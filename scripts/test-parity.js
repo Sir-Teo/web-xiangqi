@@ -78,6 +78,9 @@ async function main() {
 
   // Native debug commands parity: d / eval / flip
   engine.postMessage("position startpos");
+  engine.postMessage("rulejudge");
+  await waitFor(engine, lines, (l) => /^rulejudge (none|claim\b)/i.test(l), 10000, "rulejudge output");
+
   engine.postMessage("d");
   await waitFor(engine, lines, (l) => /^Fen: rnbakabnr\/9\/1c5c1\/p1p1p1p1p\/9\/9\/P1P1P1P1P\/1C5C1\/9\/RNBAKABNR w /i.test(l), 10000, "d output (startpos fen)");
 

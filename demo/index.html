@@ -859,6 +859,9 @@
   let lastBestmove = "";
   let lastInfo = "";
   let lastWinrate = "";
+  let lastRuleJudge = "";
+  let lastRuleJudgeKey = "";
+  let lastRuleJudgeData = null;
   let winrateSeries = [];
   let pageHidden = document.visibilityState === "hidden";
   let pendingEngineLines = [];
@@ -881,6 +884,8 @@
   let continuousRestartPending = false;
   let suppressContinuousUntilPositionChange = false;
   let autoPonderActive = false;
+  let ruleJudgeBusy = false;
+  let ruleJudgeQueued = false;
   let engineMatch = null;
   let lastMatchReport = null;
 
@@ -1677,6 +1682,7 @@
     selected = null;
     pendingBestmoveAction = null;
     autoPonderActive = false;
+    clearRuleJudgeStatus();
     lastBestmove = "";
     lastInfo = "";
     lastWinrate = "";
@@ -1690,6 +1696,7 @@
         scheduleContinuousAnalysisRestart("load-fen");
       } else {
         await syncEnginePosition();
+        refreshRuleJudgeStatus("load-fen", { silentLog: true }).catch(() => {});
       }
     }
   }
@@ -1702,6 +1709,7 @@
     moveHistory = [];
     selected = null;
     pendingBestmoveAction = null;
+    clearRuleJudgeStatus();
     lastBestmove = "";
     lastInfo = "";
     lastWinrate = "";
@@ -1710,6 +1718,9 @@
     renderAll();
     syncFenInputFromBoard();
     scheduleContinuousAnalysisRestart("reset");
+    if (engine && !continuousAnalyzeEnabled()) {
+      syncEnginePosition().then(() => refreshRuleJudgeStatus("reset", { silentLog: true })).catch(() => {});
+    }
   }
 
   function squareToUci(file, rank) {
@@ -1985,6 +1996,7 @@
     if (sourceTag !== "engine" && sourceTag !== "engine-match") {
       cancelAutoPonder({ keepSearchRunning: false });
     }
+    clearRuleJudgeStatus();
     lastInfo = "";
     lastWinrate = "";
     if (sourceTag !== "engine") {
@@ -2009,6 +2021,7 @@
     board[mv.toRank][mv.toFile] = last.captured || "";
     sideToMove = sideToMove === "w" ? "b" : "w";
     selected = null;
+    clearRuleJudgeStatus();
     lastInfo = "";
     lastWinrate = "";
     clearWinrateSeries();
@@ -2016,6 +2029,9 @@
     renderAll();
     syncFenInputFromBoard();
     scheduleContinuousAnalysisRestart("undo");
+    if (engine && !continuousAnalyzeEnabled()) {
+      syncEnginePosition().then(() => refreshRuleJudgeStatus("undo", { silentLog: true })).catch(() => {});
+    }
   }
 
   function canSelectPiece(piece) {
@@ -2064,7 +2080,18 @@
       const checkNote = isInCheck(board, sideToMove) ? (" · " + (sideToMove === "w" ? "red" : "black") + " in check") : "";
       posStatusEl.textContent = "Applied move: " + move + checkNote;
       if (document.getElementById("auto-reply").checked) {
-        requestEngineMove().catch((e) => log(String(e)));
+        Promise.resolve()
+          .then(() => refreshRuleJudgeStatus("after-human-move"))
+          .then((rj) => {
+            if (rj && rj.supported && rj.claim) {
+              posStatusEl.textContent = "Rule adjudication claimable; auto-reply skipped.";
+              return;
+            }
+            return requestEngineMove();
+          })
+          .catch((e) => log(String(e)));
+      } else {
+        refreshRuleJudgeStatus("after-human-move", { silentLog: true }).catch(() => {});
       }
     } else {
       posStatusEl.textContent = "Illegal move: " + move + " · " + (applyMove.lastError || "rule violation");
@@ -2188,9 +2215,10 @@
     const best = lastBestmove ? (" · last bestmove " + lastBestmove) : "";
     const info = lastInfo ? (" · " + lastInfo) : "";
     const wr = lastWinrate ? (" · " + lastWinrate) : "";
+    const rule = lastRuleJudge ? (" · " + lastRuleJudge) : "";
     const check = isInCheck(board, sideToMove) ? (" · " + (sideToMove === "w" ? "red" : "black") + " in check") : "";
     const ponder = autoPonderActive ? " · pondering" : "";
-    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info + wr + check + ponder;
+    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info + wr + rule + check + ponder;
   }
 
   function renderAll() {
@@ -2205,6 +2233,121 @@
       cmd += " moves " + moveHistory.map((m) => m.uci).join(" ");
     }
     return cmd;
+  }
+
+  function clearRuleJudgeStatus() {
+    lastRuleJudge = "";
+    lastRuleJudgeKey = "";
+    lastRuleJudgeData = null;
+    scheduleStatusLineRender();
+  }
+
+  function parseRuleJudgeLine(line, stmSide) {
+    const text = String(line || "").trim();
+    if (!text) return null;
+    if (/^Unknown command:\s*'rulejudge'/i.test(text)) {
+      return { supported: false, claim: false, key: "unsupported" };
+    }
+    if (/^rulejudge\s+none$/i.test(text)) {
+      return {
+        supported: true,
+        claim: false,
+        key: "none"
+      };
+    }
+    const m = text.match(/^rulejudge\s+claim\s+outcome\s+(\w+)\s+value\s+(-?\d+)/i);
+    if (!m) return null;
+    const outcome = m[1].toLowerCase();
+    const value = Number(m[2]);
+    let absolute = "unknown";
+    if (outcome === "draw") absolute = "draw";
+    else if (outcome === "win") absolute = stmSide === "w" ? "red" : "black";
+    else if (outcome === "loss") absolute = stmSide === "w" ? "black" : "red";
+    return {
+      supported: true,
+      claim: true,
+      outcome,
+      absolute,
+      value,
+      key: "claim:" + outcome + ":" + absolute + ":" + String(value)
+    };
+  }
+
+  function formatRuleJudgeStatus(parsed) {
+    if (!parsed || !parsed.supported || !parsed.claim) return "";
+    if (parsed.outcome === "draw" || parsed.absolute === "draw") return "rule draw claim";
+    if (parsed.absolute === "red" || parsed.absolute === "black") return "rule " + parsed.absolute + " win claim";
+    return "rule claim";
+  }
+
+  async function queryRuleJudgeOnEngine(e, opts) {
+    if (!e || typeof e.postMessage !== "function" || typeof e.waitForLine !== "function") {
+      return { supported: false, claim: false, key: "unsupported" };
+    }
+    const timeoutMs = Math.max(500, Number((opts && opts.timeoutMs) || 4000) || 4000);
+    const stmSide = (opts && opts.sideToMove) || sideToMove;
+    if (!(opts && opts.skipSyncPosition)) {
+      e.postMessage(currentPositionCommand());
+    }
+    const waiter = e.waitForLine((line) => {
+      const s = String(line || "");
+      return /^rulejudge\b/i.test(s) || /^Unknown command:\s*'rulejudge'/i.test(s);
+    }, { timeoutMs });
+    e.postMessage("rulejudge");
+    const line = await waiter;
+    const parsed = parseRuleJudgeLine(line, stmSide);
+    if (parsed) return parsed;
+    return { supported: false, claim: false, key: "parse-error", raw: String(line || "") };
+  }
+
+  async function refreshRuleJudgeStatus(reason, opts) {
+    if (engineMatchRunning()) return null;
+    if (!engine || engineBootPromise) return null;
+    if (ruleJudgeBusy) {
+      ruleJudgeQueued = true;
+      return null;
+    }
+    ruleJudgeBusy = true;
+    try {
+      const parsed = await queryRuleJudgeOnEngine(engine, {
+        timeoutMs: (opts && opts.timeoutMs) || 4000
+      });
+      if (!parsed || !parsed.supported) {
+        if (lastRuleJudgeKey !== "unsupported") {
+          lastRuleJudge = "";
+          lastRuleJudgeKey = "unsupported";
+          lastRuleJudgeData = parsed || null;
+          scheduleStatusLineRender();
+        }
+        return parsed || null;
+      }
+      lastRuleJudgeData = parsed;
+      if (!parsed.claim) {
+        if (lastRuleJudge || lastRuleJudgeKey !== "none") {
+          lastRuleJudge = "";
+          lastRuleJudgeKey = "none";
+          scheduleStatusLineRender();
+        }
+        return parsed;
+      }
+      const nextText = formatRuleJudgeStatus(parsed);
+      const changed = parsed.key !== lastRuleJudgeKey;
+      lastRuleJudge = nextText;
+      lastRuleJudgeKey = parsed.key || nextText;
+      scheduleStatusLineRender();
+      if (changed && !(opts && opts.silentLog)) {
+        log("[rulejudge] " + nextText + (reason ? (" (" + reason + ")") : ""));
+      }
+      return parsed;
+    } catch (_) {
+      return null;
+    } finally {
+      ruleJudgeBusy = false;
+      if (ruleJudgeQueued) {
+        ruleJudgeQueued = false;
+        setTimeout(() => refreshRuleJudgeStatus("queued", { silentLog: true }).catch(() => {}), 0);
+      }
+    }
   }
 
   function lineMatcherFn(matcher) {
@@ -2617,6 +2760,29 @@
         clockAfter: match.clock ? cloneMatchClockState(match.clock) : null
       });
       log("[match] " + sideName + " played " + move + " (" + elapsed + " ms)" + (match.clock ? (" · " + formatMatchClockSummary(match.clock)) : ""));
+      const ruleJudge = await queryRuleJudgeOnEngine(entry.engine, {
+        sideToMove,
+        timeoutMs: 3000
+      }).catch(() => null);
+      if (ruleJudge && ruleJudge.supported) {
+        match.plyLog[match.plyLog.length - 1].ruleJudge = { ...ruleJudge };
+        if (ruleJudge.claim) {
+          lastRuleJudgeData = ruleJudge;
+          lastRuleJudgeKey = ruleJudge.key || "";
+          lastRuleJudge = formatRuleJudgeStatus(ruleJudge);
+          scheduleStatusLineRender();
+          if (ruleJudge.absolute === "draw") {
+            match.reason = "rule-claim-draw";
+            log("[match] adjudication: draw claimable by Xiangqi repetition/chasing rules");
+            setEngineMatchState("finished · rule draw claim");
+          } else {
+            match.reason = "rule-claim-" + String(ruleJudge.absolute || "win");
+            log("[match] adjudication: " + String(ruleJudge.absolute || "unknown") + " wins by rule claim");
+            setEngineMatchState("finished · rule " + String(ruleJudge.absolute || "win") + " claim");
+          }
+          return;
+        }
+      }
       if (delay > 0 && !match.stopRequested) {
         await delayMs(delay);
       }
@@ -2666,6 +2832,7 @@
 
     setEngineMatchState("starting...");
     lastMatchReport = null;
+    clearRuleJudgeStatus();
     setMatchExportState("running...");
     const match = {
       running: true,
@@ -2897,9 +3064,17 @@
       if (completedAction === "play" && best[1] !== "(none)") {
         if (applyMove(best[1], "engine")) {
           posStatusEl.textContent = "Engine played " + best[1];
-          if (autoPonderEnabled() && !continuousAnalyzeEnabled() && !pageHidden) {
-            setTimeout(() => startAutoPonder("after-engine-move").catch((e) => log(String(e))), 0);
-          }
+          setTimeout(() => {
+            refreshRuleJudgeStatus("after-engine-move", { silentLog: true }).then((rj) => {
+              if (rj && rj.supported && rj.claim) {
+                posStatusEl.textContent = "Rule adjudication claimable after engine move.";
+                return;
+              }
+              if (autoPonderEnabled() && !continuousAnalyzeEnabled() && !pageHidden) {
+                return startAutoPonder("after-engine-move");
+              }
+            }).catch((e) => log(String(e)));
+          }, 0);
         } else {
           log("engine move rejected by GUI rules: " + best[1] + " · " + (applyMove.lastError || "unknown"));
         }
@@ -3145,6 +3320,7 @@
       uciOptionsStateEl.textContent = "No engine options loaded";
       engineStateEl.textContent = "engine: stopped";
       pendingBestmoveAction = null;
+      clearRuleJudgeStatus();
       setDebugLogControlsEnabled(shouldEnableDebugLogControls());
     }
   }
@@ -3437,6 +3613,14 @@
     lastBestmove = "";
     e.postMessage("stop");
     e.postMessage(currentPositionCommand());
+    const rj = await refreshRuleJudgeStatus("before-ponder", { silentLog: true }).catch(() => null);
+    if (rj && rj.supported && rj.claim) {
+      autoPonderActive = false;
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", worker)";
+      log("auto-ponder skipped: rule adjudication claimable");
+      scheduleStatusLineRender();
+      return;
+    }
     e.postMessage("go infinite");
     engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", pondering)";
     log("auto-ponder: on (" + (reason || "engine-move") + ")");
@@ -3481,6 +3665,12 @@
     const why = opts && opts.reason ? String(opts.reason) : "manual";
     e.postMessage("stop");
     e.postMessage(currentPositionCommand());
+    const rj = await refreshRuleJudgeStatus("before-continuous", { silentLog: true }).catch(() => null);
+    if (rj && rj.supported && rj.claim) {
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", worker)";
+      log("continuous analyze skipped: rule adjudication claimable");
+      return;
+    }
     e.postMessage("go infinite");
     engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", continuous)";
     log("continuous analyze: on (" + why + ")");
@@ -3495,6 +3685,12 @@
     clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
+    const rj = await refreshRuleJudgeStatus("before-engine-move", { silentLog: true }).catch(() => null);
+    if (rj && rj.supported && rj.claim) {
+      pendingBestmoveAction = null;
+      log("engine move skipped: rule adjudication claimable");
+      return;
+    }
     const plan = buildSearchCommand("engine-move");
     if (plan.warning) log(plan.warning);
     log("search: " + plan.summary);
@@ -3511,6 +3707,12 @@
     clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
+    const rj = await refreshRuleJudgeStatus("before-analyze", { silentLog: true }).catch(() => null);
+    if (rj && rj.supported && rj.claim) {
+      pendingBestmoveAction = null;
+      log("analysis skipped: rule adjudication claimable");
+      return;
+    }
     log("search: " + plan.summary);
     await sendCmd(plan.command);
     if (!plan.expectsBestmove) {

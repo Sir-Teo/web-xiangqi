@@ -33,7 +33,7 @@ index 6f209a2..157b045 100644
  	# On Android Bionic's C library comes with its own pthread implementation bundled in
  	ifneq ($(OS),Android)
 diff --git a/src/engine.cpp b/src/engine.cpp
-index 18ee617..71db25e 100644
+index 18ee617..c5f1e11 100644
 --- a/src/engine.cpp
 +++ b/src/engine.cpp
 @@ -77,10 +77,21 @@ Engine::Engine(std::optional<std::string> path) :
@@ -58,6 +58,52 @@ index 18ee617..71db25e 100644
  
      options.add(  //
        "Hash", Option(16, 1, MaxHashMB, [this](const Option& o) {
+@@ -302,6 +313,33 @@ std::string Engine::visualize() const {
+     return ss.str();
+ }
+ 
++std::string Engine::rule_judge_report() {
++    Value result = VALUE_DRAW;
++    bool  claim  = pos.rule_judge(result, 0);
++
++    std::stringstream ss;
++    ss << "rulejudge ";
++
++    if (!claim)
++    {
++        ss << "none";
++        return ss.str();
++    }
++
++    ss << "claim outcome ";
++    if (result == VALUE_DRAW)
++        ss << "draw";
++    else if (is_win(result))
++        ss << "win";
++    else if (is_loss(result))
++        ss << "loss";
++    else
++        ss << "other";
++
++    ss << " value " << int(result);
++    return ss.str();
++}
++
+ int Engine::get_hashfull(int maxAge) const { return tt.hashfull(maxAge); }
+ 
+ std::vector<std::pair<size_t, size_t>> Engine::get_bound_thread_count_by_numa_node() const {
+diff --git a/src/engine.h b/src/engine.h
+index b230829..7b1f3be 100644
+--- a/src/engine.h
++++ b/src/engine.h
+@@ -103,6 +103,7 @@ class Engine {
+     std::string                            fen() const;
+     void                                   flip();
+     std::string                            visualize() const;
++    std::string                            rule_judge_report();
+     std::vector<std::pair<size_t, size_t>> get_bound_thread_count_by_numa_node() const;
+     std::string                            get_numa_config_as_string() const;
+     std::string                            numa_config_information_as_string() const;
 diff --git a/src/main.cpp b/src/main.cpp
 index 0367e41..b621176 100644
 --- a/src/main.cpp
@@ -225,7 +271,7 @@ index 5a8d43a..670214e 100644
      #include <pthread.h>
      #include <functional>
 diff --git a/src/uci.cpp b/src/uci.cpp
-index 19f55f0..9a01d6f 100644
+index 19f55f0..7bbe17d 100644
 --- a/src/uci.cpp
 +++ b/src/uci.cpp
 @@ -84,14 +84,20 @@ void UCIEngine::init_search_update_listeners() {
@@ -258,7 +304,16 @@ index 19f55f0..9a01d6f 100644
          is >> std::skipws >> token;
  
          if (token == "quit" || token == "stop")
-@@ -172,8 +179,9 @@ void UCIEngine::loop() {
+@@ -147,6 +154,8 @@ void UCIEngine::loop() {
+             benchmark(is);
+         else if (token == "d")
+             sync_cout << engine.visualize() << sync_endl;
++        else if (token == "rulejudge")
++            sync_cout << engine.rule_judge_report() << sync_endl;
+         else if (token == "eval")
+             engine.trace_eval();
+         else if (token == "compiler")
+@@ -172,8 +181,9 @@ void UCIEngine::loop() {
          else if (!token.empty() && token[0] != '#')
              sync_cout << "Unknown command: '" << cmd << "'. Type help for more information."
                        << sync_endl;
