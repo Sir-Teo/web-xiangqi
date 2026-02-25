@@ -548,6 +548,16 @@
           <button id="flip">Flip View</button>
           <span class="small mono" id="engine-state">engine: stopped</span>
         </div>
+        <div class="row">
+          <strong>Engine Match</strong>
+          <button id="match-start">Start EvsE</button>
+          <button id="match-stop">Stop EvsE</button>
+          <label for="match-ply-limit">Ply cap</label>
+          <input id="match-ply-limit" type="number" min="1" max="1000" value="60" style="width:86px">
+          <label for="match-delay-ms">Delay ms</label>
+          <input id="match-delay-ms" type="number" min="0" max="5000" value="80" style="width:86px">
+          <span class="small mono" id="match-state">match: idle</span>
+        </div>
         <div class="status-line mono" id="position-status"></div>
       </div>
 
@@ -668,6 +678,7 @@
   const sideToMoveEl = document.getElementById("side-to-move");
   const posStatusEl = document.getElementById("position-status");
   const engineStateEl = document.getElementById("engine-state");
+  const matchStateEl = document.getElementById("match-state");
   const engineProviderEl = document.getElementById("engine-provider");
   const variantEl = document.getElementById("variant");
   const presetEl = document.getElementById("preset");
@@ -684,6 +695,8 @@
   const clockBincEl = document.getElementById("clock-binc");
   const clockMovesToGoEl = document.getElementById("clock-movestogo");
   const multipvEl = document.getElementById("multipv");
+  const matchPlyLimitEl = document.getElementById("match-ply-limit");
+  const matchDelayMsEl = document.getElementById("match-delay-ms");
   const continuousAnalyzeEl = document.getElementById("continuous-analyze");
   const externalEngineRowEl = document.getElementById("external-engine-row");
   const engineWorkerUrlEl = document.getElementById("engine-worker-url");
@@ -736,6 +749,7 @@
   let continuousRestartTimer = 0;
   let continuousRestartPending = false;
   let suppressContinuousUntilPositionChange = false;
+  let engineMatch = null;
 
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
@@ -1622,6 +1636,10 @@
   }
 
   function onSquareClick(file, rank) {
+    if (engineMatchRunning()) {
+      posStatusEl.textContent = "Engine match is running. Stop EvsE before moving pieces.";
+      return;
+    }
     const piece = board[rank][file];
     if (!selected) {
       if (canSelectPiece(piece)) {
@@ -1987,6 +2005,183 @@
     }
   }
 
+  function engineMatchRunning() {
+    return !!(engineMatch && engineMatch.running);
+  }
+
+  function setEngineMatchState(text) {
+    matchStateEl.textContent = "match: " + text;
+  }
+
+  function delayMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function parseBestmove(line) {
+    const m = String(line).match(/^bestmove\s+(\S+)/i);
+    return m ? m[1] : "";
+  }
+
+  async function initializeAuxEngineSession(e, descriptor, sideTag) {
+    await e.uci({ timeoutMs: 20000 });
+    const initCmds = descriptor && descriptor.provider === "external-worker" ? externalInitCommands() : [];
+    for (const line of initCmds) e.postMessage(line);
+    await e.isReady({ timeoutMs: 20000 });
+
+    const presetCfg = resolvePresetConfig(presetEl.value);
+    try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
+    try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
+    try { e.setOption("MultiPV", 1); } catch (_) {}
+    try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
+    try { e.setOption("Ponder", "false"); } catch (_) {}
+    await e.isReady({ timeoutMs: 20000 }).catch(() => {});
+    log("[match " + sideTag + "] ready (" + (descriptor.label || e.variant || descriptor.provider || "engine") + ")");
+  }
+
+  async function createAuxMatchEngine(sideTag) {
+    const created = await createSelectedEngine();
+    await initializeAuxEngineSession(created.engine, created.descriptor, sideTag);
+    return created;
+  }
+
+  async function stopEngineMatch(opts) {
+    const match = engineMatch;
+    if (!match) {
+      setEngineMatchState("idle");
+      return;
+    }
+    match.stopRequested = true;
+    setEngineMatchState("stopping...");
+    for (const side of ["w", "b"]) {
+      const entry = match.engines[side];
+      if (!entry || !entry.engine) continue;
+      try { entry.engine.postMessage("stop"); } catch (_) {}
+    }
+    if (opts && opts.wait) {
+      try { await match.done; } catch (_) {}
+    }
+  }
+
+  async function finalizeEngineMatch(match, finalText) {
+    if (!match) return;
+    for (const side of ["w", "b"]) {
+      const entry = match.engines[side];
+      if (!entry || !entry.engine) continue;
+      try { await entry.engine.terminate(); } catch (_) {}
+    }
+    if (engineMatch === match) {
+      engineMatch = null;
+      setEngineMatchState(finalText || "idle");
+    }
+  }
+
+  async function runEngineMatchLoop(match) {
+    const plyCap = match.plyCap;
+    const delay = match.delayMs;
+    let ply = 0;
+
+    while (!match.stopRequested && ply < plyCap) {
+      const side = sideToMove;
+      const sideName = side === "w" ? "red" : "black";
+      const entry = match.engines[side];
+      if (!entry || !entry.engine) {
+        throw new Error("match engine missing for " + sideName);
+      }
+
+      const plan = buildSearchCommand("engine-move");
+      if (plan.warning && !match.warnedInfiniteFallback) {
+        match.warnedInfiniteFallback = true;
+        log("[match] " + plan.warning);
+      }
+      setEngineMatchState("running · ply " + ply + "/" + plyCap + " · " + sideName + " thinking");
+
+      entry.engine.postMessage(currentPositionCommand());
+      entry.engine.postMessage(plan.command);
+      const t0 = performance.now();
+      const bestLine = await entry.engine.waitForLine(/^bestmove\s+\S+/i, { timeoutMs: 120000 });
+      const elapsed = Math.round(performance.now() - t0);
+      const move = parseBestmove(bestLine);
+
+      if (!move || move === "(none)") {
+        setEngineMatchState("finished · " + sideName + " has no move");
+        return;
+      }
+      if (!applyMove(move, "engine-match")) {
+        log("[match] illegal engine move from " + sideName + ": " + move + " · " + (applyMove.lastError || "unknown"));
+        setEngineMatchState("stopped · illegal move");
+        return;
+      }
+      ply += 1;
+      log("[match] " + sideName + " played " + move + " (" + elapsed + " ms)");
+      if (delay > 0 && !match.stopRequested) {
+        await delayMs(delay);
+      }
+    }
+
+    if (match.stopRequested) {
+      setEngineMatchState("stopped");
+      return;
+    }
+    setEngineMatchState("finished · ply cap reached (" + plyCap + ")");
+  }
+
+  async function startEngineMatch() {
+    if (engineMatchRunning()) {
+      log("engine match already running");
+      return;
+    }
+    if (engineBootPromise) {
+      throw new Error("Main engine is starting. Try again in a moment.");
+    }
+
+    if (continuousAnalyzeEnabled()) {
+      continuousAnalyzeEl.checked = false;
+      suppressContinuousUntilPositionChange = false;
+      await stopSearch().catch(() => {});
+    }
+    if (engine) {
+      log("stopping main engine before engine-vs-engine match");
+      await shutdownEngine();
+    }
+
+    const plyCap = positiveIntFromInput(matchPlyLimitEl, 60, 1, 1000);
+    const delay = positiveIntFromInput(matchDelayMsEl, 80, 0, 5000);
+
+    setEngineMatchState("starting...");
+    const match = {
+      running: true,
+      stopRequested: false,
+      warnedInfiniteFallback: false,
+      plyCap,
+      delayMs: delay,
+      engines: { w: null, b: null },
+      done: null
+    };
+    engineMatch = match;
+
+    try {
+      match.engines.w = await createAuxMatchEngine("red");
+      match.engines.b = await createAuxMatchEngine("black");
+      for (const side of ["w", "b"]) {
+        const e = match.engines[side].engine;
+        e.postMessage("ucinewgame");
+        e.postMessage(currentPositionCommand());
+      }
+      log("[match] started from current position (side to move: " + (sideToMove === "w" ? "red" : "black") + ")");
+      match.done = (async () => {
+        try {
+          await runEngineMatchLoop(match);
+        } finally {
+          await finalizeEngineMatch(match, match.stopRequested ? "stopped" : matchStateEl.textContent.replace(/^match:\s*/, ""));
+        }
+      })();
+      await match.done;
+    } catch (e) {
+      await finalizeEngineMatch(match, "error");
+      throw e;
+    }
+  }
+
   function scheduleEngineDrain() {
     if (pageHidden) return;
     if (engineDrainScheduled) return;
@@ -2349,6 +2544,9 @@
   }
 
   async function ensureEngine() {
+    if (engineMatchRunning()) {
+      throw new Error("Engine-vs-engine match is running. Stop EvsE first.");
+    }
     if (engine) return engine;
     if (engineBootPromise) return engineBootPromise;
     pendingEngineLines.length = 0;
@@ -2773,6 +2971,9 @@
       if (engine) {
         try { engine.postMessage("stop"); } catch (_) {}
       }
+      if (engineMatchRunning()) {
+        stopEngineMatch().catch(() => {});
+      }
       return;
     }
     scheduleEngineDrain();
@@ -2839,6 +3040,10 @@
     stopSearch().catch((e) => log(String(e)));
   };
   document.getElementById("reset").onclick = () => {
+    if (engineMatchRunning()) {
+      log("Stop engine match before resetting the board.");
+      return;
+    }
     resetPosition();
     if (engine) {
       sendCmd("ucinewgame").catch((e) => log(String(e)));
@@ -2848,6 +3053,10 @@
     }
   };
   document.getElementById("undo").onclick = () => {
+    if (engineMatchRunning()) {
+      log("Stop engine match before undo.");
+      return;
+    }
     undoMove();
     if (engine && !continuousAnalyzeEnabled()) {
       syncEnginePosition().catch((e) => log(String(e)));
@@ -2857,6 +3066,11 @@
     flipped = !flipped;
     renderBoard();
   };
+  document.getElementById("match-start").onclick = () => startEngineMatch().catch((e) => {
+    setEngineMatchState("error");
+    log("engine match failed: " + String(e && e.message || e));
+  });
+  document.getElementById("match-stop").onclick = () => stopEngineMatch().catch((e) => log(String(e)));
   document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
   document.getElementById("uci-options-refresh").onclick = () => rescanUciOptions().catch((e) => log(String(e)));
   document.getElementById("uci-options-apply").onclick = () => applyAllUciOptionsFromPanel().catch((e) => log(String(e)));
@@ -2976,6 +3190,7 @@
   resetUciOptionPanelState({ keepStateText: true });
   resetPosition();
   if (shouldEnableDebugLogControls()) setDebugLogState("debug log: disabled");
+  setEngineMatchState("idle");
   registerDemoServiceWorker();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Enable 'Continuous Analyze' for live infinite analysis that restarts on move/undo/reset.");
