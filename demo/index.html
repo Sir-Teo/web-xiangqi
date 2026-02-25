@@ -3,34 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pikafish WASM Demo</title>
+  <title>Pikafish Browser GUI</title>
   <style>
     :root {
-      --bg: #f2efe6;
-      --ink: #182126;
-      --muted: #5d6770;
-      --card: #fffdf8;
-      --line: #d7cfbf;
-      --accent: #0f7b6c;
-      --accent-2: #d9762b;
+      --bg: #efe7d6;
+      --ink: #1d2328;
+      --muted: #5f6a73;
+      --card: #fffaf0;
+      --line: #d9ccb3;
+      --accent: #0d7f6e;
+      --accent-soft: #dff6f1;
+      --danger: #b5453c;
+      --board: #edd5a3;
+      --board-line: #6a4c2e;
+      --piece-light: #fbf3dc;
+      --piece-shadow: rgba(30, 20, 12, 0.18);
+      --red: #b7332b;
+      --black: #232a31;
       --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       --sans: "IBM Plex Sans", system-ui, sans-serif;
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: var(--sans);
       color: var(--ink);
       background:
-        radial-gradient(circle at 0% 0%, #fef5d8 0, transparent 50%),
-        radial-gradient(circle at 100% 100%, #d8f0eb 0, transparent 45%),
+        radial-gradient(circle at 12% 8%, #fff4cf 0, transparent 42%),
+        radial-gradient(circle at 90% 14%, #d8efe8 0, transparent 38%),
+        radial-gradient(circle at 78% 96%, #f7d8be 0, transparent 36%),
         var(--bg);
     }
     main {
-      max-width: 980px;
+      max-width: 1180px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 18px;
       display: grid;
-      gap: 16px;
+      gap: 14px;
     }
     .panel {
       background: color-mix(in srgb, var(--card) 88%, white);
@@ -39,18 +48,29 @@
       padding: 14px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.04);
     }
-    h1 {
-      margin: 0 0 6px;
-      font-size: clamp(1.4rem, 3vw, 2rem);
-    }
-    p {
+    .hero h1 {
       margin: 0;
+      font-size: clamp(1.25rem, 2.8vw, 1.95rem);
+    }
+    .hero p {
+      margin: 6px 0 0;
       color: var(--muted);
+    }
+    .layout {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: minmax(360px, 520px) 1fr;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
     }
     .row {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
     }
     button, select, input {
@@ -58,29 +78,182 @@
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid var(--line);
-      background: white;
+      background: #fff;
+      color: inherit;
     }
     button {
       cursor: pointer;
-      background: linear-gradient(180deg, #fff, #f3f1ea);
+      background: linear-gradient(180deg, #fff, #f2eee4);
     }
     button.primary {
       border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
-      background: linear-gradient(180deg, #f1fffb, #dff6f1);
+      background: linear-gradient(180deg, #effff9, var(--accent-soft));
+    }
+    button.warn {
+      border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+      background: linear-gradient(180deg, #fff6f4, #f9ddd8);
     }
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 4px 10px;
       background: #fff;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
+      white-space: nowrap;
     }
-    .badge.ok { border-color: #9cd3c8; }
-    .badge.warn { border-color: #efc493; }
+    .badge.ok { border-color: #9fd4c8; }
+    .badge.warn { border-color: #efc291; }
+    .badge.info { border-color: #c8d2de; }
     .mono { font-family: var(--mono); }
+
+    .board-wrap {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+    .board-meta {
+      width: 100%;
+      display: grid;
+      gap: 8px;
+    }
+    .status-line {
+      font-size: 0.92rem;
+      color: var(--muted);
+      min-height: 1.25rem;
+    }
+
+    .board {
+      position: relative;
+      width: min(92vw, 500px);
+      aspect-ratio: 9 / 10;
+      background:
+        linear-gradient(0deg, rgba(255,255,255,0.18), rgba(0,0,0,0.02)),
+        var(--board);
+      border: 2px solid color-mix(in srgb, var(--board-line) 70%, #000);
+      border-radius: 16px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.35);
+      padding: 14px;
+    }
+    .board-grid {
+      position: absolute;
+      inset: 14px;
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(10, 1fr);
+    }
+    .cell {
+      position: relative;
+      border-right: 1px solid var(--board-line);
+      border-bottom: 1px solid var(--board-line);
+    }
+    .cell[data-file="8"] { border-right: none; }
+    .cell[data-rank="0"] { border-bottom: none; }
+    .cell .dot {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 5px;
+      height: 5px;
+      transform: translate(-50%, -50%);
+      background: color-mix(in srgb, var(--board-line) 85%, black);
+      border-radius: 50%;
+      opacity: 0.38;
+    }
+    .river {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: calc(14px + 4 * (100% - 28px) / 9 + 0.5 * (100% - 28px) / 9);
+      height: calc((100% - 28px) / 9);
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      color: rgba(60, 40, 18, 0.68);
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      font-size: clamp(12px, 1.9vw, 16px);
+      text-transform: uppercase;
+    }
+    .pieces {
+      position: absolute;
+      inset: 14px;
+      pointer-events: none;
+    }
+    .piece {
+      position: absolute;
+      width: calc((100% - 0px) / 9 - 8px);
+      height: calc((100% - 0px) / 10 - 8px);
+      margin-left: calc(((100% / 9) - (100% / 9 - 8px)) / 2);
+      margin-top: calc(((100% / 10) - (100% / 10 - 8px)) / 2);
+      border-radius: 50%;
+      border: 2px solid rgba(88, 59, 35, 0.8);
+      background:
+        radial-gradient(circle at 35% 28%, rgba(255,255,255,0.9), rgba(255,255,255,0.25) 40%, transparent 46%),
+        radial-gradient(circle at 50% 45%, var(--piece-light), #f0dfba 70%);
+      box-shadow:
+        0 3px 0 rgba(85, 52, 29, 0.42),
+        0 6px 12px var(--piece-shadow),
+        inset 0 0 0 2px rgba(255,255,255,0.32);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: clamp(16px, 3.2vw, 28px);
+      line-height: 1;
+      pointer-events: auto;
+      user-select: none;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .piece:hover { transform: translateY(-1px); }
+    .piece.red { color: var(--red); }
+    .piece.black { color: var(--black); }
+    .piece.selected {
+      box-shadow:
+        0 0 0 3px rgba(14, 127, 110, 0.35),
+        0 6px 14px rgba(14, 127, 110, 0.18),
+        inset 0 0 0 2px rgba(255,255,255,0.35);
+      transform: translateY(-1px);
+    }
+    .marker {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      border: 2px dashed rgba(13, 127, 110, 0.6);
+      background: rgba(13, 127, 110, 0.08);
+    }
+
+    .side {
+      display: grid;
+      gap: 14px;
+    }
+    .split {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 700px) {
+      .split { grid-template-columns: 1fr; }
+    }
+    .listbox {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+      min-height: 120px;
+      max-height: 220px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .moves {
+      display: grid;
+      grid-template-columns: 44px 1fr 1fr;
+      gap: 6px 10px;
+      align-items: baseline;
+    }
+    .moves .num { color: var(--muted); }
+    .moves .cur { font-weight: 700; color: var(--accent); }
     pre {
       margin: 0;
       font-family: var(--mono);
@@ -90,67 +263,142 @@
       color: #d7e4ef;
       border-radius: 12px;
       padding: 12px;
-      min-height: 240px;
-      max-height: 50vh;
+      min-height: 200px;
+      max-height: 35vh;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr 1fr;
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
     }
-    @media (max-width: 800px) {
-      .grid { grid-template-columns: 1fr; }
+    .small {
+      font-size: 0.82rem;
+      color: var(--muted);
     }
   </style>
 </head>
 <body>
 <main>
-  <section class="panel">
-    <h1>Pikafish WASM Demo</h1>
-    <p>Auto-selects threaded WASM when available and falls back to single-thread WASM otherwise.</p>
+  <section class="panel hero">
+    <h1>Pikafish Browser GUI (Xiangqi)</h1>
+    <p>Simple sandbox board + engine controls. Uses a Web Worker so the UI stays responsive, including single-thread fallback.</p>
   </section>
 
-  <section class="panel grid">
-    <div>
-      <div class="row" id="status-badges"></div>
-    </div>
-    <div>
-      <div class="row">
-        <label for="variant">Variant</label>
-        <select id="variant">
-          <option value="auto">Auto (recommended)</option>
-          <option value="threaded">Threaded</option>
-          <option value="single">Single-thread</option>
-        </select>
-        <button class="primary" id="start">Start Engine</button>
-        <button id="stop">Quit</button>
+  <section class="panel">
+    <div class="row" id="status-badges"></div>
+  </section>
+
+  <section class="layout">
+    <section class="panel board-wrap">
+      <div class="board-meta">
+        <div class="row">
+          <label for="variant">Engine</label>
+          <select id="variant">
+            <option value="auto">Auto (recommended)</option>
+            <option value="threaded">Threaded</option>
+            <option value="single">Single-thread</option>
+          </select>
+          <label for="depth">Depth</label>
+          <input id="depth" type="number" min="1" max="20" value="6" style="width:74px">
+          <button class="primary" id="start">Start Engine</button>
+          <button id="uci">uci</button>
+          <button id="isready">isready</button>
+          <button class="warn" id="quit">Quit</button>
+        </div>
+        <div class="row">
+          <button id="engine-move">Engine Move</button>
+          <button id="analyze">Analyze Position</button>
+          <button id="stop-search">Stop Search</button>
+          <label><input id="auto-reply" type="checkbox" checked> Auto-reply after my move</label>
+        </div>
+        <div class="row">
+          <button id="reset">Reset Board</button>
+          <button id="undo">Undo</button>
+          <button id="flip">Flip View</button>
+          <span class="small mono" id="engine-state">engine: stopped</span>
+        </div>
+        <div class="status-line mono" id="position-status"></div>
       </div>
-    </div>
-  </section>
 
-  <section class="panel">
-    <div class="row" style="margin-bottom:10px">
-      <button id="uci">uci</button>
-      <button id="isready">isready</button>
-      <button id="bench1">go depth 1</button>
-      <input id="command" class="mono" style="flex:1;min-width:220px" value="position startpos">
-      <button id="send">Send</button>
-    </div>
-    <pre id="log"></pre>
+      <div class="board" id="board">
+        <div class="board-grid" id="board-grid"></div>
+        <div class="river">CHU RIVER · HAN BORDER</div>
+        <div class="pieces" id="pieces-layer"></div>
+      </div>
+      <p class="note">Click a piece, then click a destination. This GUI applies moves without JS legality validation and relies on the engine/your input.</p>
+    </section>
+
+    <section class="side">
+      <section class="panel">
+        <div class="split">
+          <div>
+            <div class="row" style="margin-bottom:8px">
+              <strong>Moves</strong>
+              <span class="small mono" id="side-to-move"></span>
+            </div>
+            <div class="listbox" id="moves-box"></div>
+          </div>
+          <div>
+            <div class="row" style="margin-bottom:8px">
+              <strong>Manual Commands</strong>
+            </div>
+            <div class="row" style="margin-bottom:8px">
+              <input id="command" class="mono" style="flex:1;min-width:220px" value="position startpos">
+              <button id="send">Send</button>
+            </div>
+            <p class="small">Board sync helpers use <span class="mono">position startpos moves ...</span>. You can still send raw UCI commands here.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Engine Output</strong>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </section>
   </section>
 </main>
 
-<script src="./pikafish-core.js"></script>
-<script src="./pikafish-core-single.js"></script>
 <script src="./pikafish.js"></script>
 <script>
+  const FILES = "abcdefghi";
+  const START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w";
+  const PIECE_LABEL = {
+    K: "帥", A: "仕", B: "相", N: "傌", R: "俥", C: "炮", P: "兵",
+    k: "將", a: "士", b: "象", n: "馬", r: "車", c: "砲", p: "卒"
+  };
+
+  const boardEl = document.getElementById("board");
+  const boardGridEl = document.getElementById("board-grid");
+  const piecesLayerEl = document.getElementById("pieces-layer");
   const logEl = document.getElementById("log");
   const badgesEl = document.getElementById("status-badges");
+  const movesBoxEl = document.getElementById("moves-box");
+  const sideToMoveEl = document.getElementById("side-to-move");
+  const posStatusEl = document.getElementById("position-status");
+  const engineStateEl = document.getElementById("engine-state");
   const variantEl = document.getElementById("variant");
+  const depthEl = document.getElementById("depth");
+  const cmdEl = document.getElementById("command");
+
+  let board = parseFenBoard(START_FEN);
+  let sideToMove = "w";
+  let moveHistory = [];
+  let selected = null;
+  let flipped = false;
   let engine = null;
+  let engineListener = null;
+  let pendingBestmoveAction = null; // "play" | "analyze" | null
+  let lastBestmove = "";
+  let lastInfo = "";
+
+  function isRedPiece(ch) { return !!ch && ch === ch.toUpperCase(); }
+  function isBlackPiece(ch) { return !!ch && ch === ch.toLowerCase(); }
 
   function log(line) {
     logEl.textContent += line + "\n";
@@ -164,55 +412,348 @@
     return el;
   }
 
-  function refreshStatus() {
+  function refreshBadges() {
+    const threadsSupported = window.Pikafish.wasmThreadsSupported();
     badgesEl.innerHTML = "";
     badgesEl.append(
       badge("crossOriginIsolated: " + String(window.crossOriginIsolated), window.crossOriginIsolated ? "ok" : "warn"),
       badge("SharedArrayBuffer: " + (typeof SharedArrayBuffer === "function"), typeof SharedArrayBuffer === "function" ? "ok" : "warn"),
-      badge("threads supported: " + String(window.Pikafish.wasmThreadsSupported()), window.Pikafish.wasmThreadsSupported() ? "ok" : "warn")
+      badge("WASM threads: " + String(threadsSupported), threadsSupported ? "ok" : "warn"),
+      badge("wrapper worker helper: yes", "info")
     );
   }
 
-  async function startEngine() {
-    if (engine) return;
-    log("starting...");
-    engine = await window.Pikafish({
+  function parseFenBoard(fen) {
+    const [placement] = fen.trim().split(/\s+/);
+    const rows = placement.split("/");
+    const out = Array.from({ length: 10 }, () => Array(9).fill(""));
+    for (let visualRow = 0; visualRow < 10; visualRow++) {
+      let file = 0;
+      for (const ch of rows[visualRow]) {
+        if (/\d/.test(ch)) {
+          file += Number(ch);
+        } else {
+          const rank = 9 - visualRow; // fen is top->bottom, our rank is bottom->top
+          out[rank][file] = ch;
+          file += 1;
+        }
+      }
+    }
+    return out;
+  }
+
+  function resetPosition() {
+    board = parseFenBoard(START_FEN);
+    sideToMove = "w";
+    moveHistory = [];
+    selected = null;
+    pendingBestmoveAction = null;
+    lastBestmove = "";
+    lastInfo = "";
+    renderAll();
+  }
+
+  function squareToUci(file, rank) {
+    return FILES[file] + String(rank);
+  }
+
+  function parseMove(move) {
+    const m = String(move).trim().match(/^([a-i])([0-9])([a-i])([0-9])/);
+    if (!m) return null;
+    const fromFile = FILES.indexOf(m[1]);
+    const fromRank = Number(m[2]);
+    const toFile = FILES.indexOf(m[3]);
+    const toRank = Number(m[4]);
+    if (fromFile < 0 || toFile < 0) return null;
+    return { fromFile, fromRank, toFile, toRank, raw: m[0] };
+  }
+
+  function applyMove(move, sourceTag) {
+    const mv = parseMove(move);
+    if (!mv) return false;
+    const piece = board[mv.fromRank]?.[mv.fromFile];
+    if (!piece) return false;
+    const captured = board[mv.toRank][mv.toFile] || "";
+    board[mv.toRank][mv.toFile] = piece;
+    board[mv.fromRank][mv.fromFile] = "";
+    moveHistory.push({ uci: mv.raw, piece, captured, source: sourceTag || "manual" });
+    sideToMove = sideToMove === "w" ? "b" : "w";
+    selected = null;
+    renderAll();
+    return true;
+  }
+
+  function undoMove() {
+    const last = moveHistory.pop();
+    if (!last) return;
+    const mv = parseMove(last.uci);
+    if (!mv) return;
+    board[mv.fromRank][mv.fromFile] = last.piece;
+    board[mv.toRank][mv.toFile] = last.captured || "";
+    sideToMove = sideToMove === "w" ? "b" : "w";
+    selected = null;
+    renderAll();
+  }
+
+  function canSelectPiece(piece) {
+    if (!piece) return false;
+    return sideToMove === "w" ? isRedPiece(piece) : isBlackPiece(piece);
+  }
+
+  function canCaptureOwn(targetPiece, movingPiece) {
+    if (!targetPiece || !movingPiece) return false;
+    return (isRedPiece(targetPiece) && isRedPiece(movingPiece)) || (isBlackPiece(targetPiece) && isBlackPiece(movingPiece));
+  }
+
+  function onSquareClick(file, rank) {
+    const piece = board[rank][file];
+    if (!selected) {
+      if (canSelectPiece(piece)) {
+        selected = { file, rank };
+        renderBoard();
+      }
+      return;
+    }
+
+    if (selected.file === file && selected.rank === rank) {
+      selected = null;
+      renderBoard();
+      return;
+    }
+
+    const movingPiece = board[selected.rank][selected.file];
+    if (piece && canSelectPiece(piece)) {
+      selected = { file, rank };
+      renderBoard();
+      return;
+    }
+
+    if (canCaptureOwn(piece, movingPiece)) {
+      return;
+    }
+
+    const move = squareToUci(selected.file, selected.rank) + squareToUci(file, rank);
+    if (applyMove(move, "human")) {
+      posStatusEl.textContent = "Applied move: " + move + " (GUI does not validate legality)";
+      if (document.getElementById("auto-reply").checked) {
+        requestEngineMove().catch((e) => log(String(e)));
+      }
+    }
+  }
+
+  function visualToBoard(file, rank) {
+    return flipped ? { file: 8 - file, rank } : { file, rank: 9 - rank };
+  }
+
+  function boardToVisual(file, rank) {
+    return flipped ? { file: 8 - file, rank } : { file, rank: 9 - rank };
+  }
+
+  function renderBoard() {
+    if (!boardGridEl.childElementCount) {
+      for (let vr = 0; vr < 10; vr++) {
+        for (let vf = 0; vf < 9; vf++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.file = String(vf);
+          cell.dataset.rank = String(9 - vr);
+          if (!((vr === 4 || vr === 5) && vf >= 0)) {
+            const dot = document.createElement("div");
+            dot.className = "dot";
+            cell.appendChild(dot);
+          }
+          cell.addEventListener("click", () => {
+            const b = visualToBoard(vf, vr);
+            onSquareClick(b.file, b.rank);
+          });
+          boardGridEl.appendChild(cell);
+        }
+      }
+    }
+
+    piecesLayerEl.innerHTML = "";
+    const boardRect = boardEl.getBoundingClientRect();
+    const innerW = boardRect.width - 28;
+    const innerH = boardRect.height - 28;
+    const cellW = innerW / 9;
+    const cellH = innerH / 10;
+
+    for (let rank = 0; rank < 10; rank++) {
+      for (let file = 0; file < 9; file++) {
+        const piece = board[rank][file];
+        if (!piece) continue;
+        const v = boardToVisual(file, rank);
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "piece " + (isRedPiece(piece) ? "red" : "black");
+        if (selected && selected.file === file && selected.rank === rank) {
+          el.classList.add("selected");
+        }
+        el.textContent = PIECE_LABEL[piece] || piece;
+        el.style.left = (v.file * cellW) + "px";
+        el.style.top = (v.rank * cellH) + "px";
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          onSquareClick(file, rank);
+        });
+        piecesLayerEl.appendChild(el);
+      }
+    }
+
+    if (selected) {
+      const v = boardToVisual(selected.file, selected.rank);
+      const marker = document.createElement("div");
+      marker.className = "marker";
+      marker.style.width = (cellW - 6) + "px";
+      marker.style.height = (cellH - 6) + "px";
+      marker.style.left = (v.file * cellW + 3) + "px";
+      marker.style.top = (v.rank * cellH + 3) + "px";
+      piecesLayerEl.appendChild(marker);
+    }
+  }
+
+  function renderMoves() {
+    sideToMoveEl.textContent = "side: " + (sideToMove === "w" ? "red" : "black");
+    if (!moveHistory.length) {
+      movesBoxEl.innerHTML = "<span class='small'>No moves yet</span>";
+      return;
+    }
+    const rows = [];
+    for (let i = 0; i < moveHistory.length; i += 2) {
+      const moveNo = (i / 2) + 1;
+      const w = moveHistory[i];
+      const b = moveHistory[i + 1];
+      rows.push(
+        "<span class='num'>" + moveNo + ".</span>" +
+        "<span" + (i === moveHistory.length - 1 ? " class='cur'" : "") + ">" + (w ? w.uci : "") + "</span>" +
+        "<span" + (i + 1 === moveHistory.length - 1 ? " class='cur'" : "") + ">" + (b ? b.uci : "") + "</span>"
+      );
+    }
+    movesBoxEl.innerHTML = "<div class='moves'>" + rows.join("") + "</div>";
+  }
+
+  function renderStatusLine() {
+    const selectedText = selected ? ("selected " + squareToUci(selected.file, selected.rank)) : "no selection";
+    const best = lastBestmove ? (" · last bestmove " + lastBestmove) : "";
+    const info = lastInfo ? (" · " + lastInfo) : "";
+    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info;
+  }
+
+  function renderAll() {
+    renderBoard();
+    renderMoves();
+    renderStatusLine();
+  }
+
+  function currentPositionCommand() {
+    if (!moveHistory.length) return "position startpos";
+    return "position startpos moves " + moveHistory.map((m) => m.uci).join(" ");
+  }
+
+  async function ensureEngine() {
+    if (engine) return engine;
+    log("starting worker engine...");
+    engine = await window.Pikafish.createWorkerEngine({
       basePath: ".",
       variant: variantEl.value
     });
-    log("engine started (" + engine.variant + ")");
-    engine.addMessageListener((line) => log(line));
+    engineStateEl.textContent = "engine: running (" + engine.variant + ", worker)";
+
+    engineListener = (line) => {
+      log(line);
+      if (/^info depth /.test(line)) {
+        const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
+        if (scoreMatch) lastInfo = "score " + scoreMatch[1] + " " + scoreMatch[2];
+        renderStatusLine();
+      }
+      const best = line.match(/^bestmove\s+(\S+)/);
+      if (best) {
+        lastBestmove = best[1];
+        renderStatusLine();
+        if (pendingBestmoveAction === "play" && best[1] !== "(none)") {
+          if (applyMove(best[1], "engine")) {
+            posStatusEl.textContent = "Engine played " + best[1];
+          }
+        }
+        pendingBestmoveAction = null;
+      }
+    };
+    engine.addMessageListener(engineListener);
+    return engine;
   }
 
-  async function stopEngine() {
+  async function shutdownEngine() {
     if (!engine) return;
-    await engine.terminate();
-    log("terminated");
-    engine = null;
+    try {
+      if (engineListener) engine.removeMessageListener(engineListener);
+      await engine.terminate();
+    } finally {
+      engine = null;
+      engineListener = null;
+      engineStateEl.textContent = "engine: stopped";
+      pendingBestmoveAction = null;
+    }
   }
 
   async function sendCmd(cmd) {
-    if (!engine) await startEngine();
-    engine.postMessage(cmd);
+    const e = await ensureEngine();
+    e.postMessage(cmd);
   }
 
-  document.getElementById("start").onclick = () => startEngine().catch((e) => log(String(e)));
-  document.getElementById("stop").onclick = () => stopEngine().catch((e) => log(String(e)));
+  async function syncEnginePosition() {
+    await sendCmd(currentPositionCommand());
+  }
+
+  function requestedDepth() {
+    const v = Number(depthEl.value);
+    if (!Number.isFinite(v)) return 6;
+    return Math.min(20, Math.max(1, Math.trunc(v)));
+  }
+
+  async function requestEngineMove() {
+    pendingBestmoveAction = "play";
+    await syncEnginePosition();
+    await sendCmd("go depth " + requestedDepth());
+  }
+
+  async function analyzePosition() {
+    pendingBestmoveAction = "analyze";
+    await syncEnginePosition();
+    await sendCmd("go depth " + requestedDepth());
+  }
+
+  document.getElementById("start").onclick = () => ensureEngine().catch((e) => log(String(e)));
   document.getElementById("uci").onclick = () => sendCmd("uci").catch((e) => log(String(e)));
   document.getElementById("isready").onclick = () => sendCmd("isready").catch((e) => log(String(e)));
-  document.getElementById("bench1").onclick = async () => {
-    try {
-      await sendCmd("ucinewgame");
-      await sendCmd("position startpos");
-      await sendCmd("go depth 1");
-    } catch (e) {
-      log(String(e));
+  document.getElementById("quit").onclick = () => shutdownEngine().catch((e) => log(String(e)));
+  document.getElementById("engine-move").onclick = () => requestEngineMove().catch((e) => log(String(e)));
+  document.getElementById("analyze").onclick = () => analyzePosition().catch((e) => log(String(e)));
+  document.getElementById("stop-search").onclick = () => sendCmd("stop").catch((e) => log(String(e)));
+  document.getElementById("reset").onclick = () => {
+    resetPosition();
+    if (engine) {
+      sendCmd("ucinewgame").catch((e) => log(String(e)));
+      sendCmd(currentPositionCommand()).catch((e) => log(String(e)));
     }
   };
-  document.getElementById("send").onclick = () => sendCmd(document.getElementById("command").value).catch((e) => log(String(e)));
+  document.getElementById("undo").onclick = () => {
+    undoMove();
+    if (engine) {
+      syncEnginePosition().catch((e) => log(String(e)));
+    }
+  };
+  document.getElementById("flip").onclick = () => {
+    flipped = !flipped;
+    renderBoard();
+  };
+  document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
 
-  refreshStatus();
-  log("Tip: use `npm run serve:demo` so COOP/COEP headers are present for threaded WASM.");
+  window.addEventListener("resize", () => renderBoard());
+
+  refreshBadges();
+  resetPosition();
+  log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
+  log("Local server (`npm run serve:demo`) sends COOP/COEP so threaded WASM can run when supported.");
 </script>
 </body>
 </html>

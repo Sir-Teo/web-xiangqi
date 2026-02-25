@@ -19,11 +19,11 @@ Working end-to-end in Node.js and ready for browser demo use (tested on macOS ar
 
 - `patches/pikafish-wasm.patch`: upstream patch set (Makefile + Emscripten UCI/runtime compatibility)
 - `templates/emscripten/*`: Emscripten build overrides injected into upstream `Pikafish`
-- `templates/pikafish.js`: JS wrapper with auto flavor selection + NNUE loading
+- `templates/pikafish.js`: JS wrapper with auto flavor selection, NNUE loading, and browser worker helper (`createWorkerEngine`)
 - `scripts/build-pikafish.sh`: clone, patch, build, copy artifacts to `dist/`
 - `scripts/test-smoke.js`: Node smoke tests for threaded/single flavors
 - `scripts/serve-demo.js`: local static server with COOP/COEP headers
-- `demo/index.html`: browser demo UI and thread/header checks
+- `demo/index.html`: simple playable Xiangqi board UI + engine controls (worker-based)
 
 ## Quick start
 
@@ -65,11 +65,12 @@ Artifacts are written to `dist/`:
 
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
-- Browser demo shows header/thread support status and lets you force `threaded`, `single`, or use `auto`.
+- Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
+- Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
 
 ## Future improvements
 
-- Add a dedicated worker-based browser API helper in `pikafish.js` (so single-thread fallback doesn't block the main thread)
+- Add move legality validation / move highlighting in the browser GUI (current board UI intentionally applies moves without JS legality checks)
 - Add minified production bundle variants and optional WASM compression
 - Add benchmark/regression CI for both flavors
