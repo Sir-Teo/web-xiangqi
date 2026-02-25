@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install emsdk
+        run: bash scripts/install-emsdk.sh
+
+      - name: Build WASM demo
+        run: npm run build
+
+      - name: Node parity and smoke tests
+        run: |
+          npm run test:parity
+          npm run test:smoke:all
+
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install --no-save playwright@1.52.0
+          npx playwright install --with-deps chromium
+
+      - name: Browser worker parity (quick)
+        run: npm run test:worker-parity:browser

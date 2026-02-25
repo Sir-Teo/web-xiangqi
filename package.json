@@ -10,6 +10,7 @@
     "test:smoke:single": "node scripts/test-smoke.js single",
     "test:smoke:all": "node scripts/test-smoke.js threaded && node scripts/test-smoke.js single",
     "serve:demo": "node scripts/serve-demo.js",
-    "test:parity": "node scripts/test-parity.js single"
+    "test:parity": "node scripts/test-parity.js single",
+    "test:worker-parity:browser": "node scripts/test-worker-parity-browser.js"
   }
 }

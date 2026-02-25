@@ -19,6 +19,19 @@
     }
   }
 
+  function wasmSIMDSupported() {
+    try {
+      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return false;
+      // Minimal module using the v128 value type. Validation fails when SIMD is unsupported.
+      return WebAssembly.validate(Uint8Array.of(
+        0x00,0x61,0x73,0x6d, 0x01,0x00,0x00,0x00,
+        0x01,0x05, 0x01,0x60,0x00,0x01,0x7b
+      ));
+    } catch (_) {
+      return false;
+    }
+  }
+
   function isNode() {
     return typeof process !== "undefined" &&
       process.versions &&
@@ -79,16 +92,41 @@
   }
 
   function resolveVariant(opts) {
-    const requested = (opts && opts.variant) || "auto";
-    if (requested === "threaded" || requested === "single") return requested;
-    if (isNode()) return "threaded";
-    return wasmThreadsSupported() ? "threaded" : "single";
+    const requested = String((opts && opts.variant) || "auto").trim();
+    const simdOK = (opts && opts.allowSIMD === false) ? false : wasmSIMDSupported();
+    const threadOK = isNode() ? true : wasmThreadsSupported();
+
+    if (requested === "threaded-simd") {
+      if (!threadOK) return simdOK ? "single-simd" : "single";
+      return simdOK ? "threaded-simd" : "threaded";
+    }
+    if (requested === "single-simd") return simdOK ? "single-simd" : "single";
+    if (requested === "threaded") {
+      if (!threadOK) return simdOK ? "single-simd" : "single";
+      return simdOK ? "threaded-simd" : "threaded";
+    }
+    if (requested === "single") return simdOK ? "single-simd" : "single";
+
+    if (threadOK) return simdOK ? "threaded-simd" : "threaded";
+    return simdOK ? "single-simd" : "single";
   }
 
   function coreMeta(variant) {
-    return variant === "single"
-      ? { jsFile: "pikafish-core-single.js", globalName: "PikafishCoreSingle" }
-      : { jsFile: "pikafish-core.js", globalName: "PikafishCore" };
+    switch (variant) {
+      case "single":
+        return { jsFile: "pikafish-core-single.js", globalName: "PikafishCoreSingle" };
+      case "single-simd":
+        return { jsFile: "pikafish-core-single-simd.js", globalName: "PikafishCoreSingleSimd" };
+      case "threaded-simd":
+        return { jsFile: "pikafish-core-simd.js", globalName: "PikafishCoreSimd" };
+      case "threaded":
+      default:
+        return { jsFile: "pikafish-core.js", globalName: "PikafishCore" };
+    }
+  }
+
+  function isThreadedVariant(variant) {
+    return String(variant || "").indexOf("threaded") === 0;
   }
 
   function clampInt(n, min, max) {
@@ -139,7 +177,7 @@
   }
 
   function recommendedThreads(opts, variant) {
-    if (variant !== "threaded") return 1;
+    if (!isThreadedVariant(variant)) return 1;
     const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 4, 1, 64);
     if (opts && Number.isFinite(Number(opts.threads))) {
       return clampInt(Number(opts.threads), 1, maxAutoThreads);
@@ -663,12 +701,16 @@
   }
 
   createEngine.wasmThreadsSupported = wasmThreadsSupported;
+  createEngine.wasmSIMDSupported = wasmSIMDSupported;
+  createEngine.wasmSimdSupported = wasmSIMDSupported;
   createEngine.createWorkerEngine = createWorkerEngine;
 
   if (isNode()) {
     module.exports = createEngine;
     module.exports.createWorkerEngine = createWorkerEngine;
     module.exports.wasmThreadsSupported = wasmThreadsSupported;
+    module.exports.wasmSIMDSupported = wasmSIMDSupported;
+    module.exports.wasmSimdSupported = wasmSIMDSupported;
     return;
   }
 

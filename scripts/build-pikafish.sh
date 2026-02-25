@@ -33,9 +33,11 @@ else
 fi
 
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
+WASM_BUILD_SIMD="${WASM_BUILD_SIMD:-yes}"
 
 build_flavor() {
   local flavor="$1"
+  local simd="$2"
   local -a args
 
   args=(
@@ -46,28 +48,45 @@ build_flavor() {
   if [ "$flavor" = "single" ]; then
     args+=(WASM_SINGLE_THREADED=yes)
   fi
+  if [ "$simd" = "yes" ]; then
+    args+=(WASM_SIMD=yes)
+  fi
 
   make -C "$UPSTREAM_DIR/src" ARCH=wasm NO_SYZYGY=yes objclean >/dev/null
   args+=(build)
   make "${args[@]}"
 }
 
-build_flavor threaded
-cp "$UPSTREAM_DIR/src/pikafish-core.js" "$DIST_DIR/pikafish-core.js"
-cp "$UPSTREAM_DIR/src/pikafish-core.wasm" "$DIST_DIR/pikafish-core.wasm"
-if [ -f "$UPSTREAM_DIR/src/pikafish-core.worker.js" ]; then
-  cp "$UPSTREAM_DIR/src/pikafish-core.worker.js" "$DIST_DIR/pikafish-core.worker.js"
+copy_flavor_artifacts() {
+  local base="$1"
+  cp "$UPSTREAM_DIR/src/${base}.js" "$DIST_DIR/${base}.js"
+  cp "$UPSTREAM_DIR/src/${base}.wasm" "$DIST_DIR/${base}.wasm"
+  if [ -f "$UPSTREAM_DIR/src/${base}.worker.js" ]; then
+    cp "$UPSTREAM_DIR/src/${base}.worker.js" "$DIST_DIR/${base}.worker.js"
+  fi
+}
+
+build_flavor threaded no
+copy_flavor_artifacts pikafish-core
+
+if [ "$WASM_BUILD_SIMD" = "yes" ]; then
+  build_flavor threaded yes
+  copy_flavor_artifacts pikafish-core-simd
 fi
 
-build_flavor single
-cp "$UPSTREAM_DIR/src/pikafish-core-single.js" "$DIST_DIR/pikafish-core-single.js"
-cp "$UPSTREAM_DIR/src/pikafish-core-single.wasm" "$DIST_DIR/pikafish-core-single.wasm"
-if [ -f "$UPSTREAM_DIR/src/pikafish-core-single.worker.js" ]; then
-  cp "$UPSTREAM_DIR/src/pikafish-core-single.worker.js" "$DIST_DIR/pikafish-core-single.worker.js"
+build_flavor single no
+copy_flavor_artifacts pikafish-core-single
+
+if [ "$WASM_BUILD_SIMD" = "yes" ]; then
+  build_flavor single yes
+  copy_flavor_artifacts pikafish-core-single-simd
 fi
 
 cp "$ROOT/templates/pikafish.js" "$DIST_DIR/pikafish.js"
 cp "$ROOT/demo/"*.html "$DIST_DIR/"
+if [ -f "$ROOT/demo/sw.js" ]; then
+  cp "$ROOT/demo/sw.js" "$DIST_DIR/sw.js"
+fi
 cp "$UPSTREAM_DIR/src/pikafish.nnue" "$DIST_DIR/pikafish.nnue"
 
 echo "Built artifacts in $DIST_DIR"

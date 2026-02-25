@@ -1,10 +1,20 @@
-# Emscripten build override for Pikafish -> threaded and single-threaded WASM flavors
+# Emscripten build override for Pikafish -> threaded/single + SIMD/non-SIMD WASM flavors
 ifeq ($(WASM_SINGLE_THREADED),yes)
+ifeq ($(WASM_SIMD),yes)
+EXE = pikafish-core-single-simd.js
+WASM_EXPORT_NAME = PikafishCoreSingleSimd
+else
 EXE = pikafish-core-single.js
 WASM_EXPORT_NAME = PikafishCoreSingle
+endif
+else
+ifeq ($(WASM_SIMD),yes)
+EXE = pikafish-core-simd.js
+WASM_EXPORT_NAME = PikafishCoreSimd
 else
 EXE = pikafish-core.js
 WASM_EXPORT_NAME = PikafishCore
+endif
 endif
 
 COMP = em++
@@ -32,6 +42,11 @@ EM_LDFLAGS += -s MODULARIZE=1
 EM_LDFLAGS += -s EXPORT_NAME=\"$(WASM_EXPORT_NAME)\"
 EM_LDFLAGS += -sEXPORTED_RUNTIME_METHODS=['ccall','FS']
 EM_LDFLAGS += -sEXPORTED_FUNCTIONS=['_main','_command']
+
+ifeq ($(WASM_SIMD),yes)
+EM_CXXFLAGS += -msimd128
+EM_LDFLAGS += -msimd128
+endif
 
 ifeq ($(WASM_SINGLE_THREADED),yes)
 EM_CXXFLAGS += -D__EMSCRIPTEN_SINGLE_THREADED__

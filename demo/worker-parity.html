@@ -189,6 +189,44 @@
     outEl.scrollTop = outEl.scrollHeight;
   }
 
+  function shouldWarmServiceWorkerCache() {
+    if (typeof navigator === "undefined") return false;
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      if (conn.saveData) return false;
+      const et = String(conn.effectiveType || "").toLowerCase();
+      if (et.includes("2g")) return false;
+    }
+    return true;
+  }
+
+  function registerDemoServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    if (!/^https?:$/.test(location.protocol)) return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).then((reg) => {
+        const sendWarm = () => {
+          if (!shouldWarmServiceWorkerCache()) return;
+          const sw = reg.active;
+          if (sw) {
+            sw.postMessage({ type: "WARM_ENGINE_CACHE" });
+          } else {
+            navigator.serviceWorker.ready.then((readyReg) => {
+              if (readyReg.active && shouldWarmServiceWorkerCache()) {
+                readyReg.active.postMessage({ type: "WARM_ENGINE_CACHE" });
+              }
+            }).catch(() => {});
+          }
+        };
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(sendWarm, { timeout: 4000 });
+        } else {
+          setTimeout(sendWarm, 1500);
+        }
+      }).catch((e) => appendOut("service worker disabled: " + String(e && e.message || e)));
+    }, { once: true });
+  }
+
   function clearOut() {
     logLines = [];
     outEl.textContent = "";
@@ -454,6 +492,7 @@
   };
 
   variantEl.value = preferredVariant();
+  registerDemoServiceWorker();
   appendOut("Worker parity page ready.");
   appendOut("Use `npm run serve:demo` and open /worker-parity.html for threaded WASM support.");
 })();

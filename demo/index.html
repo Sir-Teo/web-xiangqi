@@ -593,12 +593,18 @@
 
   function refreshBadges() {
     const threadsSupported = window.Pikafish.wasmThreadsSupported();
-    const fastest = preferredVariant();
+    const simdSupported = typeof window.Pikafish.wasmSIMDSupported === "function"
+      ? window.Pikafish.wasmSIMDSupported()
+      : false;
+    const fastest = threadsSupported
+      ? (simdSupported ? "threaded-simd" : "threaded")
+      : (simdSupported ? "single-simd" : "single");
     badgesEl.innerHTML = "";
     badgesEl.append(
       badge("crossOriginIsolated: " + String(window.crossOriginIsolated), window.crossOriginIsolated ? "ok" : "warn"),
       badge("SharedArrayBuffer: " + (typeof SharedArrayBuffer === "function"), typeof SharedArrayBuffer === "function" ? "ok" : "warn"),
       badge("WASM threads: " + String(threadsSupported), threadsSupported ? "ok" : "warn"),
+      badge("WASM SIMD: " + String(simdSupported), simdSupported ? "ok" : "warn"),
       badge("default runtime: " + fastest, "info"),
       badge("wrapper worker helper: yes", "info")
     );
@@ -1527,6 +1533,48 @@
     scheduleWinrateGraphRender(true);
   }
 
+  function shouldWarmServiceWorkerCache() {
+    if (typeof navigator === "undefined") return false;
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      if (conn.saveData) return false;
+      const et = String(conn.effectiveType || "").toLowerCase();
+      if (et.includes("2g")) return false;
+    }
+    if (typeof navigator.deviceMemory === "number" && navigator.deviceMemory <= 2) return false;
+    return true;
+  }
+
+  function registerDemoServiceWorker() {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    if (!/^https?:$/.test(location.protocol)) return;
+
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).then((reg) => {
+        const sendWarm = () => {
+          if (!shouldWarmServiceWorkerCache()) return;
+          const activeSw = reg.active || null;
+          if (activeSw) {
+            activeSw.postMessage({ type: "WARM_ENGINE_CACHE" });
+          } else {
+            navigator.serviceWorker.ready.then((readyReg) => {
+              if (shouldWarmServiceWorkerCache() && readyReg.active) {
+                readyReg.active.postMessage({ type: "WARM_ENGINE_CACHE" });
+              }
+            }).catch(() => {});
+          }
+        };
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(sendWarm, { timeout: 4000 });
+        } else {
+          setTimeout(sendWarm, 1500);
+        }
+      }).catch((e) => {
+        log("service worker disabled: " + String(e && e.message || e));
+      });
+    }, { once: true });
+  }
+
   document.getElementById("start").onclick = () => ensureEngine().catch((e) => log(String(e)));
   document.getElementById("uci").onclick = () => sendCmd("uci").catch((e) => log(String(e)));
   document.getElementById("isready").onclick = () => sendCmd("isready").catch((e) => log(String(e)));
@@ -1574,6 +1622,7 @@
   variantEl.value = preferredVariant();
   setDebugLogState("debug log: disabled");
   resetPosition();
+  registerDemoServiceWorker();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Local server (`npm run serve:demo`) sends COOP/COEP so threaded WASM can run when supported.");
 </script>

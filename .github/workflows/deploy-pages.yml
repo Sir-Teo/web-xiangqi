@@ -29,6 +29,9 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Install emsdk
+        run: bash scripts/install-emsdk.sh
+
       - name: Build WASM demo
         run: npm run build
 
