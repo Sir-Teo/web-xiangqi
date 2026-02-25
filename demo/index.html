@@ -348,6 +348,7 @@
   <section class="panel hero">
     <h1>Pikafish Browser GUI (Xiangqi)</h1>
     <p>Simple sandbox board + engine controls. Uses a Web Worker so the UI stays responsive, including single-thread fallback.</p>
+    <p class="small">Need browser worker parity checks? Open <a href="./worker-parity.html">worker-parity.html</a> (best via <span class="mono">npm run serve:demo</span> for COOP/COEP).</p>
   </section>
 
   <section class="panel">
@@ -441,6 +442,23 @@
         </div>
         <pre id="log"></pre>
       </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Debug Log File</strong>
+          <label><input id="debug-log-enabled" type="checkbox"> Enable (slower)</label>
+          <span class="small mono" id="debug-log-state">debug log: disabled</span>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <input id="debug-log-path" class="mono" style="flex:1;min-width:220px" value="/tmp/pikafish-debug.log">
+          <button id="debug-log-apply">Apply</button>
+          <button id="debug-log-refresh">Refresh</button>
+          <button id="debug-log-download">Download</button>
+          <button id="debug-log-clear">Clear</button>
+        </div>
+        <p class="small">Reads and downloads the engine's native <span class="mono">Debug Log File</span> from the WASM filesystem (worker bridge).</p>
+        <pre id="debug-log-view" style="min-height:140px;max-height:24vh"></pre>
+      </section>
     </section>
   </section>
 </main>
@@ -470,6 +488,10 @@
   const winrateLabelEl = document.getElementById("winrate-label");
   const winrateLeftEl = document.getElementById("winrate-left");
   const winrateRightEl = document.getElementById("winrate-right");
+  const debugLogEnabledEl = document.getElementById("debug-log-enabled");
+  const debugLogPathEl = document.getElementById("debug-log-path");
+  const debugLogStateEl = document.getElementById("debug-log-state");
+  const debugLogViewEl = document.getElementById("debug-log-view");
 
   let board = parseFenBoard(START_FEN);
   let sideToMove = "w";
@@ -496,6 +518,7 @@
 
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
+  const MAX_DEBUG_LOG_PREVIEW_CHARS = 200000;
 
   function isRedPiece(ch) { return !!ch && ch === ch.toUpperCase(); }
   function isBlackPiece(ch) { return !!ch && ch === ch.toLowerCase(); }
@@ -1158,6 +1181,138 @@
     if (pendingEngineLines.length) scheduleEngineDrain();
   }
 
+  function defaultDebugLogPath() {
+    return "/tmp/pikafish-debug.log";
+  }
+
+  function currentDebugLogPath() {
+    const path = (debugLogPathEl.value || "").trim();
+    if (path) return path;
+    debugLogPathEl.value = defaultDebugLogPath();
+    return debugLogPathEl.value;
+  }
+
+  function dirnamePath(p) {
+    const s = String(p || "");
+    const idx = s.lastIndexOf("/");
+    if (idx <= 0) return "/";
+    return s.slice(0, idx);
+  }
+
+  function setDebugLogState(text) {
+    debugLogStateEl.textContent = text;
+  }
+
+  function setDebugLogPreview(text) {
+    const s = String(text || "");
+    if (s.length <= MAX_DEBUG_LOG_PREVIEW_CHARS) {
+      debugLogViewEl.textContent = s;
+      return;
+    }
+    const tail = s.slice(-MAX_DEBUG_LOG_PREVIEW_CHARS);
+    debugLogViewEl.textContent = "[truncated to last " + MAX_DEBUG_LOG_PREVIEW_CHARS + " chars]\n" + tail;
+  }
+
+  async function applyDebugLogOption(e, opts) {
+    const target = e || engine;
+    const silent = !!(opts && opts.silent);
+    if (!target) {
+      setDebugLogState(debugLogEnabledEl.checked ? ("debug log: pending (" + currentDebugLogPath() + ")") : "debug log: disabled");
+      return;
+    }
+
+    const enabled = debugLogEnabledEl.checked;
+    if (!enabled) {
+      try { target.setOption("Debug Log File", ""); } catch (_) {}
+      setDebugLogState("debug log: disabled");
+      if (!silent) log("debug log disabled");
+      return;
+    }
+
+    const path = currentDebugLogPath();
+    try {
+      await target.mkdir(dirnamePath(path));
+    } catch (_) {}
+    target.setOption("Debug Log File", path);
+    setDebugLogState("debug log: " + path);
+    if (!silent) log("debug log enabled: " + path);
+  }
+
+  async function refreshDebugLogView() {
+    if (!engine) {
+      setDebugLogState("debug log: engine not started");
+      setDebugLogPreview("");
+      return;
+    }
+    const path = currentDebugLogPath();
+    try {
+      if (typeof engine.isReady === "function") {
+        await engine.isReady({ timeoutMs: 10000 });
+      }
+      const text = await engine.readFile(path, { encoding: "utf8" });
+      setDebugLogPreview(text);
+      setDebugLogState("debug log: loaded " + path + " (" + text.length + " chars)");
+    } catch (e) {
+      setDebugLogPreview("");
+      setDebugLogState("debug log: unavailable");
+      log("debug log refresh failed: " + String(e && e.message || e));
+    }
+  }
+
+  async function clearDebugLogFile() {
+    if (!engine) {
+      setDebugLogPreview("");
+      setDebugLogState("debug log: engine not started");
+      return;
+    }
+    const path = currentDebugLogPath();
+    const enabled = debugLogEnabledEl.checked;
+    try {
+      engine.setOption("Debug Log File", "");
+      if (typeof engine.isReady === "function") {
+        await engine.isReady({ timeoutMs: 10000 });
+      }
+    } catch (_) {}
+    try {
+      await engine.unlink(path);
+    } catch (_) {}
+    if (enabled) {
+      try {
+        await engine.mkdir(dirnamePath(path));
+      } catch (_) {}
+      engine.setOption("Debug Log File", path);
+    }
+    setDebugLogPreview("");
+    setDebugLogState(enabled ? ("debug log: cleared " + path) : "debug log: disabled");
+  }
+
+  async function downloadDebugLogFile() {
+    if (!engine) {
+      setDebugLogState("debug log: engine not started");
+      return;
+    }
+    const path = currentDebugLogPath();
+    try {
+      if (typeof engine.isReady === "function") {
+        await engine.isReady({ timeoutMs: 10000 });
+      }
+      const text = await engine.readFile(path, { encoding: "utf8" });
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      a.href = URL.createObjectURL(blob);
+      a.download = "pikafish-debug-" + stamp + ".log";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 0);
+      setDebugLogState("debug log: downloaded " + text.length + " chars");
+    } catch (e) {
+      setDebugLogState("debug log: download failed");
+      log("debug log download failed: " + String(e && e.message || e));
+    }
+  }
+
   async function ensureEngine() {
     if (engine) return engine;
     pendingEngineLines.length = 0;
@@ -1170,6 +1325,7 @@
 
     engineListener = (line) => queueEngineLine(line);
     engine.addMessageListener(engineListener);
+    await applyDebugLogOption(engine, { silent: true });
     return engine;
   }
 
@@ -1184,6 +1340,7 @@
       pendingEngineLines.length = 0;
       engineStateEl.textContent = "engine: stopped";
       pendingBestmoveAction = null;
+      setDebugLogState(debugLogEnabledEl.checked ? ("debug log: pending (" + currentDebugLogPath() + ")") : "debug log: disabled");
     }
   }
 
@@ -1398,6 +1555,14 @@
     renderBoard();
   };
   document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
+  document.getElementById("debug-log-apply").onclick = () => applyDebugLogOption().catch((e) => log(String(e)));
+  document.getElementById("debug-log-refresh").onclick = () => refreshDebugLogView().catch((e) => log(String(e)));
+  document.getElementById("debug-log-download").onclick = () => downloadDebugLogFile().catch((e) => log(String(e)));
+  document.getElementById("debug-log-clear").onclick = () => clearDebugLogFile().catch((e) => log(String(e)));
+  debugLogEnabledEl.addEventListener("change", () => {
+    setDebugLogPreview(debugLogViewEl.textContent);
+    applyDebugLogOption().catch((e) => log(String(e)));
+  });
 
   window.addEventListener("resize", () => {
     renderBoard();
@@ -1407,6 +1572,7 @@
 
   refreshBadges();
   variantEl.value = preferredVariant();
+  setDebugLogState("debug log: disabled");
   resetPosition();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Local server (`npm run serve:demo`) sends COOP/COEP so threaded WASM can run when supported.");

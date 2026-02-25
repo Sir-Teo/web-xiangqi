@@ -67,7 +67,7 @@ if [ -f "$UPSTREAM_DIR/src/pikafish-core-single.worker.js" ]; then
 fi
 
 cp "$ROOT/templates/pikafish.js" "$DIST_DIR/pikafish.js"
-cp "$ROOT/demo/index.html" "$DIST_DIR/index.html"
+cp "$ROOT/demo/"*.html "$DIST_DIR/"
 cp "$UPSTREAM_DIR/src/pikafish.nnue" "$DIST_DIR/pikafish.nnue"
 
 echo "Built artifacts in $DIST_DIR"

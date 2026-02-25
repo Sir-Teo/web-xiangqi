@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pikafish Worker Parity Test</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --ink: #1f252b;
+      --muted: #69737b;
+      --line: #d8d0c4;
+      --accent: #0f6a88;
+      --good: #18794e;
+      --warn: #b26a00;
+      --bad: #b42318;
+      --mono: "Iosevka", "SFMono-Regular", Menlo, Consolas, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 15% -10%, #fff9e6 0, transparent 40%), var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      background: color-mix(in srgb, var(--panel) 92%, white 8%);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 8px 30px rgba(17, 24, 39, 0.05);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.3rem;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+    button, select {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+      padding: 8px 10px;
+      font: inherit;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    button.warn {
+      background: #fff4e6;
+      border-color: #e9c28b;
+      color: #7d4d00;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .status {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .status.good { color: var(--good); }
+    .status.bad { color: var(--bad); }
+    .status.warn { color: var(--warn); }
+    .checks {
+      display: grid;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .checks div {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 8px;
+      background: rgba(255,255,255,0.7);
+    }
+    pre {
+      margin: 0;
+      min-height: 260px;
+      max-height: 52vh;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid #19202a;
+      background: #0f1720;
+      color: #d9e2ea;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .mono { font-family: var(--mono); }
+    @media (max-width: 720px) {
+      main { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h1>Pikafish Browser Worker Parity Test</h1>
+    <p>Runs parity checks through <span class="mono">Pikafish.createWorkerEngine(...)</span> in the browser worker path. Use <span class="mono">npm run serve:demo</span> for COOP/COEP so threaded WASM can run.</p>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <label for="variant">Engine</label>
+      <select id="variant">
+        <option value="auto">Auto</option>
+        <option value="threaded">Threaded</option>
+        <option value="single">Single-thread</option>
+      </select>
+      <button id="run-quick" class="primary">Run Quick Worker Parity</button>
+      <button id="run-full">Run Full Worker Parity</button>
+      <button id="stop" class="warn">Stop</button>
+    </div>
+    <div class="row">
+      <span id="status" class="status">idle</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="checks" id="checks"></div>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <strong>Output</strong>
+    </div>
+    <pre id="out"></pre>
+  </section>
+</main>
+
+<script src="./pikafish.js"></script>
+<script>
+(() => {
+  const outEl = document.getElementById("out");
+  const checksEl = document.getElementById("checks");
+  const statusEl = document.getElementById("status");
+  const variantEl = document.getElementById("variant");
+  const runQuickBtn = document.getElementById("run-quick");
+  const runFullBtn = document.getElementById("run-full");
+  const stopBtn = document.getElementById("stop");
+
+  let activeRunId = 0;
+  let activeEngine = null;
+  let running = false;
+  let logLines = [];
+
+  function preferredVariant() {
+    try {
+      return window.Pikafish.wasmThreadsSupported() ? "threaded" : "single";
+    } catch (_) {
+      return "single";
+    }
+  }
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text;
+    statusEl.className = "status" + (kind ? (" " + kind) : "");
+  }
+
+  function appendOut(line) {
+    logLines.push(String(line));
+    if (logLines.length > 1200) logLines.splice(0, logLines.length - 1200);
+    outEl.textContent = logLines.join("\n") + (logLines.length ? "\n" : "");
+    outEl.scrollTop = outEl.scrollHeight;
+  }
+
+  function clearOut() {
+    logLines = [];
+    outEl.textContent = "";
+  }
+
+  function addCheck(label, state, details) {
+    const row = document.createElement("div");
+    let prefix = "[....]";
+    if (state === "pass") prefix = "[PASS]";
+    else if (state === "fail") prefix = "[FAIL]";
+    else if (state === "run") prefix = "[RUN ]";
+    row.textContent = prefix + " " + label + (details ? " :: " + details : "");
+    row.dataset.label = label;
+    checksEl.appendChild(row);
+    return row;
+  }
+
+  function updateCheck(row, state, details) {
+    let prefix = "[....]";
+    if (state === "pass") prefix = "[PASS]";
+    else if (state === "fail") prefix = "[FAIL]";
+    else if (state === "run") prefix = "[RUN ]";
+    row.textContent = prefix + " " + (row.dataset.label || "") + (details ? " :: " + details : "");
+  }
+
+  async function waitFor(engine, lines, predicate, timeoutMs, label) {
+    for (const line of lines) {
+      if (predicate(line)) return line;
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Timeout waiting for " + label));
+      }, timeoutMs);
+      function onLine(line) {
+        let ok = false;
+        try { ok = !!predicate(line); } catch (e) {
+          cleanup();
+          reject(e);
+          return;
+        }
+        if (!ok) return;
+        cleanup();
+        resolve(line);
+      }
+      function cleanup() {
+        clearTimeout(timer);
+        engine.removeMessageListener(onLine);
+      }
+      engine.addMessageListener(onLine);
+    });
+  }
+
+  async function waitForFile(engine, filePath, timeoutMs) {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      try {
+        return await engine.readFile(filePath, { encoding: "utf8" });
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error("Timeout waiting for file " + filePath);
+  }
+
+  async function waitForBinaryFile(engine, filePath, timeoutMs) {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      try {
+        return await engine.readFile(filePath);
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error("Timeout waiting for file " + filePath);
+  }
+
+  function assert(cond, msg) {
+    if (!cond) throw new Error(msg);
+  }
+
+  async function terminateActiveEngine() {
+    if (!activeEngine) return;
+    try {
+      await activeEngine.terminate();
+    } catch (_) {}
+    activeEngine = null;
+  }
+
+  async function runWorkerParity(opts) {
+    const full = !!(opts && opts.full);
+    const runId = ++activeRunId;
+    running = true;
+    runQuickBtn.disabled = true;
+    runFullBtn.disabled = true;
+    setStatus("starting worker engine...", "warn");
+    checksEl.innerHTML = "";
+    clearOut();
+
+    const lines = [];
+    let engine = null;
+    let listener = null;
+
+    async function step(label, fn) {
+      const row = addCheck(label, "run");
+      try {
+        const details = await fn();
+        updateCheck(row, "pass", details || "");
+      } catch (e) {
+        updateCheck(row, "fail", e && e.message ? e.message : String(e));
+        throw e;
+      }
+    }
+
+    try {
+      engine = await window.Pikafish.createWorkerEngine({
+        basePath: ".",
+        variant: variantEl.value
+      });
+      if (runId !== activeRunId) throw new Error("Run canceled");
+      activeEngine = engine;
+
+      listener = (line) => {
+        lines.push(String(line));
+        appendOut(line);
+      };
+      engine.addMessageListener(listener);
+      setStatus("worker engine running (" + engine.variant + ")", "good");
+
+      await step("uci + options", async () => {
+        await engine.uci({ timeoutMs: 30000 });
+        assert(lines.some((l) => /^option name Debug Log File\b/.test(l)), "Missing Debug Log File option");
+        assert(lines.some((l) => /^option name NumaPolicy\b/.test(l)), "Missing NumaPolicy option");
+        return engine.variant;
+      });
+
+      await step("isready", async () => {
+        await engine.isReady({ timeoutMs: 30000 });
+        return "readyok";
+      });
+
+      await step("debug commands d/eval/flip", async () => {
+        engine.postMessage("position startpos");
+        engine.postMessage("d");
+        await waitFor(engine, lines, (l) => /^Fen: .* w /i.test(l), 15000, "d output");
+        engine.postMessage("eval");
+        await waitFor(engine, lines, (l) => /NNUE evaluation|Final evaluation/i.test(l), 20000, "eval output");
+        engine.postMessage("flip");
+        engine.postMessage("d");
+        await waitFor(engine, lines, (l) => /^Fen: .* b /i.test(l), 15000, "flip+d output");
+        return "ok";
+      });
+
+      await step("help / compiler / unknown command", async () => {
+        engine.postMessage("help");
+        await waitFor(engine, lines, (l) => /Pikafish is a powerful xiangqi engine/.test(l), 15000, "help");
+        engine.postMessage("compiler");
+        await waitFor(engine, lines, (l) => /Compiled by|Compilation architecture/i.test(l), 15000, "compiler");
+        engine.postMessage("this_is_not_a_real_command");
+        await waitFor(engine, lines, (l) => /^Unknown command: /.test(l), 15000, "unknown command");
+        return "ok";
+      });
+
+      await step("worker FS bridge read/write", async () => {
+        await engine.mkdir("/tmp");
+        await engine.writeFile("/tmp/worker-parity.txt", "worker-ok", { encoding: "utf8" });
+        const txt = await engine.readFile("/tmp/worker-parity.txt", { encoding: "utf8" });
+        assert(txt === "worker-ok", "FS roundtrip mismatch");
+        const entries = await engine.readdir("/tmp");
+        assert(entries.includes("worker-parity.txt"), "readdir missing file");
+        await engine.unlink("/tmp/worker-parity.txt");
+        return "ok";
+      });
+
+      await step("Debug Log File option writes file", async () => {
+        const path = "/tmp/worker-debug.log";
+        try { await engine.unlink(path); } catch (_) {}
+        engine.setOption("Debug Log File", path);
+        engine.postMessage("compiler");
+        await engine.isReady({ timeoutMs: 15000 });
+        engine.setOption("Debug Log File", "");
+        await engine.isReady({ timeoutMs: 15000 });
+        const logText = await waitForFile(engine, path, 15000);
+        assert(/Compiled by|Compilation architecture/i.test(logText), "Debug log missing compiler output");
+        return logText.length + " chars";
+      });
+
+      await step("search go depth 1", async () => {
+        engine.postMessage("position startpos");
+        engine.postMessage("go depth 1");
+        const bm = await waitFor(engine, lines, (l) => /^bestmove\s+\S+/.test(l), 30000, "bestmove");
+        return bm;
+      });
+
+      if (full) {
+        await step("export_net", async () => {
+          const path = "/tmp/worker-export.nnue";
+          try { await engine.unlink(path); } catch (_) {}
+          engine.postMessage("export_net " + path);
+          const bytes = await waitForBinaryFile(engine, path, 120000);
+          assert(bytes && bytes.length > 1024, "export_net output invalid");
+          await engine.unlink(path);
+          return bytes.length + " bytes";
+        });
+
+        await step("bench", async () => {
+          engine.postMessage("bench 16 1 1 default depth");
+          await waitFor(engine, lines, (l) => /Nodes searched|Total time/.test(l), 120000, "bench");
+          return "ok";
+        });
+
+        await step("speedtest", async () => {
+          engine.postMessage("speedtest 1 16 1");
+          await waitFor(engine, lines, (l) => /Total nodes searched|Nodes\/second/.test(l), 120000, "speedtest");
+          return "ok";
+        });
+      }
+
+      setStatus("worker parity passed (" + (full ? "full" : "quick") + ")", "good");
+      appendOut("");
+      appendOut("Worker parity passed (" + (full ? "full" : "quick") + ").");
+    } catch (e) {
+      const msg = e && e.stack ? e.stack : String(e);
+      setStatus("worker parity failed", "bad");
+      appendOut("");
+      appendOut("[FAIL] " + msg);
+    } finally {
+      try {
+        if (engine && listener) engine.removeMessageListener(listener);
+      } catch (_) {}
+      try {
+        if (engine) {
+          engine.postMessage("quit");
+          await engine.terminate();
+        }
+      } catch (_) {}
+      if (activeEngine === engine) activeEngine = null;
+      if (runId === activeRunId) {
+        running = false;
+        runQuickBtn.disabled = false;
+        runFullBtn.disabled = false;
+        if (!/passed|failed/.test(statusEl.textContent)) setStatus("idle");
+      }
+    }
+  }
+
+  runQuickBtn.onclick = () => {
+    if (running) return;
+    runWorkerParity({ full: false });
+  };
+
+  runFullBtn.onclick = () => {
+    if (running) return;
+    runWorkerParity({ full: true });
+  };
+
+  stopBtn.onclick = async () => {
+    activeRunId += 1;
+    setStatus("stopping...", "warn");
+    await terminateActiveEngine();
+    running = false;
+    runQuickBtn.disabled = false;
+    runFullBtn.disabled = false;
+    setStatus("stopped", "warn");
+  };
+
+  variantEl.value = preferredVariant();
+  appendOut("Worker parity page ready.");
+  appendOut("Use `npm run serve:demo` and open /worker-parity.html for threaded WASM support.");
+})();
+</script>
+</body>
+</html>
