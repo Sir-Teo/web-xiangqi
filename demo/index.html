@@ -73,13 +73,18 @@
       gap: 8px;
       align-items: center;
     }
-    button, select, input {
+    button, select, input, textarea {
       font: inherit;
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid var(--line);
       background: #fff;
       color: inherit;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 68px;
+      width: 100%;
     }
     button {
       cursor: pointer;
@@ -535,6 +540,7 @@
           </select>
           <label><input id="auto-reply" type="checkbox" checked> Auto-reply after my move</label>
           <label><input id="continuous-analyze" type="checkbox"> Continuous Analyze</label>
+          <label><input id="auto-ponder" type="checkbox"> Auto-ponder after engine move</label>
         </div>
         <div class="row" id="external-engine-row" style="display:none">
           <label for="engine-worker-url">Worker URL</label>
@@ -615,8 +621,27 @@
               <input id="command" class="mono" style="flex:1;min-width:220px" value="position startpos">
               <button id="send">Send</button>
             </div>
-            <p class="small">Board sync helpers use <span class="mono">position startpos moves ...</span>. You can still send raw UCI commands here.</p>
+            <p class="small">Board sync helpers use <span class="mono">position fen ...</span>. You can still send raw UCI commands here.</p>
           </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Position / Match IO</strong>
+          <button id="fen-use-current">Use Current FEN</button>
+          <button id="fen-load">Load FEN</button>
+          <button id="fen-copy">Copy FEN</button>
+          <button id="moves-copy">Copy Moves</button>
+          <span class="small mono" id="fen-state">fen: ready</span>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <textarea id="fen-input" class="mono" placeholder="Xiangqi FEN (e.g. start position)"></textarea>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="match-export-copy">Copy Match Report</button>
+          <button id="match-export-download">Download Match Report</button>
+          <span class="small mono" id="match-export-state">match export: none</span>
         </div>
       </section>
 
@@ -625,6 +650,26 @@
           <strong>Engine Output</strong>
         </div>
         <pre id="log"></pre>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Engine Tools</strong>
+          <span class="small mono" id="engine-tools-state">tools: idle</span>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="tool-d">d</button>
+          <button id="tool-eval">eval</button>
+          <button id="tool-flip">flip</button>
+          <button id="tool-compiler">compiler</button>
+          <button id="tool-help">help</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="tool-bench">bench</button>
+          <button id="tool-speedtest">speedtest</button>
+          <input id="tool-speedtest-args" class="mono" style="flex:1;min-width:200px" value="1 16 1">
+        </div>
+        <p class="small">These send native Pikafish commands to the current engine session and write output to the Engine Output log. <span class="mono">speedtest 1 16 1</span> is the safe default.</p>
       </section>
 
       <section class="panel">
@@ -698,10 +743,16 @@
   const matchPlyLimitEl = document.getElementById("match-ply-limit");
   const matchDelayMsEl = document.getElementById("match-delay-ms");
   const continuousAnalyzeEl = document.getElementById("continuous-analyze");
+  const autoPonderEl = document.getElementById("auto-ponder");
   const externalEngineRowEl = document.getElementById("external-engine-row");
   const engineWorkerUrlEl = document.getElementById("engine-worker-url");
   const engineInitCmdsEl = document.getElementById("engine-init-cmds");
   const cmdEl = document.getElementById("command");
+  const fenInputEl = document.getElementById("fen-input");
+  const fenStateEl = document.getElementById("fen-state");
+  const matchExportStateEl = document.getElementById("match-export-state");
+  const engineToolsStateEl = document.getElementById("engine-tools-state");
+  const toolSpeedtestArgsEl = document.getElementById("tool-speedtest-args");
   const winrateGraphEl = document.getElementById("winrate-graph");
   const winrateLabelEl = document.getElementById("winrate-label");
   const winrateLeftEl = document.getElementById("winrate-left");
@@ -749,7 +800,9 @@
   let continuousRestartTimer = 0;
   let continuousRestartPending = false;
   let suppressContinuousUntilPositionChange = false;
+  let autoPonderActive = false;
   let engineMatch = null;
+  let lastMatchReport = null;
 
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
@@ -1286,6 +1339,36 @@
     return out;
   }
 
+  function parseFenPosition(fen) {
+    const text = String(fen || "").trim();
+    const parts = text.split(/\s+/);
+    if (parts.length < 2) throw new Error("FEN must include placement and side-to-move");
+    const placement = parts[0];
+    const side = parts[1];
+    if (side !== "w" && side !== "b") throw new Error("FEN side-to-move must be 'w' or 'b'");
+    const rows = placement.split("/");
+    if (rows.length !== 10) throw new Error("Xiangqi FEN placement must have 10 rows");
+    for (let i = 0; i < rows.length; i++) {
+      let files = 0;
+      for (const ch of rows[i]) {
+        if (/\d/.test(ch)) {
+          files += Number(ch);
+        } else if (/^[rnbakcpRNBAKCP]$/.test(ch)) {
+          files += 1;
+        } else {
+          throw new Error("Invalid FEN piece character '" + ch + "'");
+        }
+      }
+      if (files !== 9) throw new Error("FEN row " + (i + 1) + " does not sum to 9 files");
+    }
+    const parsedBoard = parseFenBoard(text);
+    const red = findKing(parsedBoard, "w");
+    const black = findKing(parsedBoard, "b");
+    if (!red || !black) throw new Error("FEN must contain both generals");
+    if (kingsFacing(parsedBoard)) throw new Error("Illegal FEN: generals are facing each other");
+    return { board: parsedBoard, side };
+  }
+
   function boardToFen(state, stm) {
     const rows = [];
     for (let rank = 9; rank >= 0; rank--) {
@@ -1310,7 +1393,145 @@
     return rows.join("/") + " " + (stm === "b" ? "b" : "w") + " - - 0 " + fullmove;
   }
 
+  function currentBoardFen() {
+    return boardToFen(board, sideToMove);
+  }
+
+  function setFenState(text) {
+    fenStateEl.textContent = "fen: " + text;
+  }
+
+  function setMatchExportState(text) {
+    matchExportStateEl.textContent = "match export: " + text;
+  }
+
+  function setEngineToolsState(text) {
+    engineToolsStateEl.textContent = "tools: " + text;
+  }
+
+  function syncFenInputFromBoard() {
+    fenInputEl.value = currentBoardFen();
+    setFenState("synced from board");
+  }
+
+  async function copyTextToClipboard(text, label) {
+    const s = String(text == null ? "" : text);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(s);
+      return;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = s;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+
+  function currentMoveListString() {
+    return moveHistory.map((m) => m.uci).join(" ");
+  }
+
+  function matchReportObject() {
+    if (!lastMatchReport) return null;
+    return {
+      ...lastMatchReport,
+      endFen: lastMatchReport.endFen || "",
+      moveCount: Array.isArray(lastMatchReport.moves) ? lastMatchReport.moves.length : 0,
+      moves: Array.isArray(lastMatchReport.moves) ? lastMatchReport.moves.slice() : [],
+      exportedAt: new Date().toISOString()
+    };
+  }
+
+  function matchReportText() {
+    const report = matchReportObject();
+    if (!report) return "";
+    const lines = [];
+    lines.push("web-xiangqi engine-vs-engine report");
+    lines.push("started_at: " + (report.startedAt || ""));
+    lines.push("finished_at: " + (report.finishedAt || ""));
+    lines.push("status: " + (report.status || ""));
+    lines.push("reason: " + (report.reason || ""));
+    lines.push("start_fen: " + (report.startFen || ""));
+    lines.push("end_fen: " + (report.endFen || ""));
+    lines.push("side_to_move_end: " + (report.endSideToMove || ""));
+    lines.push("search: " + (report.searchPlan || ""));
+    lines.push("ply_cap: " + (report.plyCap || ""));
+    lines.push("delay_ms: " + (report.delayMs || 0));
+    lines.push("moves:");
+    if (Array.isArray(report.moves) && report.moves.length) {
+      for (let i = 0; i < report.moves.length; i++) {
+        const m = report.moves[i];
+        lines.push(String(i + 1) + ". " + m.uci + " [" + (m.source || "") + "]");
+      }
+    } else {
+      lines.push("(none)");
+    }
+    return lines.join("\n");
+  }
+
+  async function copyCurrentFen() {
+    const fen = currentBoardFen();
+    await copyTextToClipboard(fen, "FEN");
+    fenInputEl.value = fen;
+    setFenState("copied");
+  }
+
+  async function copyCurrentMoves() {
+    await copyTextToClipboard(currentMoveListString(), "moves");
+    setFenState("moves copied (" + moveHistory.length + ")");
+  }
+
+  async function copyMatchReport() {
+    const text = matchReportText();
+    if (!text) throw new Error("No engine match report available yet");
+    await copyTextToClipboard(text, "match report");
+    setMatchExportState("copied");
+  }
+
+  async function downloadMatchReport() {
+    const report = matchReportObject();
+    if (!report) throw new Error("No engine match report available yet");
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "engine-match-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 0);
+    setMatchExportState("downloaded");
+  }
+
+  async function loadFenFromInput() {
+    if (engineMatchRunning()) throw new Error("Stop engine match before loading FEN");
+    const parsed = parseFenPosition(fenInputEl.value);
+    cancelAutoPonder({ keepSearchRunning: false });
+    board = parsed.board;
+    sideToMove = parsed.side;
+    moveHistory = [];
+    selected = null;
+    pendingBestmoveAction = null;
+    autoPonderActive = false;
+    lastBestmove = "";
+    lastInfo = "";
+    lastWinrate = "";
+    clearWinrateSeries();
+    clearPVLines();
+    renderAll();
+    setFenState("loaded");
+    if (engine) {
+      await stopSearch().catch(() => {});
+      if (continuousAnalyzeEnabled()) {
+        scheduleContinuousAnalysisRestart("load-fen");
+      } else {
+        await syncEnginePosition();
+      }
+    }
+  }
+
   function resetPosition() {
+    cancelAutoPonder({ keepSearchRunning: false });
     board = parseFenBoard(START_FEN);
     sideToMove = "w";
     moveHistory = [];
@@ -1322,6 +1543,7 @@
     clearWinrateSeries();
     clearPVLines();
     renderAll();
+    syncFenInputFromBoard();
     scheduleContinuousAnalysisRestart("reset");
   }
 
@@ -1595,6 +1817,9 @@
     moveHistory.push({ uci: mv.raw, piece, captured, source: sourceTag || "manual" });
     sideToMove = sideToMove === "w" ? "b" : "w";
     selected = null;
+    if (sourceTag !== "engine" && sourceTag !== "engine-match") {
+      cancelAutoPonder({ keepSearchRunning: false });
+    }
     lastInfo = "";
     lastWinrate = "";
     if (sourceTag !== "engine") {
@@ -1602,6 +1827,7 @@
       clearPVLines();
     }
     renderAll();
+    syncFenInputFromBoard();
     scheduleContinuousAnalysisRestart(sourceTag || "move");
     applyMove.lastError = "";
     return true;
@@ -1609,6 +1835,7 @@
   applyMove.lastError = "";
 
   function undoMove() {
+    cancelAutoPonder({ keepSearchRunning: false });
     const last = moveHistory.pop();
     if (!last) return;
     const mv = parseMove(last.uci);
@@ -1622,6 +1849,7 @@
     clearWinrateSeries();
     clearPVLines();
     renderAll();
+    syncFenInputFromBoard();
     scheduleContinuousAnalysisRestart("undo");
   }
 
@@ -1796,7 +2024,8 @@
     const info = lastInfo ? (" · " + lastInfo) : "";
     const wr = lastWinrate ? (" · " + lastWinrate) : "";
     const check = isInCheck(board, sideToMove) ? (" · " + (sideToMove === "w" ? "red" : "black") + " in check") : "";
-    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info + wr + check;
+    const ponder = autoPonderActive ? " · pondering" : "";
+    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info + wr + check + ponder;
   }
 
   function renderAll() {
@@ -2051,6 +2280,7 @@
       return;
     }
     match.stopRequested = true;
+    match.reason = match.reason || "stopped-by-user";
     setEngineMatchState("stopping...");
     for (const side of ["w", "b"]) {
       const entry = match.engines[side];
@@ -2064,11 +2294,46 @@
 
   async function finalizeEngineMatch(match, finalText) {
     if (!match) return;
+    match.finishedAt = new Date().toISOString();
     for (const side of ["w", "b"]) {
       const entry = match.engines[side];
       if (!entry || !entry.engine) continue;
       try { await entry.engine.terminate(); } catch (_) {}
     }
+    lastMatchReport = {
+      startedAt: match.startedAt || "",
+      finishedAt: match.finishedAt || "",
+      status: match.stopRequested ? "stopped" : "finished",
+      reason: match.reason || (match.stopRequested ? "stopped" : "completed"),
+      plyCap: match.plyCap,
+      delayMs: match.delayMs,
+      startFen: match.startFen || "",
+      endFen: currentBoardFen(),
+      endSideToMove: sideToMove === "w" ? "red" : "black",
+      searchPlan: match.searchPlan || "",
+      engines: {
+        red: match.engines.w ? {
+          provider: (match.engines.w.descriptor && match.engines.w.descriptor.provider) || "",
+          label: (match.engines.w.descriptor && match.engines.w.descriptor.label) || ""
+        } : null,
+        black: match.engines.b ? {
+          provider: (match.engines.b.descriptor && match.engines.b.descriptor.provider) || "",
+          label: (match.engines.b.descriptor && match.engines.b.descriptor.label) || ""
+        } : null
+      },
+      moves: moveHistory.map((m, idx) => {
+        const startSide = /\sb\b/.test(match.startFen || "") ? "b" : "w";
+        const side = idx % 2 === 0 ? startSide : (startSide === "w" ? "b" : "w");
+        return {
+          ply: idx + 1,
+          side,
+          uci: m.uci,
+          source: m.source || ""
+        };
+      }),
+      plyLog: Array.isArray(match.plyLog) ? match.plyLog.slice() : []
+    };
+    setMatchExportState("ready (" + lastMatchReport.plyLog.length + " ply)");
     if (engineMatch === match) {
       engineMatch = null;
       setEngineMatchState(finalText || "idle");
@@ -2089,6 +2354,7 @@
       }
 
       const plan = buildSearchCommand("engine-move");
+      if (!match.searchPlan) match.searchPlan = plan.summary;
       if (plan.warning && !match.warnedInfiniteFallback) {
         match.warnedInfiniteFallback = true;
         log("[match] " + plan.warning);
@@ -2103,15 +2369,18 @@
       const move = parseBestmove(bestLine);
 
       if (!move || move === "(none)") {
+        match.reason = sideName + "-no-legal-move";
         setEngineMatchState("finished · " + sideName + " has no move");
         return;
       }
       if (!applyMove(move, "engine-match")) {
+        match.reason = "illegal-move-" + sideName;
         log("[match] illegal engine move from " + sideName + ": " + move + " · " + (applyMove.lastError || "unknown"));
         setEngineMatchState("stopped · illegal move");
         return;
       }
       ply += 1;
+      match.plyLog.push({ ply, side, move, elapsedMs: elapsed, search: plan.summary });
       log("[match] " + sideName + " played " + move + " (" + elapsed + " ms)");
       if (delay > 0 && !match.stopRequested) {
         await delayMs(delay);
@@ -2119,9 +2388,11 @@
     }
 
     if (match.stopRequested) {
+      match.reason = match.reason || "stopped";
       setEngineMatchState("stopped");
       return;
     }
+    match.reason = "ply-cap-reached";
     setEngineMatchState("finished · ply cap reached (" + plyCap + ")");
   }
 
@@ -2148,12 +2419,20 @@
     const delay = positiveIntFromInput(matchDelayMsEl, 80, 0, 5000);
 
     setEngineMatchState("starting...");
+    lastMatchReport = null;
+    setMatchExportState("running...");
     const match = {
       running: true,
       stopRequested: false,
       warnedInfiniteFallback: false,
+      startedAt: new Date().toISOString(),
+      finishedAt: "",
+      reason: "",
       plyCap,
       delayMs: delay,
+      startFen: currentBoardFen(),
+      searchPlan: "",
+      plyLog: [],
       engines: { w: null, b: null },
       done: null
     };
@@ -2177,6 +2456,7 @@
       })();
       await match.done;
     } catch (e) {
+      match.reason = match.reason || ("error: " + String(e && e.message || e));
       await finalizeEngineMatch(match, "error");
       throw e;
     }
@@ -2364,6 +2644,9 @@
       if (completedAction === "play" && best[1] !== "(none)") {
         if (applyMove(best[1], "engine")) {
           posStatusEl.textContent = "Engine played " + best[1];
+          if (autoPonderEnabled() && !continuousAnalyzeEnabled() && !pageHidden) {
+            setTimeout(() => startAutoPonder("after-engine-move").catch((e) => log(String(e))), 0);
+          }
         } else {
           log("engine move rejected by GUI rules: " + best[1] + " · " + (applyMove.lastError || "unknown"));
         }
@@ -2603,6 +2886,7 @@
       engine = null;
       engineDescriptor = null;
       engineListener = null;
+      autoPonderActive = false;
       pendingEngineLines.length = 0;
       resetUciOptionPanelState({ keepStateText: true });
       uciOptionsStateEl.textContent = "No engine options loaded";
@@ -2615,6 +2899,30 @@
   async function sendCmd(cmd) {
     const e = await ensureEngine();
     e.postMessage(cmd);
+  }
+
+  async function runEngineToolCommand(cmd, label) {
+    const text = String(cmd || "").trim();
+    if (!text) throw new Error("empty engine tool command");
+    if (engineMatchRunning()) throw new Error("Stop engine match before running engine tools");
+    setEngineToolsState("running " + (label || text));
+    log("[tool] " + text);
+    const e = await ensureEngine();
+    if (continuousAnalyzeEnabled()) {
+      suppressContinuousUntilPositionChange = true;
+    }
+    autoPonderActive = false;
+    try { e.postMessage("stop"); } catch (_) {}
+    if (/^(d|eval|flip)\b/i.test(text)) {
+      e.postMessage(currentPositionCommand());
+    }
+    e.postMessage(text);
+    setEngineToolsState("sent " + (label || text));
+    setTimeout(() => {
+      if (engineToolsStateEl.textContent === ("tools: sent " + (label || text))) {
+        setEngineToolsState("idle");
+      }
+    }, 1200);
   }
 
   async function syncEnginePosition() {
@@ -2757,13 +3065,51 @@
     return !!continuousAnalyzeEl.checked;
   }
 
+  function autoPonderEnabled() {
+    return !!autoPonderEl.checked;
+  }
+
+  function cancelAutoPonder(opts) {
+    if (!autoPonderActive) return;
+    autoPonderActive = false;
+    if (!(opts && opts.keepSearchRunning) && engine) {
+      try { engine.postMessage("stop"); } catch (_) {}
+    }
+    if (engine && engineDescriptor) {
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor.label || engine.variant || "worker") + ", worker)";
+    }
+    scheduleStatusLineRender();
+  }
+
+  async function startAutoPonder(reason) {
+    if (!autoPonderEnabled()) return;
+    if (continuousAnalyzeEnabled()) return;
+    if (pageHidden || engineMatchRunning()) return;
+    const e = await ensureEngine();
+    autoPonderActive = true;
+    pendingBestmoveAction = null;
+    clearWinrateSeries();
+    clearPVLines();
+    lastBestmove = "";
+    e.postMessage("stop");
+    e.postMessage(currentPositionCommand());
+    e.postMessage("go infinite");
+    engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", pondering)";
+    log("auto-ponder: on (" + (reason || "engine-move") + ")");
+    scheduleStatusLineRender();
+  }
+
   async function stopSearch(opts) {
     const clearAction = !(opts && opts.keepPendingAction);
     if (clearAction) pendingBestmoveAction = null;
+    autoPonderActive = false;
     if (!engine) return;
     try {
       engine.postMessage("stop");
     } catch (_) {}
+    if (engineDescriptor) {
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor.label || engine.variant || "worker") + ", worker)";
+    }
   }
 
   function scheduleContinuousAnalysisRestart(reason) {
@@ -2782,6 +3128,7 @@
     if (!continuousAnalyzeEnabled()) return;
     if (pageHidden) return;
     if (suppressContinuousUntilPositionChange) return;
+    cancelAutoPonder({ keepSearchRunning: false });
     const e = await ensureEngine();
     pendingBestmoveAction = null;
     clearWinrateSeries();
@@ -2798,6 +3145,7 @@
   async function requestEngineMove() {
     clearTimeout(continuousRestartTimer);
     continuousRestartPending = false;
+    cancelAutoPonder({ keepSearchRunning: false });
     pendingBestmoveAction = "play";
     clearWinrateSeries();
     clearPVLines();
@@ -2812,6 +3160,7 @@
   async function analyzePosition() {
     clearTimeout(continuousRestartTimer);
     continuousRestartPending = false;
+    cancelAutoPonder({ keepSearchRunning: false });
     const plan = buildSearchCommand("analyze");
     pendingBestmoveAction = plan.expectsBestmove ? "analyze" : null;
     clearWinrateSeries();
@@ -2971,6 +3320,7 @@
       if (engine) {
         try { engine.postMessage("stop"); } catch (_) {}
       }
+      autoPonderActive = false;
       if (engineMatchRunning()) {
         stopEngineMatch().catch(() => {});
       }
@@ -3072,9 +3422,58 @@
   });
   document.getElementById("match-stop").onclick = () => stopEngineMatch().catch((e) => log(String(e)));
   document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
+  document.getElementById("fen-use-current").onclick = () => syncFenInputFromBoard();
+  document.getElementById("fen-load").onclick = () => loadFenFromInput().catch((e) => {
+    setFenState("load failed");
+    log("fen load failed: " + String(e && e.message || e));
+  });
+  document.getElementById("fen-copy").onclick = () => copyCurrentFen().catch((e) => {
+    setFenState("copy failed");
+    log("fen copy failed: " + String(e && e.message || e));
+  });
+  document.getElementById("moves-copy").onclick = () => copyCurrentMoves().catch((e) => {
+    setFenState("moves copy failed");
+    log("move copy failed: " + String(e && e.message || e));
+  });
+  document.getElementById("match-export-copy").onclick = () => copyMatchReport().catch((e) => {
+    setMatchExportState("copy failed");
+    log("match export copy failed: " + String(e && e.message || e));
+  });
+  document.getElementById("match-export-download").onclick = () => downloadMatchReport().catch((e) => {
+    setMatchExportState("download failed");
+    log("match export download failed: " + String(e && e.message || e));
+  });
   document.getElementById("uci-options-refresh").onclick = () => rescanUciOptions().catch((e) => log(String(e)));
   document.getElementById("uci-options-apply").onclick = () => applyAllUciOptionsFromPanel().catch((e) => log(String(e)));
   document.getElementById("uci-options-reset").onclick = () => resetUciOptionsFormToCurrent();
+  document.getElementById("tool-d").onclick = () => runEngineToolCommand("d", "d").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-eval").onclick = () => runEngineToolCommand("eval", "eval").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-flip").onclick = () => runEngineToolCommand("flip", "flip").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-compiler").onclick = () => runEngineToolCommand("compiler", "compiler").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-help").onclick = () => runEngineToolCommand("help", "help").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-bench").onclick = () => runEngineToolCommand("bench", "bench").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
+  document.getElementById("tool-speedtest").onclick = () => runEngineToolCommand("speedtest " + String(toolSpeedtestArgsEl.value || "1 16 1").trim(), "speedtest").catch((e) => {
+    setEngineToolsState("error");
+    log(String(e));
+  });
   document.getElementById("debug-log-apply").onclick = () => applyDebugLogOption().catch((e) => log(String(e)));
   document.getElementById("debug-log-refresh").onclick = () => refreshDebugLogView().catch((e) => log(String(e)));
   document.getElementById("debug-log-download").onclick = () => downloadDebugLogFile().catch((e) => log(String(e)));
@@ -3169,6 +3568,13 @@
     suppressContinuousUntilPositionChange = false;
     startContinuousAnalysis({ reason: "toggle-on" }).catch((e) => log(String(e)));
   });
+  autoPonderEl.addEventListener("change", () => {
+    if (!autoPonderEnabled()) {
+      cancelAutoPonder({ keepSearchRunning: false });
+      return;
+    }
+    log("auto-ponder enabled (starts after engine move)");
+  });
 
   window.addEventListener("resize", () => {
     renderBoard();
@@ -3183,6 +3589,7 @@
   searchValueEl.value = "1000";
   engineWorkerUrlEl.value = "";
   engineInitCmdsEl.value = "setoption name UCI_Variant value xiangqi";
+  fenInputEl.value = START_FEN + " - - 0 1";
   applyPresetToControls();
   refreshSearchModeControls();
   updateEngineProviderUI();
@@ -3191,6 +3598,8 @@
   resetPosition();
   if (shouldEnableDebugLogControls()) setDebugLogState("debug log: disabled");
   setEngineMatchState("idle");
+  setMatchExportState("none");
+  setEngineToolsState("idle");
   registerDemoServiceWorker();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Enable 'Continuous Analyze' for live infinite analysis that restarts on move/undo/reset.");
