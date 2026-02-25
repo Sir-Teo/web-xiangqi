@@ -374,6 +374,60 @@
       font-size: 0.86rem;
       background: rgba(255,255,255,0.65);
     }
+    .uci-options-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .uci-options-list {
+      display: grid;
+      gap: 8px;
+      max-height: 300px;
+      overflow: auto;
+    }
+    .uci-opt {
+      border: 1px solid color-mix(in srgb, var(--line) 84%, white);
+      border-radius: 10px;
+      padding: 8px;
+      background: linear-gradient(180deg, #fff, #fcfaf4);
+      display: grid;
+      gap: 6px;
+    }
+    .uci-opt-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-family: var(--mono);
+    }
+    .uci-opt-head strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .uci-opt-control {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .uci-opt-control input[type="number"] {
+      width: 100px;
+    }
+    .uci-opt-control select,
+    .uci-opt-control input[type="text"] {
+      min-width: 200px;
+      flex: 1;
+    }
+    .uci-opt-note {
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.25;
+    }
     pre {
       margin: 0;
       font-family: var(--mono);
@@ -539,6 +593,19 @@
 
       <section class="panel">
         <div class="row" style="margin-bottom:8px">
+          <strong>UCI Options</strong>
+          <button id="uci-options-refresh">Rescan (uci)</button>
+          <button id="uci-options-apply">Apply All</button>
+          <button id="uci-options-reset">Reset Form</button>
+          <span class="small mono" id="uci-options-state">No engine options loaded</span>
+        </div>
+        <div class="uci-options-box">
+          <div class="uci-options-list" id="uci-options-list"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
           <strong>Debug Log File</strong>
           <label><input id="debug-log-enabled" type="checkbox"> Enable (slower)</label>
           <span class="small mono" id="debug-log-state">debug log: disabled</span>
@@ -591,6 +658,8 @@
   const winrateRightEl = document.getElementById("winrate-right");
   const pvRowsEl = document.getElementById("pv-rows");
   const pvSummaryEl = document.getElementById("pv-summary");
+  const uciOptionsListEl = document.getElementById("uci-options-list");
+  const uciOptionsStateEl = document.getElementById("uci-options-state");
   const debugLogEnabledEl = document.getElementById("debug-log-enabled");
   const debugLogPathEl = document.getElementById("debug-log-path");
   const debugLogStateEl = document.getElementById("debug-log-state");
@@ -623,6 +692,10 @@
   let pvRenderScheduled = false;
   let pvLinesByIndex = new Map();
   let lastTopPV = "";
+  let uciOptionsRenderScheduled = false;
+  let uciOptionMetaByName = new Map();
+  let uciOptionOrder = [];
+  let uciOptionCurrentValues = new Map();
   let continuousRestartTimer = 0;
   let continuousRestartPending = false;
   let suppressContinuousUntilPositionChange = false;
@@ -630,6 +703,7 @@
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
   const MAX_DEBUG_LOG_PREVIEW_CHARS = 200000;
+  const UCI_OPTION_PREFS_KEY = "web-xiangqi-uci-option-prefs-v1";
 
   function isRedPiece(ch) { return !!ch && ch === ch.toUpperCase(); }
   function isBlackPiece(ch) { return !!ch && ch === ch.toLowerCase(); }
@@ -750,6 +824,7 @@
     externalEngineRowEl.style.display = isPikafish ? "none" : "flex";
     variantEl.disabled = !isPikafish;
     setDebugLogControlsEnabled(shouldEnableDebugLogControls());
+    scheduleUciOptionsRender();
   }
 
   function isLikelyMobileDevice() {
@@ -812,6 +887,307 @@
       .split(/\r?\n|;/)
       .map((s) => s.trim())
       .filter(Boolean);
+  }
+
+  function currentEnginePrefsKey() {
+    const provider = selectedEngineProvider();
+    if (provider === "external-worker") {
+      const url = (engineWorkerUrlEl.value || "").trim() || "external";
+      return "external-worker::" + url;
+    }
+    return "pikafish";
+  }
+
+  function loadAllUciOptionPrefs() {
+    try {
+      const raw = localStorage.getItem(UCI_OPTION_PREFS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveAllUciOptionPrefs(all) {
+    try {
+      localStorage.setItem(UCI_OPTION_PREFS_KEY, JSON.stringify(all || {}));
+    } catch (_) {}
+  }
+
+  function getSavedUciOptionPrefsForCurrentEngine() {
+    const all = loadAllUciOptionPrefs();
+    const key = currentEnginePrefsKey();
+    const v = all[key];
+    return v && typeof v === "object" ? v : {};
+  }
+
+  function setSavedUciOptionPref(name, value) {
+    if (!name) return;
+    const all = loadAllUciOptionPrefs();
+    const key = currentEnginePrefsKey();
+    const bucket = all[key] && typeof all[key] === "object" ? all[key] : {};
+    bucket[name] = String(value == null ? "" : value);
+    all[key] = bucket;
+    saveAllUciOptionPrefs(all);
+  }
+
+  function deleteSavedUciOptionPref(name) {
+    if (!name) return;
+    const all = loadAllUciOptionPrefs();
+    const key = currentEnginePrefsKey();
+    if (!all[key] || typeof all[key] !== "object") return;
+    delete all[key][name];
+    saveAllUciOptionPrefs(all);
+  }
+
+  function parseUciOptionLine(line) {
+    const m = String(line).match(/^option name (.+?) type (check|spin|combo|string|button)\b(.*)$/i);
+    if (!m) return null;
+    const name = m[1].trim();
+    const type = m[2].toLowerCase();
+    const tail = (m[3] || "").trim();
+    const tokens = tail ? tail.split(/\s+/) : [];
+    const markers = new Set(["default", "min", "max", "var"]);
+    const out = { name, type, default: "", min: null, max: null, vars: [] };
+    let i = 0;
+    while (i < tokens.length) {
+      const key = tokens[i++].toLowerCase();
+      if (!markers.has(key)) continue;
+      const vals = [];
+      while (i < tokens.length && !markers.has(tokens[i].toLowerCase())) {
+        vals.push(tokens[i++]);
+      }
+      const joined = vals.join(" ");
+      if (key === "default") {
+        out.default = joined === "<empty>" ? "" : joined;
+      } else if (key === "min") {
+        out.min = Number(joined);
+      } else if (key === "max") {
+        out.max = Number(joined);
+      } else if (key === "var") {
+        out.vars.push(joined === "<empty>" ? "" : joined);
+      }
+    }
+    return out;
+  }
+
+  function resetUciOptionPanelState(opts) {
+    uciOptionMetaByName = new Map();
+    uciOptionOrder = [];
+    uciOptionCurrentValues = new Map();
+    if (!(opts && opts.keepStateText)) {
+      uciOptionsStateEl.textContent = "No engine options loaded";
+    }
+    scheduleUciOptionsRender();
+  }
+
+  function scheduleUciOptionsRender() {
+    if (pageHidden) return;
+    if (uciOptionsRenderScheduled) return;
+    uciOptionsRenderScheduled = true;
+    requestAnimationFrame(() => {
+      uciOptionsRenderScheduled = false;
+      if (pageHidden) return;
+      renderUciOptionsPanel();
+    });
+  }
+
+  function upsertUciOptionMeta(meta) {
+    if (!meta || !meta.name) return false;
+    const exists = uciOptionMetaByName.has(meta.name);
+    uciOptionMetaByName.set(meta.name, meta);
+    if (!exists) uciOptionOrder.push(meta.name);
+    if (!uciOptionCurrentValues.has(meta.name) && meta.type !== "button") {
+      uciOptionCurrentValues.set(meta.name, String(meta.default == null ? "" : meta.default));
+    }
+    return true;
+  }
+
+  function formatUciOptionValueForCommand(meta, value) {
+    if (!meta) return String(value == null ? "" : value);
+    if (meta.type === "check") return value ? "true" : "false";
+    if (meta.type === "spin") {
+      let n = Number(value);
+      if (!Number.isFinite(n)) n = Number(meta.default || 0) || 0;
+      if (Number.isFinite(meta.min)) n = Math.max(meta.min, n);
+      if (Number.isFinite(meta.max)) n = Math.min(meta.max, n);
+      return String(Math.trunc(n));
+    }
+    return String(value == null ? "" : value);
+  }
+
+  function normalizeUciFormValue(meta, raw) {
+    if (!meta) return String(raw == null ? "" : raw);
+    if (meta.type === "check") return !!raw;
+    if (meta.type === "spin") {
+      let n = Number(raw);
+      if (!Number.isFinite(n)) n = Number(meta.default || 0) || 0;
+      if (Number.isFinite(meta.min)) n = Math.max(meta.min, n);
+      if (Number.isFinite(meta.max)) n = Math.min(meta.max, n);
+      return Math.trunc(n);
+    }
+    return String(raw == null ? "" : raw);
+  }
+
+  function syncUIFromAppliedUciOption(name, cmdValue) {
+    if (name === "MultiPV") {
+      const v = String(cmdValue);
+      if ([...multipvEl.options].some((o) => o.value === v)) {
+        multipvEl.value = v;
+      }
+      clearPVLines();
+    }
+    if (name === "Debug Log File" && shouldEnableDebugLogControls()) {
+      const text = String(cmdValue || "");
+      debugLogPathEl.value = text || debugLogPathEl.value || defaultDebugLogPath();
+      debugLogEnabledEl.checked = !!text;
+      setDebugLogState(text ? ("debug log: " + text) : "debug log: disabled");
+    }
+  }
+
+  async function applyOneUciOption(name, rawValue, opts) {
+    const meta = uciOptionMetaByName.get(name);
+    if (!meta || meta.type === "button") return;
+    const e = opts && opts.engine ? opts.engine : engine;
+    if (!e) throw new Error("engine not started");
+    const normalized = normalizeUciFormValue(meta, rawValue);
+    const cmdValue = formatUciOptionValueForCommand(meta, normalized);
+    e.setOption(name, cmdValue);
+    uciOptionCurrentValues.set(name, String(cmdValue));
+    syncUIFromAppliedUciOption(name, cmdValue);
+    if (!(opts && opts.skipPersist)) {
+      setSavedUciOptionPref(name, cmdValue);
+    }
+  }
+
+  function currentUciOptionFormValue(meta) {
+    if (!meta) return "";
+    const row = uciOptionsListEl.querySelector("[data-opt-name=\"" + CSS.escape(meta.name) + "\"]");
+    if (!row) return meta.type === "check"
+      ? (String(uciOptionCurrentValues.get(meta.name) || "").toLowerCase() === "true")
+      : (uciOptionCurrentValues.get(meta.name) ?? meta.default ?? "");
+    const input = row.querySelector("[data-opt-input]");
+    if (!input) return meta.default ?? "";
+    if (meta.type === "check") return !!input.checked;
+    return input.value;
+  }
+
+  function renderUciOptionsPanel() {
+    if (!uciOptionOrder.length) {
+      uciOptionsListEl.innerHTML = "<div class='pv-empty'>Start an engine and send <span class='mono'>uci</span> (done automatically on startup) to populate dynamic options.</div>";
+      return;
+    }
+    const saved = getSavedUciOptionPrefsForCurrentEngine();
+    const rows = [];
+    for (const name of uciOptionOrder) {
+      const meta = uciOptionMetaByName.get(name);
+      if (!meta) continue;
+      const current = uciOptionCurrentValues.has(name) ? uciOptionCurrentValues.get(name) : String(meta.default ?? "");
+      const savedValue = Object.prototype.hasOwnProperty.call(saved, name) ? String(saved[name]) : null;
+      const value = savedValue != null ? savedValue : current;
+      const headBits = [
+        "<span><strong>" + escapeHTML(name) + "</strong></span>",
+        "<span>type " + escapeHTML(meta.type) + "</span>"
+      ];
+      if (meta.type === "spin") {
+        if (Number.isFinite(meta.min)) headBits.push("<span>min " + meta.min + "</span>");
+        if (Number.isFinite(meta.max)) headBits.push("<span>max " + meta.max + "</span>");
+      }
+      if (meta.type !== "button") {
+        headBits.push("<span>default " + escapeHTML(String(meta.default ?? "")) + "</span>");
+        if (savedValue != null) headBits.push("<span>saved " + escapeHTML(savedValue || "<empty>") + "</span>");
+      }
+
+      let controlHTML = "";
+      if (meta.type === "check") {
+        const checked = String(value).toLowerCase() === "true" ? " checked" : "";
+        controlHTML = "<label><input data-opt-input type='checkbox'" + checked + "> Enabled</label>";
+      } else if (meta.type === "spin") {
+        const min = Number.isFinite(meta.min) ? (" min='" + meta.min + "'") : "";
+        const max = Number.isFinite(meta.max) ? (" max='" + meta.max + "'") : "";
+        controlHTML = "<input data-opt-input type='number'" + min + max + " value='" + escapeHTML(String(value)) + "'>";
+      } else if (meta.type === "combo") {
+        const vars = meta.vars && meta.vars.length ? meta.vars : [String(meta.default ?? "")];
+        const options = vars.map((v) => {
+          const selected = String(v) === String(value) ? " selected" : "";
+          return "<option value='" + escapeHTML(String(v)) + "'" + selected + ">" + escapeHTML(String(v) || "<empty>") + "</option>";
+        }).join("");
+        const missing = !vars.some((v) => String(v) === String(value))
+          ? "<option value='" + escapeHTML(String(value)) + "' selected>" + escapeHTML(String(value) || "<empty>") + "</option>"
+          : "";
+        controlHTML = "<select data-opt-input>" + missing + options + "</select>";
+      } else if (meta.type === "button") {
+        controlHTML = "<button data-opt-button type='button'>Run</button>";
+      } else {
+        controlHTML = "<input data-opt-input type='text' value='" + escapeHTML(String(value)) + "'>";
+      }
+
+      let note = "";
+      if (name === "Debug Log File") note = "Prefer the dedicated Debug Log panel for file path + preview/download.";
+      if (name === "MultiPV") note = "Synced with the MultiPV control above.";
+      rows.push(
+        "<div class='uci-opt' data-opt-name=\"" + escapeHTML(name) + "\">" +
+          "<div class='uci-opt-head'>" + headBits.join("") + "</div>" +
+          "<div class='uci-opt-control'>" + controlHTML + "</div>" +
+          (note ? ("<div class='uci-opt-note'>" + escapeHTML(note) + "</div>") : "") +
+        "</div>"
+      );
+    }
+    uciOptionsListEl.innerHTML = rows.join("");
+    uciOptionsStateEl.textContent = "Loaded " + uciOptionOrder.length + " options";
+  }
+
+  async function applyAllUciOptionsFromPanel() {
+    if (!engine) throw new Error("engine not started");
+    const names = [...uciOptionOrder];
+    for (const name of names) {
+      const meta = uciOptionMetaByName.get(name);
+      if (!meta || meta.type === "button") continue;
+      const raw = currentUciOptionFormValue(meta);
+      await applyOneUciOption(name, raw);
+    }
+    if (typeof engine.isReady === "function") {
+      await engine.isReady({ timeoutMs: 20000 }).catch(() => {});
+    }
+    if (continuousAnalyzeEnabled()) scheduleContinuousAnalysisRestart("uci-options-apply");
+    scheduleUciOptionsRender();
+    log("applied " + names.filter((n) => {
+      const m = uciOptionMetaByName.get(n);
+      return m && m.type !== "button";
+    }).length + " UCI options");
+  }
+
+  function resetUciOptionsFormToCurrent() {
+    scheduleUciOptionsRender();
+    log("UCI option form reset to current/saved values");
+  }
+
+  async function rescanUciOptions() {
+    if (!engine) throw new Error("engine not started");
+    resetUciOptionPanelState({ keepStateText: true });
+    uciOptionsStateEl.textContent = "Scanning engine options...";
+    engine.postMessage("uci");
+  }
+
+  async function applySavedUciOptionPrefsToEngine(e) {
+    const saved = getSavedUciOptionPrefsForCurrentEngine();
+    const metas = [...uciOptionOrder];
+    let applied = 0;
+    for (const name of metas) {
+      if (!Object.prototype.hasOwnProperty.call(saved, name)) continue;
+      if (name === "Debug Log File") continue; // handled by dedicated Debug Log panel
+      const meta = uciOptionMetaByName.get(name);
+      if (!meta || meta.type === "button") continue;
+      try {
+        await applyOneUciOption(name, saved[name], { engine: e, skipPersist: true });
+        applied += 1;
+      } catch (_) {}
+    }
+    if (applied) {
+      log("engine init: applied " + applied + " saved UCI option(s)");
+      scheduleUciOptionsRender();
+    }
   }
 
   function refreshBadges() {
@@ -1546,6 +1922,7 @@
 
   async function initializeEngineSession(e, descriptor) {
     await e.uci({ timeoutMs: 20000 });
+    drainEngineLines(); // parse UCI option lines immediately if they are queued
     const initCmds = descriptor && descriptor.provider === "external-worker" ? externalInitCommands() : [];
     for (const line of initCmds) {
       e.postMessage(line);
@@ -1557,6 +1934,7 @@
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
     try { e.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
     try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
+    await applySavedUciOptionPrefsToEngine(e);
     await e.isReady({ timeoutMs: 20000 }).catch(() => {});
 
     if (descriptor && descriptor.supportsDebugLog) {
@@ -1718,7 +2096,19 @@
   function processEngineLine(line) {
     let statusDirty = false;
     let pvDirty = false;
+    let uciOptionsDirty = false;
     log(line);
+
+    const parsedOpt = parseUciOptionLine(line);
+    if (parsedOpt) {
+      if (upsertUciOptionMeta(parsedOpt)) uciOptionsDirty = true;
+    }
+    if (/^uciok$/i.test(line)) {
+      uciOptionsStateEl.textContent = uciOptionOrder.length
+        ? ("Loaded " + uciOptionOrder.length + " options")
+        : "UCI handshake complete";
+      uciOptionsDirty = true;
+    }
 
     if (/^info depth /.test(line)) {
       const parsedInfo = parseInfoDepthLine(line);
@@ -1752,7 +2142,7 @@
       }
     }
 
-    return { statusDirty, pvDirty };
+    return { statusDirty, pvDirty, uciOptionsDirty };
   }
 
   function drainEngineLines() {
@@ -1760,13 +2150,16 @@
     const batch = pendingEngineLines.splice(0, pendingEngineLines.length);
     let statusDirty = false;
     let pvDirty = false;
+    let uciOptionsDirty = false;
     for (const line of batch) {
       const out = processEngineLine(line);
       if (out && out.statusDirty) statusDirty = true;
       if (out && out.pvDirty) pvDirty = true;
+      if (out && out.uciOptionsDirty) uciOptionsDirty = true;
     }
     if (statusDirty) scheduleStatusLineRender();
     if (pvDirty) schedulePVRender();
+    if (uciOptionsDirty) scheduleUciOptionsRender();
     if (pendingEngineLines.length) scheduleEngineDrain();
   }
 
@@ -1922,6 +2315,8 @@
     if (engine) return engine;
     if (engineBootPromise) return engineBootPromise;
     pendingEngineLines.length = 0;
+    resetUciOptionPanelState({ keepStateText: true });
+    uciOptionsStateEl.textContent = "Starting engine...";
     clearTimeout(continuousRestartTimer);
     continuousRestartPending = false;
     const provider = selectedEngineProvider();
@@ -1974,6 +2369,8 @@
       engineDescriptor = null;
       engineListener = null;
       pendingEngineLines.length = 0;
+      resetUciOptionPanelState({ keepStateText: true });
+      uciOptionsStateEl.textContent = "No engine options loaded";
       engineStateEl.textContent = "engine: stopped";
       pendingBestmoveAction = null;
       setDebugLogControlsEnabled(shouldEnableDebugLogControls());
@@ -2213,6 +2610,7 @@
     scheduleStatusLineRender();
     scheduleWinrateGraphRender(true);
     schedulePVRender();
+    scheduleUciOptionsRender();
     if (continuousAnalyzeEnabled() && engine) {
       scheduleContinuousAnalysisRestart("tab-visible");
     }
@@ -2290,6 +2688,9 @@
     renderBoard();
   };
   document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
+  document.getElementById("uci-options-refresh").onclick = () => rescanUciOptions().catch((e) => log(String(e)));
+  document.getElementById("uci-options-apply").onclick = () => applyAllUciOptionsFromPanel().catch((e) => log(String(e)));
+  document.getElementById("uci-options-reset").onclick = () => resetUciOptionsFormToCurrent();
   document.getElementById("debug-log-apply").onclick = () => applyDebugLogOption().catch((e) => log(String(e)));
   document.getElementById("debug-log-refresh").onclick = () => refreshDebugLogView().catch((e) => log(String(e)));
   document.getElementById("debug-log-download").onclick = () => downloadDebugLogFile().catch((e) => log(String(e)));
@@ -2297,6 +2698,36 @@
   debugLogEnabledEl.addEventListener("change", () => {
     setDebugLogPreview(debugLogViewEl.textContent);
     applyDebugLogOption().catch((e) => log(String(e)));
+  });
+  uciOptionsListEl.addEventListener("click", (ev) => {
+    const btn = ev.target && ev.target.closest ? ev.target.closest("[data-opt-button]") : null;
+    if (!btn) return;
+    const row = btn.closest("[data-opt-name]");
+    if (!row) return;
+    const name = row.getAttribute("data-opt-name") || "";
+    const meta = uciOptionMetaByName.get(name);
+    if (!meta || meta.type !== "button") return;
+    ensureEngine().then((e) => {
+      e.setOption(name, "");
+      log("ran UCI button: " + name);
+      if (name === "Clear Hash" && continuousAnalyzeEnabled()) {
+        scheduleContinuousAnalysisRestart("clear-hash");
+      }
+    }).catch((err) => log(String(err)));
+  });
+  uciOptionsListEl.addEventListener("change", (ev) => {
+    const input = ev.target && ev.target.closest ? ev.target.closest("[data-opt-input]") : null;
+    if (!input) return;
+    const row = input.closest("[data-opt-name]");
+    if (!row) return;
+    const name = row.getAttribute("data-opt-name") || "";
+    const meta = uciOptionMetaByName.get(name);
+    if (!meta) return;
+    const raw = meta.type === "check" ? !!input.checked : input.value;
+    if (name === "MultiPV") {
+      const v = String(normalizeUciFormValue(meta, raw));
+      if ([...multipvEl.options].some((o) => o.value === v)) multipvEl.value = v;
+    }
   });
   engineProviderEl.addEventListener("change", () => {
     updateEngineProviderUI();
@@ -2361,6 +2792,7 @@
   applyPresetToControls();
   updateEngineProviderUI();
   refreshBadges();
+  resetUciOptionPanelState({ keepStateText: true });
   resetPosition();
   if (shouldEnableDebugLogControls()) setDebugLogState("debug log: disabled");
   registerDemoServiceWorker();
