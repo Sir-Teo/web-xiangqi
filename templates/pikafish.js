@@ -46,6 +46,21 @@
     return new Uint8Array(await res.arrayBuffer());
   }
 
+  function toUint8Array(input) {
+    if (input instanceof Uint8Array) return input;
+    if (input instanceof ArrayBuffer) return new Uint8Array(input);
+    if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView && ArrayBuffer.isView(input)) {
+      return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+    }
+    throw new Error("Expected Uint8Array, ArrayBuffer, or TypedArray view");
+  }
+
+  function linePredicate(matcher) {
+    if (typeof matcher === "function") return matcher;
+    if (matcher instanceof RegExp) return function(line) { return matcher.test(line); };
+    return function(line) { return line === String(matcher); };
+  }
+
   function defaultBasePath() {
     if (isNode()) return __dirname;
     if (typeof self !== "undefined" && self.location) {
@@ -150,13 +165,26 @@
     const basePath = opts.basePath || defaultBasePath();
     const coreFactory = getCoreFactory({ ...opts, basePath, variant });
     const listeners = new Set();
+    const messageEventListeners = new Set();
+    const lineHistory = [];
+    const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
     const pending = [];
     let searching = false;
     let quitting = false;
     let mod;
+    let onmessageHandler = null;
 
     function emit(line) {
+      lineHistory.push(String(line));
+      if (lineHistory.length > maxLineHistory) lineHistory.shift();
       for (const fn of listeners) fn(line);
+      const evt = { data: String(line) };
+      if (typeof onmessageHandler === "function") {
+        try { onmessageHandler(evt); } catch (_) {}
+      }
+      for (const fn of messageEventListeners) {
+        try { fn(evt); } catch (_) {}
+      }
     }
 
     function maybeFlush() {
@@ -231,12 +259,115 @@
       await loadNNUE(opts.nnuePath);
     }
 
+    function waitForLine(matcher, waitOpts) {
+      const pred = linePredicate(matcher);
+      const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
+      for (const line of lineHistory) {
+        if (pred(line)) return Promise.resolve(line);
+      }
+
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error("Timed out waiting for engine output"));
+        }, timeoutMs);
+
+        function onLine(line) {
+          let matched = false;
+          try { matched = !!pred(line); } catch (e) {
+            cleanup();
+            reject(e);
+            return;
+          }
+          if (!matched) return;
+          cleanup();
+          resolve(line);
+        }
+
+        function cleanup() {
+          clearTimeout(timer);
+          listeners.delete(onLine);
+        }
+
+        listeners.add(onLine);
+      });
+    }
+
+    function readFile(path, fsOpts) {
+      const encoding = fsOpts && fsOpts.encoding === "utf8" ? "utf8" : "binary";
+      const out = mod.FS.readFile(path, { encoding: encoding === "utf8" ? "utf8" : "binary" });
+      if (encoding === "utf8") return String(out);
+      return out instanceof Uint8Array ? out : new Uint8Array(out);
+    }
+
+    function writeFile(path, data, fsOpts) {
+      const encoding = fsOpts && fsOpts.encoding === "utf8" ? "utf8" : (typeof data === "string" ? "utf8" : "binary");
+      if (encoding === "utf8") {
+        mod.FS.writeFile(path, String(data));
+      } else {
+        mod.FS.writeFile(path, toUint8Array(data));
+      }
+      return path;
+    }
+
+    function unlink(path) {
+      mod.FS.unlink(path);
+    }
+
+    function mkdir(path) {
+      if (!path) return;
+      if (typeof mod.FS.mkdirTree === "function") {
+        mod.FS.mkdirTree(path);
+        return;
+      }
+      const parts = String(path).split("/").filter(Boolean);
+      let cur = "";
+      for (const part of parts) {
+        cur += "/" + part;
+        try { mod.FS.mkdir(cur); } catch (_) {}
+      }
+    }
+
+    function readdir(path) {
+      return mod.FS.readdir(path);
+    }
+
     return {
       variant,
       postMessage,
+      command: postMessage,
+      send: postMessage,
       loadNNUE,
+      waitForLine,
+      async uci(waitOpts) {
+        const p = waitForLine(/^uciok$/, waitOpts);
+        postMessage("uci");
+        await p;
+      },
+      async isReady(waitOpts) {
+        const p = waitForLine(/^readyok$/, waitOpts);
+        postMessage("isready");
+        await p;
+      },
+      setOption(name, value) {
+        if (typeof value === "boolean") value = value ? "true" : "false";
+        postMessage("setoption name " + name + (typeof value === "undefined" ? "" : " value " + value));
+      },
+      readFile,
+      writeFile,
+      unlink,
+      mkdir,
+      readdir,
       addMessageListener(fn) { listeners.add(fn); },
       removeMessageListener(fn) { listeners.delete(fn); },
+      addEventListener(type, fn) {
+        if (type === "message") messageEventListeners.add(fn);
+      },
+      removeEventListener(type, fn) {
+        if (type === "message") messageEventListeners.delete(fn);
+      },
+      get onmessage() { return onmessageHandler; },
+      set onmessage(fn) { onmessageHandler = typeof fn === "function" ? fn : null; },
       async terminate() {
         if (!quitting) {
           try { postMessage("quit"); } catch (_) {}
@@ -265,12 +396,74 @@
     const coreScripts = opts.coreScripts || null;
 
     const listeners = new Set();
+    const messageEventListeners = new Set();
+    const errorEventListeners = new Set();
+    const lineHistory = [];
+    const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
+    const pendingRequests = new Map();
     let worker;
     let terminated = false;
     let activeVariant = bootstrapVariant;
+    let nextRequestId = 1;
+    let onmessageHandler = null;
+    let onerrorHandler = null;
 
     function emit(line) {
+      lineHistory.push(String(line));
+      if (lineHistory.length > maxLineHistory) lineHistory.shift();
       for (const fn of listeners) fn(line);
+      const evt = { data: String(line) };
+      if (typeof onmessageHandler === "function") {
+        try { onmessageHandler(evt); } catch (_) {}
+      }
+      for (const fn of messageEventListeners) {
+        try { fn(evt); } catch (_) {}
+      }
+    }
+
+    function emitError(errorLike) {
+      const err = errorLike instanceof Error ? errorLike : new Error(String(errorLike));
+      if (typeof onerrorHandler === "function") {
+        try { onerrorHandler(err); } catch (_) {}
+      }
+      for (const fn of errorEventListeners) {
+        try { fn(err); } catch (_) {}
+      }
+    }
+
+    function rejectPendingRequests(err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      for (const req of pendingRequests.values()) {
+        clearTimeout(req.timer);
+        req.reject(e);
+      }
+      pendingRequests.clear();
+    }
+
+    function callWorker(op, payload, callOpts) {
+      if (terminated && !(callOpts && callOpts.allowTerminated)) {
+        return Promise.reject(new Error("Worker engine already terminated"));
+      }
+      const requestId = nextRequestId++;
+      const timeoutMs = (callOpts && callOpts.timeoutMs) || 30000;
+      const transfer = (callOpts && callOpts.transfer) || [];
+
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pendingRequests.delete(requestId);
+          reject(new Error("Timed out in worker op: " + op));
+        }, timeoutMs);
+
+        pendingRequests.set(requestId, { resolve, reject, timer });
+
+        try {
+          worker.postMessage({ type: "rpc", op, requestId, ...(payload || {}) }, transfer);
+        } catch (e) {
+          clearTimeout(timer);
+          pendingRequests.delete(requestId);
+          reject(e);
+        }
+      });
     }
 
     const started = await new Promise((resolve, reject) => {
@@ -286,6 +479,16 @@
       worker.onmessage = function(event) {
         const data = event.data;
         if (data && typeof data === "object" && data.type) {
+          if (data.type === "rpcResult" && typeof data.requestId === "number") {
+            const req = pendingRequests.get(data.requestId);
+            if (req) {
+              pendingRequests.delete(data.requestId);
+              clearTimeout(req.timer);
+              if (data.ok) req.resolve(data);
+              else req.reject(new Error(data.message || ("Worker RPC failed: " + (data.op || "unknown"))));
+            }
+            return;
+          }
           if (data.type === "inited") {
             activeVariant = data.variant || activeVariant;
             settled = true;
@@ -301,6 +504,7 @@
               reject(err);
             } else {
               emit("[worker-error] " + err.message);
+              emitError(err);
             }
             return;
           }
@@ -317,6 +521,7 @@
           reject(e);
         } else {
           emit("[worker-error] " + e.message);
+          emitError(e);
         }
       };
 
@@ -352,16 +557,106 @@
         if (terminated) throw new Error("Worker engine already terminated");
         worker.postMessage(String(cmd));
       },
+      command(cmd) { this.postMessage(cmd); },
+      send(cmd) { this.postMessage(cmd); },
+      waitForLine(matcher, waitOpts) {
+        const pred = linePredicate(matcher);
+        const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
+        for (const line of lineHistory) {
+          if (pred(line)) return Promise.resolve(line);
+        }
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error("Timed out waiting for engine output"));
+          }, timeoutMs);
+
+          function onLine(line) {
+            let matched = false;
+            try { matched = !!pred(line); } catch (e) {
+              cleanup();
+              reject(e);
+              return;
+            }
+            if (!matched) return;
+            cleanup();
+            resolve(line);
+          }
+
+          function cleanup() {
+            clearTimeout(timer);
+            listeners.delete(onLine);
+          }
+
+          listeners.add(onLine);
+        });
+      },
+      async uci(waitOpts) {
+        const p = this.waitForLine(/^uciok$/, waitOpts);
+        this.postMessage("uci");
+        await p;
+      },
+      async isReady(waitOpts) {
+        const p = this.waitForLine(/^readyok$/, waitOpts);
+        this.postMessage("isready");
+        await p;
+      },
+      setOption(name, value) {
+        if (typeof value === "boolean") value = value ? "true" : "false";
+        this.postMessage("setoption name " + name + (typeof value === "undefined" ? "" : " value " + value));
+      },
       async loadNNUE(nnuePath) {
-        if (terminated) throw new Error("Worker engine already terminated");
-        worker.postMessage({ type: "loadNNUE", path: nnuePath || joinPath(basePath, "pikafish.nnue") });
+        await callWorker("loadNNUE", { path: nnuePath || joinPath(basePath, "pikafish.nnue") }, { timeoutMs: 120000 });
+      },
+      async readFile(path, fsOpts) {
+        const encoding = fsOpts && fsOpts.encoding === "utf8" ? "utf8" : "binary";
+        const res = await callWorker("fsRead", { path, encoding }, { timeoutMs: 120000 });
+        if (encoding === "utf8") return String(res.text || "");
+        if (res.buffer instanceof ArrayBuffer) return new Uint8Array(res.buffer);
+        return new Uint8Array(0);
+      },
+      async writeFile(path, data, fsOpts) {
+        const encoding = fsOpts && fsOpts.encoding === "utf8" ? "utf8" : (typeof data === "string" ? "utf8" : "binary");
+        if (encoding === "utf8") {
+          await callWorker("fsWrite", { path, encoding, text: String(data) }, { timeoutMs: 120000 });
+          return path;
+        }
+        const bytes = toUint8Array(data);
+        const copy = bytes.slice();
+        await callWorker("fsWrite", { path, encoding, buffer: copy.buffer }, { timeoutMs: 120000, transfer: [copy.buffer] });
+        return path;
+      },
+      async unlink(path) {
+        await callWorker("fsUnlink", { path });
+      },
+      async mkdir(path) {
+        await callWorker("fsMkdir", { path });
+      },
+      async readdir(path) {
+        const res = await callWorker("fsReaddir", { path });
+        return Array.isArray(res.entries) ? res.entries : [];
       },
       addMessageListener(fn) { listeners.add(fn); },
       removeMessageListener(fn) { listeners.delete(fn); },
+      addEventListener(type, fn) {
+        if (type === "message") messageEventListeners.add(fn);
+        else if (type === "error") errorEventListeners.add(fn);
+      },
+      removeEventListener(type, fn) {
+        if (type === "message") messageEventListeners.delete(fn);
+        else if (type === "error") errorEventListeners.delete(fn);
+      },
+      get onmessage() { return onmessageHandler; },
+      set onmessage(fn) { onmessageHandler = typeof fn === "function" ? fn : null; },
+      get onerror() { return onerrorHandler; },
+      set onerror(fn) { onerrorHandler = typeof fn === "function" ? fn : null; },
       async terminate() {
         if (terminated) return;
         terminated = true;
-        try { worker.postMessage({ type: "terminate" }); } catch (_) {}
+        try {
+          await callWorker("terminate", {}, { allowTerminated: true, timeoutMs: 5000 });
+        } catch (_) {}
+        rejectPendingRequests(new Error("Worker engine terminated"));
         try { worker.terminate(); } catch (_) {}
       }
     };
@@ -415,6 +710,20 @@
       });
     }
 
+    function postRpcOk(requestId, op, payload, transfer) {
+      self.postMessage({ type: "rpcResult", requestId, op, ok: true, ...(payload || {}) }, transfer || []);
+    }
+
+    function postRpcErr(requestId, op, error) {
+      self.postMessage({
+        type: "rpcResult",
+        requestId,
+        op,
+        ok: false,
+        message: (error && error.stack) ? error.stack : String(error)
+      });
+    }
+
     self.onmessage = async function(event) {
       try {
         const data = event.data;
@@ -441,6 +750,71 @@
 
         const engine = await ensureEngine();
         attachForwarder(engine);
+
+        if (data && typeof data === "object" && data.type === "rpc") {
+          const requestId = data.requestId;
+          const op = data.op;
+          try {
+            if (op === "terminate") {
+              await engine.terminate();
+              postRpcOk(requestId, op);
+              try { self.close(); } catch (_) {}
+              return;
+            }
+
+            if (op === "loadNNUE") {
+              const path = await engine.loadNNUE(data.path);
+              postRpcOk(requestId, op, { path });
+              return;
+            }
+
+            if (op === "fsRead") {
+              const encoding = data.encoding === "utf8" ? "utf8" : "binary";
+              const out = engine.readFile(data.path, { encoding });
+              if (encoding === "utf8") {
+                postRpcOk(requestId, op, { text: String(out) });
+              } else {
+                const bytes = (out instanceof Uint8Array) ? out : new Uint8Array(out);
+                const copy = bytes.slice();
+                postRpcOk(requestId, op, { buffer: copy.buffer }, [copy.buffer]);
+              }
+              return;
+            }
+
+            if (op === "fsWrite") {
+              const encoding = data.encoding === "utf8" ? "utf8" : "binary";
+              if (encoding === "utf8") {
+                engine.writeFile(data.path, data.text || "", { encoding: "utf8" });
+              } else {
+                engine.writeFile(data.path, new Uint8Array(data.buffer || new ArrayBuffer(0)), { encoding: "binary" });
+              }
+              postRpcOk(requestId, op, { path: data.path });
+              return;
+            }
+
+            if (op === "fsUnlink") {
+              engine.unlink(data.path);
+              postRpcOk(requestId, op);
+              return;
+            }
+
+            if (op === "fsMkdir") {
+              engine.mkdir(data.path);
+              postRpcOk(requestId, op);
+              return;
+            }
+
+            if (op === "fsReaddir") {
+              postRpcOk(requestId, op, { entries: engine.readdir(data.path) });
+              return;
+            }
+
+            throw new Error("Unknown RPC op: " + op);
+          } catch (e) {
+            postRpcErr(requestId, op, e);
+            return;
+          }
+        }
 
         if (data && typeof data === "object" && data.type === "terminate") {
           await engine.terminate();
