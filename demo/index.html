@@ -562,7 +562,72 @@
           <input id="match-ply-limit" type="number" min="1" max="1000" value="60" style="width:86px">
           <label for="match-delay-ms">Delay ms</label>
           <input id="match-delay-ms" type="number" min="0" max="5000" value="80" style="width:86px">
+          <label><input id="match-side-config-enabled" type="checkbox"> Side-specific EvsE engines</label>
           <span class="small mono" id="match-state">match: idle</span>
+        </div>
+        <div id="match-side-config-panel" style="display:none">
+          <div class="row">
+            <strong class="small">Red Engine</strong>
+            <label for="match-red-provider">Provider</label>
+            <select id="match-red-provider">
+              <option value="same">Same as main</option>
+              <option value="pikafish">Pikafish</option>
+              <option value="external-worker">External worker</option>
+            </select>
+            <label for="match-red-variant">Runtime</label>
+            <select id="match-red-variant">
+              <option value="same">Same as main</option>
+              <option value="auto">Auto</option>
+              <option value="threaded">Threaded</option>
+              <option value="single">Single-thread</option>
+            </select>
+            <label for="match-red-preset">Preset</label>
+            <select id="match-red-preset">
+              <option value="same">Same as main</option>
+              <option value="auto">Auto</option>
+              <option value="desktop-fast">Desktop Fast</option>
+              <option value="mobile-fast">Mobile Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="deep-analysis">Deep Analysis</option>
+            </select>
+          </div>
+          <div class="row" id="match-red-external-row" style="display:none">
+            <label for="match-red-worker-url">Red URL</label>
+            <input id="match-red-worker-url" class="mono" style="flex:1;min-width:200px" placeholder="(falls back to main URL)">
+            <label for="match-red-init-cmds">Red Init UCI</label>
+            <input id="match-red-init-cmds" class="mono" style="flex:1;min-width:220px" placeholder="(falls back to main init UCI)">
+          </div>
+          <div class="row">
+            <strong class="small">Black Engine</strong>
+            <label for="match-black-provider">Provider</label>
+            <select id="match-black-provider">
+              <option value="same">Same as main</option>
+              <option value="pikafish">Pikafish</option>
+              <option value="external-worker">External worker</option>
+            </select>
+            <label for="match-black-variant">Runtime</label>
+            <select id="match-black-variant">
+              <option value="same">Same as main</option>
+              <option value="auto">Auto</option>
+              <option value="threaded">Threaded</option>
+              <option value="single">Single-thread</option>
+            </select>
+            <label for="match-black-preset">Preset</label>
+            <select id="match-black-preset">
+              <option value="same">Same as main</option>
+              <option value="auto">Auto</option>
+              <option value="desktop-fast">Desktop Fast</option>
+              <option value="mobile-fast">Mobile Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="deep-analysis">Deep Analysis</option>
+            </select>
+          </div>
+          <div class="row" id="match-black-external-row" style="display:none">
+            <label for="match-black-worker-url">Black URL</label>
+            <input id="match-black-worker-url" class="mono" style="flex:1;min-width:200px" placeholder="(falls back to main URL)">
+            <label for="match-black-init-cmds">Black Init UCI</label>
+            <input id="match-black-init-cmds" class="mono" style="flex:1;min-width:220px" placeholder="(falls back to main init UCI)">
+          </div>
         </div>
         <div class="status-line mono" id="position-status"></div>
       </div>
@@ -742,6 +807,20 @@
   const multipvEl = document.getElementById("multipv");
   const matchPlyLimitEl = document.getElementById("match-ply-limit");
   const matchDelayMsEl = document.getElementById("match-delay-ms");
+  const matchSideConfigEnabledEl = document.getElementById("match-side-config-enabled");
+  const matchSideConfigPanelEl = document.getElementById("match-side-config-panel");
+  const matchRedProviderEl = document.getElementById("match-red-provider");
+  const matchRedVariantEl = document.getElementById("match-red-variant");
+  const matchRedPresetEl = document.getElementById("match-red-preset");
+  const matchRedExternalRowEl = document.getElementById("match-red-external-row");
+  const matchRedWorkerUrlEl = document.getElementById("match-red-worker-url");
+  const matchRedInitCmdsEl = document.getElementById("match-red-init-cmds");
+  const matchBlackProviderEl = document.getElementById("match-black-provider");
+  const matchBlackVariantEl = document.getElementById("match-black-variant");
+  const matchBlackPresetEl = document.getElementById("match-black-preset");
+  const matchBlackExternalRowEl = document.getElementById("match-black-external-row");
+  const matchBlackWorkerUrlEl = document.getElementById("match-black-worker-url");
+  const matchBlackInitCmdsEl = document.getElementById("match-black-init-cmds");
   const continuousAnalyzeEl = document.getElementById("continuous-analyze");
   const autoPonderEl = document.getElementById("auto-ponder");
   const externalEngineRowEl = document.getElementById("external-engine-row");
@@ -768,6 +847,7 @@
 
   let board = parseFenBoard(START_FEN);
   let sideToMove = "w";
+  let positionBaseFen = START_FEN + " - - 0 1";
   let moveHistory = [];
   let selected = null;
   let flipped = false;
@@ -806,6 +886,7 @@
 
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
+  const MATCH_CLOCK_FLAG_SLACK_MS = 50;
   const MAX_DEBUG_LOG_PREVIEW_CHARS = 200000;
   const UCI_OPTION_PREFS_KEY = "web-xiangqi-uci-option-prefs-v1";
 
@@ -928,6 +1009,7 @@
     externalEngineRowEl.style.display = isPikafish ? "none" : "flex";
     variantEl.disabled = !isPikafish;
     setDebugLogControlsEnabled(shouldEnableDebugLogControls());
+    updateMatchEngineUI();
     scheduleUciOptionsRender();
   }
 
@@ -943,9 +1025,10 @@
     return isLikelyMobileDevice() ? "mobile-fast" : "desktop-fast";
   }
 
-  function resolvePresetConfig(name) {
+  function resolvePresetConfig(name, opts) {
     const hw = Math.max(1, Number(navigator.hardwareConcurrency || 4) || 4);
-    const threadsSupported = isPikafishProvider() && window.Pikafish.wasmThreadsSupported();
+    const provider = opts && opts.provider ? opts.provider : selectedEngineProvider();
+    const threadsSupported = provider === "pikafish" && window.Pikafish.wasmThreadsSupported();
     const mobile = isLikelyMobileDevice();
     const key = (name === "auto" || !name) ? detectPresetName() : name;
     if (key === "mobile-fast") {
@@ -981,16 +1064,96 @@
   }
 
   function applyPresetToControls() {
-    const cfg = resolvePresetConfig(presetEl.value);
+    const cfg = resolvePresetConfig(presetEl.value, { provider: selectedEngineProvider() });
     depthEl.value = String(cfg.depth);
     return cfg;
   }
 
-  function externalInitCommands() {
-    return String(engineInitCmdsEl.value || "")
+  function parseInitCommandsText(text) {
+    return String(text || "")
       .split(/\r?\n|;/)
       .map((s) => s.trim())
       .filter(Boolean);
+  }
+
+  function externalInitCommands() {
+    return parseInitCommandsText(engineInitCmdsEl.value || "");
+  }
+
+  function readMainEngineSpec() {
+    return {
+      provider: selectedEngineProvider(),
+      variant: String(variantEl.value || "auto"),
+      preset: String(presetEl.value || "auto"),
+      workerUrl: String(engineWorkerUrlEl.value || "").trim(),
+      initCmds: externalInitCommands()
+    };
+  }
+
+  function evseSideName(side) {
+    return side === "w" ? "red" : "black";
+  }
+
+  function matchSideProviderControl(side) {
+    return side === "w" ? matchRedProviderEl : matchBlackProviderEl;
+  }
+
+  function matchSideVariantControl(side) {
+    return side === "w" ? matchRedVariantEl : matchBlackVariantEl;
+  }
+
+  function matchSidePresetControl(side) {
+    return side === "w" ? matchRedPresetEl : matchBlackPresetEl;
+  }
+
+  function matchSideWorkerUrlControl(side) {
+    return side === "w" ? matchRedWorkerUrlEl : matchBlackWorkerUrlEl;
+  }
+
+  function matchSideInitCmdsControl(side) {
+    return side === "w" ? matchRedInitCmdsEl : matchBlackInitCmdsEl;
+  }
+
+  function matchSideExternalRow(side) {
+    return side === "w" ? matchRedExternalRowEl : matchBlackExternalRowEl;
+  }
+
+  function evseSideOverridesEnabled() {
+    return !!(matchSideConfigEnabledEl && matchSideConfigEnabledEl.checked);
+  }
+
+  function resolveMatchSideEngineSpec(side) {
+    const base = readMainEngineSpec();
+    if (!evseSideOverridesEnabled()) return { ...base };
+
+    const providerRaw = String(matchSideProviderControl(side).value || "same");
+    const provider = providerRaw === "same" ? base.provider : providerRaw;
+    const variantRaw = String(matchSideVariantControl(side).value || "same");
+    const variant = variantRaw === "same" ? base.variant : variantRaw;
+    const presetRaw = String(matchSidePresetControl(side).value || "same");
+    const preset = presetRaw === "same" ? base.preset : presetRaw;
+
+    let workerUrl = "";
+    let initCmds = [];
+    if (provider === "external-worker") {
+      const sideUrl = String(matchSideWorkerUrlControl(side).value || "").trim();
+      workerUrl = sideUrl || base.workerUrl;
+      const sideInit = parseInitCommandsText(matchSideInitCmdsControl(side).value || "");
+      initCmds = sideInit.length ? sideInit : base.initCmds.slice();
+    }
+
+    return { provider, variant, preset, workerUrl, initCmds };
+  }
+
+  function updateMatchEngineUI() {
+    const enabled = evseSideOverridesEnabled();
+    matchSideConfigPanelEl.style.display = enabled ? "block" : "none";
+    for (const side of ["w", "b"]) {
+      const providerRaw = enabled ? String(matchSideProviderControl(side).value || "same") : "same";
+      const effectiveProvider = providerRaw === "same" ? selectedEngineProvider() : providerRaw;
+      matchSideExternalRow(side).style.display = enabled && effectiveProvider === "external-worker" ? "flex" : "none";
+      matchSideVariantControl(side).disabled = effectiveProvider !== "pikafish";
+    }
   }
 
   function currentEnginePrefsKey() {
@@ -1510,6 +1673,7 @@
     board = parsed.board;
     sideToMove = parsed.side;
     moveHistory = [];
+    positionBaseFen = boardToFen(parsed.board, parsed.side);
     selected = null;
     pendingBestmoveAction = null;
     autoPonderActive = false;
@@ -1534,6 +1698,7 @@
     cancelAutoPonder({ keepSearchRunning: false });
     board = parseFenBoard(START_FEN);
     sideToMove = "w";
+    positionBaseFen = START_FEN + " - - 0 1";
     moveHistory = [];
     selected = null;
     pendingBestmoveAction = null;
@@ -2035,7 +2200,11 @@
   }
 
   function currentPositionCommand() {
-    return "position fen " + boardToFen(board, sideToMove);
+    let cmd = "position fen " + (positionBaseFen || boardToFen(board, sideToMove));
+    if (moveHistory.length) {
+      cmd += " moves " + moveHistory.map((m) => m.uci).join(" ");
+    }
+    return cmd;
   }
 
   function lineMatcherFn(matcher) {
@@ -2172,18 +2341,34 @@
     return api;
   }
 
-  async function createSelectedEngine() {
-    const provider = selectedEngineProvider();
+  function engineSpecLabel(spec) {
+    if (!spec) return "engine";
+    if (spec.provider === "external-worker") {
+      const raw = String(spec.workerUrl || "").trim();
+      if (!raw) return "external-worker";
+      try {
+        const u = new URL(raw, location.href);
+        const tail = u.pathname.split("/").filter(Boolean).pop();
+        return tail ? ("external:" + tail) : "external-worker";
+      } catch (_) {
+        return "external-worker";
+      }
+    }
+    return spec.variant || "pikafish";
+  }
+
+  async function createEngineFromSpec(spec) {
+    const provider = spec && spec.provider ? spec.provider : "pikafish";
     if (provider === "external-worker") {
-      const workerUrl = (engineWorkerUrlEl.value || "").trim();
-      if (!workerUrl) throw new Error("Set External Worker URL first");
+      const workerUrl = String((spec && spec.workerUrl) || "").trim();
+      if (!workerUrl) throw new Error("External worker URL is required");
       const api = createGenericUCIWorkerEngine({ workerUrl });
       api.variant = "external";
       return {
         engine: api,
         descriptor: {
           provider,
-          label: "external-worker",
+          label: engineSpecLabel({ provider, workerUrl }),
           supportsDebugLog: false
         }
       };
@@ -2191,7 +2376,7 @@
 
     const api = await window.Pikafish.createWorkerEngine({
       basePath: ".",
-      variant: variantEl.value
+      variant: (spec && spec.variant) || "auto"
     });
     api.provider = "pikafish";
     return {
@@ -2204,16 +2389,21 @@
     };
   }
 
+  async function createSelectedEngine() {
+    return createEngineFromSpec(readMainEngineSpec());
+  }
+
   async function initializeEngineSession(e, descriptor) {
     await e.uci({ timeoutMs: 20000 });
     drainEngineLines(); // parse UCI option lines immediately if they are queued
-    const initCmds = descriptor && descriptor.provider === "external-worker" ? externalInitCommands() : [];
+    const spec = readMainEngineSpec();
+    const initCmds = descriptor && descriptor.provider === "external-worker" ? (spec.initCmds || []) : [];
     for (const line of initCmds) {
       e.postMessage(line);
     }
     await e.isReady({ timeoutMs: 20000 });
 
-    const presetCfg = resolvePresetConfig(presetEl.value);
+    const presetCfg = resolvePresetConfig(spec.preset, { provider: spec.provider });
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
     try { e.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
@@ -2251,25 +2441,27 @@
     return m ? m[1] : "";
   }
 
-  async function initializeAuxEngineSession(e, descriptor, sideTag) {
+  async function initializeAuxEngineSession(e, descriptor, sideTag, spec) {
     await e.uci({ timeoutMs: 20000 });
-    const initCmds = descriptor && descriptor.provider === "external-worker" ? externalInitCommands() : [];
+    const initCmds = descriptor && descriptor.provider === "external-worker" ? ((spec && spec.initCmds) || []) : [];
     for (const line of initCmds) e.postMessage(line);
     await e.isReady({ timeoutMs: 20000 });
 
-    const presetCfg = resolvePresetConfig(presetEl.value);
+    const presetCfg = resolvePresetConfig((spec && spec.preset) || presetEl.value, {
+      provider: (spec && spec.provider) || (descriptor && descriptor.provider) || "pikafish"
+    });
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
     try { e.setOption("MultiPV", 1); } catch (_) {}
     try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
     try { e.setOption("Ponder", "false"); } catch (_) {}
     await e.isReady({ timeoutMs: 20000 }).catch(() => {});
-    log("[match " + sideTag + "] ready (" + (descriptor.label || e.variant || descriptor.provider || "engine") + ")");
+    log("[match " + sideTag + "] ready (" + (descriptor.label || e.variant || descriptor.provider || "engine") + ", preset " + presetCfg.name + ")");
   }
 
-  async function createAuxMatchEngine(sideTag) {
-    const created = await createSelectedEngine();
-    await initializeAuxEngineSession(created.engine, created.descriptor, sideTag);
+  async function createAuxMatchEngine(sideTag, spec) {
+    const created = await createEngineFromSpec(spec);
+    await initializeAuxEngineSession(created.engine, created.descriptor, sideTag, spec);
     return created;
   }
 
@@ -2311,6 +2503,14 @@
       endFen: currentBoardFen(),
       endSideToMove: sideToMove === "w" ? "red" : "black",
       searchPlan: match.searchPlan || "",
+      clock: match.clock ? {
+        initial: cloneMatchClockState(match.clockInitial),
+        remaining: cloneMatchClockState(match.clock)
+      } : null,
+      sideConfigs: match.sideSpecs ? {
+        red: { ...match.sideSpecs.w, initCmds: (match.sideSpecs.w && match.sideSpecs.w.initCmds) ? match.sideSpecs.w.initCmds.slice() : [] },
+        black: { ...match.sideSpecs.b, initCmds: (match.sideSpecs.b && match.sideSpecs.b.initCmds) ? match.sideSpecs.b.initCmds.slice() : [] }
+      } : null,
       engines: {
         red: match.engines.w ? {
           provider: (match.engines.w.descriptor && match.engines.w.descriptor.provider) || "",
@@ -2353,13 +2553,18 @@
         throw new Error("match engine missing for " + sideName);
       }
 
-      const plan = buildSearchCommand("engine-move");
+      const plan = buildSearchCommand("engine-move", {
+        mode: match.searchModeFixed || searchMode(),
+        side,
+        clockState: match.clock || null
+      });
       if (!match.searchPlan) match.searchPlan = plan.summary;
       if (plan.warning && !match.warnedInfiniteFallback) {
         match.warnedInfiniteFallback = true;
         log("[match] " + plan.warning);
       }
-      setEngineMatchState("running · ply " + ply + "/" + plyCap + " · " + sideName + " thinking");
+      const clockText = match.clock ? (" · " + formatMatchClockSummary(match.clock)) : "";
+      setEngineMatchState("running · ply " + ply + "/" + plyCap + " · " + sideName + " thinking" + clockText);
 
       entry.engine.postMessage(currentPositionCommand());
       entry.engine.postMessage(plan.command);
@@ -2367,11 +2572,33 @@
       const bestLine = await entry.engine.waitForLine(/^bestmove\s+\S+/i, { timeoutMs: 120000 });
       const elapsed = Math.round(performance.now() - t0);
       const move = parseBestmove(bestLine);
+      const clockBefore = match.clock ? cloneMatchClockState(match.clock) : null;
 
       if (!move || move === "(none)") {
         match.reason = sideName + "-no-legal-move";
         setEngineMatchState("finished · " + sideName + " has no move");
         return;
+      }
+      let clockUpdate = null;
+      if (match.clock) {
+        clockUpdate = applyMatchClockAfterMove(match.clock, side, elapsed);
+        syncClockInputsFromMatchState(match.clock);
+        if (clockUpdate && clockUpdate.flagged) {
+          match.reason = "flag-" + sideName;
+          match.plyLog.push({
+            ply: ply + 1,
+            side,
+            move,
+            elapsedMs: elapsed,
+            search: plan.summary,
+            flagged: true,
+            clockBefore,
+            clockAfter: cloneMatchClockState(match.clock)
+          });
+          log("[match] " + sideName + " flagged on time after " + elapsed + " ms (" + formatMatchClockSummary(match.clock) + ")");
+          setEngineMatchState("finished · " + sideName + " flagged (" + formatMatchClockSummary(match.clock) + ")");
+          return;
+        }
       }
       if (!applyMove(move, "engine-match")) {
         match.reason = "illegal-move-" + sideName;
@@ -2380,8 +2607,16 @@
         return;
       }
       ply += 1;
-      match.plyLog.push({ ply, side, move, elapsedMs: elapsed, search: plan.summary });
-      log("[match] " + sideName + " played " + move + " (" + elapsed + " ms)");
+      match.plyLog.push({
+        ply,
+        side,
+        move,
+        elapsedMs: elapsed,
+        search: plan.summary,
+        clockBefore,
+        clockAfter: match.clock ? cloneMatchClockState(match.clock) : null
+      });
+      log("[match] " + sideName + " played " + move + " (" + elapsed + " ms)" + (match.clock ? (" · " + formatMatchClockSummary(match.clock)) : ""));
       if (delay > 0 && !match.stopRequested) {
         await delayMs(delay);
       }
@@ -2417,6 +2652,17 @@
 
     const plyCap = positiveIntFromInput(matchPlyLimitEl, 60, 1, 1000);
     const delay = positiveIntFromInput(matchDelayMsEl, 80, 0, 5000);
+    const sideSpecs = {
+      w: resolveMatchSideEngineSpec("w"),
+      b: resolveMatchSideEngineSpec("b")
+    };
+    if (sideSpecs.w.provider === "external-worker" && !sideSpecs.w.workerUrl) {
+      throw new Error("Red EvsE engine needs an external worker URL");
+    }
+    if (sideSpecs.b.provider === "external-worker" && !sideSpecs.b.workerUrl) {
+      throw new Error("Black EvsE engine needs an external worker URL");
+    }
+    const clockState = searchMode() === "clock" ? createMatchClockStateFromControls() : null;
 
     setEngineMatchState("starting...");
     lastMatchReport = null;
@@ -2432,6 +2678,10 @@
       delayMs: delay,
       startFen: currentBoardFen(),
       searchPlan: "",
+      searchModeFixed: searchMode(),
+      sideSpecs,
+      clock: clockState ? cloneMatchClockState(clockState) : null,
+      clockInitial: clockState ? cloneMatchClockState(clockState) : null,
       plyLog: [],
       engines: { w: null, b: null },
       done: null
@@ -2439,14 +2689,17 @@
     engineMatch = match;
 
     try {
-      match.engines.w = await createAuxMatchEngine("red");
-      match.engines.b = await createAuxMatchEngine("black");
+      match.engines.w = await createAuxMatchEngine("red", sideSpecs.w);
+      match.engines.b = await createAuxMatchEngine("black", sideSpecs.b);
       for (const side of ["w", "b"]) {
         const e = match.engines[side].engine;
         e.postMessage("ucinewgame");
         e.postMessage(currentPositionCommand());
       }
+      const redLabel = engineSpecLabel(sideSpecs.w);
+      const blackLabel = engineSpecLabel(sideSpecs.b);
       log("[match] started from current position (side to move: " + (sideToMove === "w" ? "red" : "black") + ")");
+      log("[match] red=" + redLabel + " · black=" + blackLabel + (match.clock ? (" · " + formatMatchClockSummary(match.clock)) : ""));
       match.done = (async () => {
         try {
           await runEngineMatchLoop(match);
@@ -2950,8 +3203,96 @@
     return v;
   }
 
-  function buildSearchCommand(kind) {
-    const mode = searchMode();
+  function readClockControls() {
+    return {
+      wtime: positiveIntFromInput(clockWtimeEl, 60000, 1, 86400000),
+      btime: positiveIntFromInput(clockBtimeEl, 60000, 1, 86400000),
+      winc: positiveIntFromInput(clockWincEl, 0, 0, 600000),
+      binc: positiveIntFromInput(clockBincEl, 0, 0, 600000),
+      movestogo: positiveIntFromInput(clockMovesToGoEl, 0, 0, 1000)
+    };
+  }
+
+  function buildClockGoCommand(clockSpec) {
+    const wtime = Math.max(0, Math.trunc(Number(clockSpec && clockSpec.wtime) || 0));
+    const btime = Math.max(0, Math.trunc(Number(clockSpec && clockSpec.btime) || 0));
+    const winc = Math.max(0, Math.trunc(Number(clockSpec && clockSpec.winc) || 0));
+    const binc = Math.max(0, Math.trunc(Number(clockSpec && clockSpec.binc) || 0));
+    const movestogo = Math.max(0, Math.trunc(Number(clockSpec && clockSpec.movestogo) || 0));
+    let cmd = "go wtime " + wtime + " btime " + btime + " winc " + winc + " binc " + binc;
+    if (movestogo > 0) cmd += " movestogo " + movestogo;
+    return cmd;
+  }
+
+  function createMatchClockStateFromControls() {
+    const c = readClockControls();
+    return {
+      enabled: true,
+      time: { w: c.wtime, b: c.btime },
+      inc: { w: c.winc, b: c.binc },
+      movestogo: { w: c.movestogo, b: c.movestogo }
+    };
+  }
+
+  function cloneMatchClockState(clock) {
+    if (!clock) return null;
+    return {
+      enabled: !!clock.enabled,
+      time: { w: Number(clock.time && clock.time.w || 0), b: Number(clock.time && clock.time.b || 0) },
+      inc: { w: Number(clock.inc && clock.inc.w || 0), b: Number(clock.inc && clock.inc.b || 0) },
+      movestogo: { w: Number(clock.movestogo && clock.movestogo.w || 0), b: Number(clock.movestogo && clock.movestogo.b || 0) }
+    };
+  }
+
+  function syncClockInputsFromMatchState(clock) {
+    if (!clock || !clock.time || !clock.inc) return;
+    clockWtimeEl.value = String(Math.max(0, Math.trunc(clock.time.w || 0)));
+    clockBtimeEl.value = String(Math.max(0, Math.trunc(clock.time.b || 0)));
+    clockWincEl.value = String(Math.max(0, Math.trunc(clock.inc.w || 0)));
+    clockBincEl.value = String(Math.max(0, Math.trunc(clock.inc.b || 0)));
+    const wm = Math.max(0, Math.trunc(clock.movestogo && clock.movestogo.w || 0));
+    const bm = Math.max(0, Math.trunc(clock.movestogo && clock.movestogo.b || 0));
+    clockMovesToGoEl.value = String(wm && bm ? Math.min(wm, bm) : (wm || bm || 0));
+    refreshSearchModeControls();
+  }
+
+  function formatClockMs(ms) {
+    const n = Math.max(0, Math.trunc(Number(ms) || 0));
+    if (n >= 60000) return (n / 1000).toFixed(1) + "s";
+    return n + "ms";
+  }
+
+  function formatMatchClockSummary(clock) {
+    if (!clock || !clock.time) return "";
+    const red = formatClockMs(clock.time.w);
+    const black = formatClockMs(clock.time.b);
+    const rw = Math.max(0, Math.trunc(clock.movestogo && clock.movestogo.w || 0));
+    const bw = Math.max(0, Math.trunc(clock.movestogo && clock.movestogo.b || 0));
+    const mtg = (rw || bw) ? (" mtg " + rw + "/" + bw) : "";
+    return "R " + red + " · B " + black + mtg;
+  }
+
+  function applyMatchClockAfterMove(clock, side, elapsedMs) {
+    if (!clock || !clock.enabled) return { flagged: false };
+    const used = Math.max(0, Math.trunc(Number(elapsedMs) || 0));
+    const before = Math.max(0, Math.trunc(Number(clock.time[side]) || 0));
+    const afterRaw = before - used;
+    const flagged = afterRaw < -MATCH_CLOCK_FLAG_SLACK_MS;
+    if (flagged) {
+      clock.time[side] = 0;
+      return { flagged: true, used, before, after: 0 };
+    }
+    const base = Math.max(0, afterRaw);
+    const inc = Math.max(0, Math.trunc(Number(clock.inc[side]) || 0));
+    clock.time[side] = base + inc;
+    if (clock.movestogo && Number(clock.movestogo[side]) > 0) {
+      clock.movestogo[side] = Math.max(0, Math.trunc(Number(clock.movestogo[side]) - 1));
+    }
+    return { flagged: false, used, before, after: clock.time[side] };
+  }
+
+  function buildSearchCommand(kind, opts) {
+    const mode = (opts && opts.mode) || searchMode();
     if (mode === "depth") {
       return {
         mode,
@@ -2988,18 +3329,21 @@
       };
     }
     if (mode === "clock") {
-      const wtime = positiveIntFromInput(clockWtimeEl, 60000, 1, 86400000);
-      const btime = positiveIntFromInput(clockBtimeEl, 60000, 1, 86400000);
-      const winc = positiveIntFromInput(clockWincEl, 0, 0, 600000);
-      const binc = positiveIntFromInput(clockBincEl, 0, 0, 600000);
-      const movestogo = positiveIntFromInput(clockMovesToGoEl, 0, 0, 1000);
-      let cmd = "go wtime " + wtime + " btime " + btime + " winc " + winc + " binc " + binc;
-      if (movestogo > 0) cmd += " movestogo " + movestogo;
+      const side = (opts && opts.side) || sideToMove;
+      const clockOverride = opts && opts.clockState;
+      const clockSpec = clockOverride ? {
+        wtime: Math.max(0, Math.trunc(Number(clockOverride.time && clockOverride.time.w) || 0)),
+        btime: Math.max(0, Math.trunc(Number(clockOverride.time && clockOverride.time.b) || 0)),
+        winc: Math.max(0, Math.trunc(Number(clockOverride.inc && clockOverride.inc.w) || 0)),
+        binc: Math.max(0, Math.trunc(Number(clockOverride.inc && clockOverride.inc.b) || 0)),
+        movestogo: Math.max(0, Math.trunc(Number(clockOverride.movestogo && clockOverride.movestogo[side]) || 0))
+      } : readClockControls();
+      const cmd = buildClockGoCommand(clockSpec);
       return {
         mode,
         command: cmd,
         expectsBestmove: true,
-        summary: cmd
+        summary: clockOverride ? (cmd + " [" + formatMatchClockSummary(clockOverride) + "]") : cmd
       };
     }
     if (mode === "infinite") {
@@ -3520,6 +3864,23 @@
       engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : "unknown") + ") · provider changed";
     }
   });
+  matchSideConfigEnabledEl.addEventListener("change", () => {
+    updateMatchEngineUI();
+    if (engineMatchRunning()) {
+      log("EvsE side config changed; stop and restart the match to apply.");
+    }
+  });
+  for (const el of [
+    matchRedProviderEl, matchRedVariantEl, matchRedPresetEl, matchRedWorkerUrlEl, matchRedInitCmdsEl,
+    matchBlackProviderEl, matchBlackVariantEl, matchBlackPresetEl, matchBlackWorkerUrlEl, matchBlackInitCmdsEl
+  ]) {
+    el.addEventListener("change", () => {
+      updateMatchEngineUI();
+      if (engineMatchRunning()) {
+        log("EvsE side config changed; stop and restart the match to apply.");
+      }
+    });
+  }
   presetEl.addEventListener("change", () => {
     const cfg = applyPresetToControls();
     refreshBadges();
@@ -3589,6 +3950,17 @@
   searchValueEl.value = "1000";
   engineWorkerUrlEl.value = "";
   engineInitCmdsEl.value = "setoption name UCI_Variant value xiangqi";
+  matchSideConfigEnabledEl.checked = false;
+  matchRedProviderEl.value = "same";
+  matchRedVariantEl.value = "same";
+  matchRedPresetEl.value = "same";
+  matchRedWorkerUrlEl.value = "";
+  matchRedInitCmdsEl.value = "";
+  matchBlackProviderEl.value = "same";
+  matchBlackVariantEl.value = "same";
+  matchBlackPresetEl.value = "same";
+  matchBlackWorkerUrlEl.value = "";
+  matchBlackInitCmdsEl.value = "";
   fenInputEl.value = START_FEN + " - - 0 1";
   applyPresetToControls();
   refreshSearchModeControls();
