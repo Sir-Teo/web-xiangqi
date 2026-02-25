@@ -317,6 +317,63 @@
     }
     .moves .num { color: var(--muted); }
     .moves .cur { font-weight: 700; color: var(--accent); }
+    .pv-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fff, #fbf7ef);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .pv-rows {
+      display: grid;
+      gap: 6px;
+      max-height: 240px;
+      overflow: auto;
+    }
+    .pv-row {
+      border: 1px solid color-mix(in srgb, var(--line) 84%, white);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+    }
+    .pv-row.top {
+      border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, white);
+    }
+    .pv-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-family: var(--mono);
+    }
+    .pv-head strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .pv-score.good { color: #0f7f6d; }
+    .pv-score.bad { color: var(--red); }
+    .pv-line {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+      color: #23303a;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .pv-empty {
+      border: 1px dashed color-mix(in srgb, var(--line) 80%, white);
+      border-radius: 10px;
+      padding: 10px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      background: rgba(255,255,255,0.65);
+    }
     pre {
       margin: 0;
       font-family: var(--mono);
@@ -389,6 +446,13 @@
           <button id="engine-move">Engine Move</button>
           <button id="analyze">Analyze Position</button>
           <button id="stop-search">Stop Search</button>
+          <label for="multipv">MultiPV</label>
+          <select id="multipv">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+          </select>
           <label><input id="auto-reply" type="checkbox" checked> Auto-reply after my move</label>
           <label><input id="continuous-analyze" type="checkbox"> Continuous Analyze</label>
         </div>
@@ -431,6 +495,16 @@
             <span><span class="swatch" style="background:#b7332b"></span>Red winrate</span>
             <span><span class="swatch" style="background:#9aa4ad"></span>50% line</span>
           </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Analysis Lines</strong>
+          <span class="small mono" id="pv-summary">No PV yet</span>
+        </div>
+        <div class="pv-box">
+          <div class="pv-rows" id="pv-rows"></div>
         </div>
       </section>
 
@@ -505,6 +579,7 @@
   const variantEl = document.getElementById("variant");
   const presetEl = document.getElementById("preset");
   const depthEl = document.getElementById("depth");
+  const multipvEl = document.getElementById("multipv");
   const continuousAnalyzeEl = document.getElementById("continuous-analyze");
   const externalEngineRowEl = document.getElementById("external-engine-row");
   const engineWorkerUrlEl = document.getElementById("engine-worker-url");
@@ -514,6 +589,8 @@
   const winrateLabelEl = document.getElementById("winrate-label");
   const winrateLeftEl = document.getElementById("winrate-left");
   const winrateRightEl = document.getElementById("winrate-right");
+  const pvRowsEl = document.getElementById("pv-rows");
+  const pvSummaryEl = document.getElementById("pv-summary");
   const debugLogEnabledEl = document.getElementById("debug-log-enabled");
   const debugLogPathEl = document.getElementById("debug-log-path");
   const debugLogStateEl = document.getElementById("debug-log-state");
@@ -543,6 +620,9 @@
   let graphRenderDeferredTimer = 0;
   let graphLastRenderTs = 0;
   let graphForceRender = false;
+  let pvRenderScheduled = false;
+  let pvLinesByIndex = new Map();
+  let lastTopPV = "";
   let continuousRestartTimer = 0;
   let continuousRestartPending = false;
   let suppressContinuousUntilPositionChange = false;
@@ -608,6 +688,17 @@
       graphForceRender = false;
       graphLastRenderTs = ts;
       renderWinrateGraph();
+    });
+  }
+
+  function schedulePVRender() {
+    if (pageHidden) return;
+    if (pvRenderScheduled) return;
+    pvRenderScheduled = true;
+    requestAnimationFrame(() => {
+      pvRenderScheduled = false;
+      if (pageHidden) return;
+      renderPVLines();
     });
   }
 
@@ -743,6 +834,12 @@
     );
   }
 
+  function requestedMultiPV() {
+    const v = Number(multipvEl.value);
+    if (!Number.isFinite(v)) return 1;
+    return Math.max(1, Math.min(16, Math.trunc(v)));
+  }
+
   function parseFenBoard(fen) {
     const [placement] = fen.trim().split(/\s+/);
     const rows = placement.split("/");
@@ -796,6 +893,7 @@
     lastInfo = "";
     lastWinrate = "";
     clearWinrateSeries();
+    clearPVLines();
     renderAll();
     scheduleContinuousAnalysisRestart("reset");
   }
@@ -1072,7 +1170,10 @@
     selected = null;
     lastInfo = "";
     lastWinrate = "";
-    if (sourceTag !== "engine") clearWinrateSeries();
+    if (sourceTag !== "engine") {
+      clearWinrateSeries();
+      clearPVLines();
+    }
     renderAll();
     scheduleContinuousAnalysisRestart(sourceTag || "move");
     applyMove.lastError = "";
@@ -1092,6 +1193,7 @@
     lastInfo = "";
     lastWinrate = "";
     clearWinrateSeries();
+    clearPVLines();
     renderAll();
     scheduleContinuousAnalysisRestart("undo");
   }
@@ -1453,6 +1555,7 @@
     const presetCfg = resolvePresetConfig(presetEl.value);
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
+    try { e.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
     try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
     await e.isReady({ timeoutMs: 20000 }).catch(() => {});
 
@@ -1463,6 +1566,7 @@
     }
 
     log("engine init: preset " + presetCfg.name + " (depth " + presetCfg.depth + ", hash " + presetCfg.hash + ", threads " + presetCfg.threads + ")");
+    log("engine init: MultiPV " + requestedMultiPV());
     if (descriptor && descriptor.provider === "external-worker" && initCmds.length) {
       log("external init commands: " + initCmds.join(" ; "));
     }
@@ -1489,22 +1593,142 @@
     scheduleEngineDrain();
   }
 
+  function parseInfoDepthLine(line) {
+    if (!/^info depth\s+/i.test(line)) return null;
+    const depth = Number((line.match(/\bdepth\s+(\d+)/i) || [])[1] || 0);
+    const seldepth = Number((line.match(/\bseldepth\s+(\d+)/i) || [])[1] || 0);
+    const multipv = Number((line.match(/\bmultipv\s+(\d+)/i) || [])[1] || 1);
+    const nps = Number((line.match(/\bnps\s+(\d+)/i) || [])[1] || 0);
+    const nodes = Number((line.match(/\bnodes\s+(\d+)/i) || [])[1] || 0);
+    const hashfull = Number((line.match(/\bhashfull\s+(\d+)/i) || [])[1] || 0);
+    const time = Number((line.match(/\btime\s+(\d+)/i) || [])[1] || 0);
+    const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/i);
+    const pvIdx = line.indexOf(" pv ");
+    const pv = pvIdx >= 0 ? line.slice(pvIdx + 4).trim() : "";
+    return {
+      depth,
+      seldepth,
+      multipv: Number.isFinite(multipv) && multipv > 0 ? multipv : 1,
+      nps,
+      nodes,
+      hashfull,
+      time,
+      scoreType: scoreMatch ? scoreMatch[1].toLowerCase() : "",
+      scoreValue: scoreMatch ? Number(scoreMatch[2]) : NaN,
+      pv
+    };
+  }
+
+  function formatPVScore(scoreType, scoreValue) {
+    if (!scoreType || !Number.isFinite(scoreValue)) return "";
+    if (scoreType === "mate") return "M" + scoreValue;
+    const val = (scoreValue / 100).toFixed(2);
+    return (scoreValue > 0 ? "+" : "") + val;
+  }
+
+  function escapeHTML(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function clearPVLines() {
+    pvLinesByIndex.clear();
+    lastTopPV = "";
+    schedulePVRender();
+  }
+
+  function updatePVLineFromInfo(info) {
+    if (!info || !Number.isFinite(info.multipv) || info.multipv < 1) return false;
+    if (!info.pv && !Number.isFinite(info.scoreValue)) return false;
+    const prev = pvLinesByIndex.get(info.multipv);
+    const same = prev &&
+      prev.depth === info.depth &&
+      prev.seldepth === info.seldepth &&
+      prev.scoreType === info.scoreType &&
+      prev.scoreValue === info.scoreValue &&
+      prev.nps === info.nps &&
+      prev.nodes === info.nodes &&
+      prev.hashfull === info.hashfull &&
+      prev.time === info.time &&
+      prev.pv === info.pv;
+    if (same) return false;
+    pvLinesByIndex.set(info.multipv, {
+      depth: info.depth,
+      seldepth: info.seldepth,
+      scoreType: info.scoreType,
+      scoreValue: info.scoreValue,
+      nps: info.nps,
+      nodes: info.nodes,
+      hashfull: info.hashfull,
+      time: info.time,
+      pv: info.pv,
+      t: Date.now()
+    });
+    if (info.multipv === 1) lastTopPV = info.pv || lastTopPV;
+    return true;
+  }
+
+  function renderPVLines() {
+    const entries = Array.from(pvLinesByIndex.entries()).sort((a, b) => a[0] - b[0]);
+    if (!entries.length) {
+      pvSummaryEl.textContent = "No PV yet";
+      pvRowsEl.innerHTML = "<div class='pv-empty'>Run analysis to view principal variation lines (MultiPV).</div>";
+      return;
+    }
+    const top = entries[0] && entries[0][1];
+    const shown = entries.length;
+    const target = requestedMultiPV();
+    const parts = [];
+    if (top && Number.isFinite(top.depth) && top.depth > 0) parts.push("depth " + top.depth);
+    if (top && Number.isFinite(top.seldepth) && top.seldepth > 0) parts.push("sel " + top.seldepth);
+    if (top && Number.isFinite(top.nps) && top.nps > 0) parts.push("nps " + top.nps);
+    parts.push("lines " + shown + "/" + target);
+    pvSummaryEl.textContent = parts.join(" · ");
+
+    const rows = entries.map(([idx, row], i) => {
+      const scoreText = formatPVScore(row.scoreType, row.scoreValue);
+      let scoreClass = "";
+      if (row.scoreType === "cp" && Number.isFinite(row.scoreValue)) {
+        scoreClass = row.scoreValue >= 0 ? "good" : "bad";
+      } else if (row.scoreType === "mate" && Number.isFinite(row.scoreValue)) {
+        scoreClass = row.scoreValue > 0 ? "good" : (row.scoreValue < 0 ? "bad" : "");
+      }
+      const meta = [
+        "<span><strong>#"+ idx +"</strong></span>",
+        scoreText ? "<span class='pv-score " + scoreClass + "'>score " + escapeHTML(scoreText) + "</span>" : "",
+        Number.isFinite(row.depth) && row.depth > 0 ? "<span>depth " + row.depth + "</span>" : "",
+        Number.isFinite(row.seldepth) && row.seldepth > 0 ? "<span>sel " + row.seldepth + "</span>" : "",
+        Number.isFinite(row.nps) && row.nps > 0 ? "<span>nps " + row.nps + "</span>" : "",
+        Number.isFinite(row.nodes) && row.nodes > 0 ? "<span>nodes " + row.nodes + "</span>" : "",
+        Number.isFinite(row.hashfull) && row.hashfull > 0 ? "<span>hash " + row.hashfull + "</span>" : ""
+      ].filter(Boolean).join("");
+      const pv = row.pv ? escapeHTML(row.pv) : "<span class='small'>No PV text</span>";
+      return (
+        "<div class='pv-row" + (i === 0 ? " top" : "") + "'>" +
+          "<div class='pv-head'>" + meta + "</div>" +
+          "<div class='pv-line'>" + pv + "</div>" +
+        "</div>"
+      );
+    });
+    pvRowsEl.innerHTML = rows.join("");
+  }
+
   function processEngineLine(line) {
     let statusDirty = false;
+    let pvDirty = false;
     log(line);
 
     if (/^info depth /.test(line)) {
-      const multipvMatch = line.match(/\bmultipv\s+(\d+)/);
-      if (!(multipvMatch && Number(multipvMatch[1]) > 1)) {
-        const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
-        if (scoreMatch) {
-          const depthMatch = line.match(/\bdepth\s+(\d+)/);
-          const scoreType = scoreMatch[1];
-          const scoreValue = Number(scoreMatch[2]);
-          lastInfo = "score " + scoreType + " " + scoreValue;
-          lastWinrate = formatWinRateForSides(scoreType, scoreValue, sideToMove);
-          const pair = computeWinRatePair(scoreType, scoreValue, sideToMove);
-          pushWinrateSample(pair.red, depthMatch ? Number(depthMatch[1]) : undefined);
+      const parsedInfo = parseInfoDepthLine(line);
+      if (parsedInfo) {
+        if (updatePVLineFromInfo(parsedInfo)) pvDirty = true;
+        if (parsedInfo.multipv === 1 && parsedInfo.scoreType && Number.isFinite(parsedInfo.scoreValue)) {
+          lastInfo = "score " + parsedInfo.scoreType + " " + parsedInfo.scoreValue + (parsedInfo.depth ? (" d" + parsedInfo.depth) : "");
+          lastWinrate = formatWinRateForSides(parsedInfo.scoreType, parsedInfo.scoreValue, sideToMove);
+          const pair = computeWinRatePair(parsedInfo.scoreType, parsedInfo.scoreValue, sideToMove);
+          pushWinrateSample(pair.red, parsedInfo.depth || undefined);
           statusDirty = true;
         }
       }
@@ -1528,17 +1752,21 @@
       }
     }
 
-    return statusDirty;
+    return { statusDirty, pvDirty };
   }
 
   function drainEngineLines() {
     if (!pendingEngineLines.length) return;
     const batch = pendingEngineLines.splice(0, pendingEngineLines.length);
     let statusDirty = false;
+    let pvDirty = false;
     for (const line of batch) {
-      if (processEngineLine(line)) statusDirty = true;
+      const out = processEngineLine(line);
+      if (out && out.statusDirty) statusDirty = true;
+      if (out && out.pvDirty) pvDirty = true;
     }
     if (statusDirty) scheduleStatusLineRender();
+    if (pvDirty) schedulePVRender();
     if (pendingEngineLines.length) scheduleEngineDrain();
   }
 
@@ -1800,6 +2028,7 @@
     const e = await ensureEngine();
     pendingBestmoveAction = null;
     clearWinrateSeries();
+    clearPVLines();
     lastBestmove = "";
     const why = opts && opts.reason ? String(opts.reason) : "manual";
     e.postMessage("stop");
@@ -1814,6 +2043,7 @@
     continuousRestartPending = false;
     pendingBestmoveAction = "play";
     clearWinrateSeries();
+    clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
@@ -1824,6 +2054,7 @@
     continuousRestartPending = false;
     pendingBestmoveAction = "analyze";
     clearWinrateSeries();
+    clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
@@ -1981,6 +2212,7 @@
     scheduleLogFlush();
     scheduleStatusLineRender();
     scheduleWinrateGraphRender(true);
+    schedulePVRender();
     if (continuousAnalyzeEnabled() && engine) {
       scheduleContinuousAnalysisRestart("tab-visible");
     }
@@ -2087,6 +2319,14 @@
   depthEl.addEventListener("change", () => {
     if (continuousAnalyzeEnabled() && engine) scheduleContinuousAnalysisRestart("depth-change");
   });
+  multipvEl.addEventListener("change", () => {
+    if (engine) {
+      try { engine.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
+      log("setoption MultiPV = " + requestedMultiPV());
+      if (continuousAnalyzeEnabled()) scheduleContinuousAnalysisRestart("multipv-change");
+    }
+    clearPVLines();
+  });
   variantEl.addEventListener("change", () => {
     if (engine && isPikafishProvider()) {
       log("runtime changed; restart engine to apply");
@@ -2115,6 +2355,7 @@
 
   variantEl.value = preferredVariant();
   presetEl.value = "auto";
+  multipvEl.value = "3";
   engineWorkerUrlEl.value = "";
   engineInitCmdsEl.value = "setoption name UCI_Variant value xiangqi";
   applyPresetToControls();
