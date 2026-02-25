@@ -491,10 +491,36 @@
           </select>
           <label for="depth">Depth</label>
           <input id="depth" type="number" min="1" max="20" value="6" style="width:74px">
+          <label for="search-mode">Search</label>
+          <select id="search-mode">
+            <option value="depth" selected>Depth</option>
+            <option value="movetime">Move Time (ms)</option>
+            <option value="nodes">Nodes</option>
+            <option value="mate">Mate Search</option>
+            <option value="clock">Clock Mode</option>
+            <option value="infinite">Infinite</option>
+          </select>
           <button class="primary" id="start">Start Engine</button>
           <button id="uci">uci</button>
           <button id="isready">isready</button>
           <button class="warn" id="quit">Quit</button>
+        </div>
+        <div class="row" id="search-extra-row">
+          <label for="search-value" id="search-value-label">Value</label>
+          <input id="search-value" type="number" min="1" value="1000" style="width:120px">
+          <span class="small mono" id="search-mode-summary">go depth &lt;Depth&gt;</span>
+        </div>
+        <div class="row" id="clock-controls-row" style="display:none">
+          <label for="clock-wtime">Red ms</label>
+          <input id="clock-wtime" type="number" min="1" value="60000" style="width:110px">
+          <label for="clock-btime">Black ms</label>
+          <input id="clock-btime" type="number" min="1" value="60000" style="width:110px">
+          <label for="clock-winc">Red inc</label>
+          <input id="clock-winc" type="number" min="0" value="0" style="width:90px">
+          <label for="clock-binc">Black inc</label>
+          <input id="clock-binc" type="number" min="0" value="0" style="width:90px">
+          <label for="clock-movestogo">Moves to go</label>
+          <input id="clock-movestogo" type="number" min="0" value="0" style="width:90px">
         </div>
         <div class="row">
           <button id="engine-move">Engine Move</button>
@@ -646,6 +672,17 @@
   const variantEl = document.getElementById("variant");
   const presetEl = document.getElementById("preset");
   const depthEl = document.getElementById("depth");
+  const searchModeEl = document.getElementById("search-mode");
+  const searchExtraRowEl = document.getElementById("search-extra-row");
+  const searchValueEl = document.getElementById("search-value");
+  const searchValueLabelEl = document.getElementById("search-value-label");
+  const searchModeSummaryEl = document.getElementById("search-mode-summary");
+  const clockControlsRowEl = document.getElementById("clock-controls-row");
+  const clockWtimeEl = document.getElementById("clock-wtime");
+  const clockBtimeEl = document.getElementById("clock-btime");
+  const clockWincEl = document.getElementById("clock-winc");
+  const clockBincEl = document.getElementById("clock-binc");
+  const clockMovesToGoEl = document.getElementById("clock-movestogo");
   const multipvEl = document.getElementById("multipv");
   const continuousAnalyzeEl = document.getElementById("continuous-analyze");
   const externalEngineRowEl = document.getElementById("external-engine-row");
@@ -2393,6 +2430,131 @@
     return Math.min(20, Math.max(1, Math.trunc(v)));
   }
 
+  function searchMode() {
+    return String(searchModeEl.value || "depth");
+  }
+
+  function positiveIntFromInput(el, fallback, min, max) {
+    let v = Number(el.value);
+    if (!Number.isFinite(v)) v = fallback;
+    v = Math.trunc(v);
+    if (Number.isFinite(min)) v = Math.max(min, v);
+    if (Number.isFinite(max)) v = Math.min(max, v);
+    el.value = String(v);
+    return v;
+  }
+
+  function buildSearchCommand(kind) {
+    const mode = searchMode();
+    if (mode === "depth") {
+      return {
+        mode,
+        command: "go depth " + requestedDepth(),
+        expectsBestmove: true,
+        summary: "go depth " + requestedDepth()
+      };
+    }
+    if (mode === "movetime") {
+      const ms = positiveIntFromInput(searchValueEl, 1000, 1, 600000);
+      return {
+        mode,
+        command: "go movetime " + ms,
+        expectsBestmove: true,
+        summary: "go movetime " + ms
+      };
+    }
+    if (mode === "nodes") {
+      const nodes = positiveIntFromInput(searchValueEl, 10000, 1, 2000000000);
+      return {
+        mode,
+        command: "go nodes " + nodes,
+        expectsBestmove: true,
+        summary: "go nodes " + nodes
+      };
+    }
+    if (mode === "mate") {
+      const plies = positiveIntFromInput(searchValueEl, 3, 1, 128);
+      return {
+        mode,
+        command: "go mate " + plies,
+        expectsBestmove: true,
+        summary: "go mate " + plies
+      };
+    }
+    if (mode === "clock") {
+      const wtime = positiveIntFromInput(clockWtimeEl, 60000, 1, 86400000);
+      const btime = positiveIntFromInput(clockBtimeEl, 60000, 1, 86400000);
+      const winc = positiveIntFromInput(clockWincEl, 0, 0, 600000);
+      const binc = positiveIntFromInput(clockBincEl, 0, 0, 600000);
+      const movestogo = positiveIntFromInput(clockMovesToGoEl, 0, 0, 1000);
+      let cmd = "go wtime " + wtime + " btime " + btime + " winc " + winc + " binc " + binc;
+      if (movestogo > 0) cmd += " movestogo " + movestogo;
+      return {
+        mode,
+        command: cmd,
+        expectsBestmove: true,
+        summary: cmd
+      };
+    }
+    if (mode === "infinite") {
+      if (kind === "engine-move") {
+        return {
+          mode,
+          command: "go depth " + requestedDepth(),
+          expectsBestmove: true,
+          summary: "go depth " + requestedDepth(),
+          warning: "Engine Move does not use go infinite; fell back to depth search."
+        };
+      }
+      return {
+        mode,
+        command: "go infinite",
+        expectsBestmove: false,
+        summary: "go infinite"
+      };
+    }
+    return {
+      mode: "depth",
+      command: "go depth " + requestedDepth(),
+      expectsBestmove: true,
+      summary: "go depth " + requestedDepth()
+    };
+  }
+
+  function refreshSearchModeControls() {
+    const mode = searchMode();
+    let label = "Value";
+    let showValue = false;
+    let summary = "";
+    if (mode === "depth") {
+      summary = "go depth <Depth>";
+    } else if (mode === "movetime") {
+      showValue = true;
+      label = "Move Time (ms)";
+      if (!Number.isFinite(Number(searchValueEl.value)) || Number(searchValueEl.value) <= 0) searchValueEl.value = "1000";
+      summary = "go movetime " + searchValueEl.value;
+    } else if (mode === "nodes") {
+      showValue = true;
+      label = "Nodes";
+      if (!Number.isFinite(Number(searchValueEl.value)) || Number(searchValueEl.value) <= 0) searchValueEl.value = "10000";
+      summary = "go nodes " + searchValueEl.value;
+    } else if (mode === "mate") {
+      showValue = true;
+      label = "Mate Plies";
+      if (!Number.isFinite(Number(searchValueEl.value)) || Number(searchValueEl.value) <= 0) searchValueEl.value = "3";
+      summary = "go mate " + searchValueEl.value;
+    } else if (mode === "clock") {
+      summary = "go wtime ... btime ... winc ... binc ...";
+    } else {
+      summary = "go infinite";
+    }
+    searchExtraRowEl.style.display = mode === "clock" ? "none" : "flex";
+    clockControlsRowEl.style.display = mode === "clock" ? "flex" : "none";
+    searchValueLabelEl.textContent = label;
+    searchValueEl.style.display = showValue ? "" : "none";
+    searchModeSummaryEl.textContent = summary;
+  }
+
   function continuousAnalyzeEnabled() {
     return !!continuousAnalyzeEl.checked;
   }
@@ -2443,18 +2605,26 @@
     clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
-    await sendCmd("go depth " + requestedDepth());
+    const plan = buildSearchCommand("engine-move");
+    if (plan.warning) log(plan.warning);
+    log("search: " + plan.summary);
+    await sendCmd(plan.command);
   }
 
   async function analyzePosition() {
     clearTimeout(continuousRestartTimer);
     continuousRestartPending = false;
-    pendingBestmoveAction = "analyze";
+    const plan = buildSearchCommand("analyze");
+    pendingBestmoveAction = plan.expectsBestmove ? "analyze" : null;
     clearWinrateSeries();
     clearPVLines();
     await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
-    await sendCmd("go depth " + requestedDepth());
+    log("search: " + plan.summary);
+    await sendCmd(plan.command);
+    if (!plan.expectsBestmove) {
+      posStatusEl.textContent = "Infinite analysis started. Use Stop Search to stop.";
+    }
   }
 
   function scoreToWinRate(scoreType, scoreValue) {
@@ -2740,6 +2910,7 @@
   presetEl.addEventListener("change", () => {
     const cfg = applyPresetToControls();
     refreshBadges();
+    refreshSearchModeControls();
     log("preset controls: " + cfg.name + " (depth " + cfg.depth + ", hash " + cfg.hash + ", threads " + cfg.threads + ")");
     if (engine) {
       try { engine.setOption("Hash", cfg.hash); } catch (_) {}
@@ -2748,8 +2919,15 @@
     }
   });
   depthEl.addEventListener("change", () => {
+    refreshSearchModeControls();
     if (continuousAnalyzeEnabled() && engine) scheduleContinuousAnalysisRestart("depth-change");
   });
+  searchModeEl.addEventListener("change", () => {
+    refreshSearchModeControls();
+  });
+  for (const el of [searchValueEl, clockWtimeEl, clockBtimeEl, clockWincEl, clockBincEl, clockMovesToGoEl]) {
+    el.addEventListener("change", refreshSearchModeControls);
+  }
   multipvEl.addEventListener("change", () => {
     if (engine) {
       try { engine.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
@@ -2787,9 +2965,12 @@
   variantEl.value = preferredVariant();
   presetEl.value = "auto";
   multipvEl.value = "3";
+  searchModeEl.value = "depth";
+  searchValueEl.value = "1000";
   engineWorkerUrlEl.value = "";
   engineInitCmdsEl.value = "setoption name UCI_Variant value xiangqi";
   applyPresetToControls();
+  refreshSearchModeControls();
   updateEngineProviderUI();
   refreshBadges();
   resetUciOptionPanelState({ keepStateText: true });
