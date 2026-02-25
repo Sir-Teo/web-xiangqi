@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      EMSDK_VERSION: latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +27,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: .deps/emsdk
+          key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('scripts/install-emsdk.sh') }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

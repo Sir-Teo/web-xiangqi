@@ -9,6 +9,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      EMSDK_VERSION: latest
 
     steps:
       - name: Checkout
@@ -18,6 +20,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: .deps/emsdk
+          key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('scripts/install-emsdk.sh') }}
 
       - name: Install emsdk
         run: bash scripts/install-emsdk.sh
@@ -29,6 +43,12 @@ jobs:
         run: |
           npm run test:parity
           npm run test:smoke:all
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-1.52.0
 
       - name: Install Playwright (Chromium)
         run: |

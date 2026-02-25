@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pikafish Browser Benchmark</title>
+  <style>
+    :root {
+      --bg: #0f1418;
+      --panel: #162028;
+      --muted: #93a2ad;
+      --text: #e7eef4;
+      --accent: #d87a27;
+      --ok: #2f9f69;
+      --warn: #bf8a1b;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: radial-gradient(circle at top, #1a2630 0%, #0f1418 55%);
+      color: var(--text);
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .panel {
+      background: rgba(22, 32, 40, 0.94);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 14px 30px rgba(0,0,0,0.25);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    label { color: var(--muted); font-size: 0.9rem; }
+    input, select, button {
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: #121a21;
+      color: var(--text);
+      padding: 8px 10px;
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      background: #1c2731;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #e98b3f, #c96a1d);
+      color: #1b120b;
+      font-weight: 700;
+      border-color: rgba(0,0,0,0.15);
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .mono { font-family: var(--mono); }
+    .muted { color: var(--muted); }
+    .ok { color: #7ed6ab; }
+    .warn { color: #f1cc74; }
+    pre {
+      margin: 0;
+      min-height: 160px;
+      max-height: 40vh;
+      overflow: auto;
+      background: #0d1318;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    a { color: #9fc4ff; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h1 style="margin:0 0 8px 0">Pikafish Browser Benchmark</h1>
+    <p style="margin:0" class="muted">Compare runtime variants in-browser. Best run locally via <span class="mono">npm run serve:demo</span> so threaded builds are available.</p>
+    <p style="margin:8px 0 0 0" class="muted">Main GUI: <a href="./index.html">index.html</a></p>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <label for="bench-variant">Variant</label>
+      <select id="bench-variant">
+        <option value="auto">auto (fastest)</option>
+        <option value="threaded-simd">threaded-simd</option>
+        <option value="threaded">threaded</option>
+        <option value="single-simd">single-simd</option>
+        <option value="single">single</option>
+      </select>
+      <label for="bench-depth">Depth</label>
+      <input id="bench-depth" type="number" min="1" max="20" value="7" style="width:80px">
+      <label for="bench-repeats">Repeats</label>
+      <input id="bench-repeats" type="number" min="1" max="10" value="2" style="width:80px">
+      <label for="bench-hash">Hash (MB)</label>
+      <input id="bench-hash" type="number" min="1" max="1024" value="64" style="width:96px">
+      <button class="primary" id="run-selected">Run Selected</button>
+      <button id="run-supported">Run Supported Variants</button>
+      <button id="clear-results">Clear Results</button>
+    </div>
+    <div class="row">
+      <span id="capability-badges" class="mono muted"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Variant</th>
+          <th>Resolved</th>
+          <th>Runs</th>
+          <th>Avg Wall (ms)</th>
+          <th>Avg NPS</th>
+          <th>Last Bestmove</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="results-body">
+        <tr><td colspan="7" class="muted">No runs yet.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="margin-bottom:8px"><strong>Log</strong></div>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script src="./pikafish.js"></script>
+<script>
+  const START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
+  const resultsBodyEl = document.getElementById("results-body");
+  const logEl = document.getElementById("log");
+  const variantEl = document.getElementById("bench-variant");
+  const depthEl = document.getElementById("bench-depth");
+  const repeatsEl = document.getElementById("bench-repeats");
+  const hashEl = document.getElementById("bench-hash");
+  const badgesEl = document.getElementById("capability-badges");
+  const runSelectedBtn = document.getElementById("run-selected");
+  const runSupportedBtn = document.getElementById("run-supported");
+
+  let running = false;
+  const rowsByVariant = new Map();
+
+  function log(line) {
+    logEl.textContent += String(line) + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function safeNum(v, fallback) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function getDepth() {
+    return Math.max(1, Math.min(20, Math.trunc(safeNum(depthEl.value, 7))));
+  }
+
+  function getRepeats() {
+    return Math.max(1, Math.min(10, Math.trunc(safeNum(repeatsEl.value, 2))));
+  }
+
+  function getHash() {
+    return Math.max(1, Math.min(1024, Math.trunc(safeNum(hashEl.value, 64))));
+  }
+
+  function supportedVariants() {
+    const threads = window.Pikafish.wasmThreadsSupported();
+    const simd = typeof window.Pikafish.wasmSIMDSupported === "function" && window.Pikafish.wasmSIMDSupported();
+    const out = [];
+    if (threads && simd) out.push("threaded-simd");
+    if (threads) out.push("threaded");
+    if (simd) out.push("single-simd");
+    out.push("single");
+    return out;
+  }
+
+  function refreshCapabilities() {
+    const threads = window.Pikafish.wasmThreadsSupported();
+    const simd = typeof window.Pikafish.wasmSIMDSupported === "function" && window.Pikafish.wasmSIMDSupported();
+    badgesEl.textContent =
+      "crossOriginIsolated=" + String(window.crossOriginIsolated) +
+      " · wasmThreads=" + String(threads) +
+      " · wasmSIMD=" + String(simd) +
+      " · supported=" + supportedVariants().join(",");
+  }
+
+  function ensureResultRow(key) {
+    if (rowsByVariant.has(key)) return rowsByVariant.get(key);
+    if (!rowsByVariant.size) resultsBodyEl.innerHTML = "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = [
+      "<td class='mono'></td>",
+      "<td class='mono'></td>",
+      "<td class='mono'></td>",
+      "<td class='mono'></td>",
+      "<td class='mono'></td>",
+      "<td class='mono'></td>",
+      "<td></td>"
+    ].join("");
+    resultsBodyEl.appendChild(tr);
+    const cells = tr.querySelectorAll("td");
+    const row = { tr, cells };
+    rowsByVariant.set(key, row);
+    return row;
+  }
+
+  function setRow(row, data) {
+    row.cells[0].textContent = data.variant || "";
+    row.cells[1].textContent = data.resolved || "";
+    row.cells[2].textContent = data.runs != null ? String(data.runs) : "";
+    row.cells[3].textContent = data.avgWallMs != null ? String(Math.round(data.avgWallMs)) : "";
+    row.cells[4].textContent = data.avgNps != null ? String(Math.round(data.avgNps)) : "";
+    row.cells[5].textContent = data.bestmove || "";
+    row.cells[6].textContent = data.status || "";
+    row.cells[6].className = (data.ok === true ? "ok" : (data.ok === false ? "warn" : ""));
+  }
+
+  function parseInfoLine(line) {
+    if (!/^info depth /.test(line)) return null;
+    const depth = Number((line.match(/\bdepth\s+(\d+)/) || [])[1] || 0);
+    const nps = Number((line.match(/\bnps\s+(\d+)/) || [])[1] || 0);
+    const nodes = Number((line.match(/\bnodes\s+(\d+)/) || [])[1] || 0);
+    const time = Number((line.match(/\btime\s+(\d+)/) || [])[1] || 0);
+    return { depth, nps, nodes, time };
+  }
+
+  async function runOne(variant) {
+    const engine = await window.Pikafish.createWorkerEngine({ basePath: ".", variant });
+    let bestmove = "";
+    let maxDepthInfo = null;
+    const listener = (line) => {
+      const text = String(line);
+      const info = parseInfoLine(text);
+      if (info && (!maxDepthInfo || info.depth >= maxDepthInfo.depth)) {
+        maxDepthInfo = info;
+      }
+      const bm = text.match(/^bestmove\s+(\S+)/);
+      if (bm) bestmove = bm[1];
+    };
+    engine.addMessageListener(listener);
+    try {
+      await engine.uci({ timeoutMs: 15000 });
+      engine.setOption("Hash", getHash());
+      if (/^threaded/.test(engine.variant || "")) {
+        const hw = Math.max(1, Number(navigator.hardwareConcurrency || 2) || 2);
+        engine.setOption("Threads", Math.max(1, Math.min(8, hw - 1)));
+      } else {
+        engine.setOption("Threads", 1);
+      }
+      await engine.isReady({ timeoutMs: 15000 });
+      engine.postMessage("ucinewgame");
+      engine.postMessage("position fen " + START_FEN);
+      const t0 = performance.now();
+      engine.postMessage("go depth " + getDepth());
+      await engine.waitForLine(/^bestmove\s+/i, { timeoutMs: 60000 });
+      const wallMs = performance.now() - t0;
+      return {
+        requested: variant,
+        resolved: engine.variant || variant,
+        wallMs,
+        info: maxDepthInfo,
+        bestmove
+      };
+    } finally {
+      try { engine.removeMessageListener(listener); } catch (_) {}
+      try { await engine.terminate(); } catch (_) {}
+    }
+  }
+
+  async function runVariantSeries(requested) {
+    const row = ensureResultRow(requested);
+    setRow(row, { variant: requested, status: "running...", ok: null });
+    const repeats = getRepeats();
+    const runs = [];
+    for (let i = 0; i < repeats; i++) {
+      log("[" + requested + "] run " + (i + 1) + "/" + repeats + " starting");
+      const out = await runOne(requested);
+      runs.push(out);
+      const lastNps = out.info && out.info.nps ? out.info.nps : 0;
+      log("[" + requested + "] resolved=" + out.resolved + " wall=" + Math.round(out.wallMs) + "ms nps=" + lastNps + " bestmove=" + (out.bestmove || "?"));
+      setRow(row, {
+        variant: requested,
+        resolved: out.resolved,
+        runs: i + 1,
+        avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
+        avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+        bestmove: out.bestmove || "",
+        status: "running...",
+        ok: null
+      });
+    }
+    const final = runs[runs.length - 1];
+    setRow(row, {
+      variant: requested,
+      resolved: final && final.resolved || requested,
+      runs: runs.length,
+      avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
+      avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+      bestmove: final && final.bestmove || "",
+      status: "done",
+      ok: true
+    });
+  }
+
+  async function runSequence(variants) {
+    if (running) return;
+    running = true;
+    runSelectedBtn.disabled = true;
+    runSupportedBtn.disabled = true;
+    try {
+      for (const variant of variants) {
+        await runVariantSeries(variant);
+      }
+    } catch (e) {
+      log("benchmark failed: " + String(e && e.message || e));
+      const row = ensureResultRow(variants[0] || "unknown");
+      setRow(row, { variant: variants[0] || "unknown", status: "failed", ok: false });
+    } finally {
+      running = false;
+      runSelectedBtn.disabled = false;
+      runSupportedBtn.disabled = false;
+    }
+  }
+
+  function shouldWarmServiceWorkerCache() {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      if (conn.saveData) return false;
+      const et = String(conn.effectiveType || "").toLowerCase();
+      if (et.includes("2g")) return false;
+    }
+    if (typeof navigator.deviceMemory === "number" && navigator.deviceMemory <= 2) return false;
+    return true;
+  }
+
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    if (!/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.register("./sw.js", { scope: "./" }).then((reg) => {
+      const warm = () => {
+        if (!shouldWarmServiceWorkerCache()) return;
+        (reg.active ? Promise.resolve(reg) : navigator.serviceWorker.ready).then((readyReg) => {
+          if (readyReg.active) readyReg.active.postMessage({ type: "WARM_ENGINE_CACHE" });
+        }).catch(() => {});
+      };
+      if (typeof requestIdleCallback === "function") requestIdleCallback(warm, { timeout: 3000 });
+      else setTimeout(warm, 1200);
+    }).catch((e) => {
+      log("service worker disabled: " + String(e && e.message || e));
+    });
+  }
+
+  document.getElementById("run-selected").onclick = () => runSequence([variantEl.value]);
+  document.getElementById("run-supported").onclick = () => runSequence(supportedVariants());
+  document.getElementById("clear-results").onclick = () => {
+    rowsByVariant.clear();
+    resultsBodyEl.innerHTML = "<tr><td colspan='7' class='muted'>No runs yet.</td></tr>";
+    logEl.textContent = "";
+  };
+
+  refreshCapabilities();
+  registerServiceWorker();
+  log("Tip: run 'supported variants' locally for the best comparison.");
+</script>
+</body>
+</html>

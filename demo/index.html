@@ -348,7 +348,7 @@
   <section class="panel hero">
     <h1>Pikafish Browser GUI (Xiangqi)</h1>
     <p>Simple sandbox board + engine controls. Uses a Web Worker so the UI stays responsive, including single-thread fallback.</p>
-    <p class="small">Need browser worker parity checks? Open <a href="./worker-parity.html">worker-parity.html</a> (best via <span class="mono">npm run serve:demo</span> for COOP/COEP).</p>
+    <p class="small">Tools: <a href="./worker-parity.html">worker-parity.html</a> for browser worker checks and <a href="./benchmark.html">benchmark.html</a> for local variant speed comparisons (best via <span class="mono">npm run serve:demo</span> for COOP/COEP).</p>
   </section>
 
   <section class="panel">
@@ -359,11 +359,24 @@
     <section class="panel board-wrap">
       <div class="board-meta">
         <div class="row">
-          <label for="variant">Engine</label>
+          <label for="engine-provider">Engine</label>
+          <select id="engine-provider">
+            <option value="pikafish">Pikafish (bundled)</option>
+            <option value="external-worker">External UCI worker (experimental)</option>
+          </select>
+          <label for="variant">Runtime</label>
           <select id="variant">
             <option value="auto">Auto (recommended)</option>
             <option value="threaded">Threaded</option>
             <option value="single">Single-thread</option>
+          </select>
+          <label for="preset">Preset</label>
+          <select id="preset">
+            <option value="auto">Auto (device-aware)</option>
+            <option value="desktop-fast">Desktop Fast</option>
+            <option value="mobile-fast">Mobile Fast</option>
+            <option value="balanced">Balanced</option>
+            <option value="deep-analysis">Deep Analysis</option>
           </select>
           <label for="depth">Depth</label>
           <input id="depth" type="number" min="1" max="20" value="6" style="width:74px">
@@ -377,6 +390,13 @@
           <button id="analyze">Analyze Position</button>
           <button id="stop-search">Stop Search</button>
           <label><input id="auto-reply" type="checkbox" checked> Auto-reply after my move</label>
+          <label><input id="continuous-analyze" type="checkbox"> Continuous Analyze</label>
+        </div>
+        <div class="row" id="external-engine-row" style="display:none">
+          <label for="engine-worker-url">Worker URL</label>
+          <input id="engine-worker-url" class="mono" style="flex:1;min-width:240px" placeholder="https://.../engine-worker.js">
+          <label for="engine-init-cmds">Init UCI</label>
+          <input id="engine-init-cmds" class="mono" style="flex:1;min-width:220px" placeholder="setoption name UCI_Variant value xiangqi">
         </div>
         <div class="row">
           <button id="reset">Reset Board</button>
@@ -392,7 +412,7 @@
         <div class="river">CHU RIVER · HAN BORDER</div>
         <div class="pieces" id="pieces-layer"></div>
       </div>
-      <p class="note">Click a piece to see legal destinations. The GUI validates standard Xiangqi piece movement, blockers, palace/river rules, and self-check.</p>
+      <p class="note">Click a piece to see legal destinations. The GUI validates standard Xiangqi piece movement, blockers, palace/river rules, and self-check. External engines should be Xiangqi UCI-compatible and accept Xiangqi FEN.</p>
     </section>
 
     <section class="side">
@@ -481,8 +501,14 @@
   const sideToMoveEl = document.getElementById("side-to-move");
   const posStatusEl = document.getElementById("position-status");
   const engineStateEl = document.getElementById("engine-state");
+  const engineProviderEl = document.getElementById("engine-provider");
   const variantEl = document.getElementById("variant");
+  const presetEl = document.getElementById("preset");
   const depthEl = document.getElementById("depth");
+  const continuousAnalyzeEl = document.getElementById("continuous-analyze");
+  const externalEngineRowEl = document.getElementById("external-engine-row");
+  const engineWorkerUrlEl = document.getElementById("engine-worker-url");
+  const engineInitCmdsEl = document.getElementById("engine-init-cmds");
   const cmdEl = document.getElementById("command");
   const winrateGraphEl = document.getElementById("winrate-graph");
   const winrateLabelEl = document.getElementById("winrate-label");
@@ -499,7 +525,9 @@
   let selected = null;
   let flipped = false;
   let engine = null;
+  let engineDescriptor = null;
   let engineListener = null;
+  let engineBootPromise = null;
   let pendingBestmoveAction = null; // "play" | "analyze" | null
   let lastBestmove = "";
   let lastInfo = "";
@@ -515,6 +543,9 @@
   let graphRenderDeferredTimer = 0;
   let graphLastRenderTs = 0;
   let graphForceRender = false;
+  let continuousRestartTimer = 0;
+  let continuousRestartPending = false;
+  let suppressContinuousUntilPositionChange = false;
 
   const MAX_LOG_LINES = 500;
   const GRAPH_MAX_FPS = 20;
@@ -591,6 +622,107 @@
     return window.Pikafish.wasmThreadsSupported() ? "threaded" : "single";
   }
 
+  function selectedEngineProvider() {
+    return engineProviderEl.value === "external-worker" ? "external-worker" : "pikafish";
+  }
+
+  function isPikafishProvider(provider) {
+    return (provider || selectedEngineProvider()) === "pikafish";
+  }
+
+  function shouldEnableDebugLogControls() {
+    if (engineDescriptor) return !!engineDescriptor.supportsDebugLog;
+    return isPikafishProvider();
+  }
+
+  function setDebugLogControlsEnabled(enabled) {
+    const controls = [
+      debugLogEnabledEl,
+      debugLogPathEl,
+      document.getElementById("debug-log-apply"),
+      document.getElementById("debug-log-refresh"),
+      document.getElementById("debug-log-download"),
+      document.getElementById("debug-log-clear")
+    ];
+    for (const el of controls) el.disabled = !enabled;
+    if (!enabled) {
+      setDebugLogState("debug log: unsupported for this engine");
+      setDebugLogPreview("");
+    } else if (!engine) {
+      setDebugLogState(debugLogEnabledEl.checked ? ("debug log: pending (" + currentDebugLogPath() + ")") : "debug log: disabled");
+    }
+  }
+
+  function updateEngineProviderUI() {
+    const provider = selectedEngineProvider();
+    const isPikafish = provider === "pikafish";
+    externalEngineRowEl.style.display = isPikafish ? "none" : "flex";
+    variantEl.disabled = !isPikafish;
+    setDebugLogControlsEnabled(shouldEnableDebugLogControls());
+  }
+
+  function isLikelyMobileDevice() {
+    const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    if (coarse) return true;
+    if (typeof navigator.deviceMemory === "number" && navigator.deviceMemory <= 4) return true;
+    if (Math.min(window.innerWidth || 0, window.innerHeight || 0) < 700) return true;
+    return false;
+  }
+
+  function detectPresetName() {
+    return isLikelyMobileDevice() ? "mobile-fast" : "desktop-fast";
+  }
+
+  function resolvePresetConfig(name) {
+    const hw = Math.max(1, Number(navigator.hardwareConcurrency || 4) || 4);
+    const threadsSupported = isPikafishProvider() && window.Pikafish.wasmThreadsSupported();
+    const mobile = isLikelyMobileDevice();
+    const key = (name === "auto" || !name) ? detectPresetName() : name;
+    if (key === "mobile-fast") {
+      return {
+        name: key,
+        depth: 5,
+        hash: 32,
+        threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
+      };
+    }
+    if (key === "balanced") {
+      return {
+        name: key,
+        depth: mobile ? 6 : 8,
+        hash: mobile ? 48 : 96,
+        threads: threadsSupported ? Math.max(1, Math.min(4, hw - 1)) : 1
+      };
+    }
+    if (key === "deep-analysis") {
+      return {
+        name: key,
+        depth: mobile ? 8 : 12,
+        hash: mobile ? 64 : 256,
+        threads: threadsSupported ? Math.max(1, Math.min(8, hw - 1)) : 1
+      };
+    }
+    return {
+      name: "desktop-fast",
+      depth: mobile ? 6 : 8,
+      hash: mobile ? 48 : 128,
+      threads: threadsSupported ? Math.max(1, Math.min(6, hw - 1)) : 1
+    };
+  }
+
+  function applyPresetToControls() {
+    const cfg = resolvePresetConfig(presetEl.value);
+    depthEl.value = String(cfg.depth);
+    return cfg;
+  }
+
+  function externalInitCommands() {
+    return String(engineInitCmdsEl.value || "")
+      .split(/\r?\n|;/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   function refreshBadges() {
     const threadsSupported = window.Pikafish.wasmThreadsSupported();
     const simdSupported = typeof window.Pikafish.wasmSIMDSupported === "function"
@@ -606,7 +738,8 @@
       badge("WASM threads: " + String(threadsSupported), threadsSupported ? "ok" : "warn"),
       badge("WASM SIMD: " + String(simdSupported), simdSupported ? "ok" : "warn"),
       badge("default runtime: " + fastest, "info"),
-      badge("wrapper worker helper: yes", "info")
+      badge("wrapper worker helper: yes", "info"),
+      badge("preset: " + resolvePresetConfig(presetEl.value).name, "info")
     );
   }
 
@@ -629,6 +762,30 @@
     return out;
   }
 
+  function boardToFen(state, stm) {
+    const rows = [];
+    for (let rank = 9; rank >= 0; rank--) {
+      let row = "";
+      let empties = 0;
+      for (let file = 0; file < 9; file++) {
+        const piece = state[rank][file];
+        if (!piece) {
+          empties += 1;
+          continue;
+        }
+        if (empties) {
+          row += String(empties);
+          empties = 0;
+        }
+        row += piece;
+      }
+      if (empties) row += String(empties);
+      rows.push(row || "9");
+    }
+    const fullmove = 1 + Math.floor(moveHistory.length / 2);
+    return rows.join("/") + " " + (stm === "b" ? "b" : "w") + " - - 0 " + fullmove;
+  }
+
   function resetPosition() {
     board = parseFenBoard(START_FEN);
     sideToMove = "w";
@@ -640,6 +797,7 @@
     lastWinrate = "";
     clearWinrateSeries();
     renderAll();
+    scheduleContinuousAnalysisRestart("reset");
   }
 
   function squareToUci(file, rank) {
@@ -916,6 +1074,7 @@
     lastWinrate = "";
     if (sourceTag !== "engine") clearWinrateSeries();
     renderAll();
+    scheduleContinuousAnalysisRestart(sourceTag || "move");
     applyMove.lastError = "";
     return true;
   }
@@ -934,6 +1093,7 @@
     lastWinrate = "";
     clearWinrateSeries();
     renderAll();
+    scheduleContinuousAnalysisRestart("undo");
   }
 
   function canSelectPiece(piece) {
@@ -1113,8 +1273,199 @@
   }
 
   function currentPositionCommand() {
-    if (!moveHistory.length) return "position startpos";
-    return "position startpos moves " + moveHistory.map((m) => m.uci).join(" ");
+    return "position fen " + boardToFen(board, sideToMove);
+  }
+
+  function lineMatcherFn(matcher) {
+    if (typeof matcher === "function") return matcher;
+    if (matcher instanceof RegExp) return (line) => matcher.test(line);
+    const target = String(matcher);
+    return (line) => String(line) === target;
+  }
+
+  function createGenericUCIWorkerEngine(opts) {
+    const workerUrl = String((opts && opts.workerUrl) || "").trim();
+    if (!workerUrl) {
+      throw new Error("External worker URL is required");
+    }
+    const resolvedUrl = new URL(workerUrl, location.href).toString();
+    const worker = new Worker(resolvedUrl);
+    const listeners = new Set();
+    const waiters = new Set();
+    let closed = false;
+
+    function emit(raw) {
+      const text = String(raw == null ? "" : raw);
+      const parts = text.split(/\r?\n/).filter((s) => s.length > 0);
+      if (!parts.length) return;
+      for (const line of parts) {
+        for (const fn of listeners) {
+          try { fn(line); } catch (_) {}
+        }
+        for (const waiter of Array.from(waiters)) {
+          if (waiter.done) continue;
+          let matched = false;
+          try {
+            matched = waiter.match(line);
+          } catch (e) {
+            waiter.done = true;
+            waiters.delete(waiter);
+            clearTimeout(waiter.timer);
+            waiter.reject(e);
+            continue;
+          }
+          if (matched) {
+            waiter.done = true;
+            waiters.delete(waiter);
+            clearTimeout(waiter.timer);
+            waiter.resolve(line);
+          }
+        }
+      }
+    }
+
+    worker.addEventListener("message", (ev) => {
+      const data = ev && ev.data;
+      if (Array.isArray(data)) {
+        for (const line of data) emit(line);
+        return;
+      }
+      if (data && typeof data === "object" && "line" in data) {
+        emit(data.line);
+        return;
+      }
+      emit(data);
+    });
+    worker.addEventListener("error", (ev) => {
+      emit("info string external worker error: " + String((ev && ev.message) || "unknown"));
+    });
+    worker.addEventListener("messageerror", () => {
+      emit("info string external worker messageerror");
+    });
+
+    const api = {
+      provider: "external-worker",
+      variant: "external",
+      workerUrl: resolvedUrl,
+      postMessage(cmd) {
+        if (closed) throw new Error("engine terminated");
+        worker.postMessage(String(cmd));
+      },
+      waitForLine(matcher, waitOpts) {
+        if (closed) return Promise.reject(new Error("engine terminated"));
+        const match = lineMatcherFn(matcher);
+        const timeoutMs = Math.max(0, Number((waitOpts && waitOpts.timeoutMs) || 15000) || 15000);
+        return new Promise((resolve, reject) => {
+          const waiter = {
+            done: false,
+            match,
+            resolve,
+            reject,
+            timer: 0
+          };
+          if (timeoutMs > 0) {
+            waiter.timer = setTimeout(() => {
+              if (waiter.done) return;
+              waiter.done = true;
+              waiters.delete(waiter);
+              reject(new Error("Timed out waiting for engine line"));
+            }, timeoutMs);
+          }
+          waiters.add(waiter);
+        });
+      },
+      async uci(waitOpts) {
+        const p = this.waitForLine(/^uciok$/i, waitOpts);
+        this.postMessage("uci");
+        return p;
+      },
+      async isReady(waitOpts) {
+        const p = this.waitForLine(/^readyok$/i, waitOpts);
+        this.postMessage("isready");
+        return p;
+      },
+      setOption(name, value) {
+        this.postMessage("setoption name " + name + " value " + value);
+      },
+      async readFile() { throw new Error("readFile unsupported for external worker engines"); },
+      async writeFile() { throw new Error("writeFile unsupported for external worker engines"); },
+      async mkdir() { throw new Error("mkdir unsupported for external worker engines"); },
+      async readdir() { throw new Error("readdir unsupported for external worker engines"); },
+      async unlink() { throw new Error("unlink unsupported for external worker engines"); },
+      addMessageListener(fn) { listeners.add(fn); },
+      removeMessageListener(fn) { listeners.delete(fn); },
+      async terminate() {
+        if (closed) return;
+        closed = true;
+        for (const waiter of Array.from(waiters)) {
+          if (waiter.done) continue;
+          waiter.done = true;
+          clearTimeout(waiter.timer);
+          waiter.reject(new Error("engine terminated"));
+        }
+        waiters.clear();
+        try { worker.terminate(); } catch (_) {}
+      }
+    };
+    return api;
+  }
+
+  async function createSelectedEngine() {
+    const provider = selectedEngineProvider();
+    if (provider === "external-worker") {
+      const workerUrl = (engineWorkerUrlEl.value || "").trim();
+      if (!workerUrl) throw new Error("Set External Worker URL first");
+      const api = createGenericUCIWorkerEngine({ workerUrl });
+      api.variant = "external";
+      return {
+        engine: api,
+        descriptor: {
+          provider,
+          label: "external-worker",
+          supportsDebugLog: false
+        }
+      };
+    }
+
+    const api = await window.Pikafish.createWorkerEngine({
+      basePath: ".",
+      variant: variantEl.value
+    });
+    api.provider = "pikafish";
+    return {
+      engine: api,
+      descriptor: {
+        provider,
+        label: api.variant || "pikafish",
+        supportsDebugLog: true
+      }
+    };
+  }
+
+  async function initializeEngineSession(e, descriptor) {
+    await e.uci({ timeoutMs: 20000 });
+    const initCmds = descriptor && descriptor.provider === "external-worker" ? externalInitCommands() : [];
+    for (const line of initCmds) {
+      e.postMessage(line);
+    }
+    await e.isReady({ timeoutMs: 20000 });
+
+    const presetCfg = resolvePresetConfig(presetEl.value);
+    try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
+    try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
+    try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
+    await e.isReady({ timeoutMs: 20000 }).catch(() => {});
+
+    if (descriptor && descriptor.supportsDebugLog) {
+      await applyDebugLogOption(e, { silent: true });
+    } else {
+      setDebugLogControlsEnabled(false);
+    }
+
+    log("engine init: preset " + presetCfg.name + " (depth " + presetCfg.depth + ", hash " + presetCfg.hash + ", threads " + presetCfg.threads + ")");
+    if (descriptor && descriptor.provider === "external-worker" && initCmds.length) {
+      log("external init commands: " + initCmds.join(" ; "));
+    }
   }
 
   function scheduleEngineDrain() {
@@ -1161,9 +1512,10 @@
 
     const best = line.match(/^bestmove\s+(\S+)/);
     if (best) {
+      const completedAction = pendingBestmoveAction;
       lastBestmove = best[1];
       statusDirty = true;
-      if (pendingBestmoveAction === "play" && best[1] !== "(none)") {
+      if (completedAction === "play" && best[1] !== "(none)") {
         if (applyMove(best[1], "engine")) {
           posStatusEl.textContent = "Engine played " + best[1];
         } else {
@@ -1171,6 +1523,9 @@
         }
       }
       pendingBestmoveAction = null;
+      if (completedAction === "analyze" && continuousAnalyzeEnabled() && !pageHidden) {
+        scheduleContinuousAnalysisRestart("resume-after-depth");
+      }
     }
 
     return statusDirty;
@@ -1220,6 +1575,10 @@
   }
 
   async function applyDebugLogOption(e, opts) {
+    if (!shouldEnableDebugLogControls()) {
+      setDebugLogControlsEnabled(false);
+      return;
+    }
     const target = e || engine;
     const silent = !!(opts && opts.silent);
     if (!target) {
@@ -1245,6 +1604,10 @@
   }
 
   async function refreshDebugLogView() {
+    if (!shouldEnableDebugLogControls()) {
+      setDebugLogControlsEnabled(false);
+      return;
+    }
     if (!engine) {
       setDebugLogState("debug log: engine not started");
       setDebugLogPreview("");
@@ -1266,6 +1629,10 @@
   }
 
   async function clearDebugLogFile() {
+    if (!shouldEnableDebugLogControls()) {
+      setDebugLogControlsEnabled(false);
+      return;
+    }
     if (!engine) {
       setDebugLogPreview("");
       setDebugLogState("debug log: engine not started");
@@ -1293,6 +1660,10 @@
   }
 
   async function downloadDebugLogFile() {
+    if (!shouldEnableDebugLogControls()) {
+      setDebugLogControlsEnabled(false);
+      return;
+    }
     if (!engine) {
       setDebugLogState("debug log: engine not started");
       return;
@@ -1321,32 +1692,63 @@
 
   async function ensureEngine() {
     if (engine) return engine;
+    if (engineBootPromise) return engineBootPromise;
     pendingEngineLines.length = 0;
-    log("starting worker engine...");
-    engine = await window.Pikafish.createWorkerEngine({
-      basePath: ".",
-      variant: variantEl.value
-    });
-    engineStateEl.textContent = "engine: running (" + engine.variant + ", worker)";
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = false;
+    const provider = selectedEngineProvider();
+    log("starting worker engine (" + provider + ")...");
+    engineStateEl.textContent = "engine: starting (" + provider + ")";
+    engineBootPromise = (async () => {
+      const created = await createSelectedEngine();
+      engine = created.engine;
+      engineDescriptor = created.descriptor;
+      engineListener = (line) => queueEngineLine(line);
+      engine.addMessageListener(engineListener);
+      updateEngineProviderUI();
+      await initializeEngineSession(engine, engineDescriptor);
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor.label || engine.variant || provider) + ", worker)";
+      if (continuousAnalyzeEnabled() && !pageHidden) {
+        scheduleContinuousAnalysisRestart("engine-start");
+      }
+      return engine;
+    })();
 
-    engineListener = (line) => queueEngineLine(line);
-    engine.addMessageListener(engineListener);
-    await applyDebugLogOption(engine, { silent: true });
-    return engine;
+    try {
+      return await engineBootPromise;
+    } catch (e) {
+      log("engine start failed: " + String(e && e.message || e));
+      try {
+        if (engine && engineListener) engine.removeMessageListener(engineListener);
+      } catch (_) {}
+      try {
+        if (engine) await engine.terminate();
+      } catch (_) {}
+      engine = null;
+      engineDescriptor = null;
+      engineListener = null;
+      engineStateEl.textContent = "engine: stopped";
+      throw e;
+    } finally {
+      engineBootPromise = null;
+    }
   }
 
   async function shutdownEngine() {
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = false;
     if (!engine) return;
     try {
       if (engineListener) engine.removeMessageListener(engineListener);
       await engine.terminate();
     } finally {
       engine = null;
+      engineDescriptor = null;
       engineListener = null;
       pendingEngineLines.length = 0;
       engineStateEl.textContent = "engine: stopped";
       pendingBestmoveAction = null;
-      setDebugLogState(debugLogEnabledEl.checked ? ("debug log: pending (" + currentDebugLogPath() + ")") : "debug log: disabled");
+      setDebugLogControlsEnabled(shouldEnableDebugLogControls());
     }
   }
 
@@ -1356,7 +1758,8 @@
   }
 
   async function syncEnginePosition() {
-    await sendCmd(currentPositionCommand());
+    const e = await ensureEngine();
+    e.postMessage(currentPositionCommand());
   }
 
   function requestedDepth() {
@@ -1365,16 +1768,63 @@
     return Math.min(20, Math.max(1, Math.trunc(v)));
   }
 
+  function continuousAnalyzeEnabled() {
+    return !!continuousAnalyzeEl.checked;
+  }
+
+  async function stopSearch(opts) {
+    const clearAction = !(opts && opts.keepPendingAction);
+    if (clearAction) pendingBestmoveAction = null;
+    if (!engine) return;
+    try {
+      engine.postMessage("stop");
+    } catch (_) {}
+  }
+
+  function scheduleContinuousAnalysisRestart(reason) {
+    if (!continuousAnalyzeEnabled()) return;
+    if (suppressContinuousUntilPositionChange) suppressContinuousUntilPositionChange = false;
+    if (!engine) return;
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = true;
+    continuousRestartTimer = setTimeout(() => {
+      continuousRestartPending = false;
+      startContinuousAnalysis({ reason }).catch((e) => log(String(e)));
+    }, 80);
+  }
+
+  async function startContinuousAnalysis(opts) {
+    if (!continuousAnalyzeEnabled()) return;
+    if (pageHidden) return;
+    if (suppressContinuousUntilPositionChange) return;
+    const e = await ensureEngine();
+    pendingBestmoveAction = null;
+    clearWinrateSeries();
+    lastBestmove = "";
+    const why = opts && opts.reason ? String(opts.reason) : "manual";
+    e.postMessage("stop");
+    e.postMessage(currentPositionCommand());
+    e.postMessage("go infinite");
+    engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : (e.variant || "unknown")) + ", continuous)";
+    log("continuous analyze: on (" + why + ")");
+  }
+
   async function requestEngineMove() {
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = false;
     pendingBestmoveAction = "play";
     clearWinrateSeries();
+    await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
   }
 
   async function analyzePosition() {
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = false;
     pendingBestmoveAction = "analyze";
     clearWinrateSeries();
+    await stopSearch({ keepPendingAction: true });
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
   }
@@ -1531,6 +1981,9 @@
     scheduleLogFlush();
     scheduleStatusLineRender();
     scheduleWinrateGraphRender(true);
+    if (continuousAnalyzeEnabled() && engine) {
+      scheduleContinuousAnalysisRestart("tab-visible");
+    }
   }
 
   function shouldWarmServiceWorkerCache() {
@@ -1582,19 +2035,21 @@
   document.getElementById("engine-move").onclick = () => requestEngineMove().catch((e) => log(String(e)));
   document.getElementById("analyze").onclick = () => analyzePosition().catch((e) => log(String(e)));
   document.getElementById("stop-search").onclick = () => {
-    pendingBestmoveAction = null;
-    sendCmd("stop").catch((e) => log(String(e)));
+    suppressContinuousUntilPositionChange = continuousAnalyzeEnabled();
+    stopSearch().catch((e) => log(String(e)));
   };
   document.getElementById("reset").onclick = () => {
     resetPosition();
     if (engine) {
       sendCmd("ucinewgame").catch((e) => log(String(e)));
-      sendCmd(currentPositionCommand()).catch((e) => log(String(e)));
+      if (!continuousAnalyzeEnabled()) {
+        sendCmd(currentPositionCommand()).catch((e) => log(String(e)));
+      }
     }
   };
   document.getElementById("undo").onclick = () => {
     undoMove();
-    if (engine) {
+    if (engine && !continuousAnalyzeEnabled()) {
       syncEnginePosition().catch((e) => log(String(e)));
     }
   };
@@ -1611,6 +2066,46 @@
     setDebugLogPreview(debugLogViewEl.textContent);
     applyDebugLogOption().catch((e) => log(String(e)));
   });
+  engineProviderEl.addEventListener("change", () => {
+    updateEngineProviderUI();
+    refreshBadges();
+    if (engine) {
+      log("engine provider changed; restart engine to apply");
+      engineStateEl.textContent = "engine: running (" + (engineDescriptor ? engineDescriptor.label : "unknown") + ") · provider changed";
+    }
+  });
+  presetEl.addEventListener("change", () => {
+    const cfg = applyPresetToControls();
+    refreshBadges();
+    log("preset controls: " + cfg.name + " (depth " + cfg.depth + ", hash " + cfg.hash + ", threads " + cfg.threads + ")");
+    if (engine) {
+      try { engine.setOption("Hash", cfg.hash); } catch (_) {}
+      try { engine.setOption("Threads", cfg.threads); } catch (_) {}
+      if (continuousAnalyzeEnabled()) scheduleContinuousAnalysisRestart("preset-change");
+    }
+  });
+  depthEl.addEventListener("change", () => {
+    if (continuousAnalyzeEnabled() && engine) scheduleContinuousAnalysisRestart("depth-change");
+  });
+  variantEl.addEventListener("change", () => {
+    if (engine && isPikafishProvider()) {
+      log("runtime changed; restart engine to apply");
+    }
+  });
+  continuousAnalyzeEl.addEventListener("change", () => {
+    if (!continuousAnalyzeEnabled()) {
+      clearTimeout(continuousRestartTimer);
+      continuousRestartPending = false;
+      suppressContinuousUntilPositionChange = false;
+      stopSearch().catch((e) => log(String(e)));
+      if (engine && engineDescriptor) {
+        engineStateEl.textContent = "engine: running (" + (engineDescriptor.label || engine.variant || "worker") + ", worker)";
+      }
+      return;
+    }
+    suppressContinuousUntilPositionChange = false;
+    startContinuousAnalysis({ reason: "toggle-on" }).catch((e) => log(String(e)));
+  });
 
   window.addEventListener("resize", () => {
     renderBoard();
@@ -1618,12 +2113,19 @@
   });
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  refreshBadges();
   variantEl.value = preferredVariant();
-  setDebugLogState("debug log: disabled");
+  presetEl.value = "auto";
+  engineWorkerUrlEl.value = "";
+  engineInitCmdsEl.value = "setoption name UCI_Variant value xiangqi";
+  applyPresetToControls();
+  updateEngineProviderUI();
+  refreshBadges();
   resetPosition();
+  if (shouldEnableDebugLogControls()) setDebugLogState("debug log: disabled");
   registerDemoServiceWorker();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
+  log("Enable 'Continuous Analyze' for live infinite analysis that restarts on move/undo/reset.");
+  log("External UCI worker support is experimental; provide a Xiangqi-capable worker URL and init commands if needed.");
   log("Local server (`npm run serve:demo`) sends COOP/COEP so threaded WASM can run when supported.");
 </script>
 </body>
