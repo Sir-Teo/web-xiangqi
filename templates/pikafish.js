@@ -1,6 +1,24 @@
 "use strict";
 
 (function() {
+  function wasmThreadsSupported() {
+    try {
+      const source = Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00);
+      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return false;
+      if (!WebAssembly.validate(source)) return false;
+      if (typeof SharedArrayBuffer !== "function") return false;
+      if (typeof Atomics !== "object") return false;
+      const mem = new WebAssembly.Memory({ shared: true, initial: 8, maximum: 16 });
+      if (!(mem.buffer instanceof SharedArrayBuffer)) return false;
+      if (typeof window !== "undefined" && typeof window.postMessage === "function") {
+        try { window.postMessage(mem, "*"); } catch (_) { return false; }
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function isNode() {
     return typeof process !== "undefined" &&
       process.versions &&
@@ -45,21 +63,36 @@
     return String(base).replace(/\/+$/, "") + "/" + file;
   }
 
+  function resolveVariant(opts) {
+    const requested = (opts && opts.variant) || "auto";
+    if (requested === "threaded" || requested === "single") return requested;
+    if (isNode()) return "threaded";
+    return wasmThreadsSupported() ? "threaded" : "single";
+  }
+
+  function coreMeta(variant) {
+    return variant === "single"
+      ? { jsFile: "pikafish-core-single.js", globalName: "PikafishCoreSingle" }
+      : { jsFile: "pikafish-core.js", globalName: "PikafishCore" };
+  }
+
   function getCoreFactory(opts) {
     if (opts && opts.coreFactory) return opts.coreFactory;
+    const meta = coreMeta(opts.variant);
     if (isNode()) {
       const path = require("path");
-      const corePath = (opts && opts.coreJsPath) || path.join(opts.basePath || __dirname, "pikafish-core.js");
+      const corePath = (opts && opts.coreJsPath) || path.join(opts.basePath || __dirname, meta.jsFile);
       return require(corePath);
     }
-    if (typeof PikafishCore !== "undefined") return PikafishCore;
-    throw new Error("PikafishCore not found. Load pikafish-core.js first.");
+    if (typeof self !== "undefined" && typeof self[meta.globalName] !== "undefined") return self[meta.globalName];
+    throw new Error(meta.globalName + " not found. Load " + meta.jsFile + " first.");
   }
 
   async function createEngine(opts) {
     opts = opts || {};
+    const variant = resolveVariant(opts);
     const basePath = opts.basePath || defaultBasePath();
-    const coreFactory = getCoreFactory({ ...opts, basePath });
+    const coreFactory = getCoreFactory({ ...opts, basePath, variant });
     const listeners = new Set();
     const pending = [];
     let searching = false;
@@ -132,6 +165,7 @@
     }
 
     return {
+      variant,
       postMessage,
       loadNNUE,
       addMessageListener(fn) { listeners.add(fn); },
@@ -147,6 +181,8 @@
     };
   }
 
+  createEngine.wasmThreadsSupported = wasmThreadsSupported;
+
   if (isNode()) {
     module.exports = createEngine;
     return;
@@ -156,12 +192,14 @@
     let enginePromise = null;
     let basePathOverride = null;
     let nnuePathOverride = null;
+    let variantOverride = "auto";
 
     function ensureEngine() {
       if (!enginePromise) {
         enginePromise = createEngine({
           basePath: basePathOverride || defaultBasePath(),
-          nnuePath: nnuePathOverride || null
+          nnuePath: nnuePathOverride || null,
+          variant: variantOverride
         });
       }
       return enginePromise;
@@ -173,6 +211,7 @@
         if (data.coreScript) importScripts(data.coreScript);
         basePathOverride = data.basePath || basePathOverride;
         nnuePathOverride = data.nnuePath || nnuePathOverride;
+        variantOverride = data.variant || variantOverride;
         await ensureEngine();
         return;
       }
@@ -191,4 +230,3 @@
 
   self.Pikafish = createEngine;
 })();
-

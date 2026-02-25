@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pikafish WASM Demo</title>
+  <style>
+    :root {
+      --bg: #f2efe6;
+      --ink: #182126;
+      --muted: #5d6770;
+      --card: #fffdf8;
+      --line: #d7cfbf;
+      --accent: #0f7b6c;
+      --accent-2: #d9762b;
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sans: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 0% 0%, #fef5d8 0, transparent 50%),
+        radial-gradient(circle at 100% 100%, #d8f0eb 0, transparent 45%),
+        var(--bg);
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      background: color-mix(in srgb, var(--card) 88%, white);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    button, select, input {
+      font: inherit;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #fff, #f3f1ea);
+    }
+    button.primary {
+      border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+      background: linear-gradient(180deg, #f1fffb, #dff6f1);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fff;
+      font-size: 0.9rem;
+    }
+    .badge.ok { border-color: #9cd3c8; }
+    .badge.warn { border-color: #efc493; }
+    .mono { font-family: var(--mono); }
+    pre {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+      background: #0f1720;
+      color: #d7e4ef;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 240px;
+      max-height: 50vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h1>Pikafish WASM Demo</h1>
+    <p>Auto-selects threaded WASM when available and falls back to single-thread WASM otherwise.</p>
+  </section>
+
+  <section class="panel grid">
+    <div>
+      <div class="row" id="status-badges"></div>
+    </div>
+    <div>
+      <div class="row">
+        <label for="variant">Variant</label>
+        <select id="variant">
+          <option value="auto">Auto (recommended)</option>
+          <option value="threaded">Threaded</option>
+          <option value="single">Single-thread</option>
+        </select>
+        <button class="primary" id="start">Start Engine</button>
+        <button id="stop">Quit</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <button id="uci">uci</button>
+      <button id="isready">isready</button>
+      <button id="bench1">go depth 1</button>
+      <input id="command" class="mono" style="flex:1;min-width:220px" value="position startpos">
+      <button id="send">Send</button>
+    </div>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script src="./pikafish-core.js"></script>
+<script src="./pikafish-core-single.js"></script>
+<script src="./pikafish.js"></script>
+<script>
+  const logEl = document.getElementById("log");
+  const badgesEl = document.getElementById("status-badges");
+  const variantEl = document.getElementById("variant");
+  let engine = null;
+
+  function log(line) {
+    logEl.textContent += line + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function badge(text, kind) {
+    const el = document.createElement("span");
+    el.className = "badge " + (kind || "");
+    el.textContent = text;
+    return el;
+  }
+
+  function refreshStatus() {
+    badgesEl.innerHTML = "";
+    badgesEl.append(
+      badge("crossOriginIsolated: " + String(window.crossOriginIsolated), window.crossOriginIsolated ? "ok" : "warn"),
+      badge("SharedArrayBuffer: " + (typeof SharedArrayBuffer === "function"), typeof SharedArrayBuffer === "function" ? "ok" : "warn"),
+      badge("threads supported: " + String(window.Pikafish.wasmThreadsSupported()), window.Pikafish.wasmThreadsSupported() ? "ok" : "warn")
+    );
+  }
+
+  async function startEngine() {
+    if (engine) return;
+    log("starting...");
+    engine = await window.Pikafish({
+      basePath: ".",
+      variant: variantEl.value
+    });
+    log("engine started (" + engine.variant + ")");
+    engine.addMessageListener((line) => log(line));
+  }
+
+  async function stopEngine() {
+    if (!engine) return;
+    await engine.terminate();
+    log("terminated");
+    engine = null;
+  }
+
+  async function sendCmd(cmd) {
+    if (!engine) await startEngine();
+    engine.postMessage(cmd);
+  }
+
+  document.getElementById("start").onclick = () => startEngine().catch((e) => log(String(e)));
+  document.getElementById("stop").onclick = () => stopEngine().catch((e) => log(String(e)));
+  document.getElementById("uci").onclick = () => sendCmd("uci").catch((e) => log(String(e)));
+  document.getElementById("isready").onclick = () => sendCmd("isready").catch((e) => log(String(e)));
+  document.getElementById("bench1").onclick = async () => {
+    try {
+      await sendCmd("ucinewgame");
+      await sendCmd("position startpos");
+      await sendCmd("go depth 1");
+    } catch (e) {
+      log(String(e));
+    }
+  };
+  document.getElementById("send").onclick = () => sendCmd(document.getElementById("command").value).catch((e) => log(String(e)));
+
+  refreshStatus();
+  log("Tip: use `npm run serve:demo` so COOP/COEP headers are present for threaded WASM.");
+</script>
+</body>
+</html>

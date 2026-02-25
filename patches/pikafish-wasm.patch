@@ -32,6 +32,43 @@ index 6f209a2..157b045 100644
  	CXXFLAGS += -DUSE_PTHREADS
  	# On Android Bionic's C library comes with its own pthread implementation bundled in
  	ifneq ($(OS),Android)
+diff --git a/src/engine.cpp b/src/engine.cpp
+index 18ee617..27731ed 100644
+--- a/src/engine.cpp
++++ b/src/engine.cpp
+@@ -63,6 +63,7 @@ Engine::Engine(std::optional<std::string> path) :
+ 
+     pos.set(StartFEN, &states->back());
+ 
++#ifndef __EMSCRIPTEN__
+     options.add(  //
+       "Debug Log File", Option("", [](const Option& o) {
+           start_logger(o);
+@@ -75,12 +76,24 @@ Engine::Engine(std::optional<std::string> path) :
+           return numa_config_information_as_string() + "\n"
+                + thread_allocation_information_as_string();
+       }));
++#endif
+ 
+     options.add(  //
++#ifdef __EMSCRIPTEN_SINGLE_THREADED__
++      "Threads", Option(1, 1, 1, [](const Option&) {
++          return std::nullopt;
++      }));
++#elif defined(__EMSCRIPTEN__)
++      "Threads", Option(1, 1, 32, [this](const Option&) {
++          resize_threads();
++          return std::nullopt;
++      }));
++#else
+       "Threads", Option(1, 1, MaxThreads, [this](const Option&) {
+           resize_threads();
+           return thread_allocation_information_as_string();
+       }));
++#endif
+ 
+     options.add(  //
+       "Hash", Option(16, 1, MaxHashMB, [this](const Option& o) {
 diff --git a/src/main.cpp b/src/main.cpp
 index 0367e41..b621176 100644
 --- a/src/main.cpp
@@ -80,6 +117,124 @@ index 0367e41..b621176 100644
 +}
 +#endif
 +#endif
+diff --git a/src/thread.cpp b/src/thread.cpp
+index 6d32fb6..08804ca 100644
+--- a/src/thread.cpp
++++ b/src/thread.cpp
+@@ -53,18 +53,22 @@ Thread::Thread(Search::SharedState&                    sharedState,
+     nthreads(sharedState.options["Threads"]),
+     stdThread(&Thread::idle_loop, this) {
+ 
++#ifndef __EMSCRIPTEN__
+     wait_for_search_finished();
+ 
+     run_custom_job([this, &binder, &sharedState, &sm, n]() {
++#endif
+         // Use the binder to [maybe] bind the threads to a NUMA node before doing
+         // the Worker allocation. Ideally we would also allocate the SearchManager
+         // here, but that's minor.
+         this->numaAccessToken = binder();
+         this->worker          = make_unique_large_page<Search::Worker>(
+           sharedState, std::move(sm), n, idxInNuma, totalNuma, this->numaAccessToken);
++#ifndef __EMSCRIPTEN__
+     });
+ 
+     wait_for_search_finished();
++#endif
+ }
+ 
+ 
+@@ -76,7 +80,9 @@ Thread::~Thread() {
+ 
+     exit = true;
+     start_searching();
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
+     stdThread.join();
++#endif
+ }
+ 
+ // Wakes up the thread that will start the search
+@@ -88,18 +94,24 @@ void Thread::start_searching() {
+ // Clears the histories for the thread worker (usually before a new game)
+ void Thread::clear_worker() {
+     assert(worker != nullptr);
++#ifndef __EMSCRIPTEN__
+     run_custom_job([this]() { worker->clear(); });
++#else
++    worker->clear();
++#endif
+ }
+ 
+ // Blocks on the condition variable until the thread has finished searching
+ void Thread::wait_for_search_finished() {
+-
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
+     std::unique_lock<std::mutex> lk(mutex);
+     cv.wait(lk, [&] { return !searching; });
++#endif
+ }
+ 
+ // Launching a function in the thread
+ void Thread::run_custom_job(std::function<void()> f) {
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
+     {
+         std::unique_lock<std::mutex> lk(mutex);
+         cv.wait(lk, [&] { return !searching; });
+@@ -107,6 +119,9 @@ void Thread::run_custom_job(std::function<void()> f) {
+         searching = true;
+     }
+     cv.notify_one();
++#else
++    f();
++#endif
+ }
+ 
+ void Thread::ensure_network_replicated() { worker->ensure_network_replicated(); }
+@@ -167,6 +182,7 @@ void ThreadPool::set(const NumaConfig&                           numaConfig,
+         // This is undesirable, and so the default behaviour (i.e. when the user does not
+         // change the NumaConfig UCI setting) is to not bind the threads to processors
+         // unless we know for sure that we span NUMA nodes and replication is required.
++#ifndef __EMSCRIPTEN__
+         const std::string numaPolicy(sharedState.options["NumaPolicy"]);
+         const bool        doBindThreads = [&]() {
+             if (numaPolicy == "none")
+@@ -178,6 +194,9 @@ void ThreadPool::set(const NumaConfig&                           numaConfig,
+             // numaPolicy == "system", or explicitly set by the user
+             return true;
+         }();
++#else
++        const bool doBindThreads = false;
++#endif
+ 
+         std::map<NumaIndex, size_t> counts;
+         boundThreadToNumaNode = doBindThreads
+diff --git a/src/thread_win32_osx.h b/src/thread_win32_osx.h
+index 5a8d43a..670214e 100644
+--- a/src/thread_win32_osx.h
++++ b/src/thread_win32_osx.h
+@@ -27,7 +27,21 @@
+ // The implementation calls pthread_create() with the stack size parameter
+ // equal to the Linux 8MB default, on platforms that support it.
+ 
+-#if defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__) || defined(USE_PTHREADS)
++#if defined(__EMSCRIPTEN_SINGLE_THREADED__)
++
++namespace Stockfish {
++
++class NativeThread {
++   public:
++    template<class Function, class... Args>
++    explicit NativeThread(Function&&, Args&&...) {}
++
++    void join() {}
++};
++
++}  // namespace Stockfish
++
++#elif defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__) || defined(USE_PTHREADS)
+ 
+     #include <pthread.h>
+     #include <functional>
 diff --git a/src/uci.cpp b/src/uci.cpp
 index 19f55f0..435f5ea 100644
 --- a/src/uci.cpp

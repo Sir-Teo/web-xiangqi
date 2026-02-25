@@ -6,7 +6,9 @@
   "main": "dist/pikafish.js",
   "scripts": {
     "build": "bash scripts/build-pikafish.sh",
-    "test:smoke": "node scripts/test-smoke.js"
+    "test:smoke": "node scripts/test-smoke.js threaded",
+    "test:smoke:single": "node scripts/test-smoke.js single",
+    "test:smoke:all": "node scripts/test-smoke.js threaded && node scripts/test-smoke.js single",
+    "serve:demo": "node scripts/serve-demo.js"
   }
 }
-
