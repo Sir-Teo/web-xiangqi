@@ -1,0 +1,12 @@
+{
+  "name": "web-xiangqi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WASM/JS wrapper build for Pikafish (Xiangqi engine)",
+  "main": "dist/pikafish.js",
+  "scripts": {
+    "build": "bash scripts/build-pikafish.sh",
+    "test:smoke": "node scripts/test-smoke.js"
+  }
+}
+

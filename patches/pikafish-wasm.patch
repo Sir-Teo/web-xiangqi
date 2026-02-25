@@ -1,0 +1,172 @@
+diff --git a/src/Makefile b/src/Makefile
+index 6f209a2..157b045 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -135,7 +135,7 @@ ifeq ($(ARCH), $(filter $(ARCH), \
+                  x86-64-avx512icl x86-64-vnni512 x86-64-avx512 x86-64-avxvnni \
+                  x86-64-bmi2 x86-64-avx2 x86-64-sse41-popcnt x86-64-modern x86-64-ssse3 x86-64-sse3-popcnt \
+                  x86-64 x86-32-sse41-popcnt x86-32-sse2 x86-32 ppc-64 ppc-64-altivec ppc-64-vsx ppc-32 e2k \
+-                 armv7 armv7-neon armv8 armv8-dotprod apple-silicon general-64 general-32 riscv64 \
++                 armv7 armv7-neon armv8 armv8-dotprod apple-silicon general-64 general-32 riscv64 wasm \
+                  loongarch64 loongarch64-lsx loongarch64-lasx))
+    SUPPORTED_ARCH=true
+ else
+@@ -417,6 +417,11 @@ endif
+ endif
+ endif
+ 
++# WASM
++ifeq ($(ARCH),wasm)
++include emscripten/wasm-makefile.mk
++endif
++
+ 
+ ### ==========================================================================
+ ### Section 3. Low-level Configuration
+@@ -618,7 +623,7 @@ ifeq ($(COMP),gcc)
+ endif
+ 
+ ### On mingw use Windows threads, otherwise POSIX
+-ifneq ($(comp),mingw)
++ifneq ($(if $(filter wasm,$(ARCH)),mingw,$(comp)),mingw)
+ 	CXXFLAGS += -DUSE_PTHREADS
+ 	# On Android Bionic's C library comes with its own pthread implementation bundled in
+ 	ifneq ($(OS),Android)
+diff --git a/src/main.cpp b/src/main.cpp
+index 0367e41..b621176 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -28,17 +28,41 @@
+ 
+ using namespace Stockfish;
+ 
++#ifdef __EMSCRIPTEN__
++UCIEngine* uciP;
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
++bool ready = false;
++#endif
++#endif
++
+ int main(int argc, char* argv[]) {
+     std::cout << engine_info() << std::endl;
+ 
+     Bitboards::init();
+     Position::init();
+ 
++#ifndef __EMSCRIPTEN__
+     auto uci = std::make_unique<UCIEngine>(argc, argv);
+-
+     Tune::init(uci->engine_options());
+-
+     uci->loop();
++#else
++    uciP = new UCIEngine(argc, argv);
++    Tune::init(uciP->engine_options());
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
++    ready = true;
++#endif
++#endif
+ 
+     return 0;
+ }
++
++#ifdef __EMSCRIPTEN__
++extern "C" void command(const char* cmd) {
++    uciP->process_command(cmd);
++}
++#ifndef __EMSCRIPTEN_SINGLE_THREADED__
++extern "C" bool isReady() {
++    return ready;
++}
++#endif
++#endif
+diff --git a/src/uci.cpp b/src/uci.cpp
+index 19f55f0..435f5ea 100644
+--- a/src/uci.cpp
++++ b/src/uci.cpp
+@@ -84,14 +84,20 @@ void UCIEngine::init_search_update_listeners() {
+     engine.set_on_verify_networks([](const auto& s) { print_info_string(s); });
+ }
+ 
++#ifdef __EMSCRIPTEN__
++void UCIEngine::process_command(std::string cmd) {
++    std::string token;
++    std::istringstream is(cmd);
++#else
+ void UCIEngine::loop() {
+     std::string token, cmd;
+ 
+     for (int i = 1; i < cli.argc; ++i)
+         cmd += std::string(cli.argv[i]) + " ";
+-
+     do
+     {
++#endif
++#ifndef __EMSCRIPTEN__
+         if (cli.argc == 1
+             && !getline(std::cin, cmd))  // Wait for an input or an end-of-file (EOF) indication
+             cmd = "quit";
+@@ -99,6 +105,7 @@ void UCIEngine::loop() {
+         std::istringstream is(cmd);
+ 
+         token.clear();  // Avoid a stale if getline() returns nothing or a blank line
++#endif
+         is >> std::skipws >> token;
+ 
+         if (token == "quit" || token == "stop")
+@@ -141,16 +148,19 @@ void UCIEngine::loop() {
+         // These commands must not be used during a search!
+         else if (token == "flip")
+             engine.flip();
++#ifndef __EMSCRIPTEN__
+         else if (token == "bench")
+             bench(is);
+         else if (token == BenchmarkCommand)
+             benchmark(is);
++#endif
+         else if (token == "d")
+             sync_cout << engine.visualize() << sync_endl;
+         else if (token == "eval")
+             engine.trace_eval();
+         else if (token == "compiler")
+             sync_cout << compiler_info() << sync_endl;
++#ifndef __EMSCRIPTEN__
+         else if (token == "export_net")
+         {
+             std::pair<std::optional<std::string>, std::string> files;
+@@ -160,6 +170,7 @@ void UCIEngine::loop() {
+ 
+             engine.save_network(files);
+         }
++#endif
+         else if (token == "--help" || token == "help" || token == "--license" || token == "license")
+             sync_cout
+               << "\nPikafish is a powerful xiangqi engine for playing and analyzing."
+@@ -169,11 +180,13 @@ void UCIEngine::loop() {
+                  "\nFor any further information, visit https://github.com/official-pikafish/Pikafish#readme"
+                  "\nor read the corresponding README.md and Copying.txt files distributed along with this program.\n"
+               << sync_endl;
++#ifndef __EMSCRIPTEN__
+         else if (!token.empty() && token[0] != '#')
+             sync_cout << "Unknown command: '" << cmd << "'. Type help for more information."
+                       << sync_endl;
+ 
+     } while (token != "quit" && cli.argc == 1);  // The command-line arguments are one-shot
++#endif
+ }
+ 
+ Search::LimitsType UCIEngine::parse_limits(std::istream& is) {
+diff --git a/src/uci.h b/src/uci.h
+index 74500c5..a7d9a8b 100644
+--- a/src/uci.h
++++ b/src/uci.h
+@@ -40,6 +40,9 @@ class UCIEngine {
+    public:
+     UCIEngine(int argc, char** argv);
+ 
++#ifdef __EMSCRIPTEN__
++    void process_command(std::string cmd);
++#endif
+     void loop();
+ 
+     static int         to_cp(Value v, const Position& pos);
