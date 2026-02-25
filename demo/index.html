@@ -222,6 +222,21 @@
       border: 2px dashed rgba(13, 127, 110, 0.6);
       background: rgba(13, 127, 110, 0.08);
     }
+    .target-dot {
+      position: absolute;
+      pointer-events: none;
+      border-radius: 50%;
+      background: rgba(13, 127, 110, 0.22);
+      border: 1px solid rgba(13, 127, 110, 0.34);
+    }
+    .target-ring {
+      position: absolute;
+      pointer-events: none;
+      border-radius: 50%;
+      border: 3px solid rgba(183, 51, 43, 0.55);
+      background: rgba(183, 51, 43, 0.06);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+    }
 
     .side {
       display: grid;
@@ -245,6 +260,54 @@
       overflow: auto;
       font-family: var(--mono);
       font-size: 12px;
+    }
+    .graph-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fff, #faf6ee);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .graph-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      min-height: 1.1rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-family: var(--mono);
+    }
+    .graph-meta strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .graph {
+      width: 100%;
+      height: 160px;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--line) 75%, white);
+      background:
+        linear-gradient(180deg, rgba(183, 51, 43, 0.04), transparent 38%, rgba(13, 127, 110, 0.04)),
+        #fff;
+      display: block;
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .legend .swatch {
+      width: 12px;
+      height: 3px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 4px;
+      vertical-align: middle;
     }
     .moves {
       display: grid;
@@ -328,10 +391,28 @@
         <div class="river">CHU RIVER · HAN BORDER</div>
         <div class="pieces" id="pieces-layer"></div>
       </div>
-      <p class="note">Click a piece, then click a destination. This GUI applies moves without JS legality validation and relies on the engine/your input.</p>
+      <p class="note">Click a piece to see legal destinations. The GUI validates standard Xiangqi piece movement, blockers, palace/river rules, and self-check.</p>
     </section>
 
     <section class="side">
+      <section class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <strong>Winrate</strong>
+          <span class="small mono" id="winrate-label">No eval yet</span>
+        </div>
+        <div class="graph-wrap">
+          <canvas id="winrate-graph" class="graph" width="640" height="160" aria-label="Engine winrate graph"></canvas>
+          <div class="graph-meta">
+            <span id="winrate-left"><strong>Red</strong> 50%</span>
+            <span id="winrate-right"><strong>Black</strong> 50%</span>
+          </div>
+          <div class="legend">
+            <span><span class="swatch" style="background:#b7332b"></span>Red winrate</span>
+            <span><span class="swatch" style="background:#9aa4ad"></span>50% line</span>
+          </div>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="split">
           <div>
@@ -385,6 +466,10 @@
   const variantEl = document.getElementById("variant");
   const depthEl = document.getElementById("depth");
   const cmdEl = document.getElementById("command");
+  const winrateGraphEl = document.getElementById("winrate-graph");
+  const winrateLabelEl = document.getElementById("winrate-label");
+  const winrateLeftEl = document.getElementById("winrate-left");
+  const winrateRightEl = document.getElementById("winrate-right");
 
   let board = parseFenBoard(START_FEN);
   let sideToMove = "w";
@@ -396,13 +481,80 @@
   let pendingBestmoveAction = null; // "play" | "analyze" | null
   let lastBestmove = "";
   let lastInfo = "";
+  let lastWinrate = "";
+  let winrateSeries = [];
+  let pageHidden = document.visibilityState === "hidden";
+  let pendingEngineLines = [];
+  let engineDrainScheduled = false;
+  let statusRenderScheduled = false;
+  let logLines = [];
+  let logFlushScheduled = false;
+  let graphRenderScheduled = false;
+  let graphRenderDeferredTimer = 0;
+  let graphLastRenderTs = 0;
+  let graphForceRender = false;
+
+  const MAX_LOG_LINES = 500;
+  const GRAPH_MAX_FPS = 20;
 
   function isRedPiece(ch) { return !!ch && ch === ch.toUpperCase(); }
   function isBlackPiece(ch) { return !!ch && ch === ch.toLowerCase(); }
 
   function log(line) {
-    logEl.textContent += line + "\n";
-    logEl.scrollTop = logEl.scrollHeight;
+    logLines.push(String(line));
+    if (logLines.length > MAX_LOG_LINES) {
+      logLines.splice(0, logLines.length - MAX_LOG_LINES);
+    }
+    scheduleLogFlush();
+  }
+
+  function flushLogNow() {
+    const nearBottom = (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight) < 28;
+    logEl.textContent = logLines.length ? (logLines.join("\n") + "\n") : "";
+    if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function scheduleLogFlush() {
+    if (pageHidden) return;
+    if (logFlushScheduled) return;
+    logFlushScheduled = true;
+    requestAnimationFrame(() => {
+      logFlushScheduled = false;
+      if (pageHidden) return;
+      flushLogNow();
+    });
+  }
+
+  function scheduleStatusLineRender() {
+    if (pageHidden) return;
+    if (statusRenderScheduled) return;
+    statusRenderScheduled = true;
+    requestAnimationFrame(() => {
+      statusRenderScheduled = false;
+      if (pageHidden) return;
+      renderStatusLine();
+    });
+  }
+
+  function scheduleWinrateGraphRender(force) {
+    if (force) graphForceRender = true;
+    if (pageHidden) return;
+    if (graphRenderScheduled) return;
+    graphRenderScheduled = true;
+    requestAnimationFrame((ts) => {
+      graphRenderScheduled = false;
+      if (pageHidden) return;
+      const minGap = 1000 / GRAPH_MAX_FPS;
+      const elapsed = ts - graphLastRenderTs;
+      if (!graphForceRender && elapsed < minGap) {
+        clearTimeout(graphRenderDeferredTimer);
+        graphRenderDeferredTimer = setTimeout(() => scheduleWinrateGraphRender(false), Math.ceil(minGap - elapsed));
+        return;
+      }
+      graphForceRender = false;
+      graphLastRenderTs = ts;
+      renderWinrateGraph();
+    });
   }
 
   function badge(text, kind) {
@@ -412,13 +564,19 @@
     return el;
   }
 
+  function preferredVariant() {
+    return window.Pikafish.wasmThreadsSupported() ? "threaded" : "single";
+  }
+
   function refreshBadges() {
     const threadsSupported = window.Pikafish.wasmThreadsSupported();
+    const fastest = preferredVariant();
     badgesEl.innerHTML = "";
     badgesEl.append(
       badge("crossOriginIsolated: " + String(window.crossOriginIsolated), window.crossOriginIsolated ? "ok" : "warn"),
       badge("SharedArrayBuffer: " + (typeof SharedArrayBuffer === "function"), typeof SharedArrayBuffer === "function" ? "ok" : "warn"),
       badge("WASM threads: " + String(threadsSupported), threadsSupported ? "ok" : "warn"),
+      badge("default runtime: " + fastest, "info"),
       badge("wrapper worker helper: yes", "info")
     );
   }
@@ -450,6 +608,8 @@
     pendingBestmoveAction = null;
     lastBestmove = "";
     lastInfo = "";
+    lastWinrate = "";
+    clearWinrateSeries();
     renderAll();
   }
 
@@ -468,20 +628,269 @@
     return { fromFile, fromRank, toFile, toRank, raw: m[0] };
   }
 
-  function applyMove(move, sourceTag) {
+  function otherSide(side) {
+    return side === "w" ? "b" : "w";
+  }
+
+  function pieceSide(piece) {
+    if (!piece) return null;
+    return isRedPiece(piece) ? "w" : "b";
+  }
+
+  function inBounds(file, rank) {
+    return file >= 0 && file < 9 && rank >= 0 && rank < 10;
+  }
+
+  function inPalace(side, file, rank) {
+    if (file < 3 || file > 5) return false;
+    return side === "w" ? (rank >= 0 && rank <= 2) : (rank >= 7 && rank <= 9);
+  }
+
+  function hasCrossedRiver(side, rank) {
+    return side === "w" ? rank >= 5 : rank <= 4;
+  }
+
+  function sgn(n) {
+    return n > 0 ? 1 : (n < 0 ? -1 : 0);
+  }
+
+  function countBetweenOrthogonal(state, fromFile, fromRank, toFile, toRank) {
+    if (fromFile !== toFile && fromRank !== toRank) return -1;
+    let count = 0;
+    if (fromFile === toFile) {
+      const step = sgn(toRank - fromRank);
+      for (let r = fromRank + step; r !== toRank; r += step) {
+        if (state[r][fromFile]) count += 1;
+      }
+      return count;
+    }
+    const step = sgn(toFile - fromFile);
+    for (let f = fromFile + step; f !== toFile; f += step) {
+      if (state[fromRank][f]) count += 1;
+    }
+    return count;
+  }
+
+  function cloneBoardState(state) {
+    return state.map((row) => row.slice());
+  }
+
+  function findKing(state, side) {
+    const target = side === "w" ? "K" : "k";
+    for (let rank = 0; rank < 10; rank++) {
+      for (let file = 0; file < 9; file++) {
+        if (state[rank][file] === target) return { file, rank };
+      }
+    }
+    return null;
+  }
+
+  function kingsFacing(state) {
+    const red = findKing(state, "w");
+    const black = findKing(state, "b");
+    if (!red || !black) return false;
+    if (red.file !== black.file) return false;
+    return countBetweenOrthogonal(state, red.file, red.rank, black.file, black.rank) === 0;
+  }
+
+  function attacksSquare(state, fromFile, fromRank, piece, toFile, toRank) {
+    if (!piece || !inBounds(toFile, toRank)) return false;
+    const side = pieceSide(piece);
+    const type = piece.toUpperCase();
+    const df = toFile - fromFile;
+    const dr = toRank - fromRank;
+    const adf = Math.abs(df);
+    const adr = Math.abs(dr);
+
+    if (type === "R") {
+      return (fromFile === toFile || fromRank === toRank) &&
+        countBetweenOrthogonal(state, fromFile, fromRank, toFile, toRank) === 0;
+    }
+
+    if (type === "C") {
+      return (fromFile === toFile || fromRank === toRank) &&
+        countBetweenOrthogonal(state, fromFile, fromRank, toFile, toRank) === 1;
+    }
+
+    if (type === "N") {
+      if (!((adf === 2 && adr === 1) || (adf === 1 && adr === 2))) return false;
+      const legFile = adf === 2 ? (fromFile + sgn(df)) : fromFile;
+      const legRank = adr === 2 ? (fromRank + sgn(dr)) : fromRank;
+      return !state[legRank][legFile];
+    }
+
+    if (type === "B") {
+      if (!(adf === 2 && adr === 2)) return false;
+      if (side === "w" && toRank > 4) return false;
+      if (side === "b" && toRank < 5) return false;
+      const eyeFile = fromFile + sgn(df);
+      const eyeRank = fromRank + sgn(dr);
+      return !state[eyeRank][eyeFile];
+    }
+
+    if (type === "A") {
+      return adf === 1 && adr === 1 && inPalace(side, toFile, toRank);
+    }
+
+    if (type === "K") {
+      if (adf + adr === 1 && inPalace(side, toFile, toRank)) return true;
+      return fromFile === toFile && countBetweenOrthogonal(state, fromFile, fromRank, toFile, toRank) === 0;
+    }
+
+    if (type === "P") {
+      if (side === "w") {
+        if (df === 0 && dr === 1) return true;
+        return hasCrossedRiver(side, fromRank) && adr === 0 && adf === 1;
+      }
+      if (df === 0 && dr === -1) return true;
+      return hasCrossedRiver(side, fromRank) && adr === 0 && adf === 1;
+    }
+
+    return false;
+  }
+
+  function isInCheck(state, side) {
+    const king = findKing(state, side);
+    if (!king) return true;
+    const attacker = otherSide(side);
+    for (let rank = 0; rank < 10; rank++) {
+      for (let file = 0; file < 9; file++) {
+        const piece = state[rank][file];
+        if (!piece || pieceSide(piece) !== attacker) continue;
+        if (attacksSquare(state, file, rank, piece, king.file, king.rank)) return true;
+      }
+    }
+    return false;
+  }
+
+  function validatePieceMove(state, mv, movingSide) {
+    if (!inBounds(mv.fromFile, mv.fromRank) || !inBounds(mv.toFile, mv.toRank)) {
+      return { ok: false, reason: "out of bounds" };
+    }
+    if (mv.fromFile === mv.toFile && mv.fromRank === mv.toRank) {
+      return { ok: false, reason: "move must change square" };
+    }
+
+    const piece = state[mv.fromRank][mv.fromFile];
+    if (!piece) return { ok: false, reason: "no piece on source square" };
+    if (pieceSide(piece) !== movingSide) return { ok: false, reason: "not your piece" };
+
+    const target = state[mv.toRank][mv.toFile];
+    if (target && pieceSide(target) === movingSide) {
+      return { ok: false, reason: "cannot capture your own piece" };
+    }
+
+    const type = piece.toUpperCase();
+    const df = mv.toFile - mv.fromFile;
+    const dr = mv.toRank - mv.fromRank;
+    const adf = Math.abs(df);
+    const adr = Math.abs(dr);
+
+    if (type === "R") {
+      if (!(mv.fromFile === mv.toFile || mv.fromRank === mv.toRank)) return { ok: false, reason: "rook moves orthogonally" };
+      if (countBetweenOrthogonal(state, mv.fromFile, mv.fromRank, mv.toFile, mv.toRank) !== 0) return { ok: false, reason: "rook path blocked" };
+    } else if (type === "C") {
+      if (!(mv.fromFile === mv.toFile || mv.fromRank === mv.toRank)) return { ok: false, reason: "cannon moves orthogonally" };
+      const between = countBetweenOrthogonal(state, mv.fromFile, mv.fromRank, mv.toFile, mv.toRank);
+      if (target) {
+        if (between !== 1) return { ok: false, reason: "cannon capture needs one screen" };
+      } else if (between !== 0) {
+        return { ok: false, reason: "cannon path blocked" };
+      }
+    } else if (type === "N") {
+      if (!((adf === 2 && adr === 1) || (adf === 1 && adr === 2))) return { ok: false, reason: "horse moves in an L" };
+      const legFile = adf === 2 ? (mv.fromFile + sgn(df)) : mv.fromFile;
+      const legRank = adr === 2 ? (mv.fromRank + sgn(dr)) : mv.fromRank;
+      if (state[legRank][legFile]) return { ok: false, reason: "horse leg blocked" };
+    } else if (type === "B") {
+      if (!(adf === 2 && adr === 2)) return { ok: false, reason: "elephant moves 2 diagonally" };
+      if (movingSide === "w" && mv.toRank > 4) return { ok: false, reason: "elephant cannot cross river" };
+      if (movingSide === "b" && mv.toRank < 5) return { ok: false, reason: "elephant cannot cross river" };
+      const eyeFile = mv.fromFile + sgn(df);
+      const eyeRank = mv.fromRank + sgn(dr);
+      if (state[eyeRank][eyeFile]) return { ok: false, reason: "elephant eye blocked" };
+    } else if (type === "A") {
+      if (!(adf === 1 && adr === 1)) return { ok: false, reason: "advisor moves 1 diagonally" };
+      if (!inPalace(movingSide, mv.toFile, mv.toRank)) return { ok: false, reason: "advisor must stay in palace" };
+    } else if (type === "K") {
+      const flyingCapture = target && target.toUpperCase() === "K" &&
+        mv.fromFile === mv.toFile &&
+        countBetweenOrthogonal(state, mv.fromFile, mv.fromRank, mv.toFile, mv.toRank) === 0;
+      if (!flyingCapture) {
+        if (adf + adr !== 1) return { ok: false, reason: "general moves 1 orthogonally" };
+        if (!inPalace(movingSide, mv.toFile, mv.toRank)) return { ok: false, reason: "general must stay in palace" };
+      }
+    } else if (type === "P") {
+      if (movingSide === "w") {
+        if (!(df === 0 && dr === 1) && !(hasCrossedRiver(movingSide, mv.fromRank) && adr === 0 && adf === 1)) {
+          return { ok: false, reason: "pawn move is illegal" };
+        }
+      } else if (!(df === 0 && dr === -1) && !(hasCrossedRiver(movingSide, mv.fromRank) && adr === 0 && adf === 1)) {
+        return { ok: false, reason: "pawn move is illegal" };
+      }
+    } else {
+      return { ok: false, reason: "unknown piece" };
+    }
+
+    const next = cloneBoardState(state);
+    next[mv.toRank][mv.toFile] = piece;
+    next[mv.fromRank][mv.fromFile] = "";
+    if (kingsFacing(next)) return { ok: false, reason: "generals cannot face each other" };
+    if (isInCheck(next, movingSide)) return { ok: false, reason: "move leaves general in check" };
+
+    return { ok: true, piece, captured: target || "" };
+  }
+
+  function validateMove(move, movingSide) {
     const mv = parseMove(move);
-    if (!mv) return false;
-    const piece = board[mv.fromRank]?.[mv.fromFile];
-    if (!piece) return false;
-    const captured = board[mv.toRank][mv.toFile] || "";
+    if (!mv) return { ok: false, reason: "invalid move format" };
+    const result = validatePieceMove(board, mv, movingSide);
+    if (!result.ok) return result;
+    return { ok: true, mv, piece: result.piece, captured: result.captured };
+  }
+
+  function legalMovesFrom(file, rank) {
+    const piece = board[rank]?.[file];
+    if (!piece || pieceSide(piece) !== sideToMove) return [];
+    const out = [];
+    for (let toRank = 0; toRank < 10; toRank++) {
+      for (let toFile = 0; toFile < 9; toFile++) {
+        if (toFile === file && toRank === rank) continue;
+        const mv = { fromFile: file, fromRank: rank, toFile, toRank, raw: "" };
+        const checked = validatePieceMove(board, mv, sideToMove);
+        if (!checked.ok) continue;
+        out.push({
+          file: toFile,
+          rank: toRank,
+          capture: !!board[toRank][toFile]
+        });
+      }
+    }
+    return out;
+  }
+
+  function applyMove(move, sourceTag) {
+    const checked = validateMove(move, sideToMove);
+    if (!checked.ok) {
+      applyMove.lastError = checked.reason || "illegal move";
+      return false;
+    }
+    const mv = checked.mv;
+    const piece = checked.piece;
+    const captured = checked.captured;
     board[mv.toRank][mv.toFile] = piece;
     board[mv.fromRank][mv.fromFile] = "";
     moveHistory.push({ uci: mv.raw, piece, captured, source: sourceTag || "manual" });
     sideToMove = sideToMove === "w" ? "b" : "w";
     selected = null;
+    lastInfo = "";
+    lastWinrate = "";
+    if (sourceTag !== "engine") clearWinrateSeries();
     renderAll();
+    applyMove.lastError = "";
     return true;
   }
+  applyMove.lastError = "";
 
   function undoMove() {
     const last = moveHistory.pop();
@@ -492,6 +901,9 @@
     board[mv.toRank][mv.toFile] = last.captured || "";
     sideToMove = sideToMove === "w" ? "b" : "w";
     selected = null;
+    lastInfo = "";
+    lastWinrate = "";
+    clearWinrateSeries();
     renderAll();
   }
 
@@ -534,10 +946,13 @@
 
     const move = squareToUci(selected.file, selected.rank) + squareToUci(file, rank);
     if (applyMove(move, "human")) {
-      posStatusEl.textContent = "Applied move: " + move + " (GUI does not validate legality)";
+      const checkNote = isInCheck(board, sideToMove) ? (" · " + (sideToMove === "w" ? "red" : "black") + " in check") : "";
+      posStatusEl.textContent = "Applied move: " + move + checkNote;
       if (document.getElementById("auto-reply").checked) {
         requestEngineMove().catch((e) => log(String(e)));
       }
+    } else {
+      posStatusEl.textContent = "Illegal move: " + move + " · " + (applyMove.lastError || "rule violation");
     }
   }
 
@@ -577,6 +992,27 @@
     const innerH = boardRect.height - 28;
     const cellW = innerW / 9;
     const cellH = innerH / 10;
+    const selectedTargets = selected ? legalMovesFrom(selected.file, selected.rank) : [];
+
+    for (const target of selectedTargets) {
+      const v = boardToVisual(target.file, target.rank);
+      const el = document.createElement("div");
+      if (target.capture) {
+        el.className = "target-ring";
+        el.style.width = (cellW - 8) + "px";
+        el.style.height = (cellH - 8) + "px";
+        el.style.left = (v.file * cellW + 4) + "px";
+        el.style.top = (v.rank * cellH + 4) + "px";
+      } else {
+        const dot = Math.max(8, Math.min(cellW, cellH) * 0.22);
+        el.className = "target-dot";
+        el.style.width = dot + "px";
+        el.style.height = dot + "px";
+        el.style.left = (v.file * cellW + (cellW - dot) / 2) + "px";
+        el.style.top = (v.rank * cellH + (cellH - dot) / 2) + "px";
+      }
+      piecesLayerEl.appendChild(el);
+    }
 
     for (let rank = 0; rank < 10; rank++) {
       for (let file = 0; file < 9; file++) {
@@ -636,7 +1072,9 @@
     const selectedText = selected ? ("selected " + squareToUci(selected.file, selected.rank)) : "no selection";
     const best = lastBestmove ? (" · last bestmove " + lastBestmove) : "";
     const info = lastInfo ? (" · " + lastInfo) : "";
-    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info;
+    const wr = lastWinrate ? (" · " + lastWinrate) : "";
+    const check = isInCheck(board, sideToMove) ? (" · " + (sideToMove === "w" ? "red" : "black") + " in check") : "";
+    posStatusEl.textContent = selectedText + " · moves " + moveHistory.length + best + info + wr + check;
   }
 
   function renderAll() {
@@ -650,8 +1088,79 @@
     return "position startpos moves " + moveHistory.map((m) => m.uci).join(" ");
   }
 
+  function scheduleEngineDrain() {
+    if (pageHidden) return;
+    if (engineDrainScheduled) return;
+    engineDrainScheduled = true;
+    requestAnimationFrame(() => {
+      engineDrainScheduled = false;
+      if (pageHidden) return;
+      drainEngineLines();
+    });
+  }
+
+  function queueEngineLine(line) {
+    const text = String(line);
+    if (pageHidden && /^info depth /.test(text)) {
+      // Drop high-frequency search chatter while hidden.
+      return;
+    }
+    pendingEngineLines.push(text);
+    scheduleEngineDrain();
+  }
+
+  function processEngineLine(line) {
+    let statusDirty = false;
+    log(line);
+
+    if (/^info depth /.test(line)) {
+      const multipvMatch = line.match(/\bmultipv\s+(\d+)/);
+      if (!(multipvMatch && Number(multipvMatch[1]) > 1)) {
+        const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
+        if (scoreMatch) {
+          const depthMatch = line.match(/\bdepth\s+(\d+)/);
+          const scoreType = scoreMatch[1];
+          const scoreValue = Number(scoreMatch[2]);
+          lastInfo = "score " + scoreType + " " + scoreValue;
+          lastWinrate = formatWinRateForSides(scoreType, scoreValue, sideToMove);
+          const pair = computeWinRatePair(scoreType, scoreValue, sideToMove);
+          pushWinrateSample(pair.red, depthMatch ? Number(depthMatch[1]) : undefined);
+          statusDirty = true;
+        }
+      }
+    }
+
+    const best = line.match(/^bestmove\s+(\S+)/);
+    if (best) {
+      lastBestmove = best[1];
+      statusDirty = true;
+      if (pendingBestmoveAction === "play" && best[1] !== "(none)") {
+        if (applyMove(best[1], "engine")) {
+          posStatusEl.textContent = "Engine played " + best[1];
+        } else {
+          log("engine move rejected by GUI rules: " + best[1] + " · " + (applyMove.lastError || "unknown"));
+        }
+      }
+      pendingBestmoveAction = null;
+    }
+
+    return statusDirty;
+  }
+
+  function drainEngineLines() {
+    if (!pendingEngineLines.length) return;
+    const batch = pendingEngineLines.splice(0, pendingEngineLines.length);
+    let statusDirty = false;
+    for (const line of batch) {
+      if (processEngineLine(line)) statusDirty = true;
+    }
+    if (statusDirty) scheduleStatusLineRender();
+    if (pendingEngineLines.length) scheduleEngineDrain();
+  }
+
   async function ensureEngine() {
     if (engine) return engine;
+    pendingEngineLines.length = 0;
     log("starting worker engine...");
     engine = await window.Pikafish.createWorkerEngine({
       basePath: ".",
@@ -659,25 +1168,7 @@
     });
     engineStateEl.textContent = "engine: running (" + engine.variant + ", worker)";
 
-    engineListener = (line) => {
-      log(line);
-      if (/^info depth /.test(line)) {
-        const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
-        if (scoreMatch) lastInfo = "score " + scoreMatch[1] + " " + scoreMatch[2];
-        renderStatusLine();
-      }
-      const best = line.match(/^bestmove\s+(\S+)/);
-      if (best) {
-        lastBestmove = best[1];
-        renderStatusLine();
-        if (pendingBestmoveAction === "play" && best[1] !== "(none)") {
-          if (applyMove(best[1], "engine")) {
-            posStatusEl.textContent = "Engine played " + best[1];
-          }
-        }
-        pendingBestmoveAction = null;
-      }
-    };
+    engineListener = (line) => queueEngineLine(line);
     engine.addMessageListener(engineListener);
     return engine;
   }
@@ -690,6 +1181,7 @@
     } finally {
       engine = null;
       engineListener = null;
+      pendingEngineLines.length = 0;
       engineStateEl.textContent = "engine: stopped";
       pendingBestmoveAction = null;
     }
@@ -712,14 +1204,170 @@
 
   async function requestEngineMove() {
     pendingBestmoveAction = "play";
+    clearWinrateSeries();
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
   }
 
   async function analyzePosition() {
     pendingBestmoveAction = "analyze";
+    clearWinrateSeries();
     await syncEnginePosition();
     await sendCmd("go depth " + requestedDepth());
+  }
+
+  function scoreToWinRate(scoreType, scoreValue) {
+    if (scoreType === "mate") {
+      if (scoreValue > 0) return 0.995;
+      if (scoreValue < 0) return 0.005;
+      return 0.5;
+    }
+    const cp = Math.max(-2000, Math.min(2000, scoreValue));
+    return 1 / (1 + Math.exp(-cp / 220));
+  }
+
+  function computeWinRatePair(scoreType, scoreValue, evalSide) {
+    const pEvalSide = scoreToWinRate(scoreType, scoreValue);
+    const pRed = evalSide === "w" ? pEvalSide : (1 - pEvalSide);
+    const pBlack = 1 - pRed;
+    return { red: pRed, black: pBlack };
+  }
+
+  function formatWinRateForSides(scoreType, scoreValue, evalSide) {
+    const pair = computeWinRatePair(scoreType, scoreValue, evalSide);
+    return "winrate red " + Math.round(pair.red * 100) + "% / black " + Math.round(pair.black * 100) + "%";
+  }
+
+  function updateWinrateLabels(redWinrate, depth) {
+    const redPct = Math.round(redWinrate * 100);
+    const blackPct = 100 - redPct;
+    winrateLeftEl.innerHTML = "<strong>Red</strong> " + redPct + "%";
+    winrateRightEl.innerHTML = "<strong>Black</strong> " + blackPct + "%";
+    if (typeof depth === "number" && Number.isFinite(depth)) {
+      winrateLabelEl.textContent = "live eval · depth " + depth;
+    } else {
+      winrateLabelEl.textContent = "live eval";
+    }
+  }
+
+  function renderWinrateGraph() {
+    const canvas = winrateGraphEl;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(20, Math.round(rect.width || canvas.width || 640));
+    const cssH = Math.max(20, Math.round(rect.height || canvas.height || 160));
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const pxW = Math.round(cssW * dpr);
+    const pxH = Math.round(cssH * dpr);
+    if (canvas.width !== pxW || canvas.height !== pxH) {
+      canvas.width = pxW;
+      canvas.height = pxH;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const w = cssW;
+    const h = cssH;
+    const padL = 10;
+    const padR = 10;
+    const padT = 10;
+    const padB = 10;
+    const plotW = Math.max(1, w - padL - padR);
+    const plotH = Math.max(1, h - padT - padB);
+    const xAt = (i, n) => padL + (n <= 1 ? plotW : (i / (n - 1)) * plotW);
+    const yAt = (pRed) => padT + (1 - pRed) * plotH;
+
+    // Grid + 50% baseline
+    ctx.lineWidth = 1;
+    for (const p of [0.25, 0.5, 0.75]) {
+      const y = yAt(p);
+      ctx.strokeStyle = p === 0.5 ? "rgba(154,164,173,0.75)" : "rgba(154,164,173,0.25)";
+      ctx.beginPath();
+      ctx.moveTo(padL, y + 0.5);
+      ctx.lineTo(w - padR, y + 0.5);
+      ctx.stroke();
+    }
+
+    if (!winrateSeries.length) {
+      winrateLeftEl.innerHTML = "<strong>Red</strong> 50%";
+      winrateRightEl.innerHTML = "<strong>Black</strong> 50%";
+      winrateLabelEl.textContent = "No eval yet";
+      ctx.fillStyle = "rgba(95,106,115,0.75)";
+      ctx.font = "12px " + getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
+      ctx.fillText("Start engine analysis to see live winrate.", padL + 6, yAt(0.5) - 6);
+      return;
+    }
+
+    const n = winrateSeries.length;
+    // Fill under curve
+    ctx.beginPath();
+    ctx.moveTo(xAt(0, n), yAt(winrateSeries[0].red));
+    for (let i = 1; i < n; i++) ctx.lineTo(xAt(i, n), yAt(winrateSeries[i].red));
+    ctx.lineTo(xAt(n - 1, n), yAt(0));
+    ctx.lineTo(xAt(0, n), yAt(0));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(183,51,43,0.08)";
+    ctx.fill();
+
+    // Curve
+    ctx.beginPath();
+    ctx.moveTo(xAt(0, n), yAt(winrateSeries[0].red));
+    for (let i = 1; i < n; i++) ctx.lineTo(xAt(i, n), yAt(winrateSeries[i].red));
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#b7332b";
+    ctx.stroke();
+
+    // Last point
+    const last = winrateSeries[n - 1];
+    const lx = xAt(n - 1, n);
+    const ly = yAt(last.red);
+    ctx.beginPath();
+    ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#b7332b";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    updateWinrateLabels(last.red, last.depth);
+  }
+
+  function clearWinrateSeries() {
+    winrateSeries = [];
+    scheduleWinrateGraphRender(true);
+  }
+
+  function pushWinrateSample(redWinrate, depth) {
+    const red = Math.max(0, Math.min(1, redWinrate));
+    const last = winrateSeries[winrateSeries.length - 1];
+    if (last && last.depth === depth) {
+      last.red = red;
+      last.t = Date.now();
+    } else {
+      winrateSeries.push({ red, depth, t: Date.now() });
+      if (winrateSeries.length > 240) winrateSeries.shift();
+    }
+    scheduleWinrateGraphRender(false);
+  }
+
+  function handleVisibilityChange() {
+    pageHidden = document.visibilityState === "hidden";
+    if (pageHidden) {
+      clearTimeout(graphRenderDeferredTimer);
+      graphRenderDeferredTimer = 0;
+      // Stop active searches to save CPU/battery in background tabs.
+      pendingBestmoveAction = null;
+      if (engine) {
+        try { engine.postMessage("stop"); } catch (_) {}
+      }
+      return;
+    }
+    scheduleEngineDrain();
+    scheduleLogFlush();
+    scheduleStatusLineRender();
+    scheduleWinrateGraphRender(true);
   }
 
   document.getElementById("start").onclick = () => ensureEngine().catch((e) => log(String(e)));
@@ -728,7 +1376,10 @@
   document.getElementById("quit").onclick = () => shutdownEngine().catch((e) => log(String(e)));
   document.getElementById("engine-move").onclick = () => requestEngineMove().catch((e) => log(String(e)));
   document.getElementById("analyze").onclick = () => analyzePosition().catch((e) => log(String(e)));
-  document.getElementById("stop-search").onclick = () => sendCmd("stop").catch((e) => log(String(e)));
+  document.getElementById("stop-search").onclick = () => {
+    pendingBestmoveAction = null;
+    sendCmd("stop").catch((e) => log(String(e)));
+  };
   document.getElementById("reset").onclick = () => {
     resetPosition();
     if (engine) {
@@ -748,9 +1399,14 @@
   };
   document.getElementById("send").onclick = () => sendCmd(cmdEl.value).catch((e) => log(String(e)));
 
-  window.addEventListener("resize", () => renderBoard());
+  window.addEventListener("resize", () => {
+    renderBoard();
+    scheduleWinrateGraphRender(true);
+  });
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 
   refreshBadges();
+  variantEl.value = preferredVariant();
   resetPosition();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Local server (`npm run serve:demo`) sends COOP/COEP so threaded WASM can run when supported.");

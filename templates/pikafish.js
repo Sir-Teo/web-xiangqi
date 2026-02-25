@@ -76,6 +76,62 @@
       : { jsFile: "pikafish-core.js", globalName: "PikafishCore" };
   }
 
+  function clampInt(n, min, max) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return min;
+    return Math.min(max, Math.max(min, Math.trunc(v)));
+  }
+
+  function detectHardwareThreads() {
+    if (isNode()) {
+      try {
+        const os = require("os");
+        return Math.max(1, os.cpus().length || 1);
+      } catch (_) {
+        return 1;
+      }
+    }
+    if (typeof navigator !== "undefined" && Number.isFinite(navigator.hardwareConcurrency)) {
+      return Math.max(1, Math.trunc(navigator.hardwareConcurrency));
+    }
+    return 1;
+  }
+
+  function detectMemoryHintMB() {
+    if (isNode()) {
+      try {
+        const os = require("os");
+        return Math.max(256, Math.trunc(os.totalmem() / (1024 * 1024)));
+      } catch (_) {
+        return 0;
+      }
+    }
+    if (typeof navigator !== "undefined" && Number.isFinite(navigator.deviceMemory)) {
+      return Math.max(256, Math.trunc(navigator.deviceMemory * 1024));
+    }
+    return 0;
+  }
+
+  function recommendedHashMB(opts) {
+    if (opts && opts.autoHashMB === false) return null;
+    if (opts && Number.isFinite(Number(opts.hashMB))) {
+      return clampInt(Number(opts.hashMB), 1, 4096);
+    }
+    const memMB = detectMemoryHintMB();
+    if (!memMB) return 64;
+    // Conservative default: keep hash useful without pressuring browser memory.
+    return clampInt(Math.floor(memMB / 16), 32, 128);
+  }
+
+  function recommendedThreads(opts, variant) {
+    if (variant !== "threaded") return 1;
+    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 4, 1, 64);
+    if (opts && Number.isFinite(Number(opts.threads))) {
+      return clampInt(Number(opts.threads), 1, maxAutoThreads);
+    }
+    return clampInt(detectHardwareThreads(), 1, maxAutoThreads);
+  }
+
   function getCoreFactory(opts) {
     if (opts && opts.coreFactory) return opts.coreFactory;
     const meta = coreMeta(opts.variant);
@@ -119,8 +175,12 @@
       }
     }
 
+    const meta = coreMeta(variant);
     mod = await coreFactory({
       listener: onLine,
+      // In browser workers, Emscripten pthread workers need to load the core
+      // runtime script, not this wrapper script.
+      mainScriptUrlOrBlob: !isNode() ? joinPath(basePath, meta.jsFile) : undefined,
       locateFile: function(file) {
         if (file.endsWith(".wasm") || file.endsWith(".worker.js")) {
           return joinPath(basePath, file);
@@ -160,6 +220,13 @@
       rawSend(cmd);
     }
 
+    if (opts.autoTune !== false) {
+      const threads = recommendedThreads(opts, variant);
+      const hashMB = recommendedHashMB(opts);
+      if (threads >= 1) rawSend("setoption name Threads value " + threads);
+      if (hashMB && hashMB >= 1) rawSend("setoption name Hash value " + hashMB);
+    }
+
     if (opts.autoLoadNNUE !== false) {
       await loadNNUE(opts.nnuePath);
     }
@@ -192,15 +259,15 @@
     opts = opts || {};
     const basePath = opts.basePath || defaultBasePath();
     const wrapperScript = opts.workerScript || joinPath(basePath, "pikafish.js");
-    const coreScripts = opts.coreScripts || [
-      joinPath(basePath, "pikafish-core.js"),
-      joinPath(basePath, "pikafish-core-single.js")
-    ];
+    const requestedVariant = opts.variant || "auto";
+    const bootstrapVariant = resolveVariant({ variant: requestedVariant });
+    const coreScript = opts.coreScript || joinPath(basePath, coreMeta(bootstrapVariant).jsFile);
+    const coreScripts = opts.coreScripts || null;
 
     const listeners = new Set();
     let worker;
     let terminated = false;
-    let activeVariant = "auto";
+    let activeVariant = bootstrapVariant;
 
     function emit(line) {
       for (const fn of listeners) fn(line);
@@ -264,8 +331,15 @@
         type: "init",
         basePath,
         nnuePath: opts.nnuePath || joinPath(basePath, "pikafish.nnue"),
-        variant: opts.variant || "auto",
+        variant: requestedVariant,
+        bootstrapVariant,
         autoLoadNNUE: opts.autoLoadNNUE !== false,
+        autoTune: opts.autoTune !== false,
+        maxAutoThreads: opts.maxAutoThreads,
+        threads: opts.threads,
+        autoHashMB: opts.autoHashMB,
+        hashMB: opts.hashMB,
+        coreScript,
         coreScripts
       });
     });
@@ -303,24 +377,34 @@
     return;
   }
 
-  if (isWorker()) {
-    let enginePromise = null;
-    let basePathOverride = null;
-    let nnuePathOverride = null;
-    let variantOverride = "auto";
-    let autoLoadNNUEOverride = true;
-    let forwardAttached = false;
+    if (isWorker()) {
+      let enginePromise = null;
+      let basePathOverride = null;
+      let nnuePathOverride = null;
+      let variantOverride = "auto";
+      let autoLoadNNUEOverride = true;
+      let autoTuneOverride = true;
+      let maxAutoThreadsOverride = undefined;
+      let threadsOverride = undefined;
+      let autoHashMBOverride = true;
+      let hashMBOverride = undefined;
+      let forwardAttached = false;
 
     function ensureEngine() {
       if (!enginePromise) {
         enginePromise = createEngine({
-          basePath: basePathOverride || defaultBasePath(),
-          nnuePath: nnuePathOverride || null,
-          variant: variantOverride,
-          autoLoadNNUE: autoLoadNNUEOverride
-        });
-      }
-      return enginePromise;
+            basePath: basePathOverride || defaultBasePath(),
+            nnuePath: nnuePathOverride || null,
+            variant: variantOverride,
+            autoLoadNNUE: autoLoadNNUEOverride,
+            autoTune: autoTuneOverride,
+            maxAutoThreads: maxAutoThreadsOverride,
+            threads: threadsOverride,
+            autoHashMB: autoHashMBOverride,
+            hashMB: hashMBOverride
+          });
+        }
+        return enginePromise;
     }
 
     function attachForwarder(engine) {
@@ -342,8 +426,13 @@
           }
           basePathOverride = data.basePath || basePathOverride;
           nnuePathOverride = data.nnuePath || nnuePathOverride;
-          variantOverride = data.variant || variantOverride;
+          variantOverride = data.bootstrapVariant || data.variant || variantOverride;
           autoLoadNNUEOverride = data.autoLoadNNUE !== false;
+          autoTuneOverride = data.autoTune !== false;
+          maxAutoThreadsOverride = data.maxAutoThreads;
+          threadsOverride = data.threads;
+          autoHashMBOverride = data.autoHashMB !== false;
+          hashMBOverride = data.hashMB;
           const engine = await ensureEngine();
           attachForwarder(engine);
           self.postMessage({ type: "inited", variant: engine.variant });
