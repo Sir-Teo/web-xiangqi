@@ -20,12 +20,16 @@ export interface MoveRecord {
     piece: string;
     captured: string;
     evalScore?: number;
+    board: BoardState;
+    sideToMove: Side;
+    inCheck: boolean;
 }
 
 export function useXiangqi() {
     const [board, setBoard] = useState<BoardState>(() => parseFenBoard(START_FEN));
     const [sideToMove, setSideToMove] = useState<Side>('w');
     const [moveHistory, setMoveHistory] = useState<MoveRecord[]>([]);
+    const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
     const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
     const [validTargets, setValidTargets] = useState<{ file: number; rank: number; capture: boolean }[]>([]);
     const [inCheck, setInCheck] = useState<boolean>(false);
@@ -36,10 +40,30 @@ export function useXiangqi() {
         setBoard(parseFenBoard(START_FEN));
         setSideToMove('w');
         setMoveHistory([]);
+        setCurrentMoveIndex(-1);
         setSelected(null);
         setValidTargets([]);
         setInCheck(false);
     }, []);
+
+    const jumpToMove = useCallback((index: number) => {
+        if (index < -1 || index >= moveHistory.length) return;
+
+        setCurrentMoveIndex(index);
+        setSelected(null);
+        setValidTargets([]);
+
+        if (index === -1) {
+            setBoard(parseFenBoard(START_FEN));
+            setSideToMove('w');
+            setInCheck(false);
+        } else {
+            const record = moveHistory[index];
+            setBoard(record.board);
+            setSideToMove(record.sideToMove);
+            setInCheck(record.inCheck);
+        }
+    }, [moveHistory]);
 
     const applyUciMove = useCallback((uci: string, evalScore?: number) => {
         const fromSquare = uci.substring(0, 2);
@@ -71,17 +95,29 @@ export function useXiangqi() {
         nextBoard[to.rank][to.file] = result.piece || '';
         nextBoard[from.rank][from.file] = '';
 
-        setBoard(nextBoard);
-        setMoveHistory(prev => [...prev, { uci: mv.raw, piece: result.piece!, captured: result.captured || '', evalScore }]);
-
         const nextSide = sideToMove === 'w' ? 'b' : 'w';
+        const nextInCheck = isInCheck(nextBoard, nextSide);
+
+        const historyToKeep = moveHistory.slice(0, currentMoveIndex + 1);
+        setMoveHistory([...historyToKeep, {
+            uci: mv.raw,
+            piece: result.piece!,
+            captured: result.captured || '',
+            evalScore,
+            board: nextBoard,
+            sideToMove: nextSide,
+            inCheck: nextInCheck
+        }]);
+        setCurrentMoveIndex(historyToKeep.length);
+
+        setBoard(nextBoard);
         setSideToMove(nextSide);
         setSelected(null);
         setValidTargets([]);
-        setInCheck(isInCheck(nextBoard, nextSide));
+        setInCheck(nextInCheck);
 
         return true;
-    }, [board, sideToMove]);
+    }, [board, sideToMove, moveHistory, currentMoveIndex]);
 
     // Returns true if a move was successfully applied
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
@@ -130,28 +166,41 @@ export function useXiangqi() {
         nextBoard[rank][file] = result.piece || '';
         nextBoard[selected.rank][selected.file] = '';
 
-        setBoard(nextBoard);
-        setMoveHistory(prev => [...prev, { uci: mv.raw, piece: result.piece!, captured: result.captured || '' }]);
-
         const nextSide = sideToMove === 'w' ? 'b' : 'w';
+        const nextInCheck = isInCheck(nextBoard, nextSide);
+
+        const historyToKeep = moveHistory.slice(0, currentMoveIndex + 1);
+        setMoveHistory([...historyToKeep, {
+            uci: mv.raw,
+            piece: result.piece!,
+            captured: result.captured || '',
+            board: nextBoard,
+            sideToMove: nextSide,
+            inCheck: nextInCheck
+        }]);
+        setCurrentMoveIndex(historyToKeep.length);
+
+        setBoard(nextBoard);
         setSideToMove(nextSide);
         setSelected(null);
         setValidTargets([]);
-        setInCheck(isInCheck(nextBoard, nextSide));
+        setInCheck(nextInCheck);
 
         return mv.raw; // Return the move string so the caller can send it to the engine
-    }, [board, selected, sideToMove]);
+    }, [board, selected, sideToMove, moveHistory, currentMoveIndex]);
 
     return {
         board,
         sideToMove,
         moveHistory,
+        currentMoveIndex,
         selected,
         validTargets,
         currentFen,
         inCheck,
         onSquareClick,
         resetBoard,
-        applyUciMove
+        applyUciMove,
+        jumpToMove
     };
 }
