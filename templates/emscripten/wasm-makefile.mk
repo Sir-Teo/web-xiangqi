@@ -26,15 +26,24 @@ arch = any
 bits = 64
 SUPPORTED_ARCH=true
 
+WASM_ALLOW_MEMORY_GROWTH ?= yes
+WASM_INITIAL_MEMORY ?= 134217728
+WASM_MAXIMUM_MEMORY ?= 2147483648
+WASM_PTHREAD_POOL_SIZE ?= 4
+
 # zstd ships an x86_64 asm file that cannot be assembled for wasm.
 SRCS := $(filter-out ./external/decompress/huf_decompress_amd64.S, $(SRCS))
 OBJS := $(filter-out huf_decompress_amd64.o, $(OBJS))
 
 EM_CXXFLAGS += -DPOSIXALIGNEDALLOC
 EM_LDFLAGS += --pre-js emscripten/pre.js
+ifneq ($(filter 1 yes true,$(WASM_ALLOW_MEMORY_GROWTH)),)
 EM_LDFLAGS += -s ALLOW_MEMORY_GROWTH=1
-EM_LDFLAGS += -s INITIAL_MEMORY=134217728
-EM_LDFLAGS += -s MAXIMUM_MEMORY=2147483648
+else
+EM_LDFLAGS += -s ALLOW_MEMORY_GROWTH=0
+endif
+EM_LDFLAGS += -s INITIAL_MEMORY=$(WASM_INITIAL_MEMORY)
+EM_LDFLAGS += -s MAXIMUM_MEMORY=$(WASM_MAXIMUM_MEMORY)
 EM_LDFLAGS += -s ENVIRONMENT=web,worker,node
 EM_LDFLAGS += -s EXIT_RUNTIME=0
 EM_LDFLAGS += -s NO_FILESYSTEM=0
@@ -56,7 +65,7 @@ EM_CXXFLAGS += -pthread
 EM_CXXFLAGS += -Wno-pthreads-mem-growth
 EM_LDFLAGS += -pthread
 EM_LDFLAGS += -s USE_PTHREADS=1
-EM_LDFLAGS += -s PTHREAD_POOL_SIZE=4
+EM_LDFLAGS += -s PTHREAD_POOL_SIZE=$(WASM_PTHREAD_POOL_SIZE)
 endif
 
 ifeq ($(WASM_PROFILE),release)

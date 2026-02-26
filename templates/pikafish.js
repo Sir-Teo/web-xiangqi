@@ -135,6 +135,33 @@
     return Math.min(max, Math.max(min, Math.trunc(v)));
   }
 
+  function createLineHistory(limit) {
+    const capacity = clampInt(limit, 1, 20000);
+    const ring = new Array(capacity);
+    let size = 0;
+    let head = 0;
+
+    function push(line) {
+      if (size < capacity) {
+        ring[size++] = line;
+        return;
+      }
+      ring[head] = line;
+      head = (head + 1) % capacity;
+    }
+
+    function find(pred) {
+      const start = size === capacity ? head : 0;
+      for (let i = 0; i < size; i++) {
+        const line = ring[(start + i) % capacity];
+        if (pred(line)) return line;
+      }
+      return null;
+    }
+
+    return { push, find };
+  }
+
   function detectHardwareThreads() {
     if (isNode()) {
       try {
@@ -178,10 +205,10 @@
 
   function recommendedThreads(opts, variant) {
     if (!isThreadedVariant(variant)) return 1;
-    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 4, 1, 64);
     if (opts && Number.isFinite(Number(opts.threads))) {
-      return clampInt(Number(opts.threads), 1, maxAutoThreads);
+      return clampInt(Number(opts.threads), 1, 64);
     }
+    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 4, 1, 64);
     return clampInt(detectHardwareThreads(), 1, maxAutoThreads);
   }
 
@@ -204,8 +231,8 @@
     const coreFactory = getCoreFactory({ ...opts, basePath, variant });
     const listeners = new Set();
     const messageEventListeners = new Set();
-    const lineHistory = [];
     const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
+    const lineHistory = createLineHistory(maxLineHistory);
     const pending = [];
     let searching = false;
     let quitting = false;
@@ -213,10 +240,11 @@
     let onmessageHandler = null;
 
     function emit(line) {
-      lineHistory.push(String(line));
-      if (lineHistory.length > maxLineHistory) lineHistory.shift();
-      for (const fn of listeners) fn(line);
-      const evt = { data: String(line) };
+      const text = String(line);
+      lineHistory.push(text);
+      for (const fn of listeners) fn(text);
+      if (typeof onmessageHandler !== "function" && messageEventListeners.size === 0) return;
+      const evt = { data: text };
       if (typeof onmessageHandler === "function") {
         try { onmessageHandler(evt); } catch (_) {}
       }
@@ -300,9 +328,8 @@
     function waitForLine(matcher, waitOpts) {
       const pred = linePredicate(matcher);
       const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
-      for (const line of lineHistory) {
-        if (pred(line)) return Promise.resolve(line);
-      }
+      const cached = lineHistory.find(pred);
+      if (cached !== null) return Promise.resolve(cached);
 
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -436,8 +463,8 @@
     const listeners = new Set();
     const messageEventListeners = new Set();
     const errorEventListeners = new Set();
-    const lineHistory = [];
     const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
+    const lineHistory = createLineHistory(maxLineHistory);
     const pendingRequests = new Map();
     let worker;
     let terminated = false;
@@ -447,10 +474,11 @@
     let onerrorHandler = null;
 
     function emit(line) {
-      lineHistory.push(String(line));
-      if (lineHistory.length > maxLineHistory) lineHistory.shift();
-      for (const fn of listeners) fn(line);
-      const evt = { data: String(line) };
+      const text = String(line);
+      lineHistory.push(text);
+      for (const fn of listeners) fn(text);
+      if (typeof onmessageHandler !== "function" && messageEventListeners.size === 0) return;
+      const evt = { data: text };
       if (typeof onmessageHandler === "function") {
         try { onmessageHandler(evt); } catch (_) {}
       }
@@ -600,9 +628,8 @@
       waitForLine(matcher, waitOpts) {
         const pred = linePredicate(matcher);
         const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
-        for (const line of lineHistory) {
-          if (pred(line)) return Promise.resolve(line);
-        }
+        const cached = lineHistory.find(pred);
+        if (cached !== null) return Promise.resolve(cached);
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => {
             cleanup();

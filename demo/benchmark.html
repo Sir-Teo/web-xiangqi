@@ -133,15 +133,16 @@
         <tr>
           <th>Variant</th>
           <th>Resolved</th>
+          <th>Cold Start (ms)</th>
           <th>Runs</th>
-          <th>Avg Wall (ms)</th>
+          <th>Avg Search (ms)</th>
           <th>Avg NPS</th>
           <th>Last Bestmove</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody id="results-body">
-        <tr><td colspan="7" class="muted">No runs yet.</td></tr>
+        <tr><td colspan="8" class="muted">No runs yet.</td></tr>
       </tbody>
     </table>
   </section>
@@ -222,6 +223,7 @@
       "<td class='mono'></td>",
       "<td class='mono'></td>",
       "<td class='mono'></td>",
+      "<td class='mono'></td>",
       "<td></td>"
     ].join("");
     resultsBodyEl.appendChild(tr);
@@ -234,12 +236,13 @@
   function setRow(row, data) {
     row.cells[0].textContent = data.variant || "";
     row.cells[1].textContent = data.resolved || "";
-    row.cells[2].textContent = data.runs != null ? String(data.runs) : "";
-    row.cells[3].textContent = data.avgWallMs != null ? String(Math.round(data.avgWallMs)) : "";
-    row.cells[4].textContent = data.avgNps != null ? String(Math.round(data.avgNps)) : "";
-    row.cells[5].textContent = data.bestmove || "";
-    row.cells[6].textContent = data.status || "";
-    row.cells[6].className = (data.ok === true ? "ok" : (data.ok === false ? "warn" : ""));
+    row.cells[2].textContent = data.coldStartMs != null ? String(Math.round(data.coldStartMs)) : "";
+    row.cells[3].textContent = data.runs != null ? String(data.runs) : "";
+    row.cells[4].textContent = data.avgWallMs != null ? String(Math.round(data.avgWallMs)) : "";
+    row.cells[5].textContent = data.avgNps != null ? String(Math.round(data.avgNps)) : "";
+    row.cells[6].textContent = data.bestmove || "";
+    row.cells[7].textContent = data.status || "";
+    row.cells[7].className = (data.ok === true ? "ok" : (data.ok === false ? "warn" : ""));
   }
 
   function parseInfoLine(line) {
@@ -251,8 +254,66 @@
     return { depth, nps, nodes, time };
   }
 
-  async function runOne(variant) {
+  function benchThreadsForVariant(resolvedVariant) {
+    if (!/^threaded/.test(String(resolvedVariant || ""))) return 1;
+    const hw = Math.max(1, Number(navigator.hardwareConcurrency || 2) || 2);
+    return Math.max(1, Math.min(8, hw - 1));
+  }
+
+  function waitForNextLine(engine, matcher, timeoutMs) {
+    const pred = matcher instanceof RegExp
+      ? (line) => matcher.test(String(line))
+      : (typeof matcher === "function" ? matcher : (line) => String(line) === String(matcher));
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Timeout waiting for next engine output"));
+      }, timeoutMs || 30000);
+
+      function onLine(line) {
+        let matched = false;
+        try { matched = !!pred(line); } catch (e) {
+          cleanup();
+          reject(e);
+          return;
+        }
+        if (!matched) return;
+        cleanup();
+        resolve(String(line));
+      }
+
+      function cleanup() {
+        clearTimeout(timer);
+        try { engine.removeMessageListener(onLine); } catch (_) {}
+      }
+
+      engine.addMessageListener(onLine);
+    });
+  }
+
+  async function createBenchSession(variant) {
+    const t0 = performance.now();
     const engine = await window.Pikafish.createWorkerEngine({ basePath: ".", variant });
+    try {
+      await engine.uci({ timeoutMs: 15000 });
+      engine.setOption("Hash", getHash());
+      engine.setOption("Threads", benchThreadsForVariant(engine.variant || variant));
+      await engine.isReady({ timeoutMs: 15000 });
+      return {
+        engine,
+        requested: variant,
+        resolved: engine.variant || variant,
+        coldStartMs: performance.now() - t0
+      };
+    } catch (e) {
+      try { await engine.terminate(); } catch (_) {}
+      throw e;
+    }
+  }
+
+  async function runOne(session) {
+    const engine = session.engine;
     let bestmove = "";
     let maxDepthInfo = null;
     const listener = (line) => {
@@ -266,67 +327,86 @@
     };
     engine.addMessageListener(listener);
     try {
-      await engine.uci({ timeoutMs: 15000 });
-      engine.setOption("Hash", getHash());
-      if (/^threaded/.test(engine.variant || "")) {
-        const hw = Math.max(1, Number(navigator.hardwareConcurrency || 2) || 2);
-        engine.setOption("Threads", Math.max(1, Math.min(8, hw - 1)));
-      } else {
-        engine.setOption("Threads", 1);
-      }
-      await engine.isReady({ timeoutMs: 15000 });
       engine.postMessage("ucinewgame");
+      engine.setOption("Clear Hash");
+      const readyPromise = waitForNextLine(engine, /^readyok$/i, 15000);
+      engine.postMessage("isready");
+      await readyPromise;
       engine.postMessage("position fen " + START_FEN);
+      const bestmovePromise = waitForNextLine(engine, /^bestmove\s+/i, 60000);
       const t0 = performance.now();
       engine.postMessage("go depth " + getDepth());
-      await engine.waitForLine(/^bestmove\s+/i, { timeoutMs: 60000 });
+      await bestmovePromise;
       const wallMs = performance.now() - t0;
       return {
-        requested: variant,
-        resolved: engine.variant || variant,
+        requested: session.requested,
+        resolved: session.resolved,
         wallMs,
         info: maxDepthInfo,
         bestmove
       };
     } finally {
       try { engine.removeMessageListener(listener); } catch (_) {}
-      try { await engine.terminate(); } catch (_) {}
     }
   }
 
   async function runVariantSeries(requested) {
     const row = ensureResultRow(requested);
-    setRow(row, { variant: requested, status: "running...", ok: null });
+    let session = null;
+    setRow(row, { variant: requested, status: "initializing...", ok: null });
     const repeats = getRepeats();
     const runs = [];
-    for (let i = 0; i < repeats; i++) {
-      log("[" + requested + "] run " + (i + 1) + "/" + repeats + " starting");
-      const out = await runOne(requested);
-      runs.push(out);
-      const lastNps = out.info && out.info.nps ? out.info.nps : 0;
-      log("[" + requested + "] resolved=" + out.resolved + " wall=" + Math.round(out.wallMs) + "ms nps=" + lastNps + " bestmove=" + (out.bestmove || "?"));
+    try {
+      const initLabel = "[" + requested + "] cold start";
+      log(initLabel + " starting");
+      session = await createBenchSession(requested);
+      log(initLabel + " resolved=" + session.resolved + " coldStart=" + Math.round(session.coldStartMs) + "ms");
+
       setRow(row, {
         variant: requested,
-        resolved: out.resolved,
-        runs: i + 1,
-        avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
-        avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
-        bestmove: out.bestmove || "",
+        resolved: session.resolved,
+        coldStartMs: session.coldStartMs,
+        runs: 0,
         status: "running...",
         ok: null
       });
+
+      for (let i = 0; i < repeats; i++) {
+        log("[" + requested + "] run " + (i + 1) + "/" + repeats + " starting");
+        const out = await runOne(session);
+        runs.push(out);
+        const lastNps = out.info && out.info.nps ? out.info.nps : 0;
+        log("[" + requested + "] resolved=" + out.resolved + " search=" + Math.round(out.wallMs) + "ms nps=" + lastNps + " bestmove=" + (out.bestmove || "?"));
+        setRow(row, {
+          variant: requested,
+          resolved: out.resolved,
+          coldStartMs: session.coldStartMs,
+          runs: i + 1,
+          avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
+          avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+          bestmove: out.bestmove || "",
+          status: "running...",
+          ok: null
+        });
+      }
+
+      const final = runs[runs.length - 1];
+      setRow(row, {
+        variant: requested,
+        resolved: final && final.resolved || (session && session.resolved) || requested,
+        coldStartMs: session && session.coldStartMs,
+        runs: runs.length,
+        avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
+        avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+        bestmove: final && final.bestmove || "",
+        status: "done",
+        ok: true
+      });
+    } finally {
+      if (session && session.engine) {
+        try { await session.engine.terminate(); } catch (_) {}
+      }
     }
-    const final = runs[runs.length - 1];
-    setRow(row, {
-      variant: requested,
-      resolved: final && final.resolved || requested,
-      runs: runs.length,
-      avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
-      avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
-      bestmove: final && final.bestmove || "",
-      status: "done",
-      ok: true
-    });
   }
 
   async function runSequence(variants) {
@@ -381,7 +461,7 @@
   document.getElementById("run-supported").onclick = () => runSequence(supportedVariants());
   document.getElementById("clear-results").onclick = () => {
     rowsByVariant.clear();
-    resultsBodyEl.innerHTML = "<tr><td colspan='7' class='muted'>No runs yet.</td></tr>";
+    resultsBodyEl.innerHTML = "<tr><td colspan='8' class='muted'>No runs yet.</td></tr>";
     logEl.textContent = "";
   };
 
