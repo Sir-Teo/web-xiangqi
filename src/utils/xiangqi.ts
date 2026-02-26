@@ -75,6 +75,14 @@ export function squareToUci(file: number, rank: number): string {
     return FILES[file] + String(rank);
 }
 
+export function uciToSquare(square: string): { file: number, rank: number } | null {
+    if (!square || square.length !== 2) return null;
+    const file = FILES.indexOf(square[0]);
+    const rank = Number(square[1]);
+    if (file < 0 || isNaN(rank)) return null;
+    return { file, rank };
+}
+
 export function parseMove(move: string): Move | null {
     const m = String(move).trim().match(/^([a-i])([0-9])([a-i])([0-9])/);
     if (!m) return null;

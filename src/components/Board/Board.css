@@ -1,3 +1,4 @@
+/* Board container scaling */
 .xiangqi-board-container {
     width: 100%;
     max-width: 580px;
@@ -5,161 +6,217 @@
     margin: 0 auto;
 }
 
+/* Premium Board Aesthetic */
 .xiangqi-board {
     position: relative;
     width: 100%;
     height: 100%;
     background:
-        linear-gradient(0deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.1)),
-        var(--board-bg);
-    border: 3px solid var(--board-line);
+        /* Wood grain effect */
+        linear-gradient(45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.05) 75%, rgba(255, 255, 255, 0.05)),
+        linear-gradient(45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.05) 75%, rgba(255, 255, 255, 0.05)),
+        radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 100%),
+        #d19a55;
+    background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%;
+    background-position: 0 0, 10px 10px, 0 0, 0 0;
+
+    border: 3px solid #5a3c18;
     border-radius: var(--radius-md);
     box-shadow:
         inset 0 0 40px rgba(0, 0, 0, 0.5),
+        -5px 10px 20px rgba(0, 0, 0, 0.4),
+        0 0 0 8px #4a2c0c,
+        /* outer dark wood rim */
         var(--shadow-lg);
-    padding: 24px;
-    /* Padding creates the margins for the outer intersections */
+    padding: 28px;
 }
 
 /* The visual grid behind the pieces */
 .board-grid {
     position: absolute;
-    inset: 24px;
+    inset: 28px;
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(9, 1fr);
-    border: 2px solid var(--board-line);
-    /* Outer boundary of the grid */
+    border: 2px solid #5a3c18;
 }
 
 .cell {
-    border-right: 2px solid var(--board-line);
-    border-bottom: 2px solid var(--board-line);
+    border-right: 2px solid #5a3c18;
+    border-bottom: 2px solid #5a3c18;
     position: relative;
+    pointer-events: none;
+    /* Cells should not intercept clicks */
 }
 
 /* River visually breaks the vertical lines */
-/* In a real production css, we might just draw top and bottom halves or hide border in the middle */
 .cell[data-rank="5"] {
     border-bottom: none;
-    /* Creates the empty river gap */
 }
 
 /* Specific styling for the palace crosses */
 .palace-lines {
     position: absolute;
-    inset: 24px;
+    inset: 28px;
     pointer-events: none;
     z-index: 2;
 }
 
 .palace-line {
-    stroke: var(--board-line);
+    stroke: #5a3c18;
     stroke-width: 0.05px;
-    /* Since the viewBox is 0 0 8 9, 2px is huge */
     vector-effect: non-scaling-stroke;
-    /* Ensure it stays thin regardless of svg scaling */
     fill: transparent;
 }
 
 .river {
     position: absolute;
-    left: 24px;
-    right: 24px;
-    /* Top is positioned halfway down between rank 4 and 5 */
-    top: calc(24px + 4 * (100% - 48px) / 9);
-    height: calc((100% - 48px) / 9);
+    left: 28px;
+    right: 28px;
+    top: calc(28px + 4 * (100% - 56px) / 9);
+    height: calc((100% - 56px) / 9);
     display: flex;
     align-items: center;
     justify-content: space-around;
     pointer-events: none;
-    color: rgba(92, 60, 30, 0.5);
-    font-weight: 700;
-    letter-spacing: 0.5em;
-    font-size: 1.2rem;
-    font-family: var(--sans);
+    color: rgba(90, 60, 24, 0.7);
+    font-weight: 800;
+    letter-spacing: 0.8em;
+    font-size: 1.5rem;
+    font-family: 'Noto Serif TC', serif;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.2), -1px -1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Hitboxes for handling tap events exactly on intersections */
+.hitboxes-layer {
+    position: absolute;
+    inset: 28px;
+    pointer-events: none;
+    /* wrapper doesn't capture, only children */
+    z-index: 5;
+}
+
+.hitbox {
+    position: absolute;
+    width: calc((100% - 56px) / 10 + 20px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+    /* Capture clicks here */
+    cursor: pointer;
+    /* Optional: Uncomment to debug hitbox positioning */
+    /* background: rgba(0, 255, 0, 0.2); */
+}
+
+.hitbox:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .pieces-layer {
     position: absolute;
-    inset: 24px;
+    inset: 28px;
     pointer-events: none;
-    /* Let the board receive clicks if we needed, but pieces must be clickable */
 }
 
-/* Pieces are absolutely positioned inside the grid container */
+/* Premium physical piece visual */
 .piece {
     position: absolute;
-    width: calc((100% - 48px) / 10 + 12px);
-    /* Size relative to board */
+    width: calc((100% - 56px) / 10 + 16px);
     aspect-ratio: 1;
     border-radius: 50%;
-    pointer-events: auto;
-    cursor: pointer;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    /* Let clicks pass through to the hitbox! */
 
     display: flex;
     align-items: center;
     justify-content: center;
 
-    font-family: inherit;
-    font-weight: 700;
-    font-size: 1.8rem;
+    font-family: 'Noto Serif TC', serif;
+    font-weight: 900;
+    font-size: 2rem;
 
-    /* Styling to make it look like a physical wooden piece */
+    /* Wood / Ivory Texture */
     background:
-        radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.1) 40%, transparent 46%),
-        radial-gradient(circle at 50% 45%, var(--piece-light), #e2d4af 70%);
-    border: 2px solid rgba(60, 40, 20, 0.8);
-    box-shadow:
-        0 4px 6px var(--piece-shadow),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+        radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.6) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, #f4e8c1 0%, #d4bc82 80%);
 
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    /* 3D Bevel and Depth */
+    border: 3px solid #b59b60;
+    box-shadow:
+        inset -4px -4px 8px rgba(0, 0, 0, 0.3),
+        inset 4px 4px 8px rgba(255, 255, 255, 0.6),
+        3px 5px 8px rgba(0, 0, 0, 0.5);
+
+    /* Smooth glide when moving */
+    transition: left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+        top 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+        transform 0.1s ease, box-shadow 0.1s ease;
     z-index: 10;
 }
 
-.piece:hover {
-    transform: translate(-50%, calc(-50% - 3px));
-    box-shadow:
-        0 8px 12px var(--piece-shadow),
-        0 0 0 4px var(--accent-glow),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.4);
-    z-index: 11;
-}
+/* Hover effect on hitbox cascades to piece using JS (via selected state) 
+   but since hitboxes cover pieces, piece hover normally wouldn't work easily 
+   without sibling selectors. Because hitboxes are in a separate layer, we rely 
+   mainly on the selected state for visual emphasis. */
 
 .piece.selected {
+    transform: translate(-50%, calc(-50% - 10px)) scale(1.08);
+    /* Lift slightly higher */
     box-shadow:
-        0 8px 12px var(--piece-shadow),
-        0 0 0 4px var(--accent-glow),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.4);
-    z-index: 11;
+        inset -5px -5px 10px rgba(0, 0, 0, 0.4),
+        inset 5px 5px 10px rgba(255, 255, 255, 0.8),
+        0 20px 25px rgba(0, 0, 0, 0.7),
+        /* Much deeper shadow when lifted */
+        0 0 0 4px var(--accent-glow);
+    z-index: 15;
 }
 
+/* Engraved Text styling */
+.piece.red {
+    color: #cc2222;
+    text-shadow:
+        1px 1px 1px rgba(255, 255, 255, 0.8),
+        -1px -1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.piece.black {
+    color: #222222;
+    text-shadow:
+        1px 1px 1px rgba(255, 255, 255, 0.8),
+        -1px -1px 1px rgba(0, 0, 0, 0.6);
+}
+
+/* Target Indicators */
 .target-dot {
     position: absolute;
+    width: 20px !important;
+    height: 20px !important;
     background: var(--accent-glow);
     border-radius: 50%;
     transform: translate(-50%, -50%);
     pointer-events: none;
-    opacity: 0.8;
+    opacity: 0.9;
+    box-shadow: 0 0 10px var(--accent-glow);
     z-index: 5;
+    transition: left 0.3s ease, top 0.3s ease;
 }
 
 .target-ring {
     position: absolute;
-    border: 4px solid var(--accent-glow);
+    width: calc((100% - 56px) / 10 + 20px) !important;
+    height: calc((100% - 56px) / 10 + 20px) !important;
+    border: 5px solid var(--accent-glow);
     border-radius: 50%;
     transform: translate(-50%, -50%);
     pointer-events: none;
-    opacity: 0.8;
-    z-index: 5;
+    opacity: 0.9;
+    box-shadow:
+        inset 0 0 10px var(--accent-glow),
+        0 0 10px var(--accent-glow);
+    z-index: 12;
+    /* Ring sits slightly above unselected pieces, but below selected piece */
     box-sizing: border-box;
-}
-
-.piece.red {
-    color: var(--piece-red);
-}
-
-.piece.black {
-    color: var(--piece-black);
+    transition: left 0.3s ease, top 0.3s ease;
 }

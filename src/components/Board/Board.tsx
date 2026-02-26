@@ -54,7 +54,6 @@ export const Board: React.FC<BoardProps> = ({
                                     className="cell"
                                     data-file={file}
                                     data-rank={rank}
-                                    onClick={() => onSquareClick(file, rank)}
                                 >
                                     {/* Palace cross lines or other markings can go here */}
                                 </div>
@@ -65,6 +64,25 @@ export const Board: React.FC<BoardProps> = ({
 
                 {/* The river dividing the board */}
                 <div className="river">CHU RIVER · HAN BORDER</div>
+
+                {/* Invisible Hitbox Layer for clicking the exact intersections */}
+                <div className="hitboxes-layer">
+                    {RANKS.map(rank => (
+                        FILES.map(file => {
+                            const left = `${(file / 8) * 100}%`;
+                            const top = `${((9 - rank) / 9) * 100}%`;
+
+                            return (
+                                <div
+                                    key={`hitbox-${file}-${rank}`}
+                                    className="hitbox"
+                                    style={{ left, top }}
+                                    onClick={() => onSquareClick(file, rank)}
+                                />
+                            );
+                        })
+                    ))}
+                </div>
 
                 {/* The piece layer */}
                 <div className="pieces-layer">
@@ -78,7 +96,7 @@ export const Board: React.FC<BoardProps> = ({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-ring"
-                                    style={{ left, top, width: 'calc((100% - 48px) / 10 + 12px)', height: 'calc((100% - 48px) / 10 + 12px)' }}
+                                    style={{ left, top }}
                                 />
                             );
                         } else {
@@ -86,7 +104,7 @@ export const Board: React.FC<BoardProps> = ({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-dot"
-                                    style={{ left, top, width: '16px', height: '16px' }}
+                                    style={{ left, top }}
                                 />
                             );
                         }
@@ -108,7 +126,6 @@ export const Board: React.FC<BoardProps> = ({
                                     key={`piece-${file}-${rank}`}
                                     className={`piece ${colorClass} ${isSelected ? 'selected' : ''}`}
                                     style={{ left, top }}
-                                    onClick={(e) => { e.stopPropagation(); onSquareClick(file, rank); }}
                                 >
                                     {PIECE_LABELS[piece] || piece}
                                 </div>

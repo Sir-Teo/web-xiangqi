@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
+import { EvalGraph } from './components/Panels/EvalGraph';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
 
+export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
+
 function App() {
+  const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
-  const { isReady, isSearching, startSearch, stopSearch, outputLines, pvLines } = useEngine();
-  const { board, selected, validTargets, moveHistory, currentFen, inCheck, onSquareClick, resetBoard } = useXiangqi();
+  const { board, selected, validTargets, moveHistory, currentFen, inCheck, onSquareClick, resetBoard, sideToMove, applyUciMove } = useXiangqi();
+
+  const { isReady, isSearching, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
+    onBestMove: (uci, score) => {
+      applyUciMove(uci, score);
+    }
+  });
 
   const [autoAnalyze, setAutoAnalyze] = useState(false);
 
@@ -27,8 +36,42 @@ function App() {
     }
   }, [moveHistory, isReady, autoAnalyze]);
 
+  // AI Turn orchestrator
+  useEffect(() => {
+    if (!isReady) return;
+
+    const isAiTurn =
+      gameMode === 'AIvAI' ||
+      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
+      (gameMode === 'PvAI-Red' && sideToMove === 'w');
+
+    // If it's an AI turn and we aren't currently searching (and autoAnalyze isn't hogging it)
+    if (isAiTurn && !isSearching) {
+      if (autoAnalyze) {
+        setAutoAnalyze(false); // Disable manual analysis if AI is playing
+        stopSearch();
+      }
+
+      const timer = setTimeout(() => {
+        const uciMoves = moveHistory.map(m => m.uci).join(' ');
+        startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
+        startSearch('go depth 12'); // Fixed depth search since Wasm time management can be unreliable
+      }, 500); // 500ms slight delay before AI starts thinking to feel more natural
+
+      return () => clearTimeout(timer);
+    }
+  }, [sideToMove, gameMode, isReady, isSearching, moveHistory, autoAnalyze, startSearch, stopSearch]);
+
   const handleSquareClick = (file: number, rank: number) => {
-    onSquareClick(file, rank);
+    // Only allow manual clicks if it's not the AI's turn
+    const isAiTurn =
+      gameMode === 'AIvAI' ||
+      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
+      (gameMode === 'PvAI-Red' && sideToMove === 'w');
+
+    if (!isAiTurn) {
+      onSquareClick(file, rank);
+    }
   };
 
   return (
@@ -91,45 +134,59 @@ function App() {
           </div>
           <div className="panel-content">
             <div className="settings-group">
-              <label>Search Mode</label>
-              <select className="premium-select">
-                <option>Depth</option>
-                <option>Time per move</option>
-                <option>Infinite</option>
+              <label>Game Mode</label>
+              <select
+                className="premium-select"
+                value={gameMode}
+                onChange={(e) => {
+                  setGameMode(e.target.value as GameMode);
+                  resetBoard();
+                }}
+              >
+                <option value="PvP">Local Multiplayer</option>
+                <option value="PvAI-Black">Play Red vs AI</option>
+                <option value="PvAI-Red">Play Black vs AI</option>
+                <option value="AIvAI">Watch AI vs AI</option>
               </select>
             </div>
+
+            <div className="settings-group">
+              <label>Engine Action</label>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button className="premium-primary-btn" style={{ flex: 1, padding: '8px' }} onClick={resetBoard}>
+                  New Game
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-divider" style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '16px 0' }} />
+
+            <div className="settings-group">
+              <label>Analysis Mode</label>
+              <button
+                className={`premium-primary-btn mt-2 ${autoAnalyze ? 'active' : ''}`}
+                onClick={() => {
+                  if (autoAnalyze) {
+                    setAutoAnalyze(false);
+                    stopSearch();
+                  } else {
+                    setAutoAnalyze(true);
+                    const uciMoves = moveHistory.map(m => m.uci).join(' ');
+                    startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
+                    startSearch('go depth 16');
+                  }
+                }}
+                disabled={!isReady || gameMode === 'AIvAI'}
+              >
+                {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
+              </button>
+            </div>
+
             <div className="settings-group">
               <label>Search Depth (Plys)</label>
               <input type="range" min="1" max="30" defaultValue="16" className="premium-slider" />
               <div className="slider-value">16</div>
             </div>
-            <div className="settings-group">
-              <label>MultiPV Lines</label>
-              <select className="premium-select">
-                <option>1 Line</option>
-                <option>3 Lines</option>
-                <option>5 Lines</option>
-              </select>
-            </div>
-
-            <button
-              className="premium-primary-btn mt-4"
-              onClick={() => {
-                if (autoAnalyze) {
-                  setAutoAnalyze(false);
-                  stopSearch();
-                } else {
-                  setAutoAnalyze(true);
-                  // Basic sequence to start searching from current position
-                  const uciMoves = moveHistory.map(m => m.uci).join(' ');
-                  startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
-                  startSearch('go depth 16');
-                }
-              }}
-              disabled={!isReady}
-            >
-              {autoAnalyze ? 'Stop Analysis' : 'Start Analysis'}
-            </button>
           </div>
         </aside>
 
@@ -149,10 +206,8 @@ function App() {
             <h2>Analysis</h2>
           </div>
           <div className="panel-content">
-            <div className="eval-graph-placeholder">
-              <span>Evaluation Graph</span>
-            </div>
-            <div className="pv-lines-container">
+            <EvalGraph history={moveHistory} currentEval={evalScore} />
+            <div className="pv-lines-container mt-4">
               {pvLines.length === 0 ? (
                 <div className="text-muted" style={{ fontSize: '0.85rem', padding: '16px' }}>No PV available</div>
               ) : pvLines.map((pv, i) => (

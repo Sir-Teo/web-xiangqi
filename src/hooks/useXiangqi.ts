@@ -10,6 +10,7 @@ import {
     validatePieceMove,
     boardToFen,
     squareToUci,
+    uciToSquare,
     pieceSide,
     isInCheck
 } from '../utils/xiangqi';
@@ -18,6 +19,7 @@ export interface MoveRecord {
     uci: string;
     piece: string;
     captured: string;
+    evalScore?: number;
 }
 
 export function useXiangqi() {
@@ -38,6 +40,48 @@ export function useXiangqi() {
         setValidTargets([]);
         setInCheck(false);
     }, []);
+
+    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
+        const fromSquare = uci.substring(0, 2);
+        const toSquare = uci.substring(2, 4);
+
+        const from = uciToSquare(fromSquare);
+        const to = uciToSquare(toSquare);
+
+        if (!from || !to) {
+            console.error("Invalid UCI move format:", uci);
+            return false;
+        }
+
+        const mv = {
+            fromFile: from.file,
+            fromRank: from.rank,
+            toFile: to.file,
+            toRank: to.rank,
+            raw: uci
+        };
+
+        const result = validatePieceMove(board, mv, sideToMove);
+        if (!result.ok) {
+            console.warn("Invalid programmatic move (engine move rejected):", result.reason, uci, "Side:", sideToMove, "Piece:", board[mv.fromRank][mv.fromFile]);
+            return false;
+        }
+
+        const nextBoard = board.map(row => [...row]);
+        nextBoard[to.rank][to.file] = result.piece || '';
+        nextBoard[from.rank][from.file] = '';
+
+        setBoard(nextBoard);
+        setMoveHistory(prev => [...prev, { uci: mv.raw, piece: result.piece!, captured: result.captured || '', evalScore }]);
+
+        const nextSide = sideToMove === 'w' ? 'b' : 'w';
+        setSideToMove(nextSide);
+        setSelected(null);
+        setValidTargets([]);
+        setInCheck(isInCheck(nextBoard, nextSide));
+
+        return true;
+    }, [board, sideToMove]);
 
     // Returns true if a move was successfully applied
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
@@ -107,6 +151,7 @@ export function useXiangqi() {
         currentFen,
         inCheck,
         onSquareClick,
-        resetBoard
+        resetBoard,
+        applyUciMove
     };
 }

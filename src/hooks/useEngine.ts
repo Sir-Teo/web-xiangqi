@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 export interface EngineInitOptions {
     variant?: 'auto' | 'threaded' | 'single';
+    onBestMove?: (uci: string, score: number) => void;
 }
 
 export function useEngine(options: EngineInitOptions = {}) {
@@ -10,8 +11,14 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [isSearching, setIsSearching] = useState(false);
     const [outputLines, setOutputLines] = useState<string[]>([]);
     const [pvLines, setPvLines] = useState<any[]>([]);
+    const [evalScore, setEvalScore] = useState<number>(0);
 
     const engineRef = useRef<any>(null);
+    const onBestMoveRef = useRef(options.onBestMove);
+
+    useEffect(() => {
+        onBestMoveRef.current = options.onBestMove;
+    }, [options.onBestMove]);
 
     // Track when we are actually searching
     const startSearch = useCallback((cmd: string) => {
@@ -93,22 +100,56 @@ export function useEngine(options: EngineInitOptions = {}) {
             sendCommand('isready');
         } else if (msg === 'readyok') {
             setIsReady(true);
+        } else if (msg.startsWith('bestmove')) {
+            setIsSearching(false);
+            const moveMatch = msg.match(/bestmove ([a-i]\d[a-i]\d)/);
+            if (moveMatch && moveMatch[1]) {
+                const uciMove = moveMatch[1];
+                setEvalScore((currentScore) => {
+                    if (onBestMoveRef.current) {
+                        onBestMoveRef.current(uciMove, currentScore);
+                    }
+                    return currentScore;
+                });
+            }
         }
 
         // Parse PV info line
-        if (msg.startsWith('info depth')) {
-            // Very basic PV parse for now just to populate the UI realistically
+        if (msg.startsWith('info depth') || msg.startsWith('info score')) { // sometimes just info score
             const depthMatch = msg.match(/depth (\d+)/);
             const scoreMatch = msg.match(/score cp (-?\d+)/); // simplified
-            const pvMatch = msg.match(/ pv (.*)/);
 
-            if (depthMatch && pvMatch) {
-                const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+            // Matte score: score mate -1
+            const mateMatch = msg.match(/score mate (-?\d+)/);
+
+            let finalScore = 0;
+            if (scoreMatch) {
+                finalScore = parseInt(scoreMatch[1], 10);
+            } else if (mateMatch) {
+                const mateIn = parseInt(mateMatch[1], 10);
+                finalScore = mateIn > 0 ? 10000 - mateIn : -10000 - mateIn;
+            }
+
+            if (scoreMatch || mateMatch) {
+                setEvalScore(finalScore);
+            }
+
+            const pvMatch = msg.match(/ pv (.*)/);
+            if (depthMatch && pvMatch && (scoreMatch || mateMatch)) {
+
+                let scoreStr = '';
+                if (scoreMatch) {
+                    scoreStr = finalScore > 0 ? `+${finalScore}` : `${finalScore}`;
+                } else if (mateMatch) {
+                    const mateIn = parseInt(mateMatch![1], 10);
+                    scoreStr = mateIn > 0 ? `+M${mateIn}` : `-M${Math.abs(mateIn)}`;
+                }
+
                 const newPv = {
                     depth: depthMatch[1],
-                    score: score,
-                    scoreStr: score > 0 ? `+${score}` : `${score}`,
-                    moves: pvMatch[1].split(' ')
+                    score: finalScore,
+                    scoreStr,
+                    moves: pvMatch[1].trim().split(' ')
                 };
 
                 // In a real app we'd map multipv index or just replace the root line.
@@ -121,5 +162,5 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
     };
 
-    return { isReady, isSearching, startSearch, stopSearch, sendCommand, outputLines, pvLines };
+    return { isReady, isSearching, startSearch, stopSearch, sendCommand, outputLines, pvLines, evalScore };
 }
