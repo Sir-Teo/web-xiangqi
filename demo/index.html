@@ -493,6 +493,7 @@
             <option value="mobile-fast">Mobile Fast</option>
             <option value="balanced">Balanced</option>
             <option value="deep-analysis">Deep Analysis</option>
+            <option value="max-strength">Max Strength</option>
           </select>
           <label for="depth">Depth</label>
           <input id="depth" type="number" min="1" max="20" value="6" style="width:74px">
@@ -589,6 +590,7 @@
               <option value="mobile-fast">Mobile Fast</option>
               <option value="balanced">Balanced</option>
               <option value="deep-analysis">Deep Analysis</option>
+              <option value="max-strength">Max Strength</option>
             </select>
           </div>
           <div class="row" id="match-red-external-row" style="display:none">
@@ -620,6 +622,7 @@
               <option value="mobile-fast">Mobile Fast</option>
               <option value="balanced">Balanced</option>
               <option value="deep-analysis">Deep Analysis</option>
+              <option value="max-strength">Max Strength</option>
             </select>
           </div>
           <div class="row" id="match-black-external-row" style="display:none">
@@ -865,6 +868,7 @@
   let winrateSeries = [];
   let pageHidden = document.visibilityState === "hidden";
   let pendingEngineLines = [];
+  let pendingEngineLineStart = 0;
   let engineDrainScheduled = false;
   let statusRenderScheduled = false;
   let statusRenderDeferredTimer = 0;
@@ -882,6 +886,7 @@
   let pvLastRenderTs = 0;
   let pvForceRender = false;
   let pvLinesByIndex = new Map();
+  let pvRowDomByIndex = new Map();
   let lastTopPV = "";
   let uciOptionsRenderScheduled = false;
   let uciOptionMetaByName = new Map();
@@ -896,6 +901,9 @@
   let engineMatch = null;
   let lastMatchReport = null;
   let engineFatalShutdownScheduled = false;
+  let boardPieceLayerDelegated = false;
+  const boardPieceNodePool = [];
+  const boardOverlayNodePool = [];
 
   const MAX_LOG_LINES = 200;
   const ENGINE_DRAIN_MAX_LINES_PER_FRAME = 160;
@@ -906,8 +914,8 @@
   // Current bundled Pikafish requires the NNUE net to run.
   const DEMO_PIKAFISH_AUTOLOAD_NNUE = true;
   const DEMO_ENABLE_SERVICE_WORKER = false;
-  const DEMO_DEFAULT_VARIANT = "single";
-  const DEMO_DEFAULT_PRESET = "mobile-fast";
+  const DEMO_DEFAULT_VARIANT = "auto";
+  const DEMO_DEFAULT_PRESET = "auto";
   const DEMO_DEFAULT_MULTIPV = "1";
   const DEMO_ENABLE_UCI_SHOW_WDL = false;
   const DEMO_WRAPPER_LINE_HISTORY_MAX = 400;
@@ -1069,11 +1077,26 @@
   }
 
   function resolvePresetConfig(name, opts) {
+    function clampValue(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
     const hw = Math.max(1, Number(navigator.hardwareConcurrency || 4) || 4);
+    const memMB = (typeof navigator.deviceMemory === "number" && Number.isFinite(navigator.deviceMemory))
+      ? Math.max(512, Math.trunc(navigator.deviceMemory * 1024))
+      : 0;
     const provider = opts && opts.provider ? opts.provider : selectedEngineProvider();
     const threadsSupported = provider === "pikafish" && window.Pikafish.wasmThreadsSupported();
     const mobile = isLikelyMobileDevice();
     const key = (name === "auto" || !name) ? detectPresetName() : name;
+    const uiSafeThreadCap = Math.max(1, hw - 1);
+    const desktopFastThreads = threadsSupported ? Math.max(1, Math.min(4, uiSafeThreadCap)) : 1;
+    const balancedThreads = threadsSupported ? Math.max(1, Math.min(6, uiSafeThreadCap)) : 1;
+    const deepThreads = threadsSupported ? Math.max(1, Math.min(8, uiSafeThreadCap)) : 1;
+    const desktopFastHash = memMB ? clampValue(Math.floor(memMB / 24), 48, 96) : 64;
+    const balancedHash = memMB ? clampValue(Math.floor(memMB / 16), 64, 160) : 96;
+    const deepHash = memMB ? clampValue(Math.floor(memMB / 8), 128, 256) : 192;
+    const maxThreads = threadsSupported ? Math.max(1, Math.min(12, uiSafeThreadCap)) : 1;
+    const maxHash = memMB ? clampValue(Math.floor(memMB / 4), 192, 512) : 256;
     if (key === "mobile-fast") {
       return {
         name: key,
@@ -1086,23 +1109,31 @@
       return {
         name: key,
         depth: mobile ? 6 : 8,
-        hash: mobile ? 24 : 64,
-        threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
+        hash: mobile ? 24 : balancedHash,
+        threads: mobile ? 1 : balancedThreads
       };
     }
     if (key === "deep-analysis") {
       return {
         name: key,
         depth: mobile ? 8 : 12,
-        hash: mobile ? 48 : 128,
-        threads: threadsSupported ? Math.max(1, Math.min(4, hw - 1)) : 1
+        hash: mobile ? 48 : deepHash,
+        threads: mobile ? 1 : deepThreads
+      };
+    }
+    if (key === "max-strength") {
+      return {
+        name: key,
+        depth: mobile ? 10 : 14,
+        hash: mobile ? 64 : maxHash,
+        threads: mobile ? 2 : maxThreads
       };
     }
     return {
       name: "desktop-fast",
       depth: mobile ? 6 : 8,
-      hash: mobile ? 24 : 48,
-      threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
+      hash: mobile ? 24 : desktopFastHash,
+      threads: mobile ? 1 : desktopFastThreads
     };
   }
 
@@ -2144,7 +2175,38 @@
     return flipped ? { file: 8 - file, rank } : { file, rank: 9 - rank };
   }
 
+  function ensureBoardPieceLayerDelegation() {
+    if (boardPieceLayerDelegated) return;
+    boardPieceLayerDelegated = true;
+    piecesLayerEl.addEventListener("click", (ev) => {
+      const target = ev.target;
+      const pieceEl = target && typeof target.closest === "function"
+        ? target.closest(".piece[data-file][data-rank]")
+        : null;
+      if (!pieceEl || !piecesLayerEl.contains(pieceEl)) return;
+      ev.stopPropagation();
+      const file = Number(pieceEl.dataset.file);
+      const rank = Number(pieceEl.dataset.rank);
+      if (!Number.isFinite(file) || !Number.isFinite(rank)) return;
+      onSquareClick(file, rank);
+    });
+  }
+
+  function acquireBoardPieceNode() {
+    let el = boardPieceNodePool.pop();
+    if (!el) {
+      el = document.createElement("button");
+      el.type = "button";
+    }
+    return el;
+  }
+
+  function acquireBoardOverlayNode() {
+    return boardOverlayNodePool.pop() || document.createElement("div");
+  }
+
   function renderBoard() {
+    ensureBoardPieceLayerDelegation();
     if (!boardGridEl.childElementCount) {
       for (let vr = 0; vr < 10; vr++) {
         for (let vf = 0; vf < 9; vf++) {
@@ -2166,17 +2228,24 @@
       }
     }
 
-    piecesLayerEl.innerHTML = "";
+    while (piecesLayerEl.firstChild) {
+      const node = piecesLayerEl.firstChild;
+      piecesLayerEl.removeChild(node);
+      if (node.classList && node.classList.contains("piece")) boardPieceNodePool.push(node);
+      else boardOverlayNodePool.push(node);
+    }
     const boardRect = boardEl.getBoundingClientRect();
     const innerW = boardRect.width - 28;
     const innerH = boardRect.height - 28;
     const cellW = innerW / 9;
     const cellH = innerH / 10;
     const selectedTargets = selected ? legalMovesFrom(selected.file, selected.rank) : [];
+    const frag = document.createDocumentFragment();
 
     for (const target of selectedTargets) {
       const v = boardToVisual(target.file, target.rank);
-      const el = document.createElement("div");
+      const el = acquireBoardOverlayNode();
+      el.textContent = "";
       if (target.capture) {
         el.className = "target-ring";
         el.style.width = (cellW - 8) + "px";
@@ -2191,7 +2260,7 @@
         el.style.left = (v.file * cellW + (cellW - dot) / 2) + "px";
         el.style.top = (v.rank * cellH + (cellH - dot) / 2) + "px";
       }
-      piecesLayerEl.appendChild(el);
+      frag.appendChild(el);
     }
 
     for (let rank = 0; rank < 10; rank++) {
@@ -2199,33 +2268,31 @@
         const piece = board[rank][file];
         if (!piece) continue;
         const v = boardToVisual(file, rank);
-        const el = document.createElement("button");
-        el.type = "button";
-        el.className = "piece " + (isRedPiece(piece) ? "red" : "black");
-        if (selected && selected.file === file && selected.rank === rank) {
-          el.classList.add("selected");
-        }
+        const el = acquireBoardPieceNode();
+        el.className = "piece " + (isRedPiece(piece) ? "red" : "black") +
+          (selected && selected.file === file && selected.rank === rank ? " selected" : "");
         el.textContent = PIECE_LABEL[piece] || piece;
+        el.dataset.file = String(file);
+        el.dataset.rank = String(rank);
         el.style.left = (v.file * cellW) + "px";
         el.style.top = (v.rank * cellH) + "px";
-        el.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          onSquareClick(file, rank);
-        });
-        piecesLayerEl.appendChild(el);
+        frag.appendChild(el);
       }
     }
 
     if (selected) {
       const v = boardToVisual(selected.file, selected.rank);
-      const marker = document.createElement("div");
+      const marker = acquireBoardOverlayNode();
+      marker.textContent = "";
       marker.className = "marker";
       marker.style.width = (cellW - 6) + "px";
       marker.style.height = (cellH - 6) + "px";
       marker.style.left = (v.file * cellW + 3) + "px";
       marker.style.top = (v.rank * cellH + 3) + "px";
-      piecesLayerEl.appendChild(marker);
+      frag.appendChild(marker);
     }
+
+    piecesLayerEl.appendChild(frag);
   }
 
   function renderMoves() {
@@ -2588,20 +2655,19 @@
     for (const line of initCmds) {
       e.postMessage(line);
     }
-    await e.isReady({ timeoutMs: 20000 });
 
     const presetCfg = resolvePresetConfig(spec.preset, { provider: spec.provider });
+    const selectedMultiPV = requestedMultiPV();
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
-    try { e.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
+    try { e.setOption("MultiPV", selectedMultiPV); } catch (_) {}
     try { e.setOption("UCI_ShowWDL", DEMO_ENABLE_UCI_SHOW_WDL ? "true" : "false"); } catch (_) {}
     await applySavedUciOptionPrefsToEngine(e);
     // Reassert demo defaults after saved prefs so a prior "heavy" config doesn't
     // silently bring back high CPU/memory usage.
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
-    if (multipvEl.value !== DEMO_DEFAULT_MULTIPV) multipvEl.value = DEMO_DEFAULT_MULTIPV;
-    try { e.setOption("MultiPV", Number(DEMO_DEFAULT_MULTIPV)); } catch (_) {}
+    try { e.setOption("MultiPV", selectedMultiPV); } catch (_) {}
     try { e.setOption("UCI_ShowWDL", DEMO_ENABLE_UCI_SHOW_WDL ? "true" : "false"); } catch (_) {}
     if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
       try { e.setOption("Use NNUE", "false"); } catch (_) {}
@@ -2615,7 +2681,7 @@
     }
 
     log("engine init: preset " + presetCfg.name + " (depth " + presetCfg.depth + ", hash " + presetCfg.hash + ", threads " + presetCfg.threads + ")");
-    log("engine init: MultiPV " + requestedMultiPV());
+    log("engine init: MultiPV " + selectedMultiPV);
     if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
       log("engine init: lightweight mode (NNUE disabled; skips pikafish.nnue load)");
     }
@@ -2648,7 +2714,6 @@
       try { e.setOption("Use NNUE", "false"); } catch (_) {}
     }
     for (const line of initCmds) e.postMessage(line);
-    await e.isReady({ timeoutMs: 20000 });
 
     const presetCfg = resolvePresetConfig((spec && spec.preset) || presetEl.value, {
       provider: (spec && spec.provider) || (descriptor && descriptor.provider) || "pikafish"
@@ -2953,6 +3018,15 @@
     });
   }
 
+  function pendingEngineLineCount() {
+    return pendingEngineLines.length - pendingEngineLineStart;
+  }
+
+  function resetPendingEngineLineQueue() {
+    pendingEngineLines.length = 0;
+    pendingEngineLineStart = 0;
+  }
+
   function queueEngineLine(line) {
     const text = String(line);
     if (pageHidden && /^info depth /.test(text)) {
@@ -2964,17 +3038,72 @@
   }
 
   function parseInfoDepthLine(line) {
-    if (!/^info depth\s+/i.test(line)) return null;
-    const depth = Number((line.match(/\bdepth\s+(\d+)/i) || [])[1] || 0);
-    const seldepth = Number((line.match(/\bseldepth\s+(\d+)/i) || [])[1] || 0);
-    const multipv = Number((line.match(/\bmultipv\s+(\d+)/i) || [])[1] || 1);
-    const nps = Number((line.match(/\bnps\s+(\d+)/i) || [])[1] || 0);
-    const nodes = Number((line.match(/\bnodes\s+(\d+)/i) || [])[1] || 0);
-    const hashfull = Number((line.match(/\bhashfull\s+(\d+)/i) || [])[1] || 0);
-    const time = Number((line.match(/\btime\s+(\d+)/i) || [])[1] || 0);
-    const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/i);
-    const pvIdx = line.indexOf(" pv ");
-    const pv = pvIdx >= 0 ? line.slice(pvIdx + 4).trim() : "";
+    const text = String(line || "");
+    if (!/^info depth\s+/i.test(text)) return null;
+    let depth = 0;
+    let seldepth = 0;
+    let multipv = 1;
+    let nps = 0;
+    let nodes = 0;
+    let hashfull = 0;
+    let time = 0;
+    let scoreType = "";
+    let scoreValue = NaN;
+
+    let pvIdx = text.indexOf(" pv ");
+    if (pvIdx < 0) pvIdx = text.indexOf(" PV ");
+    const head = pvIdx >= 0 ? text.slice(0, pvIdx) : text;
+    const pv = pvIdx >= 0 ? text.slice(pvIdx + 4).trim() : "";
+    const tokens = head.trim().split(/\s+/);
+
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = String(tokens[i] || "").toLowerCase();
+      if (tok === "depth") {
+        depth = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "seldepth") {
+        seldepth = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "multipv") {
+        multipv = Number(tokens[i + 1]) || 1;
+        i += 1;
+        continue;
+      }
+      if (tok === "nps") {
+        nps = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "nodes") {
+        nodes = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "hashfull") {
+        hashfull = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "time") {
+        time = Number(tokens[i + 1]) || 0;
+        i += 1;
+        continue;
+      }
+      if (tok === "score") {
+        const kind = String(tokens[i + 1] || "").toLowerCase();
+        const val = Number(tokens[i + 2]);
+        if ((kind === "cp" || kind === "mate") && Number.isFinite(val)) {
+          scoreType = kind;
+          scoreValue = val;
+        }
+        i += 2;
+      }
+    }
+
     return {
       depth,
       seldepth,
@@ -2983,8 +3112,8 @@
       nodes,
       hashfull,
       time,
-      scoreType: scoreMatch ? scoreMatch[1].toLowerCase() : "",
-      scoreValue: scoreMatch ? Number(scoreMatch[2]) : NaN,
+      scoreType,
+      scoreValue,
       pv
     };
   }
@@ -3040,11 +3169,81 @@
     return true;
   }
 
+  function createPVRowDom() {
+    const root = document.createElement("div");
+    root.className = "pv-row";
+    const head = document.createElement("div");
+    head.className = "pv-head";
+    const line = document.createElement("div");
+    line.className = "pv-line";
+    root.append(head, line);
+    return { root, head, line, sig: "", top: false };
+  }
+
+  function appendPVHeadText(frag, text, className, strong) {
+    const span = document.createElement("span");
+    if (className) span.className = className;
+    if (strong) {
+      const s = document.createElement("strong");
+      s.textContent = text;
+      span.appendChild(s);
+    } else {
+      span.textContent = text;
+    }
+    frag.appendChild(span);
+  }
+
+  function renderOnePVRow(rowDom, idx, row, isTop) {
+    const sig = [
+      idx,
+      row.depth,
+      row.seldepth,
+      row.scoreType,
+      row.scoreValue,
+      row.nps,
+      row.nodes,
+      row.hashfull,
+      row.time,
+      row.pv
+    ].join("|");
+    if (rowDom.sig === sig && rowDom.top === isTop) return;
+    rowDom.sig = sig;
+    rowDom.top = isTop;
+    rowDom.root.className = "pv-row" + (isTop ? " top" : "");
+
+    const scoreText = formatPVScore(row.scoreType, row.scoreValue);
+    let scoreClass = "";
+    if (row.scoreType === "cp" && Number.isFinite(row.scoreValue)) {
+      scoreClass = row.scoreValue >= 0 ? "good" : "bad";
+    } else if (row.scoreType === "mate" && Number.isFinite(row.scoreValue)) {
+      scoreClass = row.scoreValue > 0 ? "good" : (row.scoreValue < 0 ? "bad" : "");
+    }
+
+    const headFrag = document.createDocumentFragment();
+    appendPVHeadText(headFrag, "#" + idx, "", true);
+    if (scoreText) appendPVHeadText(headFrag, "score " + scoreText, "pv-score" + (scoreClass ? (" " + scoreClass) : ""), false);
+    if (Number.isFinite(row.depth) && row.depth > 0) appendPVHeadText(headFrag, "depth " + row.depth, "", false);
+    if (Number.isFinite(row.seldepth) && row.seldepth > 0) appendPVHeadText(headFrag, "sel " + row.seldepth, "", false);
+    if (Number.isFinite(row.nps) && row.nps > 0) appendPVHeadText(headFrag, "nps " + row.nps, "", false);
+    if (Number.isFinite(row.nodes) && row.nodes > 0) appendPVHeadText(headFrag, "nodes " + row.nodes, "", false);
+    if (Number.isFinite(row.hashfull) && row.hashfull > 0) appendPVHeadText(headFrag, "hash " + row.hashfull, "", false);
+    rowDom.head.replaceChildren(headFrag);
+
+    if (row.pv) {
+      rowDom.line.textContent = row.pv;
+    } else {
+      rowDom.line.textContent = "No PV text";
+    }
+  }
+
   function renderPVLines() {
     const entries = Array.from(pvLinesByIndex.entries()).sort((a, b) => a[0] - b[0]);
     if (!entries.length) {
       pvSummaryEl.textContent = "No PV yet";
-      pvRowsEl.innerHTML = "<div class='pv-empty'>Run analysis to view principal variation lines (MultiPV).</div>";
+      const empty = document.createElement("div");
+      empty.className = "pv-empty";
+      empty.textContent = "Run analysis to view principal variation lines (MultiPV).";
+      pvRowsEl.replaceChildren(empty);
       return;
     }
     const top = entries[0] && entries[0][1];
@@ -3057,32 +3256,19 @@
     parts.push("lines " + shown + "/" + target);
     pvSummaryEl.textContent = parts.join(" · ");
 
-    const rows = entries.map(([idx, row], i) => {
-      const scoreText = formatPVScore(row.scoreType, row.scoreValue);
-      let scoreClass = "";
-      if (row.scoreType === "cp" && Number.isFinite(row.scoreValue)) {
-        scoreClass = row.scoreValue >= 0 ? "good" : "bad";
-      } else if (row.scoreType === "mate" && Number.isFinite(row.scoreValue)) {
-        scoreClass = row.scoreValue > 0 ? "good" : (row.scoreValue < 0 ? "bad" : "");
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < entries.length; i++) {
+      const idx = entries[i][0];
+      const row = entries[i][1];
+      let rowDom = pvRowDomByIndex.get(idx);
+      if (!rowDom) {
+        rowDom = createPVRowDom();
+        pvRowDomByIndex.set(idx, rowDom);
       }
-      const meta = [
-        "<span><strong>#"+ idx +"</strong></span>",
-        scoreText ? "<span class='pv-score " + scoreClass + "'>score " + escapeHTML(scoreText) + "</span>" : "",
-        Number.isFinite(row.depth) && row.depth > 0 ? "<span>depth " + row.depth + "</span>" : "",
-        Number.isFinite(row.seldepth) && row.seldepth > 0 ? "<span>sel " + row.seldepth + "</span>" : "",
-        Number.isFinite(row.nps) && row.nps > 0 ? "<span>nps " + row.nps + "</span>" : "",
-        Number.isFinite(row.nodes) && row.nodes > 0 ? "<span>nodes " + row.nodes + "</span>" : "",
-        Number.isFinite(row.hashfull) && row.hashfull > 0 ? "<span>hash " + row.hashfull + "</span>" : ""
-      ].filter(Boolean).join("");
-      const pv = row.pv ? escapeHTML(row.pv) : "<span class='small'>No PV text</span>";
-      return (
-        "<div class='pv-row" + (i === 0 ? " top" : "") + "'>" +
-          "<div class='pv-head'>" + meta + "</div>" +
-          "<div class='pv-line'>" + pv + "</div>" +
-        "</div>"
-      );
-    });
-    pvRowsEl.innerHTML = rows.join("");
+      renderOnePVRow(rowDom, idx, row, i === 0);
+      frag.appendChild(rowDom.root);
+    }
+    pvRowsEl.replaceChildren(frag);
   }
 
   function shouldLogEngineLine(line) {
@@ -3207,9 +3393,13 @@
   }
 
   function drainEngineLines() {
-    if (!pendingEngineLines.length) return;
-    const take = Math.min(pendingEngineLines.length, ENGINE_DRAIN_MAX_LINES_PER_FRAME);
-    const batch = compactEngineLineBatch(pendingEngineLines.splice(0, take));
+    const queued = pendingEngineLineCount();
+    if (!queued) return;
+    const take = Math.min(queued, ENGINE_DRAIN_MAX_LINES_PER_FRAME);
+    const start = pendingEngineLineStart;
+    const end = start + take;
+    pendingEngineLineStart = end;
+    const batch = compactEngineLineBatch(pendingEngineLines.slice(start, end));
     let statusDirty = false;
     let pvDirty = false;
     let uciOptionsDirty = false;
@@ -3222,7 +3412,13 @@
     if (statusDirty) scheduleStatusLineRender();
     if (pvDirty) schedulePVRender();
     if (uciOptionsDirty) scheduleUciOptionsRender();
-    if (pendingEngineLines.length) scheduleEngineDrain();
+    if (pendingEngineLineStart >= pendingEngineLines.length) {
+      resetPendingEngineLineQueue();
+    } else if (pendingEngineLineStart >= 512 && pendingEngineLineStart * 2 >= pendingEngineLines.length) {
+      pendingEngineLines = pendingEngineLines.slice(pendingEngineLineStart);
+      pendingEngineLineStart = 0;
+    }
+    if (pendingEngineLineCount()) scheduleEngineDrain();
   }
 
   function defaultDebugLogPath() {
@@ -3380,7 +3576,7 @@
     if (engine) return engine;
     if (engineBootPromise) return engineBootPromise;
     engineFatalShutdownScheduled = false;
-    pendingEngineLines.length = 0;
+    resetPendingEngineLineQueue();
     resetUciOptionPanelState({ keepStateText: true });
     uciOptionsStateEl.textContent = "Starting engine...";
     clearTimeout(continuousRestartTimer);
@@ -3435,7 +3631,7 @@
       engineDescriptor = null;
       engineListener = null;
       autoPonderActive = false;
-      pendingEngineLines.length = 0;
+      resetPendingEngineLineQueue();
       resetUciOptionPanelState({ keepStateText: true });
       uciOptionsStateEl.textContent = "No engine options loaded";
       engineStateEl.textContent = "engine: stopped";

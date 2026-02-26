@@ -29,13 +29,18 @@ SUPPORTED_ARCH=true
 WASM_ALLOW_MEMORY_GROWTH ?= yes
 WASM_INITIAL_MEMORY ?= 134217728
 WASM_MAXIMUM_MEMORY ?= 2147483648
-WASM_PTHREAD_POOL_SIZE ?= 4
+WASM_PTHREAD_POOL_SIZE ?= 8
+WASM_ENABLE_LTO ?= yes
+WASM_DISABLE_RTTI ?= yes
 
 # zstd ships an x86_64 asm file that cannot be assembled for wasm.
 SRCS := $(filter-out ./external/decompress/huf_decompress_amd64.S, $(SRCS))
 OBJS := $(filter-out huf_decompress_amd64.o, $(OBJS))
 
 EM_CXXFLAGS += -DPOSIXALIGNEDALLOC
+ifneq ($(filter 1 yes true,$(WASM_DISABLE_RTTI)),)
+EM_CXXFLAGS += -fno-rtti
+endif
 EM_LDFLAGS += --pre-js emscripten/pre.js
 ifneq ($(filter 1 yes true,$(WASM_ALLOW_MEMORY_GROWTH)),)
 EM_LDFLAGS += -s ALLOW_MEMORY_GROWTH=1
@@ -71,6 +76,10 @@ endif
 ifeq ($(WASM_PROFILE),release)
 EM_CXXFLAGS += -O3 -DNDEBUG
 EM_LDFLAGS += -O3 -s ASSERTIONS=0
+ifneq ($(filter 1 yes true,$(WASM_ENABLE_LTO)),)
+EM_CXXFLAGS += -flto
+EM_LDFLAGS += -flto
+endif
 else
 EM_CXXFLAGS += -g
 EM_LDFLAGS += -g -s ASSERTIONS=1

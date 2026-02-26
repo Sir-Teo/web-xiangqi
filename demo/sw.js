@@ -67,7 +67,8 @@ async function putIfOk(cacheName, requestOrUrl, response) {
 }
 
 async function cacheFirst(request, cacheName) {
-  const cached = await caches.match(request);
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
   await putIfOk(cacheName, request, response);
@@ -80,7 +81,8 @@ async function networkFirst(request, cacheName) {
     await putIfOk(cacheName, request, response);
     return response;
   } catch (err) {
-    const cached = await caches.match(request);
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(request);
     if (cached) return cached;
     throw err;
   }

@@ -78,6 +78,11 @@
     .muted { color: var(--muted); }
     .ok { color: #7ed6ab; }
     .warn { color: #f1cc74; }
+    .cmd-box {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
     pre {
       margin: 0;
       min-height: 160px;
@@ -125,6 +130,17 @@
     <div class="row">
       <span id="capability-badges" class="mono muted"></span>
     </div>
+    <div class="cmd-box">
+      <div class="row">
+        <strong>Repo-Reproducible CLI Benchmark</strong>
+        <button id="copy-cli-cmd">Copy Bench Cmd</button>
+        <button id="copy-cli-workflow">Copy Build+Compare</button>
+        <span id="cli-copy-state" class="mono muted"></span>
+      </div>
+      <p class="muted" style="margin:0">Use the same settings from this dashboard in the repo via <span class="mono">scripts/bench-nps.js</span> (after <span class="mono">npm run build</span>).</p>
+      <pre id="cli-cmd-preview" class="mono" style="min-height:54px;max-height:none"></pre>
+      <pre id="cli-workflow-preview" class="mono" style="min-height:76px;max-height:none"></pre>
+    </div>
   </section>
 
   <section class="panel">
@@ -165,6 +181,9 @@
   const badgesEl = document.getElementById("capability-badges");
   const runSelectedBtn = document.getElementById("run-selected");
   const runSupportedBtn = document.getElementById("run-supported");
+  const cliCmdPreviewEl = document.getElementById("cli-cmd-preview");
+  const cliWorkflowPreviewEl = document.getElementById("cli-workflow-preview");
+  const cliCopyStateEl = document.getElementById("cli-copy-state");
 
   let running = false;
   const rowsByVariant = new Map();
@@ -189,6 +208,65 @@
 
   function getHash() {
     return Math.max(1, Math.min(1024, Math.trunc(safeNum(hashEl.value, 64))));
+  }
+
+  function cliThreadsHintForVariant(requestedVariant) {
+    if (!/^threaded/.test(String(requestedVariant || ""))) return 1;
+    const hw = Math.max(1, Number(navigator.hardwareConcurrency || 2) || 2);
+    return Math.max(1, Math.min(8, hw - 1));
+  }
+
+  function reproducibleVariant() {
+    return variantEl.value === "auto" ? "threaded-simd" : String(variantEl.value || "threaded-simd");
+  }
+
+  function cliBenchCommand() {
+    const variant = reproducibleVariant();
+    const threads = cliThreadsHintForVariant(variant);
+    return [
+      "npm run bench:nps --",
+      "--variant " + variant,
+      "--depth " + getDepth(),
+      "--repeats " + getRepeats(),
+      "--warmup 1",
+      "--hash " + getHash(),
+      "--threads " + threads
+    ].join(" ");
+  }
+
+  function cliCompareWorkflow() {
+    const base = cliBenchCommand();
+    return [
+      "npm run build",
+      base + " --out /tmp/pika-before.json --label before",
+      "npm run build",
+      base + " --compare /tmp/pika-before.json --out /tmp/pika-after.json --label after"
+    ].join("\n");
+  }
+
+  async function copyText(text, label) {
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      cliCopyStateEl.textContent = "clipboard unavailable";
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      cliCopyStateEl.textContent = label + " copied";
+      setTimeout(() => {
+        if (cliCopyStateEl.textContent === label + " copied") cliCopyStateEl.textContent = "";
+      }, 1200);
+    } catch (_) {
+      cliCopyStateEl.textContent = "copy failed";
+    }
+  }
+
+  function refreshCliBenchmarkPreview() {
+    const variant = reproducibleVariant();
+    const note = variantEl.value === "auto"
+      ? "# 'auto' resolved to explicit variant for reproducibility\n"
+      : "";
+    cliCmdPreviewEl.textContent = note + cliBenchCommand();
+    cliWorkflowPreviewEl.textContent = cliCompareWorkflow();
   }
 
   function supportedVariants() {
@@ -356,6 +434,8 @@
     setRow(row, { variant: requested, status: "initializing...", ok: null });
     const repeats = getRepeats();
     const runs = [];
+    let sumWallMs = 0;
+    let sumNps = 0;
     try {
       const initLabel = "[" + requested + "] cold start";
       log(initLabel + " starting");
@@ -376,14 +456,16 @@
         const out = await runOne(session);
         runs.push(out);
         const lastNps = out.info && out.info.nps ? out.info.nps : 0;
+        sumWallMs += out.wallMs;
+        sumNps += lastNps;
         log("[" + requested + "] resolved=" + out.resolved + " search=" + Math.round(out.wallMs) + "ms nps=" + lastNps + " bestmove=" + (out.bestmove || "?"));
         setRow(row, {
           variant: requested,
           resolved: out.resolved,
           coldStartMs: session.coldStartMs,
           runs: i + 1,
-          avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
-          avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+          avgWallMs: sumWallMs / runs.length,
+          avgNps: sumNps / runs.length,
           bestmove: out.bestmove || "",
           status: "running...",
           ok: null
@@ -396,8 +478,8 @@
         resolved: final && final.resolved || (session && session.resolved) || requested,
         coldStartMs: session && session.coldStartMs,
         runs: runs.length,
-        avgWallMs: runs.reduce((s, r) => s + r.wallMs, 0) / runs.length,
-        avgNps: runs.reduce((s, r) => s + ((r.info && r.info.nps) || 0), 0) / runs.length,
+        avgWallMs: sumWallMs / runs.length,
+        avgNps: sumNps / runs.length,
         bestmove: final && final.bestmove || "",
         status: "done",
         ok: true
@@ -464,8 +546,15 @@
     resultsBodyEl.innerHTML = "<tr><td colspan='8' class='muted'>No runs yet.</td></tr>";
     logEl.textContent = "";
   };
+  document.getElementById("copy-cli-cmd").onclick = () => copyText(cliCmdPreviewEl.textContent, "bench cmd");
+  document.getElementById("copy-cli-workflow").onclick = () => copyText(cliWorkflowPreviewEl.textContent, "workflow");
+  for (const el of [variantEl, depthEl, repeatsEl, hashEl]) {
+    el.addEventListener("change", refreshCliBenchmarkPreview);
+    el.addEventListener("input", refreshCliBenchmarkPreview);
+  }
 
   refreshCapabilities();
+  refreshCliBenchmarkPreview();
   registerServiceWorker();
   log("Tip: run 'supported variants' locally for the best comparison.");
 </script>

@@ -1,34 +1,41 @@
 "use strict";
 
 (function() {
+  let wasmThreadsSupportCache;
+  let wasmSIMDSupportCache;
+  let hardwareThreadsCache;
+  let memoryHintMBCache;
+
   function wasmThreadsSupported() {
+    if (typeof wasmThreadsSupportCache === "boolean") return wasmThreadsSupportCache;
     try {
       const source = Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00);
-      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return false;
-      if (!WebAssembly.validate(source)) return false;
-      if (typeof SharedArrayBuffer !== "function") return false;
-      if (typeof Atomics !== "object") return false;
+      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return (wasmThreadsSupportCache = false);
+      if (!WebAssembly.validate(source)) return (wasmThreadsSupportCache = false);
+      if (typeof SharedArrayBuffer !== "function") return (wasmThreadsSupportCache = false);
+      if (typeof Atomics !== "object") return (wasmThreadsSupportCache = false);
       const mem = new WebAssembly.Memory({ shared: true, initial: 8, maximum: 16 });
-      if (!(mem.buffer instanceof SharedArrayBuffer)) return false;
+      if (!(mem.buffer instanceof SharedArrayBuffer)) return (wasmThreadsSupportCache = false);
       if (typeof window !== "undefined" && typeof window.postMessage === "function") {
-        try { window.postMessage(mem, "*"); } catch (_) { return false; }
+        try { window.postMessage(mem, "*"); } catch (_) { return (wasmThreadsSupportCache = false); }
       }
-      return true;
+      return (wasmThreadsSupportCache = true);
     } catch (_) {
-      return false;
+      return (wasmThreadsSupportCache = false);
     }
   }
 
   function wasmSIMDSupported() {
+    if (typeof wasmSIMDSupportCache === "boolean") return wasmSIMDSupportCache;
     try {
-      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return false;
+      if (typeof WebAssembly !== "object" || typeof WebAssembly.validate !== "function") return (wasmSIMDSupportCache = false);
       // Minimal module using the v128 value type. Validation fails when SIMD is unsupported.
-      return WebAssembly.validate(Uint8Array.of(
+      return (wasmSIMDSupportCache = WebAssembly.validate(Uint8Array.of(
         0x00,0x61,0x73,0x6d, 0x01,0x00,0x00,0x00,
         0x01,0x05, 0x01,0x60,0x00,0x01,0x7b
-      ));
+      )));
     } catch (_) {
-      return false;
+      return (wasmSIMDSupportCache = false);
     }
   }
 
@@ -163,33 +170,47 @@
   }
 
   function detectHardwareThreads() {
+    if (Number.isFinite(hardwareThreadsCache) && hardwareThreadsCache >= 1) {
+      return hardwareThreadsCache;
+    }
     if (isNode()) {
       try {
         const os = require("os");
-        return Math.max(1, os.cpus().length || 1);
+        hardwareThreadsCache = Math.max(1, os.cpus().length || 1);
+        return hardwareThreadsCache;
       } catch (_) {
-        return 1;
+        hardwareThreadsCache = 1;
+        return hardwareThreadsCache;
       }
     }
     if (typeof navigator !== "undefined" && Number.isFinite(navigator.hardwareConcurrency)) {
-      return Math.max(1, Math.trunc(navigator.hardwareConcurrency));
+      hardwareThreadsCache = Math.max(1, Math.trunc(navigator.hardwareConcurrency));
+      return hardwareThreadsCache;
     }
-    return 1;
+    hardwareThreadsCache = 1;
+    return hardwareThreadsCache;
   }
 
   function detectMemoryHintMB() {
+    if (Number.isFinite(memoryHintMBCache) && memoryHintMBCache >= 0) {
+      return memoryHintMBCache;
+    }
     if (isNode()) {
       try {
         const os = require("os");
-        return Math.max(256, Math.trunc(os.totalmem() / (1024 * 1024)));
+        memoryHintMBCache = Math.max(256, Math.trunc(os.totalmem() / (1024 * 1024)));
+        return memoryHintMBCache;
       } catch (_) {
-        return 0;
+        memoryHintMBCache = 0;
+        return memoryHintMBCache;
       }
     }
     if (typeof navigator !== "undefined" && Number.isFinite(navigator.deviceMemory)) {
-      return Math.max(256, Math.trunc(navigator.deviceMemory * 1024));
+      memoryHintMBCache = Math.max(256, Math.trunc(navigator.deviceMemory * 1024));
+      return memoryHintMBCache;
     }
-    return 0;
+    memoryHintMBCache = 0;
+    return memoryHintMBCache;
   }
 
   function recommendedHashMB(opts) {
@@ -199,8 +220,8 @@
     }
     const memMB = detectMemoryHintMB();
     if (!memMB) return 64;
-    // Conservative default: keep hash useful without pressuring browser memory.
-    return clampInt(Math.floor(memMB / 16), 32, 128);
+    // Keep defaults browser-safe while allowing larger desktop caches.
+    return clampInt(Math.floor(memMB / 16), 32, 256);
   }
 
   function recommendedThreads(opts, variant) {
@@ -208,8 +229,10 @@
     if (opts && Number.isFinite(Number(opts.threads))) {
       return clampInt(Number(opts.threads), 1, 64);
     }
-    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 4, 1, 64);
-    return clampInt(detectHardwareThreads(), 1, maxAutoThreads);
+    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 8, 1, 64);
+    const hw = detectHardwareThreads();
+    const target = isNode() ? hw : Math.max(1, hw - 1);
+    return clampInt(target, 1, maxAutoThreads);
   }
 
   function getCoreFactory(opts) {
@@ -234,6 +257,7 @@
     const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
     const lineHistory = createLineHistory(maxLineHistory);
     const pending = [];
+    let pendingHead = 0;
     let searching = false;
     let quitting = false;
     let mod;
@@ -254,10 +278,14 @@
     }
 
     function maybeFlush() {
-      if (searching || !pending.length) return;
-      while (pending.length && !searching) {
-        const cmd = pending.shift();
+      if (searching || pendingHead >= pending.length) return;
+      while (pendingHead < pending.length && !searching) {
+        const cmd = pending[pendingHead++];
         rawSend(cmd);
+      }
+      if (pendingHead && (pendingHead === pending.length || (pendingHead >= 64 && pendingHead * 2 >= pending.length))) {
+        pending.splice(0, pendingHead);
+        pendingHead = 0;
       }
     }
 

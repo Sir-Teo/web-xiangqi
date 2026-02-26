@@ -76,18 +76,22 @@ Artifacts are written to `dist/`:
   - it falls back to `grep` if `rg` (ripgrep) is not installed
   - it skips patch application if the patch was already applied
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
+- The wasm core build enables Emscripten/LLVM LTO by default (`WASM_ENABLE_LTO=yes`) and strips RTTI (`WASM_DISABLE_RTTI=yes`) for a smaller/faster core. Both are opt-out build env vars.
+- Threaded builds now prewarm a larger pthread worker pool by default (`WASM_PTHREAD_POOL_SIZE=8`) so higher thread counts don't pay runtime worker spawn costs as often.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
+- Local Node benchmark helper: `npm run bench:nps -- --variant threaded-simd --depth 8 --repeats 3 --out /tmp/pika-before.json` (and `--compare <file>` for before/after deltas).
 
 ## Demo defaults (performance-first)
 
-- The demo now starts in a lighter browser configuration to improve responsiveness:
+- The demo now starts in an auto-tuned browser configuration that still preserves responsiveness:
   - bundled Pikafish worker
-  - `single` runtime variant by default
-  - `mobile-fast` preset (low hash / 1 thread)
+  - `auto` runtime variant by default (resolves to the strongest supported core)
+  - `auto` preset (device-aware thread/hash sizing)
+  - optional `max-strength` preset for stronger desktop analysis (higher threads/hash)
   - `MultiPV = 1`
   - `UCI_ShowWDL = false`
   - service worker disabled by default (and unregistered for the demo scope)

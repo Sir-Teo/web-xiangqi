@@ -11,6 +11,8 @@
     "test:smoke:all": "node scripts/test-smoke.js threaded && node scripts/test-smoke.js single",
     "serve:demo": "node scripts/serve-demo.js",
     "test:parity": "node scripts/test-parity.js single",
-    "test:worker-parity:browser": "node scripts/test-worker-parity-browser.js"
+    "test:worker-parity:browser": "node scripts/test-worker-parity-browser.js",
+    "bench:nps": "node scripts/bench-nps.js",
+    "bench:nps:threaded-simd": "node scripts/bench-nps.js --variant threaded-simd"
   }
 }
