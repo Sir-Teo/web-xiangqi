@@ -29,6 +29,10 @@ const ENGINE_ASSETS = [
   "./pikafish-core-single-simd.worker.js",
 ];
 
+// Warm JS/WASM runtime assets first; let NNUE cache on demand to avoid a large
+// background fetch competing with initial page interactivity.
+const ENGINE_WARM_ASSETS = ENGINE_ASSETS.filter((asset) => !/\.nnue$/i.test(asset));
+
 function isSameOrigin(url) {
   try {
     return url.origin === self.location.origin;
@@ -84,7 +88,7 @@ async function networkFirst(request, cacheName) {
 
 async function warmEngineCache() {
   const cache = await caches.open(ENGINE_CACHE);
-  for (const asset of ENGINE_ASSETS) {
+  for (const asset of ENGINE_WARM_ASSETS) {
     const url = normalizeAssetUrl(asset);
     try {
       if (await cache.match(url)) continue;

@@ -39,6 +39,13 @@ bash scripts/install-emsdk.sh
 npm run build
 ```
 
+If you want a completely clean/reproducible rebuild (recommended after patch/build failures), remove the cached upstream checkout first:
+
+```bash
+rm -rf .deps/pikafish
+npm run build
+```
+
 3. Run smoke tests:
 
 ```bash
@@ -52,6 +59,8 @@ npm run serve:demo
 # open http://localhost:8080
 ```
 
+Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild automatically.
+
 Artifacts are written to `dist/`:
 
 - `dist/pikafish.js` (wrapper)
@@ -63,11 +72,26 @@ Artifacts are written to `dist/`:
 
 ## Notes
 
+- `scripts/build-pikafish.sh` is now idempotent for the local upstream checkout:
+  - it falls back to `grep` if `rg` (ripgrep) is not installed
+  - it skips patch application if the patch was already applied
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
+- Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
+
+## Demo defaults (performance-first)
+
+- The demo now starts in a lighter browser configuration to improve responsiveness:
+  - bundled Pikafish worker
+  - `single` runtime variant by default
+  - `mobile-fast` preset (low hash / 1 thread)
+  - `MultiPV = 1`
+  - `UCI_ShowWDL = false`
+  - service worker disabled by default (and unregistered for the demo scope)
+- If the page still feels sluggish, hard refresh once after updating the demo so any older cached assets/service worker are cleared.
 
 ## Future improvements
 

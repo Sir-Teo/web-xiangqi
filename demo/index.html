@@ -867,13 +867,20 @@
   let pendingEngineLines = [];
   let engineDrainScheduled = false;
   let statusRenderScheduled = false;
+  let statusRenderDeferredTimer = 0;
+  let statusLastRenderTs = 0;
   let logLines = [];
   let logFlushScheduled = false;
+  let winrateGraphRenderErrorLogged = false;
   let graphRenderScheduled = false;
   let graphRenderDeferredTimer = 0;
   let graphLastRenderTs = 0;
   let graphForceRender = false;
+  let graphMonoFont = "";
   let pvRenderScheduled = false;
+  let pvRenderDeferredTimer = 0;
+  let pvLastRenderTs = 0;
+  let pvForceRender = false;
   let pvLinesByIndex = new Map();
   let lastTopPV = "";
   let uciOptionsRenderScheduled = false;
@@ -888,9 +895,22 @@
   let ruleJudgeQueued = false;
   let engineMatch = null;
   let lastMatchReport = null;
+  let engineFatalShutdownScheduled = false;
 
-  const MAX_LOG_LINES = 500;
-  const GRAPH_MAX_FPS = 20;
+  const MAX_LOG_LINES = 200;
+  const ENGINE_DRAIN_MAX_LINES_PER_FRAME = 160;
+  const ENGINE_DRAIN_COMPACT_THRESHOLD = 48;
+  const STATUS_MAX_FPS = 12;
+  const GRAPH_MAX_FPS = 12;
+  const PV_MAX_FPS = 12;
+  // Current bundled Pikafish requires the NNUE net to run.
+  const DEMO_PIKAFISH_AUTOLOAD_NNUE = true;
+  const DEMO_ENABLE_SERVICE_WORKER = false;
+  const DEMO_DEFAULT_VARIANT = "single";
+  const DEMO_DEFAULT_PRESET = "mobile-fast";
+  const DEMO_DEFAULT_MULTIPV = "1";
+  const DEMO_ENABLE_UCI_SHOW_WDL = false;
+  const DEMO_WRAPPER_LINE_HISTORY_MAX = 400;
   const MATCH_CLOCK_FLAG_SLACK_MS = 50;
   const MAX_DEBUG_LOG_PREVIEW_CHARS = 200000;
   const UCI_OPTION_PREFS_KEY = "web-xiangqi-uci-option-prefs-v1";
@@ -927,9 +947,17 @@
     if (pageHidden) return;
     if (statusRenderScheduled) return;
     statusRenderScheduled = true;
-    requestAnimationFrame(() => {
+    requestAnimationFrame((ts) => {
       statusRenderScheduled = false;
       if (pageHidden) return;
+      const minGap = 1000 / STATUS_MAX_FPS;
+      const elapsed = ts - statusLastRenderTs;
+      if (elapsed < minGap) {
+        clearTimeout(statusRenderDeferredTimer);
+        statusRenderDeferredTimer = setTimeout(scheduleStatusLineRender, Math.ceil(minGap - elapsed));
+        return;
+      }
+      statusLastRenderTs = ts;
       renderStatusLine();
     });
   }
@@ -951,17 +979,27 @@
       }
       graphForceRender = false;
       graphLastRenderTs = ts;
-      renderWinrateGraph();
+      renderWinrateGraphSafe();
     });
   }
 
-  function schedulePVRender() {
+  function schedulePVRender(force) {
+    if (force) pvForceRender = true;
     if (pageHidden) return;
     if (pvRenderScheduled) return;
     pvRenderScheduled = true;
-    requestAnimationFrame(() => {
+    requestAnimationFrame((ts) => {
       pvRenderScheduled = false;
       if (pageHidden) return;
+      const minGap = 1000 / PV_MAX_FPS;
+      const elapsed = ts - pvLastRenderTs;
+      if (!pvForceRender && elapsed < minGap) {
+        clearTimeout(pvRenderDeferredTimer);
+        pvRenderDeferredTimer = setTimeout(() => schedulePVRender(false), Math.ceil(minGap - elapsed));
+        return;
+      }
+      pvForceRender = false;
+      pvLastRenderTs = ts;
       renderPVLines();
     });
   }
@@ -1040,31 +1078,31 @@
       return {
         name: key,
         depth: 5,
-        hash: 32,
-        threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
+        hash: 16,
+        threads: 1
       };
     }
     if (key === "balanced") {
       return {
         name: key,
         depth: mobile ? 6 : 8,
-        hash: mobile ? 48 : 96,
-        threads: threadsSupported ? Math.max(1, Math.min(4, hw - 1)) : 1
+        hash: mobile ? 24 : 64,
+        threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
       };
     }
     if (key === "deep-analysis") {
       return {
         name: key,
         depth: mobile ? 8 : 12,
-        hash: mobile ? 64 : 256,
-        threads: threadsSupported ? Math.max(1, Math.min(8, hw - 1)) : 1
+        hash: mobile ? 48 : 128,
+        threads: threadsSupported ? Math.max(1, Math.min(4, hw - 1)) : 1
       };
     }
     return {
       name: "desktop-fast",
       depth: mobile ? 6 : 8,
-      hash: mobile ? 48 : 128,
-      threads: threadsSupported ? Math.max(1, Math.min(6, hw - 1)) : 1
+      hash: mobile ? 24 : 48,
+      threads: threadsSupported ? Math.max(1, Math.min(2, hw - 1)) : 1
     };
   }
 
@@ -2519,7 +2557,10 @@
 
     const api = await window.Pikafish.createWorkerEngine({
       basePath: ".",
-      variant: (spec && spec.variant) || "auto"
+      variant: (spec && spec.variant) || "auto",
+      autoLoadNNUE: DEMO_PIKAFISH_AUTOLOAD_NNUE,
+      autoTune: false,
+      lineHistoryMax: DEMO_WRAPPER_LINE_HISTORY_MAX
     });
     api.provider = "pikafish";
     return {
@@ -2541,6 +2582,9 @@
     drainEngineLines(); // parse UCI option lines immediately if they are queued
     const spec = readMainEngineSpec();
     const initCmds = descriptor && descriptor.provider === "external-worker" ? (spec.initCmds || []) : [];
+    if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
+      try { e.setOption("Use NNUE", "false"); } catch (_) {}
+    }
     for (const line of initCmds) {
       e.postMessage(line);
     }
@@ -2550,8 +2594,18 @@
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
     try { e.setOption("MultiPV", requestedMultiPV()); } catch (_) {}
-    try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
+    try { e.setOption("UCI_ShowWDL", DEMO_ENABLE_UCI_SHOW_WDL ? "true" : "false"); } catch (_) {}
     await applySavedUciOptionPrefsToEngine(e);
+    // Reassert demo defaults after saved prefs so a prior "heavy" config doesn't
+    // silently bring back high CPU/memory usage.
+    try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
+    try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
+    if (multipvEl.value !== DEMO_DEFAULT_MULTIPV) multipvEl.value = DEMO_DEFAULT_MULTIPV;
+    try { e.setOption("MultiPV", Number(DEMO_DEFAULT_MULTIPV)); } catch (_) {}
+    try { e.setOption("UCI_ShowWDL", DEMO_ENABLE_UCI_SHOW_WDL ? "true" : "false"); } catch (_) {}
+    if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
+      try { e.setOption("Use NNUE", "false"); } catch (_) {}
+    }
     await e.isReady({ timeoutMs: 20000 }).catch(() => {});
 
     if (descriptor && descriptor.supportsDebugLog) {
@@ -2562,6 +2616,9 @@
 
     log("engine init: preset " + presetCfg.name + " (depth " + presetCfg.depth + ", hash " + presetCfg.hash + ", threads " + presetCfg.threads + ")");
     log("engine init: MultiPV " + requestedMultiPV());
+    if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
+      log("engine init: lightweight mode (NNUE disabled; skips pikafish.nnue load)");
+    }
     if (descriptor && descriptor.provider === "external-worker" && initCmds.length) {
       log("external init commands: " + initCmds.join(" ; "));
     }
@@ -2587,6 +2644,9 @@
   async function initializeAuxEngineSession(e, descriptor, sideTag, spec) {
     await e.uci({ timeoutMs: 20000 });
     const initCmds = descriptor && descriptor.provider === "external-worker" ? ((spec && spec.initCmds) || []) : [];
+    if (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE) {
+      try { e.setOption("Use NNUE", "false"); } catch (_) {}
+    }
     for (const line of initCmds) e.postMessage(line);
     await e.isReady({ timeoutMs: 20000 });
 
@@ -2596,10 +2656,10 @@
     try { e.setOption("Hash", presetCfg.hash); } catch (_) {}
     try { e.setOption("Threads", presetCfg.threads); } catch (_) {}
     try { e.setOption("MultiPV", 1); } catch (_) {}
-    try { e.setOption("UCI_ShowWDL", "true"); } catch (_) {}
+    try { e.setOption("UCI_ShowWDL", DEMO_ENABLE_UCI_SHOW_WDL ? "true" : "false"); } catch (_) {}
     try { e.setOption("Ponder", "false"); } catch (_) {}
     await e.isReady({ timeoutMs: 20000 }).catch(() => {});
-    log("[match " + sideTag + "] ready (" + (descriptor.label || e.variant || descriptor.provider || "engine") + ", preset " + presetCfg.name + ")");
+    log("[match " + sideTag + "] ready (" + (descriptor.label || e.variant || descriptor.provider || "engine") + ", preset " + presetCfg.name + (descriptor && descriptor.provider === "pikafish" && !DEMO_PIKAFISH_AUTOLOAD_NNUE ? ", no-nnue" : "") + ")");
   }
 
   async function createAuxMatchEngine(sideTag, spec) {
@@ -2946,7 +3006,7 @@
   function clearPVLines() {
     pvLinesByIndex.clear();
     lastTopPV = "";
-    schedulePVRender();
+    schedulePVRender(true);
   }
 
   function updatePVLineFromInfo(info) {
@@ -3025,11 +3085,69 @@
     pvRowsEl.innerHTML = rows.join("");
   }
 
+  function shouldLogEngineLine(line) {
+    // `info depth` lines are already represented in the PV and winrate panels.
+    return !/^info depth\s+/i.test(String(line));
+  }
+
+  function maybeHandleEngineFatalLine(line) {
+    const text = String(line || "");
+    const fatal = /^\[worker-error\]/i.test(text) ||
+      /ERROR:\s*The engine will be terminated now\./i.test(text);
+    if (!fatal || engineFatalShutdownScheduled) return false;
+    engineFatalShutdownScheduled = true;
+    pendingBestmoveAction = null;
+    autoPonderActive = false;
+    clearTimeout(continuousRestartTimer);
+    continuousRestartPending = false;
+    if (continuousAnalyzeEl && continuousAnalyzeEl.checked) {
+      continuousAnalyzeEl.checked = false;
+      suppressContinuousUntilPositionChange = false;
+      log("continuous analyze disabled after engine failure");
+    }
+    setTimeout(() => {
+      shutdownEngine().catch(() => {}).finally(() => {
+        engineFatalShutdownScheduled = false;
+      });
+    }, 0);
+    return true;
+  }
+
+  function compactEngineLineBatch(batch) {
+    if (!Array.isArray(batch) || batch.length < ENGINE_DRAIN_COMPACT_THRESHOLD) return batch;
+    const seenMultiPV = new Set();
+    const keep = new Array(batch.length);
+    let dropped = 0;
+    for (let i = batch.length - 1; i >= 0; i--) {
+      const line = batch[i];
+      if (!/^info depth\s+/i.test(line)) {
+        keep[i] = true;
+        continue;
+      }
+      const m = String(line).match(/\bmultipv\s+(\d+)/i);
+      const key = m ? Math.max(1, Number(m[1]) || 1) : 1;
+      if (seenMultiPV.has(key)) {
+        keep[i] = false;
+        dropped += 1;
+        continue;
+      }
+      seenMultiPV.add(key);
+      keep[i] = true;
+    }
+    if (!dropped) return batch;
+    const out = [];
+    for (let i = 0; i < batch.length; i++) {
+      if (keep[i]) out.push(batch[i]);
+    }
+    return out;
+  }
+
   function processEngineLine(line) {
     let statusDirty = false;
     let pvDirty = false;
     let uciOptionsDirty = false;
-    log(line);
+    if (shouldLogEngineLine(line)) log(line);
+    if (maybeHandleEngineFatalLine(line)) statusDirty = true;
 
     const parsedOpt = parseUciOptionLine(line);
     if (parsedOpt) {
@@ -3090,7 +3208,8 @@
 
   function drainEngineLines() {
     if (!pendingEngineLines.length) return;
-    const batch = pendingEngineLines.splice(0, pendingEngineLines.length);
+    const take = Math.min(pendingEngineLines.length, ENGINE_DRAIN_MAX_LINES_PER_FRAME);
+    const batch = compactEngineLineBatch(pendingEngineLines.splice(0, take));
     let statusDirty = false;
     let pvDirty = false;
     let uciOptionsDirty = false;
@@ -3260,6 +3379,7 @@
     }
     if (engine) return engine;
     if (engineBootPromise) return engineBootPromise;
+    engineFatalShutdownScheduled = false;
     pendingEngineLines.length = 0;
     resetUciOptionPanelState({ keepStateText: true });
     uciOptionsStateEl.textContent = "Starting engine...";
@@ -3756,7 +3876,12 @@
 
   function renderWinrateGraph() {
     const canvas = winrateGraphEl;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      winrateLabelEl.textContent = "Winrate graph unavailable";
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     const cssW = Math.max(20, Math.round(rect.width || canvas.width || 640));
     const cssH = Math.max(20, Math.round(rect.height || canvas.height || 160));
@@ -3799,7 +3924,10 @@
       winrateRightEl.innerHTML = "<strong>Black</strong> 50%";
       winrateLabelEl.textContent = "No eval yet";
       ctx.fillStyle = "rgba(95,106,115,0.75)";
-      ctx.font = "12px " + getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
+      if (!graphMonoFont) {
+        graphMonoFont = "12px " + getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
+      }
+      ctx.font = graphMonoFont;
       ctx.fillText("Start engine analysis to see live winrate.", padL + 6, yAt(0.5) - 6);
       return;
     }
@@ -3838,6 +3966,18 @@
     updateWinrateLabels(last.red, last.depth);
   }
 
+  function renderWinrateGraphSafe() {
+    try {
+      renderWinrateGraph();
+    } catch (e) {
+      if (!winrateGraphRenderErrorLogged) {
+        winrateGraphRenderErrorLogged = true;
+        log("winrate graph render failed: " + String(e && e.message || e));
+      }
+      winrateLabelEl.textContent = "Winrate graph error";
+    }
+  }
+
   function clearWinrateSeries() {
     winrateSeries = [];
     scheduleWinrateGraphRender(true);
@@ -3859,8 +3999,12 @@
   function handleVisibilityChange() {
     pageHidden = document.visibilityState === "hidden";
     if (pageHidden) {
+      clearTimeout(statusRenderDeferredTimer);
+      statusRenderDeferredTimer = 0;
       clearTimeout(graphRenderDeferredTimer);
       graphRenderDeferredTimer = 0;
+      clearTimeout(pvRenderDeferredTimer);
+      pvRenderDeferredTimer = 0;
       // Stop active searches to save CPU/battery in background tabs.
       pendingBestmoveAction = null;
       if (engine) {
@@ -3923,6 +4067,17 @@
         log("service worker disabled: " + String(e && e.message || e));
       });
     }, { once: true });
+  }
+
+  function disableDemoServiceWorkerForCurrentScope() {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    const scopeUrl = new URL("./", location.href).href;
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      for (const reg of regs || []) {
+        if (!reg || reg.scope !== scopeUrl) continue;
+        reg.unregister().catch(() => {});
+      }
+    }).catch(() => {});
   }
 
   document.getElementById("start").onclick = () => ensureEngine().catch((e) => log(String(e)));
@@ -4143,11 +4298,17 @@
     renderBoard();
     scheduleWinrateGraphRender(true);
   });
+  window.addEventListener("pageshow", () => scheduleWinrateGraphRender(true));
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  variantEl.value = preferredVariant();
-  presetEl.value = "auto";
-  multipvEl.value = "3";
+  if (typeof ResizeObserver === "function" && winrateGraphEl) {
+    const graphResizeObserver = new ResizeObserver(() => scheduleWinrateGraphRender(true));
+    graphResizeObserver.observe(winrateGraphEl);
+  }
+
+  variantEl.value = DEMO_DEFAULT_VARIANT;
+  presetEl.value = DEMO_DEFAULT_PRESET;
+  multipvEl.value = DEMO_DEFAULT_MULTIPV;
   searchModeEl.value = "depth";
   searchValueEl.value = "1000";
   engineWorkerUrlEl.value = "";
@@ -4174,7 +4335,8 @@
   setEngineMatchState("idle");
   setMatchExportState("none");
   setEngineToolsState("idle");
-  registerDemoServiceWorker();
+  if (DEMO_ENABLE_SERVICE_WORKER) registerDemoServiceWorker();
+  else disableDemoServiceWorkerForCurrentScope();
   log("Tip: start the engine, move pieces on the board, then use 'Engine Move' or 'Analyze Position'.");
   log("Enable 'Continuous Analyze' for live infinite analysis that restarts on move/undo/reset.");
   log("External UCI worker support is experimental; provide a Xiangqi-capable worker URL and init commands if needed.");

@@ -22,8 +22,26 @@ mkdir -p "$UPSTREAM_DIR/src/emscripten"
 cp "$ROOT/templates/emscripten/wasm-makefile.mk" "$UPSTREAM_DIR/src/emscripten/wasm-makefile.mk"
 cp "$ROOT/templates/emscripten/pre.js" "$UPSTREAM_DIR/src/emscripten/pre.js"
 
-if ! rg -q 'extern "C" void command' "$UPSTREAM_DIR/src/main.cpp"; then
-  git -C "$UPSTREAM_DIR" apply "$PATCH_FILE"
+has_text() {
+  local needle="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q --fixed-strings "$needle" "$file"
+  else
+    grep -Fq -- "$needle" "$file"
+  fi
+}
+
+if ! has_text 'extern "C" void command' "$UPSTREAM_DIR/src/main.cpp"; then
+  if git -C "$UPSTREAM_DIR" apply --check "$PATCH_FILE" >/dev/null 2>&1; then
+    git -C "$UPSTREAM_DIR" apply "$PATCH_FILE"
+  elif git -C "$UPSTREAM_DIR" apply --reverse --check "$PATCH_FILE" >/dev/null 2>&1; then
+    echo "Pikafish patch already applied; continuing."
+  else
+    echo "Failed to apply $PATCH_FILE to $UPSTREAM_DIR (upstream source may have changed)." >&2
+    echo "Try removing $UPSTREAM_DIR and rerunning, or update patches/pikafish-wasm.patch." >&2
+    exit 1
+  fi
 fi
 
 if command -v emcc >/dev/null 2>&1; then
