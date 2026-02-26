@@ -21,6 +21,7 @@ function App() {
   });
 
   const [autoAnalyze, setAutoAnalyze] = useState(false);
+  const [searchDepth, setSearchDepth] = useState(8);
 
   // Auto-analyze when moves change, if autoAnalyze is on
   useEffect(() => {
@@ -55,12 +56,12 @@ function App() {
       const timer = setTimeout(() => {
         const uciMoves = moveHistory.map(m => m.uci).join(' ');
         startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
-        startSearch('go depth 12'); // Fixed depth search since Wasm time management can be unreliable
+        startSearch(`go depth ${searchDepth}`); // Fixed depth search since Wasm time management can be unreliable
       }, 500); // 500ms slight delay before AI starts thinking to feel more natural
 
       return () => clearTimeout(timer);
     }
-  }, [sideToMove, gameMode, isReady, isSearching, moveHistory, autoAnalyze, startSearch, stopSearch]);
+  }, [sideToMove, gameMode, isReady, isSearching, moveHistory, autoAnalyze, startSearch, stopSearch, searchDepth]);
 
   const handleSquareClick = (file: number, rank: number) => {
     // Only allow manual clicks if it's not the AI's turn
@@ -173,7 +174,7 @@ function App() {
                     setAutoAnalyze(true);
                     const uciMoves = moveHistory.map(m => m.uci).join(' ');
                     startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
-                    startSearch('go depth 16');
+                    startSearch(`go depth ${searchDepth}`);
                   }
                 }}
                 disabled={!isReady || gameMode === 'AIvAI'}
@@ -184,8 +185,15 @@ function App() {
 
             <div className="settings-group">
               <label>Search Depth (Plys)</label>
-              <input type="range" min="1" max="30" defaultValue="16" className="premium-slider" />
-              <div className="slider-value">16</div>
+              <input
+                type="range"
+                min="1"
+                max="24"
+                value={searchDepth}
+                onChange={(e) => setSearchDepth(Number(e.target.value))}
+                className="premium-slider"
+              />
+              <div className="slider-value">{searchDepth}</div>
             </div>
           </div>
         </aside>
