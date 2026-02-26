@@ -1,61 +1,44 @@
 import React from 'react';
 import './Board.css';
+import type { BoardState } from '../../utils/xiangqi';
 
 // Xiangqi board ranks and files
 const RANKS = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 const FILES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-
-interface Piece {
-    type: string; // 'K', 'A', 'B', 'N', 'R', 'C', 'P' (uppercase for Red, lowercase for Black)
-    color: 'red' | 'black';
-    label: string;
-}
 
 const PIECE_LABELS: Record<string, string> = {
     K: "帥", A: "仕", B: "相", N: "傌", R: "俥", C: "炮", P: "兵",
     k: "將", a: "士", b: "象", n: "馬", r: "車", c: "砲", p: "卒"
 };
 
-// Simplified FEN parse
-function parseFen(fen: string): Record<string, Piece> {
-    const pieces: Record<string, Piece> = {};
-    const placement = fen.split(' ')[0];
-    const rows = placement.split('/');
-
-    rows.forEach((row, rankIdx) => {
-        let fileIdx = 0;
-        for (const char of row) {
-            if (/[1-9]/.test(char)) {
-                fileIdx += parseInt(char, 10);
-            } else {
-                const rank = 9 - rankIdx; // 9 = red side bottom, 0 = black side top
-                const isRed = char === char.toUpperCase();
-                pieces[`${fileIdx},${rank}`] = {
-                    type: char,
-                    color: isRed ? 'red' : 'black',
-                    label: PIECE_LABELS[char] || char
-                };
-                fileIdx++;
-            }
-        }
-    });
-
-    return pieces;
-}
-
 interface BoardProps {
-    fen?: string;
+    board: BoardState;
+    selected: { file: number, rank: number } | null;
+    validTargets: { file: number, rank: number, capture: boolean }[];
+    onSquareClick: (file: number, rank: number) => void;
 }
 
 export const Board: React.FC<BoardProps> = ({
-    fen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w"
+    board,
+    selected,
+    validTargets,
+    onSquareClick
 }) => {
-
-    const pieces = parseFen(fen);
 
     return (
         <div className="xiangqi-board-container">
             <div className="xiangqi-board">
+                {/* SVG Layer for Palace Diagonal Lines */}
+                <svg className="palace-lines" viewBox="0 0 8 9" preserveAspectRatio="none">
+                    {/* Bottom Palace (Red) */}
+                    <line x1="3" y1="7" x2="5" y2="9" className="palace-line" />
+                    <line x1="5" y1="7" x2="3" y2="9" className="palace-line" />
+
+                    {/* Top Palace (Black) */}
+                    <line x1="3" y1="0" x2="5" y2="2" className="palace-line" />
+                    <line x1="5" y1="0" x2="3" y2="2" className="palace-line" />
+                </svg>
+
                 {/* Draw the physical grid lines */}
                 <div className="board-grid">
                     {RANKS.map(rank => (
@@ -71,6 +54,7 @@ export const Board: React.FC<BoardProps> = ({
                                     className="cell"
                                     data-file={file}
                                     data-rank={rank}
+                                    onClick={() => onSquareClick(file, rank)}
                                 >
                                     {/* Palace cross lines or other markings can go here */}
                                 </div>
@@ -84,28 +68,53 @@ export const Board: React.FC<BoardProps> = ({
 
                 {/* The piece layer */}
                 <div className="pieces-layer">
-                    {Object.entries(pieces).map(([coord, piece]) => {
-                        const [file, rank] = coord.split(',').map(Number);
+                    {/* Valid Target overlays */}
+                    {validTargets.map(target => {
+                        const left = `${(target.file / 8) * 100}%`;
+                        const top = `${((9 - target.rank) / 9) * 100}%`;
 
-                        // Calculate absolute position (0-100%)
-                        // 9 files (0-8) -> each interval is 12.5% (100% / 8) -> Wait pieces are centered!
-                        // Actually, because pieces are on intersections:
-                        // x = file * (100% / 8)
-                        // y = (9 - rank) * (100% / 9)
-
-                        const left = `${(file / 8) * 100}%`;
-                        const top = `${((9 - rank) / 9) * 100}%`;
-
-                        return (
-                            <div
-                                key={coord}
-                                className={`piece ${piece.color}`}
-                                style={{ left, top, transform: 'translate(-50%, -50%)' }}
-                            >
-                                {piece.label}
-                            </div>
-                        );
+                        if (target.capture) {
+                            return (
+                                <div
+                                    key={`target-${target.file}-${target.rank}`}
+                                    className="target-ring"
+                                    style={{ left, top, width: 'calc((100% - 48px) / 10 + 12px)', height: 'calc((100% - 48px) / 10 + 12px)' }}
+                                />
+                            );
+                        } else {
+                            return (
+                                <div
+                                    key={`target-${target.file}-${target.rank}`}
+                                    className="target-dot"
+                                    style={{ left, top, width: '16px', height: '16px' }}
+                                />
+                            );
+                        }
                     })}
+
+                    {RANKS.map(rank => (
+                        FILES.map(file => {
+                            const piece = board[rank][file];
+                            if (!piece) return null;
+
+                            const isSelected = selected?.file === file && selected?.rank === rank;
+                            const isRed = piece === piece.toUpperCase();
+                            const colorClass = isRed ? 'red' : 'black';
+                            const left = `${(file / 8) * 100}%`;
+                            const top = `${((9 - rank) / 9) * 100}%`;
+
+                            return (
+                                <div
+                                    key={`piece-${file}-${rank}`}
+                                    className={`piece ${colorClass} ${isSelected ? 'selected' : ''}`}
+                                    style={{ left, top }}
+                                    onClick={(e) => { e.stopPropagation(); onSquareClick(file, rank); }}
+                                >
+                                    {PIECE_LABELS[piece] || piece}
+                                </div>
+                            );
+                        })
+                    ))}
                 </div>
             </div>
         </div>

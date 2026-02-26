@@ -1,13 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
 import { useEngine } from './hooks/useEngine';
+import { useXiangqi } from './hooks/useXiangqi';
 
 function App() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
   const { isReady, isSearching, startSearch, stopSearch, outputLines, pvLines } = useEngine();
+  const { board, selected, validTargets, moveHistory, currentFen, inCheck, onSquareClick, resetBoard } = useXiangqi();
+
+  const [autoAnalyze, setAutoAnalyze] = useState(false);
+
+  // Auto-analyze when moves change, if autoAnalyze is on
+  useEffect(() => {
+    if (isReady && autoAnalyze) {
+      if (isSearching) {
+        stopSearch();
+      }
+      setTimeout(() => {
+        const uciMoves = moveHistory.map(m => m.uci).join(' ');
+        startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
+        startSearch('go depth 16');
+      }, 50);
+    }
+  }, [moveHistory, isReady, autoAnalyze]);
+
+  const handleSquareClick = (file: number, rank: number) => {
+    onSquareClick(file, rank);
+  };
 
   return (
     <div className="app-container">
@@ -93,24 +115,32 @@ function App() {
             <button
               className="premium-primary-btn mt-4"
               onClick={() => {
-                if (isSearching) {
+                if (autoAnalyze) {
+                  setAutoAnalyze(false);
                   stopSearch();
                 } else {
-                  // Basic sequence to start searching from startpos
-                  startSearch('position startpos');
+                  setAutoAnalyze(true);
+                  // Basic sequence to start searching from current position
+                  const uciMoves = moveHistory.map(m => m.uci).join(' ');
+                  startSearch(`position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`);
                   startSearch('go depth 16');
                 }
               }}
               disabled={!isReady}
             >
-              {isSearching ? 'Stop Analysis' : 'Start Analysis'}
+              {autoAnalyze ? 'Stop Analysis' : 'Start Analysis'}
             </button>
           </div>
         </aside>
 
         {/* Center: The Board */}
         <section className="board-area">
-          <Board />
+          <Board
+            board={board}
+            selected={selected}
+            validTargets={validTargets}
+            onSquareClick={handleSquareClick}
+          />
         </section>
 
         {/* Right Panel: Analysis & Eval */}
@@ -148,8 +178,10 @@ function App() {
 
       {/* Bottom Status Bar */}
       <footer className="bottombar glass-panel">
-        <div className="bottombar-info">Nodes: 0 | NPS: 0 | Depth: 0</div>
-        <div className="bottombar-fen">FEN: rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w</div>
+        <div className="bottombar-info">
+          Nodes: 0 | NPS: 0 | Depth: 0 {inCheck && <span className="text-warning ml-2 font-bold">· CHECK</span>}
+        </div>
+        <div className="bottombar-fen">FEN: {currentFen}</div>
       </footer>
     </div>
   );

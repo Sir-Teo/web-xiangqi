@@ -46,7 +46,21 @@
 }
 
 /* Specific styling for the palace crosses */
-/* (We can add SVG or CSS rotation lines here for the diagonal crosses later) */
+.palace-lines {
+    position: absolute;
+    inset: 24px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.palace-line {
+    stroke: var(--board-line);
+    stroke-width: 0.05px;
+    /* Since the viewBox is 0 0 8 9, 2px is huge */
+    vector-effect: non-scaling-stroke;
+    /* Ensure it stays thin regardless of svg scaling */
+    fill: transparent;
+}
 
 .river {
     position: absolute;
@@ -111,6 +125,35 @@
         0 0 0 4px var(--accent-glow),
         inset 0 0 0 2px rgba(255, 255, 255, 0.4);
     z-index: 11;
+}
+
+.piece.selected {
+    box-shadow:
+        0 8px 12px var(--piece-shadow),
+        0 0 0 4px var(--accent-glow),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+    z-index: 11;
+}
+
+.target-dot {
+    position: absolute;
+    background: var(--accent-glow);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.8;
+    z-index: 5;
+}
+
+.target-ring {
+    position: absolute;
+    border: 4px solid var(--accent-glow);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.8;
+    z-index: 5;
+    box-sizing: border-box;
 }
 
 .piece.red {
