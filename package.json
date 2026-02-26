@@ -2,9 +2,14 @@
   "name": "web-xiangqi",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "WASM/JS wrapper build for Pikafish (Xiangqi engine)",
   "main": "dist/pikafish.js",
   "scripts": {
+    "dev": "vite",
+    "build:react": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
     "build": "bash scripts/build-pikafish.sh",
     "test:smoke": "node scripts/test-smoke.js threaded",
     "test:smoke:single": "node scripts/test-smoke.js single",
@@ -14,5 +19,23 @@
     "test:worker-parity:browser": "node scripts/test-worker-parity-browser.js",
     "bench:nps": "node scripts/bench-nps.js",
     "bench:nps:threaded-simd": "node scripts/bench-nps.js --variant threaded-simd"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.11.1",
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^9.11.1",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.12",
+    "globals": "^15.9.0",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.7.0",
+    "vite": "^5.4.8"
   }
 }
