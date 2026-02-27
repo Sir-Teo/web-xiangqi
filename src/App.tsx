@@ -28,8 +28,9 @@ function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(320);
+  const [topPanelOpen, setTopPanelOpen] = useState(true);
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1280 : window.innerWidth
   );
@@ -132,7 +133,8 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setSettingsOpen(false);
+        const openSettings = document.querySelector('.settings-menu[open]') as HTMLDetailsElement | null;
+        openSettings?.removeAttribute('open');
       }
     };
     const onResize = () => setViewportWidth(window.innerWidth);
@@ -248,6 +250,12 @@ function App() {
     resetGame();
   };
 
+  const closeSettingsMenu = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    const details = element?.closest('.settings-menu') as HTMLDetailsElement | null;
+    details?.removeAttribute('open');
+  };
+
   const MIN_WIDTH = 60;
   const DEFAULT_LEFT = 320;
   const DEFAULT_RIGHT = 320;
@@ -290,13 +298,43 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className="panel top">
+      <section className={`panel top ${topPanelOpen ? '' : 'hidden'}`}>
         <div className="panel-inner">
-          <div className="panel-content top-toolbar">
+          <div className="panel-content compact-grid">
             <div className="app-brand">
               <span className="app-brand-text">Web Xiangqi</span>
               <span className="brand-badge">Analysis</span>
             </div>
+
+            <div className="mobile-actions">
+              <button
+                type="button"
+                onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
+              >
+                <span className="btn-label">Graph</span>
+              </button>
+              <button
+                type="button"
+                onClick={resetGame}
+              >
+                <span className="btn-label">New</span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleAnalysis}
+                disabled={!isReady || gameMode === 'AIvAI'}
+              >
+                <span className="btn-label">{autoAnalyze ? 'Stop' : 'Analyze'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
+              >
+                <span className="btn-label">Tree</span>
+              </button>
+            </div>
+
+            <span className="toolbar-divider desktop-only" />
 
             <div className="top-mode-pills" role="tablist" aria-label="Game mode">
               {GAME_MODES.map(({ mode, label }) => (
@@ -316,129 +354,92 @@ function App() {
               {isReady ? 'Pikafish ready' : 'Loading engine'}
             </div>
 
-            <div className="top-actions">
-              <button
-                type="button"
-                className="icon-btn top-action-btn"
-                onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
-              >
-                Graph
-              </button>
-              <button
-                type="button"
-                className="icon-btn top-action-btn"
-                onClick={resetGame}
-              >
-                New
-              </button>
-              <button
-                type="button"
-                className={`icon-btn top-action-btn ${autoAnalyze ? 'top-action-active' : ''}`}
-                onClick={toggleAnalysis}
-                disabled={!isReady || gameMode === 'AIvAI'}
-              >
-                {autoAnalyze ? 'Stop' : 'Analyze'}
-              </button>
-              <button
-                type="button"
-                className="icon-btn top-action-btn"
-                onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
-              >
-                Tree
-              </button>
+            <span className="toolbar-divider desktop-only" />
 
-              <div className="settings-root">
-                <button
-                  type="button"
-                  className="icon-btn top-action-btn settings-trigger"
-                  onClick={() => setSettingsOpen((open) => !open)}
-                  aria-haspopup="dialog"
-                  aria-expanded={settingsOpen}
-                >
-                  <IconSettings />
-                  Settings
-                </button>
-                {settingsOpen ? (
-                  <>
-                    <div className="settings-backdrop" onClick={() => setSettingsOpen(false)} />
-                    <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
-                      <div className="settings-header">
-                        <h2>Settings</h2>
-                        <button
-                          className="settings-close-btn"
-                          type="button"
-                          onClick={() => setSettingsOpen(false)}
-                        >
-                          Done
-                        </button>
-                      </div>
+            <details className="settings-menu">
+              <summary className="settings-trigger">
+                <IconSettings />
+                Settings
+              </summary>
+              <div className="settings-backdrop" onClick={(event) => closeSettingsMenu(event.currentTarget)} />
+              <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
+                <div className="settings-header">
+                  <h2>Settings</h2>
+                  <button
+                    className="settings-close-btn"
+                    type="button"
+                    onClick={(event) => closeSettingsMenu(event.currentTarget)}
+                  >
+                    Done
+                  </button>
+                </div>
 
-                      <div className="settings-group">
-                        <label>Game Mode</label>
-                        <select
-                          className="premium-select"
-                          value={gameMode}
-                          onChange={(e) => {
-                            applyMode(e.target.value as GameMode);
-                            setSettingsOpen(false);
-                          }}
-                        >
-                          <option value="PvP">Local Multiplayer</option>
-                          <option value="PvAI-Black">Play Red vs AI</option>
-                          <option value="PvAI-Red">Play Black vs AI</option>
-                          <option value="AIvAI">Watch AI vs AI</option>
-                        </select>
-                      </div>
+                <div className="settings-group">
+                  <label>Game Mode</label>
+                  <select
+                    className="premium-select"
+                    value={gameMode}
+                    onChange={(e) => {
+                      applyMode(e.target.value as GameMode);
+                      closeSettingsMenu(e.currentTarget);
+                    }}
+                  >
+                    <option value="PvP">Local Multiplayer</option>
+                    <option value="PvAI-Black">Play Red vs AI</option>
+                    <option value="PvAI-Red">Play Black vs AI</option>
+                    <option value="AIvAI">Watch AI vs AI</option>
+                  </select>
+                </div>
 
-                      <div className="settings-group">
-                        <label>Layout</label>
-                        <div className="settings-inline-toggles">
-                          <button
-                            type="button"
-                            className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
-                            onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
-                          >
-                            Left Panel
-                          </button>
-                          <button
-                            type="button"
-                            className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
-                            onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
-                          >
-                            Right Panel
-                          </button>
-                        </div>
-                      </div>
+                <div className="settings-group">
+                  <label>Layout</label>
+                  <div className="settings-inline-toggles">
+                    <button
+                      type="button"
+                      className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
+                      onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
+                    >
+                      Left Panel
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
+                      onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
+                    >
+                      Right Panel
+                    </button>
+                  </div>
+                </div>
 
-                      <div className="settings-group">
-                        <label>Analysis Mode</label>
-                        <button
-                          className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
-                          onClick={toggleAnalysis}
-                          disabled={!isReady || gameMode === 'AIvAI'}
-                        >
-                          {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
-                        </button>
-                      </div>
+                <div className="settings-group">
+                  <label>Analysis Mode</label>
+                  <button
+                    className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
+                    onClick={toggleAnalysis}
+                    disabled={!isReady || gameMode === 'AIvAI'}
+                  >
+                    {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
+                  </button>
+                </div>
 
-                      <div className="settings-group">
-                        <label>Search Depth (Plys)</label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="24"
-                          value={searchDepth}
-                          onChange={(e) => setSearchDepth(Number(e.target.value))}
-                          className="premium-slider"
-                        />
-                        <div className="setting-value">Depth: {searchDepth}</div>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
+                <div className="settings-group">
+                  <label>Search Depth (Plys)</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="24"
+                    value={searchDepth}
+                    onChange={(e) => setSearchDepth(Number(e.target.value))}
+                    className="premium-slider"
+                  />
+                  <div className="setting-value">Depth: {searchDepth}</div>
+                </div>
               </div>
-            </div>
+            </details>
           </div>
+        </div>
+        <div className="resize-handle resize-handle-bottom" onClick={() => setTopPanelOpen((open) => !open)} title="Toggle top bar">
+          <span className="resize-pill horizontal" />
         </div>
       </section>
 
@@ -506,17 +507,17 @@ function App() {
           <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
               <h2>Review</h2>
-              <div className="analysis-tabs">
+              <div className="analysis-tab-strip">
                 <button
                   type="button"
-                  className={`analysis-tab-btn ${analysisTab === 'tree' ? 'analysis-tab-btn-active' : ''}`}
+                  className={`analysis-tab-btn ${analysisTab === 'tree' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('tree')}
                 >
                   Game Tree
                 </button>
                 <button
                   type="button"
-                  className={`analysis-tab-btn ${analysisTab === 'engine' ? 'analysis-tab-btn-active' : ''}`}
+                  className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('engine')}
                 >
                   Engine
@@ -576,7 +577,10 @@ function App() {
         </aside>
       </div>
 
-      <section className="panel bottom">
+      <section className={`panel bottom ${bottomPanelOpen ? '' : 'hidden'}`}>
+        <div className="resize-handle resize-handle-top" onClick={() => setBottomPanelOpen((open) => !open)} title="Toggle bottom bar">
+          <span className="resize-pill horizontal" />
+        </div>
         <div className="panel-inner">
           <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} />
           <div className="panel-content bottom-main">
