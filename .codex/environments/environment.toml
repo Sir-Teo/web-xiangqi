@@ -12,3 +12,8 @@ command = '''
 npm run build
 npm run serve:demo
 '''
+
+[[actions]]
+name = "run server"
+icon = "tool"
+command = "npm run dev"

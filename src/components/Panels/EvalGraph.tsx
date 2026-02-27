@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
 
 interface EvalGraphProps {
     history: MoveRecord[];
     currentMoveIndex: number;
     currentEval: number;
+    branchCounts?: Record<number, number>;
+    rootBranchCount?: number;
     onNavigate?: (index: number) => void;
 }
 
@@ -14,7 +16,16 @@ type EvalPoint = {
     ply: number;
 };
 
-export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex, currentEval, onNavigate }) => {
+export const EvalGraph: React.FC<EvalGraphProps> = ({
+    history,
+    currentMoveIndex,
+    currentEval,
+    branchCounts = {},
+    rootBranchCount = 0,
+    onNavigate
+}) => {
+    const [hoverPointIndex, setHoverPointIndex] = useState<number | null>(null);
+
     const points = useMemo<EvalPoint[]>(() => {
         let previous = 0;
         const next: EvalPoint[] = [{ moveIndex: -1, eval: 0, ply: 0 }];
@@ -34,9 +45,9 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
     }, [history, currentMoveIndex, currentEval]);
 
     const maxEvalClamp = 1200;
-    const chartHeight = 190;
-    const chartWidth = Math.max(360, points.length * 34);
-    const padding = { top: 16, right: 18, bottom: 32, left: 38 };
+    const chartHeight = 210;
+    const chartWidth = Math.max(420, points.length * 32);
+    const padding = { top: 16, right: 18, bottom: 34, left: 38 };
     const plotWidth = chartWidth - padding.left - padding.right;
     const plotHeight = chartHeight - padding.top - padding.bottom;
 
@@ -53,20 +64,21 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
     const linePath = useMemo(() => {
         if (points.length === 0) return '';
         return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index).toFixed(2)} ${yFor(point.eval).toFixed(2)}`).join(' ');
-    }, [points]);
+    }, [points, plotWidth, plotHeight]);
 
     const fillPath = useMemo(() => {
         if (points.length === 0) return '';
         const lastX = xFor(points.length - 1);
         return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${xFor(0).toFixed(2)} ${baselineY.toFixed(2)} Z`;
-    }, [points, linePath, baselineY]);
+    }, [points, linePath, baselineY, plotWidth]);
 
     const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
     const currentPoint = points[currentPointIndex];
     const currentDisplay = formatEval(currentPoint?.eval ?? 0);
+    const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
 
-    const onChartClick = (event: React.MouseEvent<SVGSVGElement>) => {
-        if (!onNavigate || points.length === 0) return;
+    const nearestPointForEvent = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (points.length === 0) return 0;
         const rect = event.currentTarget.getBoundingClientRect();
         const scaleX = chartWidth / rect.width;
         const x = (event.clientX - rect.left) * scaleX;
@@ -79,6 +91,12 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
                 nearestDistance = distance;
             }
         });
+        return nearest;
+    };
+
+    const onChartClick = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (!onNavigate || points.length === 0) return;
+        const nearest = nearestPointForEvent(event);
         onNavigate(points[nearest].moveIndex);
     };
 
@@ -90,6 +108,8 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
                     width={chartWidth}
                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                     onClick={onChartClick}
+                    onMouseMove={(event) => setHoverPointIndex(nearestPointForEvent(event))}
+                    onMouseLeave={() => setHoverPointIndex(null)}
                     style={{ cursor: onNavigate ? 'pointer' : 'default' }}
                     aria-label="Evaluation graph"
                 >
@@ -123,22 +143,64 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
                         x2={xFor(currentPointIndex)}
                         y1={padding.top}
                         y2={chartHeight - padding.bottom}
-                        stroke="rgba(255, 255, 255, 0.65)"
+                        className="graph-current-line"
                         strokeWidth="1.5"
                         strokeDasharray="4 4"
                     />
-                    {points.map((point, pointIndex) => (
-                        <circle
-                            key={`point-${point.ply}`}
-                            className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''}`}
-                            cx={xFor(pointIndex)}
-                            cy={yFor(point.eval)}
-                            r={pointIndex === currentPointIndex ? 4 : 2.8}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onNavigate?.(point.moveIndex);
-                            }}
+                    {hoverPointIndex != null ? (
+                        <line
+                            x1={xFor(hoverPointIndex)}
+                            x2={xFor(hoverPointIndex)}
+                            y1={padding.top}
+                            y2={chartHeight - padding.bottom}
+                            className="graph-hover-line"
+                            strokeWidth="1"
+                            strokeDasharray="3 4"
                         />
+                    ) : null}
+                    {points.map((point, pointIndex) => (
+                        <g key={`point-${point.ply}`}>
+                            <circle
+                                className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
+                                cx={xFor(pointIndex)}
+                                cy={yFor(point.eval)}
+                                r={pointIndex === currentPointIndex ? 4.2 : pointIndex === hoverPointIndex ? 3.8 : 2.8}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onNavigate?.(point.moveIndex);
+                                }}
+                            />
+                            {(() => {
+                                const variationCount = point.moveIndex === -1
+                                    ? rootBranchCount
+                                    : branchCounts[point.moveIndex] ?? 0;
+                                if (variationCount <= 1) return null;
+                                return (
+                                    <g
+                                        className="graph-branch-badge"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onNavigate?.(point.moveIndex);
+                                        }}
+                                    >
+                                        <rect
+                                            x={xFor(pointIndex) + 5}
+                                            y={yFor(point.eval) - 18}
+                                            width={16}
+                                            height={11}
+                                            rx={5}
+                                        />
+                                        <text
+                                            x={xFor(pointIndex) + 13}
+                                            y={yFor(point.eval) - 10}
+                                            textAnchor="middle"
+                                        >
+                                            {variationCount}
+                                        </text>
+                                    </g>
+                                );
+                            })()}
+                        </g>
                     ))}
                 </svg>
             </div>
@@ -146,6 +208,17 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex,
                 <span>{currentPoint?.moveIndex === -1 ? 'Start Position' : `Ply ${currentPoint?.ply ?? 0}`}</span>
                 <strong>{currentDisplay}</strong>
             </div>
+            {hoveredPoint ? (
+                <div
+                    className="graph-tooltip"
+                    style={{
+                        left: `${xFor(hoverPointIndex ?? 0)}px`,
+                        top: `${Math.max(18, yFor(hoveredPoint.eval) - 18)}px`,
+                    }}
+                >
+                    {hoveredPoint.moveIndex === -1 ? 'Start' : `Ply ${hoveredPoint.ply}`} - {formatEval(hoveredPoint.eval)}
+                </div>
+            ) : null}
         </div>
     );
 };

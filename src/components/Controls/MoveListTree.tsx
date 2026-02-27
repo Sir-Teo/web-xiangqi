@@ -1,102 +1,129 @@
-import React, { useEffect, useRef } from 'react';
-import type { MoveRecord } from '../../hooks/useXiangqi';
+import { useEffect } from 'react';
+import type { MoveTreeNode } from '../../hooks/useXiangqi';
 
 type Props = {
-    moveHistory: MoveRecord[];
+    treeNodes: Record<string, MoveTreeNode>;
+    rootNodeId: string;
+    currentNodeId: string;
     currentMoveIndex: number;
-    onNavigate: (index: number) => void;
+    activeLineNodeIds: string[];
+    onNavigateNode: (nodeId: string) => void;
 };
 
-export function MoveListTree({ moveHistory, currentMoveIndex, onNavigate }: Props) {
-    const scrollRef = useRef<HTMLDivElement>(null);
+type FlatNode = {
+    id: string;
+    depth: number;
+    label: string;
+    moveNo: string;
+    uci: string;
+    qualityClass: string;
+};
 
-    // Auto-scroll current node into view
+export function MoveListTree({
+    treeNodes,
+    rootNodeId,
+    currentNodeId,
+    currentMoveIndex,
+    activeLineNodeIds,
+    onNavigateNode,
+}: Props) {
     useEffect(() => {
-        const el = document.querySelector(`[data-move-id="move-${currentMoveIndex}"]`) as HTMLElement | null;
+        const el = document.querySelector(`[data-node-id="node-${currentNodeId}"]`) as HTMLElement | null;
         el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }, [currentMoveIndex]);
+    }, [currentNodeId]);
 
-    const rows: React.ReactElement[] = [];
-    let i = 0;
-    while (i < moveHistory.length) {
-        const redMove = moveHistory[i];
-        const blackMove = moveHistory[i + 1] ?? null;
-        const moveNum = Math.floor(i / 2) + 1;
+    const activeLine = new Set(activeLineNodeIds);
+    const flatRows = flattenTree(treeNodes, rootNodeId);
 
-        rows.push(
-            <div key={`row-${moveNum}`} className="mtree-row">
-                <span className="mtree-num">{moveNum}.</span>
-                <MoveChip
-                    move={redMove}
-                    history={moveHistory}
-                    index={i}
-                    isCurrent={i === currentMoveIndex}
-                    onClick={() => onNavigate(i)}
-                />
-                {blackMove ? (
-                    <MoveChip
-                        move={blackMove}
-                        history={moveHistory}
-                        index={i + 1}
-                        isCurrent={i + 1 === currentMoveIndex}
-                        onClick={() => onNavigate(i + 1)}
-                    />
-                ) : <span className="mtree-spacer" />}
-            </div>
-        );
-        i += 2;
-    }
+    const totalNodeCount = Math.max(0, Object.keys(treeNodes).length - 1);
 
     return (
         <div className="mtree-wrap">
             <div className="mtree-head">
                 <button
                     type="button"
-                    className={`mtree-chip mtree-chip-root ${currentMoveIndex === -1 ? 'mtree-chip-active' : ''}`}
-                    onClick={() => onNavigate(-1)}
+                    className={`mtree-chip mtree-chip-root ${currentNodeId === rootNodeId ? 'mtree-chip-active' : ''}`}
+                    onClick={() => onNavigateNode(rootNodeId)}
                 >
                     Start Position
                 </button>
-                <span className="mtree-progress">{Math.max(0, currentMoveIndex + 1)} / {moveHistory.length}</span>
+                <span className="mtree-progress">
+                    Ply {Math.max(0, currentMoveIndex + 1)} · Nodes {totalNodeCount}
+                </span>
             </div>
-            {moveHistory.length === 0 ? (
+            {flatRows.length === 0 ? (
                 <div className="empty-state" style={{ padding: '12px 4px', color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', textAlign: 'center' }}>
-                    <p>Play some moves - they will appear here.</p>
+                    <p>Play some moves - branches will appear here.</p>
                 </div>
             ) : (
-                <div className="mtree-scroll" ref={scrollRef}>
-                    {rows}
+                <div className="mtree-scroll">
+                    {flatRows.map((row) => (
+                        <div key={row.id} className="mtree-tree-row">
+                            <span className="mtree-node-meta">{row.moveNo}</span>
+                            <button
+                                data-node-id={`node-${row.id}`}
+                                type="button"
+                                className={`mtree-tree-chip ${row.qualityClass} ${activeLine.has(row.id) ? 'mtree-tree-chip-line' : ''} ${currentNodeId === row.id ? 'mtree-chip-active' : ''}`}
+                                onClick={() => onNavigateNode(row.id)}
+                                style={{ paddingLeft: `${8 + row.depth * 14}px` }}
+                                title={row.uci}
+                            >
+                                {row.depth > 0 ? <span className="mtree-depth-marker">↳</span> : null}
+                                <span>{row.label}</span>
+                                <span className="move-uci">{row.uci}</span>
+                                <span className="mtree-quality-dot" />
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     );
 }
 
-function MoveChip({ move, history, index, isCurrent, onClick }: { move: MoveRecord, history: MoveRecord[], index: number, isCurrent: boolean, onClick: () => void }) {
-    const notation = `${move.piece.toUpperCase()}${move.captured ? 'x' : '-'}${move.uci.substring(2, 4)}`;
-    const qualityClass = getMoveQualityClass(history, index);
+function flattenTree(treeNodes: Record<string, MoveTreeNode>, rootNodeId: string): FlatNode[] {
+    const rows: FlatNode[] = [];
 
-    return (
-        <button
-            data-move-id={`move-${index}`}
-            type="button"
-            className={`mtree-chip ${qualityClass} ${isCurrent ? 'mtree-chip-active' : ''}`}
-            onClick={onClick}
-            title={`${notation} (${move.uci})`}
-        >
-            <span>{notation}</span>
-            <span className="move-uci">{move.uci}</span>
-            <span className="mtree-quality-dot" />
-        </button>
-    );
+    const walk = (parentId: string, depth: number) => {
+        const parent = treeNodes[parentId];
+        if (!parent) return;
+        parent.childrenIds.forEach((childId) => {
+            const child = treeNodes[childId];
+            const record = child?.record;
+            if (!child || !record) return;
+
+            const moveNo = record.ply % 2 === 1
+                ? `${Math.ceil(record.ply / 2)}.`
+                : `${Math.ceil(record.ply / 2)}...`;
+
+            rows.push({
+                id: childId,
+                depth,
+                label: formatMoveLabel(record),
+                moveNo,
+                uci: record.uci,
+                qualityClass: getMoveQualityClass(treeNodes, childId),
+            });
+
+            walk(childId, depth + 1);
+        });
+    };
+
+    walk(rootNodeId, 0);
+    return rows;
 }
 
-function getMoveQualityClass(history: MoveRecord[], index: number): string {
-    const currentEval = history[index]?.evalScore;
-    const previousEval = index > 0 ? history[index - 1]?.evalScore : 0;
-    if (typeof currentEval !== 'number' || typeof previousEval !== 'number') return 'quality-pending';
+function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
+    return `${record.piece.toUpperCase()}${record.captured ? 'x' : '-'}${record.uci.substring(2, 4)}`;
+}
 
-    const delta = Math.abs(currentEval - previousEval);
+function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {
+    const node = treeNodes[nodeId];
+    const currentEval = node?.record?.evalScore;
+    const parentEval = node?.parentId ? treeNodes[node.parentId]?.record?.evalScore : 0;
+    if (typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';
+
+    const delta = Math.abs(currentEval - parentEval);
     if (delta <= 40) return 'quality-best';
     if (delta <= 90) return 'quality-good';
     if (delta <= 180) return 'quality-inaccuracy';

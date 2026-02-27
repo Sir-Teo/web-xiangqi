@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import type {
     BoardState,
     Side
@@ -23,49 +23,138 @@ export interface MoveRecord {
     board: BoardState;
     sideToMove: Side;
     inCheck: boolean;
+    ply: number;
+}
+
+export interface MoveTreeNode {
+    id: string;
+    parentId: string | null;
+    childrenIds: string[];
+    record?: MoveRecord;
+}
+
+const ROOT_NODE_ID = 'root';
+
+function createRootTree(): Record<string, MoveTreeNode> {
+    return {
+        [ROOT_NODE_ID]: {
+            id: ROOT_NODE_ID,
+            parentId: null,
+            childrenIds: [],
+        },
+    };
+}
+
+function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string[] {
+    if (!treeNodes[nodeId]) return [];
+    const reversed: string[] = [];
+    let cursor: string | null = nodeId;
+    while (cursor && cursor !== ROOT_NODE_ID) {
+        reversed.push(cursor);
+        cursor = treeNodes[cursor]?.parentId ?? null;
+    }
+    reversed.reverse();
+    return reversed;
+}
+
+function preferredContinuation(treeNodes: Record<string, MoveTreeNode>, startNodeId: string): string[] {
+    const continuation: string[] = [];
+    let cursor = startNodeId;
+    while (treeNodes[cursor]?.childrenIds.length) {
+        const children = treeNodes[cursor].childrenIds;
+        // Follow the most recently explored branch.
+        const preferredChild = children[children.length - 1];
+        continuation.push(preferredChild);
+        cursor = preferredChild;
+    }
+    return continuation;
+}
+
+function getPositionFromNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string) {
+    if (nodeId === ROOT_NODE_ID) {
+        return {
+            board: parseFenBoard(START_FEN),
+            sideToMove: 'w' as Side,
+            inCheck: false,
+        };
+    }
+    const node = treeNodes[nodeId];
+    if (!node?.record) {
+        return {
+            board: parseFenBoard(START_FEN),
+            sideToMove: 'w' as Side,
+            inCheck: false,
+        };
+    }
+    return {
+        board: node.record.board,
+        sideToMove: node.record.sideToMove,
+        inCheck: node.record.inCheck,
+    };
 }
 
 export function useXiangqi() {
+    const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
+    const [activeLineNodeIds, setActiveLineNodeIds] = useState<string[]>([]);
+    const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
+
     const [board, setBoard] = useState<BoardState>(() => parseFenBoard(START_FEN));
     const [sideToMove, setSideToMove] = useState<Side>('w');
-    const [moveHistory, setMoveHistory] = useState<MoveRecord[]>([]);
-    const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
     const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
     const [validTargets, setValidTargets] = useState<{ file: number; rank: number; capture: boolean }[]>([]);
     const [inCheck, setInCheck] = useState<boolean>(false);
 
+    const nodeCounterRef = useRef(1);
+
+    const currentNodeId = currentMoveIndex >= 0 ? activeLineNodeIds[currentMoveIndex] ?? ROOT_NODE_ID : ROOT_NODE_ID;
+    const moveHistory = useMemo(
+        () => activeLineNodeIds.map((nodeId) => treeNodes[nodeId]?.record).filter((record): record is MoveRecord => Boolean(record)),
+        [activeLineNodeIds, treeNodes]
+    );
     const currentFen = boardToFen(board, sideToMove, 1 + Math.floor((currentMoveIndex + 1) / 2));
 
+    const syncPositionForNode = useCallback((nextTree: Record<string, MoveTreeNode>, nodeId: string) => {
+        const position = getPositionFromNode(nextTree, nodeId);
+        setBoard(position.board);
+        setSideToMove(position.sideToMove);
+        setInCheck(position.inCheck);
+        setSelected(null);
+        setValidTargets([]);
+    }, []);
+
     const resetBoard = useCallback(() => {
+        const rootTree = createRootTree();
+        setTreeNodes(rootTree);
+        setActiveLineNodeIds([]);
+        setCurrentMoveIndex(-1);
         setBoard(parseFenBoard(START_FEN));
         setSideToMove('w');
-        setMoveHistory([]);
-        setCurrentMoveIndex(-1);
         setSelected(null);
         setValidTargets([]);
         setInCheck(false);
+        nodeCounterRef.current = 1;
     }, []);
 
+    const jumpToNode = useCallback((nodeId: string) => {
+        const targetId = nodeId && treeNodes[nodeId] ? nodeId : ROOT_NODE_ID;
+        const path = findPathToNode(treeNodes, targetId);
+        const continuation = preferredContinuation(treeNodes, targetId);
+        const nextActiveLine = [...path, ...continuation];
+        const nextIndex = path.length - 1;
+
+        setActiveLineNodeIds(nextActiveLine);
+        setCurrentMoveIndex(nextIndex);
+        syncPositionForNode(treeNodes, targetId);
+    }, [treeNodes, syncPositionForNode]);
+
     const jumpToMove = useCallback((index: number) => {
-        if (index < -1 || index >= moveHistory.length) return;
-
+        if (index < -1 || index >= activeLineNodeIds.length) return;
+        const nodeId = index === -1 ? ROOT_NODE_ID : activeLineNodeIds[index];
         setCurrentMoveIndex(index);
-        setSelected(null);
-        setValidTargets([]);
+        syncPositionForNode(treeNodes, nodeId);
+    }, [activeLineNodeIds, treeNodes, syncPositionForNode]);
 
-        if (index === -1) {
-            setBoard(parseFenBoard(START_FEN));
-            setSideToMove('w');
-            setInCheck(false);
-        } else {
-            const record = moveHistory[index];
-            setBoard(record.board);
-            setSideToMove(record.sideToMove);
-            setInCheck(record.inCheck);
-        }
-    }, [moveHistory]);
-
-    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
+    const commitMove = useCallback((uci: string, evalScore?: number) => {
         const fromSquare = uci.substring(0, 2);
         const toSquare = uci.substring(2, 4);
 
@@ -73,7 +162,7 @@ export function useXiangqi() {
         const to = uciToSquare(toSquare);
 
         if (!from || !to) {
-            console.error("Invalid UCI move format:", uci);
+            console.error('Invalid UCI move format:', uci);
             return false;
         }
 
@@ -87,43 +176,94 @@ export function useXiangqi() {
 
         const result = validatePieceMove(board, mv, sideToMove);
         if (!result.ok) {
-            console.warn("Invalid programmatic move (engine move rejected):", result.reason, uci, "Side:", sideToMove, "Piece:", board[mv.fromRank][mv.fromFile]);
+            console.warn('Invalid programmatic move (engine move rejected):', result.reason, uci, 'Side:', sideToMove, 'Piece:', board[mv.fromRank][mv.fromFile]);
             return false;
         }
 
-        const nextBoard = board.map(row => [...row]);
+        const nextBoard = board.map((row) => [...row]);
         nextBoard[to.rank][to.file] = result.piece || '';
         nextBoard[from.rank][from.file] = '';
 
         const nextSide = sideToMove === 'w' ? 'b' : 'w';
         const nextInCheck = isInCheck(nextBoard, nextSide);
 
-        const historyToKeep = moveHistory.slice(0, currentMoveIndex + 1);
-        setMoveHistory([...historyToKeep, {
+        const parentNodeId = currentNodeId;
+        const parentNode = treeNodes[parentNodeId];
+        const existingChildId = parentNode?.childrenIds.find((childId) => treeNodes[childId]?.record?.uci === mv.raw);
+
+        const activePrefix = activeLineNodeIds.slice(0, currentMoveIndex + 1);
+
+        if (existingChildId) {
+            const existingChild = treeNodes[existingChildId];
+            const updatedRecord: MoveRecord | undefined = existingChild.record ? {
+                ...existingChild.record,
+                evalScore: evalScore ?? existingChild.record.evalScore,
+            } : undefined;
+
+            const nextTree: Record<string, MoveTreeNode> = updatedRecord ? {
+                ...treeNodes,
+                [existingChildId]: {
+                    ...existingChild,
+                    record: updatedRecord,
+                }
+            } : treeNodes;
+
+            setTreeNodes(nextTree);
+
+            const keptFuture = activeLineNodeIds[currentMoveIndex + 1] === existingChildId
+                ? activeLineNodeIds.slice(currentMoveIndex + 1)
+                : [existingChildId, ...preferredContinuation(nextTree, existingChildId)];
+
+            const nextActiveLine = [...activePrefix, ...keptFuture];
+            const nextIndex = currentMoveIndex + 1;
+
+            setActiveLineNodeIds(nextActiveLine);
+            setCurrentMoveIndex(nextIndex);
+            syncPositionForNode(nextTree, existingChildId);
+            return true;
+        }
+
+        const newNodeId = `n${nodeCounterRef.current++}`;
+        const newRecord: MoveRecord = {
             uci: mv.raw,
             piece: result.piece!,
             captured: result.captured || '',
             evalScore,
             board: nextBoard,
             sideToMove: nextSide,
-            inCheck: nextInCheck
-        }]);
-        setCurrentMoveIndex(historyToKeep.length);
+            inCheck: nextInCheck,
+            ply: currentMoveIndex + 2,
+        };
 
-        setBoard(nextBoard);
-        setSideToMove(nextSide);
-        setSelected(null);
-        setValidTargets([]);
-        setInCheck(nextInCheck);
+        const nextTree: Record<string, MoveTreeNode> = {
+            ...treeNodes,
+            [parentNodeId]: {
+                ...parentNode,
+                childrenIds: [...parentNode.childrenIds, newNodeId],
+            },
+            [newNodeId]: {
+                id: newNodeId,
+                parentId: parentNodeId,
+                childrenIds: [],
+                record: newRecord,
+            },
+        };
 
+        setTreeNodes(nextTree);
+        setActiveLineNodeIds([...activePrefix, newNodeId]);
+        setCurrentMoveIndex(activePrefix.length);
+        syncPositionForNode(nextTree, newNodeId);
         return true;
-    }, [board, sideToMove, moveHistory, currentMoveIndex]);
+    }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, syncPositionForNode]);
 
-    // Returns true if a move was successfully applied
+    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
+        return commitMove(uci, evalScore);
+    }, [commitMove]);
+
+    // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
         const piece = board[rank][file];
 
-        // If no piece is selected, select it if it belongs to the side to move
         if (!selected) {
             if (piece && pieceSide(piece) === sideToMove) {
                 setSelected({ file, rank });
@@ -132,68 +272,33 @@ export function useXiangqi() {
             return null;
         }
 
-        // Clicking the same piece again deselects
         if (selected.file === file && selected.rank === rank) {
             setSelected(null);
             setValidTargets([]);
             return null;
         }
 
-        // Clicking another of our own pieces selects that one instead
         if (piece && pieceSide(piece) === sideToMove) {
             setSelected({ file, rank });
             setValidTargets(legalMovesFrom(board, file, rank, sideToMove));
             return null;
         }
 
-        // Attempt to move
-        const mv = {
-            fromFile: selected.file,
-            fromRank: selected.rank,
-            toFile: file,
-            toRank: rank,
-            raw: squareToUci(selected.file, selected.rank) + squareToUci(file, rank)
-        };
-
-        const result = validatePieceMove(board, mv, sideToMove);
-        if (!result.ok) {
-            console.warn("Invalid move:", result.reason);
-            return null; // Ignore invalid moves
-        }
-
-        // Apply move
-        const nextBoard = board.map(row => [...row]);
-        nextBoard[rank][file] = result.piece || '';
-        nextBoard[selected.rank][selected.file] = '';
-
-        const nextSide = sideToMove === 'w' ? 'b' : 'w';
-        const nextInCheck = isInCheck(nextBoard, nextSide);
-
-        const historyToKeep = moveHistory.slice(0, currentMoveIndex + 1);
-        setMoveHistory([...historyToKeep, {
-            uci: mv.raw,
-            piece: result.piece!,
-            captured: result.captured || '',
-            board: nextBoard,
-            sideToMove: nextSide,
-            inCheck: nextInCheck
-        }]);
-        setCurrentMoveIndex(historyToKeep.length);
-
-        setBoard(nextBoard);
-        setSideToMove(nextSide);
-        setSelected(null);
-        setValidTargets([]);
-        setInCheck(nextInCheck);
-
-        return mv.raw; // Return the move string so the caller can send it to the engine
-    }, [board, selected, sideToMove, moveHistory, currentMoveIndex]);
+        const uci = squareToUci(selected.file, selected.rank) + squareToUci(file, rank);
+        const moved = commitMove(uci);
+        if (!moved) return null;
+        return uci;
+    }, [board, selected, sideToMove, commitMove]);
 
     return {
         board,
         sideToMove,
         moveHistory,
         currentMoveIndex,
+        currentNodeId,
+        rootNodeId: ROOT_NODE_ID,
+        treeNodes,
+        activeLineNodeIds,
         selected,
         validTargets,
         currentFen,
@@ -201,6 +306,7 @@ export function useXiangqi() {
         onSquareClick,
         resetBoard,
         applyUciMove,
-        jumpToMove
+        jumpToMove,
+        jumpToNode,
     };
 }
