@@ -9,6 +9,7 @@ import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
+type WorkspaceMode = 'play' | 'analysis';
 
 const GAME_MODES: Array<{ mode: GameMode; label: string }> = [
   { mode: 'PvP', label: 'Local' },
@@ -26,6 +27,7 @@ function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typ
 
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(320);
   const [topPanelOpen, setTopPanelOpen] = useState(true);
@@ -56,6 +58,7 @@ function App() {
     resetBoard,
     sideToMove,
     applyUciMove,
+    setCurrentNodeEval,
     jumpToMove,
     jumpToNode,
   } = useXiangqi();
@@ -117,6 +120,7 @@ function App() {
   const isMobile = viewportWidth <= 900;
   const leftPanelOpen = leftWidth > 0;
   const rightPanelOpen = rightWidth > 0;
+  const engineEnabled = workspaceMode === 'analysis';
 
   const stopAnalysis = () => {
     applyBestMoveRef.current = false;
@@ -129,6 +133,12 @@ function App() {
     setIsAutoPlaying(false);
     resetBoard();
   };
+
+  useEffect(() => {
+    if (!engineEnabled && autoAnalyze) {
+      stopAnalysis();
+    }
+  }, [engineEnabled, autoAnalyze]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -152,18 +162,16 @@ function App() {
       (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
       (gameMode === 'PvAI-Red' && sideToMove === 'w');
 
-    if (!isReady || !autoAnalyze || isAiTurn) return undefined;
+    if (!engineEnabled || !isReady || !autoAnalyze || isAiTurn) return undefined;
 
     applyBestMoveRef.current = false;
-    if (isSearching) {
-      stopSearch();
-    }
+    stopSearch();
     const timer = setTimeout(() => {
       startSearch(currentPositionCommand);
       startSearch(`go depth ${searchDepth}`);
     }, 80);
     return () => clearTimeout(timer);
-  }, [isReady, autoAnalyze, gameMode, sideToMove, isSearching, stopSearch, startSearch, currentPositionCommand, searchDepth]);
+  }, [engineEnabled, isReady, autoAnalyze, gameMode, sideToMove, stopSearch, startSearch, currentPositionCommand, searchDepth]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -173,24 +181,33 @@ function App() {
       (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
       (gameMode === 'PvAI-Red' && sideToMove === 'w');
 
-    if (isAiTurn && !isSearching) {
-      if (autoAnalyze) {
-        setAutoAnalyze(false);
-        stopSearch();
-      }
-
-      const timer = setTimeout(() => {
-        applyBestMoveRef.current = true;
-        startSearch(currentPositionCommand);
-        startSearch(`go depth ${searchDepth}`);
-      }, 500);
-
-      return () => clearTimeout(timer);
+    if (!isAiTurn) {
+      applyBestMoveRef.current = false;
+      return undefined;
     }
 
-    applyBestMoveRef.current = false;
-    return undefined;
+    if (autoAnalyze) {
+      setAutoAnalyze(false);
+      stopSearch();
+    }
+
+    if (isSearching) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      applyBestMoveRef.current = true;
+      startSearch(currentPositionCommand);
+      startSearch(`go depth ${searchDepth}`);
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [sideToMove, gameMode, isReady, isSearching, autoAnalyze, startSearch, stopSearch, searchDepth, currentPositionCommand]);
+
+  useEffect(() => {
+    if (!engineEnabled || !isSearching || currentMoveIndex < 0) return;
+    setCurrentNodeEval(evalScore);
+  }, [engineEnabled, isSearching, currentMoveIndex, evalScore, setCurrentNodeEval]);
 
   useEffect(() => {
     if (!isAutoPlaying) return;
@@ -237,6 +254,7 @@ function App() {
   };
 
   const toggleAnalysis = () => {
+    if (!engineEnabled) return;
     if (autoAnalyze) {
       stopAnalysis();
       return;
@@ -322,7 +340,7 @@ function App() {
               <button
                 type="button"
                 onClick={toggleAnalysis}
-                disabled={!isReady || gameMode === 'AIvAI'}
+                disabled={!isReady || !engineEnabled}
               >
                 <span className="btn-label">{autoAnalyze ? 'Stop' : 'Analyze'}</span>
               </button>
@@ -331,6 +349,25 @@ function App() {
                 onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
               >
                 <span className="btn-label">Tree</span>
+              </button>
+            </div>
+
+            <span className="toolbar-divider desktop-only" />
+
+            <div className="top-mode-pills" aria-label="Workspace mode">
+              <button
+                type="button"
+                className={`gc-pill ${workspaceMode === 'play' ? 'gc-pill-active' : ''}`}
+                onClick={() => setWorkspaceMode('play')}
+              >
+                Play
+              </button>
+              <button
+                type="button"
+                className={`gc-pill ${workspaceMode === 'analysis' ? 'gc-pill-active' : ''}`}
+                onClick={() => setWorkspaceMode('analysis')}
+              >
+                Analysis
               </button>
             </div>
 
@@ -375,6 +412,18 @@ function App() {
                 </div>
 
                 <div className="settings-group">
+                  <label>Workspace</label>
+                  <select
+                    className="premium-select"
+                    value={workspaceMode}
+                    onChange={(e) => setWorkspaceMode(e.target.value as WorkspaceMode)}
+                  >
+                    <option value="analysis">Analysis</option>
+                    <option value="play">Play</option>
+                  </select>
+                </div>
+
+                <div className="settings-group">
                   <label>Game Mode</label>
                   <select
                     className="premium-select"
@@ -416,9 +465,9 @@ function App() {
                   <button
                     className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
                     onClick={toggleAnalysis}
-                    disabled={!isReady || gameMode === 'AIvAI'}
+                    disabled={!isReady || !engineEnabled}
                   >
-                    {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
+                    {!engineEnabled ? 'Switch to Analysis Workspace' : (autoAnalyze ? 'Stop Analysis' : 'Analyze Position')}
                   </button>
                 </div>
 
@@ -465,6 +514,7 @@ function App() {
                 history={moveHistory}
                 currentMoveIndex={currentMoveIndex}
                 currentEval={evalScore}
+                isSearching={isSearching}
                 branchCounts={graphBranchCounts}
                 rootBranchCount={rootGraphBranchCount}
                 onNavigate={jumpAndPausePlayback}
@@ -589,7 +639,7 @@ function App() {
               <button
                 className={`gc-btn ${autoAnalyze ? 'gc-btn-pause' : 'gc-btn-resume'}`}
                 onClick={toggleAnalysis}
-                disabled={!isReady || gameMode === 'AIvAI'}
+                disabled={!isReady || !engineEnabled}
               >
                 {autoAnalyze ? 'Stop Analysis' : 'Analyze'}
               </button>

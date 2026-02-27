@@ -260,6 +260,25 @@ export function useXiangqi() {
         return commitMove(uci, evalScore);
     }, [commitMove]);
 
+    const setCurrentNodeEval = useCallback((evalScore: number) => {
+        if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
+        setTreeNodes((prevTree) => {
+            const node = prevTree[currentNodeId];
+            if (!node?.record) return prevTree;
+            if (node.record.evalScore === evalScore) return prevTree;
+            return {
+                ...prevTree,
+                [currentNodeId]: {
+                    ...node,
+                    record: {
+                        ...node.record,
+                        evalScore,
+                    },
+                },
+            };
+        });
+    }, [currentNodeId]);
+
     // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
         const piece = board[rank][file];
@@ -306,6 +325,7 @@ export function useXiangqi() {
         onSquareClick,
         resetBoard,
         applyUciMove,
+        setCurrentNodeEval,
         jumpToMove,
         jumpToNode,
     };

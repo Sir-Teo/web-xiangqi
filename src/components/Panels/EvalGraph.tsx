@@ -5,6 +5,7 @@ interface EvalGraphProps {
     history: MoveRecord[];
     currentMoveIndex: number;
     currentEval: number;
+    isSearching?: boolean;
     branchCounts?: Record<number, number>;
     rootBranchCount?: number;
     onNavigate?: (index: number) => void;
@@ -20,6 +21,7 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
     history,
     currentMoveIndex,
     currentEval,
+    isSearching = false,
     branchCounts = {},
     rootBranchCount = 0,
     onNavigate
@@ -34,15 +36,18 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
             next.push({ moveIndex: index, eval: previous, ply: index + 1 });
         });
 
-        // Always project the live engine score onto the currently viewed ply
-        // so the graph updates while analyzing start position or historical steps.
         const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
-        next[activePointIndex] = {
-            ...next[activePointIndex],
-            eval: currentEval,
-        };
+        const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
+        const currentPlyHasStoredEval = typeof currentMove?.evalScore === 'number';
+        const shouldProjectLiveEval = isSearching || !currentPlyHasStoredEval;
+        if (shouldProjectLiveEval) {
+            next[activePointIndex] = {
+                ...next[activePointIndex],
+                eval: currentEval,
+            };
+        }
         return next;
-    }, [history, currentMoveIndex, currentEval]);
+    }, [history, currentMoveIndex, currentEval, isSearching]);
 
     const maxEvalClamp = 1200;
     const chartHeight = 210;
@@ -131,7 +136,7 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
                         );
                     })}
                     <defs>
-                        <linearGradient id="graph-gradient-xiangqi" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="rgba(16, 185, 129, 0.35)" />
                             <stop offset="100%" stopColor="rgba(16, 185, 129, 0.03)" />
                         </linearGradient>
