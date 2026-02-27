@@ -34,7 +34,7 @@ export function useXiangqi() {
     const [validTargets, setValidTargets] = useState<{ file: number; rank: number; capture: boolean }[]>([]);
     const [inCheck, setInCheck] = useState<boolean>(false);
 
-    const currentFen = boardToFen(board, sideToMove, 1 + Math.floor(moveHistory.length / 2));
+    const currentFen = boardToFen(board, sideToMove, 1 + Math.floor((currentMoveIndex + 1) / 2));
 
     const resetBoard = useCallback(() => {
         setBoard(parseFenBoard(START_FEN));

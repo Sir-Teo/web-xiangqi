@@ -3,98 +3,154 @@ import type { MoveRecord } from '../../hooks/useXiangqi';
 
 interface EvalGraphProps {
     history: MoveRecord[];
+    currentMoveIndex: number;
     currentEval: number;
+    onNavigate?: (index: number) => void;
 }
 
-export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentEval }) => {
-    // We construct a series of data points: [0, eval1, eval2, ...]
-    const dataPoints = useMemo(() => {
-        const points = [0]; // Start game at 0 advantage
-        history.forEach(m => {
-            // Keep the previous eval if the current move doesn't have one
-            const prev = points[points.length - 1];
-            points.push(m.evalScore !== undefined ? m.evalScore : prev);
+type EvalPoint = {
+    moveIndex: number;
+    eval: number;
+    ply: number;
+};
+
+export const EvalGraph: React.FC<EvalGraphProps> = ({ history, currentMoveIndex, currentEval, onNavigate }) => {
+    const points = useMemo<EvalPoint[]>(() => {
+        let previous = 0;
+        const next: EvalPoint[] = [{ moveIndex: -1, eval: 0, ply: 0 }];
+        history.forEach((move, index) => {
+            if (typeof move.evalScore === 'number') previous = move.evalScore;
+            next.push({ moveIndex: index, eval: previous, ply: index + 1 });
         });
 
-        // Push the current live eval as the latest point
-        points.push(currentEval);
+        // Always project the live engine score onto the currently viewed ply
+        // so the graph updates while analyzing start position or historical steps.
+        const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
+        next[activePointIndex] = {
+            ...next[activePointIndex],
+            eval: currentEval,
+        };
+        return next;
+    }, [history, currentMoveIndex, currentEval]);
 
-        return points;
-    }, [history, currentEval]);
+    const maxEvalClamp = 1200;
+    const chartHeight = 190;
+    const chartWidth = Math.max(360, points.length * 34);
+    const padding = { top: 16, right: 18, bottom: 32, left: 38 };
+    const plotWidth = chartWidth - padding.left - padding.right;
+    const plotHeight = chartHeight - padding.top - padding.bottom;
 
-    // Dimensions
-    const width = 300;
-    const height = 150;
-    const maxEvalClamp = 1000; // clamp visual at +10.00 / -10.00
+    const xFor = (pointIndex: number) => {
+        if (points.length <= 1) return padding.left;
+        return padding.left + (pointIndex / (points.length - 1)) * plotWidth;
+    };
+    const yFor = (evalScore: number) => {
+        const clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
+        return padding.top + ((maxEvalClamp - clamped) / (maxEvalClamp * 2)) * plotHeight;
+    };
+    const baselineY = yFor(0);
 
-    // Generate Path Data
-    const generatePath = () => {
-        if (dataPoints.length === 0) return '';
+    const linePath = useMemo(() => {
+        if (points.length === 0) return '';
+        return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index).toFixed(2)} ${yFor(point.eval).toFixed(2)}`).join(' ');
+    }, [points]);
 
-        const stepX = width / Math.max(10, dataPoints.length - 1); // at least stretch to 10 moves
+    const fillPath = useMemo(() => {
+        if (points.length === 0) return '';
+        const lastX = xFor(points.length - 1);
+        return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${xFor(0).toFixed(2)} ${baselineY.toFixed(2)} Z`;
+    }, [points, linePath, baselineY]);
 
-        let path = `M 0,${height / 2}`;
+    const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
+    const currentPoint = points[currentPointIndex];
+    const currentDisplay = formatEval(currentPoint?.eval ?? 0);
 
-        dataPoints.forEach((val, i) => {
-            const x = i * stepX;
-            // Map value to Y coordinate. 0 is in the middle.
-            // +1000 -> 0 (top), -1000 -> height (bottom)
-            let clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, val));
-            const y = (height / 2) - ((clamped / maxEvalClamp) * (height / 2));
-
-            // Simple line-to to start, curved in future iterations if preferred
-            path += ` L ${x},${y}`;
+    const onChartClick = (event: React.MouseEvent<SVGSVGElement>) => {
+        if (!onNavigate || points.length === 0) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const scaleX = chartWidth / rect.width;
+        const x = (event.clientX - rect.left) * scaleX;
+        let nearest = 0;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+        points.forEach((_, pointIndex) => {
+            const distance = Math.abs(xFor(pointIndex) - x);
+            if (distance < nearestDistance) {
+                nearest = pointIndex;
+                nearestDistance = distance;
+            }
         });
-
-        return path;
+        onNavigate(points[nearest].moveIndex);
     };
 
-    const pathData = generatePath();
-    const fillPath = `${pathData} L ${Math.max(10, dataPoints.length - 1) * (width / Math.max(10, dataPoints.length - 1))},${height / 2} L 0,${height / 2} Z`;
-
-    // A split gradient ID
-    const gradientId = 'evalGradient';
-
     return (
-        <div style={{ width: '100%', padding: '10px 0', position: 'relative' }}>
-            <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', overflow: 'visible', filter: 'drop-shadow(0px 5px 10px rgba(0,0,0,0.5))' }}>
-                <defs>
-                    <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(204, 34, 34, 0.7)" /> {/* Red Advantage */}
-                        <stop offset="50%" stopColor="rgba(204, 34, 34, 0.1)" />
-                        <stop offset="50%" stopColor="rgba(34, 34, 34, 0.1)" />
-                        <stop offset="100%" stopColor="rgba(34, 34, 34, 0.7)" /> {/* Black Advantage */}
-                    </linearGradient>
-                </defs>
-
-                {/* Center line (0.00) */}
-                <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255, 255, 255, 0.2)" strokeWidth="1" strokeDasharray="4 4" />
-
-                {/* Highlight fill area */}
-                <path d={fillPath} fill={`url(#${gradientId})`} />
-
-                {/* Main line */}
-                <path d={pathData} fill="none" stroke="rgba(255, 255, 255, 0.8)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-
-                {/* Current Eval Dot */}
-                {dataPoints.length > 0 && (
-                    <circle
-                        cx={(dataPoints.length - 1) * (width / Math.max(10, dataPoints.length - 1))}
-                        cy={(height / 2) - ((Math.max(-maxEvalClamp, Math.min(maxEvalClamp, dataPoints[dataPoints.length - 1])) / maxEvalClamp) * (height / 2))}
-                        r="5"
-                        fill="#fff"
-                        strokeWidth="2"
-                        stroke={dataPoints[dataPoints.length - 1] > 0 ? '#cc2222' : '#222'}
+        <div className="graph-wrap">
+            <div className="graph-scroll">
+                <svg
+                    className="winrate-graph"
+                    width={chartWidth}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    onClick={onChartClick}
+                    style={{ cursor: onNavigate ? 'pointer' : 'default' }}
+                    aria-label="Evaluation graph"
+                >
+                    {[1000, 500, 0, -500, -1000].map((score) => {
+                        const y = yFor(score);
+                        return (
+                            <g key={`grid-${score}`}>
+                                <line
+                                    className="graph-grid-line"
+                                    x1={padding.left}
+                                    x2={chartWidth - padding.right}
+                                    y1={y}
+                                    y2={y}
+                                />
+                                <text className="graph-grid-text" x={padding.left - 8} y={y + 4} textAnchor="end">
+                                    {score === 0 ? '0.0' : `${score / 100}`}
+                                </text>
+                            </g>
+                        );
+                    })}
+                    <defs>
+                        <linearGradient id="graph-gradient-xiangqi" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="rgba(16, 185, 129, 0.35)" />
+                            <stop offset="100%" stopColor="rgba(16, 185, 129, 0.03)" />
+                        </linearGradient>
+                    </defs>
+                    <path className="graph-area" d={fillPath} fill="url(#graph-gradient-xiangqi)" />
+                    <path className="graph-line" d={linePath} />
+                    <line
+                        x1={xFor(currentPointIndex)}
+                        x2={xFor(currentPointIndex)}
+                        y1={padding.top}
+                        y2={chartHeight - padding.bottom}
+                        stroke="rgba(255, 255, 255, 0.65)"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
                     />
-                )}
-            </svg>
-
-            <div style={{ position: 'absolute', top: 0, left: 10, fontSize: '0.8rem', color: '#cc2222', fontWeight: 'bold' }}>Red</div>
-            <div style={{ position: 'absolute', bottom: 0, left: 10, fontSize: '0.8rem', color: '#888', fontWeight: 'bold' }}>Black</div>
-
-            <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '1.2rem', fontWeight: 800, fontFamily: 'monospace' }}>
-                {currentEval > 0 ? '+' : ''}{(currentEval / 100).toFixed(2)}
+                    {points.map((point, pointIndex) => (
+                        <circle
+                            key={`point-${point.ply}`}
+                            className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''}`}
+                            cx={xFor(pointIndex)}
+                            cy={yFor(point.eval)}
+                            r={pointIndex === currentPointIndex ? 4 : 2.8}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onNavigate?.(point.moveIndex);
+                            }}
+                        />
+                    ))}
+                </svg>
+            </div>
+            <div className="graph-legend">
+                <span>{currentPoint?.moveIndex === -1 ? 'Start Position' : `Ply ${currentPoint?.ply ?? 0}`}</span>
+                <strong>{currentDisplay}</strong>
             </div>
         </div>
     );
 };
+
+function formatEval(score: number): string {
+    const sign = score > 0 ? '+' : '';
+    return `${sign}${(score / 100).toFixed(2)}`;
+}

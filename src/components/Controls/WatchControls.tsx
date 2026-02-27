@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward } from '../icons';
 
 type Props = {
@@ -8,6 +8,9 @@ type Props = {
     onPrev: () => void;
     onNext: () => void;
     onLast: () => void;
+    currentMoveIndex: number;
+    totalMoves: number;
+    onScrub: (index: number) => void;
 };
 
 export function WatchControls({
@@ -17,6 +20,9 @@ export function WatchControls({
     onPrev,
     onNext,
     onLast,
+    currentMoveIndex,
+    totalMoves,
+    onScrub,
 }: Props) {
     // Keyboard shortcuts (← →)
     useEffect(() => {
@@ -47,6 +53,22 @@ export function WatchControls({
                 <button type="button" className="wc-btn" onClick={onLast} disabled={!canGoForward} title="Last position" aria-label="Go to last position">
                     <IconSkipForward />
                 </button>
+            </div>
+            <div className="wc-timeline">
+                <div className="wc-meta">
+                    <span>Move</span>
+                    <strong>{Math.max(0, currentMoveIndex + 1)} / {totalMoves}</strong>
+                </div>
+                <input
+                    type="range"
+                    className="wc-scrubber"
+                    min={0}
+                    max={Math.max(totalMoves, 1)}
+                    value={currentMoveIndex + 1}
+                    onChange={(e) => onScrub(Number(e.target.value) - 1)}
+                    disabled={totalMoves === 0}
+                    aria-label="Jump to move"
+                />
             </div>
         </div>
     );
