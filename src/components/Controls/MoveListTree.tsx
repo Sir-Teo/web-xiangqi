@@ -10,111 +10,107 @@ type Props = {
     onNavigateNode: (nodeId: string) => void;
 };
 
-type FlatNode = {
-    id: string;
-    depth: number;
-    label: string;
-    moveNo: string;
-    uci: string;
-    qualityClass: string;
-};
-
 export function MoveListTree({
     treeNodes,
-    rootNodeId,
+    rootNodeId: _rootNodeId,
     currentNodeId,
-    currentMoveIndex,
+    currentMoveIndex: _currentMoveIndex,
     activeLineNodeIds,
     onNavigateNode,
 }: Props) {
     useEffect(() => {
-        const el = document.querySelector(`[data-node-id="node-${currentNodeId}"]`) as HTMLElement | null;
+        const el = document.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
         el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }, [currentNodeId]);
 
-    const activeLine = new Set(activeLineNodeIds);
-    const flatRows = flattenTree(treeNodes, rootNodeId);
-
-    const totalNodeCount = Math.max(0, Object.keys(treeNodes).length - 1);
-
-    return (
-        <div className="mtree-wrap">
-            <div className="mtree-head">
-                <button
-                    type="button"
-                    className={`mtree-chip mtree-chip-root ${currentNodeId === rootNodeId ? 'mtree-chip-active' : ''}`}
-                    onClick={() => onNavigateNode(rootNodeId)}
-                >
-                    Start Position
-                </button>
-                <span className="mtree-progress">
-                    Ply {Math.max(0, currentMoveIndex + 1)} · Nodes {totalNodeCount}
-                </span>
+    if (activeLineNodeIds.length === 0) {
+        return (
+            <div className="empty-state">
+                <p>Play some moves - branches will appear here.</p>
             </div>
-            {flatRows.length === 0 ? (
-                <div className="empty-state" style={{ padding: '12px 4px', color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', textAlign: 'center' }}>
-                    <p>Play some moves - branches will appear here.</p>
-                </div>
-            ) : (
-                <div className="mtree-scroll">
-                    {flatRows.map((row) => (
-                        <div key={row.id} className="mtree-tree-row">
-                            <span className="mtree-node-meta">{row.moveNo}</span>
-                            <button
-                                data-node-id={`node-${row.id}`}
-                                type="button"
-                                className={`mtree-tree-chip ${row.qualityClass} ${activeLine.has(row.id) ? 'mtree-tree-chip-line' : ''} ${currentNodeId === row.id ? 'mtree-chip-active' : ''}`}
-                                onClick={() => onNavigateNode(row.id)}
-                                style={{ paddingLeft: `${8 + row.depth * 14}px` }}
-                                title={row.uci}
-                            >
-                                {row.depth > 0 ? <span className="mtree-depth-marker">↳</span> : null}
-                                <span>{row.label}</span>
-                                <span className="move-uci">{row.uci}</span>
-                                <span className="mtree-quality-dot" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
+        );
+    }
 
-function flattenTree(treeNodes: Record<string, MoveTreeNode>, rootNodeId: string): FlatNode[] {
-    const rows: FlatNode[] = [];
+    const rows: JSX.Element[] = [];
 
-    const walk = (parentId: string, depth: number) => {
+    const renderMoveChip = (nodeId: string, compact = false) => {
+        const node = treeNodes[nodeId];
+        const record = node?.record;
+        if (!node || !record) return null;
+        const qualityClass = getMoveQualityClass(treeNodes, nodeId);
+        return (
+            <button
+                key={nodeId}
+                data-node-id={nodeId}
+                type="button"
+                className={[
+                    'mtree-chip',
+                    qualityClass,
+                    compact ? 'mtree-chip-compact' : '',
+                    currentNodeId === nodeId ? 'mtree-chip-active' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => onNavigateNode(nodeId)}
+                title={record.uci}
+            >
+                {formatMoveLabel(record)}
+                <span className="move-uci">{record.uci}</span>
+                {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
+            </button>
+        );
+    };
+
+    const pushVariations = (parentId: string, lineIndex: number) => {
         const parent = treeNodes[parentId];
-        if (!parent) return;
-        parent.childrenIds.forEach((childId) => {
-            const child = treeNodes[childId];
-            const record = child?.record;
-            if (!child || !record) return;
-
-            const moveNo = record.ply % 2 === 1
-                ? `${Math.ceil(record.ply / 2)}.`
-                : `${Math.ceil(record.ply / 2)}...`;
-
-            rows.push({
-                id: childId,
-                depth,
-                label: formatMoveLabel(record),
-                moveNo,
-                uci: record.uci,
-                qualityClass: getMoveQualityClass(treeNodes, childId),
-            });
-
-            walk(childId, depth + 1);
+        if (!parent || parent.childrenIds.length <= 1) return;
+        const mainChild = activeLineNodeIds[lineIndex + 1] ?? null;
+        const variationRoots = parent.childrenIds.filter((childId) => childId !== mainChild);
+        variationRoots.forEach((variationRootId) => {
+            const variationLine = buildVariationLine(variationRootId, treeNodes);
+            rows.push(
+                <div key={`var-${parentId}-${variationRootId}`} className="mtree-variation">
+                    <span className="mtree-var-marker">↳</span>
+                    {variationLine.map((nodeId) => renderMoveChip(nodeId, true))}
+                </div>
+            );
         });
     };
 
-    walk(rootNodeId, 0);
-    return rows;
+    let index = 0;
+    while (index < activeLineNodeIds.length) {
+        const whiteNodeId = activeLineNodeIds[index];
+        const blackNodeId = activeLineNodeIds[index + 1] ?? null;
+        const moveNo = Math.ceil((index + 1) / 2);
+
+        rows.push(
+            <div key={`row-${whiteNodeId}`} className="mtree-row">
+                <span className="mtree-num">{moveNo}.</span>
+                {whiteNodeId ? renderMoveChip(whiteNodeId) : <span className="mtree-spacer" />}
+                {blackNodeId ? renderMoveChip(blackNodeId) : <span className="mtree-spacer" />}
+            </div>
+        );
+
+        pushVariations(whiteNodeId, index);
+        if (blackNodeId) pushVariations(blackNodeId, index + 1);
+        index += 2;
+    }
+
+    return <div className="mtree-scroll">{rows}</div>;
 }
 
 function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
     return `${record.piece.toUpperCase()}${record.captured ? 'x' : '-'}${record.uci.substring(2, 4)}`;
+}
+
+function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeNode>): string[] {
+    const line: string[] = [];
+    let cursor: string | undefined = startId;
+    let guard = 6;
+    while (cursor && guard-- > 0) {
+        line.push(cursor);
+        const nextNodeId: string | undefined = treeNodes[cursor]?.childrenIds[0];
+        cursor = nextNodeId;
+    }
+    return line;
 }
 
 function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {

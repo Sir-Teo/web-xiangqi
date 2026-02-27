@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
 import { EvalGraph } from './components/Panels/EvalGraph';
 import { WatchControls } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
+import { IconSettings } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
 
@@ -25,9 +26,13 @@ function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typ
 
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [leftWidth, setLeftWidth] = useState(320);
+  const [rightWidth, setRightWidth] = useState(320);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === 'undefined' ? 1280 : window.innerWidth
+  );
 
   const [autoAnalyze, setAutoAnalyze] = useState(false);
   const [searchDepth, setSearchDepth] = useState(8);
@@ -106,7 +111,11 @@ function App() {
     });
     return counts;
   }, [activeLineNodeIds, treeNodes]);
+
   const rootGraphBranchCount = treeNodes[rootNodeId]?.childrenIds.length ?? 0;
+  const isMobile = viewportWidth <= 900;
+  const leftPanelOpen = leftWidth > 0;
+  const rightPanelOpen = rightWidth > 0;
 
   const stopAnalysis = () => {
     applyBestMoveRef.current = false;
@@ -122,15 +131,19 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      const openSettings = document.querySelector('.settings-menu[open]') as HTMLDetailsElement | null;
-      openSettings?.removeAttribute('open');
+      if (event.key === 'Escape') {
+        setSettingsOpen(false);
+      }
     };
+    const onResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', onResize);
+    };
   }, []);
 
-  // Auto-analyze while exploring a position tree.
   useEffect(() => {
     const isAiTurn =
       gameMode === 'AIvAI' ||
@@ -150,7 +163,6 @@ function App() {
     return () => clearTimeout(timer);
   }, [isReady, autoAnalyze, gameMode, sideToMove, isSearching, stopSearch, startSearch, currentPositionCommand, searchDepth]);
 
-  // AI turn orchestrator.
   useEffect(() => {
     if (!isReady) return;
 
@@ -178,7 +190,6 @@ function App() {
     return undefined;
   }, [sideToMove, gameMode, isReady, isSearching, autoAnalyze, startSearch, stopSearch, searchDepth, currentPositionCommand]);
 
-  // Playback mode for stepping through previous moves quickly.
   useEffect(() => {
     if (!isAutoPlaying) return;
     if (moveHistory.length === 0 || currentMoveIndex >= moveHistory.length - 1) {
@@ -232,206 +243,246 @@ function App() {
     setAutoAnalyze(true);
   };
 
-  const closeSettingsMenu = (target: EventTarget | null) => {
-    const element = target as HTMLElement | null;
-    const details = element?.closest('.settings-menu') as HTMLDetailsElement | null;
-    details?.removeAttribute('open');
+  const applyMode = (mode: GameMode) => {
+    setGameMode(mode);
+    resetGame();
   };
 
-  const settingsPanel = (
-      <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <button
-            className="settings-close-btn"
-            type="button"
-            onClick={(event) => closeSettingsMenu(event.currentTarget)}
-          >
-            Done
-          </button>
-        </div>
+  const MIN_WIDTH = 60;
+  const DEFAULT_LEFT = 320;
+  const DEFAULT_RIGHT = 320;
 
-        <div className="settings-group">
-          <label>Game Mode</label>
-          <select
-            className="premium-select"
-            value={gameMode}
-            onChange={(e) => {
-              setGameMode(e.target.value as GameMode);
-              resetGame();
-              closeSettingsMenu(e.currentTarget);
-            }}
-          >
-            <option value="PvP">Local Multiplayer</option>
-            <option value="PvAI-Black">Play Red vs AI</option>
-            <option value="PvAI-Red">Play Black vs AI</option>
-            <option value="AIvAI">Watch AI vs AI</option>
-          </select>
-        </div>
+  const startLeftResize = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    document.body.classList.add('resizing');
+    const startX = event.clientX;
+    const startW = leftWidth;
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = startW + moveEvent.clientX - startX;
+      setLeftWidth(next < MIN_WIDTH ? 0 : Math.min(next, 600));
+    };
+    const onUp = () => {
+      document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
-        <div className="settings-group">
-          <label>Layout</label>
-          <div className="settings-inline-toggles">
-            <button
-              type="button"
-              className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
-              onClick={() => setLeftPanelOpen((open) => !open)}
-            >
-              Left Panel
-            </button>
-            <button
-              type="button"
-              className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
-              onClick={() => setRightPanelOpen((open) => !open)}
-            >
-              Right Panel
-            </button>
-          </div>
-        </div>
-
-        <div className="settings-group">
-          <label>Analysis Mode</label>
-          <button
-            className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
-            onClick={toggleAnalysis}
-            disabled={!isReady || gameMode === 'AIvAI'}
-          >
-            {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
-          </button>
-        </div>
-
-        <div className="settings-group">
-          <label>Search Depth (Plys)</label>
-          <input
-            type="range"
-            min="1"
-            max="24"
-            value={searchDepth}
-            onChange={(e) => setSearchDepth(Number(e.target.value))}
-            className="premium-slider"
-          />
-          <div className="setting-value">Depth: {searchDepth}</div>
-        </div>
-      </div>
-  );
+  const startRightResize = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    document.body.classList.add('resizing');
+    const startX = event.clientX;
+    const startW = rightWidth;
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = startW - (moveEvent.clientX - startX);
+      setRightWidth(next < MIN_WIDTH ? 0 : Math.min(next, 600));
+    };
+    const onUp = () => {
+      document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
   return (
-    <div className="app-container">
-      <header className="topbar glass-panel">
-        <div className="topbar-left">
-          <button
-            className="icon-btn"
-            onClick={() => setLeftPanelOpen((open) => !open)}
-            aria-label="Toggle left panel"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-            </svg>
-          </button>
-          <div className="brand">
-            <h1>Web Xiangqi</h1>
-            <span className="badge">Analysis</span>
-          </div>
-        </div>
-
-        <div className="topbar-center">
-          <div className="top-mode-pills" role="tablist" aria-label="Game mode">
-            {GAME_MODES.map(({ mode, label }) => (
-              <button
-                key={mode}
-                type="button"
-                className={`mode-pill ${gameMode === mode ? 'mode-pill-active' : ''}`}
-                onClick={() => {
-                  setGameMode(mode);
-                  resetGame();
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="engine-status">
-            <span className={`status-dot ${isReady ? 'healthy' : ''}`}></span>
-            {isReady ? 'Pikafish ready' : 'Loading engine'}
-          </div>
-        </div>
-
-        <div className="topbar-right">
-          <button
-            type="button"
-            className="icon-btn top-action-btn"
-            onClick={resetGame}
-            aria-label="New game"
-          >
-            New
-          </button>
-          <button
-            type="button"
-            className={`icon-btn top-action-btn ${autoAnalyze ? 'top-action-active' : ''}`}
-            onClick={toggleAnalysis}
-            disabled={!isReady || gameMode === 'AIvAI'}
-            aria-label={autoAnalyze ? 'Stop analysis' : 'Start analysis'}
-          >
-            {autoAnalyze ? 'Stop' : 'Analyze'}
-          </button>
-
-          <details className="settings-menu">
-            <summary aria-label="Settings">
-              <span className="icon-btn">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-              </span>
-            </summary>
-            <div className="settings-backdrop" onClick={(event) => closeSettingsMenu(event.currentTarget)} />
-            {settingsPanel}
-          </details>
-
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => setRightPanelOpen((open) => !open)}
-            aria-label="Toggle right panel"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="15" y1="3" x2="15" y2="21"></line>
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      <main className="main-content">
-        <aside className={`panel left-panel glass-panel ${leftPanelOpen ? 'open' : 'closed'}`}>
-          <div className="panel-header">
-            <h2>Analysis Graph</h2>
-            <span className="panel-kicker">Click any node to jump</span>
-          </div>
-          <div className="panel-content">
-            <EvalGraph
-              history={moveHistory}
-              currentMoveIndex={currentMoveIndex}
-              currentEval={evalScore}
-              branchCounts={graphBranchCounts}
-              rootBranchCount={rootGraphBranchCount}
-              onNavigate={jumpAndPausePlayback}
-            />
-            <div className="graph-jump-controls">
-              <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(-1)} disabled={!canGoBack}>Start</button>
-              <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
-              <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
-              <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
+    <main className="app-shell">
+      <section className="panel top">
+        <div className="panel-inner">
+          <div className="panel-content top-toolbar">
+            <div className="app-brand">
+              <span className="app-brand-text">Web Xiangqi</span>
+              <span className="brand-badge">Analysis</span>
             </div>
-            <p className="panel-copy small">
-              Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}
-            </p>
-          </div>
-        </aside>
 
-        <section className="board-area">
-          <div className="board-stage">
+            <div className="top-mode-pills" role="tablist" aria-label="Game mode">
+              {GAME_MODES.map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`gc-pill ${gameMode === mode ? 'gc-pill-active' : ''}`}
+                  onClick={() => applyMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="top-engine-state">
+              <span className={`status-dot ${isReady ? 'healthy' : ''}`}></span>
+              {isReady ? 'Pikafish ready' : 'Loading engine'}
+            </div>
+
+            <div className="top-actions">
+              <button
+                type="button"
+                className="icon-btn top-action-btn"
+                onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
+              >
+                Graph
+              </button>
+              <button
+                type="button"
+                className="icon-btn top-action-btn"
+                onClick={resetGame}
+              >
+                New
+              </button>
+              <button
+                type="button"
+                className={`icon-btn top-action-btn ${autoAnalyze ? 'top-action-active' : ''}`}
+                onClick={toggleAnalysis}
+                disabled={!isReady || gameMode === 'AIvAI'}
+              >
+                {autoAnalyze ? 'Stop' : 'Analyze'}
+              </button>
+              <button
+                type="button"
+                className="icon-btn top-action-btn"
+                onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
+              >
+                Tree
+              </button>
+
+              <div className="settings-root">
+                <button
+                  type="button"
+                  className="icon-btn top-action-btn settings-trigger"
+                  onClick={() => setSettingsOpen((open) => !open)}
+                  aria-haspopup="dialog"
+                  aria-expanded={settingsOpen}
+                >
+                  <IconSettings />
+                  Settings
+                </button>
+                {settingsOpen ? (
+                  <>
+                    <div className="settings-backdrop" onClick={() => setSettingsOpen(false)} />
+                    <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
+                      <div className="settings-header">
+                        <h2>Settings</h2>
+                        <button
+                          className="settings-close-btn"
+                          type="button"
+                          onClick={() => setSettingsOpen(false)}
+                        >
+                          Done
+                        </button>
+                      </div>
+
+                      <div className="settings-group">
+                        <label>Game Mode</label>
+                        <select
+                          className="premium-select"
+                          value={gameMode}
+                          onChange={(e) => {
+                            applyMode(e.target.value as GameMode);
+                            setSettingsOpen(false);
+                          }}
+                        >
+                          <option value="PvP">Local Multiplayer</option>
+                          <option value="PvAI-Black">Play Red vs AI</option>
+                          <option value="PvAI-Red">Play Black vs AI</option>
+                          <option value="AIvAI">Watch AI vs AI</option>
+                        </select>
+                      </div>
+
+                      <div className="settings-group">
+                        <label>Layout</label>
+                        <div className="settings-inline-toggles">
+                          <button
+                            type="button"
+                            className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
+                            onClick={() => setLeftWidth((width) => (width > 0 ? 0 : DEFAULT_LEFT))}
+                          >
+                            Left Panel
+                          </button>
+                          <button
+                            type="button"
+                            className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
+                            onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
+                          >
+                            Right Panel
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="settings-group">
+                        <label>Analysis Mode</label>
+                        <button
+                          className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
+                          onClick={toggleAnalysis}
+                          disabled={!isReady || gameMode === 'AIvAI'}
+                        >
+                          {autoAnalyze ? 'Stop Analysis' : 'Analyze Position'}
+                        </button>
+                      </div>
+
+                      <div className="settings-group">
+                        <label>Search Depth (Plys)</label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="24"
+                          value={searchDepth}
+                          onChange={(e) => setSearchDepth(Number(e.target.value))}
+                          className="premium-slider"
+                        />
+                        <div className="setting-value">Depth: {searchDepth}</div>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="main-container">
+        <section className="panel left" style={{ width: leftWidth }}>
+          <div
+            className="resize-handle resize-handle-right"
+            onMouseDown={startLeftResize}
+            onClick={() => {
+              if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT);
+            }}
+            title="Drag to resize · click to expand"
+          >
+            <span className="resize-pill" />
+          </div>
+          <div className="panel-inner" style={{ opacity: (!isMobile && leftWidth === 0) ? 0 : 1 }}>
+            <header className="panel-header">
+              <h2>Analysis Graph</h2>
+              <span className="panel-kicker">Click chart nodes to jump</span>
+            </header>
+            <div className="panel-content">
+              <EvalGraph
+                history={moveHistory}
+                currentMoveIndex={currentMoveIndex}
+                currentEval={evalScore}
+                branchCounts={graphBranchCounts}
+                rootBranchCount={rootGraphBranchCount}
+                onNavigate={jumpAndPausePlayback}
+              />
+              <div className="graph-jump-controls">
+                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(-1)} disabled={!canGoBack}>Start</button>
+                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
+                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
+                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
+              </div>
+              <p className="panel-copy small">
+                Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="board-stage" aria-label="Xiangqi board">
+          <div className="board-wrap">
             <Board
               board={board}
               selected={selected}
@@ -441,131 +492,146 @@ function App() {
           </div>
         </section>
 
-        <aside className={`panel right-panel glass-panel ${rightPanelOpen ? 'open' : 'closed'}`}>
-          <div className="panel-header panel-header-tabs">
-            <h2>Review</h2>
-            <div className="analysis-tabs">
-              <button
-                type="button"
-                className={`analysis-tab-btn ${analysisTab === 'tree' ? 'analysis-tab-btn-active' : ''}`}
-                onClick={() => setAnalysisTab('tree')}
-              >
-                Game Tree
-              </button>
-              <button
-                type="button"
-                className={`analysis-tab-btn ${analysisTab === 'engine' ? 'analysis-tab-btn-active' : ''}`}
-                onClick={() => setAnalysisTab('engine')}
-              >
-                Engine
-              </button>
+        <aside className="panel right" style={{ width: rightWidth }}>
+          <div
+            className="resize-handle resize-handle-left"
+            onMouseDown={startRightResize}
+            onClick={() => {
+              if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT);
+            }}
+            title="Drag to resize · click to expand"
+          >
+            <span className="resize-pill" />
+          </div>
+          <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
+            <header className="panel-header panel-header-tabs">
+              <h2>Review</h2>
+              <div className="analysis-tabs">
+                <button
+                  type="button"
+                  className={`analysis-tab-btn ${analysisTab === 'tree' ? 'analysis-tab-btn-active' : ''}`}
+                  onClick={() => setAnalysisTab('tree')}
+                >
+                  Game Tree
+                </button>
+                <button
+                  type="button"
+                  className={`analysis-tab-btn ${analysisTab === 'engine' ? 'analysis-tab-btn-active' : ''}`}
+                  onClick={() => setAnalysisTab('engine')}
+                >
+                  Engine
+                </button>
+              </div>
+            </header>
+            <div className="panel-content">
+              {analysisTab === 'tree' ? (
+                <>
+                  <div className="tree-breadcrumb">
+                    {breadcrumbNodeIds.map((nodeId, index) => (
+                      <button
+                        key={nodeId}
+                        type="button"
+                        className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
+                        onClick={() => jumpNodeAndPausePlayback(nodeId)}
+                      >
+                        {nodeLabel(nodeId, rootNodeId, treeNodes)}
+                        {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                  <MoveListTree
+                    treeNodes={treeNodes}
+                    rootNodeId={rootNodeId}
+                    currentNodeId={currentNodeId}
+                    currentMoveIndex={currentMoveIndex}
+                    activeLineNodeIds={activeLineNodeIds}
+                    onNavigateNode={jumpNodeAndPausePlayback}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="pv-lines-container">
+                    {pvLines.length === 0 ? (
+                      <div className="text-muted small">No PV available yet.</div>
+                    ) : pvLines.map((pv, i) => (
+                      <div key={i} className="pv-line premium-card">
+                        <div className={`pv-score ${pv.score > 0 ? 'positive' : 'negative'}`}>{pv.scoreStr}</div>
+                        <div className="pv-moves">
+                          <span className="turnNum">Depth {pv.depth}</span>
+                          <span className="move">{pv.moves.slice(0, 7).join(' ')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="engine-output-terminal mt-4">
+                    {outputLines.slice(-20).map((line, i) => (
+                      <div key={i}>{line}</div>
+                    ))}
+                    {outputLines.length === 0 && <div>Waiting for engine...</div>}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-          <div className="panel-content">
-            {analysisTab === 'tree' ? (
-              <>
-                <div className="tree-breadcrumb">
-                  {breadcrumbNodeIds.map((nodeId, index) => (
-                    <button
-                      key={nodeId}
-                      type="button"
-                      className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
-                      onClick={() => jumpNodeAndPausePlayback(nodeId)}
-                    >
-                      {nodeLabel(nodeId, rootNodeId, treeNodes)}
-                      {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
-                    </button>
-                  ))}
-                </div>
-                <MoveListTree
-                  treeNodes={treeNodes}
-                  rootNodeId={rootNodeId}
-                  currentNodeId={currentNodeId}
-                  currentMoveIndex={currentMoveIndex}
-                  activeLineNodeIds={activeLineNodeIds}
-                  onNavigateNode={jumpNodeAndPausePlayback}
-                />
-              </>
-            ) : (
-              <>
-                <div className="pv-lines-container">
-                  {pvLines.length === 0 ? (
-                    <div className="text-muted small">No PV available yet.</div>
-                  ) : pvLines.map((pv, i) => (
-                    <div key={i} className="pv-line premium-card">
-                      <div className={`pv-score ${pv.score > 0 ? 'positive' : 'negative'}`}>{pv.scoreStr}</div>
-                      <div className="pv-moves">
-                        <span className="turnNum">Depth {pv.depth}</span>
-                        <span className="move">{pv.moves.slice(0, 7).join(' ')}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="engine-output-terminal mt-4">
-                  {outputLines.slice(-20).map((line, i) => (
-                    <div key={i}>{line}</div>
-                  ))}
-                  {outputLines.length === 0 && <div>Waiting for engine...</div>}
-                </div>
-              </>
-            )}
-          </div>
         </aside>
-      </main>
+      </div>
 
-      <footer className="bottombar glass-panel">
-        <div className="bottom-controls-row">
-          <div className="game-controls">
-            <button className="gc-btn" onClick={resetGame}>New Game</button>
-            <button
-              className={`gc-btn ${autoAnalyze ? 'gc-btn-pause' : 'gc-btn-resume'}`}
-              onClick={toggleAnalysis}
-              disabled={!isReady || gameMode === 'AIvAI'}
-            >
-              {autoAnalyze ? 'Stop Analysis' : 'Analyze'}
-            </button>
-            <span className="game-mode-badge">
-              {GAME_MODES.find((item) => item.mode === gameMode)?.label ?? gameMode}
-            </span>
+      <section className="panel bottom">
+        <div className="panel-inner">
+          <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} />
+          <div className="panel-content bottom-main">
+            <div className="game-controls">
+              <button className="gc-btn" onClick={resetGame}>New Game</button>
+              <button
+                className={`gc-btn ${autoAnalyze ? 'gc-btn-pause' : 'gc-btn-resume'}`}
+                onClick={toggleAnalysis}
+                disabled={!isReady || gameMode === 'AIvAI'}
+              >
+                {autoAnalyze ? 'Stop Analysis' : 'Analyze'}
+              </button>
+              <span className="game-mode-badge">
+                {GAME_MODES.find((item) => item.mode === gameMode)?.label ?? gameMode}
+              </span>
+            </div>
+
+            <WatchControls
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              onFirst={() => jumpAndPausePlayback(-1)}
+              onPrev={() => jumpAndPausePlayback(currentMoveIndex - 1)}
+              onNext={() => jumpAndPausePlayback(currentMoveIndex + 1)}
+              onLast={() => jumpAndPausePlayback(moveHistory.length - 1)}
+              canPrevVariation={canPrevVariation}
+              canNextVariation={canNextVariation}
+              onPrevVariation={() => goToSiblingVariation(-1)}
+              onNextVariation={() => goToSiblingVariation(1)}
+              variationLabel={variationLabel}
+              isAutoPlaying={isAutoPlaying}
+              onToggleAutoPlay={() => {
+                if (moveHistory.length === 0) return;
+                if (currentMoveIndex >= moveHistory.length - 1) {
+                  jumpAndPausePlayback(-1);
+                }
+                setIsAutoPlaying((playing) => !playing);
+              }}
+              playbackSpeedMs={playbackSpeedMs}
+              onPlaybackSpeedChange={setPlaybackSpeedMs}
+              currentMoveIndex={currentMoveIndex}
+              totalMoves={moveHistory.length}
+              onScrub={jumpAndPausePlayback}
+            />
           </div>
 
-          <WatchControls
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onFirst={() => jumpAndPausePlayback(-1)}
-            onPrev={() => jumpAndPausePlayback(currentMoveIndex - 1)}
-            onNext={() => jumpAndPausePlayback(currentMoveIndex + 1)}
-            onLast={() => jumpAndPausePlayback(moveHistory.length - 1)}
-            canPrevVariation={canPrevVariation}
-            canNextVariation={canNextVariation}
-            onPrevVariation={() => goToSiblingVariation(-1)}
-            onNextVariation={() => goToSiblingVariation(1)}
-            variationLabel={variationLabel}
-            isAutoPlaying={isAutoPlaying}
-            onToggleAutoPlay={() => {
-              if (moveHistory.length === 0) return;
-              if (currentMoveIndex >= moveHistory.length - 1) {
-                jumpAndPausePlayback(-1);
-              }
-              setIsAutoPlaying((playing) => !playing);
-            }}
-            playbackSpeedMs={playbackSpeedMs}
-            onPlaybackSpeedChange={setPlaybackSpeedMs}
-            currentMoveIndex={currentMoveIndex}
-            totalMoves={moveHistory.length}
-            onScrub={jumpAndPausePlayback}
-          />
-        </div>
-
-        <div className="bottom-status-row">
-          <div className="bottombar-info">
-            {isSearching ? `Analyzing depth ${searchDepth}` : `Idle at depth ${searchDepth}`}
-            {inCheck ? <span className="check-badge">CHECK</span> : null}
+          <div className="bottom-status-row">
+            <div className="bottom-engine-info">
+              {isSearching ? `Analyzing depth ${searchDepth}` : `Idle at depth ${searchDepth}`}
+              {inCheck ? <span className="check-badge">CHECK</span> : null}
+            </div>
+            <div className="bottombar-fen">FEN: {currentFen}</div>
           </div>
-          <div className="bottombar-fen">FEN: {currentFen}</div>
         </div>
-      </footer>
-    </div>
+      </section>
+    </main>
   );
 }
 

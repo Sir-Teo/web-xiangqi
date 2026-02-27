@@ -53,19 +53,21 @@ export function WatchControls({
         const onKey = (e: KeyboardEvent) => {
             const tag = (e.target as HTMLElement).tagName;
             if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+            if (e.altKey && e.key === 'ArrowLeft' && onPrevVariation) {
+                e.preventDefault();
+                onPrevVariation();
+                return;
+            }
+            if (e.altKey && e.key === 'ArrowRight' && onNextVariation) {
+                e.preventDefault();
+                onNextVariation();
+                return;
+            }
             if (e.key === 'ArrowLeft') { e.preventDefault(); onPrev(); }
             if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
             if (e.key === 'ArrowUp') { e.preventDefault(); onFirst(); }
             if (e.key === 'ArrowDown') { e.preventDefault(); onLast(); }
             if (e.key === ' ') { e.preventDefault(); onToggleAutoPlay(); }
-            if (e.altKey && e.key === 'ArrowLeft' && onPrevVariation) {
-                e.preventDefault();
-                onPrevVariation();
-            }
-            if (e.altKey && e.key === 'ArrowRight' && onNextVariation) {
-                e.preventDefault();
-                onNextVariation();
-            }
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
