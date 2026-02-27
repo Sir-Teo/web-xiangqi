@@ -93,7 +93,10 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
     }, []);
 
-    const handleUciOut = (msg: string) => {
+    const handleUciOut = (rawMsg: string) => {
+        const msg = rawMsg.trim();
+        if (!msg) return;
+
         setOutputLines((prev) => [...prev.slice(-100), msg]); // Keep last 100 lines
 
         if (msg === 'uciok') {
@@ -102,7 +105,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             setIsReady(true);
         } else if (msg.startsWith('bestmove')) {
             setIsSearching(false);
-            const moveMatch = msg.match(/bestmove ([a-i]\d[a-i]\d)/);
+            const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
             if (moveMatch && moveMatch[1]) {
                 const uciMove = moveMatch[1];
                 setEvalScore((currentScore) => {
@@ -115,12 +118,12 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
 
         // Parse PV info line
-        if (msg.startsWith('info depth') || msg.startsWith('info score')) { // sometimes just info score
-            const depthMatch = msg.match(/depth (\d+)/);
-            const scoreMatch = msg.match(/score cp (-?\d+)/); // simplified
+        if (msg.startsWith('info')) {
+            const depthMatch = msg.match(/\bdepth (\d+)/);
+            const scoreMatch = msg.match(/\bscore cp ([+-]?\d+)/);
 
             // Matte score: score mate -1
-            const mateMatch = msg.match(/score mate (-?\d+)/);
+            const mateMatch = msg.match(/\bscore mate ([+-]?\d+)/);
 
             let finalScore = 0;
             if (scoreMatch) {
@@ -134,7 +137,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 setEvalScore(finalScore);
             }
 
-            const pvMatch = msg.match(/ pv (.*)/);
+            const pvMatch = msg.match(/\bpv (.*)/);
             if (depthMatch && pvMatch && (scoreMatch || mateMatch)) {
 
                 let scoreStr = '';

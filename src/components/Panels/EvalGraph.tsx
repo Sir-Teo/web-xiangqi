@@ -141,7 +141,7 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
                             <stop offset="100%" stopColor="rgba(16, 185, 129, 0.03)" />
                         </linearGradient>
                     </defs>
-                    <path className="graph-area" d={fillPath} fill="url(#graph-gradient-xiangqi)" />
+                    <path className="graph-area" d={fillPath} fill="url(#graph-gradient)" />
                     <path className="graph-line" d={linePath} />
                     <line
                         x1={xFor(currentPointIndex)}
