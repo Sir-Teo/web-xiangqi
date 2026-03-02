@@ -30,7 +30,8 @@ export const EvalGraph = React.memo(function EvalGraph({
     onNavigate
 }: EvalGraphProps) {
     const [hoverPointIndex, setHoverPointIndex] = useState<number | null>(null);
-    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const [viewportWidth, setViewportWidth] = useState(420);
+    const viewportRef = useRef<HTMLDivElement | null>(null);
 
     const points = useMemo<EvalPoint[]>(() => {
         let previous = 0;
@@ -69,10 +70,11 @@ export const EvalGraph = React.memo(function EvalGraph({
 
     const maxEvalClamp = 1200;
     const chartHeight = 248;
-    const chartWidth = Math.max(420, points.length * 32);
+    const chartWidth = Math.max(320, viewportWidth);
     const padding = { top: 18, right: 20, bottom: 44, left: 42 };
     const plotWidth = chartWidth - padding.left - padding.right;
     const plotHeight = chartHeight - padding.top - padding.bottom;
+    const pixelsPerPoint = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
 
     const xFor = (pointIndex: number) => {
         if (points.length <= 1) return padding.left;
@@ -99,7 +101,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const currentPoint = points[currentPointIndex];
     const currentDisplay = formatEval(currentPoint?.eval ?? 0);
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
-    const xTickStep = points.length <= 12 ? 1 : points.length <= 24 ? 2 : points.length <= 48 ? 4 : 6;
+    const xTickStep = Math.max(1, Math.ceil(56 / Math.max(1, pixelsPerPoint)));
     const xTickIndexes = useMemo(() => {
         const indexes = new Set<number>([0, currentPointIndex, points.length - 1]);
         for (let index = xTickStep; index < points.length - 1; index += xTickStep) {
@@ -117,6 +119,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     );
     const currentBranchCount = currentPoint?.branchCount ?? 0;
     const swing = highestEval - lowestEval;
+    const shouldCompressBadges = pixelsPerPoint < 26;
 
     const nearestPointForEvent = (event: React.MouseEvent<SVGSVGElement>) => {
         if (points.length === 0) return 0;
@@ -136,13 +139,24 @@ export const EvalGraph = React.memo(function EvalGraph({
     };
 
     useEffect(() => {
-        const scrollEl = scrollRef.current;
-        if (!scrollEl) return;
-        const focusX = xFor(currentPointIndex);
-        const nextLeft = Math.max(0, focusX - scrollEl.clientWidth / 2);
-        if (Math.abs(scrollEl.scrollLeft - nextLeft) < 12) return;
-        scrollEl.scrollTo({ left: nextLeft, behavior: 'smooth' });
-    }, [chartWidth, currentPointIndex]);
+        const element = viewportRef.current;
+        if (!element) return;
+
+        const updateWidth = () => {
+            setViewportWidth(Math.max(320, Math.floor(element.clientWidth)));
+        };
+
+        updateWidth();
+
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateWidth);
+            return () => window.removeEventListener('resize', updateWidth);
+        }
+
+        const observer = new ResizeObserver(() => updateWidth());
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
 
     const onChartClick = (event: React.MouseEvent<SVGSVGElement>) => {
         if (!onNavigate || points.length === 0) return;
@@ -212,8 +226,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                     <strong>{currentBranchCount > 1 ? `${currentBranchCount} lines` : 'Main line'}</strong>
                 </div>
             </div>
-            <div className="graph-scroll" ref={scrollRef}>
-                <div className="graph-scroll-inner" style={{ width: chartWidth }}>
+            <div className="graph-scroll" ref={viewportRef}>
+                <div className="graph-scroll-inner">
                     <svg
                         className="winrate-graph"
                         width={chartWidth}
@@ -319,7 +333,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                         onNavigate?.(point.moveIndex);
                                     }}
                                 />
-                                {point.branchCount > 1 ? (
+                                {point.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
                                     <g
                                         className="graph-branch-badge"
                                         onClick={(event) => {

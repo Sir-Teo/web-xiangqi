@@ -1773,19 +1773,17 @@
 
 .graph-scroll {
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: hidden;
 }
 
 .graph-scroll-inner {
   position: relative;
-  min-width: 100%;
+  width: 100%;
 }
 
 .winrate-graph {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   height: 248px;
   display: block;
   outline: none;
