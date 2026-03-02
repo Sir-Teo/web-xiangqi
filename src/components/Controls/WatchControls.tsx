@@ -1,32 +1,48 @@
 import { useEffect } from 'react';
-import { IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward } from '../icons';
+import type { GameMode } from '../../App';
+import {
+    IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward,
+    IconPlay, IconPause, IconStepForward
+} from '../icons';
+
+export type AiSpeed = 'slow' | 'normal' | 'fast' | 'step';
+
+export const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
+    slow: 1500,
+    normal: 800,
+    fast: 150,
+};
+
+const SPEEDS: { id: AiSpeed; label: string }[] = [
+    { id: 'slow', label: 'Slow' },
+    { id: 'normal', label: 'Normal' },
+    { id: 'fast', label: 'Fast' },
+    { id: 'step', label: 'Step' },
+];
 
 type Props = {
+    // Navigation
     canGoBack: boolean;
     canGoForward: boolean;
     onFirst: () => void;
     onPrev: () => void;
     onNext: () => void;
     onLast: () => void;
-    canPrevVariation?: boolean;
-    canNextVariation?: boolean;
-    onPrevVariation?: () => void;
-    onNextVariation?: () => void;
-    variationLabel?: string;
-    isAutoPlaying: boolean;
-    onToggleAutoPlay: () => void;
-    playbackSpeedMs: number;
-    onPlaybackSpeedChange: (speedMs: number) => void;
+    // AI play control
+    gameMode: GameMode;
+    paused: boolean;
+    isGameOver: boolean;
+    onPause: () => void;
+    onResume: () => void;
+    onStep: () => void;
+    // Speed
+    aiSpeed: AiSpeed;
+    onSpeedChange: (s: AiSpeed) => void;
+    // Move scrubber
     currentMoveIndex: number;
     totalMoves: number;
     onScrub: (index: number) => void;
 };
-
-const PLAYBACK_SPEEDS = [
-    { label: '0.5x', ms: 1200 },
-    { label: '1x', ms: 700 },
-    { label: '2x', ms: 350 },
-] as const;
 
 export function WatchControls({
     canGoBack,
@@ -35,109 +51,144 @@ export function WatchControls({
     onPrev,
     onNext,
     onLast,
-    canPrevVariation = false,
-    canNextVariation = false,
-    onPrevVariation,
-    onNextVariation,
-    variationLabel = '',
-    isAutoPlaying,
-    onToggleAutoPlay,
-    playbackSpeedMs,
-    onPlaybackSpeedChange,
+    gameMode,
+    paused,
+    isGameOver,
+    onPause,
+    onResume,
+    onStep,
+    aiSpeed,
+    onSpeedChange,
     currentMoveIndex,
     totalMoves,
     onScrub,
 }: Props) {
-    // Keyboard shortcuts for fast game review.
+    const aiActive = gameMode !== 'PvP';
+    const stepMode = aiSpeed === 'step';
+
+    // Keyboard shortcuts
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             const tag = (e.target as HTMLElement).tagName;
             if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-            if (e.altKey && e.key === 'ArrowLeft' && onPrevVariation) {
-                e.preventDefault();
-                onPrevVariation();
-                return;
-            }
-            if (e.altKey && e.key === 'ArrowRight' && onNextVariation) {
-                e.preventDefault();
-                onNextVariation();
-                return;
-            }
             if (e.key === 'ArrowLeft') { e.preventDefault(); onPrev(); }
             if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
             if (e.key === 'ArrowUp') { e.preventDefault(); onFirst(); }
             if (e.key === 'ArrowDown') { e.preventDefault(); onLast(); }
-            if (e.key === ' ') { e.preventDefault(); onToggleAutoPlay(); }
-        }
+        };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onPrev, onNext, onFirst, onLast, onToggleAutoPlay, onPrevVariation, onNextVariation]);
+    }, [onPrev, onNext, onFirst, onLast]);
 
     return (
         <div className="watch-controls">
+            {/* ── Navigation ── */}
             <div className="wc-nav">
-                <button type="button" className="wc-btn" onClick={onFirst} disabled={!canGoBack} title="First position" aria-label="Go to first position">
+                <button
+                    type="button"
+                    className="wc-btn"
+                    onClick={onFirst}
+                    disabled={!canGoBack}
+                    title="First position (↑)"
+                    aria-label="Go to first position"
+                >
                     <IconSkipBack />
                 </button>
-                <button type="button" className="wc-btn" onClick={onPrev} disabled={!canGoBack} title="Previous move (←)" aria-label="Go to previous move">
+                <button
+                    type="button"
+                    className="wc-btn"
+                    onClick={onPrev}
+                    disabled={!canGoBack}
+                    title="Previous move (←)"
+                    aria-label="Go to previous move"
+                >
                     <IconChevronLeft />
                 </button>
-                <button type="button" className="wc-btn" onClick={onNext} disabled={!canGoForward} title="Next move (→)" aria-label="Go to next move">
+                <button
+                    type="button"
+                    className="wc-btn"
+                    onClick={onNext}
+                    disabled={!canGoForward}
+                    title="Next move (→)"
+                    aria-label="Go to next move"
+                >
                     <IconChevronRight />
                 </button>
-                <button type="button" className="wc-btn" onClick={onLast} disabled={!canGoForward} title="Last position" aria-label="Go to last position">
+                <button
+                    type="button"
+                    className="wc-btn"
+                    onClick={onLast}
+                    disabled={!canGoForward}
+                    title="Last position (↓)"
+                    aria-label="Go to last position"
+                >
                     <IconSkipForward />
                 </button>
             </div>
-            <div className="wc-play">
-                <button
-                    type="button"
-                    className={`wc-btn ${isAutoPlaying ? 'wc-btn-pause' : 'wc-btn-resume'}`}
-                    onClick={onToggleAutoPlay}
-                    disabled={totalMoves === 0}
-                    title={isAutoPlaying ? 'Pause review (Space)' : 'Play review (Space)'}
-                    aria-label={isAutoPlaying ? 'Pause move playback' : 'Start move playback'}
-                >
-                    {isAutoPlaying ? 'Pause' : 'Play'}
-                </button>
-            </div>
-            <div className="wc-speed">
-                <span className="wc-speed-label">Speed</span>
-                {PLAYBACK_SPEEDS.map((speed) => (
-                    <button
-                        key={speed.label}
-                        type="button"
-                        className={`wc-speed-pill ${playbackSpeedMs === speed.ms ? 'wc-speed-active' : ''}`}
-                        onClick={() => onPlaybackSpeedChange(speed.ms)}
-                        aria-label={`Set playback speed to ${speed.label}`}
-                    >
-                        {speed.label}
-                    </button>
-                ))}
-            </div>
-            <div className="wc-variation">
-                <button
-                    type="button"
-                    className="wc-btn"
-                    disabled={!canPrevVariation}
-                    onClick={onPrevVariation}
-                    title="Previous variation (Alt+Left)"
-                    aria-label="Go to previous variation"
-                >
-                    Var-
-                </button>
-                <span className="wc-variation-label">{variationLabel}</span>
-                <button
-                    type="button"
-                    className="wc-btn"
-                    disabled={!canNextVariation}
-                    onClick={onNextVariation}
-                    title="Next variation (Alt+Right)"
-                    aria-label="Go to next variation"
-                >
-                    Var+
-                </button>
-            </div>
+
+            {/* ── Play / Pause / Step (AI modes only) ── */}
+            {aiActive && !isGameOver && (
+                <div className="wc-play">
+                    {stepMode && paused ? (
+                        <button
+                            type="button"
+                            className="wc-btn wc-btn-step"
+                            onClick={onStep}
+                            title="Advance one AI move"
+                            aria-label="Advance one AI move"
+                        >
+                            <IconStepForward /> Step
+                        </button>
+                    ) : paused ? (
+                        <button
+                            type="button"
+                            className="wc-btn wc-btn-resume"
+                            onClick={onResume}
+                            title="Resume AI"
+                            aria-label="Resume AI game"
+                        >
+                            <IconPlay /> Resume
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            className="wc-btn wc-btn-pause"
+                            onClick={onPause}
+                            title="Pause & analyze"
+                            aria-label="Pause AI game"
+                        >
+                            <IconPause /> Pause
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* ── Speed selector (AI modes only) ── */}
+            {aiActive && (
+                <div className="wc-speed">
+                    <span className="wc-speed-label">Speed</span>
+                    {SPEEDS.map(({ id, label }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            className={`wc-speed-pill ${aiSpeed === id ? 'wc-speed-active' : ''}`}
+                            onClick={() => onSpeedChange(id)}
+                            aria-label={`Set speed to ${label}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* ── Paused indicator ── */}
+            {paused && aiActive && (
+                <span className="wc-paused-label">
+                    <IconPause /> Analyzing
+                </span>
+            )}
+
+            {/* ── Move scrubber ── */}
             <div className="wc-timeline">
                 <div className="wc-meta">
                     <span>Move</span>
