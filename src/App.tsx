@@ -25,6 +25,7 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'AIvAI', label: 'AI vs AI' },
 ];
 const WORKER_SAFE_MAX_DEPTH = 12;
+const ANALYSIS_QUEUE_DEBOUNCE_MS = 120;
 
 function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
   if (nodeId === rootNodeId) return 'Start';
@@ -151,7 +152,7 @@ function App() {
     restartEngine();
   }, [analysisEngineMode, restartEngine, workspaceMode]);
 
-  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
+  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, outputLines, pvLines, evalScore } = useEngine({
     restartToken: engineRestartToken,
     onWorkerError: handleEngineWorkerError,
     onBestMove: (uci, score) => {
@@ -205,8 +206,9 @@ function App() {
 
   const stopAnalysis = useCallback(() => {
     applyBestMoveRef.current = false;
+    clearQueuedSearch();
     stopSearch();
-  }, [stopSearch]);
+  }, [clearQueuedSearch, stopSearch]);
 
   const resetGame = useCallback(() => {
     stopAnalysis();
@@ -218,11 +220,12 @@ function App() {
   useEffect(() => {
     if (!engineEnabled) {
       applyBestMoveRef.current = false;
+      clearQueuedSearch();
       stopSearch();
       activeAnalysisRequestRef.current = '';
       settledAnalysisRequestRef.current = '';
     }
-  }, [engineEnabled, stopSearch]);
+  }, [clearQueuedSearch, engineEnabled, stopSearch]);
 
   useEffect(() => {
     if (!engineEnabled && analysisTab === 'engine') {
@@ -255,6 +258,7 @@ function App() {
     if (!engineEnabled || !isReady) {
       activeAnalysisRequestRef.current = '';
       settledAnalysisRequestRef.current = '';
+      clearQueuedSearch();
       if (isSearching) {
         applyBestMoveRef.current = false;
         stopSearch();
@@ -265,6 +269,7 @@ function App() {
     if (isAiTurn) {
       activeAnalysisRequestRef.current = '';
       settledAnalysisRequestRef.current = '';
+      clearQueuedSearch();
       if (isSearching && !applyBestMoveRef.current) {
         stopSearch();
       }
@@ -275,24 +280,20 @@ function App() {
     if (requestChanged) {
       activeAnalysisRequestRef.current = analysisRequestKey;
       settledAnalysisRequestRef.current = '';
-    }
-
-    if (isSearching) {
-      if (requestChanged) {
-        applyBestMoveRef.current = false;
-        stopSearch();
-      }
-      return;
+      applyBestMoveRef.current = false;
     }
 
     if (settledAnalysisRequestRef.current === analysisRequestKey) {
+      clearQueuedSearch();
       return;
     }
 
-    applyBestMoveRef.current = false;
-    startSearch(currentPositionCommand);
-    startSearch(useInfiniteAnalysis ? 'go infinite' : `go depth ${safeSearchDepth}`);
-  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, analysisRequestKey, isSearching, stopSearch, startSearch, safeSearchDepth, useInfiniteAnalysis]);
+    queueSearch(
+      currentPositionCommand,
+      useInfiniteAnalysis ? 'go infinite' : `go depth ${safeSearchDepth}`,
+      ANALYSIS_QUEUE_DEBOUNCE_MS
+    );
+  }, [clearQueuedSearch, currentPositionCommand, analysisRequestKey, engineEnabled, gameMode, isReady, isSearching, queueSearch, safeSearchDepth, sideToMove, stopSearch, useInfiniteAnalysis]);
 
   // AI move effect
   useEffect(() => {

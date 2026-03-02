@@ -11,6 +11,12 @@ type PvLine = {
     moves: string[];
 };
 
+type SearchRequest = {
+    positionCmd: string;
+    goCmd: string;
+    signature: string;
+};
+
 export interface EngineInitOptions {
     variant?: 'auto' | 'threaded' | 'single';
     allowSIMD?: boolean;
@@ -64,8 +70,12 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pendingEvalRef = useRef<number | null>(null);
     const pvDirtyRef = useRef(false);
     const infoFlushTimerRef = useRef<number | null>(null);
+    const queuedSearchTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
     const initTokenRef = useRef(0);
+    const stopRequestedRef = useRef(false);
+    const pendingSearchRef = useRef<SearchRequest | null>(null);
+    const activeSearchSignatureRef = useRef('');
 
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
@@ -169,6 +179,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         if (normalized.startsWith('go')) {
             setIsSearching(true);
             isSearchingRef.current = true;
+            stopRequestedRef.current = false;
         }
         sendCommand(cmd);
     }, [sendCommand]);
@@ -176,9 +187,64 @@ export function useEngine(options: EngineInitOptions = {}) {
     // Only send `stop` when actually searching — calling stop on an idle engine
     // causes a WASM function signature mismatch crash.
     const stopSearch = useCallback(() => {
-        if (!isSearchingRef.current) return;
+        if (!isSearchingRef.current || stopRequestedRef.current) return;
+        stopRequestedRef.current = true;
         sendCommand('stop');
     }, [sendCommand]);
+
+    const clearQueuedSearch = useCallback(() => {
+        pendingSearchRef.current = null;
+        if (queuedSearchTimerRef.current !== null) {
+            window.clearTimeout(queuedSearchTimerRef.current);
+            queuedSearchTimerRef.current = null;
+        }
+    }, []);
+
+    const dispatchQueuedSearch = useCallback(() => {
+        if (!engineRef.current || !pendingSearchRef.current) return;
+
+        if (isSearchingRef.current) {
+            stopSearch();
+            return;
+        }
+
+        const nextRequest = pendingSearchRef.current;
+        pendingSearchRef.current = null;
+        activeSearchSignatureRef.current = nextRequest.signature;
+        stopRequestedRef.current = false;
+        startSearch(nextRequest.positionCmd);
+        startSearch(nextRequest.goCmd);
+    }, [startSearch, stopSearch]);
+
+    const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0) => {
+        const signature = `${positionCmd}\n${goCmd}`;
+        if (activeSearchSignatureRef.current === signature && isSearchingRef.current && !pendingSearchRef.current) {
+            return;
+        }
+        if (
+            pendingSearchRef.current?.signature === signature &&
+            (queuedSearchTimerRef.current !== null || isSearchingRef.current || activeSearchSignatureRef.current === signature)
+        ) {
+            return;
+        }
+
+        pendingSearchRef.current = { positionCmd, goCmd, signature };
+
+        if (queuedSearchTimerRef.current !== null) {
+            window.clearTimeout(queuedSearchTimerRef.current);
+            queuedSearchTimerRef.current = null;
+        }
+
+        if (debounceMs <= 0) {
+            dispatchQueuedSearch();
+            return;
+        }
+
+        queuedSearchTimerRef.current = window.setTimeout(() => {
+            queuedSearchTimerRef.current = null;
+            dispatchQueuedSearch();
+        }, debounceMs);
+    }, [dispatchQueuedSearch]);
 
     const initializeEngine = useCallback((initToken: number) => {
         if (typeof (window as any).Pikafish !== 'function' || typeof (window as any).Pikafish.createWorkerEngine !== 'function') {
@@ -190,6 +256,9 @@ export function useEngine(options: EngineInitOptions = {}) {
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
         }
+        clearQueuedSearch();
+        activeSearchSignatureRef.current = '';
+        stopRequestedRef.current = false;
 
         // Wait for the constructor. We'll use "auto" variant as default.
         const pikafishFactory = (window as any).Pikafish;
@@ -231,10 +300,12 @@ export function useEngine(options: EngineInitOptions = {}) {
                 setIsSearching(false);
                 isSearchingRef.current = false;
                 engineRef.current = null;
+                activeSearchSignatureRef.current = '';
+                clearQueuedSearch();
                 onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
                 console.error("Failed to boot Pikafish engine", err);
             });
-    }, [options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
+    }, [clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
 
     useEffect(() => {
         // Prefer the script already declared in index.html. Only inject a loader
@@ -271,10 +342,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             if (script) {
                 script.removeEventListener('load', start);
             }
+            clearQueuedSearch();
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
         };
-    }, [initializeEngine, terminateEngineInstance, options.restartToken]);
+    }, [clearQueuedSearch, initializeEngine, terminateEngineInstance, options.restartToken]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -303,16 +375,23 @@ export function useEngine(options: EngineInitOptions = {}) {
             setIsSearching(false);
             isSearchingRef.current = false;
             engineRef.current = null;
+            activeSearchSignatureRef.current = '';
+            clearQueuedSearch();
+            stopRequestedRef.current = false;
             onWorkerErrorRef.current?.(msg);
         } else if (msg.startsWith('bestmove')) {
             flushBufferedInfo();
             appendOutputLine(msg);
             setIsSearching(false);
             isSearchingRef.current = false;
+            stopRequestedRef.current = false;
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
             if (moveMatch && moveMatch[1]) {
                 const uciMove = moveMatch[1];
                 onBestMoveRef.current?.(uciMove, latestEvalRef.current);
+            }
+            if (pendingSearchRef.current) {
+                dispatchQueuedSearch();
             }
         } else if (!msg.startsWith('info')) {
             appendOutputLine(msg);
@@ -373,8 +452,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             if (infoFlushTimerRef.current !== null) {
                 window.clearTimeout(infoFlushTimerRef.current);
             }
+            if (queuedSearchTimerRef.current !== null) {
+                window.clearTimeout(queuedSearchTimerRef.current);
+            }
         };
     }, []);
 
-    return { isReady, isSearching, variant, startSearch, stopSearch, sendCommand, outputLines, pvLines, evalScore };
+    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, sendCommand, outputLines, pvLines, evalScore };
 }
