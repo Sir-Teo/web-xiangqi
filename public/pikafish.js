@@ -608,6 +608,9 @@
       };
 
       worker.onerror = function(err) {
+        if (err && typeof err.preventDefault === "function") {
+          try { err.preventDefault(); } catch (_) {}
+        }
         const e = err && err.error ? err.error : new Error(err.message || "Worker error");
         if (!settled) {
           settled = true;
@@ -617,6 +620,7 @@
           emit("[worker-error] " + e.message);
           emitError(e);
         }
+        return true;
       };
 
       timer = setTimeout(() => {
@@ -824,6 +828,45 @@
       });
     }
 
+    let lastWorkerErrorMessage = "";
+    let lastWorkerErrorAt = 0;
+
+    function workerErrorMessage(errorLike, fallback) {
+      if (errorLike && errorLike.stack) return String(errorLike.stack);
+      if (errorLike && errorLike.message) return String(errorLike.message);
+      if (typeof fallback !== "undefined") return String(fallback);
+      return String(errorLike);
+    }
+
+    function postWorkerError(errorLike, fallback) {
+      const message = workerErrorMessage(errorLike, fallback);
+      const now = Date.now();
+      if (message === lastWorkerErrorMessage && now - lastWorkerErrorAt < 500) {
+        return;
+      }
+      lastWorkerErrorMessage = message;
+      lastWorkerErrorAt = now;
+      try {
+        self.postMessage({ type: "error", message });
+      } catch (_) {}
+    }
+
+    self.onerror = function(eventOrMessage, source, lineno, colno, error) {
+      postWorkerError(error || eventOrMessage, eventOrMessage && eventOrMessage.message ? eventOrMessage.message : eventOrMessage);
+      if (eventOrMessage && typeof eventOrMessage.preventDefault === "function") {
+        try { eventOrMessage.preventDefault(); } catch (_) {}
+      }
+      return true;
+    };
+
+    self.onunhandledrejection = function(event) {
+      postWorkerError(event && "reason" in event ? event.reason : event);
+      if (event && typeof event.preventDefault === "function") {
+        try { event.preventDefault(); } catch (_) {}
+      }
+      return true;
+    };
+
     self.onmessage = async function(event) {
       try {
         const data = event.data;
@@ -932,7 +975,7 @@
 
         engine.postMessage(String(data));
       } catch (e) {
-        self.postMessage({ type: "error", message: (e && e.stack) ? e.stack : String(e) });
+        postWorkerError(e);
       }
     };
     self.Pikafish = createEngine;

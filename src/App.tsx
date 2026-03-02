@@ -16,6 +16,7 @@ import { useXiangqi } from './hooks/useXiangqi';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
+type AnalysisEngineMode = 'stable' | 'optimized';
 
 const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'PvP', label: 'Local' },
@@ -47,6 +48,8 @@ function App() {
   );
 
   const [searchDepth, setSearchDepth] = useState(8);
+  const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
+  const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>('normal');
   const aiSpeedRef = useRef<AiSpeed>('normal');
   const handleSpeedChange = useCallback((s: AiSpeed) => {
@@ -100,17 +103,57 @@ function App() {
   const currentPositionCommand = useMemo(() => {
     return `position fen ${currentFen}`;
   }, [currentFen]);
+  const useInfiniteAnalysis = analysisEngineMode === 'optimized';
   const analysisRequestKey = useMemo(() => {
+    if (useInfiniteAnalysis) {
+      return `${currentPositionCommand}::infinite`;
+    }
     return `${currentPositionCommand}::depth:${Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH)}`;
-  }, [currentPositionCommand, searchDepth]);
+  }, [currentPositionCommand, searchDepth, useInfiniteAnalysis]);
 
   const applyBestMoveRef = useRef(false);
   const activeAnalysisRequestRef = useRef('');
   const settledAnalysisRequestRef = useRef('');
   const currentAnalysisRequestKeyRef = useRef(analysisRequestKey);
+  const engineRecoveryTimestampsRef = useRef<number[]>([]);
+  const lastEngineRecoveryAtRef = useRef(0);
   currentAnalysisRequestKeyRef.current = analysisRequestKey;
 
+  const restartEngine = useCallback(() => {
+    setEngineRestartToken((value) => value + 1);
+  }, []);
+
+  const handleEngineWorkerError = useCallback((message: string) => {
+    const now = Date.now();
+    if (now - lastEngineRecoveryAtRef.current < 1000) {
+      return;
+    }
+    lastEngineRecoveryAtRef.current = now;
+
+    engineRecoveryTimestampsRef.current = [
+      ...engineRecoveryTimestampsRef.current.filter((timestamp) => now - timestamp < 15000),
+      now,
+    ];
+
+    applyBestMoveRef.current = false;
+    activeAnalysisRequestRef.current = '';
+    settledAnalysisRequestRef.current = '';
+
+    if (engineRecoveryTimestampsRef.current.length > 3) {
+      console.error('Pikafish worker crashed repeatedly; automatic restart suppressed.', message);
+      return;
+    }
+
+    if (workspaceMode === 'analysis' && analysisEngineMode === 'optimized') {
+      setAnalysisEngineMode('stable');
+    }
+
+    restartEngine();
+  }, [analysisEngineMode, restartEngine, workspaceMode]);
+
   const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
+    restartToken: engineRestartToken,
+    onWorkerError: handleEngineWorkerError,
     onBestMove: (uci, score) => {
       if (applyBestMoveRef.current) {
         applyUciMove(uci, score);
@@ -248,8 +291,8 @@ function App() {
 
     applyBestMoveRef.current = false;
     startSearch(currentPositionCommand);
-    startSearch(`go depth ${safeSearchDepth}`);
-  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, analysisRequestKey, isSearching, stopSearch, startSearch, safeSearchDepth]);
+    startSearch(useInfiniteAnalysis ? 'go infinite' : `go depth ${safeSearchDepth}`);
+  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, analysisRequestKey, isSearching, stopSearch, startSearch, safeSearchDepth, useInfiniteAnalysis]);
 
   // AI move effect
   useEffect(() => {
@@ -576,9 +619,29 @@ function App() {
             </div>
 
             <div className="settings-group">
+              <label>Analysis Engine</label>
+              <div className="settings-inline-toggles">
+                <button
+                  type="button"
+                  className={`pill-btn ${analysisEngineMode === 'stable' ? 'pill-btn-active' : ''}`}
+                  onClick={() => setAnalysisEngineMode('stable')}
+                >
+                  Stable
+                </button>
+                <button
+                  type="button"
+                  className={`pill-btn ${analysisEngineMode === 'optimized' ? 'pill-btn-active' : ''}`}
+                  onClick={() => setAnalysisEngineMode('optimized')}
+                >
+                  Optimized
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-group">
               <label>
-                Search Depth (Plys) — {searchDepth}
-                {searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
+                Search Depth (AI / Stable Analysis) — {searchDepth}
+                {!useInfiniteAnalysis && searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
               </label>
               <input
                 type="range"

@@ -17,6 +17,8 @@ export interface EngineInitOptions {
     threads?: number;
     hashMB?: number;
     onBestMove?: (uci: string, score: number) => void;
+    onWorkerError?: (message: string) => void;
+    restartToken?: number;
 }
 
 function detectUiSafeThreads() {
@@ -34,6 +36,16 @@ function detectUiSafeHashMB() {
     return 64;
 }
 
+function shouldSuppressEngineRuntimeError(filename: string, message: string) {
+    const normalizedFilename = String(filename || '');
+    const normalizedMessage = String(message || '');
+    const fromPikafishRuntime =
+        normalizedFilename.includes('/pikafish-core.js') ||
+        normalizedFilename.includes('/pikafish.js') ||
+        normalizedFilename.includes('/pikafish-core.wasm');
+    return fromPikafishRuntime && normalizedMessage.includes('memory access out of bounds');
+}
+
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
@@ -44,6 +56,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const engineRef = useRef<any>(null);
     const onBestMoveRef = useRef(options.onBestMove);
+    const onWorkerErrorRef = useRef(options.onWorkerError);
     const outputLinesRef = useRef<string[]>([]);
     const pvLinesRef = useRef<PvLine[]>([]);
     const latestEvalRef = useRef(0);
@@ -57,6 +70,35 @@ export function useEngine(options: EngineInitOptions = {}) {
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
     }, [options.onBestMove]);
+
+    useEffect(() => {
+        onWorkerErrorRef.current = options.onWorkerError;
+    }, [options.onWorkerError]);
+
+    useEffect(() => {
+        const handleWindowError = (event: ErrorEvent) => {
+            if (!shouldSuppressEngineRuntimeError(event.filename || '', event.message || '')) {
+                return;
+            }
+            event.preventDefault();
+        };
+
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            const reason = event.reason;
+            const message = String(reason?.message || reason?.stack || reason || '');
+            if (!message.includes('memory access out of bounds')) {
+                return;
+            }
+            event.preventDefault();
+        };
+
+        window.addEventListener('error', handleWindowError);
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+        return () => {
+            window.removeEventListener('error', handleWindowError);
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        };
+    }, []);
 
     const terminateEngineInstance = useCallback((engineInstance: any) => {
         if (!engineInstance || typeof engineInstance.terminate !== 'function') return;
@@ -185,6 +227,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             })
             .catch((err: any) => {
                 if (initToken !== initTokenRef.current) return;
+                setIsReady(false);
+                setIsSearching(false);
+                isSearchingRef.current = false;
+                engineRef.current = null;
+                onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
                 console.error("Failed to boot Pikafish engine", err);
             });
     }, [options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
@@ -227,7 +274,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
         };
-    }, [initializeEngine, terminateEngineInstance]);
+    }, [initializeEngine, terminateEngineInstance, options.restartToken]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -256,6 +303,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             setIsSearching(false);
             isSearchingRef.current = false;
             engineRef.current = null;
+            onWorkerErrorRef.current?.(msg);
         } else if (msg.startsWith('bestmove')) {
             flushBufferedInfo();
             appendOutputLine(msg);
