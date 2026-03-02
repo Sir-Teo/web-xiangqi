@@ -47,14 +47,13 @@ function createRootTree(): Record<string, MoveTreeNode> {
 
 function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string[] {
     if (!treeNodes[nodeId]) return [];
-    const reversed: string[] = [];
+    const path: string[] = [];
     let cursor: string | null = nodeId;
     while (cursor && cursor !== ROOT_NODE_ID) {
-        reversed.push(cursor);
+        path.unshift(cursor);
         cursor = treeNodes[cursor]?.parentId ?? null;
     }
-    reversed.reverse();
-    return reversed;
+    return path;
 }
 
 function preferredContinuation(treeNodes: Record<string, MoveTreeNode>, startNodeId: string): string[] {
@@ -154,7 +153,7 @@ export function useXiangqi() {
         syncPositionForNode(treeNodes, nodeId);
     }, [activeLineNodeIds, treeNodes, syncPositionForNode]);
 
-    const commitMove = useCallback((uci: string, evalScore?: number) => {
+    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
         const fromSquare = uci.substring(0, 2);
         const toSquare = uci.substring(2, 4);
 
@@ -256,10 +255,6 @@ export function useXiangqi() {
         return true;
     }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, syncPositionForNode]);
 
-    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
-        return commitMove(uci, evalScore);
-    }, [commitMove]);
-
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
@@ -270,14 +265,34 @@ export function useXiangqi() {
                 ...prevTree,
                 [currentNodeId]: {
                     ...node,
-                    record: {
-                        ...node.record,
-                        evalScore,
-                    },
+                    record: { ...node.record, evalScore },
                 },
             };
         });
     }, [currentNodeId]);
+
+    const getNodeFen = useCallback((nodeId: string): string => {
+        const pos = getPositionFromNode(treeNodes, nodeId);
+        const node = treeNodes[nodeId];
+        const ply = node?.record?.ply ?? 1;
+        return boardToFen(pos.board, pos.sideToMove, 1 + Math.floor(ply / 2));
+    }, [treeNodes]);
+
+    const setNodeEval = useCallback((nodeId: string, evalScore: number) => {
+        if (!Number.isFinite(evalScore) || nodeId === ROOT_NODE_ID) return;
+        setTreeNodes((prevTree) => {
+            const node = prevTree[nodeId];
+            if (!node?.record) return prevTree;
+            if (node.record.evalScore === evalScore) return prevTree;
+            return {
+                ...prevTree,
+                [nodeId]: {
+                    ...node,
+                    record: { ...node.record, evalScore },
+                },
+            };
+        });
+    }, []);
 
     // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
@@ -304,10 +319,10 @@ export function useXiangqi() {
         }
 
         const uci = squareToUci(selected.file, selected.rank) + squareToUci(file, rank);
-        const moved = commitMove(uci);
+        const moved = applyUciMove(uci);
         if (!moved) return null;
         return uci;
-    }, [board, selected, sideToMove, commitMove]);
+    }, [board, selected, sideToMove, applyUciMove]);
 
     return {
         board,
@@ -326,6 +341,8 @@ export function useXiangqi() {
         resetBoard,
         applyUciMove,
         setCurrentNodeEval,
+        setNodeEval,
+        getNodeFen,
         jumpToMove,
         jumpToNode,
     };

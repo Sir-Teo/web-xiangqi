@@ -1,0 +1,63 @@
+.wdl-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: var(--space-sm, 8px);
+}
+
+.wdl-bar {
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--bg-subtle, #1a1a2e);
+    display: flex;
+}
+
+.wdl-bar-empty {
+    background: var(--border-subtle, rgba(255,255,255,0.08));
+}
+
+.wdl-segment {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+
+.wdl-segment-win {
+    background: #cc3333;
+}
+
+.wdl-segment-draw {
+    background: rgba(160, 160, 180, 0.6);
+}
+
+.wdl-segment-loss {
+    background: #222222;
+}
+
+.wdl-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--text-tertiary, #888);
+    letter-spacing: 0.04em;
+}
+
+.wdl-label {
+    font-variant-numeric: tabular-nums;
+}
+
+.wdl-label.wdl-win {
+    color: #e06060;
+}
+
+.wdl-label.wdl-draw {
+    color: var(--text-secondary, #aaa);
+}
+
+.wdl-label.wdl-loss {
+    color: var(--text-tertiary, #777);
+}
+
+.wdl-bar-live .wdl-bar {
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.3);
+}

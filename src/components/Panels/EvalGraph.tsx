@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
 
 interface EvalGraphProps {
@@ -76,26 +76,34 @@ export const EvalGraph = React.memo(function EvalGraph({
     const plotHeight = chartHeight - padding.top - padding.bottom;
     const pixelsPerPoint = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
 
-    const xFor = (pointIndex: number) => {
+    const xFor = useCallback((pointIndex: number) => {
         if (points.length <= 1) return padding.left;
         return padding.left + (pointIndex / (points.length - 1)) * plotWidth;
-    };
-    const yFor = (evalScore: number) => {
+    }, [points.length, plotWidth, padding.left]);
+
+    const yFor = useCallback((evalScore: number) => {
         const clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
         return padding.top + ((maxEvalClamp - clamped) / (maxEvalClamp * 2)) * plotHeight;
-    };
+    }, [maxEvalClamp, plotHeight, padding.top]);
+
     const baselineY = yFor(0);
 
+    // Pre-compute {x, y} for each point once — reused in paths, dots, and badges
+    const computedPoints = useMemo(
+        () => points.map((p, i) => ({ ...p, x: xFor(i), y: yFor(p.eval) })),
+        [points, xFor, yFor]
+    );
+
     const linePath = useMemo(() => {
-        if (points.length === 0) return '';
-        return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index).toFixed(2)} ${yFor(point.eval).toFixed(2)}`).join(' ');
-    }, [points, plotWidth, plotHeight]);
+        if (computedPoints.length === 0) return '';
+        return computedPoints.map((pt, index) => `${index === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
+    }, [computedPoints]);
 
     const fillPath = useMemo(() => {
-        if (points.length === 0) return '';
-        const lastX = xFor(points.length - 1);
-        return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${xFor(0).toFixed(2)} ${baselineY.toFixed(2)} Z`;
-    }, [points, linePath, baselineY, plotWidth]);
+        if (computedPoints.length === 0) return '';
+        const lastX = computedPoints[computedPoints.length - 1].x;
+        return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${computedPoints[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+    }, [computedPoints, linePath, baselineY]);
 
     const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
     const currentPoint = points[currentPointIndex];
@@ -121,22 +129,25 @@ export const EvalGraph = React.memo(function EvalGraph({
     const swing = highestEval - lowestEval;
     const shouldCompressBadges = pixelsPerPoint < 26;
 
-    const nearestPointForEvent = (event: React.MouseEvent<SVGSVGElement>) => {
-        if (points.length === 0) return 0;
+    const nearestPointForEvent = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
+        if (computedPoints.length === 0) return 0;
         const rect = event.currentTarget.getBoundingClientRect();
         const scaleX = chartWidth / rect.width;
         const x = (event.clientX - rect.left) * scaleX;
-        let nearest = 0;
-        let nearestDistance = Number.POSITIVE_INFINITY;
-        points.forEach((_, pointIndex) => {
-            const distance = Math.abs(xFor(pointIndex) - x);
-            if (distance < nearestDistance) {
-                nearest = pointIndex;
-                nearestDistance = distance;
-            }
-        });
-        return nearest;
-    };
+        // Binary search — computedPoints are ordered by ascending x
+        let lo = 0;
+        let hi = computedPoints.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (computedPoints[mid].x < x) lo = mid + 1;
+            else hi = mid;
+        }
+        // Check lo and lo-1 for the nearest
+        if (lo > 0 && Math.abs(computedPoints[lo - 1].x - x) <= Math.abs(computedPoints[lo].x - x)) {
+            return lo - 1;
+        }
+        return lo;
+    }, [computedPoints, chartWidth]);
 
     useEffect(() => {
         const element = viewportRef.current;
@@ -203,8 +214,8 @@ export const EvalGraph = React.memo(function EvalGraph({
     const tooltipPoint = hoveredPoint ?? currentPoint;
     const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
-    const tooltipX = Math.max(padding.left + 54, Math.min(chartWidth - padding.right - 54, xFor(tooltipIndex)));
-    const tooltipY = Math.max(54, yFor(tooltipPoint?.eval ?? 0) - 18);
+    const tooltipX = Math.max(padding.left + 54, Math.min(chartWidth - padding.right - 54, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
+    const tooltipY = Math.max(54, (computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0)) - 18);
 
     return (
         <div className="graph-wrap">
@@ -276,19 +287,18 @@ export const EvalGraph = React.memo(function EvalGraph({
                             );
                         })}
                         {xTickIndexes.map((pointIndex) => {
-                            const point = points[pointIndex];
-                            const x = xFor(pointIndex);
+                            const pt = computedPoints[pointIndex];
                             return (
                                 <g key={`tick-${pointIndex}`}>
                                     <line
                                         className="graph-axis-tick"
-                                        x1={x}
-                                        x2={x}
+                                        x1={pt.x}
+                                        x2={pt.x}
                                         y1={chartHeight - padding.bottom}
                                         y2={chartHeight - padding.bottom + 6}
                                     />
-                                    <text className="graph-axis-text" x={x} y={chartHeight - padding.bottom + 18} textAnchor="middle">
-                                        {point.moveIndex === -1 ? 'Start' : point.ply}
+                                    <text className="graph-axis-text" x={pt.x} y={chartHeight - padding.bottom + 18} textAnchor="middle">
+                                        {pt.moveIndex === -1 ? 'Start' : pt.ply}
                                     </text>
                                 </g>
                             );
@@ -302,8 +312,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                         <path className="graph-area" d={fillPath} fill="url(#graph-gradient)" />
                         <path className="graph-line" d={linePath} />
                         <line
-                            x1={xFor(currentPointIndex)}
-                            x2={xFor(currentPointIndex)}
+                            x1={computedPoints[currentPointIndex]?.x ?? 0}
+                            x2={computedPoints[currentPointIndex]?.x ?? 0}
                             y1={padding.top}
                             y2={chartHeight - padding.bottom}
                             className="graph-current-line"
@@ -312,8 +322,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                         />
                         {hoverPointIndex != null ? (
                             <line
-                                x1={xFor(hoverPointIndex)}
-                                x2={xFor(hoverPointIndex)}
+                                x1={computedPoints[hoverPointIndex]?.x ?? 0}
+                                x2={computedPoints[hoverPointIndex]?.x ?? 0}
                                 y1={padding.top}
                                 y2={chartHeight - padding.bottom}
                                 className="graph-hover-line"
@@ -321,39 +331,39 @@ export const EvalGraph = React.memo(function EvalGraph({
                                 strokeDasharray="3 4"
                             />
                         ) : null}
-                        {points.map((point, pointIndex) => (
-                            <g key={`point-${point.ply}`}>
+                        {computedPoints.map((pt, pointIndex) => (
+                            <g key={`point-${pt.ply}`}>
                                 <circle
                                     className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
-                                    cx={xFor(pointIndex)}
-                                    cy={yFor(point.eval)}
+                                    cx={pt.x}
+                                    cy={pt.y}
                                     r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
                                     onClick={(event) => {
                                         event.stopPropagation();
-                                        onNavigate?.(point.moveIndex);
+                                        onNavigate?.(pt.moveIndex);
                                     }}
                                 />
-                                {point.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
+                                {pt.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
                                     <g
                                         className="graph-branch-badge"
                                         onClick={(event) => {
                                             event.stopPropagation();
-                                            onNavigate?.(point.moveIndex);
+                                            onNavigate?.(pt.moveIndex);
                                         }}
                                     >
                                         <rect
-                                            x={xFor(pointIndex) + 6}
-                                            y={yFor(point.eval) - 19}
+                                            x={pt.x + 6}
+                                            y={pt.y - 19}
                                             width={18}
                                             height={12}
                                             rx={6}
                                         />
                                         <text
-                                            x={xFor(pointIndex) + 15}
-                                            y={yFor(point.eval) - 10}
+                                            x={pt.x + 15}
+                                            y={pt.y - 10}
                                             textAnchor="middle"
                                         >
-                                            {point.branchCount}
+                                            {pt.branchCount}
                                         </text>
                                     </g>
                                 ) : null}

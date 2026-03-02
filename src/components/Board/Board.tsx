@@ -1,6 +1,7 @@
 import React from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
+import { BoardArrows } from './BoardArrows';
 
 const PIECE_LABELS: Record<string, string> = {
     K: "帥", A: "仕", B: "相", N: "傌", R: "俥", C: "炮", P: "兵",
@@ -15,6 +16,12 @@ interface BoardProps {
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
     orientation?: BoardOrientation;
+    arrows?: Array<{
+        from: { file: number; rank: number };
+        to: { file: number; rank: number };
+        color: string;
+        opacity?: number;
+    }>;
 }
 
 export const Board = React.memo(function Board({
@@ -23,6 +30,7 @@ export const Board = React.memo(function Board({
     validTargets,
     onSquareClick,
     orientation = 'red',
+    arrows = [],
 }: BoardProps) {
     // When orientation='black', flip rank and file ordering
     const ranks = orientation === 'black'
@@ -102,6 +110,11 @@ export const Board = React.memo(function Board({
                         ))
                     ))}
                 </div>
+
+                {/* Arrow overlay */}
+                {arrows.length > 0 && (
+                    <BoardArrows arrows={arrows} orientation={orientation} />
+                )}
 
                 {/* The piece layer */}
                 <div className="pieces-layer">

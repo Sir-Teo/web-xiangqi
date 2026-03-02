@@ -94,7 +94,21 @@ export const MoveListTree = memo(function MoveListTree({
         index += 2;
     }
 
-    return <div className="mtree-scroll">{rows}</div>;
+    return (
+        <div className="mtree-scroll">
+            {rows}
+            <div className="mtree-quality-legend">
+                <span className="legend-title">Move quality</span>
+                <div className="legend-items">
+                    <span className="legend-item quality-best"><span className="mtree-quality-dot" /> Best <em>≤40cp</em></span>
+                    <span className="legend-item quality-good"><span className="mtree-quality-dot" /> Good <em>≤90cp</em></span>
+                    <span className="legend-item quality-inaccuracy"><span className="mtree-quality-dot" /> Inaccuracy <em>≤180cp</em></span>
+                    <span className="legend-item quality-mistake"><span className="mtree-quality-dot" /> Mistake <em>≤320cp</em></span>
+                    <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> Blunder <em>&gt;320cp</em></span>
+                </div>
+            </div>
+        </div>
+    );
 });
 
 MoveListTree.displayName = 'MoveListTree';

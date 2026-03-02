@@ -9,10 +9,18 @@ import { AI_SPEED_MS } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
-  IconBot, IconX, IconPause
+  IconBot, IconX, IconPause, IconSave, IconLibrary
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
+import { uciToSquare } from './utils/xiangqi';
+import { WdlBar } from './components/Panels/WdlBar';
+import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
+import { matchOpening } from './utils/openings';
+import { useGameLibrary } from './hooks/useGameLibrary';
+import { GameLibraryModal } from './components/Library/GameLibraryModal';
+import type { SavedGame } from './utils/gameLibrary';
+import { useGameReview, REVIEW_DEPTH, computeReviewSummary } from './hooks/useGameReview';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
@@ -43,10 +51,19 @@ function App() {
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
   const [showSettings, setShowSettings] = useState(false);
+  const [showNewGameMenu, setShowNewGameMenu] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [orientation, setOrientation] = useState<BoardOrientation>('red');
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1280 : window.innerWidth
   );
+
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const soundEnabledRef = useRef(true);
+  const handleSoundToggle = useCallback((enabled: boolean) => {
+    soundEnabledRef.current = enabled;
+    setSoundEnabled(enabled);
+  }, []);
 
   const [searchDepth, setSearchDepth] = useState(8);
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
@@ -97,6 +114,8 @@ function App() {
     sideToMove,
     applyUciMove,
     setCurrentNodeEval,
+    setNodeEval,
+    getNodeFen,
     jumpToMove,
     jumpToNode,
   } = useXiangqi();
@@ -111,6 +130,21 @@ function App() {
     }
     return `${currentPositionCommand}::depth:${Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH)}`;
   }, [currentPositionCommand, searchDepth, useInfiniteAnalysis]);
+
+  const {
+    status: reviewStatus,
+    progress: reviewProgress,
+    summary: reviewSummary,
+    getNextNodeId: getReviewNextNodeId,
+    advanceQueue: advanceReviewQueue,
+    beginReview,
+    finishReview,
+    cancelReview: cancelReviewHook,
+    resetReview,
+  } = useGameReview();
+
+  const reviewActiveRef = useRef(false);
+  const reviewCurrentNodeIdRef = useRef<string | null>(null);
 
   const applyBestMoveRef = useRef(false);
   const activeAnalysisRequestRef = useRef('');
@@ -152,10 +186,22 @@ function App() {
     restartEngine();
   }, [analysisEngineMode, restartEngine, workspaceMode]);
 
-  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, outputLines, pvLines, evalScore } = useEngine({
+  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, outputLines, pvLines, evalScore, wdl } = useEngine({
     restartToken: engineRestartToken,
     onWorkerError: handleEngineWorkerError,
     onBestMove: (uci, score) => {
+      // Review mode: capture score for the current review node then advance
+      if (reviewActiveRef.current && reviewCurrentNodeIdRef.current) {
+        const reviewNodeId = reviewCurrentNodeIdRef.current;
+        reviewCurrentNodeIdRef.current = null;
+        setNodeEval(reviewNodeId, score);
+        const nextNodeId = advanceReviewQueue();
+        if (!nextNodeId) {
+          reviewActiveRef.current = false;
+        }
+        return;
+      }
+
       if (applyBestMoveRef.current) {
         applyUciMove(uci, score);
         // In step mode: after applying the AI move, re-pause
@@ -180,10 +226,9 @@ function App() {
     const path: string[] = [];
     let cursor: string | null = currentNodeId;
     while (cursor && cursor !== rootNodeId) {
-      path.push(cursor);
+      path.unshift(cursor);
       cursor = treeNodes[cursor]?.parentId ?? null;
     }
-    path.reverse();
     return [rootNodeId, ...path];
   }, [currentNodeId, rootNodeId, treeNodes]);
 
@@ -239,14 +284,42 @@ function App() {
         setShowSettings(false);
       }
     };
-    const onResize = () => setViewportWidth(window.innerWidth);
+    let resizeTimer: number | undefined;
+    const onResize = () => {
+      if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => setViewportWidth(window.innerWidth), 50);
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('resize', onResize);
+      if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
   }, []);
+
+  // Sound effect: fire when a move is played (currentMoveIndex advanced by 1)
+  const prevMoveIndexRef = useRef(currentMoveIndex);
+  const prevNodeIdRef = useRef(currentNodeId);
+  useEffect(() => {
+    const prevIdx = prevMoveIndexRef.current;
+    const prevNodeId = prevNodeIdRef.current;
+    prevMoveIndexRef.current = currentMoveIndex;
+    prevNodeIdRef.current = currentNodeId;
+
+    if (
+      soundEnabledRef.current &&
+      currentMoveIndex === prevIdx + 1 &&
+      currentNodeId !== prevNodeId
+    ) {
+      const record = treeNodes[currentNodeId]?.record;
+      if (record) {
+        if (record.inCheck) { playCheckSound(); }
+        else if (record.captured) { playCaptureSound(); }
+        else { playMoveSound(); }
+      }
+    }
+  }, [currentMoveIndex, currentNodeId, treeNodes]);
 
   // Analysis engine effect
   useEffect(() => {
@@ -341,16 +414,43 @@ function App() {
     setCurrentNodeEval(evalScore);
   }, [engineEnabled, isSearching, currentMoveIndex, evalScore, setCurrentNodeEval]);
 
-  const jumpAndPausePlayback = useCallback((index: number) => {
-    jumpToMove(index);
-  }, [jumpToMove]);
+  // Review engine drive: when review is running and engine is idle, fire next search
+  useEffect(() => {
+    if (!reviewActiveRef.current) return;
+    if (isSearching) return;
+    if (!isReady) return;
+    const nodeId = getReviewNextNodeId();
+    if (!nodeId) {
+      reviewActiveRef.current = false;
+      finishReview(activeLineNodeIds, treeNodes);
+      return;
+    }
+    reviewCurrentNodeIdRef.current = nodeId;
+    const fen = getNodeFen(nodeId);
+    startSearch(`position fen ${fen}`);
+    startSearch(`go depth ${REVIEW_DEPTH}`);
+  }, [isSearching, isReady, getReviewNextNodeId, finishReview, activeLineNodeIds, treeNodes, getNodeFen, startSearch]);
 
-  const jumpNodeAndPausePlayback = useCallback((nodeId: string) => {
-    jumpToNode(nodeId);
-  }, [jumpToNode]);
+  const startGameReview = useCallback(() => {
+    if (applyBestMoveRef.current) return;
+    if (!engineEnabled || !isReady) return;
+    stopAnalysis();
+    const started = beginReview(activeLineNodeIds, treeNodes);
+    if (started) {
+      reviewActiveRef.current = true;
+    }
+  }, [applyBestMoveRef, engineEnabled, isReady, stopAnalysis, beginReview, activeLineNodeIds, treeNodes]);
 
+  const playSoundForNode = useCallback((nodeId: string | null, nodes: typeof treeNodes) => {
+    if (!soundEnabledRef.current || !nodeId) return;
+    const record = nodes[nodeId]?.record;
+    if (!record) return;
+    if (record.inCheck) { playCheckSound(); return; }
+    if (record.captured) { playCaptureSound(); return; }
+    playMoveSound();
+  }, [treeNodes]);
 
-  const handleSquareClick = (file: number, rank: number) => {
+  const handleSquareClick = useCallback((file: number, rank: number) => {
     const isAiTurn =
       gameMode === 'AIvAI' ||
       (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
@@ -359,7 +459,7 @@ function App() {
     if (!isAiTurn) {
       onSquareClick(file, rank);
     }
-  };
+  }, [gameMode, sideToMove, onSquareClick]);
 
   const applyMode = (mode: GameMode) => {
     setGameMode(mode);
@@ -370,7 +470,7 @@ function App() {
   const DEFAULT_LEFT = 320;
   const DEFAULT_RIGHT = 320;
 
-  const startLeftResize = (event: React.MouseEvent) => {
+  const startLeftResize = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     document.body.classList.add('resizing');
     const startX = event.clientX;
@@ -386,9 +486,9 @@ function App() {
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  };
+  }, [leftWidth]);
 
-  const startRightResize = (event: React.MouseEvent) => {
+  const startRightResize = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     document.body.classList.add('resizing');
     const startX = event.clientX;
@@ -404,10 +504,90 @@ function App() {
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  };
+  }, [rightWidth]);
 
   const isAiMode = gameMode !== 'PvP';
-  const isGameOver = false; // TODO: detect checkmate
+
+  const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
+  const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
+  const lastMoveTo   = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(2, 4)) : null, [lastMoveUci]);
+
+  const lastMoveArrowColor = useMemo(() => {
+    const currentEval = treeNodes[currentNodeId]?.record?.evalScore;
+    const parentId    = treeNodes[currentNodeId]?.parentId;
+    const parentEval  = parentId ? treeNodes[parentId]?.record?.evalScore : 0;
+    if (typeof currentEval !== 'number' || typeof parentEval !== 'number') return '#94a3b8';
+    const delta = Math.abs(currentEval - parentEval);
+    if (delta <= 40)  return '#22c55e'; // best   — bright green
+    if (delta <= 90)  return '#4ade80'; // good   — light green
+    if (delta <= 180) return '#facc15'; // inaccuracy — yellow
+    if (delta <= 320) return '#f97316'; // mistake   — orange
+    return '#ef4444';                   // blunder   — red
+  }, [currentNodeId, treeNodes]);
+
+  // Opening recognition
+  const detectedOpening = useMemo(() => {
+    const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
+    return matchOpening(uciMoves);
+  }, [moveHistory, currentMoveIndex]);
+
+  // Game library
+  const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
+
+  const handleSaveGame = useCallback(() => {
+    const moves = activeLineNodeIds
+      .slice(0, currentMoveIndex + 1)
+      .map(id => treeNodes[id]?.record?.uci)
+      .filter((uci): uci is string => Boolean(uci));
+    saveGameToLibrary(gameMode, moves, {
+      opening: detectedOpening?.name,
+      finalEval: evalScore,
+    });
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, saveGameToLibrary, detectedOpening, evalScore]);
+
+  const handleLoadGame = useCallback((game: SavedGame) => {
+    stopAnalysis();
+    resetBoard();
+    setShowLibrary(false);
+    // Replay moves sequentially — use setTimeout to let board reset settle first
+    let idx = 0;
+    const replay = () => {
+      if (idx >= game.moves.length) return;
+      applyUciMove(game.moves[idx]);
+      idx++;
+      if (idx < game.moves.length) setTimeout(replay, 0);
+    };
+    setTimeout(replay, 0);
+  }, [stopAnalysis, resetBoard, applyUciMove]);
+
+  // Board arrows: quality-colored last move + engine recommendation lines
+  const boardArrows = useMemo(() => {
+    const result: Array<{ from: { file: number; rank: number }; to: { file: number; rank: number }; color: string; opacity?: number }> = [];
+
+    // Last played move — color encodes quality (green=good … red=blunder)
+    if (lastMoveFrom && lastMoveTo) {
+      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, opacity: 0.82 });
+    }
+
+    // Engine best move (green)
+    if (engineEnabled && pvLines[0]?.moves[0]) {
+      const uci = pvLines[0].moves[0];
+      const from = uciToSquare(uci.substring(0, 2));
+      const to = uciToSquare(uci.substring(2, 4));
+      if (from && to) result.push({ from, to, color: '#10b981', opacity: 0.88 });
+    }
+
+    // Alternative engine lines (muted green)
+    for (let idx = 1; idx <= 2; idx++) {
+      const uci = pvLines[idx]?.moves[0];
+      if (!uci) continue;
+      const from = uciToSquare(uci.substring(0, 2));
+      const to = uciToSquare(uci.substring(2, 4));
+      if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55 });
+    }
+
+    return result;
+  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines]);
 
   return (
     <main className="app-shell">
@@ -441,22 +621,6 @@ function App() {
               </button>
             </div>
 
-            <span className="toolbar-divider desktop-only" />
-
-            {/* Game mode pills */}
-            <div className="top-mode-pills" role="tablist" aria-label="Game mode">
-              {GAME_MODES.map(({ mode, label }) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`gc-pill ${gameMode === mode ? 'gc-pill-active' : ''}`}
-                  onClick={() => applyMode(mode)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
             {engineEnabled ? (
               <div className="top-engine-state">
                 <span className={`status-dot ${isReady ? 'healthy' : ''}`} />
@@ -481,12 +645,25 @@ function App() {
               <button
                 type="button"
                 className="top-action-btn"
-                onClick={resetGame}
+                onClick={() => setShowNewGameMenu(m => !m)}
                 title="New game"
                 aria-label="Start new game"
+                aria-haspopup="dialog"
+                aria-expanded={showNewGameMenu}
               >
                 <IconRefresh />
                 <span className="btn-label-desktop">New</span>
+              </button>
+              <button
+                type="button"
+                className="top-action-btn"
+                onClick={() => setShowLibrary(s => !s)}
+                title="Game library"
+                aria-label="Open game library"
+                aria-expanded={showLibrary}
+              >
+                <IconLibrary />
+                <span className="btn-label-desktop">Library</span>
               </button>
               <button
                 type="button"
@@ -673,6 +850,26 @@ function App() {
             )}
 
             <div className="settings-group">
+              <label>Sound Effects</label>
+              <div className="settings-inline-toggles">
+                <button
+                  type="button"
+                  className={`pill-btn ${soundEnabled ? 'pill-btn-active' : ''}`}
+                  onClick={() => handleSoundToggle(true)}
+                >
+                  On
+                </button>
+                <button
+                  type="button"
+                  className={`pill-btn ${!soundEnabled ? 'pill-btn-active' : ''}`}
+                  onClick={() => handleSoundToggle(false)}
+                >
+                  Off
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-group">
               <button
                 type="button"
                 className="gc-btn gc-btn-danger"
@@ -683,6 +880,53 @@ function App() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── New game menu ── */}
+      {showNewGameMenu && (
+        <>
+          <div
+            className="settings-backdrop"
+            onClick={() => setShowNewGameMenu(false)}
+            aria-hidden="true"
+          />
+          <div className="new-game-menu" role="dialog" aria-modal="true" aria-label="New game">
+            <div className="settings-header">
+              <h2>New Game</h2>
+              <button
+                className="settings-close-btn"
+                type="button"
+                onClick={() => setShowNewGameMenu(false)}
+                aria-label="Close"
+              >
+                <IconX />
+              </button>
+            </div>
+            <div className="new-game-menu-modes">
+              {GAME_MODES.map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`new-game-mode-btn ${gameMode === mode ? 'new-game-mode-btn-active' : ''}`}
+                  onClick={() => { applyMode(mode); setShowNewGameMenu(false); }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Game Library modal ── */}
+      {showLibrary && (
+        <GameLibraryModal
+          games={savedGames}
+          onClose={() => setShowLibrary(false)}
+          onLoadGame={handleLoadGame}
+          onDeleteGame={deleteGameFromLibrary}
+          onRenameGame={renameGameInLibrary}
+        />
       )}
 
       <div className="main-container">
@@ -702,6 +946,7 @@ function App() {
               <span className="panel-kicker">Click or use arrow keys to jump</span>
             </header>
             <div className="panel-content">
+              {engineEnabled && <WdlBar wdl={wdl} isSearching={isSearching} />}
               <EvalGraph
                 history={moveHistory}
                 currentMoveIndex={currentMoveIndex}
@@ -709,13 +954,13 @@ function App() {
                 isSearching={isSearching}
                 branchCounts={graphBranchCounts}
                 rootBranchCount={rootGraphBranchCount}
-                onNavigate={jumpAndPausePlayback}
+                onNavigate={jumpToMove}
               />
               <div className="graph-jump-controls">
-                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(-1)} disabled={!canGoBack}>Start</button>
-                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
-                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
-                <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
+                <button type="button" className="chip-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>Start</button>
+                <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
+                <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
+                <button type="button" className="chip-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
               </div>
               <p className="panel-copy small">
                 Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
@@ -748,6 +993,7 @@ function App() {
               validTargets={validTargets}
               onSquareClick={handleSquareClick}
               orientation={orientation}
+              arrows={boardArrows}
             />
             {inCheck && (
               <div className="check-overlay">
@@ -798,7 +1044,7 @@ function App() {
                         key={nodeId}
                         type="button"
                         className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
-                        onClick={() => jumpNodeAndPausePlayback(nodeId)}
+                        onClick={() => jumpToNode(nodeId)}
                       >
                         {nodeLabel(nodeId, rootNodeId, treeNodes)}
                         {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
@@ -811,7 +1057,7 @@ function App() {
                     currentNodeId={currentNodeId}
                     currentMoveIndex={currentMoveIndex}
                     activeLineNodeIds={activeLineNodeIds}
-                    onNavigateNode={jumpNodeAndPausePlayback}
+                    onNavigateNode={jumpToNode}
                   />
                 </>
               ) : (
@@ -855,25 +1101,53 @@ function App() {
           {engineEnabled ? <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
             <div className="game-controls">
-              <button className="gc-btn" onClick={resetGame}>
+              <button className="gc-btn" onClick={() => setShowNewGameMenu(m => !m)}>
                 <IconRefresh /> New Game
               </button>
+              <button className="gc-btn" onClick={handleSaveGame} disabled={moveHistory.length === 0} title="Save current game to library">
+                <IconSave /> Save
+              </button>
+              {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
+                <button className="gc-btn" onClick={startGameReview} title="Analyse all moves">
+                  Review Game
+                </button>
+              )}
+              {reviewStatus === 'running' && (
+                <span className="review-progress">
+                  Reviewing… {Math.round(reviewProgress * 100)}%
+                  <button className="chip-btn" onClick={cancelReviewHook}>Cancel</button>
+                </span>
+              )}
+              {reviewStatus === 'done' && reviewSummary && (
+                <span className="review-summary">
+                  <strong>{reviewSummary.accuracy}%</strong> accuracy
+                  <span className="quality-blunder"> {reviewSummary.blunderCount}B</span>
+                  <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
+                  <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
+                  <button className="chip-btn" onClick={resetReview}>✕</button>
+                </span>
+              )}
               <span className="game-mode-badge">
                 {isAiMode && <IconBot />}
                 {GAME_MODES.find(m => m.mode === gameMode)?.label ?? gameMode}
               </span>
+              {detectedOpening && (
+                <span className="opening-badge" title={detectedOpening.name}>
+                  {detectedOpening.chinese}
+                  <span className="opening-badge-name">{detectedOpening.name}</span>
+                </span>
+              )}
             </div>
 
             <WatchControls
               canGoBack={canGoBack}
               canGoForward={canGoForward}
-              onFirst={() => jumpAndPausePlayback(-1)}
-              onPrev={() => jumpAndPausePlayback(currentMoveIndex - 1)}
-              onNext={() => jumpAndPausePlayback(currentMoveIndex + 1)}
-              onLast={() => jumpAndPausePlayback(moveHistory.length - 1)}
+              onFirst={() => jumpToMove(-1)}
+              onPrev={() => jumpToMove(currentMoveIndex - 1)}
+              onNext={() => jumpToMove(currentMoveIndex + 1)}
+              onLast={() => jumpToMove(moveHistory.length - 1)}
               gameMode={gameMode}
               paused={paused}
-              isGameOver={isGameOver}
               onPause={pause}
               onResume={resume}
               onStep={step}
@@ -881,7 +1155,7 @@ function App() {
               onSpeedChange={handleSpeedChange}
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
-              onScrub={jumpAndPausePlayback}
+              onScrub={jumpToMove}
             />
           </div>
 

@@ -9,7 +9,10 @@ type PvLine = {
     score: number;
     scoreStr: string;
     moves: string[];
+    multipv?: number;
 };
+
+export type WdlStats = { win: number; draw: number; loss: number };
 
 type SearchRequest = {
     positionCmd: string;
@@ -59,6 +62,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [outputLines, setOutputLines] = useState<string[]>([]);
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
     const [evalScore, setEvalScore] = useState<number>(0);
+    const [wdl, setWdl] = useState<WdlStats | null>(null);
 
     const engineRef = useRef<any>(null);
     const onBestMoveRef = useRef(options.onBestMove);
@@ -68,6 +72,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const latestEvalRef = useRef(0);
     const pendingInfoLineRef = useRef<string | null>(null);
     const pendingEvalRef = useRef<number | null>(null);
+    const pendingWdlRef = useRef<WdlStats | null>(null);
     const pvDirtyRef = useRef(false);
     const infoFlushTimerRef = useRef<number | null>(null);
     const queuedSearchTimerRef = useRef<number | null>(null);
@@ -146,6 +151,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             setEvalScore(pendingEvalRef.current);
         }
         pendingEvalRef.current = null;
+
+        if (pendingWdlRef.current !== null) {
+            setWdl(pendingWdlRef.current);
+            pendingWdlRef.current = null;
+        }
 
         if (pvDirtyRef.current) {
             pvDirtyRef.current = false;
@@ -357,8 +367,8 @@ export function useEngine(options: EngineInitOptions = {}) {
             if (!didConfigureSessionRef.current) {
                 didConfigureSessionRef.current = true;
                 sendCommand('setoption name UCI_Variant value xiangqi');
-                sendCommand('setoption name MultiPV value 1');
-                sendCommand('setoption name UCI_ShowWDL value false');
+                sendCommand('setoption name MultiPV value 3');
+                sendCommand('setoption name UCI_ShowWDL value true');
                 sendCommand('setoption name Ponder value false');
                 sendCommand('ucinewgame');
             }
@@ -402,9 +412,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             pendingInfoLineRef.current = msg;
             const depthMatch = msg.match(/\bdepth (\d+)/);
             const scoreMatch = msg.match(/\bscore cp ([+-]?\d+)/);
-
-            // Matte score: score mate -1
             const mateMatch = msg.match(/\bscore mate ([+-]?\d+)/);
+            const multipvMatch = msg.match(/\bmultipv (\d+)/);
+            const wdlMatch = msg.match(/\bwdl (\d+) (\d+) (\d+)/);
+
+            const multipvIndex = multipvMatch ? parseInt(multipvMatch[1], 10) - 1 : 0;
 
             let finalScore = 0;
             if (scoreMatch) {
@@ -414,13 +426,22 @@ export function useEngine(options: EngineInitOptions = {}) {
                 finalScore = mateIn > 0 ? 10000 - mateIn : -10000 - mateIn;
             }
 
-            if (scoreMatch || mateMatch) {
-                pendingEvalRef.current = finalScore;
+            // Only update eval and WDL from the primary PV line (multipv 1)
+            if (multipvIndex === 0) {
+                if (scoreMatch || mateMatch) {
+                    pendingEvalRef.current = finalScore;
+                }
+                if (wdlMatch) {
+                    pendingWdlRef.current = {
+                        win: parseInt(wdlMatch[1], 10),
+                        draw: parseInt(wdlMatch[2], 10),
+                        loss: parseInt(wdlMatch[3], 10),
+                    };
+                }
             }
 
             const pvMatch = msg.match(/\bpv (.*)/);
             if (depthMatch && pvMatch && (scoreMatch || mateMatch)) {
-
                 let scoreStr = '';
                 if (scoreMatch) {
                     scoreStr = finalScore > 0 ? `+${finalScore}` : `${finalScore}`;
@@ -429,17 +450,18 @@ export function useEngine(options: EngineInitOptions = {}) {
                     scoreStr = mateIn > 0 ? `+M${mateIn}` : `-M${Math.abs(mateIn)}`;
                 }
 
-                const newPv = {
+                const newPv: PvLine = {
                     depth: depthMatch[1],
                     score: finalScore,
                     scoreStr,
-                    moves: pvMatch[1].trim().split(' ')
+                    moves: pvMatch[1].trim().split(' '),
+                    multipv: multipvIndex,
                 };
 
-                pvLinesRef.current = [
-                    newPv,
-                    ...pvLinesRef.current.filter((pv) => pv.depth !== newPv.depth),
-                ].slice(0, 3);
+                // Keep one entry per multipv slot, ordered by slot index
+                const filtered = pvLinesRef.current.filter((pv) => pv.multipv !== multipvIndex);
+                const merged = [...filtered, newPv].sort((a, b) => (a.multipv ?? 0) - (b.multipv ?? 0));
+                pvLinesRef.current = merged.slice(0, 3);
                 pvDirtyRef.current = true;
             }
 
@@ -458,5 +480,5 @@ export function useEngine(options: EngineInitOptions = {}) {
         };
     }, []);
 
-    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, sendCommand, outputLines, pvLines, evalScore };
+    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, sendCommand, outputLines, pvLines, evalScore, wdl };
 }
