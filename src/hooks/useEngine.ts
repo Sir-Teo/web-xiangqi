@@ -37,6 +37,7 @@ function detectUiSafeHashMB() {
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
+    const [variant, setVariant] = useState<string>('unknown');
     const [outputLines, setOutputLines] = useState<string[]>([]);
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
     const [evalScore, setEvalScore] = useState<number>(0);
@@ -51,10 +52,21 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pvDirtyRef = useRef(false);
     const infoFlushTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
+    const initTokenRef = useRef(0);
 
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
     }, [options.onBestMove]);
+
+    const terminateEngineInstance = useCallback((engineInstance: any) => {
+        if (!engineInstance || typeof engineInstance.terminate !== 'function') return;
+        try {
+            const termination = engineInstance.terminate();
+            if (termination && typeof termination.catch === 'function') {
+                termination.catch(() => {});
+            }
+        } catch (_) {}
+    }, []);
 
     const commitOutputLines = useCallback((nextLines: string[]) => {
         const trimmed = nextLines.slice(-OUTPUT_LINE_LIMIT);
@@ -126,42 +138,15 @@ export function useEngine(options: EngineInitOptions = {}) {
         sendCommand('stop');
     }, [sendCommand]);
 
-    useEffect(() => {
-        // We expect `window.Pikafish` to be available after loading `pikafish.js`.
-        // In Vite, we can inject a script tag dynamically or add it to index.html.
-        const engineScriptSrc = '/pikafish.js?v=nosimd-worker-propagation-fix';
-        const existingScript = document.querySelector('#pikafish-script') as HTMLScriptElement | null;
-
-        if (existingScript && existingScript.getAttribute('src') !== engineScriptSrc) {
-            existingScript.remove();
-        }
-
-        const activeScript = document.querySelector('#pikafish-script') as HTMLScriptElement | null;
-        if (!activeScript) {
-            const script = document.createElement('script');
-            script.id = 'pikafish-script';
-            script.src = engineScriptSrc;
-            script.async = true;
-            script.onload = () => {
-                initializeEngine();
-            };
-            document.body.appendChild(script);
-        } else {
-            initializeEngine();
-        }
-
-        return () => {
-            // Cleanup
-            if (engineRef.current && typeof engineRef.current.terminate === 'function') {
-                engineRef.current.terminate();
-            }
-        };
-    }, []);
-
-    const initializeEngine = () => {
+    const initializeEngine = useCallback((initToken: number) => {
         if (typeof (window as any).Pikafish !== 'function' || typeof (window as any).Pikafish.createWorkerEngine !== 'function') {
             console.error("Pikafish is not loaded.");
             return;
+        }
+
+        if (engineRef.current) {
+            terminateEngineInstance(engineRef.current);
+            engineRef.current = null;
         }
 
         // Wait for the constructor. We'll use "auto" variant as default.
@@ -170,6 +155,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         const hashMB = options.hashMB ?? detectUiSafeHashMB();
         didConfigureSessionRef.current = false;
         setIsReady(false);
+        setVariant('unknown');
 
         // Boot engine using the wrapper component
         pikafishFactory.createWorkerEngine({
@@ -180,10 +166,17 @@ export function useEngine(options: EngineInitOptions = {}) {
             hashMB,
         })
             .then((engineInstance: any) => {
+                if (initToken !== initTokenRef.current) {
+                    terminateEngineInstance(engineInstance);
+                    return;
+                }
+
                 engineRef.current = engineInstance;
+                setVariant(String(engineInstance?.variant || options.variant || 'auto'));
 
                 // Listen to stdout from the worker
                 engineInstance.addMessageListener((msg: string) => {
+                    if (initToken !== initTokenRef.current) return;
                     handleUciOut(msg);
                 });
 
@@ -191,9 +184,50 @@ export function useEngine(options: EngineInitOptions = {}) {
                 engineInstance.postMessage('uci');
             })
             .catch((err: any) => {
+                if (initToken !== initTokenRef.current) return;
                 console.error("Failed to boot Pikafish engine", err);
             });
-    };
+    }, [options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
+
+    useEffect(() => {
+        // Prefer the script already declared in index.html. Only inject a loader
+        // when the page didn't include Pikafish yet.
+        const initToken = ++initTokenRef.current;
+        const engineScriptSrc = '/pikafish.js';
+        let script: HTMLScriptElement | null = null;
+
+        const start = () => {
+            if (initToken !== initTokenRef.current) return;
+            initializeEngine(initToken);
+        };
+
+        if (typeof (window as any).Pikafish === 'function' && typeof (window as any).Pikafish.createWorkerEngine === 'function') {
+            start();
+        } else {
+            const existingScript = Array.from(document.scripts).find((candidate) => {
+                const src = candidate.getAttribute('src') || '';
+                return src.includes('/pikafish.js');
+            }) as HTMLScriptElement | undefined;
+
+            script = existingScript ?? document.createElement('script');
+            if (!existingScript) {
+                script.id = 'pikafish-script';
+                script.src = engineScriptSrc;
+                script.async = true;
+                document.body.appendChild(script);
+            }
+            script.addEventListener('load', start, { once: true });
+        }
+
+        return () => {
+            initTokenRef.current += 1;
+            if (script) {
+                script.removeEventListener('load', start);
+            }
+            terminateEngineInstance(engineRef.current);
+            engineRef.current = null;
+        };
+    }, [initializeEngine, terminateEngineInstance]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -294,5 +328,5 @@ export function useEngine(options: EngineInitOptions = {}) {
         };
     }, []);
 
-    return { isReady, isSearching, startSearch, stopSearch, sendCommand, outputLines, pvLines, evalScore };
+    return { isReady, isSearching, variant, startSearch, stopSearch, sendCommand, outputLines, pvLines, evalScore };
 }

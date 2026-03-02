@@ -23,6 +23,7 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'PvAI-Red', label: 'vs AI (Black)' },
   { mode: 'AIvAI', label: 'AI vs AI' },
 ];
+const WORKER_SAFE_MAX_DEPTH = 12;
 
 function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
   if (nodeId === rootNodeId) return 'Start';
@@ -99,11 +100,17 @@ function App() {
   const currentPositionCommand = useMemo(() => {
     return `position fen ${currentFen}`;
   }, [currentFen]);
+  const analysisRequestKey = useMemo(() => {
+    return `${currentPositionCommand}::depth:${Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH)}`;
+  }, [currentPositionCommand, searchDepth]);
 
   const applyBestMoveRef = useRef(false);
-  const activeAnalysisPositionRef = useRef('');
+  const activeAnalysisRequestRef = useRef('');
+  const settledAnalysisRequestRef = useRef('');
+  const currentAnalysisRequestKeyRef = useRef(analysisRequestKey);
+  currentAnalysisRequestKeyRef.current = analysisRequestKey;
 
-  const { isReady, isSearching, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
+  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
     onBestMove: (uci, score) => {
       if (applyBestMoveRef.current) {
         applyUciMove(uci, score);
@@ -114,9 +121,12 @@ function App() {
           setPaused(true);
         }
         applyBestMoveRef.current = false;
+      } else {
+        settledAnalysisRequestRef.current = currentAnalysisRequestKeyRef.current;
       }
     }
   });
+  const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
 
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
@@ -166,7 +176,8 @@ function App() {
     if (!engineEnabled) {
       applyBestMoveRef.current = false;
       stopSearch();
-      activeAnalysisPositionRef.current = '';
+      activeAnalysisRequestRef.current = '';
+      settledAnalysisRequestRef.current = '';
     }
   }, [engineEnabled, stopSearch]);
 
@@ -199,7 +210,8 @@ function App() {
       (gameMode === 'PvAI-Red' && sideToMove === 'w');
 
     if (!engineEnabled || !isReady) {
-      activeAnalysisPositionRef.current = '';
+      activeAnalysisRequestRef.current = '';
+      settledAnalysisRequestRef.current = '';
       if (isSearching) {
         applyBestMoveRef.current = false;
         stopSearch();
@@ -208,30 +220,36 @@ function App() {
     }
 
     if (isAiTurn) {
-      activeAnalysisPositionRef.current = '';
+      activeAnalysisRequestRef.current = '';
+      settledAnalysisRequestRef.current = '';
       if (isSearching && !applyBestMoveRef.current) {
         stopSearch();
       }
       return;
     }
 
-    const positionChanged = activeAnalysisPositionRef.current !== currentPositionCommand;
-    if (positionChanged) {
-      activeAnalysisPositionRef.current = currentPositionCommand;
+    const requestChanged = activeAnalysisRequestRef.current !== analysisRequestKey;
+    if (requestChanged) {
+      activeAnalysisRequestRef.current = analysisRequestKey;
+      settledAnalysisRequestRef.current = '';
     }
 
     if (isSearching) {
-      if (positionChanged) {
+      if (requestChanged) {
         applyBestMoveRef.current = false;
         stopSearch();
       }
       return;
     }
 
+    if (settledAnalysisRequestRef.current === analysisRequestKey) {
+      return;
+    }
+
     applyBestMoveRef.current = false;
     startSearch(currentPositionCommand);
-    startSearch('go infinite');
-  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, isSearching, stopSearch, startSearch]);
+    startSearch(`go depth ${safeSearchDepth}`);
+  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, analysisRequestKey, isSearching, stopSearch, startSearch, safeSearchDepth]);
 
   // AI move effect
   useEffect(() => {
@@ -267,11 +285,11 @@ function App() {
       }
       applyBestMoveRef.current = true;
       startSearch(currentPositionCommand);
-      startSearch(`go depth ${searchDepth}`);
+      startSearch(`go depth ${safeSearchDepth}`);
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [sideToMove, gameMode, isReady, isSearching, startSearch, stopSearch, searchDepth, currentPositionCommand, paused]);
+  }, [sideToMove, gameMode, isReady, isSearching, startSearch, stopSearch, currentPositionCommand, paused, safeSearchDepth]);
 
   // Eval capture for graph
   useEffect(() => {
@@ -398,7 +416,7 @@ function App() {
             {engineEnabled ? (
               <div className="top-engine-state">
                 <span className={`status-dot ${isReady ? 'healthy' : ''}`} />
-                {isReady ? 'Pikafish ready' : 'Loading engine…'}
+                {isReady ? `Pikafish ready (${engineVariant})` : 'Loading engine…'}
               </div>
             ) : null}
 
@@ -558,7 +576,10 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Search Depth (Plys) — {searchDepth}</label>
+              <label>
+                Search Depth (Plys) — {searchDepth}
+                {searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
+              </label>
               <input
                 type="range"
                 min="1"
