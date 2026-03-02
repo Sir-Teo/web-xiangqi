@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import type { GameMode } from '../../App';
 import {
     IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward,
@@ -44,7 +44,7 @@ type Props = {
     onScrub: (index: number) => void;
 };
 
-export function WatchControls({
+export const WatchControls = memo(function WatchControls({
     canGoBack,
     canGoForward,
     onFirst,
@@ -207,4 +207,6 @@ export function WatchControls({
             </div>
         </div>
     );
-}
+});
+
+WatchControls.displayName = 'WatchControls';

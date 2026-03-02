@@ -17,7 +17,7 @@ type EvalPoint = {
     ply: number;
 };
 
-export const EvalGraph: React.FC<EvalGraphProps> = ({
+export const EvalGraph = React.memo(function EvalGraph({
     history,
     currentMoveIndex,
     currentEval,
@@ -25,7 +25,7 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
     branchCounts = {},
     rootBranchCount = 0,
     onNavigate
-}) => {
+}: EvalGraphProps) {
     const [hoverPointIndex, setHoverPointIndex] = useState<number | null>(null);
 
     const points = useMemo<EvalPoint[]>(() => {
@@ -226,7 +226,9 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
             ) : null}
         </div>
     );
-};
+});
+
+EvalGraph.displayName = 'EvalGraph';
 
 function formatEval(score: number): string {
     const sign = score > 0 ? '+' : '';

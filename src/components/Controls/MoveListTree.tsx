@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 
 type Props = {
@@ -10,7 +10,7 @@ type Props = {
     onNavigateNode: (nodeId: string) => void;
 };
 
-export function MoveListTree({
+export const MoveListTree = memo(function MoveListTree({
     treeNodes,
     rootNodeId: _rootNodeId,
     currentNodeId,
@@ -95,7 +95,9 @@ export function MoveListTree({
     }
 
     return <div className="mtree-scroll">{rows}</div>;
-}
+});
+
+MoveListTree.displayName = 'MoveListTree';
 
 function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
     return `${record.piece.toUpperCase()}${record.captured ? 'x' : '-'}${record.uci.substring(2, 4)}`;

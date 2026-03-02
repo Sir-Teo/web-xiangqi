@@ -17,13 +17,13 @@ interface BoardProps {
     orientation?: BoardOrientation;
 }
 
-export const Board: React.FC<BoardProps> = ({
+export const Board = React.memo(function Board({
     board,
     selected,
     validTargets,
     onSquareClick,
     orientation = 'red',
-}) => {
+}: BoardProps) {
     // When orientation='black', flip rank and file ordering
     const ranks = orientation === 'black'
         ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -151,4 +151,6 @@ export const Board: React.FC<BoardProps> = ({
             </div>
         </div>
     );
-}
+});
+
+Board.displayName = 'Board';

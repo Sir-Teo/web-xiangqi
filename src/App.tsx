@@ -96,15 +96,9 @@ function App() {
     jumpToNode,
   } = useXiangqi();
 
-  const activeLineMoves = useMemo(
-    () => moveHistory.slice(0, currentMoveIndex + 1),
-    [moveHistory, currentMoveIndex]
-  );
-
   const currentPositionCommand = useMemo(() => {
-    const uciMoves = activeLineMoves.map((move) => move.uci).join(' ');
-    return `position startpos ${uciMoves ? 'moves ' + uciMoves : ''}`.trim();
-  }, [activeLineMoves]);
+    return `position fen ${currentFen}`;
+  }, [currentFen]);
 
   const applyBestMoveRef = useRef(false);
   const activeAnalysisPositionRef = useRef('');

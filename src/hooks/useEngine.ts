@@ -1,28 +1,112 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
+const OUTPUT_LINE_LIMIT = 100;
+const INFO_FLUSH_MS = 200;
+
+type PvLine = {
+    depth: string;
+    score: number;
+    scoreStr: string;
+    moves: string[];
+};
+
 export interface EngineInitOptions {
     variant?: 'auto' | 'threaded' | 'single';
     allowSIMD?: boolean;
+    threads?: number;
+    hashMB?: number;
     onBestMove?: (uci: string, score: number) => void;
+}
+
+function detectUiSafeThreads() {
+    if (typeof navigator === 'undefined') return 1;
+    const hardwareThreads = Number(navigator.hardwareConcurrency) || 2;
+    const compactLayout = typeof window !== 'undefined' ? window.innerWidth <= 900 : false;
+    if (compactLayout) return 1;
+    return Math.max(1, Math.min(2, Math.floor(hardwareThreads / 4) || 1));
+}
+
+function detectUiSafeHashMB() {
+    if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+        return 32;
+    }
+    return 64;
 }
 
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [outputLines, setOutputLines] = useState<string[]>([]);
-    const [pvLines, setPvLines] = useState<any[]>([]);
+    const [pvLines, setPvLines] = useState<PvLine[]>([]);
     const [evalScore, setEvalScore] = useState<number>(0);
 
     const engineRef = useRef<any>(null);
     const onBestMoveRef = useRef(options.onBestMove);
+    const outputLinesRef = useRef<string[]>([]);
+    const pvLinesRef = useRef<PvLine[]>([]);
+    const latestEvalRef = useRef(0);
+    const pendingInfoLineRef = useRef<string | null>(null);
+    const pendingEvalRef = useRef<number | null>(null);
+    const pvDirtyRef = useRef(false);
+    const infoFlushTimerRef = useRef<number | null>(null);
+    const didConfigureSessionRef = useRef(false);
 
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
     }, [options.onBestMove]);
 
+    const commitOutputLines = useCallback((nextLines: string[]) => {
+        const trimmed = nextLines.slice(-OUTPUT_LINE_LIMIT);
+        outputLinesRef.current = trimmed;
+        setOutputLines(trimmed);
+    }, []);
+
+    const appendOutputLine = useCallback((line: string) => {
+        commitOutputLines([...outputLinesRef.current, line]);
+    }, [commitOutputLines]);
+
+    const flushBufferedInfo = useCallback(() => {
+        if (infoFlushTimerRef.current !== null) {
+            window.clearTimeout(infoFlushTimerRef.current);
+            infoFlushTimerRef.current = null;
+        }
+
+        if (pendingInfoLineRef.current) {
+            commitOutputLines([...outputLinesRef.current, pendingInfoLineRef.current]);
+            pendingInfoLineRef.current = null;
+        }
+
+        if (pendingEvalRef.current !== null && pendingEvalRef.current !== latestEvalRef.current) {
+            latestEvalRef.current = pendingEvalRef.current;
+            setEvalScore(pendingEvalRef.current);
+        }
+        pendingEvalRef.current = null;
+
+        if (pvDirtyRef.current) {
+            pvDirtyRef.current = false;
+            setPvLines([...pvLinesRef.current]);
+        }
+    }, [commitOutputLines]);
+
+    const scheduleInfoFlush = useCallback(() => {
+        if (infoFlushTimerRef.current !== null) return;
+        infoFlushTimerRef.current = window.setTimeout(() => {
+            flushBufferedInfo();
+        }, INFO_FLUSH_MS);
+    }, [flushBufferedInfo]);
+
     // Ref mirrors isSearching so stopSearch doesn't need it in its deps
     const isSearchingRef = useRef(false);
+
+    const sendCommand = useCallback((cmd: string) => {
+        if (engineRef.current) {
+            engineRef.current.postMessage(cmd);
+            appendOutputLine(`> ${cmd}`);
+        } else {
+            console.warn("Engine not ready, ignoring command:", cmd);
+        }
+    }, [appendOutputLine]);
 
     // Track searching state from actual UCI search commands only.
     // Keep `isSearching` true after `stop` until the engine emits `bestmove`.
@@ -33,14 +117,14 @@ export function useEngine(options: EngineInitOptions = {}) {
             isSearchingRef.current = true;
         }
         sendCommand(cmd);
-    }, []);
+    }, [sendCommand]);
 
     // Only send `stop` when actually searching — calling stop on an idle engine
     // causes a WASM function signature mismatch crash.
     const stopSearch = useCallback(() => {
         if (!isSearchingRef.current) return;
         sendCommand('stop');
-    }, []);
+    }, [sendCommand]);
 
     useEffect(() => {
         // We expect `window.Pikafish` to be available after loading `pikafish.js`.
@@ -82,12 +166,18 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         // Wait for the constructor. We'll use "auto" variant as default.
         const pikafishFactory = (window as any).Pikafish;
+        const threads = options.threads ?? detectUiSafeThreads();
+        const hashMB = options.hashMB ?? detectUiSafeHashMB();
+        didConfigureSessionRef.current = false;
+        setIsReady(false);
 
         // Boot engine using the wrapper component
         pikafishFactory.createWorkerEngine({
             variant: options.variant || 'auto',
             // Prefer stability over speed: some environments crash in single-simd.
             allowSIMD: options.allowSIMD ?? false,
+            threads,
+            hashMB,
         })
             .then((engineInstance: any) => {
                 engineRef.current = engineInstance;
@@ -105,47 +195,50 @@ export function useEngine(options: EngineInitOptions = {}) {
             });
     };
 
-    const sendCommand = useCallback((cmd: string) => {
-        if (engineRef.current) {
-            engineRef.current.postMessage(cmd);
-            setOutputLines((prev) => [...prev, `> ${cmd}`]);
-        } else {
-            console.warn("Engine not ready, ignoring command:", cmd);
-        }
-    }, []);
-
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
         if (!msg) return;
 
-        setOutputLines((prev) => [...prev.slice(-100), msg]); // Keep last 100 lines
-
         if (msg === 'uciok') {
+            appendOutputLine(msg);
+            if (!didConfigureSessionRef.current) {
+                didConfigureSessionRef.current = true;
+                sendCommand('setoption name UCI_Variant value xiangqi');
+                sendCommand('setoption name MultiPV value 1');
+                sendCommand('setoption name UCI_ShowWDL value false');
+                sendCommand('setoption name Ponder value false');
+                sendCommand('ucinewgame');
+            }
             sendCommand('isready');
         } else if (msg === 'readyok') {
+            appendOutputLine(msg);
             setIsReady(true);
         } else if (msg.startsWith('[worker-error]')) {
-            // Non-fatal: reset searching state but keep isReady so the engine
-            // can continue. The crash was likely from calling `stop` while idle.
+            flushBufferedInfo();
+            appendOutputLine(msg);
+            // The worker aborted. Mark the engine unavailable so callers do not
+            // keep reissuing the same search in a loop.
+            setIsReady(false);
             setIsSearching(false);
             isSearchingRef.current = false;
+            engineRef.current = null;
         } else if (msg.startsWith('bestmove')) {
+            flushBufferedInfo();
+            appendOutputLine(msg);
             setIsSearching(false);
             isSearchingRef.current = false;
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
             if (moveMatch && moveMatch[1]) {
                 const uciMove = moveMatch[1];
-                setEvalScore((currentScore) => {
-                    if (onBestMoveRef.current) {
-                        onBestMoveRef.current(uciMove, currentScore);
-                    }
-                    return currentScore;
-                });
+                onBestMoveRef.current?.(uciMove, latestEvalRef.current);
             }
+        } else if (!msg.startsWith('info')) {
+            appendOutputLine(msg);
         }
 
         // Parse PV info line
         if (msg.startsWith('info')) {
+            pendingInfoLineRef.current = msg;
             const depthMatch = msg.match(/\bdepth (\d+)/);
             const scoreMatch = msg.match(/\bscore cp ([+-]?\d+)/);
 
@@ -161,7 +254,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             }
 
             if (scoreMatch || mateMatch) {
-                setEvalScore(finalScore);
+                pendingEvalRef.current = finalScore;
             }
 
             const pvMatch = msg.match(/\bpv (.*)/);
@@ -182,15 +275,24 @@ export function useEngine(options: EngineInitOptions = {}) {
                     moves: pvMatch[1].trim().split(' ')
                 };
 
-                // In a real app we'd map multipv index or just replace the root line.
-                // Here we'll just push it and keep the top N
-                setPvLines(prev => {
-                    const current = [newPv, ...prev].slice(0, 3);
-                    return current;
-                });
+                pvLinesRef.current = [
+                    newPv,
+                    ...pvLinesRef.current.filter((pv) => pv.depth !== newPv.depth),
+                ].slice(0, 3);
+                pvDirtyRef.current = true;
             }
+
+            scheduleInfoFlush();
         }
     };
+
+    useEffect(() => {
+        return () => {
+            if (infoFlushTimerRef.current !== null) {
+                window.clearTimeout(infoFlushTimerRef.current);
+            }
+        };
+    }, []);
 
     return { isReady, isSearching, startSearch, stopSearch, sendCommand, outputLines, pvLines, evalScore };
 }
