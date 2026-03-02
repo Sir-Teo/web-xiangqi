@@ -31,7 +31,6 @@ type Props = {
     // AI play control
     gameMode: GameMode;
     paused: boolean;
-    isGameOver: boolean;
     onPause: () => void;
     onResume: () => void;
     onStep: () => void;
@@ -53,7 +52,6 @@ export const WatchControls = memo(function WatchControls({
     onLast,
     gameMode,
     paused,
-    isGameOver,
     onPause,
     onResume,
     onStep,
@@ -127,7 +125,7 @@ export const WatchControls = memo(function WatchControls({
             </div>
 
             {/* ── Play / Pause / Step (AI modes only) ── */}
-            {aiActive && !isGameOver && (
+            {aiActive && (
                 <div className="wc-play">
                     {stepMode && paused ? (
                         <button
