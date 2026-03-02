@@ -21,17 +21,24 @@ export function useEngine(options: EngineInitOptions = {}) {
         onBestMoveRef.current = options.onBestMove;
     }, [options.onBestMove]);
 
+    // Ref mirrors isSearching so stopSearch doesn't need it in its deps
+    const isSearchingRef = useRef(false);
+
     // Track searching state from actual UCI search commands only.
     // Keep `isSearching` true after `stop` until the engine emits `bestmove`.
     const startSearch = useCallback((cmd: string) => {
         const normalized = cmd.trim().toLowerCase();
         if (normalized.startsWith('go')) {
             setIsSearching(true);
+            isSearchingRef.current = true;
         }
         sendCommand(cmd);
     }, []);
 
+    // Only send `stop` when actually searching — calling stop on an idle engine
+    // causes a WASM function signature mismatch crash.
     const stopSearch = useCallback(() => {
+        if (!isSearchingRef.current) return;
         sendCommand('stop');
     }, []);
 
@@ -118,10 +125,13 @@ export function useEngine(options: EngineInitOptions = {}) {
         } else if (msg === 'readyok') {
             setIsReady(true);
         } else if (msg.startsWith('[worker-error]')) {
+            // Non-fatal: reset searching state but keep isReady so the engine
+            // can continue. The crash was likely from calling `stop` while idle.
             setIsSearching(false);
-            setIsReady(false);
+            isSearchingRef.current = false;
         } else if (msg.startsWith('bestmove')) {
             setIsSearching(false);
+            isSearchingRef.current = false;
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
             if (moveMatch && moveMatch[1]) {
                 const uciMove = moveMatch[1];
