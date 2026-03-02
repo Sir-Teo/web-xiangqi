@@ -698,7 +698,7 @@ function App() {
           <div className="panel-inner" style={{ opacity: (!isMobile && leftWidth === 0) ? 0 : 1 }}>
             <header className="panel-header">
               <h2><IconBarChart style={{ marginRight: '0.35rem', verticalAlign: 'middle' }} />Analysis Graph</h2>
-              <span className="panel-kicker">Click chart nodes to jump</span>
+              <span className="panel-kicker">Click or use arrow keys to jump</span>
             </header>
             <div className="panel-content">
               <EvalGraph
@@ -717,7 +717,7 @@ function App() {
                 <button type="button" className="chip-btn" onClick={() => jumpAndPausePlayback(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
               </div>
               <p className="panel-copy small">
-                Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}
+                Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
               </p>
             </div>
           </div>

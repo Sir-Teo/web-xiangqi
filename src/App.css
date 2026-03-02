@@ -1728,12 +1728,47 @@
    Winrate graph
    ═══════════════════════════════════════════════════ */
 .graph-wrap {
+  position: relative;
   width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-card);
-  padding: 0.4rem;
+  padding: 0.5rem;
   overflow: hidden;
+}
+
+.graph-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+  margin-bottom: 0.45rem;
+}
+
+.graph-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  padding: 0.46rem 0.54rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    var(--bg-elevated);
+}
+
+.graph-summary-card span {
+  font-size: 0.63rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.graph-summary-card strong {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .graph-scroll {
@@ -1743,11 +1778,21 @@
   scrollbar-width: thin;
 }
 
+.graph-scroll-inner {
+  position: relative;
+  min-width: 100%;
+}
+
 .winrate-graph {
   width: max-content;
   min-width: 100%;
-  height: 220px;
+  height: 248px;
   display: block;
+  outline: none;
+}
+
+.winrate-graph:focus-visible {
+  filter: drop-shadow(0 0 0.4rem rgba(63, 185, 80, 0.2));
 }
 
 .graph-grid-line {
@@ -1756,10 +1801,37 @@
   stroke-dasharray: 3 4;
 }
 
+.graph-grid-line-zero {
+  stroke: rgba(240, 246, 252, 0.18);
+}
+
 .graph-grid-text {
   font-size: 13px;
   fill: var(--text-secondary);
   font-family: inherit;
+}
+
+.graph-zone {
+  pointer-events: none;
+}
+
+.graph-zone-positive {
+  fill: rgba(63, 185, 80, 0.05);
+}
+
+.graph-zone-negative {
+  fill: rgba(255, 122, 89, 0.04);
+}
+
+.graph-axis-tick {
+  stroke: rgba(240, 246, 252, 0.18);
+  stroke-width: 1;
+}
+
+.graph-axis-text {
+  font-size: 11px;
+  fill: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
 }
 
 .graph-area {
@@ -3070,8 +3142,8 @@ summary:active {
 }
 
 .graph-branch-badge rect {
-  fill: rgba(63, 185, 80, 0.18);
-  stroke: rgba(63, 185, 80, 0.45);
+  fill: rgba(63, 185, 80, 0.22);
+  stroke: rgba(63, 185, 80, 0.52);
   stroke-width: 1;
 }
 
@@ -3105,12 +3177,30 @@ summary:active {
   border-radius: var(--radius-sm);
   background: rgba(8, 10, 12, 0.94);
   color: var(--text-primary);
-  padding: 0.26rem 0.42rem;
+  padding: 0.38rem 0.48rem;
   font-size: 0.68rem;
   font-family: "JetBrains Mono", monospace;
   pointer-events: none;
   white-space: nowrap;
   z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.graph-tooltip strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.graph-tooltip span {
+  color: #d9fff1;
+}
+
+.graph-tooltip em {
+  color: var(--text-secondary);
+  font-style: normal;
 }
 
 .graph-jump-controls {
@@ -3139,6 +3229,16 @@ summary:active {
 .chip-btn:disabled {
   opacity: 0.34;
   cursor: not-allowed;
+}
+
+.graph-extrema {
+  margin-top: 0.38rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
 }
 
 /* Engine tab cards */
@@ -3349,6 +3449,10 @@ summary:active {
 }
 
 @media (max-width: 768px) {
+  .graph-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .graph-jump-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
