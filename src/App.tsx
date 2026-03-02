@@ -37,7 +37,6 @@ function App() {
     typeof window === 'undefined' ? 1280 : window.innerWidth
   );
 
-  const [autoAnalyze, setAutoAnalyze] = useState(false);
   const [searchDepth, setSearchDepth] = useState(8);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [playbackSpeedMs, setPlaybackSpeedMs] = useState(700);
@@ -74,6 +73,7 @@ function App() {
   }, [activeLineMoves]);
 
   const applyBestMoveRef = useRef(false);
+  const activeAnalysisPositionRef = useRef('');
 
   const { isReady, isSearching, startSearch, stopSearch, outputLines, pvLines, evalScore } = useEngine({
     onBestMove: (uci, score) => {
@@ -124,7 +124,6 @@ function App() {
 
   const stopAnalysis = () => {
     applyBestMoveRef.current = false;
-    setAutoAnalyze(false);
     stopSearch();
   };
 
@@ -135,10 +134,18 @@ function App() {
   };
 
   useEffect(() => {
-    if (!engineEnabled && autoAnalyze) {
-      stopAnalysis();
+    if (!engineEnabled) {
+      applyBestMoveRef.current = false;
+      stopSearch();
+      activeAnalysisPositionRef.current = '';
     }
-  }, [engineEnabled, autoAnalyze]);
+  }, [engineEnabled, stopSearch]);
+
+  useEffect(() => {
+    if (!engineEnabled && analysisTab === 'engine') {
+      setAnalysisTab('tree');
+    }
+  }, [engineEnabled, analysisTab]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -162,16 +169,44 @@ function App() {
       (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
       (gameMode === 'PvAI-Red' && sideToMove === 'w');
 
-    if (!engineEnabled || !isReady || !autoAnalyze || isAiTurn) return undefined;
+    if (!engineEnabled || !isReady) {
+      activeAnalysisPositionRef.current = '';
+      if (isSearching) {
+        applyBestMoveRef.current = false;
+        stopSearch();
+      }
+      return;
+    }
 
+    if (isAiTurn) {
+      activeAnalysisPositionRef.current = '';
+      // If analysis mode was running an infinite search, stop it so the AI turn
+      // can start its own depth-limited search.
+      if (isSearching && !applyBestMoveRef.current) {
+        stopSearch();
+      }
+      return;
+    }
+
+    const positionChanged = activeAnalysisPositionRef.current !== currentPositionCommand;
+    if (positionChanged) {
+      activeAnalysisPositionRef.current = currentPositionCommand;
+    }
+
+    if (isSearching) {
+      // A running search on an old position must be stopped first.
+      if (positionChanged) {
+        applyBestMoveRef.current = false;
+        stopSearch();
+      }
+      return;
+    }
+
+    // Not searching: start or resume analysis for the current position.
     applyBestMoveRef.current = false;
-    stopSearch();
-    const timer = setTimeout(() => {
-      startSearch(currentPositionCommand);
-      startSearch(`go depth ${searchDepth}`);
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [engineEnabled, isReady, autoAnalyze, gameMode, sideToMove, stopSearch, startSearch, currentPositionCommand, searchDepth]);
+    startSearch(currentPositionCommand);
+    startSearch('go infinite');
+  }, [engineEnabled, isReady, gameMode, sideToMove, currentPositionCommand, isSearching, stopSearch, startSearch]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -186,11 +221,6 @@ function App() {
       return undefined;
     }
 
-    if (autoAnalyze) {
-      setAutoAnalyze(false);
-      stopSearch();
-    }
-
     if (isSearching) {
       return undefined;
     }
@@ -202,7 +232,7 @@ function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [sideToMove, gameMode, isReady, isSearching, autoAnalyze, startSearch, stopSearch, searchDepth, currentPositionCommand]);
+  }, [sideToMove, gameMode, isReady, isSearching, startSearch, stopSearch, searchDepth, currentPositionCommand]);
 
   useEffect(() => {
     if (!engineEnabled || !isSearching || currentMoveIndex < 0) return;
@@ -251,16 +281,6 @@ function App() {
       setIsAutoPlaying(false);
       onSquareClick(file, rank);
     }
-  };
-
-  const toggleAnalysis = () => {
-    if (!engineEnabled) return;
-    if (autoAnalyze) {
-      stopAnalysis();
-      return;
-    }
-    applyBestMoveRef.current = false;
-    setAutoAnalyze(true);
   };
 
   const applyMode = (mode: GameMode) => {
@@ -339,13 +359,6 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={toggleAnalysis}
-                disabled={!isReady || !engineEnabled}
-              >
-                <span className="btn-label">{autoAnalyze ? 'Stop' : 'Analyze'}</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => setRightWidth((width) => (width > 0 ? 0 : DEFAULT_RIGHT))}
               >
                 <span className="btn-label">Tree</span>
@@ -386,10 +399,12 @@ function App() {
               ))}
             </div>
 
-            <div className="top-engine-state">
-              <span className={`status-dot ${isReady ? 'healthy' : ''}`}></span>
-              {isReady ? 'Pikafish ready' : 'Loading engine'}
-            </div>
+            {engineEnabled ? (
+              <div className="top-engine-state">
+                <span className={`status-dot ${isReady ? 'healthy' : ''}`}></span>
+                {isReady ? 'Pikafish ready' : 'Loading engine'}
+              </div>
+            ) : null}
 
             <span className="toolbar-divider desktop-only" />
 
@@ -458,17 +473,6 @@ function App() {
                       Right Panel
                     </button>
                   </div>
-                </div>
-
-                <div className="settings-group">
-                  <label>Analysis Mode</label>
-                  <button
-                    className={`premium-primary-btn ${autoAnalyze ? 'active' : ''}`}
-                    onClick={toggleAnalysis}
-                    disabled={!isReady || !engineEnabled}
-                  >
-                    {!engineEnabled ? 'Switch to Analysis Workspace' : (autoAnalyze ? 'Stop Analysis' : 'Analyze Position')}
-                  </button>
                 </div>
 
                 <div className="settings-group">
@@ -565,13 +569,15 @@ function App() {
                 >
                   Game Tree
                 </button>
-                <button
-                  type="button"
-                  className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
-                  onClick={() => setAnalysisTab('engine')}
-                >
-                  Engine
-                </button>
+                {engineEnabled ? (
+                  <button
+                    type="button"
+                    className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
+                    onClick={() => setAnalysisTab('engine')}
+                  >
+                    Engine
+                  </button>
+                ) : null}
               </div>
             </header>
             <div className="panel-content">
@@ -632,17 +638,10 @@ function App() {
           <span className="resize-pill horizontal" />
         </div>
         <div className="panel-inner">
-          <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} />
+          {engineEnabled ? <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
             <div className="game-controls">
               <button className="gc-btn" onClick={resetGame}>New Game</button>
-              <button
-                className={`gc-btn ${autoAnalyze ? 'gc-btn-pause' : 'gc-btn-resume'}`}
-                onClick={toggleAnalysis}
-                disabled={!isReady || !engineEnabled}
-              >
-                {autoAnalyze ? 'Stop Analysis' : 'Analyze'}
-              </button>
               <span className="game-mode-badge">
                 {GAME_MODES.find((item) => item.mode === gameMode)?.label ?? gameMode}
               </span>
@@ -677,10 +676,16 @@ function App() {
           </div>
 
           <div className="bottom-status-row">
-            <div className="bottom-engine-info">
-              {isSearching ? `Analyzing depth ${searchDepth}` : `Idle at depth ${searchDepth}`}
-              {inCheck ? <span className="check-badge">CHECK</span> : null}
-            </div>
+            {engineEnabled ? (
+              <div className="bottom-engine-info">
+                {isSearching ? 'Analyzing' : 'Idle'}
+                {inCheck ? <span className="check-badge">CHECK</span> : null}
+              </div>
+            ) : (
+              <div className="bottom-engine-info">
+                {inCheck ? <span className="check-badge">CHECK</span> : 'Play mode'}
+              </div>
+            )}
             <div className="bottombar-fen">FEN: {currentFen}</div>
           </div>
         </div>

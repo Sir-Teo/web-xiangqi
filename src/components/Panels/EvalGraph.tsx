@@ -39,7 +39,7 @@ export const EvalGraph: React.FC<EvalGraphProps> = ({
         const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
         const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
         const currentPlyHasStoredEval = typeof currentMove?.evalScore === 'number';
-        const shouldProjectLiveEval = isSearching || !currentPlyHasStoredEval;
+        const shouldProjectLiveEval = Number.isFinite(currentEval) && (isSearching || !currentPlyHasStoredEval);
         if (shouldProjectLiveEval) {
             next[activePointIndex] = {
                 ...next[activePointIndex],

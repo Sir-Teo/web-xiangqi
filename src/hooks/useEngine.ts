@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 export interface EngineInitOptions {
     variant?: 'auto' | 'threaded' | 'single';
+    allowSIMD?: boolean;
     onBestMove?: (uci: string, score: number) => void;
 }
 
@@ -20,26 +21,35 @@ export function useEngine(options: EngineInitOptions = {}) {
         onBestMoveRef.current = options.onBestMove;
     }, [options.onBestMove]);
 
-    // Track when we are actually searching
+    // Track searching state from actual UCI search commands only.
+    // Keep `isSearching` true after `stop` until the engine emits `bestmove`.
     const startSearch = useCallback((cmd: string) => {
-        setIsSearching(true);
+        const normalized = cmd.trim().toLowerCase();
+        if (normalized.startsWith('go')) {
+            setIsSearching(true);
+        }
         sendCommand(cmd);
     }, []);
 
     const stopSearch = useCallback(() => {
         sendCommand('stop');
-        setIsSearching(false);
     }, []);
 
     useEffect(() => {
         // We expect `window.Pikafish` to be available after loading `pikafish.js`.
         // In Vite, we can inject a script tag dynamically or add it to index.html.
+        const engineScriptSrc = '/pikafish.js?v=nosimd-worker-propagation-fix';
+        const existingScript = document.querySelector('#pikafish-script') as HTMLScriptElement | null;
 
-        // Check if script is already present
-        if (!document.querySelector('#pikafish-script')) {
+        if (existingScript && existingScript.getAttribute('src') !== engineScriptSrc) {
+            existingScript.remove();
+        }
+
+        const activeScript = document.querySelector('#pikafish-script') as HTMLScriptElement | null;
+        if (!activeScript) {
             const script = document.createElement('script');
             script.id = 'pikafish-script';
-            script.src = '/pikafish.js';
+            script.src = engineScriptSrc;
             script.async = true;
             script.onload = () => {
                 initializeEngine();
@@ -67,7 +77,11 @@ export function useEngine(options: EngineInitOptions = {}) {
         const pikafishFactory = (window as any).Pikafish;
 
         // Boot engine using the wrapper component
-        pikafishFactory.createWorkerEngine({ variant: options.variant || 'auto' })
+        pikafishFactory.createWorkerEngine({
+            variant: options.variant || 'auto',
+            // Prefer stability over speed: some environments crash in single-simd.
+            allowSIMD: options.allowSIMD ?? false,
+        })
             .then((engineInstance: any) => {
                 engineRef.current = engineInstance;
 
@@ -103,6 +117,9 @@ export function useEngine(options: EngineInitOptions = {}) {
             sendCommand('isready');
         } else if (msg === 'readyok') {
             setIsReady(true);
+        } else if (msg.startsWith('[worker-error]')) {
+            setIsSearching(false);
+            setIsReady(false);
         } else if (msg.startsWith('bestmove')) {
             setIsSearching(false);
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);

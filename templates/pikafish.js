@@ -484,7 +484,7 @@
     const basePath = opts.basePath || defaultBasePath();
     const wrapperScript = opts.workerScript || joinPath(basePath, "pikafish.js");
     const requestedVariant = opts.variant || "auto";
-    const bootstrapVariant = resolveVariant({ variant: requestedVariant });
+    const bootstrapVariant = resolveVariant({ variant: requestedVariant, allowSIMD: opts.allowSIMD });
     const coreScript = opts.coreScript || joinPath(basePath, coreMeta(bootstrapVariant).jsFile);
     const coreScripts = opts.coreScripts || null;
 
@@ -632,6 +632,7 @@
         nnuePath: opts.nnuePath || joinPath(basePath, "pikafish.nnue"),
         variant: requestedVariant,
         bootstrapVariant,
+        allowSIMD: opts.allowSIMD,
         autoLoadNNUE: opts.autoLoadNNUE !== false,
         autoTune: opts.autoTune !== false,
         maxAutoThreads: opts.maxAutoThreads,
@@ -774,6 +775,7 @@
       let basePathOverride = null;
       let nnuePathOverride = null;
       let variantOverride = "auto";
+      let allowSIMDOverride = undefined;
       let autoLoadNNUEOverride = true;
       let autoTuneOverride = true;
       let maxAutoThreadsOverride = undefined;
@@ -788,6 +790,7 @@
             basePath: basePathOverride || defaultBasePath(),
             nnuePath: nnuePathOverride || null,
             variant: variantOverride,
+            allowSIMD: allowSIMDOverride,
             autoLoadNNUE: autoLoadNNUEOverride,
             autoTune: autoTuneOverride,
             maxAutoThreads: maxAutoThreadsOverride,
@@ -833,6 +836,7 @@
           basePathOverride = data.basePath || basePathOverride;
           nnuePathOverride = data.nnuePath || nnuePathOverride;
           variantOverride = data.bootstrapVariant || data.variant || variantOverride;
+          allowSIMDOverride = data.allowSIMD;
           autoLoadNNUEOverride = data.autoLoadNNUE !== false;
           autoTuneOverride = data.autoTune !== false;
           maxAutoThreadsOverride = data.maxAutoThreads;
