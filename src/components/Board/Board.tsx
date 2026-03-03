@@ -95,7 +95,10 @@ export const Board = React.memo(function Board({
                 </div>
 
                 {/* The river dividing the board */}
-                <div className="river">CHU RIVER · HAN BORDER</div>
+                <div className="river">
+                    <span className="river-text">楚　河</span>
+                    <span className="river-text river-text-flipped">漢　界</span>
+                </div>
 
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}
                 <div className="hitboxes-layer">
