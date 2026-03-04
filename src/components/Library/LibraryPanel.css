@@ -1,0 +1,214 @@
+.lib-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Search ── */
+.lib-search-wrap {
+  padding-bottom: 0.4rem;
+  flex-shrink: 0;
+}
+
+.lib-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-subtle, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.lib-search:focus {
+  border-color: var(--accent, #10b981);
+}
+
+/* ── Section headers ── */
+.lib-section-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0.6rem 0 0.2rem;
+  flex-shrink: 0;
+}
+
+/* ── List ── */
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.5rem;
+}
+
+
+/* ── Cards ── */
+.lib-card {
+  background: var(--bg-elevated, rgba(255,255,255,0.04));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: border-color 0.15s;
+}
+
+.lib-card:hover {
+  border-color: rgba(255,255,255,0.15);
+}
+
+.lib-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.lib-matchup {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lib-vs {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin: 0 0.2em;
+}
+
+/* ── Result badges ── */
+.lib-result {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15em 0.5em;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lib-result--red {
+  background: rgba(220, 50, 50, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(220, 50, 50, 0.3);
+}
+
+.lib-result--black {
+  background: rgba(120, 120, 120, 0.15);
+  color: #9ca3af;
+  border: 1px solid rgba(120, 120, 120, 0.3);
+}
+
+.lib-result--draw {
+  background: rgba(234, 179, 8, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+/* ── Meta row ── */
+.lib-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
+.lib-dot {
+  opacity: 0.4;
+}
+
+.lib-opening {
+  color: var(--accent, #10b981);
+  font-weight: 600;
+}
+
+.lib-date {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.lib-eval--pos {
+  color: #cc3333;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.lib-eval--neg {
+  color: #888;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Card actions ── */
+.lib-card-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.lib-card-actions--inline {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+/* ── Saved game name (clickable to rename) ── */
+.lib-game-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lib-game-name:hover {
+  color: var(--accent, #10b981);
+  text-decoration: underline;
+}
+
+/* ── Rename form ── */
+.lib-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.lib-rename-input {
+  flex: 1;
+  background: var(--bg-subtle, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.2rem 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.lib-rename-input:focus {
+  border-color: var(--accent, #10b981);
+}
+
+/* ── Empty state ── */
+.lib-empty {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+  line-height: 1.5;
+}

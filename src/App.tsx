@@ -18,8 +18,9 @@ import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import { GameLibraryModal } from './components/Library/GameLibraryModal';
 import type { SavedGame } from './utils/gameLibrary';
+import { LibraryPanel } from './components/Library/LibraryPanel';
+import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview, REVIEW_DEPTH, computeReviewSummary } from './hooks/useGameReview';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
@@ -54,7 +55,7 @@ function App() {
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
+  const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [orientation, setOrientation] = useState<BoardOrientation>('red');
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1280 : window.innerWidth
@@ -578,8 +579,22 @@ function App() {
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
     resetBoard();
-    setShowLibrary(false);
+    setLeftPanelTab('graph');
     // Replay moves sequentially — use setTimeout to let board reset settle first
+    let idx = 0;
+    const replay = () => {
+      if (idx >= game.moves.length) return;
+      applyUciMove(game.moves[idx]);
+      idx++;
+      if (idx < game.moves.length) setTimeout(replay, 0);
+    };
+    setTimeout(replay, 0);
+  }, [stopAnalysis, resetBoard, applyUciMove]);
+
+  const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
+    stopAnalysis();
+    resetBoard();
+    setLeftPanelTab('graph');
     let idx = 0;
     const replay = () => {
       if (idx >= game.moves.length) return;
@@ -687,10 +702,12 @@ function App() {
               <button
                 type="button"
                 className="top-action-btn"
-                onClick={() => setShowLibrary(s => !s)}
+                onClick={() => {
+                  if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT);
+                  setLeftPanelTab('library');
+                }}
                 title="Game library"
                 aria-label="Open game library"
-                aria-expanded={showLibrary}
               >
                 <IconLibrary />
                 <span className="btn-label-desktop">Library</span>
@@ -948,17 +965,6 @@ function App() {
         </>
       )}
 
-      {/* ── Game Library modal ── */}
-      {showLibrary && (
-        <GameLibraryModal
-          games={savedGames}
-          onClose={() => setShowLibrary(false)}
-          onLoadGame={handleLoadGame}
-          onDeleteGame={deleteGameFromLibrary}
-          onRenameGame={renameGameInLibrary}
-        />
-      )}
-
       <div className="main-container">
         {/* ── Left panel: Eval Graph ── */}
         <section className="panel left" style={{ width: leftWidth }}>
@@ -971,30 +977,56 @@ function App() {
             <span className="resize-pill" />
           </div>
           <div className="panel-inner" style={{ opacity: (!isMobile && leftWidth === 0) ? 0 : 1 }}>
-            <header className="panel-header">
-              <h2><IconBarChart style={{ marginRight: '0.35rem', verticalAlign: 'middle' }} />Analysis Graph</h2>
-              <span className="panel-kicker">Click or use arrow keys to jump</span>
+            <header className="panel-header panel-header-tabs">
+              <div className="analysis-tab-strip">
+                <button
+                  type="button"
+                  className={`analysis-tab-btn ${leftPanelTab === 'graph' ? 'active' : ''}`}
+                  onClick={() => setLeftPanelTab('graph')}
+                >
+                  <IconBarChart style={{ marginRight: '0.3rem' }} />Graph
+                </button>
+                <button
+                  type="button"
+                  className={`analysis-tab-btn ${leftPanelTab === 'library' ? 'active' : ''}`}
+                  onClick={() => setLeftPanelTab('library')}
+                >
+                  <IconLibrary style={{ marginRight: '0.3rem' }} />Library
+                </button>
+              </div>
             </header>
             <div className="panel-content">
-              {engineEnabled && <WdlBar wdl={wdl} isSearching={isSearching} />}
-              <EvalGraph
-                history={moveHistory}
-                currentMoveIndex={currentMoveIndex}
-                currentEval={evalScore}
-                isSearching={isSearching}
-                branchCounts={graphBranchCounts}
-                rootBranchCount={rootGraphBranchCount}
-                onNavigate={jumpToMove}
-              />
-              <div className="graph-jump-controls">
-                <button type="button" className="chip-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>Start</button>
-                <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
-                <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
-                <button type="button" className="chip-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
-              </div>
-              <p className="panel-copy small">
-                Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
-              </p>
+              {leftPanelTab === 'graph' ? (
+                <>
+                  {engineEnabled && <WdlBar wdl={wdl} isSearching={isSearching} />}
+                  <EvalGraph
+                    history={moveHistory}
+                    currentMoveIndex={currentMoveIndex}
+                    currentEval={evalScore}
+                    isSearching={isSearching}
+                    branchCounts={graphBranchCounts}
+                    rootBranchCount={rootGraphBranchCount}
+                    onNavigate={jumpToMove}
+                  />
+                  <div className="graph-jump-controls">
+                    <button type="button" className="chip-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>Start</button>
+                    <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
+                    <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
+                    <button type="button" className="chip-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
+                  </div>
+                  <p className="panel-copy small">
+                    Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
+                  </p>
+                </>
+              ) : (
+                <LibraryPanel
+                  savedGames={savedGames}
+                  onLoadSavedGame={handleLoadGame}
+                  onDeleteSavedGame={deleteGameFromLibrary}
+                  onRenameSavedGame={renameGameInLibrary}
+                  onLoadHistorical={handleLoadHistoricalGame}
+                />
+              )}
             </div>
           </div>
         </section>
