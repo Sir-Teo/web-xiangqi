@@ -30,19 +30,30 @@ export interface EngineInitOptions {
     restartToken?: number;
 }
 
+function detectSIMDSupport(): boolean {
+    try {
+        return WebAssembly.validate(new Uint8Array([
+            0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,
+            10,10,1,8,0,65,0,253,15,253,98,11
+        ]));
+    } catch (_) { return false; }
+}
+
 function detectUiSafeThreads() {
     if (typeof navigator === 'undefined') return 1;
-    const hardwareThreads = Number(navigator.hardwareConcurrency) || 2;
-    const compactLayout = typeof window !== 'undefined' ? window.innerWidth <= 900 : false;
-    if (compactLayout) return 1;
-    return Math.max(1, Math.min(2, Math.floor(hardwareThreads / 4) || 1));
+    const hw = Number(navigator.hardwareConcurrency) || 2;
+    const isCompact = typeof window !== 'undefined' && window.innerWidth <= 900;
+    if (isCompact) return 1;
+    return Math.max(1, Math.min(4, hw - 2));
 }
 
 function detectUiSafeHashMB() {
-    if (typeof window !== 'undefined' && window.innerWidth <= 900) {
-        return 32;
-    }
-    return 64;
+    const isCompact = typeof window !== 'undefined' && window.innerWidth <= 900;
+    const memGB = (navigator as any).deviceMemory || 0;
+    if (isCompact) return memGB >= 4 ? 32 : 16;
+    if (memGB >= 8) return 128;
+    if (memGB >= 4) return 64;
+    return 32;
 }
 
 function shouldSuppressEngineRuntimeError(filename: string, message: string) {
@@ -173,6 +184,11 @@ export function useEngine(options: EngineInitOptions = {}) {
     // Ref mirrors isSearching so stopSearch doesn't need it in its deps
     const isSearchingRef = useRef(false);
 
+    const clearPvLines = useCallback(() => {
+        pvLinesRef.current = [];
+        setPvLines([]);
+    }, []);
+
     const sendCommand = useCallback((cmd: string) => {
         if (engineRef.current) {
             engineRef.current.postMessage(cmd);
@@ -281,8 +297,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         // Boot engine using the wrapper component
         pikafishFactory.createWorkerEngine({
             variant: options.variant || 'auto',
-            // Prefer stability over speed: some environments crash in single-simd.
-            allowSIMD: options.allowSIMD ?? false,
+            allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
             threads,
             hashMB,
         })
@@ -480,5 +495,5 @@ export function useEngine(options: EngineInitOptions = {}) {
         };
     }, []);
 
-    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, sendCommand, outputLines, pvLines, evalScore, wdl };
+    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, clearPvLines, sendCommand, outputLines, pvLines, evalScore, wdl };
 }

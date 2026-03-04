@@ -34,6 +34,8 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
 ];
 const WORKER_SAFE_MAX_DEPTH = 12;
 const ANALYSIS_QUEUE_DEBOUNCE_MS = 120;
+const MOBILE_ANALYSIS_QUEUE_DEBOUNCE_MS = 250;
+const MOBILE_ANALYSIS_MOVETIME_MS = 3000;
 
 function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
   if (nodeId === rootNodeId) return 'Start';
@@ -65,7 +67,9 @@ function App() {
     setSoundEnabled(enabled);
   }, []);
 
-  const [searchDepth, setSearchDepth] = useState(8);
+  const [searchDepth, setSearchDepth] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth <= 900 ? 6 : 8
+  );
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>('normal');
@@ -150,6 +154,7 @@ function App() {
   const activeAnalysisRequestRef = useRef('');
   const settledAnalysisRequestRef = useRef('');
   const currentAnalysisRequestKeyRef = useRef(analysisRequestKey);
+  const currentMultiPvRef = useRef(3);
   const engineRecoveryTimestampsRef = useRef<number[]>([]);
   const lastEngineRecoveryAtRef = useRef(0);
   currentAnalysisRequestKeyRef.current = analysisRequestKey;
@@ -186,7 +191,7 @@ function App() {
     restartEngine();
   }, [analysisEngineMode, restartEngine, workspaceMode]);
 
-  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, outputLines, pvLines, evalScore, wdl } = useEngine({
+  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, clearPvLines, sendCommand, outputLines, pvLines, evalScore, wdl } = useEngine({
     restartToken: engineRestartToken,
     onWorkerError: handleEngineWorkerError,
     onBestMove: (uci, score) => {
@@ -289,14 +294,22 @@ function App() {
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => setViewportWidth(window.innerWidth), 50);
     };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        clearQueuedSearch();
+        stopSearch();
+      }
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('resize', onResize);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
-  }, []);
+  }, [clearQueuedSearch, stopSearch]);
 
   // Sound effect: fire when a move is played (currentMoveIndex advanced by 1)
   const prevMoveIndexRef = useRef(currentMoveIndex);
@@ -361,12 +374,22 @@ function App() {
       return;
     }
 
-    queueSearch(
-      currentPositionCommand,
-      useInfiniteAnalysis ? 'go infinite' : `go depth ${safeSearchDepth}`,
-      ANALYSIS_QUEUE_DEBOUNCE_MS
-    );
-  }, [clearQueuedSearch, currentPositionCommand, analysisRequestKey, engineEnabled, gameMode, isReady, isSearching, queueSearch, safeSearchDepth, sideToMove, stopSearch, useInfiniteAnalysis]);
+    // Switch to MultiPV 3 for analysis if not already
+    if (currentMultiPvRef.current !== 3) {
+      currentMultiPvRef.current = 3;
+      sendCommand('setoption name MultiPV value 3');
+    }
+
+    const debounceMs = isMobile ? MOBILE_ANALYSIS_QUEUE_DEBOUNCE_MS : ANALYSIS_QUEUE_DEBOUNCE_MS;
+    const mobileDepth = isMobile ? Math.min(safeSearchDepth, 10) : safeSearchDepth;
+    const goCmd = useInfiniteAnalysis
+      ? 'go infinite'
+      : isMobile
+        ? `go depth ${mobileDepth} movetime ${MOBILE_ANALYSIS_MOVETIME_MS}`
+        : `go depth ${safeSearchDepth}`;
+
+    queueSearch(currentPositionCommand, goCmd, debounceMs);
+  }, [clearQueuedSearch, currentPositionCommand, analysisRequestKey, engineEnabled, gameMode, isMobile, isReady, isSearching, queueSearch, safeSearchDepth, sendCommand, sideToMove, stopSearch, useInfiniteAnalysis]);
 
   // AI move effect
   useEffect(() => {
@@ -400,13 +423,19 @@ function App() {
       if (pausedRef.current && !stepPendingRef.current) {
         return;
       }
+      // Switch to MultiPV 1 for AI play (only best move needed)
+      if (currentMultiPvRef.current !== 1) {
+        currentMultiPvRef.current = 1;
+        sendCommand('setoption name MultiPV value 1');
+        clearPvLines();
+      }
       applyBestMoveRef.current = true;
       startSearch(currentPositionCommand);
       startSearch(`go depth ${safeSearchDepth}`);
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [sideToMove, gameMode, isReady, isSearching, startSearch, stopSearch, currentPositionCommand, paused, safeSearchDepth]);
+  }, [clearPvLines, sideToMove, gameMode, isReady, isSearching, sendCommand, startSearch, stopSearch, currentPositionCommand, paused, safeSearchDepth]);
 
   // Eval capture for graph
   useEffect(() => {
@@ -427,9 +456,10 @@ function App() {
     }
     reviewCurrentNodeIdRef.current = nodeId;
     const fen = getNodeFen(nodeId);
+    const effectiveReviewDepth = isMobile ? Math.min(REVIEW_DEPTH, 8) : REVIEW_DEPTH;
     startSearch(`position fen ${fen}`);
-    startSearch(`go depth ${REVIEW_DEPTH}`);
-  }, [isSearching, isReady, getReviewNextNodeId, finishReview, activeLineNodeIds, treeNodes, getNodeFen, startSearch]);
+    startSearch(`go depth ${effectiveReviewDepth}`);
+  }, [isSearching, isReady, isMobile, getReviewNextNodeId, finishReview, activeLineNodeIds, treeNodes, getNodeFen, startSearch]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
