@@ -116,6 +116,7 @@ function App() {
     inCheck,
     onSquareClick,
     resetBoard,
+    loadMoves,
     sideToMove,
     applyUciMove,
     setCurrentNodeEval,
@@ -578,32 +579,15 @@ function App() {
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
-    resetBoard();
     setLeftPanelTab('graph');
-    // Replay moves sequentially — use setTimeout to let board reset settle first
-    let idx = 0;
-    const replay = () => {
-      if (idx >= game.moves.length) return;
-      applyUciMove(game.moves[idx]);
-      idx++;
-      if (idx < game.moves.length) setTimeout(replay, 0);
-    };
-    setTimeout(replay, 0);
-  }, [stopAnalysis, resetBoard, applyUciMove]);
+    loadMoves(game.moves);
+  }, [stopAnalysis, loadMoves]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
-    resetBoard();
     setLeftPanelTab('graph');
-    let idx = 0;
-    const replay = () => {
-      if (idx >= game.moves.length) return;
-      applyUciMove(game.moves[idx]);
-      idx++;
-      if (idx < game.moves.length) setTimeout(replay, 0);
-    };
-    setTimeout(replay, 0);
-  }, [stopAnalysis, resetBoard, applyUciMove]);
+    loadMoves(game.moves);
+  }, [stopAnalysis, loadMoves]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const boardArrows = useMemo(() => {

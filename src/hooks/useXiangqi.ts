@@ -134,6 +134,64 @@ export function useXiangqi() {
         nodeCounterRef.current = 1;
     }, []);
 
+    const loadMoves = useCallback((moves: string[]) => {
+        let currentBoard = parseFenBoard(START_FEN);
+        let currentSide: Side = 'w';
+        const tree: Record<string, MoveTreeNode> = createRootTree();
+        let parentNodeId = ROOT_NODE_ID;
+        const activeLine: string[] = [];
+        let counter = 1;
+        let lastIndex = -1;
+
+        for (const uci of moves) {
+            const from = uciToSquare(uci.substring(0, 2));
+            const to = uciToSquare(uci.substring(2, 4));
+            if (!from || !to) break;
+            const mv = { fromFile: from.file, fromRank: from.rank, toFile: to.file, toRank: to.rank, raw: uci };
+            const result = validatePieceMove(currentBoard, mv, currentSide);
+            if (!result.ok) break;
+
+            const nextBoard = currentBoard.map(row => [...row]) as BoardState;
+            nextBoard[to.rank][to.file] = result.piece || '';
+            nextBoard[from.rank][from.file] = '';
+            const nextSide: Side = currentSide === 'w' ? 'b' : 'w';
+            const nextInCheck = isInCheck(nextBoard, nextSide);
+
+            const nodeId = `n${counter++}`;
+            tree[parentNodeId].childrenIds.push(nodeId);
+            tree[nodeId] = {
+                id: nodeId,
+                parentId: parentNodeId,
+                childrenIds: [],
+                record: {
+                    uci,
+                    piece: result.piece!,
+                    captured: result.captured || '',
+                    board: nextBoard,
+                    sideToMove: nextSide,
+                    inCheck: nextInCheck,
+                    ply: lastIndex + 2,
+                },
+            };
+
+            activeLine.push(nodeId);
+            parentNodeId = nodeId;
+            lastIndex++;
+            currentBoard = nextBoard;
+            currentSide = nextSide;
+        }
+
+        nodeCounterRef.current = counter;
+        setTreeNodes(tree);
+        setActiveLineNodeIds(activeLine);
+        setCurrentMoveIndex(lastIndex);
+        setBoard(currentBoard);
+        setSideToMove(currentSide);
+        setInCheck(isInCheck(currentBoard, currentSide));
+        setSelected(null);
+        setValidTargets([]);
+    }, []); // no deps — uses only local vars and stable refs
+
     const jumpToNode = useCallback((nodeId: string) => {
         const targetId = nodeId && treeNodes[nodeId] ? nodeId : ROOT_NODE_ID;
         const path = findPathToNode(treeNodes, targetId);
@@ -343,6 +401,7 @@ export function useXiangqi() {
         setCurrentNodeEval,
         setNodeEval,
         getNodeFen,
+        loadMoves,
         jumpToMove,
         jumpToNode,
     };
