@@ -131,6 +131,7 @@ function App() {
   const [topPanelOpen, setTopPanelOpen] = useState(true);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
+  const [mobilePanelTab, setMobilePanelTab] = useState<'moves' | 'graph'>('moves');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -1341,7 +1342,7 @@ function App() {
         </>
       )}
 
-      <div className="main-container">
+      <div className="main-container" data-mobile-tab={isMobile ? mobilePanelTab : undefined}>
         {/* ── Left panel: Eval Graph ── */}
         <section className="panel left">
           <div
@@ -1441,6 +1442,24 @@ function App() {
             )}
           </div>
         </section>
+
+        {/* ── Mobile panel tab strip ── */}
+        {isMobile && (
+          <div className="mobile-panel-tabs">
+            <button
+              className={`mobile-tab-btn ${mobilePanelTab === 'moves' ? 'active' : ''}`}
+              onClick={() => setMobilePanelTab('moves')}
+            >
+              <IconTree /> Moves
+            </button>
+            <button
+              className={`mobile-tab-btn ${mobilePanelTab === 'graph' ? 'active' : ''}`}
+              onClick={() => setMobilePanelTab('graph')}
+            >
+              <IconBarChart /> Analysis
+            </button>
+          </div>
+        )}
 
         {/* ── Right panel: Move tree / Engine ── */}
         <aside className="panel right">
