@@ -3,6 +3,7 @@ interface ArrowDef {
     to: { file: number; rank: number };
     color: string;
     opacity?: number;
+    strokeWidth?: number;
 }
 
 interface BoardArrowsProps {
@@ -10,24 +11,28 @@ interface BoardArrowsProps {
     orientation: 'red' | 'black';
 }
 
-// Percentage position helpers — same geometry as Board.tsx
-function xPct(file: number) { return `${(file / 8) * 100}%`; }
-function yPct(rank: number, orientation: 'red' | 'black') {
-    return orientation === 'black'
-        ? `${(rank / 9) * 100}%`
-        : `${((9 - rank) / 9) * 100}%`;
-}
+const VB_W = 800;
+const VB_H = 900;
+const CURVE_AMT = 30;  // viewBox units — perpendicular control point offset
+const HEAD_SIZE = 22;  // viewBox units — arrowhead depth
+const HEAD_WING = 11;  // viewBox units — arrowhead half-width
 
-const STROKE = 5;
-// Arrowhead: markerUnits="userSpaceOnUse" keeps pixel size regardless of viewBox/scale
-const HEAD_PX = 14;
+function xCoord(file: number) {
+    return (file / 8) * VB_W;
+}
+function yCoord(rank: number, orientation: 'red' | 'black') {
+    return orientation === 'black'
+        ? (rank / 9) * VB_H
+        : ((9 - rank) / 9) * VB_H;
+}
 
 export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
     if (arrows.length === 0) return null;
 
     return (
-        // No viewBox — native pixel coordinate space so markers aren't distorted
         <svg
+            viewBox={`0 0 ${VB_W} ${VB_H}`}
+            preserveAspectRatio="none"
             style={{
                 position: 'absolute',
                 inset: 28,
@@ -38,40 +43,64 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 overflow: 'visible',
             }}
         >
-            <defs>
-                {arrows.map((arrow, i) => (
-                    <marker
-                        key={i}
-                        id={`ah-${i}`}
-                        markerUnits="userSpaceOnUse"
-                        markerWidth={HEAD_PX}
-                        markerHeight={HEAD_PX}
-                        refX={HEAD_PX - 1}
-                        refY={HEAD_PX / 2}
-                        orient="auto"
-                    >
-                        <path
-                            d={`M 0 1 L ${HEAD_PX - 1} ${HEAD_PX / 2} L 0 ${HEAD_PX - 1} Z`}
-                            fill={arrow.color}
-                        />
-                    </marker>
-                ))}
-            </defs>
-            {arrows.map((arrow, i) => {
+            {arrows.map((arrow) => {
                 if (arrow.from.file === arrow.to.file && arrow.from.rank === arrow.to.rank) return null;
+
+                const opacity = arrow.opacity ?? 0.82;
+                const strokeWidth = arrow.strokeWidth ?? 5;
+                const key = `${arrow.from.file},${arrow.from.rank}-${arrow.to.file},${arrow.to.rank}-${arrow.color}`;
+
+                const x1 = xCoord(arrow.from.file);
+                const y1 = yCoord(arrow.from.rank, orientation);
+                const x2 = xCoord(arrow.to.file);
+                const y2 = yCoord(arrow.to.rank, orientation);
+
+                // Direction and perpendicular for control point
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const nx = dx / len;
+                const ny = dy / len;
+                // Clockwise perpendicular: (ny, -nx)
+                const px = ny;
+                const py = -nx;
+
+                // Quadratic bezier control point: midpoint + perpendicular offset
+                const cx = (x1 + x2) / 2 + px * CURVE_AMT;
+                const cy = (y1 + y2) / 2 + py * CURVE_AMT;
+
+                // Tangent at curve end = direction from control point to endpoint
+                const tx = x2 - cx;
+                const ty = y2 - cy;
+                const tlen = Math.sqrt(tx * tx + ty * ty);
+                const tnx = tx / tlen;
+                const tny = ty / tlen;
+
+                // Arrowhead base (where shaft ends) and wings
+                const bx = x2 - tnx * HEAD_SIZE;
+                const by = y2 - tny * HEAD_SIZE;
+                // Perpendicular to tangent for wings: (tny, -tnx)
+                const w1x = bx + tny * HEAD_WING;
+                const w1y = by - tnx * HEAD_WING;
+                const w2x = bx - tny * HEAD_WING;
+                const w2y = by + tnx * HEAD_WING;
+
+                const shaftPath = `M ${x1} ${y1} Q ${cx} ${cy} ${bx} ${by}`;
+                const headPoints = `${x2},${y2} ${w1x},${w1y} ${w2x},${w2y}`;
+
                 return (
-                    <line
-                        key={i}
-                        x1={xPct(arrow.from.file)}
-                        y1={yPct(arrow.from.rank, orientation)}
-                        x2={xPct(arrow.to.file)}
-                        y2={yPct(arrow.to.rank, orientation)}
-                        stroke={arrow.color}
-                        strokeWidth={STROKE}
-                        strokeLinecap="round"
-                        strokeOpacity={arrow.opacity ?? 0.82}
-                        markerEnd={`url(#ah-${i})`}
-                    />
+                    <g key={key} opacity={opacity}>
+                        <animate attributeName="opacity" from="0" to={String(opacity)} dur="0.18s" fill="freeze" />
+                        <circle cx={x1} cy={y1} r={strokeWidth * 0.9} fill={arrow.color} />
+                        <path
+                            d={shaftPath}
+                            stroke={arrow.color}
+                            strokeWidth={strokeWidth}
+                            strokeLinecap="round"
+                            fill="none"
+                        />
+                        <polygon points={headPoints} fill={arrow.color} />
+                    </g>
                 );
             })}
         </svg>

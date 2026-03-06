@@ -968,11 +968,11 @@ function App() {
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const boardArrows = useMemo(() => {
-    const result: Array<{ from: { file: number; rank: number }; to: { file: number; rank: number }; color: string; opacity?: number }> = [];
+    const result: Array<{ from: { file: number; rank: number }; to: { file: number; rank: number }; color: string; opacity?: number; strokeWidth?: number }> = [];
 
     // Last played move — color encodes quality (green=good … red=blunder)
     if (lastMoveFrom && lastMoveTo) {
-      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, opacity: 0.82 });
+      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, opacity: 0.82, strokeWidth: 5 });
     }
 
     // Engine best move (green)
@@ -980,7 +980,7 @@ function App() {
       const uci = pvLines[0].moves[0];
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#10b981', opacity: 0.88 });
+      if (from && to) result.push({ from, to, color: '#10b981', opacity: 0.88, strokeWidth: 6 });
     }
 
     // Alternative engine lines (muted green)
@@ -989,7 +989,7 @@ function App() {
       if (!uci) continue;
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55 });
+      if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55, strokeWidth: 3.5 });
     }
 
     return result;
