@@ -369,7 +369,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         // Prefer the script already declared in index.html. Only inject a loader
         // when the page didn't include Pikafish yet.
         const initToken = ++initTokenRef.current;
-        const engineScriptSrc = '/pikafish.js';
+        const engineScriptSrc = `${import.meta.env.BASE_URL}pikafish.js`;
         let script: HTMLScriptElement | null = null;
 
         const start = () => {

@@ -98,6 +98,12 @@ export const IconSave = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+export const IconArrow = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+);
+
 export const IconLibrary = (props: React.SVGProps<SVGSVGElement>) => (
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />

@@ -46,8 +46,11 @@ jobs:
       - name: Install emsdk
         run: bash scripts/install-emsdk.sh
 
-      - name: Build WASM demo
+      - name: Build WASM engine
         run: npm run build
+
+      - name: Build React app
+        run: npm run build:react
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

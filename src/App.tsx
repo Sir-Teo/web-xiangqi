@@ -9,7 +9,7 @@ import { AI_SPEED_MS } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
-  IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary
+  IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
@@ -133,6 +133,7 @@ function App() {
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
   const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph'>('moves');
+  const [showArrows, setShowArrows] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -1009,8 +1010,9 @@ function App() {
       if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55, strokeWidth: 3.5 });
     }
 
+    if (!showArrows) return [];
     return result;
-  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines]);
+  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines, showArrows]);
 
   return (
     <main className="app-shell" data-mobile-view={isMobile ? mobileView : undefined}>
@@ -1064,6 +1066,16 @@ function App() {
               >
                 <IconFlip />
                 <span className="btn-label-desktop">Flip</span>
+              </button>
+              <button
+                type="button"
+                className={`top-action-btn ${showArrows ? 'top-action-btn-active' : ''}`}
+                onClick={() => setShowArrows(v => !v)}
+                title={showArrows ? 'Hide arrows' : 'Show arrows'}
+                aria-label="Toggle board arrows"
+              >
+                <IconArrow />
+                <span className="btn-label-desktop">Arrows</span>
               </button>
               <button
                 type="button"
@@ -1423,13 +1435,20 @@ function App() {
               </button>
               {isAiMode && (
                 <button
-                  className={`mobile-float-btn ${paused ? 'mobile-float-btn-active' : ''}`}
+                  className={`mobile-float-btn ${paused ? 'mobile-float-btn-pause' : ''}`}
                   onClick={() => paused ? resume() : pause()}
                   title={paused ? 'Resume AI' : 'Pause AI'}
                 >
                   {paused ? <IconPlay /> : <IconPause />}
                 </button>
               )}
+              <button
+                className={`mobile-float-btn ${showArrows ? 'mobile-float-btn-active' : ''}`}
+                onClick={() => setShowArrows(v => !v)}
+                title={showArrows ? 'Hide arrows' : 'Show arrows'}
+              >
+                <IconArrow />
+              </button>
               <button className="mobile-float-btn" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board">
                 <IconFlip />
               </button>

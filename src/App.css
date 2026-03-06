@@ -3723,6 +3723,12 @@ summary:active {
   }
 
   .mobile-float-btn-active {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: var(--accent);
+  }
+
+  .mobile-float-btn-pause {
     background: rgba(239, 68, 68, 0.25);
     border-color: rgba(239, 68, 68, 0.5);
     color: #f87171;
@@ -4042,6 +4048,12 @@ summary:active {
 
 .top-action-btn:active {
   transform: scale(0.97);
+}
+
+.top-action-btn-active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--accent);
 }
 
 .btn-label-desktop {

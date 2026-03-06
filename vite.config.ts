@@ -9,11 +9,15 @@ const crossOriginIsolationHeaders = {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/web-xiangqi/',
   plugins: [react()],
   server: {
     headers: crossOriginIsolationHeaders,
   },
   preview: {
     headers: crossOriginIsolationHeaders,
+  },
+  build: {
+    emptyOutDir: false, // WASM artifacts in dist/ are built first; don't wipe them
   },
 })
