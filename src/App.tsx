@@ -521,6 +521,15 @@ function App() {
   const leftPanelOpen = leftWidth > 0;
   const rightPanelOpen = rightWidth > 0;
 
+  // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--left-panel-w', leftWidth + 'px');
+  }, [leftWidth]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--right-panel-w', rightWidth + 'px');
+  }, [rightWidth]);
+
   const stopAnalysis = useCallback(() => {
     applyBestMoveRef.current = false;
     activeAnalysisRequestRef.current = '';
@@ -878,14 +887,17 @@ function App() {
     document.body.classList.add('resizing');
     const startX = event.clientX;
     const startW = leftWidth;
+    let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW + e.clientX - startX;
-      setLeftWidth(next < MIN_WIDTH ? 0 : Math.min(next, 600));
+      last = next < MIN_WIDTH ? 0 : Math.min(next, 600);
+      document.documentElement.style.setProperty('--left-panel-w', last + 'px');
     };
     const onUp = () => {
       document.body.classList.remove('resizing');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      setLeftWidth(last);
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -896,14 +908,17 @@ function App() {
     document.body.classList.add('resizing');
     const startX = event.clientX;
     const startW = rightWidth;
+    let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW - (e.clientX - startX);
-      setRightWidth(next < MIN_WIDTH ? 0 : Math.min(next, 600));
+      last = next < MIN_WIDTH ? 0 : Math.min(next, 600);
+      document.documentElement.style.setProperty('--right-panel-w', last + 'px');
     };
     const onUp = () => {
       document.body.classList.remove('resizing');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      setRightWidth(last);
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -1328,7 +1343,7 @@ function App() {
 
       <div className="main-container">
         {/* ── Left panel: Eval Graph ── */}
-        <section className="panel left" style={{ width: leftWidth }}>
+        <section className="panel left">
           <div
             className="resize-handle resize-handle-right"
             onMouseDown={startLeftResize}
@@ -1428,7 +1443,7 @@ function App() {
         </section>
 
         {/* ── Right panel: Move tree / Engine ── */}
-        <aside className="panel right" style={{ width: rightWidth }}>
+        <aside className="panel right">
           <div
             className="resize-handle resize-handle-left"
             onMouseDown={startRightResize}

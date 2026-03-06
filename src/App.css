@@ -632,6 +632,9 @@
 /* ═══════════════════════════════════════════════════
    Side panels (left & right)
    ═══════════════════════════════════════════════════ */
+.panel.left  { width: var(--left-panel-w,  320px); }
+.panel.right { width: var(--right-panel-w, 320px); }
+
 .left {
   height: 100%;
 }

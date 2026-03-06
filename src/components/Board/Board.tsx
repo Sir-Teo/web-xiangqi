@@ -1,14 +1,27 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { BoardArrows } from './BoardArrows';
+
+export type BoardOrientation = 'red' | 'black';
+
+// Module-level helpers — defined once, never re-created on render
+function leftFor(file: number) { return `${(file / 8) * 100}%`; }
+function topFor(rank: number, orientation: BoardOrientation) {
+    return orientation === 'black'
+        ? `${(rank / 9) * 100}%`
+        : `${((9 - rank) / 9) * 100}%`;
+}
+
+const RANKS_RED   = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0] as const;
+const RANKS_BLACK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const FILES_RED   = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+const FILES_BLACK = [8, 7, 6, 5, 4, 3, 2, 1, 0] as const;
 
 const PIECE_LABELS: Record<string, string> = {
     K: "帥", A: "仕", B: "相", N: "傌", R: "俥", C: "炮", P: "兵",
     k: "將", a: "士", b: "象", n: "馬", r: "車", c: "砲", p: "卒"
 };
-
-export type BoardOrientation = 'red' | 'black';
 
 interface BoardProps {
     board: BoardState;
@@ -32,23 +45,16 @@ export const Board = React.memo(function Board({
     orientation = 'red',
     arrows = [],
 }: BoardProps) {
-    // When orientation='black', flip rank and file ordering
-    const ranks = orientation === 'black'
-        ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-        : [9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
-    const files = orientation === 'black'
-        ? [8, 7, 6, 5, 4, 3, 2, 1, 0]
-        : [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const ranks = orientation === 'black' ? RANKS_BLACK : RANKS_RED;
+    const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
 
-    // Position helpers stay in "original coordinate space" — no flipping needed
-    // because percentage positions are calculated from original file/rank values.
-    const leftFor = (file: number) => `${(file / 8) * 100}%`;
-    const topFor = (rank: number) => {
-        if (orientation === 'black') {
-            return `${(rank / 9) * 100}%`;
-        }
-        return `${((9 - rank) / 9) * 100}%`;
-    };
+    const handleHitboxClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        const el = (e.target as HTMLElement).closest<HTMLElement>('[data-file]');
+        if (!el) return;
+        const file = parseInt(el.dataset.file!);
+        const rank = parseInt(el.dataset.rank!);
+        onSquareClick(file, rank);
+    }, [onSquareClick]);
 
     return (
         <div className="xiangqi-board-container">
@@ -101,14 +107,15 @@ export const Board = React.memo(function Board({
                 </div>
 
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}
-                <div className="hitboxes-layer">
+                <div className="hitboxes-layer" onClick={handleHitboxClick}>
                     {ranks.map(rank => (
                         files.map(file => (
                             <div
                                 key={`hitbox-${file}-${rank}`}
                                 className="hitbox"
-                                style={{ left: leftFor(file), top: topFor(rank) }}
-                                onClick={() => onSquareClick(file, rank)}
+                                style={{ left: leftFor(file), top: topFor(rank, orientation) }}
+                                data-file={file}
+                                data-rank={rank}
                             />
                         ))
                     ))}
@@ -128,7 +135,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-ring"
-                                    style={{ left: leftFor(target.file), top: topFor(target.rank) }}
+                                    style={{ left: leftFor(target.file), top: topFor(target.rank, orientation) }}
                                 />
                             );
                         } else {
@@ -136,7 +143,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-dot"
-                                    style={{ left: leftFor(target.file), top: topFor(target.rank) }}
+                                    style={{ left: leftFor(target.file), top: topFor(target.rank, orientation) }}
                                 />
                             );
                         }
@@ -156,7 +163,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`piece-${file}-${rank}`}
                                     className={`piece ${colorClass} ${isSelected ? 'selected' : ''}`}
-                                    style={{ left: leftFor(file), top: topFor(rank) }}
+                                    style={{ left: leftFor(file), top: topFor(rank, orientation) }}
                                 >
                                     {PIECE_LABELS[piece] || piece}
                                 </div>

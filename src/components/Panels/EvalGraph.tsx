@@ -12,6 +12,8 @@ interface EvalGraphProps {
     onNavigate?: (index: number) => void;
 }
 
+const PADDING = { top: 18, right: 20, bottom: 44, left: 42 } as const;
+
 type EvalPoint = {
     moveIndex: number;
     eval: number;
@@ -76,20 +78,19 @@ export const EvalGraph = React.memo(function EvalGraph({
     const maxEvalClamp = 1200;
     const chartHeight = 248;
     const chartWidth = Math.max(320, viewportWidth);
-    const padding = { top: 18, right: 20, bottom: 44, left: 42 };
-    const plotWidth = chartWidth - padding.left - padding.right;
-    const plotHeight = chartHeight - padding.top - padding.bottom;
+    const plotWidth = chartWidth - PADDING.left - PADDING.right;
+    const plotHeight = chartHeight - PADDING.top - PADDING.bottom;
     const pixelsPerPoint = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
 
     const xFor = useCallback((pointIndex: number) => {
-        if (points.length <= 1) return padding.left;
-        return padding.left + (pointIndex / (points.length - 1)) * plotWidth;
-    }, [points.length, plotWidth, padding.left]);
+        if (points.length <= 1) return PADDING.left;
+        return PADDING.left + (pointIndex / (points.length - 1)) * plotWidth;
+    }, [points.length, plotWidth]);
 
     const yFor = useCallback((evalScore: number) => {
         const clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
-        return padding.top + ((maxEvalClamp - clamped) / (maxEvalClamp * 2)) * plotHeight;
-    }, [maxEvalClamp, plotHeight, padding.top]);
+        return PADDING.top + ((maxEvalClamp - clamped) / (maxEvalClamp * 2)) * plotHeight;
+    }, [maxEvalClamp, plotHeight]);
 
     const baselineY = yFor(0);
 
@@ -258,7 +259,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const tooltipPoint = hoveredPoint ?? currentPoint;
     const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
-    const tooltipX = Math.max(padding.left + 54, Math.min(chartWidth - padding.right - 54, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
+    const tooltipX = Math.max(PADDING.left + 54, Math.min(chartWidth - PADDING.right - 54, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
     const tooltipY = Math.max(54, (computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0)) - 18);
 
     return (
@@ -302,17 +303,17 @@ export const EvalGraph = React.memo(function EvalGraph({
                         >
                             <rect
                                 className="graph-zone graph-zone-positive"
-                                x={padding.left}
-                                y={padding.top}
+                                x={PADDING.left}
+                                y={PADDING.top}
                                 width={plotWidth}
-                                height={baselineY - padding.top}
+                                height={baselineY - PADDING.top}
                             />
                             <rect
                                 className="graph-zone graph-zone-negative"
-                                x={padding.left}
+                                x={PADDING.left}
                                 y={baselineY}
                                 width={plotWidth}
-                                height={chartHeight - padding.bottom - baselineY}
+                                height={chartHeight - PADDING.bottom - baselineY}
                             />
                             {[1000, 500, 0, -500, -1000].map((score) => {
                                 const y = yFor(score);
@@ -320,12 +321,12 @@ export const EvalGraph = React.memo(function EvalGraph({
                                     <g key={`grid-${score}`}>
                                         <line
                                             className={`graph-grid-line ${score === 0 ? 'graph-grid-line-zero' : ''}`}
-                                            x1={padding.left}
-                                            x2={chartWidth - padding.right}
+                                            x1={PADDING.left}
+                                            x2={chartWidth - PADDING.right}
                                             y1={y}
                                             y2={y}
                                         />
-                                        <text className="graph-grid-text" x={padding.left - 8} y={y + 4} textAnchor="end">
+                                        <text className="graph-grid-text" x={PADDING.left - 8} y={y + 4} textAnchor="end">
                                             {score === 0 ? '0.0' : `${score / 100}`}
                                         </text>
                                     </g>
@@ -339,10 +340,10 @@ export const EvalGraph = React.memo(function EvalGraph({
                                             className="graph-axis-tick"
                                             x1={pt.x}
                                             x2={pt.x}
-                                            y1={chartHeight - padding.bottom}
-                                            y2={chartHeight - padding.bottom + 6}
+                                            y1={chartHeight - PADDING.bottom}
+                                            y2={chartHeight - PADDING.bottom + 6}
                                         />
-                                        <text className="graph-axis-text" x={pt.x} y={chartHeight - padding.bottom + 18} textAnchor="middle">
+                                        <text className="graph-axis-text" x={pt.x} y={chartHeight - PADDING.bottom + 18} textAnchor="middle">
                                             {pt.moveIndex === -1 ? 'Start' : pt.ply}
                                         </text>
                                     </g>
@@ -359,8 +360,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                             <line
                                 x1={computedPoints[currentPointIndex]?.x ?? 0}
                                 x2={computedPoints[currentPointIndex]?.x ?? 0}
-                                y1={padding.top}
-                                y2={chartHeight - padding.bottom}
+                                y1={PADDING.top}
+                                y2={chartHeight - PADDING.bottom}
                                 className="graph-current-line"
                                 strokeWidth="1.5"
                                 strokeDasharray="4 4"
@@ -369,8 +370,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                                 <line
                                     x1={computedPoints[hoverPointIndex]?.x ?? 0}
                                     x2={computedPoints[hoverPointIndex]?.x ?? 0}
-                                    y1={padding.top}
-                                    y2={chartHeight - padding.bottom}
+                                    y1={PADDING.top}
+                                    y2={chartHeight - PADDING.bottom}
                                     className="graph-hover-line"
                                     strokeWidth="1"
                                     strokeDasharray="3 4"

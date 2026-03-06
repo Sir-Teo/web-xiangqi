@@ -82,6 +82,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const onWorkerErrorRef = useRef(options.onWorkerError);
     const outputLinesRef = useRef<string[]>([]);
     const pvLinesRef = useRef<PvLine[]>([]);
+    const pvSlotRef = useRef<Record<number, PvLine>>({});
     const latestEvalRef = useRef(0);
     const pendingInfoLineRef = useRef<string | null>(null);
     const pendingEvalRef = useRef<number | null>(null);
@@ -173,7 +174,9 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         if (pvDirtyRef.current) {
             pvDirtyRef.current = false;
-            setPvLines([...pvLinesRef.current]);
+            const sorted = Object.values(pvSlotRef.current).sort((a, b) => (a.multipv ?? 0) - (b.multipv ?? 0));
+            pvLinesRef.current = sorted;
+            setPvLines(sorted);
         }
     }, [commitOutputLines]);
 
@@ -188,6 +191,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const isSearchingRef = useRef(false);
 
     const clearPvLines = useCallback(() => {
+        pvSlotRef.current = {};
         pvLinesRef.current = [];
         pvDirtyRef.current = false;
         setPvLines([]);
@@ -195,7 +199,9 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const trimPvLines = useCallback((maxLines = 1) => {
         const limit = Math.max(0, Math.trunc(maxLines));
-        const trimmed = pvLinesRef.current.slice(0, limit);
+        const sorted = Object.values(pvSlotRef.current).sort((a, b) => (a.multipv ?? 0) - (b.multipv ?? 0));
+        const trimmed = sorted.slice(0, limit);
+        pvSlotRef.current = Object.fromEntries(trimmed.map(pv => [pv.multipv ?? 0, pv]));
         pvLinesRef.current = trimmed;
         pvDirtyRef.current = false;
         setPvLines(trimmed);
@@ -502,10 +508,8 @@ export function useEngine(options: EngineInitOptions = {}) {
                     multipv: multipvIndex,
                 };
 
-                // Keep one entry per multipv slot, ordered by slot index
-                const filtered = pvLinesRef.current.filter((pv) => pv.multipv !== multipvIndex);
-                const merged = [...filtered, newPv].sort((a, b) => (a.multipv ?? 0) - (b.multipv ?? 0));
-                pvLinesRef.current = merged.slice(0, 3);
+                // Direct slot assignment — no array manipulation in hot path
+                pvSlotRef.current[multipvIndex] = newPv;
                 pvDirtyRef.current = true;
             }
 
