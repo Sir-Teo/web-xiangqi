@@ -9,7 +9,7 @@ import { AI_SPEED_MS } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
-  IconBot, IconX, IconPause, IconSave, IconLibrary
+  IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
@@ -131,7 +131,8 @@ function App() {
   const [topPanelOpen, setTopPanelOpen] = useState(true);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
-  const [mobilePanelTab, setMobilePanelTab] = useState<'moves' | 'graph'>('moves');
+  const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
+  const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph'>('moves');
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -869,10 +870,10 @@ function App() {
   }, [activeLineNodeIds, applyBestMoveRef, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, setOption, startReview, stopAnalysis, treeNodes]);
 
   const handleSquareClick = useCallback((file: number, rank: number) => {
-    if (!isAiTurn) {
+    if (!isAiTurn || paused) {
       onSquareClick(file, rank);
     }
-  }, [isAiTurn, onSquareClick]);
+  }, [isAiTurn, paused, onSquareClick]);
 
   const applyMode = (mode: GameMode) => {
     setGameMode(mode);
@@ -1012,7 +1013,7 @@ function App() {
   }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines]);
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-mobile-view={isMobile ? mobileView : undefined}>
       {/* ── Top bar ── */}
       <section className={`panel top ${topPanelOpen ? '' : 'hidden'}`}>
         <div className="panel-inner">
@@ -1342,7 +1343,7 @@ function App() {
         </>
       )}
 
-      <div className="main-container" data-mobile-tab={isMobile ? mobilePanelTab : undefined}>
+      <div className="main-container" data-mobile-tab={isMobile ? mobileAnalysisTab : undefined}>
         {/* ── Left panel: Eval Graph ── */}
         <section className="panel left">
           <div
@@ -1411,6 +1412,32 @@ function App() {
 
         {/* ── Board stage ── */}
         <section className="board-stage" aria-label="Xiangqi board">
+          {isMobile && (
+            <div className="mobile-board-top-controls">
+              <button
+                className="mobile-float-btn"
+                onClick={() => setShowNewGameMenu(m => !m)}
+                title="New game"
+              >
+                <IconRefresh />
+              </button>
+              {isAiMode && (
+                <button
+                  className={`mobile-float-btn ${paused ? 'mobile-float-btn-active' : ''}`}
+                  onClick={() => paused ? resume() : pause()}
+                  title={paused ? 'Resume AI' : 'Pause AI'}
+                >
+                  {paused ? <IconPlay /> : <IconPause />}
+                </button>
+              )}
+              <button className="mobile-float-btn" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board">
+                <IconFlip />
+              </button>
+              <button className="mobile-float-btn" onClick={() => setShowSettings(s => !s)} title="Settings">
+                <IconSettings />
+              </button>
+            </div>
+          )}
           <div className="board-wrap">
             {isAiMode && (
               <div className="board-ai-status">
@@ -1441,22 +1468,33 @@ function App() {
               </div>
             )}
           </div>
+          {isMobile && (
+            <div className="mobile-board-nav">
+              <button className="mobile-nav-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>⏮</button>
+              <button className="mobile-nav-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>‹</button>
+              <span className="mobile-nav-label">
+                {currentMoveIndex < 0 ? 'Start' : `${currentMoveIndex + 1} / ${moveHistory.length}`}
+              </span>
+              <button className="mobile-nav-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>›</button>
+              <button className="mobile-nav-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>⏭</button>
+            </div>
+          )}
         </section>
 
-        {/* ── Mobile panel tab strip ── */}
+        {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
         {isMobile && (
-          <div className="mobile-panel-tabs">
+          <div className="mobile-analysis-tabs">
             <button
-              className={`mobile-tab-btn ${mobilePanelTab === 'moves' ? 'active' : ''}`}
-              onClick={() => setMobilePanelTab('moves')}
+              className={`mobile-tab-btn ${mobileAnalysisTab === 'moves' ? 'active' : ''}`}
+              onClick={() => setMobileAnalysisTab('moves')}
             >
               <IconTree /> Moves
             </button>
             <button
-              className={`mobile-tab-btn ${mobilePanelTab === 'graph' ? 'active' : ''}`}
-              onClick={() => setMobilePanelTab('graph')}
+              className={`mobile-tab-btn ${mobileAnalysisTab === 'graph' ? 'active' : ''}`}
+              onClick={() => setMobileAnalysisTab('graph')}
             >
-              <IconBarChart /> Analysis
+              <IconBarChart /> Graph
             </button>
           </div>
         )}
@@ -1632,6 +1670,26 @@ function App() {
           </div>
         </div>
       </section>
+
+      {/* ── Persistent bottom tab bar (mobile only) ── */}
+      {isMobile && (
+        <nav className="mobile-tab-bar">
+          <button
+            className={`mobile-tab-bar-btn ${mobileView === 'board' ? 'active' : ''}`}
+            onClick={() => setMobileView('board')}
+          >
+            <span style={{ fontSize: '1.1rem' }}>♟</span>
+            Board
+          </button>
+          <button
+            className={`mobile-tab-bar-btn ${mobileView === 'analysis' ? 'active' : ''}`}
+            onClick={() => setMobileView('analysis')}
+          >
+            <IconBarChart />
+            Analysis
+          </button>
+        </nav>
+      )}
     </main>
   );
 }

@@ -2298,33 +2298,27 @@
   }
 
   .board-stage {
-    order: 1;
-    padding: 4px;
-    min-height: auto;
+    position: relative;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    flex: none;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     background: var(--bg-base);
   }
 
   .right {
-    order: 3;
     padding: 0 !important;
     width: 100% !important;
-    flex: 1;
     min-height: 0;
     overflow: hidden;
   }
 
   .left {
-    order: 4;
     padding: 0 !important;
     width: 100% !important;
-    flex: 1;
     min-height: 0;
     overflow: hidden;
   }
@@ -2348,9 +2342,9 @@
     min-height: 0;
   }
 
-  /* Hide the panel that isn't active on mobile */
-  .main-container[data-mobile-tab="moves"] .panel.left { display: none; }
-  .main-container[data-mobile-tab="graph"] .panel.right { display: none; }
+  /* Hide the panel that isn't active in analysis view */
+  [data-mobile-view="analysis"] .main-container[data-mobile-tab="moves"] .panel.left { display: none; }
+  [data-mobile-view="analysis"] .main-container[data-mobile-tab="graph"] .panel.right { display: none; }
 
   /* No width transition on mobile — panels are shown/hidden by display */
   .panel {
@@ -2369,15 +2363,7 @@
   }
 
   .bottom {
-    position: sticky !important;
-    bottom: 0 !important;
-    order: 2;
-    width: 100% !important;
-    overflow-x: hidden;
-    background: rgba(13, 17, 23, 0.75);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    z-index: 200;
+    display: none !important;
   }
 
   .app-brand-text {
@@ -3632,9 +3618,7 @@ summary:active {
     width: 100%;
   }
 
-  /* Height-constrain the board so it fits without scrolling.
-     Width = 45dvh * (9/10) so board height ≈ 45dvh.
-     Fall back to 88vw on very short screens (landscape). */
+  /* Board view overrides this — see [data-mobile-view="board"] .board-wrap */
   .board-wrap {
     width: min(calc(45dvh * 0.9), 88vw) !important;
     max-width: 100% !important;
@@ -3642,23 +3626,174 @@ summary:active {
 }
 
 /* ═══════════════════════════════════════════════════
-   Mobile panel tab strip
+   Mobile two-view layout (Board / Analysis)
    ═══════════════════════════════════════════════════ */
-.mobile-panel-tabs {
+
+/* ── Persistent bottom tab bar ── */
+.mobile-tab-bar {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 52px;
+    background: rgba(13, 17, 23, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--border-subtle);
+    z-index: 300;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-tab-bar-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    background: none;
+    border: none;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .mobile-tab-bar-btn svg { width: 18px; height: 18px; }
+  .mobile-tab-bar-btn.active { color: var(--accent); }
+}
+
+/* ── Board view (fills full screen above tab bar) ── */
+@media (max-width: 900px) {
+  [data-mobile-view="board"] .panel.top,
+  [data-mobile-view="board"] .panel.bottom,
+  [data-mobile-view="board"] .panel.left,
+  [data-mobile-view="board"] .panel.right,
+  [data-mobile-view="board"] .mobile-analysis-tabs { display: none; }
+
+  [data-mobile-view="board"] .main-container {
+    height: calc(100dvh - 52px);
+    flex: 1;
+    overflow: hidden;
+  }
+
+  [data-mobile-view="board"] .board-stage {
+    flex: 1;
+    height: 100%;
+    padding: 0;
+  }
+
+  [data-mobile-view="board"] .board-wrap {
+    /* max board: full width OR height minus nav strip (48px) + tab bar (52px) + breathing (8px) */
+    width: min(100vw, calc((100dvh - 112px) * 0.9)) !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ── Floating board controls (board view) ── */
+@media (max-width: 900px) {
+  .mobile-board-top-controls {
+    position: absolute;
+    top: 8px; right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+  }
+
+  .mobile-float-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(13, 17, 23, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .mobile-float-btn-active {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #f87171;
+  }
+
+  .mobile-board-nav {
+    position: absolute;
+    bottom: 8px; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    z-index: 20;
+  }
+
+  .mobile-nav-btn {
+    width: 44px; height: 36px;
+    background: rgba(13, 17, 23, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
+  .mobile-nav-btn:disabled { opacity: 0.35; }
+
+  .mobile-nav-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    min-width: 60px;
+    text-align: center;
+  }
+
+  /* Hide floating controls when not in board view */
+  [data-mobile-view="analysis"] .mobile-board-top-controls,
+  [data-mobile-view="analysis"] .mobile-board-nav { display: none; }
+}
+
+/* ── Analysis view ── */
+.mobile-analysis-tabs {
   display: none; /* hidden on desktop */
 }
 
 @media (max-width: 900px) {
-  .mobile-panel-tabs {
+  [data-mobile-view="analysis"] .panel.top { display: none; }
+  [data-mobile-view="analysis"] .board-stage { display: none; }
+
+  [data-mobile-view="analysis"] .main-container {
+    height: calc(100dvh - 52px);
+    overflow: hidden;
     display: flex;
-    flex: 0 0 44px;
-    order: 2;
+    flex-direction: column;
+  }
+
+  [data-mobile-view="analysis"] .panel.left,
+  [data-mobile-view="analysis"] .panel.right {
+    flex: 1;
+    min-height: 0;
+    order: 1;
+  }
+
+  [data-mobile-view="analysis"] .mobile-analysis-tabs {
+    display: flex;
+    flex: 0 0 48px;
+    order: 0;
     width: 100%;
     background: var(--bg-panel);
-    border-top: 1px solid var(--border-subtle);
     border-bottom: 1px solid var(--border-subtle);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
   }
 
   .mobile-tab-btn {
