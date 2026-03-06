@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface ArrowDef {
     from: { file: number; rank: number };
     to: { file: number; rank: number };

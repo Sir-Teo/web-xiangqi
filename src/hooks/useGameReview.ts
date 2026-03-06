@@ -15,17 +15,32 @@ export interface ReviewSummary {
     blunderCount: number;
 }
 
+type EvalOverrides = Map<string, number> | Record<string, number> | null | undefined;
+
+function getEvalOverride(nodeId: string, evalOverrides: EvalOverrides) {
+    if (!evalOverrides) return undefined;
+    if (evalOverrides instanceof Map) {
+        return evalOverrides.get(nodeId);
+    }
+    return evalOverrides[nodeId];
+}
+
 export function computeReviewSummary(
     activeLineNodeIds: string[],
-    treeNodes: Record<string, MoveTreeNode>
+    treeNodes: Record<string, MoveTreeNode>,
+    evalOverrides?: EvalOverrides
 ): ReviewSummary {
     const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     let evaluated = 0;
 
     for (const nodeId of activeLineNodeIds) {
         const node = treeNodes[nodeId];
-        const currentEval = node?.record?.evalScore;
-        const parentEval = node?.parentId ? treeNodes[node.parentId]?.record?.evalScore : 0;
+        const overrideEval = getEvalOverride(nodeId, evalOverrides);
+        const currentEval = typeof overrideEval === 'number' ? overrideEval : node?.record?.evalScore;
+        const parentOverride = node?.parentId ? getEvalOverride(node.parentId, evalOverrides) : undefined;
+        const parentEval = node?.parentId
+            ? (typeof parentOverride === 'number' ? parentOverride : treeNodes[node.parentId]?.record?.evalScore)
+            : 0;
         if (typeof currentEval !== 'number' || typeof parentEval !== 'number') continue;
         evaluated++;
         const delta = Math.abs(currentEval - parentEval);
@@ -48,70 +63,43 @@ export function computeReviewSummary(
 
 /**
  * Lightweight review state manager.
- * App.tsx drives the engine; this hook manages the queue + status.
+ * App.tsx drives the engine; this hook manages review status + summary.
  */
 export function useGameReview() {
     const [status, setStatus] = useState<ReviewStatus>('idle');
     const [progress, setProgress] = useState(0);
     const [summary, setSummary] = useState<ReviewSummary | null>(null);
 
-    // nodeIds still waiting for an engine eval
-    const queueRef = useRef<string[]>([]);
     const totalRef = useRef(0);
 
-    const getNextNodeId = useCallback((): string | null => {
-        return queueRef.current[0] ?? null;
-    }, []);
-
-    const advanceQueue = useCallback(() => {
-        queueRef.current = queueRef.current.slice(1);
-        const done = totalRef.current - queueRef.current.length;
-        setProgress(done / Math.max(1, totalRef.current));
-        return queueRef.current[0] ?? null; // next nodeId or null if done
-    }, []);
-
-    const beginReview = useCallback((
-        activeLineNodeIds: string[],
-        treeNodes: Record<string, MoveTreeNode>
-    ) => {
-        const queue = activeLineNodeIds.filter((nodeId) => {
-            const node = treeNodes[nodeId];
-            return node?.record && typeof node.record.evalScore !== 'number';
-        });
-
-        if (queue.length === 0) {
-            const s = computeReviewSummary(activeLineNodeIds, treeNodes);
-            setSummary(s);
-            setStatus('done');
-            return false; // nothing to do
-        }
-
-        queueRef.current = queue;
-        totalRef.current = queue.length;
+    const startReview = useCallback((totalSteps: number) => {
+        totalRef.current = Math.max(0, totalSteps);
         setStatus('running');
         setProgress(0);
         setSummary(null);
-        return true; // review started, caller should kick off first search
+        return totalRef.current > 0;
     }, []);
 
-    const finishReview = useCallback((
-        activeLineNodeIds: string[],
-        treeNodes: Record<string, MoveTreeNode>
-    ) => {
-        const s = computeReviewSummary(activeLineNodeIds, treeNodes);
-        setSummary(s);
+    const updateReviewProgress = useCallback((completedSteps: number, totalSteps?: number) => {
+        if (typeof totalSteps === 'number') {
+            totalRef.current = Math.max(0, totalSteps);
+        }
+        setProgress(totalRef.current > 0 ? completedSteps / totalRef.current : 1);
+    }, []);
+
+    const completeReview = useCallback((nextSummary: ReviewSummary) => {
+        setSummary(nextSummary);
         setStatus('done');
         setProgress(1);
-        queueRef.current = [];
     }, []);
 
     const cancelReview = useCallback(() => {
-        queueRef.current = [];
         setStatus('idle');
+        setProgress(0);
+        setSummary(null);
     }, []);
 
     const resetReview = useCallback(() => {
-        queueRef.current = [];
         setStatus('idle');
         setProgress(0);
         setSummary(null);
@@ -121,10 +109,9 @@ export function useGameReview() {
         status,
         progress,
         summary,
-        getNextNodeId,
-        advanceQueue,
-        beginReview,
-        finishReview,
+        startReview,
+        updateReviewProgress,
+        completeReview,
         cancelReview,
         resetReview,
     };

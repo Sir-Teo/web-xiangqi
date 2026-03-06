@@ -352,6 +352,31 @@ export function useXiangqi() {
         });
     }, []);
 
+    const setNodeEvals = useCallback((updates: Array<{ nodeId: string; evalScore: number }>) => {
+        if (updates.length === 0) return;
+        setTreeNodes((prevTree) => {
+            let nextTree = prevTree;
+
+            for (const update of updates) {
+                const { nodeId, evalScore } = update;
+                if (!Number.isFinite(evalScore) || nodeId === ROOT_NODE_ID) continue;
+                const node = nextTree[nodeId];
+                if (!node?.record || node.record.evalScore === evalScore) continue;
+
+                if (nextTree === prevTree) {
+                    nextTree = { ...prevTree };
+                }
+
+                nextTree[nodeId] = {
+                    ...node,
+                    record: { ...node.record, evalScore },
+                };
+            }
+
+            return nextTree;
+        });
+    }, []);
+
     // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
         const piece = board[rank][file];
@@ -400,6 +425,7 @@ export function useXiangqi() {
         applyUciMove,
         setCurrentNodeEval,
         setNodeEval,
+        setNodeEvals,
         getNodeFen,
         loadMoves,
         jumpToMove,

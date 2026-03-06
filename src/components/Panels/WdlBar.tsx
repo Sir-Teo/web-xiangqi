@@ -1,4 +1,3 @@
-import React from 'react';
 import type { WdlStats } from '../../hooks/useEngine';
 import './WdlBar.css';
 

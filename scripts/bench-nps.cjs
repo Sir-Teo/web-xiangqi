@@ -63,6 +63,21 @@ function formatPct(delta) {
   return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
 }
 
+function coreJsFileForVariant(variant) {
+  switch (String(variant || "").trim()) {
+    case "single":
+      return "pikafish-core-single.js";
+    case "single-simd":
+      return "pikafish-core-single-simd.js";
+    case "threaded":
+      return "pikafish-core.js";
+    case "threaded-simd":
+      return "pikafish-core-simd.js";
+    default:
+      return "pikafish-core-simd.js";
+  }
+}
+
 function parseInfoLine(line) {
   const text = String(line || "");
   if (!/^info depth\s+/i.test(text)) return null;
@@ -184,7 +199,14 @@ async function main() {
     throw new Error("dist/pikafish.js not found. Build first.");
   }
 
-  const createPikafish = require(path.join(distDir, "pikafish.js"));
+  const wrapperSrcPath = path.join(distDir, "pikafish.js");
+  const wrapperCjsPath = path.join(os.tmpdir(), "pikafish-bench-wrapper.cjs");
+  const coreJsSrcPath = path.join(distDir, coreJsFileForVariant(cfg.variant));
+  const coreFactoryCjsPath = path.join(os.tmpdir(), "pikafish-bench-core.cjs");
+  fs.copyFileSync(wrapperSrcPath, wrapperCjsPath);
+  fs.copyFileSync(coreJsSrcPath, coreFactoryCjsPath);
+  const createPikafish = require(wrapperCjsPath);
+  const coreFactory = require(coreFactoryCjsPath);
   const state = { activeRun: null };
   let engine = null;
 
@@ -220,6 +242,7 @@ async function main() {
       basePath: distDir,
       nnuePath: path.join(distDir, "pikafish.nnue"),
       variant: cfg.variant,
+      coreFactory,
       autoTune: false,
       lineHistoryMax: 200
     });

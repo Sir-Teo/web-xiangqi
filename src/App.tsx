@@ -21,7 +21,13 @@ import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame } from './utils/gameLibrary';
 import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
-import { useGameReview, REVIEW_DEPTH, computeReviewSummary } from './hooks/useGameReview';
+import { useGameReview, computeReviewSummary } from './hooks/useGameReview';
+import {
+  detectDeviceTier,
+  resolveEngineBootConfig,
+  resolveLiveAnalysisPolicy,
+  resolveReviewPolicy,
+} from './utils/analysisProfile';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
@@ -34,15 +40,87 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'AIvAI', label: 'AI vs AI' },
 ];
 const WORKER_SAFE_MAX_DEPTH = 12;
-const ANALYSIS_QUEUE_DEBOUNCE_MS = 120;
-const MOBILE_ANALYSIS_QUEUE_DEBOUNCE_MS = 250;
-const MOBILE_ANALYSIS_MOVETIME_MS = 3000;
+const ANALYSIS_TAG_PREFIX = 'analysis';
+const AI_TAG_PREFIX = 'ai';
+const REVIEW_TAG_PREFIX = 'review';
+
+type ReviewPhase = 'base' | 'revisit';
+
+type ReviewController = {
+  active: boolean;
+  phase: ReviewPhase;
+  baseQueue: string[];
+  revisitQueue: string[];
+  provisionalEvals: Map<string, number>;
+  criticalNodeSwings: Map<string, number>;
+  pendingEvals: Map<string, number>;
+  completed: number;
+  total: number;
+  currentNodeId: string | null;
+  flushTimer: number | null;
+};
+
+function createReviewController(): ReviewController {
+  return {
+    active: false,
+    phase: 'base',
+    baseQueue: [],
+    revisitQueue: [],
+    provisionalEvals: new Map(),
+    criticalNodeSwings: new Map(),
+    pendingEvals: new Map(),
+    completed: 0,
+    total: 0,
+    currentNodeId: null,
+    flushTimer: null,
+  };
+}
 
 function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
   if (nodeId === rootNodeId) return 'Start';
   const record = treeNodes[nodeId]?.record;
   if (!record) return 'Node';
   return `${record.ply}. ${record.uci}`;
+}
+
+function detectCoarsePointer() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
+function detectSimdSupport() {
+  try {
+    return WebAssembly.validate(new Uint8Array([
+      0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
+      10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
+    ]));
+  } catch (_) {
+    return false;
+  }
+}
+
+function makeAnalysisTag(phase: 'primary' | 'deepen', requestKey: string) {
+  return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
+}
+
+function parseAnalysisTag(tag: string | null) {
+  if (!tag || !tag.startsWith(`${ANALYSIS_TAG_PREFIX}|`)) return null;
+  const [, phase, ...rest] = tag.split('|');
+  if ((phase !== 'primary' && phase !== 'deepen') || rest.length === 0) return null;
+  return { phase, requestKey: rest.join('|') };
+}
+
+function makeReviewTag(phase: ReviewPhase, nodeId: string) {
+  return `${REVIEW_TAG_PREFIX}|${phase}|${nodeId}`;
+}
+
+function parseReviewTag(tag: string | null) {
+  if (!tag || !tag.startsWith(`${REVIEW_TAG_PREFIX}|`)) return null;
+  const [, phase, nodeId] = tag.split('|');
+  if ((phase !== 'base' && phase !== 'revisit') || !nodeId) return null;
+  return { phase, nodeId };
 }
 
 function App() {
@@ -57,9 +135,10 @@ function App() {
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [orientation, setOrientation] = useState<BoardOrientation>('red');
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window === 'undefined' ? 1280 : window.innerWidth
-  );
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === 'undefined' ? 1280 : window.innerWidth,
+    height: typeof window === 'undefined' ? 800 : window.innerHeight,
+  }));
 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const soundEnabledRef = useRef(true);
@@ -73,6 +152,7 @@ function App() {
   );
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
   const [engineRestartToken, setEngineRestartToken] = useState(0);
+  const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>('normal');
   const aiSpeedRef = useRef<AiSpeed>('normal');
   const handleSpeedChange = useCallback((s: AiSpeed) => {
@@ -120,50 +200,161 @@ function App() {
     sideToMove,
     applyUciMove,
     setCurrentNodeEval,
-    setNodeEval,
+    setNodeEvals,
     getNodeFen,
     jumpToMove,
     jumpToNode,
   } = useXiangqi();
 
+  const viewportWidth = viewportSize.width;
+  const viewportHeight = viewportSize.height;
+  const isMobile = viewportWidth <= 900;
+  const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
   const currentPositionCommand = useMemo(() => {
     return `position fen ${currentFen}`;
   }, [currentFen]);
-  const useInfiniteAnalysis = analysisEngineMode === 'optimized';
-  const analysisRequestKey = useMemo(() => {
-    if (useInfiniteAnalysis) {
-      return `${currentPositionCommand}::infinite`;
-    }
-    return `${currentPositionCommand}::depth:${Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH)}`;
-  }, [currentPositionCommand, searchDepth, useInfiniteAnalysis]);
+  const isAiTurn =
+    gameMode === 'AIvAI' ||
+    (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
+    (gameMode === 'PvAI-Red' && sideToMove === 'w');
+  const engineEnabled = workspaceMode === 'analysis';
 
   const {
     status: reviewStatus,
     progress: reviewProgress,
     summary: reviewSummary,
-    getNextNodeId: getReviewNextNodeId,
-    advanceQueue: advanceReviewQueue,
-    beginReview,
-    finishReview,
-    cancelReview: cancelReviewHook,
+    startReview,
+    updateReviewProgress,
+    completeReview,
+    cancelReview,
     resetReview,
   } = useGameReview();
 
-  const reviewActiveRef = useRef(false);
-  const reviewCurrentNodeIdRef = useRef<string | null>(null);
-
   const applyBestMoveRef = useRef(false);
+  const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'settled'>('idle');
+  const analysisDeepenTimerRef = useRef<number | null>(null);
   const activeAnalysisRequestRef = useRef('');
-  const settledAnalysisRequestRef = useRef('');
-  const currentAnalysisRequestKeyRef = useRef(analysisRequestKey);
-  const currentMultiPvRef = useRef(3);
+  const currentAnalysisRequestKeyRef = useRef('');
+  const currentMultiPvRef = useRef(1);
+  const currentShowWdlRef = useRef(false);
+  const reviewControllerRef = useRef<ReviewController>(createReviewController());
   const engineRecoveryTimestampsRef = useRef<number[]>([]);
   const lastEngineRecoveryAtRef = useRef(0);
-  currentAnalysisRequestKeyRef.current = analysisRequestKey;
 
   const restartEngine = useCallback(() => {
     setEngineRestartToken((value) => value + 1);
   }, []);
+
+  const deviceProfile = useMemo(() => detectDeviceTier({
+    viewportWidth,
+    viewportHeight,
+    hardwareConcurrency: typeof navigator === 'undefined' ? undefined : Number(navigator.hardwareConcurrency),
+    deviceMemoryGB: typeof navigator === 'undefined' ? undefined : Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0),
+    coarsePointer: detectCoarsePointer(),
+  }), [viewportWidth, viewportHeight]);
+
+  const baseEngineBootConfig = useMemo(
+    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport() }),
+    [deviceProfile]
+  );
+
+  const engineBootConfig = useMemo(() => {
+    if (engineSafetyBootLevel < 1) return baseEngineBootConfig;
+    return resolveEngineBootConfig(deviceProfile, {
+      allowSIMD: baseEngineBootConfig.allowSIMD,
+      saferBoot: true,
+    });
+  }, [baseEngineBootConfig, deviceProfile, engineSafetyBootLevel]);
+
+  const engineDetailEnabled = engineEnabled && analysisTab === 'engine' && !isAiTurn && reviewStatus !== 'running';
+  const liveAnalysisPolicy = useMemo(() => resolveLiveAnalysisPolicy({
+    tier: engineBootConfig.tier,
+    mode: analysisEngineMode,
+    searchDepth: safeSearchDepth,
+    detailEnabled: engineDetailEnabled,
+  }), [analysisEngineMode, engineBootConfig.tier, engineDetailEnabled, safeSearchDepth]);
+
+  const reviewPolicy = useMemo(() => resolveReviewPolicy(deviceProfile), [deviceProfile]);
+  const analysisRequestKey = useMemo(
+    () => `${currentPositionCommand}::mode:${analysisEngineMode}::policy:${liveAnalysisPolicy.signature}::detail:${engineDetailEnabled ? 'detail' : 'compact'}`,
+    [analysisEngineMode, currentPositionCommand, engineDetailEnabled, liveAnalysisPolicy.signature]
+  );
+  currentAnalysisRequestKeyRef.current = analysisRequestKey;
+
+  const clearAnalysisDeepenTimer = useCallback(() => {
+    if (analysisDeepenTimerRef.current !== null) {
+      window.clearTimeout(analysisDeepenTimerRef.current);
+      analysisDeepenTimerRef.current = null;
+    }
+  }, []);
+
+  const flushReviewEvalUpdates = useCallback(() => {
+    const controller = reviewControllerRef.current;
+    if (controller.flushTimer !== null) {
+      window.clearTimeout(controller.flushTimer);
+      controller.flushTimer = null;
+    }
+    if (controller.pendingEvals.size === 0) return;
+
+    const updates = Array.from(controller.pendingEvals.entries()).map(([nodeId, evalScore]) => ({
+      nodeId,
+      evalScore,
+    }));
+    controller.pendingEvals.clear();
+    setNodeEvals(updates);
+  }, [setNodeEvals]);
+
+  const resetReviewController = useCallback((flushPending = false) => {
+    const controller = reviewControllerRef.current;
+    if (controller.flushTimer !== null) {
+      window.clearTimeout(controller.flushTimer);
+      controller.flushTimer = null;
+    }
+    if (flushPending && controller.pendingEvals.size > 0) {
+      const updates = Array.from(controller.pendingEvals.entries()).map(([nodeId, evalScore]) => ({
+        nodeId,
+        evalScore,
+      }));
+      controller.pendingEvals.clear();
+      setNodeEvals(updates);
+    }
+    reviewControllerRef.current = createReviewController();
+  }, [setNodeEvals]);
+
+  const getEffectiveNodeEval = useCallback((nodeId: string | null) => {
+    if (!nodeId) return undefined;
+    const provisional = reviewControllerRef.current.provisionalEvals.get(nodeId);
+    if (typeof provisional === 'number') {
+      return provisional;
+    }
+    return treeNodes[nodeId]?.record?.evalScore;
+  }, [treeNodes]);
+
+  const queueReviewEvalUpdate = useCallback((nodeId: string, evalScore: number) => {
+    const controller = reviewControllerRef.current;
+    controller.provisionalEvals.set(nodeId, evalScore);
+    controller.pendingEvals.set(nodeId, evalScore);
+
+    if (controller.pendingEvals.size >= reviewPolicy.batchSize) {
+      flushReviewEvalUpdates();
+      return;
+    }
+
+    if (controller.flushTimer === null) {
+      controller.flushTimer = window.setTimeout(() => {
+        controller.flushTimer = null;
+        flushReviewEvalUpdates();
+      }, reviewPolicy.flushMs);
+    }
+  }, [flushReviewEvalUpdates, reviewPolicy.batchSize, reviewPolicy.flushMs]);
+
+  const finalizeReview = useCallback(() => {
+    const controller = reviewControllerRef.current;
+    const summary = computeReviewSummary(activeLineNodeIds, treeNodes, controller.provisionalEvals);
+    flushReviewEvalUpdates();
+    resetReviewController(false);
+    completeReview(summary);
+  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, treeNodes]);
 
   const handleEngineWorkerError = useCallback((message: string) => {
     const now = Date.now();
@@ -179,52 +370,127 @@ function App() {
 
     applyBestMoveRef.current = false;
     activeAnalysisRequestRef.current = '';
-    settledAnalysisRequestRef.current = '';
+    analysisStageRef.current = 'idle';
+    clearAnalysisDeepenTimer();
+
+    if (reviewControllerRef.current.active) {
+      resetReviewController(true);
+      cancelReview();
+    }
 
     if (engineRecoveryTimestampsRef.current.length > 3) {
       console.error('Pikafish worker crashed repeatedly; automatic restart suppressed.', message);
       return;
     }
 
-    if (workspaceMode === 'analysis' && analysisEngineMode === 'optimized') {
+    if (workspaceMode === 'analysis') {
       setAnalysisEngineMode('stable');
+    }
+    if (engineRecoveryTimestampsRef.current.length >= 2) {
+      setEngineSafetyBootLevel(1);
     }
 
     restartEngine();
-  }, [analysisEngineMode, restartEngine, workspaceMode]);
+  }, [cancelReview, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
 
-  const { isReady, isSearching, variant: engineVariant, startSearch, stopSearch, queueSearch, clearQueuedSearch, clearPvLines, sendCommand, outputLines, pvLines, evalScore, wdl } = useEngine({
+  const {
+    isReady,
+    isSearching,
+    variant: engineVariant,
+    stopSearch,
+    queueSearch,
+    clearQueuedSearch,
+    clearPvLines,
+    trimPvLines,
+    clearWdl,
+    setOption,
+    outputLines,
+    pvLines,
+    evalScore,
+    wdl,
+  } = useEngine({
     restartToken: engineRestartToken,
+    variant: engineBootConfig.variant,
+    allowSIMD: engineBootConfig.allowSIMD,
+    threads: engineBootConfig.threads,
+    hashMB: engineBootConfig.hashMB,
     onWorkerError: handleEngineWorkerError,
-    onBestMove: (uci, score) => {
-      // Review mode: capture score for the current review node then advance
-      if (reviewActiveRef.current && reviewCurrentNodeIdRef.current) {
-        const reviewNodeId = reviewCurrentNodeIdRef.current;
-        reviewCurrentNodeIdRef.current = null;
-        setNodeEval(reviewNodeId, score);
-        const nextNodeId = advanceReviewQueue();
-        if (!nextNodeId) {
-          reviewActiveRef.current = false;
+    onBestMove: (uci, score, searchTag) => {
+      const reviewTag = parseReviewTag(searchTag);
+      if (reviewTag && reviewControllerRef.current.active) {
+        const controller = reviewControllerRef.current;
+        if (controller.currentNodeId !== reviewTag.nodeId) {
+          return;
         }
+
+        controller.currentNodeId = null;
+        queueReviewEvalUpdate(reviewTag.nodeId, score);
+
+        if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
+          const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
+          const parentEval = parentId ? getEffectiveNodeEval(parentId) : 0;
+          if (typeof parentEval === 'number') {
+            const swing = Math.abs(score - parentEval);
+            if (swing >= reviewPolicy.revisitThreshold) {
+              const previousSwing = controller.criticalNodeSwings.get(reviewTag.nodeId) ?? 0;
+              if (swing > previousSwing) {
+                controller.criticalNodeSwings.set(reviewTag.nodeId, swing);
+              }
+            }
+          }
+        }
+
+        controller.completed += 1;
+        updateReviewProgress(controller.completed, controller.total);
         return;
       }
 
-      if (applyBestMoveRef.current) {
-        applyUciMove(uci, score);
-        // In step mode: after applying the AI move, re-pause
+      if (searchTag?.startsWith(`${AI_TAG_PREFIX}|`)) {
+        applyBestMoveRef.current = false;
+        if (uci) {
+          applyUciMove(uci, score);
+        }
         if (aiSpeedRef.current === 'step' || stepPendingRef.current) {
           stepPendingRef.current = false;
           pausedRef.current = true;
           setPaused(true);
         }
-        applyBestMoveRef.current = false;
-      } else {
-        settledAnalysisRequestRef.current = currentAnalysisRequestKeyRef.current;
+        return;
       }
-    }
-  });
-  const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
 
+      const analysisTag = parseAnalysisTag(searchTag);
+      if (!analysisTag) {
+        applyBestMoveRef.current = false;
+        return;
+      }
+      if (
+        analysisTag.requestKey !== activeAnalysisRequestRef.current ||
+        analysisTag.requestKey !== currentAnalysisRequestKeyRef.current
+      ) {
+        return;
+      }
+
+      if (currentMoveIndex >= 0) {
+        setCurrentNodeEval(score);
+      }
+
+      if (
+        analysisTag.phase === 'primary' &&
+        liveAnalysisPolicy.deepen &&
+        !document.hidden &&
+        engineEnabled &&
+        !isAiTurn &&
+        !reviewControllerRef.current.active &&
+        analysisTab === 'engine'
+      ) {
+        analysisStageRef.current = 'primary-complete';
+      } else {
+        analysisStageRef.current = 'settled';
+      }
+    },
+  });
+
+  const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
   const viewedPly = Math.max(0, currentMoveIndex + 1);
@@ -251,33 +517,47 @@ function App() {
   }, [activeLineNodeIds, treeNodes]);
 
   const rootGraphBranchCount = treeNodes[rootNodeId]?.childrenIds.length ?? 0;
-  const isMobile = viewportWidth <= 900;
   const leftPanelOpen = leftWidth > 0;
   const rightPanelOpen = rightWidth > 0;
-  const engineEnabled = workspaceMode === 'analysis';
 
   const stopAnalysis = useCallback(() => {
     applyBestMoveRef.current = false;
+    activeAnalysisRequestRef.current = '';
+    analysisStageRef.current = 'idle';
+    clearAnalysisDeepenTimer();
     clearQueuedSearch();
     stopSearch();
-  }, [clearQueuedSearch, stopSearch]);
+  }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
+
+  const handleCancelReview = useCallback(() => {
+    reviewControllerRef.current.active = false;
+    reviewControllerRef.current.currentNodeId = null;
+    flushReviewEvalUpdates();
+    resetReviewController(false);
+    cancelReview();
+    clearQueuedSearch();
+    stopSearch();
+  }, [cancelReview, clearQueuedSearch, flushReviewEvalUpdates, resetReviewController, stopSearch]);
 
   const resetGame = useCallback(() => {
     stopAnalysis();
+    handleCancelReview();
     pausedRef.current = false;
     setPaused(false);
+    resetReview();
     resetBoard();
-  }, [stopAnalysis, resetBoard]);
+  }, [handleCancelReview, resetBoard, resetReview, stopAnalysis]);
 
   useEffect(() => {
     if (!engineEnabled) {
-      applyBestMoveRef.current = false;
-      clearQueuedSearch();
-      stopSearch();
-      activeAnalysisRequestRef.current = '';
-      settledAnalysisRequestRef.current = '';
+      stopAnalysis();
+      if (reviewControllerRef.current.active) {
+        handleCancelReview();
+      }
+      trimPvLines(1);
+      clearWdl();
     }
-  }, [clearQueuedSearch, engineEnabled, stopSearch]);
+  }, [clearWdl, engineEnabled, handleCancelReview, stopAnalysis, trimPvLines]);
 
   useEffect(() => {
     if (!engineEnabled && analysisTab === 'engine') {
@@ -294,10 +574,15 @@ function App() {
     let resizeTimer: number | undefined;
     const onResize = () => {
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => setViewportWidth(window.innerWidth), 50);
+      resizeTimer = window.setTimeout(() => {
+        setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+      }, 50);
     };
     const onVisibilityChange = () => {
       if (document.hidden) {
+        activeAnalysisRequestRef.current = '';
+        analysisStageRef.current = 'idle';
+        clearAnalysisDeepenTimer();
         clearQueuedSearch();
         stopSearch();
       }
@@ -311,7 +596,7 @@ function App() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
-  }, [clearQueuedSearch, stopSearch]);
+  }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
 
   // Sound effect: fire when a move is played (currentMoveIndex advanced by 1)
   const prevMoveIndexRef = useRef(currentMoveIndex);
@@ -336,27 +621,37 @@ function App() {
     }
   }, [currentMoveIndex, currentNodeId, treeNodes]);
 
-  // Analysis engine effect
   useEffect(() => {
-    const isAiTurn =
-      gameMode === 'AIvAI' ||
-      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
-      (gameMode === 'PvAI-Red' && sideToMove === 'w');
+    if (!engineEnabled || !isReady) return;
 
-    if (!engineEnabled || !isReady) {
-      activeAnalysisRequestRef.current = '';
-      settledAnalysisRequestRef.current = '';
-      clearQueuedSearch();
-      if (isSearching) {
-        applyBestMoveRef.current = false;
-        stopSearch();
+    const targetMultiPv = engineDetailEnabled ? 3 : 1;
+    const showWdl = engineDetailEnabled;
+
+    if (currentMultiPvRef.current !== targetMultiPv) {
+      currentMultiPvRef.current = targetMultiPv;
+      setOption('MultiPV', targetMultiPv);
+      if (targetMultiPv === 1) {
+        trimPvLines(1);
+      } else {
+        clearPvLines();
       }
-      return;
     }
 
-    if (isAiTurn) {
+    if (currentShowWdlRef.current !== showWdl) {
+      currentShowWdlRef.current = showWdl;
+      setOption('UCI_ShowWDL', showWdl);
+      if (!showWdl) {
+        clearWdl();
+      }
+    }
+  }, [clearPvLines, clearWdl, engineDetailEnabled, engineEnabled, isReady, setOption, trimPvLines]);
+
+  // Analysis engine effect
+  useEffect(() => {
+    if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || document.hidden) {
       activeAnalysisRequestRef.current = '';
-      settledAnalysisRequestRef.current = '';
+      analysisStageRef.current = 'idle';
+      clearAnalysisDeepenTimer();
       clearQueuedSearch();
       if (isSearching && !applyBestMoveRef.current) {
         stopSearch();
@@ -364,43 +659,97 @@ function App() {
       return;
     }
 
-    const requestChanged = activeAnalysisRequestRef.current !== analysisRequestKey;
-    if (requestChanged) {
+    if (activeAnalysisRequestRef.current !== analysisRequestKey) {
       activeAnalysisRequestRef.current = analysisRequestKey;
-      settledAnalysisRequestRef.current = '';
+      analysisStageRef.current = 'idle';
+      clearAnalysisDeepenTimer();
       applyBestMoveRef.current = false;
     }
 
-    if (settledAnalysisRequestRef.current === analysisRequestKey) {
-      clearQueuedSearch();
+    if (analysisStageRef.current !== 'idle') {
       return;
     }
 
-    // Switch to MultiPV 3 for analysis if not already
-    if (currentMultiPvRef.current !== 3) {
-      currentMultiPvRef.current = 3;
-      sendCommand('setoption name MultiPV value 3');
+    analysisStageRef.current = 'primary-pending';
+    queueSearch(
+      currentPositionCommand,
+      liveAnalysisPolicy.primary.goCmd,
+      liveAnalysisPolicy.debounceMs,
+      makeAnalysisTag('primary', analysisRequestKey),
+    );
+  }, [
+    analysisRequestKey,
+    clearAnalysisDeepenTimer,
+    clearQueuedSearch,
+    currentPositionCommand,
+    engineEnabled,
+    isAiTurn,
+    isReady,
+    isSearching,
+    liveAnalysisPolicy.debounceMs,
+    liveAnalysisPolicy.primary.goCmd,
+    queueSearch,
+    stopSearch,
+  ]);
+
+  useEffect(() => {
+    if (analysisStageRef.current !== 'primary-complete') return;
+    const deepenPolicy = liveAnalysisPolicy.deepen;
+    if (
+      !deepenPolicy ||
+      !engineEnabled ||
+      !isReady ||
+      isAiTurn ||
+      reviewControllerRef.current.active ||
+      document.hidden ||
+      !engineDetailEnabled
+    ) {
+      analysisStageRef.current = 'settled';
+      return;
     }
 
-    const debounceMs = isMobile ? MOBILE_ANALYSIS_QUEUE_DEBOUNCE_MS : ANALYSIS_QUEUE_DEBOUNCE_MS;
-    const mobileDepth = isMobile ? Math.min(safeSearchDepth, 10) : safeSearchDepth;
-    const goCmd = useInfiniteAnalysis
-      ? 'go infinite'
-      : isMobile
-        ? `go depth ${mobileDepth} movetime ${MOBILE_ANALYSIS_MOVETIME_MS}`
-        : `go depth ${safeSearchDepth}`;
+    clearAnalysisDeepenTimer();
+    const requestKey = analysisRequestKey;
+    analysisDeepenTimerRef.current = window.setTimeout(() => {
+      analysisDeepenTimerRef.current = null;
+      if (
+        activeAnalysisRequestRef.current !== requestKey ||
+        currentAnalysisRequestKeyRef.current !== requestKey ||
+        analysisStageRef.current !== 'primary-complete' ||
+        document.hidden ||
+        !engineEnabled ||
+        isAiTurn ||
+        reviewControllerRef.current.active ||
+        !engineDetailEnabled
+      ) {
+        return;
+      }
 
-    queueSearch(currentPositionCommand, goCmd, debounceMs);
-  }, [clearQueuedSearch, currentPositionCommand, analysisRequestKey, engineEnabled, gameMode, isMobile, isReady, isSearching, queueSearch, safeSearchDepth, sendCommand, sideToMove, stopSearch, useInfiniteAnalysis]);
+      analysisStageRef.current = 'deepen-pending';
+      queueSearch(
+        currentPositionCommand,
+        deepenPolicy.goCmd,
+        0,
+        makeAnalysisTag('deepen', requestKey),
+      );
+    }, deepenPolicy.delayMs);
+
+    return clearAnalysisDeepenTimer;
+  }, [
+    analysisRequestKey,
+    clearAnalysisDeepenTimer,
+    currentPositionCommand,
+    engineDetailEnabled,
+    engineEnabled,
+    isAiTurn,
+    isReady,
+    liveAnalysisPolicy.deepen,
+    queueSearch,
+  ]);
 
   // AI move effect
   useEffect(() => {
     if (!isReady) return;
-
-    const isAiTurn =
-      gameMode === 'AIvAI' ||
-      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
-      (gameMode === 'PvAI-Red' && sideToMove === 'w');
 
     if (!isAiTurn) {
       applyBestMoveRef.current = false;
@@ -425,73 +774,94 @@ function App() {
       if (pausedRef.current && !stepPendingRef.current) {
         return;
       }
-      // Switch to MultiPV 1 for AI play (only best move needed)
-      if (currentMultiPvRef.current !== 1) {
-        currentMultiPvRef.current = 1;
-        sendCommand('setoption name MultiPV value 1');
-        clearPvLines();
-      }
       applyBestMoveRef.current = true;
-      startSearch(currentPositionCommand);
-      startSearch(`go depth ${safeSearchDepth}`);
+      queueSearch(
+        currentPositionCommand,
+        `go depth ${safeSearchDepth}`,
+        0,
+        `${AI_TAG_PREFIX}|${currentPositionCommand}|${safeSearchDepth}`,
+      );
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [clearPvLines, sideToMove, gameMode, isReady, isSearching, sendCommand, startSearch, stopSearch, currentPositionCommand, paused, safeSearchDepth]);
-
-  // Eval capture for graph
-  useEffect(() => {
-    if (!engineEnabled || !isSearching || currentMoveIndex < 0) return;
-    setCurrentNodeEval(evalScore);
-  }, [engineEnabled, isSearching, currentMoveIndex, evalScore, setCurrentNodeEval]);
+  }, [currentPositionCommand, isAiTurn, isReady, isSearching, queueSearch, safeSearchDepth]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
-    if (!reviewActiveRef.current) return;
+    const controller = reviewControllerRef.current;
+    if (!controller.active) return;
     if (isSearching) return;
     if (!isReady) return;
-    const nodeId = getReviewNextNodeId();
-    if (!nodeId) {
-      reviewActiveRef.current = false;
-      finishReview(activeLineNodeIds, treeNodes);
+    if (controller.currentNodeId) return;
+
+    if (controller.phase === 'base' && controller.baseQueue.length === 0) {
+      if (reviewPolicy.revisit && controller.revisitQueue.length === 0) {
+        controller.revisitQueue = Array.from(controller.criticalNodeSwings.entries())
+          .sort((left, right) => right[1] - left[1])
+          .slice(0, reviewPolicy.revisitLimit)
+          .map(([nodeId]) => nodeId);
+
+        if (controller.revisitQueue.length > 0) {
+          controller.phase = 'revisit';
+          controller.total = controller.completed + controller.revisitQueue.length;
+          updateReviewProgress(controller.completed, controller.total);
+        }
+      }
+
+      if (controller.phase === 'base' && controller.baseQueue.length === 0) {
+        finalizeReview();
+        return;
+      }
+    }
+
+    if (controller.phase === 'revisit' && controller.revisitQueue.length === 0) {
+      finalizeReview();
       return;
     }
-    reviewCurrentNodeIdRef.current = nodeId;
+
+    const queue = controller.phase === 'base' ? controller.baseQueue : controller.revisitQueue;
+    const nodeId = queue.shift() ?? null;
+    if (!nodeId) {
+      return;
+    }
+    controller.currentNodeId = nodeId;
     const fen = getNodeFen(nodeId);
-    const effectiveReviewDepth = isMobile ? Math.min(REVIEW_DEPTH, 8) : REVIEW_DEPTH;
-    startSearch(`position fen ${fen}`);
-    startSearch(`go depth ${effectiveReviewDepth}`);
-  }, [isSearching, isReady, isMobile, getReviewNextNodeId, finishReview, activeLineNodeIds, treeNodes, getNodeFen, startSearch]);
+    const goCmd = controller.phase === 'base' ? reviewPolicy.base.goCmd : (reviewRevisitGoCmd ?? reviewPolicy.base.goCmd);
+    queueSearch(`position fen ${fen}`, goCmd, 0, makeReviewTag(controller.phase, nodeId));
+  }, [finalizeReview, getNodeFen, isReady, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
     if (!engineEnabled || !isReady) return;
     stopAnalysis();
-    const started = beginReview(activeLineNodeIds, treeNodes);
-    if (started) {
-      reviewActiveRef.current = true;
-    }
-  }, [applyBestMoveRef, engineEnabled, isReady, stopAnalysis, beginReview, activeLineNodeIds, treeNodes]);
+    resetReviewController(true);
+    clearPvLines();
+    clearWdl();
+    currentMultiPvRef.current = 1;
+    currentShowWdlRef.current = false;
+    setOption('MultiPV', 1);
+    setOption('UCI_ShowWDL', false);
 
-  const playSoundForNode = useCallback((nodeId: string | null, nodes: typeof treeNodes) => {
-    if (!soundEnabledRef.current || !nodeId) return;
-    const record = nodes[nodeId]?.record;
-    if (!record) return;
-    if (record.inCheck) { playCheckSound(); return; }
-    if (record.captured) { playCaptureSound(); return; }
-    playMoveSound();
-  }, [treeNodes]);
+    const totalSteps = activeLineNodeIds.length;
+    if (!startReview(totalSteps)) {
+      completeReview(computeReviewSummary(activeLineNodeIds, treeNodes));
+      return;
+    }
+
+    reviewControllerRef.current = {
+      ...createReviewController(),
+      active: true,
+      phase: 'base',
+      baseQueue: [...activeLineNodeIds],
+      total: totalSteps,
+    };
+  }, [activeLineNodeIds, applyBestMoveRef, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, setOption, startReview, stopAnalysis, treeNodes]);
 
   const handleSquareClick = useCallback((file: number, rank: number) => {
-    const isAiTurn =
-      gameMode === 'AIvAI' ||
-      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
-      (gameMode === 'PvAI-Red' && sideToMove === 'w');
-
     if (!isAiTurn) {
       onSquareClick(file, rank);
     }
-  }, [gameMode, sideToMove, onSquareClick]);
+  }, [isAiTurn, onSquareClick]);
 
   const applyMode = (mode: GameMode) => {
     setGameMode(mode);
@@ -579,15 +949,19 @@ function App() {
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
+    handleCancelReview();
+    resetReview();
     setLeftPanelTab('graph');
     loadMoves(game.moves);
-  }, [stopAnalysis, loadMoves]);
+  }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
+    handleCancelReview();
+    resetReview();
     setLeftPanelTab('graph');
     loadMoves(game.moves);
-  }, [stopAnalysis, loadMoves]);
+  }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const boardArrows = useMemo(() => {
@@ -849,8 +1223,8 @@ function App() {
 
             <div className="settings-group">
               <label>
-                Search Depth (AI / Stable Analysis) — {searchDepth}
-                {!useInfiniteAnalysis && searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
+                Search Depth (AI / Live Analysis Cap) — {searchDepth}
+                {searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
               </label>
               <input
                 type="range"
@@ -1161,7 +1535,7 @@ function App() {
               {reviewStatus === 'running' && (
                 <span className="review-progress">
                   Reviewing… {Math.round(reviewProgress * 100)}%
-                  <button className="chip-btn" onClick={cancelReviewHook}>Cancel</button>
+                  <button className="chip-btn" onClick={handleCancelReview}>Cancel</button>
                 </span>
               )}
               {reviewStatus === 'done' && reviewSummary && (

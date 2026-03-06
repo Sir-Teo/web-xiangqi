@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
@@ -18,14 +19,15 @@ type SearchRequest = {
     positionCmd: string;
     goCmd: string;
     signature: string;
+    tag?: string;
 };
 
 export interface EngineInitOptions {
-    variant?: 'auto' | 'threaded' | 'single';
+    variant?: EngineRuntimeVariant;
     allowSIMD?: boolean;
     threads?: number;
     hashMB?: number;
-    onBestMove?: (uci: string, score: number) => void;
+    onBestMove?: (uci: string, score: number, searchTag: string | null) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
 }
@@ -92,6 +94,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const stopRequestedRef = useRef(false);
     const pendingSearchRef = useRef<SearchRequest | null>(null);
     const activeSearchSignatureRef = useRef('');
+    const activeSearchTagRef = useRef<string | null>(null);
 
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
@@ -186,7 +189,21 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const clearPvLines = useCallback(() => {
         pvLinesRef.current = [];
+        pvDirtyRef.current = false;
         setPvLines([]);
+    }, []);
+
+    const trimPvLines = useCallback((maxLines = 1) => {
+        const limit = Math.max(0, Math.trunc(maxLines));
+        const trimmed = pvLinesRef.current.slice(0, limit);
+        pvLinesRef.current = trimmed;
+        pvDirtyRef.current = false;
+        setPvLines(trimmed);
+    }, []);
+
+    const clearWdl = useCallback(() => {
+        pendingWdlRef.current = null;
+        setWdl(null);
     }, []);
 
     const sendCommand = useCallback((cmd: string) => {
@@ -197,6 +214,15 @@ export function useEngine(options: EngineInitOptions = {}) {
             console.warn("Engine not ready, ignoring command:", cmd);
         }
     }, [appendOutputLine]);
+
+    const setOption = useCallback((name: string, value?: string | number | boolean) => {
+        let suffix = '';
+        if (typeof value !== 'undefined') {
+            const normalizedValue = typeof value === 'boolean' ? (value ? 'true' : 'false') : value;
+            suffix = ` value ${normalizedValue}`;
+        }
+        sendCommand(`setoption name ${name}${suffix}`);
+    }, [sendCommand]);
 
     // Track searching state from actual UCI search commands only.
     // Keep `isSearching` true after `stop` until the engine emits `bestmove`.
@@ -237,13 +263,14 @@ export function useEngine(options: EngineInitOptions = {}) {
         const nextRequest = pendingSearchRef.current;
         pendingSearchRef.current = null;
         activeSearchSignatureRef.current = nextRequest.signature;
+        activeSearchTagRef.current = nextRequest.tag ?? null;
         stopRequestedRef.current = false;
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
     }, [startSearch, stopSearch]);
 
-    const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0) => {
-        const signature = `${positionCmd}\n${goCmd}`;
+    const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0, tag?: string) => {
+        const signature = `${positionCmd}\n${goCmd}\n${tag ?? ''}`;
         if (activeSearchSignatureRef.current === signature && isSearchingRef.current && !pendingSearchRef.current) {
             return;
         }
@@ -254,7 +281,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             return;
         }
 
-        pendingSearchRef.current = { positionCmd, goCmd, signature };
+        pendingSearchRef.current = { positionCmd, goCmd, signature, tag };
 
         if (queuedSearchTimerRef.current !== null) {
             window.clearTimeout(queuedSearchTimerRef.current);
@@ -370,6 +397,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             clearQueuedSearch();
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
+            activeSearchTagRef.current = null;
         };
     }, [clearQueuedSearch, initializeEngine, terminateEngineInstance, options.restartToken]);
 
@@ -381,10 +409,10 @@ export function useEngine(options: EngineInitOptions = {}) {
             appendOutputLine(msg);
             if (!didConfigureSessionRef.current) {
                 didConfigureSessionRef.current = true;
-                sendCommand('setoption name UCI_Variant value xiangqi');
-                sendCommand('setoption name MultiPV value 3');
-                sendCommand('setoption name UCI_ShowWDL value true');
-                sendCommand('setoption name Ponder value false');
+                setOption('UCI_Variant', 'xiangqi');
+                setOption('MultiPV', 1);
+                setOption('UCI_ShowWDL', false);
+                setOption('Ponder', false);
                 sendCommand('ucinewgame');
             }
             sendCommand('isready');
@@ -401,6 +429,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             isSearchingRef.current = false;
             engineRef.current = null;
             activeSearchSignatureRef.current = '';
+            activeSearchTagRef.current = null;
             clearQueuedSearch();
             stopRequestedRef.current = false;
             onWorkerErrorRef.current?.(msg);
@@ -410,11 +439,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             setIsSearching(false);
             isSearchingRef.current = false;
             stopRequestedRef.current = false;
+            const completedSearchTag = activeSearchTagRef.current;
+            activeSearchTagRef.current = null;
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
-            if (moveMatch && moveMatch[1]) {
-                const uciMove = moveMatch[1];
-                onBestMoveRef.current?.(uciMove, latestEvalRef.current);
-            }
+            const uciMove = moveMatch?.[1] ?? '';
+            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
             }
@@ -495,5 +524,22 @@ export function useEngine(options: EngineInitOptions = {}) {
         };
     }, []);
 
-    return { isReady, isSearching, variant, startSearch, stopSearch, queueSearch, clearQueuedSearch, clearPvLines, sendCommand, outputLines, pvLines, evalScore, wdl };
+    return {
+        isReady,
+        isSearching,
+        variant,
+        startSearch,
+        stopSearch,
+        queueSearch,
+        clearQueuedSearch,
+        clearPvLines,
+        trimPvLines,
+        clearWdl,
+        setOption,
+        sendCommand,
+        outputLines,
+        pvLines,
+        evalScore,
+        wdl,
+    };
 }
