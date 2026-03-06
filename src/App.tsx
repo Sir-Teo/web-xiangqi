@@ -134,6 +134,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
+  const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>('red');
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
@@ -953,6 +954,7 @@ function App() {
     resetReview();
     setLeftPanelTab('graph');
     loadMoves(game.moves);
+    setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
@@ -961,6 +963,7 @@ function App() {
     resetReview();
     setLeftPanelTab('graph');
     loadMoves(game.moves);
+    setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
@@ -1364,6 +1367,7 @@ function App() {
                     isSearching={isSearching}
                     branchCounts={graphBranchCounts}
                     rootBranchCount={rootGraphBranchCount}
+                    loadSweepToken={graphLoadSweepToken}
                     onNavigate={jumpToMove}
                   />
                   <div className="graph-jump-controls">

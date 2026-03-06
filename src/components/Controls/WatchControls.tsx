@@ -67,6 +67,7 @@ export const WatchControls = memo(function WatchControls({
     // Keyboard shortcuts
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
+            if (e.defaultPrevented) return;
             const tag = (e.target as HTMLElement).tagName;
             if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
             if (e.key === 'ArrowLeft') { e.preventDefault(); onPrev(); }
