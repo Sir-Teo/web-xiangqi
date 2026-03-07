@@ -3620,7 +3620,7 @@ summary:active {
 
   /* Board view overrides this — see [data-mobile-view="board"] .board-wrap */
   .board-wrap {
-    width: min(calc(45dvh * 0.9), 88vw) !important;
+    width: min(calc(100vw - 16px), calc(45dvh * 0.9)) !important;
     max-width: 100% !important;
   }
 }
@@ -3679,7 +3679,8 @@ summary:active {
   [data-mobile-view="board"] .mobile-analysis-tabs { display: none; }
 
   [data-mobile-view="board"] .main-container {
-    height: calc(100dvh - 52px);
+    /* Subtract tab bar height AND safe-area-inset-bottom so content sits above the home bar */
+    height: calc(100dvh - 52px - env(safe-area-inset-bottom));
     flex: 1;
     overflow: hidden;
   }
@@ -3687,12 +3688,21 @@ summary:active {
   [data-mobile-view="board"] .board-stage {
     flex: 1;
     height: 100%;
-    padding: 0;
+    /* Vertical breathing room keeps the board clear of the floating controls:
+       top controls: 8px offset + 36px height + 8px gap = 52px
+       bottom nav:   8px gap  + 36px height + 8px offset = 52px */
+    padding: 52px 8px;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   [data-mobile-view="board"] .board-wrap {
-    /* max board: full width OR height minus nav strip (48px) + tab bar (52px) + breathing (8px) */
-    width: min(100vw, calc((100dvh - 112px) * 0.9)) !important;
+    /* Fit within viewport width (minus 16px gutter) OR within the usable height
+       (total height – tab bar – safe area – 104px vertical padding) scaled by the 9:10 aspect ratio */
+    width: min(
+      calc(100vw - 16px),
+      calc((100dvh - 52px - env(safe-area-inset-bottom) - 104px) * 0.9)
+    ) !important;
     max-width: 100% !important;
   }
 }
@@ -3780,7 +3790,7 @@ summary:active {
   [data-mobile-view="analysis"] .board-stage { display: none; }
 
   [data-mobile-view="analysis"] .main-container {
-    height: calc(100dvh - 52px);
+    height: calc(100dvh - 52px - env(safe-area-inset-bottom));
     overflow: hidden;
     display: flex;
     flex-direction: column;
