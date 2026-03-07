@@ -3687,12 +3687,12 @@ summary:active {
   [data-mobile-view="board"] .board-stage {
     flex: 1;
     height: 100%;
-    padding: 0;
+    padding: 8px 14px 0;
   }
 
   [data-mobile-view="board"] .board-wrap {
-    /* max board: full width OR height minus nav strip (48px) + tab bar (52px) + breathing (8px) */
-    width: min(100vw, calc((100dvh - 112px) * 0.9)) !important;
+    /* max board: full width (minus side padding for shadow rings) OR height-constrained */
+    width: min(100%, calc((100dvh - 126px) * 0.9)) !important;
     max-width: 100% !important;
   }
 }
