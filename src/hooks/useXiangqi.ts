@@ -12,8 +12,11 @@ import {
     squareToUci,
     uciToSquare,
     pieceSide,
-    isInCheck
+    isInCheck,
+    hasAnyLegalMove,
 } from '../utils/xiangqi';
+
+export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
 export interface MoveRecord {
     uci: string;
@@ -102,6 +105,7 @@ export function useXiangqi() {
     const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
     const [validTargets, setValidTargets] = useState<{ file: number; rank: number; capture: boolean }[]>([]);
     const [inCheck, setInCheck] = useState<boolean>(false);
+    const [gameResult, setGameResult] = useState<GameResult>(null);
 
     const nodeCounterRef = useRef(1);
 
@@ -131,6 +135,7 @@ export function useXiangqi() {
         setSelected(null);
         setValidTargets([]);
         setInCheck(false);
+        setGameResult(null);
         nodeCounterRef.current = 1;
     }, []);
 
@@ -243,6 +248,11 @@ export function useXiangqi() {
 
         const nextSide = sideToMove === 'w' ? 'b' : 'w';
         const nextInCheck = isInCheck(nextBoard, nextSide);
+
+        // Game over: in Xiangqi, no legal moves = loss for the player to move
+        if (!hasAnyLegalMove(nextBoard, nextSide)) {
+            setGameResult(nextSide === 'w' ? 'black-wins' : 'red-wins');
+        }
 
         const parentNodeId = currentNodeId;
         const parentNode = treeNodes[parentNodeId];
@@ -420,6 +430,8 @@ export function useXiangqi() {
         validTargets,
         currentFen,
         inCheck,
+        gameResult,
+        setGameResult,
         onSquareClick,
         resetBoard,
         applyUciMove,

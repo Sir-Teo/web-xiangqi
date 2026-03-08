@@ -336,3 +336,15 @@ export function legalMovesFrom(state: BoardState, file: number, rank: number, si
     }
     return out;
 }
+
+/** Returns true if the given side has at least one legal move. */
+export function hasAnyLegalMove(state: BoardState, side: Side): boolean {
+    for (let rank = 0; rank < 10; rank++) {
+        for (let file = 0; file < 9; file++) {
+            const piece = state[rank][file];
+            if (!piece || pieceSide(piece) !== side) continue;
+            if (legalMovesFrom(state, file, rank, side).length > 0) return true;
+        }
+    }
+    return false;
+}

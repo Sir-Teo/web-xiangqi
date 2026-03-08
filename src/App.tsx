@@ -22,6 +22,7 @@ import type { SavedGame } from './utils/gameLibrary';
 import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview, computeReviewSummary } from './hooks/useGameReview';
+import { GameOverModal } from './components/GameOverModal';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -198,6 +199,8 @@ function App() {
     activeLineNodeIds,
     currentFen,
     inCheck,
+    gameResult,
+    setGameResult,
     onSquareClick,
     resetBoard,
     loadMoves,
@@ -578,6 +581,13 @@ function App() {
     }
   }, [engineEnabled, analysisTab]);
 
+  // Stop AI engine when game ends
+  useEffect(() => {
+    if (gameResult) {
+      stopAnalysis();
+    }
+  }, [gameResult, stopAnalysis]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -871,10 +881,11 @@ function App() {
   }, [activeLineNodeIds, applyBestMoveRef, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, setOption, startReview, stopAnalysis, treeNodes]);
 
   const handleSquareClick = useCallback((file: number, rank: number) => {
+    if (gameResult) return;
     if (!isAiTurn || paused) {
       onSquareClick(file, rank);
     }
-  }, [isAiTurn, paused, onSquareClick]);
+  }, [gameResult, isAiTurn, paused, onSquareClick]);
 
   const applyMode = (mode: GameMode) => {
     setGameMode(mode);
@@ -1424,39 +1435,36 @@ function App() {
 
         {/* ── Board stage ── */}
         <section className="board-stage" aria-label="Xiangqi board">
-          {isMobile && (
-            <div className="mobile-board-top-controls">
-              <button
-                className="mobile-float-btn"
-                onClick={() => setShowNewGameMenu(m => !m)}
-                title="New game"
-              >
-                <IconRefresh />
-              </button>
-              {isAiMode && (
-                <button
-                  className={`mobile-float-btn ${paused ? 'mobile-float-btn-pause' : ''}`}
-                  onClick={() => paused ? resume() : pause()}
-                  title={paused ? 'Resume AI' : 'Pause AI'}
-                >
-                  {paused ? <IconPlay /> : <IconPause />}
-                </button>
-              )}
-              <button
-                className={`mobile-float-btn ${showArrows ? 'mobile-float-btn-active' : ''}`}
-                onClick={() => setShowArrows(v => !v)}
-                title={showArrows ? 'Hide arrows' : 'Show arrows'}
-              >
-                <IconArrow />
-              </button>
-              <button className="mobile-float-btn" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board">
-                <IconFlip />
-              </button>
-              <button className="mobile-float-btn" onClick={() => setShowSettings(s => !s)} title="Settings">
-                <IconSettings />
-              </button>
+          {isMobile && mobileView === 'board' && (
+            <div className="mobile-board-header">
+              <div className="mobile-board-turn-info">
+                <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
+                <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
+                {engineEnabled && evalScore !== null && (
+                  <span className={`mobile-eval-chip ${evalScore > 0 ? 'eval-positive' : evalScore < 0 ? 'eval-negative' : ''}`}>
+                    {evalScore > 0 ? '+' : ''}{(evalScore / 100).toFixed(1)}
+                  </span>
+                )}
+                {detectedOpening && (
+                  <span className="mobile-opening-pill" title={detectedOpening.name}>
+                    {detectedOpening.name}
+                  </span>
+                )}
+              </div>
+              <div className="mobile-board-actions">
+                <button className="mobile-action-btn" onClick={() => setShowNewGameMenu(m => !m)} title="New game"><IconRefresh /></button>
+                {isAiMode && (
+                  <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'}>
+                    {paused ? <IconPlay /> : <IconPause />}
+                  </button>
+                )}
+                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} onClick={() => setShowArrows(v => !v)} title="Toggle arrows"><IconArrow /></button>
+                <button className="mobile-action-btn" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board"><IconFlip /></button>
+                <button className="mobile-action-btn" onClick={() => setShowSettings(s => !s)} title="Settings"><IconSettings /></button>
+              </div>
             </div>
           )}
+          <div className="mobile-board-center">
           <div className="board-wrap">
             {isAiMode && (
               <div className="board-ai-status">
@@ -1486,6 +1494,7 @@ function App() {
                 <span className="check-badge">CHECK</span>
               </div>
             )}
+          </div>
           </div>
           {isMobile && (
             <div className="mobile-board-nav">
@@ -1708,6 +1717,14 @@ function App() {
             Analysis
           </button>
         </nav>
+      )}
+
+      {gameResult && (
+        <GameOverModal
+          result={gameResult}
+          onNewGame={() => { setGameResult(null); resetGame(); }}
+          onReview={() => setGameResult(null)}
+        />
       )}
     </main>
   );
