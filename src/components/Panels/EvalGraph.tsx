@@ -39,6 +39,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const sweepTimerRef = useRef<number | null>(null);
     const sweepFrameRef = useRef<number | null>(null);
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const points = useMemo<EvalPoint[]>(() => {
         let previous = 0;
@@ -256,6 +257,23 @@ export const EvalGraph = React.memo(function EvalGraph({
         onNavigate(targetIndex);
     };
 
+    const onTouchStart = (event: React.TouchEvent<SVGSVGElement>) => {
+        const t = event.touches[0];
+        touchStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+
+    const onTouchEnd = (event: React.TouchEvent<SVGSVGElement>) => {
+        if (!onNavigate || !touchStartRef.current) return;
+        const t = event.changedTouches[0];
+        const dx = t.clientX - touchStartRef.current.x;
+        const dy = Math.abs(t.clientY - touchStartRef.current.y);
+        touchStartRef.current = null;
+        if (Math.abs(dx) < 30 || dy > 60) return;
+        const delta = dx < 0 ? 1 : -1;
+        const target = Math.max(-1, Math.min(history.length - 1, currentMoveIndex + delta));
+        onNavigate(target);
+    };
+
     const tooltipPoint = hoveredPoint ?? currentPoint;
     const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
@@ -295,6 +313,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                             onFocus={() => setHoverPointIndex(currentPointIndex)}
                             onBlur={() => setHoverPointIndex(null)}
                             onKeyDown={onChartKeyDown}
+                            onTouchStart={onTouchStart}
+                            onTouchEnd={onTouchEnd}
                             style={{ cursor: onNavigate ? 'pointer' : 'default' }}
                             aria-label="Evaluation graph"
                             aria-description="Use left and right arrows to move across the line. Press Enter to jump to the hovered point."
