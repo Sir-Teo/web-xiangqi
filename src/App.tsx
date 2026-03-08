@@ -40,6 +40,22 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'PvAI-Red', label: 'vs AI (Black)' },
   { mode: 'AIvAI', label: 'AI vs AI' },
 ];
+
+export type AiStrength = 1 | 2 | 3 | 4 | 5;
+const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
+  1: 'Beginner',
+  2: 'Easy',
+  3: 'Medium',
+  4: 'Hard',
+  5: 'Master',
+};
+const AI_SKILL_LEVEL: Record<AiStrength, number> = {
+  1: 3,
+  2: 7,
+  3: 12,
+  4: 17,
+  5: 20,
+};
 const WORKER_SAFE_MAX_DEPTH = 12;
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
@@ -137,6 +153,7 @@ function App() {
   const [showArrows, setShowArrows] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
+  const [aiStrength, setAiStrength] = useState<AiStrength>(5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>('red');
@@ -587,6 +604,12 @@ function App() {
       stopAnalysis();
     }
   }, [gameResult, stopAnalysis]);
+
+  // Apply AI skill level whenever it changes or engine becomes ready
+  useEffect(() => {
+    if (!isReady) return;
+    setOption('Skill Level', AI_SKILL_LEVEL[aiStrength]);
+  }, [isReady, aiStrength, setOption]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1362,6 +1385,24 @@ function App() {
                 </button>
               ))}
             </div>
+            {gameMode !== 'PvP' && (
+              <div className="new-game-strength-section">
+                <p className="new-game-strength-label">AI Difficulty</p>
+                <div className="new-game-strength-pills">
+                  {([1, 2, 3, 4, 5] as AiStrength[]).map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={`new-game-strength-btn ${aiStrength === lvl ? 'new-game-strength-btn-active' : ''}`}
+                      onClick={() => setAiStrength(lvl)}
+                      title={AI_STRENGTH_LABELS[lvl]}
+                    >
+                      {AI_STRENGTH_LABELS[lvl]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

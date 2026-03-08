@@ -4267,6 +4267,57 @@ summary:active {
   color: var(--accent);
 }
 
+.new-game-strength-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.new-game-strength-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.new-game-strength-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.new-game-strength-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .new-game-strength-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+}
+
+.new-game-strength-btn-active {
+  border-color: var(--border-accent);
+  background: rgba(63, 185, 80, 0.08);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* ═══════════════════════════════════════════════════
    brand-badge
    ═══════════════════════════════════════════════════ */
