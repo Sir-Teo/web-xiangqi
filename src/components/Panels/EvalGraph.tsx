@@ -327,7 +327,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                             y2={y}
                                         />
                                         <text className="graph-grid-text" x={PADDING.left - 8} y={y + 4} textAnchor="end">
-                                            {score === 0 ? '0.0' : `${score / 100}`}
+                                            {score === 0 ? '=' : score > 0 ? `R+${score / 100}` : `B+${Math.abs(score) / 100}`}
                                         </text>
                                     </g>
                                 );

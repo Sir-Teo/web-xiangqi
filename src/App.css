@@ -4335,6 +4335,23 @@ summary:active {
 }
 
 /* ═══════════════════════════════════════════════════
+   Reduced-motion overrides
+   ═══════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots span,
+  .mobile-tab-bar-btn.active::after,
+  .game-over-backdrop,
+  .game-over-modal,
+  .pulsing.btn-primary,
+  .fade-in-slide {
+    animation: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    Game Over Modal
    ═══════════════════════════════════════════════════ */
 .game-over-backdrop {
