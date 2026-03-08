@@ -23,6 +23,7 @@ export interface MoveRecord {
     piece: string;
     captured: string;
     evalScore?: number;
+    bestMove?: string; // engine's best from this position (set during review)
     board: BoardState;
     sideToMove: Side;
     inCheck: boolean;
@@ -426,6 +427,18 @@ export function useXiangqi() {
         });
     }, []);
 
+    const setNodeBestMove = useCallback((nodeId: string, bestMove: string) => {
+        if (!bestMove || nodeId === ROOT_NODE_ID) return;
+        setTreeNodes((prevTree) => {
+            const node = prevTree[nodeId];
+            if (!node?.record || node.record.bestMove === bestMove) return prevTree;
+            return {
+                ...prevTree,
+                [nodeId]: { ...node, record: { ...node.record, bestMove } },
+            };
+        });
+    }, []);
+
     // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
         const piece = board[rank][file];
@@ -477,6 +490,7 @@ export function useXiangqi() {
         setCurrentNodeEval,
         setNodeEval,
         setNodeEvals,
+        setNodeBestMove,
         getNodeFen,
         loadMoves,
         loadFen,

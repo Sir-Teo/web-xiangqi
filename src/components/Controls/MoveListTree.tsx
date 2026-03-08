@@ -38,24 +38,33 @@ export const MoveListTree = memo(function MoveListTree({
         const record = node?.record;
         if (!node || !record) return null;
         const qualityClass = getMoveQualityClass(treeNodes, nodeId);
+        // Coach hint: engine's best alternative (stored on this node from review)
+        const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
+        const isBadMove = qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
         return (
-            <button
-                key={nodeId}
-                data-node-id={nodeId}
-                type="button"
-                className={[
-                    'mtree-chip',
-                    qualityClass,
-                    compact ? 'mtree-chip-compact' : '',
-                    currentNodeId === nodeId ? 'mtree-chip-active' : '',
-                ].filter(Boolean).join(' ')}
-                onClick={() => onNavigateNode(nodeId)}
-                title={formatMoveTitle(record)}
-            >
-                {formatMoveLabel(record)}
-                <span className="move-uci">{record.uci}</span>
-                {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
-            </button>
+            <span key={nodeId} className="mtree-chip-wrap">
+                <button
+                    data-node-id={nodeId}
+                    type="button"
+                    className={[
+                        'mtree-chip',
+                        qualityClass,
+                        compact ? 'mtree-chip-compact' : '',
+                        currentNodeId === nodeId ? 'mtree-chip-active' : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => onNavigateNode(nodeId)}
+                    title={formatMoveTitle(record)}
+                >
+                    {formatMoveLabel(record)}
+                    <span className="move-uci">{record.uci}</span>
+                    {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
+                </button>
+                {isBadMove && coachMove && (
+                    <span className="mtree-coach-hint" title={`Engine suggested: ${coachMove}`}>
+                        ✦ {coachMove}
+                    </span>
+                )}
+            </span>
         );
     };
 

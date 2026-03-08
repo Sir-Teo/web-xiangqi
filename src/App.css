@@ -3101,6 +3101,27 @@
   width: auto;
 }
 
+.mtree-chip-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+.mtree-coach-hint {
+  font-size: 0.62rem;
+  font-family: 'Courier New', monospace;
+  color: var(--accent);
+  opacity: 0.75;
+  padding: 0 0.2rem;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
+
+.mtree-coach-hint:hover {
+  opacity: 1;
+}
+
 /* Interactive Active States */
 button:active:not(:disabled),
 .gc-btn:active:not(:disabled),

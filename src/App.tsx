@@ -227,6 +227,7 @@ function App() {
     applyUciMove,
     setCurrentNodeEval,
     setNodeEvals,
+    setNodeBestMove,
     getNodeFen,
     jumpToMove,
     jumpToNode,
@@ -451,6 +452,14 @@ function App() {
 
         controller.currentNodeId = null;
         queueReviewEvalUpdate(reviewTag.nodeId, score);
+
+        // Store engine's recommended move for the child node that was actually played
+        // so the coach UI can show "Engine suggests X" when a move was a mistake/blunder
+        if (uci) {
+          const childNodeId = treeNodes[reviewTag.nodeId]?.childrenIds
+            .find(cid => activeLineNodeIds.includes(cid));
+          if (childNodeId) setNodeBestMove(childNodeId, uci);
+        }
 
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
           const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
