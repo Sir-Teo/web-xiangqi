@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import { IconX, IconRefresh } from '../icons';
+import { exportPgnFromUci, copyToClipboard } from '../../utils/gameExport';
 import './GameLibraryModal.css';
 
 interface GameLibraryModalProps {
@@ -35,6 +36,20 @@ export function GameLibraryModal({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editLabel, setEditLabel] = useState('');
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const handleCopyPgn = async (game: SavedGame) => {
+        const pgn = exportPgnFromUci(game.moves, {
+            gameMode: game.gameMode,
+            opening: game.opening,
+            label: game.label,
+        });
+        const ok = await copyToClipboard(pgn);
+        if (ok) {
+            setCopiedId(game.id);
+            setTimeout(() => setCopiedId(null), 2000);
+        }
+    };
 
     const startEdit = (game: SavedGame) => {
         setEditingId(game.id);
@@ -97,6 +112,14 @@ export function GameLibraryModal({
                                         </span>
                                     )}
                                     <div className="library-item-actions">
+                                        <button
+                                            type="button"
+                                            className="chip-btn"
+                                            onClick={() => handleCopyPgn(game)}
+                                            title="Copy PGN to clipboard"
+                                        >
+                                            {copiedId === game.id ? '✓' : 'PGN'}
+                                        </button>
                                         <button
                                             type="button"
                                             className="chip-btn chip-btn-primary"

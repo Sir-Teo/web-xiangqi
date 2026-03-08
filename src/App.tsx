@@ -23,6 +23,7 @@ import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview, computeReviewSummary } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
+import { exportPgn, copyToClipboard } from './utils/gameExport';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -989,6 +990,26 @@ function App() {
   // Game library
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
+  const [copiedToast, setCopiedToast] = useState(false);
+
+  const handleCopyPgn = useCallback(async () => {
+    const moves = activeLineNodeIds
+      .slice(0, currentMoveIndex + 1)
+      .map(id => treeNodes[id]?.record)
+      .filter((r): r is NonNullable<typeof r> => Boolean(r));
+    if (moves.length === 0) return;
+    const pgn = exportPgn(moves, {
+      gameMode,
+      opening: detectedOpening?.name,
+      result: gameResult,
+    });
+    const ok = await copyToClipboard(pgn);
+    if (ok) {
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 2000);
+    }
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult]);
+
   const handleSaveGame = useCallback(() => {
     const moves = activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
@@ -1671,6 +1692,14 @@ function App() {
               </button>
               <button className="gc-btn" onClick={handleSaveGame} disabled={moveHistory.length === 0} title="Save current game to library">
                 <IconSave /> Save
+              </button>
+              <button
+                className="gc-btn"
+                onClick={handleCopyPgn}
+                disabled={moveHistory.length === 0}
+                title="Copy PGN to clipboard"
+              >
+                {copiedToast ? '✓ Copied' : 'Copy PGN'}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button className="gc-btn" onClick={startGameReview} title="Analyse all moves">
