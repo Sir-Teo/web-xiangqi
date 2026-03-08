@@ -34,6 +34,7 @@ export function GameLibraryModal({
 }: GameLibraryModalProps) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editLabel, setEditLabel] = useState('');
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     const startEdit = (game: SavedGame) => {
         setEditingId(game.id);
@@ -104,14 +105,29 @@ export function GameLibraryModal({
                                         >
                                             <IconRefresh /> Load
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="chip-btn chip-btn-danger"
-                                            onClick={() => onDeleteGame(game.id)}
-                                            title="Delete"
-                                        >
-                                            <IconX />
-                                        </button>
+                                        {pendingDeleteId === game.id ? (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className="chip-btn chip-btn-danger"
+                                                    onClick={() => { onDeleteGame(game.id); setPendingDeleteId(null); }}
+                                                    title="Confirm delete"
+                                                    autoFocus
+                                                    onBlur={() => setPendingDeleteId(null)}
+                                                >
+                                                    Confirm?
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                className="chip-btn chip-btn-danger"
+                                                onClick={() => setPendingDeleteId(game.id)}
+                                                title="Delete"
+                                            >
+                                                <IconX />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="library-item-meta">
