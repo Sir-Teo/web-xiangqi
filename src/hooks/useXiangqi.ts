@@ -107,6 +107,9 @@ export function useXiangqi() {
     const [inCheck, setInCheck] = useState<boolean>(false);
     const [gameResult, setGameResult] = useState<GameResult>(null);
 
+    // Position history for repetition detection (FEN → count)
+    const positionHistoryRef = useRef<Map<string, number>>(new Map());
+
     const nodeCounterRef = useRef(1);
 
     const currentNodeId = currentMoveIndex >= 0 ? activeLineNodeIds[currentMoveIndex] ?? ROOT_NODE_ID : ROOT_NODE_ID;
@@ -136,6 +139,7 @@ export function useXiangqi() {
         setValidTargets([]);
         setInCheck(false);
         setGameResult(null);
+        positionHistoryRef.current = new Map();
         nodeCounterRef.current = 1;
     }, []);
 
@@ -252,6 +256,14 @@ export function useXiangqi() {
         // Game over: in Xiangqi, no legal moves = loss for the player to move
         if (!hasAnyLegalMove(nextBoard, nextSide)) {
             setGameResult(nextSide === 'w' ? 'black-wins' : 'red-wins');
+        } else {
+            // Threefold repetition detection (position key = board + side to move)
+            const posKey = boardToFen(nextBoard, nextSide);
+            const posCount = (positionHistoryRef.current.get(posKey) ?? 0) + 1;
+            positionHistoryRef.current.set(posKey, posCount);
+            if (posCount >= 3) {
+                setGameResult('draw');
+            }
         }
 
         const parentNodeId = currentNodeId;
