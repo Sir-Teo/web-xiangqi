@@ -4318,6 +4318,40 @@ summary:active {
   font-weight: 600;
 }
 
+.new-game-fen-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.new-game-fen-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.new-game-fen-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.74rem;
+  font-family: 'Courier New', monospace;
+  background: var(--bg-input, var(--bg-elevated));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 150ms ease;
+}
+
+.new-game-fen-input:focus {
+  border-color: var(--border-accent);
+}
+
+.new-game-fen-input-error {
+  border-color: #e74c3c !important;
+  color: #e74c3c;
+}
+
 /* ═══════════════════════════════════════════════════
    brand-badge
    ═══════════════════════════════════════════════════ */

@@ -222,6 +222,7 @@ function App() {
     onSquareClick,
     resetBoard,
     loadMoves,
+    loadFen,
     sideToMove,
     applyUciMove,
     setCurrentNodeEval,
@@ -991,6 +992,8 @@ function App() {
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   const [copiedToast, setCopiedToast] = useState(false);
+  const [fenInput, setFenInput] = useState('');
+  const [fenError, setFenError] = useState(false);
 
   const handleCopyPgn = useCallback(async () => {
     const moves = activeLineNodeIds
@@ -1009,6 +1012,18 @@ function App() {
       setTimeout(() => setCopiedToast(false), 2000);
     }
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult]);
+
+  const handleLoadFen = useCallback((fen: string) => {
+    const ok = loadFen(fen.trim());
+    if (!ok) {
+      setFenError(true);
+      setTimeout(() => setFenError(false), 2000);
+      return;
+    }
+    stopAnalysis();
+    setFenInput('');
+    setShowNewGameMenu(false);
+  }, [loadFen, stopAnalysis]);
 
   const handleSaveGame = useCallback(() => {
     const moves = activeLineNodeIds
@@ -1424,6 +1439,29 @@ function App() {
                 </div>
               </div>
             )}
+            <div className="new-game-fen-section">
+              <p className="new-game-strength-label">Load Position (FEN)</p>
+              <form
+                className="new-game-fen-form"
+                onSubmit={(e) => { e.preventDefault(); handleLoadFen(fenInput); }}
+              >
+                <input
+                  className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
+                  type="text"
+                  value={fenInput}
+                  onChange={(e) => setFenInput(e.target.value)}
+                  placeholder="rnbakabnr/9/… w - - 0 1"
+                  aria-label="FEN string"
+                />
+                <button
+                  type="submit"
+                  className="new-game-strength-btn new-game-strength-btn-active"
+                  disabled={!fenInput.trim()}
+                >
+                  {fenError ? 'Invalid FEN' : 'Load'}
+                </button>
+              </form>
+            </div>
           </div>
         </>
       )}

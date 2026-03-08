@@ -143,6 +143,33 @@ export function useXiangqi() {
         nodeCounterRef.current = 1;
     }, []);
 
+    const loadFen = useCallback((fen: string): boolean => {
+        try {
+            const parts = fen.trim().split(/\s+/);
+            const board = parseFenBoard(parts[0]);
+            // Basic validation: both kings must be present
+            const flat = board.flat();
+            if (!flat.includes('K') || !flat.includes('k')) return false;
+            const sideChar = parts[1];
+            const side: Side = sideChar === 'b' ? 'b' : 'w';
+            const rootTree = createRootTree();
+            setTreeNodes(rootTree);
+            setActiveLineNodeIds([]);
+            setCurrentMoveIndex(-1);
+            setBoard(board);
+            setSideToMove(side);
+            setSelected(null);
+            setValidTargets([]);
+            setInCheck(isInCheck(board, side));
+            setGameResult(null);
+            positionHistoryRef.current = new Map();
+            nodeCounterRef.current = 1;
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
+
     const loadMoves = useCallback((moves: string[]) => {
         let currentBoard = parseFenBoard(START_FEN);
         let currentSide: Side = 'w';
@@ -452,6 +479,7 @@ export function useXiangqi() {
         setNodeEvals,
         getNodeFen,
         loadMoves,
+        loadFen,
         jumpToMove,
         jumpToNode,
     };
