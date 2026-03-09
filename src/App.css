@@ -3717,16 +3717,13 @@ summary:active {
 
   [data-mobile-view="board"] .board-stage {
     flex: 1;
-    height: calc(100dvh - 56px);
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    padding: 0;
-    overflow: hidden;
+    height: 100%;
+    padding: 8px 14px 0;
   }
 
   [data-mobile-view="board"] .board-wrap {
-    width: min(calc(100vw - 20px), calc((100dvh - 140px) * 0.9)) !important;
+    /* max board: full width (minus side padding for shadow rings) OR height-constrained */
+    width: min(100%, calc((100dvh - 126px) * 0.9)) !important;
     max-width: 100% !important;
   }
 }

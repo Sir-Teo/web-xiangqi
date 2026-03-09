@@ -131,4 +131,8 @@ fi
 cp "$UPSTREAM_DIR/src/pikafish.nnue" "$DIST_DIR/pikafish.nnue"
 cp "$UPSTREAM_DIR/src/pikafish.nnue" "$PUBLIC_DIR/pikafish.nnue"
 
+# Mark dist/ as CJS so Node.js doesn't treat pikafish.js as ES module
+# (root package.json has "type":"module" but pikafish.js uses module.exports)
+echo '{"type":"commonjs"}' > "$DIST_DIR/package.json"
+
 echo "Built artifacts in $DIST_DIR"
