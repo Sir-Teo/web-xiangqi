@@ -35,9 +35,9 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
             preserveAspectRatio="none"
             style={{
                 position: 'absolute',
-                inset: 28,
-                width: 'calc(100% - 56px)',
-                height: 'calc(100% - 56px)',
+                inset: 'var(--board-pad)',
+                width: 'calc(100% - 2 * var(--board-pad))',
+                height: 'calc(100% - 2 * var(--board-pad))',
                 pointerEvents: 'none',
                 zIndex: 8,
                 overflow: 'visible',
