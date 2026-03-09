@@ -3719,11 +3719,21 @@ summary:active {
     flex: 1;
     height: 100%;
     padding: 8px 14px 0;
+    /* Override base grid/center layout for proper column stacking */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  [data-mobile-view="board"] .mobile-board-center {
+    width: 100%;
   }
 
   [data-mobile-view="board"] .board-wrap {
-    /* max board: full width (minus side padding for shadow rings) OR height-constrained */
-    width: min(100%, calc((100dvh - 126px) * 0.9)) !important;
+    /* height budget: 56px tab-bar + 40px header + 44px nav + 8px top-padding = 148px */
+    width: min(100%, calc((100dvh - 148px) * 0.9)) !important;
     max-width: 100% !important;
   }
 }
