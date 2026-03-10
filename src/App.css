@@ -3729,6 +3729,10 @@ summary:active {
 
   [data-mobile-view="board"] .mobile-board-center {
     width: 100%;
+    /* The board's box-shadow rings (9px at ≤440px container) extend outside
+       board-wrap. Setting overflow: visible lets them bleed into board-stage's
+       14px side padding instead of being clipped. */
+    overflow: visible;
   }
 
   [data-mobile-view="board"] .board-wrap {
