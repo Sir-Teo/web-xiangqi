@@ -81,24 +81,24 @@ export const Board = React.memo(function Board({
                     )}
                 </svg>
 
-                {/* Draw the physical grid lines */}
-                <div className="board-grid">
-                    {ranks.map(rank => (
-                        files.map(file => {
-                            if (orientation === 'red' && (file === 8 || rank === 0)) return null;
-                            if (orientation === 'black' && (file === 0 || rank === 9)) return null;
-
-                            return (
-                                <div
-                                    key={`cell-${file}-${rank}`}
-                                    className="cell"
-                                    data-file={file}
-                                    data-rank={rank}
-                                />
-                            );
-                        })
+                {/* SVG grid lines — same coordinate system as palace-lines so all
+                    layers align perfectly (no box-model border offset). */}
+                <svg className="board-grid-svg" viewBox="0 0 8 9" preserveAspectRatio="none">
+                    {/* 10 horizontal lines (ranks 0–9) */}
+                    {[0,1,2,3,4,5,6,7,8,9].map(y => (
+                        <line key={`h${y}`} className="grid-line" x1="0" y1={y} x2="8" y2={y} />
                     ))}
-                </div>
+                    {/* Outer vertical lines run the full height */}
+                    <line className="grid-line" x1="0" y1="0" x2="0" y2="9" />
+                    <line className="grid-line" x1="8" y1="0" x2="8" y2="9" />
+                    {/* Inner vertical lines (files 1–7) stop at the river (y 4→5) */}
+                    {[1,2,3,4,5,6,7].map(x => (
+                        <React.Fragment key={`v${x}`}>
+                            <line className="grid-line" x1={x} y1="0" x2={x} y2="4" />
+                            <line className="grid-line" x1={x} y1="5" x2={x} y2="9" />
+                        </React.Fragment>
+                    ))}
+                </svg>
 
                 {/* The river dividing the board */}
                 <div className="river">

@@ -76,26 +76,19 @@
 }
 
 /* ─── Grid ───────────────────────────────────────────────────────────────── */
-.board-grid {
+.board-grid-svg {
     position: absolute;
     inset: var(--board-pad);
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(9, 1fr);
-    border: 1.5px solid #3a2006;
+    pointer-events: none;
+    overflow: visible;
     z-index: 2;
 }
 
-.cell {
-    border-right: 1.5px solid #3a2006;
-    border-bottom: 1.5px solid #3a2006;
-    position: relative;
-    pointer-events: none;
-}
-
-/* River breaks the inner vertical lines; both river-bank horizontal lines are preserved */
-.cell[data-rank="5"] {
-    border-right: none;
+.grid-line {
+    stroke: #3a2006;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+    fill: none;
 }
 
 /* ─── Palace Diagonal Lines ──────────────────────────────────────────────── */
@@ -323,7 +316,7 @@
             -4px 12px 24px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .board-grid,
+    .board-grid-svg,
     .palace-lines,
     .hitboxes-layer,
     .pieces-layer {
@@ -372,7 +365,7 @@
             -2px 8px 16px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .board-grid,
+    .board-grid-svg,
     .palace-lines,
     .hitboxes-layer,
     .pieces-layer {
