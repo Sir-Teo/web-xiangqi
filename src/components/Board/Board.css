@@ -1,8 +1,7 @@
-:root { --board-pad: 28px; }
-
-@media (max-width: 900px) {
-  :root { --board-pad: 22px; }
-}
+/* --board-pad lives on the container so container queries can override it
+   without relying on viewport-width media queries. All child elements that
+   reference var(--board-pad) will automatically pick up the right value. */
+.xiangqi-board-container { --board-pad: 28px; }
 
 /* Board container scaling */
 .xiangqi-board-container {
@@ -75,42 +74,29 @@
     z-index: 1;
 }
 
-/* ─── Grid ───────────────────────────────────────────────────────────────── */
-.board-grid {
-    position: absolute;
-    inset: var(--board-pad);
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(9, 1fr);
-    border: 1.5px solid #3a2006;
-    z-index: 2;
-}
-
-.cell {
-    border-right: 1.5px solid #3a2006;
-    border-bottom: 1.5px solid #3a2006;
-    position: relative;
-    pointer-events: none;
-}
-
-/* River breaks the inner vertical lines; both river-bank horizontal lines are preserved */
-.cell[data-rank="5"] {
-    border-right: none;
-}
-
-/* ─── Palace Diagonal Lines ──────────────────────────────────────────────── */
-.palace-lines {
+/* ─── SVG Grid + Palace Lines ────────────────────────────────────────────── */
+/* Single SVG replaces the old CSS-grid and the palace-lines SVG.
+   Using SVG coordinates that match piece positions (file/8, rank/9) guarantees
+   pixel-perfect alignment at every board size — no border-box offset issues. */
+.board-svg-grid {
     position: absolute;
     inset: var(--board-pad);
     pointer-events: none;
     z-index: 2;
+    overflow: visible;
+}
+
+.grid-line {
+    stroke: #3a2006;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
 }
 
 .palace-line {
     stroke: #3a2006;
     stroke-width: 1.5px;
     vector-effect: non-scaling-stroke;
-    fill: transparent;
+    fill: none;
 }
 
 /* ─── River ──────────────────────────────────────────────────────────────── */
@@ -156,7 +142,9 @@
 
 .hitbox {
     position: absolute;
-    width: calc((100% - 2 * var(--board-pad)) / 10 + 20px);
+    /* 100% = playing-area width (pieces-layer is already inset by board-pad).
+       One cell spacing = 100%/8. Hitbox is slightly larger for easy tapping. */
+    width: calc(100% / 8 + 6px);
     aspect-ratio: 1;
     border-radius: 50%;
     transform: translate(-50%, -50%);
@@ -178,7 +166,9 @@
 /* ─── Piece ──────────────────────────────────────────────────────────────── */
 .piece {
     position: absolute;
-    width: calc((100% - 2 * var(--board-pad)) / 10 + 16px);
+    /* One cell spacing = 100%/8. Pieces slightly smaller (~95%) so adjacent
+       pieces don't overlap and look consistent at every board size. */
+    width: calc(100% / 8 - 2px);
     aspect-ratio: 1;
     border-radius: 50%;
     transform: translate(-50%, -50%);
@@ -287,8 +277,8 @@
 
 .target-ring {
     position: absolute;
-    width: calc((100% - 2 * var(--board-pad)) / 10 + 20px) !important;
-    height: calc((100% - 2 * var(--board-pad)) / 10 + 20px) !important;
+    width: calc(100% / 8 + 6px) !important;
+    height: calc(100% / 8 + 6px) !important;
     border: 3px solid var(--accent);
     border-radius: 50%;
     transform: translate(-50%, -50%);
@@ -312,8 +302,11 @@
 
 /* Medium boards: phones in portrait, or analysis-view constrained layout     */
 @container board (max-width: 440px) {
+    /* Update --board-pad on the container so every child using var(--board-pad)
+       picks up the new value automatically — no need to override each inset. */
+    .xiangqi-board-container { --board-pad: 22px; }
+
     .xiangqi-board {
-        padding: 22px;
         box-shadow:
             inset 0 0 0 2px rgba(255, 215, 110, 0.18),
             inset 0 0 60px rgba(0, 0, 0, 0.42),
@@ -323,29 +316,8 @@
             -4px 12px 24px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .board-grid,
-    .palace-lines,
-    .hitboxes-layer,
-    .pieces-layer {
-        inset: 22px;
-    }
-    .river {
-        left: 22px;
-        right: 22px;
-        top: calc(22px + 4 * (100% - 44px) / 9);
-        height: calc((100% - 44px) / 9);
-    }
-    .hitbox {
-        width: calc((100% - 44px) / 10 + 14px);
-    }
     .piece {
-        /* +10px keeps pieces ≈95% of cell width, matching desktop proportions */
-        width: calc((100% - 44px) / 10 + 10px);
         font-size: clamp(1.1rem, 7cqi, 1.6rem);
-    }
-    .target-ring {
-        width:  calc((100% - 44px) / 10 + 14px) !important;
-        height: calc((100% - 44px) / 10 + 14px) !important;
     }
     .river-text {
         font-size: 1.15rem;
@@ -361,8 +333,9 @@
 
 /* Small boards: very small phones or landscape analysis-view                  */
 @container board (max-width: 320px) {
+    .xiangqi-board-container { --board-pad: 16px; }
+
     .xiangqi-board {
-        padding: 16px;
         box-shadow:
             inset 0 0 0 2px rgba(255, 215, 110, 0.18),
             inset 0 0 40px rgba(0, 0, 0, 0.42),
@@ -372,29 +345,8 @@
             -2px 8px 16px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .board-grid,
-    .palace-lines,
-    .hitboxes-layer,
-    .pieces-layer {
-        inset: 16px;
-    }
-    .river {
-        left: 16px;
-        right: 16px;
-        top: calc(16px + 4 * (100% - 32px) / 9);
-        height: calc((100% - 32px) / 9);
-    }
-    .hitbox {
-        width: calc((100% - 32px) / 10 + 10px);
-    }
     .piece {
-        /* +6px keeps pieces ≈96% of cell width on very small boards */
-        width: calc((100% - 32px) / 10 + 6px);
         font-size: clamp(0.85rem, 6.5cqi, 1.2rem);
-    }
-    .target-ring {
-        width:  calc((100% - 32px) / 10 + 10px) !important;
-        height: calc((100% - 32px) / 10 + 10px) !important;
     }
     .river-text {
         font-size: 0.85rem;

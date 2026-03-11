@@ -59,46 +59,31 @@ export const Board = React.memo(function Board({
     return (
         <div className="xiangqi-board-container">
             <div className="xiangqi-board">
-                {/* SVG Layer for Palace Diagonal Lines */}
-                <svg className="palace-lines" viewBox="0 0 8 9" preserveAspectRatio="none">
-                    {orientation === 'red' ? (
-                        <>
-                            {/* Bottom Palace (Red) */}
-                            <line x1="3" y1="7" x2="5" y2="9" className="palace-line" />
-                            <line x1="5" y1="7" x2="3" y2="9" className="palace-line" />
-                            {/* Top Palace (Black) */}
-                            <line x1="3" y1="0" x2="5" y2="2" className="palace-line" />
-                            <line x1="5" y1="0" x2="3" y2="2" className="palace-line" />
-                        </>
-                    ) : (
-                        <>
-                            {/* Flipped: Black palace now at bottom */}
-                            <line x1="3" y1="7" x2="5" y2="9" className="palace-line" />
-                            <line x1="5" y1="7" x2="3" y2="9" className="palace-line" />
-                            <line x1="3" y1="0" x2="5" y2="2" className="palace-line" />
-                            <line x1="5" y1="0" x2="3" y2="2" className="palace-line" />
-                        </>
-                    )}
-                </svg>
-
-                {/* Draw the physical grid lines */}
-                <div className="board-grid">
-                    {ranks.map(rank => (
-                        files.map(file => {
-                            if (orientation === 'red' && (file === 8 || rank === 0)) return null;
-                            if (orientation === 'black' && (file === 0 || rank === 9)) return null;
-
-                            return (
-                                <div
-                                    key={`cell-${file}-${rank}`}
-                                    className="cell"
-                                    data-file={file}
-                                    data-rank={rank}
-                                />
-                            );
-                        })
+                {/* Single SVG for all grid lines + palace diagonals.
+                    ViewBox "0 0 8 9" matches piece coordinate system exactly:
+                    left=(file/8)*100% ↔ x=file, top=(rank/9)*100% ↔ y=rank-row.
+                    vector-effect: non-scaling-stroke keeps lines crisp at any size. */}
+                <svg className="board-svg-grid" viewBox="0 0 8 9" preserveAspectRatio="none">
+                    {/* 10 horizontal lines (rank rows 0–9) */}
+                    {([0,1,2,3,4,5,6,7,8,9] as const).map(y => (
+                        <line key={`h${y}`} x1={0} y1={y} x2={8} y2={y} className="grid-line" />
                     ))}
-                </div>
+                    {/* Outer vertical lines — full height */}
+                    <line x1={0} y1={0} x2={0} y2={9} className="grid-line" />
+                    <line x1={8} y1={0} x2={8} y2={9} className="grid-line" />
+                    {/* Inner vertical lines — split at river (y 4→5) */}
+                    {([1,2,3,4,5,6,7] as const).map(x => (
+                        <React.Fragment key={`v${x}`}>
+                            <line x1={x} y1={0} x2={x} y2={4} className="grid-line" />
+                            <line x1={x} y1={5} x2={x} y2={9} className="grid-line" />
+                        </React.Fragment>
+                    ))}
+                    {/* Palace diagonal lines (board is symmetric; same coords both orientations) */}
+                    <line x1={3} y1={0} x2={5} y2={2} className="palace-line" />
+                    <line x1={5} y1={0} x2={3} y2={2} className="palace-line" />
+                    <line x1={3} y1={7} x2={5} y2={9} className="palace-line" />
+                    <line x1={5} y1={7} x2={3} y2={9} className="palace-line" />
+                </svg>
 
                 {/* The river dividing the board */}
                 <div className="river">
