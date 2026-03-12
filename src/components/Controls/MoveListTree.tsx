@@ -1,5 +1,6 @@
 import { memo, useEffect } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
+import { getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
 
 type Props = {
     treeNodes: Record<string, MoveTreeNode>;
@@ -40,11 +41,13 @@ export const MoveListTree = memo(function MoveListTree({
         const qualityClass = getMoveQualityClass(treeNodes, nodeId);
         // Coach hint: engine's best alternative (stored on this node from review)
         const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
-        const isBadMove = qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
+        const note = record.quality && isCriticalReviewQuality(record.quality) ? record.reviewNote : null;
+        const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
         return (
             <span key={nodeId} className="mtree-chip-wrap">
                 <button
                     data-node-id={nodeId}
+                    data-testid={currentNodeId === nodeId ? 'move-tree-active' : undefined}
                     type="button"
                     className={[
                         'mtree-chip',
@@ -64,6 +67,11 @@ export const MoveListTree = memo(function MoveListTree({
                         ✦ {coachMove}
                     </span>
                 )}
+                {note ? (
+                    <span className="mtree-review-note" title={note}>
+                        {note}
+                    </span>
+                ) : null}
             </span>
         );
     };
@@ -158,6 +166,9 @@ function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeN
 
 function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {
     const node = treeNodes[nodeId];
+    if (node?.record?.quality) {
+        return getMoveQualityClassName(node.record.quality);
+    }
     const currentEval = node?.record?.evalScore;
     const parentEval = node?.parentId ? treeNodes[node.parentId]?.record?.evalScore : 0;
     if (typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';

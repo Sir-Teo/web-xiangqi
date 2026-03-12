@@ -15,6 +15,7 @@ import {
     isInCheck,
     hasAnyLegalMove,
 } from '../utils/xiangqi';
+import type { ReviewMoveQuality } from '../utils/review';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
@@ -23,7 +24,10 @@ export interface MoveRecord {
     piece: string;
     captured: string;
     evalScore?: number;
-    bestMove?: string; // engine's best from this position (set during review)
+    bestMove?: string; // engine's best move from the parent position (set during review)
+    quality?: ReviewMoveQuality;
+    swing?: number;
+    reviewNote?: string;
     board: BoardState;
     sideToMove: Side;
     inCheck: boolean;
@@ -227,6 +231,7 @@ export function useXiangqi() {
         setInCheck(isInCheck(currentBoard, currentSide));
         setSelected(null);
         setValidTargets([]);
+        return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
     const jumpToNode = useCallback((nodeId: string) => {
@@ -439,6 +444,91 @@ export function useXiangqi() {
         });
     }, []);
 
+    const setNodeReviewDataBulk = useCallback((updates: Array<{
+        nodeId: string;
+        evalScore?: number;
+        bestMove?: string;
+        quality?: ReviewMoveQuality;
+        swing?: number;
+        reviewNote?: string;
+    }>) => {
+        if (updates.length === 0) return;
+        setTreeNodes((prevTree) => {
+            let nextTree = prevTree;
+
+            for (const update of updates) {
+                if (update.nodeId === ROOT_NODE_ID) continue;
+                const node = nextTree[update.nodeId];
+                const record = node?.record;
+                if (!record) continue;
+
+                const nextRecord: MoveRecord = {
+                    ...record,
+                    evalScore: typeof update.evalScore === 'number' ? update.evalScore : record.evalScore,
+                    bestMove: update.bestMove ?? record.bestMove,
+                    quality: update.quality,
+                    swing: typeof update.swing === 'number' ? update.swing : undefined,
+                    reviewNote: update.reviewNote,
+                };
+
+                const changed =
+                    nextRecord.evalScore !== record.evalScore ||
+                    nextRecord.bestMove !== record.bestMove ||
+                    nextRecord.quality !== record.quality ||
+                    nextRecord.swing !== record.swing ||
+                    nextRecord.reviewNote !== record.reviewNote;
+                if (!changed) continue;
+
+                if (nextTree === prevTree) {
+                    nextTree = { ...prevTree };
+                }
+
+                nextTree[update.nodeId] = {
+                    ...node,
+                    record: nextRecord,
+                };
+            }
+
+            return nextTree;
+        });
+    }, []);
+
+    const clearAllReviewData = useCallback(() => {
+        setTreeNodes((prevTree) => {
+            let nextTree = prevTree;
+
+            for (const [nodeId, node] of Object.entries(prevTree)) {
+                const record = node.record;
+                if (!record) continue;
+                if (
+                    record.bestMove === undefined &&
+                    record.quality === undefined &&
+                    record.swing === undefined &&
+                    record.reviewNote === undefined
+                ) {
+                    continue;
+                }
+
+                if (nextTree === prevTree) {
+                    nextTree = { ...prevTree };
+                }
+
+                nextTree[nodeId] = {
+                    ...node,
+                    record: {
+                        ...record,
+                        bestMove: undefined,
+                        quality: undefined,
+                        swing: undefined,
+                        reviewNote: undefined,
+                    },
+                };
+            }
+
+            return nextTree;
+        });
+    }, []);
+
     // Returns true if a move was successfully applied.
     const onSquareClick = useCallback((file: number, rank: number): string | null => {
         const piece = board[rank][file];
@@ -491,6 +581,8 @@ export function useXiangqi() {
         setNodeEval,
         setNodeEvals,
         setNodeBestMove,
+        setNodeReviewDataBulk,
+        clearAllReviewData,
         getNodeFen,
         loadMoves,
         loadFen,

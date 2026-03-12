@@ -13,13 +13,19 @@ export function useGameLibrary() {
     const save = useCallback((
         gameMode: GameMode,
         moves: string[],
-        options: { opening?: string; finalEval?: number; label?: string } = {}
+        options: {
+            opening?: string;
+            finalEval?: number;
+            label?: string;
+            result?: SavedGame['result'];
+            review?: SavedGame['review'];
+        } = {}
     ): SavedGame => {
         const saved = saveGame({
             gameMode,
-            moves,
-            result: 'ongoing',
             ...options,
+            moves,
+            result: options.result ?? 'ongoing',
         });
         setGames(loadAllGames());
         return saved;

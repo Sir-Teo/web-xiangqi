@@ -3,6 +3,7 @@ import './App.css';
 import { Board } from './components/Board/Board';
 import type { BoardOrientation } from './components/Board/Board';
 import { EvalGraph } from './components/Panels/EvalGraph';
+import { ReviewPanel } from './components/Panels/ReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
 import { AI_SPEED_MS } from './components/Controls/WatchControls';
@@ -21,7 +22,7 @@ import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame } from './utils/gameLibrary';
 import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
-import { useGameReview, computeReviewSummary } from './hooks/useGameReview';
+import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, copyToClipboard } from './utils/gameExport';
 import {
@@ -30,6 +31,12 @@ import {
   resolveLiveAnalysisPolicy,
   resolveReviewPolicy,
 } from './utils/analysisProfile';
+import {
+  computeReviewArtifacts,
+  makeReviewLineSignature,
+  makeReviewLineSignatureFromMoves,
+  remapReviewSummaryToLine,
+} from './utils/review';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
@@ -148,7 +155,7 @@ function App() {
   const [rightWidth, setRightWidth] = useState(320);
   const [topPanelOpen, setTopPanelOpen] = useState(true);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
-  const [analysisTab, setAnalysisTab] = useState<'tree' | 'engine'>('tree');
+  const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
   const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph'>('moves');
   const [showArrows, setShowArrows] = useState(true);
@@ -228,6 +235,8 @@ function App() {
     setCurrentNodeEval,
     setNodeEvals,
     setNodeBestMove,
+    setNodeReviewDataBulk,
+    clearAllReviewData,
     getNodeFen,
     jumpToMove,
     jumpToNode,
@@ -253,6 +262,7 @@ function App() {
     startReview,
     updateReviewProgress,
     completeReview,
+    hydrateReview,
     cancelReview,
     resetReview,
   } = useGameReview();
@@ -377,11 +387,19 @@ function App() {
 
   const finalizeReview = useCallback(() => {
     const controller = reviewControllerRef.current;
-    const summary = computeReviewSummary(activeLineNodeIds, treeNodes, controller.provisionalEvals);
+    const reviewedAt = Date.now();
+    const { summary, annotations } = computeReviewArtifacts(
+      activeLineNodeIds,
+      treeNodes,
+      controller.provisionalEvals,
+      reviewedAt,
+    );
     flushReviewEvalUpdates();
+    setNodeReviewDataBulk(annotations);
     resetReviewController(false);
     completeReview(summary);
-  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, treeNodes]);
+    setAnalysisTab('review');
+  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, setNodeReviewDataBulk, treeNodes]);
 
   const handleEngineWorkerError = useCallback((message: string) => {
     const now = Date.now();
@@ -402,6 +420,7 @@ function App() {
 
     if (reviewControllerRef.current.active) {
       resetReviewController(true);
+      clearAllReviewData();
       cancelReview();
     }
 
@@ -418,7 +437,7 @@ function App() {
     }
 
     restartEngine();
-  }, [cancelReview, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
+  }, [cancelReview, clearAllReviewData, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
 
   const {
     isReady,
@@ -463,7 +482,7 @@ function App() {
 
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
           const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
-          const parentEval = parentId ? getEffectiveNodeEval(parentId) : 0;
+          const parentEval = parentId ? getEffectiveNodeEval(parentId) : undefined;
           if (typeof parentEval === 'number') {
             const swing = Math.abs(score - parentEval);
             if (swing >= reviewPolicy.revisitThreshold) {
@@ -505,7 +524,7 @@ function App() {
         return;
       }
 
-      if (currentMoveIndex >= 0) {
+      if (currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(score);
       }
 
@@ -529,6 +548,10 @@ function App() {
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
   const viewedPly = Math.max(0, currentMoveIndex + 1);
+  const currentLineSignature = useMemo(
+    () => makeReviewLineSignature(activeLineNodeIds, treeNodes),
+    [activeLineNodeIds, treeNodes]
+  );
 
   const breadcrumbNodeIds = useMemo(() => {
     const path: string[] = [];
@@ -578,10 +601,19 @@ function App() {
     reviewControllerRef.current.currentNodeId = null;
     flushReviewEvalUpdates();
     resetReviewController(false);
+    clearAllReviewData();
     cancelReview();
     clearQueuedSearch();
     stopSearch();
-  }, [cancelReview, clearQueuedSearch, flushReviewEvalUpdates, resetReviewController, stopSearch]);
+  }, [cancelReview, clearAllReviewData, clearQueuedSearch, flushReviewEvalUpdates, resetReviewController, stopSearch]);
+
+  const clearCompletedReview = useCallback(() => {
+    reviewControllerRef.current.active = false;
+    reviewControllerRef.current.currentNodeId = null;
+    resetReviewController(false);
+    clearAllReviewData();
+    resetReview();
+  }, [clearAllReviewData, resetReview, resetReviewController]);
 
   const resetGame = useCallback(() => {
     stopAnalysis();
@@ -608,6 +640,12 @@ function App() {
       setAnalysisTab('tree');
     }
   }, [engineEnabled, analysisTab]);
+
+  useEffect(() => {
+    if (reviewStatus !== 'done' || !reviewSummary) return;
+    if (reviewSummary.lineSignature === currentLineSignature) return;
+    clearCompletedReview();
+  }, [clearCompletedReview, currentLineSignature, reviewStatus, reviewSummary]);
 
   // Stop AI engine when game ends
   useEffect(() => {
@@ -885,23 +923,26 @@ function App() {
     const fen = getNodeFen(nodeId);
     const goCmd = controller.phase === 'base' ? reviewPolicy.base.goCmd : (reviewRevisitGoCmd ?? reviewPolicy.base.goCmd);
     queueSearch(`position fen ${fen}`, goCmd, 0, makeReviewTag(controller.phase, nodeId));
-  }, [finalizeReview, getNodeFen, isReady, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, updateReviewProgress]);
+  }, [finalizeReview, getNodeFen, isReady, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
     if (!engineEnabled || !isReady) return;
     stopAnalysis();
     resetReviewController(true);
+    clearAllReviewData();
     clearPvLines();
     clearWdl();
     currentMultiPvRef.current = 1;
     currentShowWdlRef.current = false;
     setOption('MultiPV', 1);
     setOption('UCI_ShowWDL', false);
+    setAnalysisTab('review');
 
-    const totalSteps = activeLineNodeIds.length;
+    const totalSteps = activeLineNodeIds.length + 1;
     if (!startReview(totalSteps)) {
-      completeReview(computeReviewSummary(activeLineNodeIds, treeNodes));
+      const { summary } = computeReviewArtifacts(activeLineNodeIds, treeNodes);
+      completeReview(summary);
       return;
     }
 
@@ -909,10 +950,10 @@ function App() {
       ...createReviewController(),
       active: true,
       phase: 'base',
-      baseQueue: [...activeLineNodeIds],
+      baseQueue: [rootNodeId, ...activeLineNodeIds],
       total: totalSteps,
     };
-  }, [activeLineNodeIds, applyBestMoveRef, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, setOption, startReview, stopAnalysis, treeNodes]);
+  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
   const handleSquareClick = useCallback((file: number, rank: number) => {
     if (gameResult) return;
@@ -1030,29 +1071,81 @@ function App() {
       return;
     }
     stopAnalysis();
+    handleCancelReview();
+    resetReview();
     setFenInput('');
     setShowNewGameMenu(false);
-  }, [loadFen, stopAnalysis]);
+  }, [handleCancelReview, loadFen, resetReview, stopAnalysis]);
+
+  const savedReviewSnapshot = useMemo(() => {
+    if (reviewStatus !== 'done' || !reviewSummary) return undefined;
+    return {
+      summary: reviewSummary,
+      annotations: moveHistory.map((record, moveIndex) => ({
+        moveIndex,
+        evalScore: record.evalScore,
+        bestMove: record.bestMove,
+        quality: record.quality,
+        swing: record.swing,
+        reviewNote: record.reviewNote,
+      })),
+    };
+  }, [moveHistory, reviewStatus, reviewSummary]);
 
   const handleSaveGame = useCallback(() => {
-    const moves = activeLineNodeIds
-      .slice(0, currentMoveIndex + 1)
+    const saveNodeIds = reviewStatus === 'done' && reviewSummary
+      ? activeLineNodeIds
+      : activeLineNodeIds.slice(0, currentMoveIndex + 1);
+    const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
     saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
       finalEval: evalScore,
+      result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
+      review: reviewStatus === 'done' && reviewSummary
+        ? {
+            ...savedReviewSnapshot,
+            summary: {
+              ...reviewSummary,
+              lineSignature: makeReviewLineSignatureFromMoves(moves),
+            },
+          }
+        : undefined,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, saveGameToLibrary, detectedOpening, evalScore]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, evalScore, gameMode, gameResult, reviewStatus, reviewSummary, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
     handleCancelReview();
     resetReview();
     setLeftPanelTab('graph');
-    loadMoves(game.moves);
+    const loadedNodeIds = loadMoves(game.moves);
+    if (game.review) {
+      setNodeReviewDataBulk(
+        game.review.annotations
+          .map((annotation) => {
+            const nodeId = loadedNodeIds[annotation.moveIndex];
+            if (!nodeId) return null;
+            return {
+              nodeId,
+              evalScore: annotation.evalScore,
+              bestMove: annotation.bestMove,
+              quality: annotation.quality,
+              swing: annotation.swing,
+              reviewNote: annotation.reviewNote,
+            };
+          })
+          .filter((annotation): annotation is NonNullable<typeof annotation> => Boolean(annotation))
+      );
+      hydrateReview(remapReviewSummaryToLine({
+        ...game.review.summary,
+        lineSignature: makeReviewLineSignatureFromMoves(game.moves),
+      }, loadedNodeIds));
+      setAnalysisTab('review');
+    }
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
+  }, [handleCancelReview, hydrateReview, loadMoves, resetReview, setNodeReviewDataBulk, stopAnalysis]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
@@ -1648,20 +1741,30 @@ function App() {
           </div>
           <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
-              <h2>Review</h2>
+              <h2>Analysis</h2>
               <div className="analysis-tab-strip">
                 <button
                   type="button"
                   className={`analysis-tab-btn ${analysisTab === 'tree' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('tree')}
+                  data-testid="analysis-tab-tree"
                 >
                   <IconTree style={{ marginRight: '0.3rem' }} />Game Tree
+                </button>
+                <button
+                  type="button"
+                  className={`analysis-tab-btn ${analysisTab === 'review' ? 'active' : ''}`}
+                  onClick={() => setAnalysisTab('review')}
+                  data-testid="analysis-tab-review"
+                >
+                  <IconBarChart style={{ marginRight: '0.3rem' }} />Review
                 </button>
                 {engineEnabled ? (
                   <button
                     type="button"
                     className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
                     onClick={() => setAnalysisTab('engine')}
+                    data-testid="analysis-tab-engine"
                   >
                     <IconBot style={{ marginRight: '0.3rem' }} />Engine
                   </button>
@@ -1693,6 +1796,18 @@ function App() {
                     onNavigateNode={jumpToNode}
                   />
                 </>
+              ) : analysisTab === 'review' ? (
+                <ReviewPanel
+                  status={reviewStatus}
+                  progress={reviewProgress}
+                  summary={reviewSummary}
+                  currentNodeId={currentNodeId}
+                  canStart={engineEnabled && moveHistory.length > 0}
+                  onStart={startGameReview}
+                  onCancel={handleCancelReview}
+                  onClear={clearCompletedReview}
+                  onNavigateNode={jumpToNode}
+                />
               ) : (
                 <>
                   <div className="pv-lines-container">
@@ -1737,7 +1852,13 @@ function App() {
               <button className="gc-btn" onClick={() => setShowNewGameMenu(m => !m)}>
                 <IconRefresh /> New Game
               </button>
-              <button className="gc-btn" onClick={handleSaveGame} disabled={moveHistory.length === 0} title="Save current game to library">
+              <button
+                className="gc-btn"
+                onClick={handleSaveGame}
+                disabled={moveHistory.length === 0}
+                title="Save current game to library"
+                data-testid="save-game-btn"
+              >
                 <IconSave /> Save
               </button>
               <button
@@ -1749,7 +1870,7 @@ function App() {
                 {copiedToast ? '✓ Copied' : 'Copy PGN'}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
-                <button className="gc-btn" onClick={startGameReview} title="Analyse all moves">
+                <button className="gc-btn" onClick={startGameReview} title="Analyse all moves" data-testid="start-review-btn">
                   Review Game
                 </button>
               )}
@@ -1765,7 +1886,8 @@ function App() {
                   <span className="quality-blunder"> {reviewSummary.blunderCount}B</span>
                   <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
                   <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
-                  <button className="chip-btn" onClick={resetReview}>✕</button>
+                  <button className="chip-btn" onClick={() => setAnalysisTab('review')}>View</button>
+                  <button className="chip-btn" onClick={clearCompletedReview}>✕</button>
                 </span>
               )}
               <span className="game-mode-badge">

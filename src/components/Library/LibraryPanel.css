@@ -10,6 +10,13 @@
   flex-shrink: 0;
 }
 
+.lib-filter-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding-bottom: 0.55rem;
+}
+
 .lib-search {
   width: 100%;
   box-sizing: border-box;
@@ -23,6 +30,22 @@
 }
 
 .lib-search:focus {
+  border-color: var(--accent, #10b981);
+}
+
+.lib-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-subtle, rgba(255,255,255,0.06));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.34rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.lib-filter-select:focus {
   border-color: var(--accent, #10b981);
 }
 
@@ -115,6 +138,12 @@
   border: 1px solid rgba(234, 179, 8, 0.3);
 }
 
+.lib-result--ongoing {
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
 /* ── Meta row ── */
 .lib-card-meta {
   display: flex;
@@ -161,6 +190,48 @@
 .lib-card-actions--inline {
   margin-top: 0;
   flex-shrink: 0;
+}
+
+.lib-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-top: 0.2rem;
+}
+
+.lib-review-pill {
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent, #10b981);
+  font-size: 0.63rem;
+  font-weight: 700;
+  padding: 0.14rem 0.44rem;
+}
+
+.lib-review-pill-blunder {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.lib-review-pill-mistake {
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fb923c;
+}
+
+.lib-review-pill-inaccuracy {
+  border-color: rgba(234, 179, 8, 0.24);
+  background: rgba(234, 179, 8, 0.12);
+  color: #fbbf24;
+}
+
+.lib-review-date {
+  color: var(--text-muted);
+  font-size: 0.63rem;
+  margin-left: auto;
+  align-self: center;
 }
 
 /* ── Saved game name (clickable to rename) ── */

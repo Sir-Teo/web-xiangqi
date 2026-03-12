@@ -2656,6 +2656,10 @@
   color: var(--accent, #10b981);
 }
 
+.review-summary .chip-btn {
+  padding: 0.18rem 0.42rem;
+}
+
 .gc-btn {
   display: inline-flex;
   align-items: center;
@@ -3122,6 +3126,14 @@
   opacity: 1;
 }
 
+.mtree-review-note {
+  max-width: 16rem;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+  padding: 0 0.2rem 0.1rem;
+}
+
 /* Interactive Active States */
 button:active:not(:disabled),
 .gc-btn:active:not(:disabled),
@@ -3362,6 +3374,25 @@ summary:active {
   fill: #ffffff;
 }
 
+.graph-review-marker {
+  fill: transparent;
+  stroke-width: 1.7;
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+.graph-review-marker.quality-inaccuracy {
+  stroke: var(--quality-inaccuracy);
+}
+
+.graph-review-marker.quality-mistake {
+  stroke: var(--quality-mistake);
+}
+
+.graph-review-marker.quality-blunder {
+  stroke: var(--quality-blunder);
+}
+
 .graph-tooltip {
   position: absolute;
   transform: translate(-50%, -100%);
@@ -3373,7 +3404,8 @@ summary:active {
   font-size: 0.68rem;
   font-family: "JetBrains Mono", monospace;
   pointer-events: none;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 18rem;
   z-index: 4;
   display: flex;
   flex-direction: column;
@@ -3395,6 +3427,22 @@ summary:active {
   font-style: normal;
 }
 
+.graph-tooltip-quality {
+  font-weight: 700;
+}
+
+.graph-tooltip-quality.quality-inaccuracy {
+  color: var(--quality-inaccuracy);
+}
+
+.graph-tooltip-quality.quality-mistake {
+  color: var(--quality-mistake);
+}
+
+.graph-tooltip-quality.quality-blunder {
+  color: var(--quality-blunder);
+}
+
 .graph-jump-controls {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3410,6 +3458,12 @@ summary:active {
   font-size: 0.71rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.chip-btn-primary {
+  border-color: var(--border-accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .chip-btn:hover:not(:disabled) {
@@ -3431,6 +3485,188 @@ summary:active {
   font-size: 0.68rem;
   color: var(--text-tertiary);
   font-family: "JetBrains Mono", monospace;
+}
+
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.review-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.review-panel-header h3 {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.review-panel-header p {
+  margin: 0.18rem 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  max-width: 22rem;
+}
+
+.review-panel-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.review-progress-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.review-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.74rem;
+}
+
+.review-progress-copy strong {
+  color: var(--text-primary);
+}
+
+.review-progress-copy span {
+  color: var(--accent);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.review-progress-track {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.review-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.4), rgba(110, 231, 183, 0.9));
+}
+
+.review-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.review-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.review-summary-card span {
+  color: var(--text-tertiary);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-summary-card strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.review-moment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.review-moment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.review-moment-card {
+  display: grid;
+  gap: 0.28rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  padding: 0.7rem 0.78rem;
+  cursor: pointer;
+}
+
+.review-moment-card:hover {
+  border-color: var(--border-strong);
+}
+
+.review-moment-card-active {
+  border-color: var(--border-accent);
+  background: var(--accent-subtle);
+}
+
+.review-moment-topline,
+.review-moment-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.review-moment-topline {
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.review-moment-topline span {
+  font-weight: 700;
+}
+
+.review-moment-topline strong,
+.review-moment-main strong {
+  font-family: "JetBrains Mono", monospace;
+}
+
+.review-moment-main span {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.review-moment-card p {
+  margin: 0;
+  line-height: 1.45;
+  font-size: 0.72rem;
+}
+
+.review-moment-card em {
+  font-style: normal;
+  color: var(--accent);
+  font-size: 0.68rem;
 }
 
 /* Engine tab cards */

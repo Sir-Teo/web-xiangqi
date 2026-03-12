@@ -17,6 +17,9 @@
     "serve:demo": "node scripts/serve-demo.cjs",
     "test:parity": "node scripts/test-parity.cjs single",
     "test:worker-parity:browser": "node scripts/test-worker-parity-browser.cjs",
+    "test:review:fixtures": "node scripts/test-review-fixtures-browser.cjs",
+    "test:review:browser": "node scripts/test-review-browser.cjs",
+    "test:review:parity": "node scripts/test-review-parity.cjs",
     "bench:nps": "node scripts/bench-nps.cjs",
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
   },

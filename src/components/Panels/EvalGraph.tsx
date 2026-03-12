@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
+import { formatReviewQuality, getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
 
 interface EvalGraphProps {
     history: MoveRecord[];
@@ -21,6 +22,10 @@ type EvalPoint = {
     uci: string | null;
     mover: 'red' | 'black' | 'start';
     branchCount: number;
+    quality?: MoveRecord['quality'];
+    swing?: MoveRecord['swing'];
+    reviewNote?: MoveRecord['reviewNote'];
+    bestMove?: MoveRecord['bestMove'];
 };
 
 export const EvalGraph = React.memo(function EvalGraph({
@@ -60,6 +65,10 @@ export const EvalGraph = React.memo(function EvalGraph({
                 uci: move.uci,
                 mover: index % 2 === 0 ? 'red' : 'black',
                 branchCount: branchCounts[index] ?? 0,
+                quality: move.quality,
+                swing: move.swing,
+                reviewNote: move.reviewNote,
+                bestMove: move.bestMove,
             });
         });
 
@@ -279,6 +288,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
     const tooltipX = Math.max(PADDING.left + 54, Math.min(chartWidth - PADDING.right - 54, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
     const tooltipY = Math.max(54, (computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0)) - 18);
+    const tooltipQualityClass = tooltipPoint?.quality ? getMoveQualityClassName(tooltipPoint.quality) : '';
 
     return (
         <div className="graph-wrap">
@@ -399,6 +409,14 @@ export const EvalGraph = React.memo(function EvalGraph({
                             ) : null}
                             {computedPoints.map((pt, pointIndex) => (
                                 <g key={`point-${pt.ply}`}>
+                                    {pt.quality && isCriticalReviewQuality(pt.quality) ? (
+                                        <circle
+                                            className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
+                                            cx={pt.x}
+                                            cy={pt.y}
+                                            r={6.4}
+                                        />
+                                    ) : null}
                                     <circle
                                         className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
                                         cx={pt.x}
@@ -436,7 +454,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                 </g>
                             ))}
                         </svg>
-                        {isSweepingLoad ? <div className="graph-load-sweep-overlay" aria-hidden="true" /> : null}
+                        {isSweepingLoad ? <div className="graph-load-sweep-overlay" aria-hidden="true" data-testid="graph-load-sweep" /> : null}
                     </div>
                     {tooltipPoint ? (
                         <div
@@ -448,13 +466,23 @@ export const EvalGraph = React.memo(function EvalGraph({
                         >
                             <strong>{formatPointLabel(tooltipPoint)}</strong>
                             <span>{formatEval(tooltipPoint.eval)}</span>
+                            {tooltipPoint?.quality ? (
+                                <em className={`graph-tooltip-quality ${tooltipQualityClass}`}>
+                                    {formatReviewQuality(tooltipPoint.quality)}
+                                    {typeof tooltipPoint.swing === 'number' ? ` · ${Math.round(tooltipPoint.swing)}cp` : ''}
+                                </em>
+                            ) : null}
+                            {tooltipPoint?.reviewNote ? <span>{tooltipPoint.reviewNote}</span> : null}
+                            {tooltipPoint?.bestMove && tooltipPoint.bestMove !== tooltipPoint.uci ? (
+                                <em>Engine: {tooltipPoint.bestMove.toUpperCase()}</em>
+                            ) : null}
                             {tooltipBranchCount > 1 ? <em>{tooltipBranchCount} branches</em> : null}
                         </div>
                     ) : null}
                 </div>
             </div>
             <div className="graph-legend">
-                <span>{currentPoint?.moveIndex === -1 ? 'Start Position' : `${formatPointLabel(currentPoint)} · Ply ${currentPoint?.ply ?? 0}`}</span>
+                <span data-testid="graph-current-point">{currentPoint?.moveIndex === -1 ? 'Start Position' : `${formatPointLabel(currentPoint)} · Ply ${currentPoint?.ply ?? 0}`}</span>
                 <strong>{currentDisplay}</strong>
             </div>
             <div className="graph-extrema">

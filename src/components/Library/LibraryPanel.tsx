@@ -19,9 +19,10 @@ function formatDate(ts: number): string {
   });
 }
 
-function resultLabel(result: HistoricalGame['result']): string {
+function resultLabel(result: HistoricalGame['result'] | SavedGame['result']): string {
   if (result === 'red') return 'Red wins';
   if (result === 'black') return 'Black wins';
+  if (result === 'ongoing') return 'Ongoing';
   return 'Draw';
 }
 
@@ -35,10 +36,14 @@ export function LibraryPanel({
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
+  const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
 
   const q = search.trim().toLowerCase();
 
   const filteredHistorical = HISTORICAL_GAMES.filter((g) => {
+    if (reviewFilter === 'reviewed') return false;
+    if (resultFilter !== 'all' && g.result !== resultFilter) return false;
     if (!q) return true;
     return (
       g.redPlayer.toLowerCase().includes(q) ||
@@ -50,6 +55,10 @@ export function LibraryPanel({
   });
 
   const filteredSaved = savedGames.filter((g) => {
+    const isReviewed = Boolean(g.review);
+    if (reviewFilter === 'reviewed' && !isReviewed) return false;
+    if (reviewFilter === 'unreviewed' && isReviewed) return false;
+    if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
     if (!q) return true;
     return (
       (g.label ?? '').toLowerCase().includes(q) ||
@@ -74,11 +83,35 @@ export function LibraryPanel({
         <input
           className="lib-search"
           type="search"
-          placeholder="Search players, events…"
+          placeholder="Search players, openings, events…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search library"
         />
+      </div>
+      <div className="lib-filter-row">
+        <select
+          className="lib-filter-select"
+          value={reviewFilter}
+          onChange={(e) => setReviewFilter(e.target.value as typeof reviewFilter)}
+          aria-label="Filter by review status"
+        >
+          <option value="all">All reviews</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="unreviewed">Unreviewed</option>
+        </select>
+        <select
+          className="lib-filter-select"
+          value={resultFilter}
+          onChange={(e) => setResultFilter(e.target.value as typeof resultFilter)}
+          aria-label="Filter by result"
+        >
+          <option value="all">All results</option>
+          <option value="red">Red wins</option>
+          <option value="black">Black wins</option>
+          <option value="draw">Draw</option>
+          <option value="ongoing">Ongoing</option>
+        </select>
       </div>
 
       {/* ── Classic Games ── */}
@@ -115,6 +148,7 @@ export function LibraryPanel({
                   type="button"
                   className="chip-btn chip-btn-primary"
                   onClick={() => onLoadHistorical(game)}
+                  data-testid={`load-historical-${game.id}`}
                 >
                   <IconRefresh /> Load
                 </button>
@@ -166,6 +200,7 @@ export function LibraryPanel({
                     type="button"
                     className="chip-btn chip-btn-primary"
                     onClick={() => onLoadSavedGame(game)}
+                    data-testid={`load-saved-${game.id}`}
                   >
                     <IconRefresh /> Load
                   </button>
@@ -181,6 +216,10 @@ export function LibraryPanel({
               </div>
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
+                <span className="lib-dot">·</span>
+                <span className={`lib-result lib-result--${game.result ?? 'ongoing'}`}>
+                  {resultLabel(game.result ?? 'ongoing')}
+                </span>
                 <span className="lib-dot">·</span>
                 <span>{game.moves.length} moves</span>
                 {game.opening && (
@@ -199,6 +238,25 @@ export function LibraryPanel({
                 )}
                 <span className="lib-date">{formatDate(game.savedAt)}</span>
               </div>
+              {game.review ? (
+                <div className="lib-review-meta">
+                  <span className="lib-review-pill">
+                    {game.review.summary.accuracy}% accuracy
+                  </span>
+                  <span className="lib-review-pill lib-review-pill-blunder">
+                    {game.review.summary.blunderCount}B
+                  </span>
+                  <span className="lib-review-pill lib-review-pill-mistake">
+                    {game.review.summary.mistakeCount}M
+                  </span>
+                  <span className="lib-review-pill lib-review-pill-inaccuracy">
+                    {game.review.summary.inaccuracyCount}I
+                  </span>
+                  <span className="lib-review-date">
+                    Reviewed {formatDate(game.review.summary.reviewedAt)}
+                  </span>
+                </div>
+              ) : null}
             </div>
           ))
         )}
