@@ -1105,7 +1105,7 @@ function App() {
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
       review: reviewStatus === 'done' && reviewSummary
         ? {
-            ...savedReviewSnapshot,
+            ...savedReviewSnapshot!,
             summary: {
               ...reviewSummary,
               lineSignature: makeReviewLineSignatureFromMoves(moves),
