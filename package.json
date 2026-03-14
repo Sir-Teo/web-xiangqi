@@ -21,7 +21,8 @@
     "test:review:browser": "node scripts/test-review-browser.cjs",
     "test:review:parity": "node scripts/test-review-parity.cjs",
     "bench:nps": "node scripts/bench-nps.cjs",
-    "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
+    "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd",
+    "test:rl": "npx tsx scripts/test-rl-env.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
