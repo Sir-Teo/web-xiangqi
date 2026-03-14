@@ -80,7 +80,10 @@
    pixel-perfect alignment at every board size — no border-box offset issues. */
 .board-svg-grid {
     position: absolute;
-    inset: var(--board-pad);
+    top: var(--board-pad);
+    left: var(--board-pad);
+    width: calc(100% - 2 * var(--board-pad));
+    height: calc(100% - 2 * var(--board-pad));
     pointer-events: none;
     z-index: 2;
     overflow: visible;
@@ -135,7 +138,10 @@
 /* ─── Hitboxes ───────────────────────────────────────────────────────────── */
 .hitboxes-layer {
     position: absolute;
-    inset: var(--board-pad);
+    top: var(--board-pad);
+    left: var(--board-pad);
+    width: calc(100% - 2 * var(--board-pad));
+    height: calc(100% - 2 * var(--board-pad));
     pointer-events: none;
     z-index: 5;
 }
@@ -159,7 +165,10 @@
 /* ─── Pieces Layer ───────────────────────────────────────────────────────── */
 .pieces-layer {
     position: absolute;
-    inset: var(--board-pad);
+    top: var(--board-pad);
+    left: var(--board-pad);
+    width: calc(100% - 2 * var(--board-pad));
+    height: calc(100% - 2 * var(--board-pad));
     pointer-events: none;
 }
 
