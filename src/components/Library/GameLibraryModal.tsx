@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
-import { IconX, IconRefresh } from '../icons';
+import { IconX, IconRefresh, IconCheck } from '../icons';
 import { exportPgnFromUci, copyToClipboard } from '../../utils/gameExport';
 import './GameLibraryModal.css';
 
@@ -118,7 +118,7 @@ export function GameLibraryModal({
                                             onClick={() => handleCopyPgn(game)}
                                             title="Copy PGN to clipboard"
                                         >
-                                            {copiedId === game.id ? '✓' : 'PGN'}
+                                            {copiedId === game.id ? <IconCheck /> : 'PGN'}
                                         </button>
                                         <button
                                             type="button"

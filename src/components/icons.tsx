@@ -109,3 +109,30 @@ export const IconLibrary = (props: React.SVGProps<SVGSVGElement>) => (
         <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
     </svg>
 );
+
+export const IconPawn = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+        <circle cx="12" cy="6.5" r="2.8" />
+        <path d="M9.2 9.3C7.6 10.2 6.5 11.8 6.5 13.7c0 1 .3 2 .8 2.8H8v.5h8v-.5h.7c.5-.8.8-1.8.8-2.8 0-1.9-1.1-3.5-2.7-4.4a3.5 3.5 0 0 1-2.8 0z" />
+        <rect x="7.5" y="18" width="9" height="2.5" rx="1.2" />
+    </svg>
+);
+
+export const IconCheck = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M20 6 9 17l-5-5" />
+    </svg>
+);
+
+export const IconCornerDownRight = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <polyline points="15 10 20 15 15 20" />
+        <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+    </svg>
+);
+
+export const IconSpark = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+        <path d="M12 2c.4 3.8 2 7 10 10-8 3-9.6 6.2-10 10-.4-3.8-2-7-10-10 8-3 9.6-6.2 10-10z" />
+    </svg>
+);

@@ -337,9 +337,11 @@
 }
 
 .app-brand-icon {
-  font-size: 1.05rem;
-  line-height: 1;
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
   opacity: 0.85;
+  vertical-align: middle;
 }
 
 .app-brand-text {
@@ -3093,10 +3095,12 @@
 }
 
 .mtree-var-marker {
-  font-size: 0.7rem;
+  width: 0.75rem;
+  height: 0.75rem;
   color: var(--text-muted);
   margin-right: 0.15rem;
   flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .mtree-chip-compact {
@@ -3113,6 +3117,9 @@
 }
 
 .mtree-coach-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   font-size: 0.62rem;
   font-family: 'Courier New', monospace;
   color: var(--accent);
@@ -3120,6 +3127,12 @@
   padding: 0 0.2rem;
   letter-spacing: 0.02em;
   cursor: default;
+}
+
+.mtree-coach-hint svg {
+  width: 0.6rem;
+  height: 0.6rem;
+  flex-shrink: 0;
 }
 
 .mtree-coach-hint:hover {

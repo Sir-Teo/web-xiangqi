@@ -10,7 +10,8 @@ import { AI_SPEED_MS } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
-  IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow
+  IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
+  IconPawn, IconCheck
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
@@ -1193,7 +1194,7 @@ function App() {
         <div className="panel-inner">
           <div className="panel-content compact-grid">
             <div className="app-brand">
-              <span className="app-brand-icon">♟</span>
+              <IconPawn className="app-brand-icon" />
               <span className="app-brand-text">Web Xiangqi</span>
               <span className="brand-badge">Alpha</span>
             </div>
@@ -1867,7 +1868,7 @@ function App() {
                 disabled={moveHistory.length === 0}
                 title="Copy PGN to clipboard"
               >
-                {copiedToast ? '✓ Copied' : 'Copy PGN'}
+                {copiedToast ? <><IconCheck /> Copied</> : 'Copy PGN'}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button className="gc-btn" onClick={startGameReview} title="Analyse all moves" data-testid="start-review-btn">
@@ -1887,7 +1888,7 @@ function App() {
                   <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
                   <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
                   <button className="chip-btn" onClick={() => setAnalysisTab('review')}>View</button>
-                  <button className="chip-btn" onClick={clearCompletedReview}>✕</button>
+                  <button className="chip-btn" onClick={clearCompletedReview}><IconX /></button>
                 </span>
               )}
               <span className="game-mode-badge">
@@ -1945,7 +1946,7 @@ function App() {
             className={`mobile-tab-bar-btn ${mobileView === 'board' ? 'active' : ''}`}
             onClick={() => setMobileView('board')}
           >
-            <span style={{ fontSize: '1.1rem' }}>♟</span>
+            <IconPawn style={{ fontSize: '1.1rem' }} />
             Board
           </button>
           <button
