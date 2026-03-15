@@ -1,6 +1,7 @@
 import { memo, useEffect } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import { getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
+import { IconSpark, IconCornerDownRight } from '../icons';
 
 type Props = {
     treeNodes: Record<string, MoveTreeNode>;
@@ -64,7 +65,7 @@ export const MoveListTree = memo(function MoveListTree({
                 </button>
                 {isBadMove && coachMove && (
                     <span className="mtree-coach-hint" title={`Engine suggested: ${coachMove}`}>
-                        ✦ {coachMove}
+                        <IconSpark /> {coachMove}
                     </span>
                 )}
                 {note ? (
@@ -85,7 +86,7 @@ export const MoveListTree = memo(function MoveListTree({
             const variationLine = buildVariationLine(variationRootId, treeNodes);
             rows.push(
                 <div key={`var-${parentId}-${variationRootId}`} className="mtree-variation">
-                    <span className="mtree-var-marker">↳</span>
+                    <IconCornerDownRight className="mtree-var-marker" />
                     {variationLine.map((nodeId) => renderMoveChip(nodeId, true))}
                 </div>
             );
