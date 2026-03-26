@@ -6,7 +6,6 @@ import { EvalGraph } from './components/Panels/EvalGraph';
 import { ReviewPanel } from './components/Panels/ReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
-import { AI_SPEED_MS } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
@@ -51,6 +50,11 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
 ];
 
 export type AiStrength = 1 | 2 | 3 | 4 | 5;
+const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
+  slow: 1500,
+  normal: 800,
+  fast: 150,
+};
 const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
   1: 'Beginner',
   2: 'Easy',
@@ -162,6 +166,7 @@ function App() {
   const [showArrows, setShowArrows] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
+  const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
@@ -664,7 +669,10 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         setShowSettings(false);
+        setShowNewGameMenu(false);
+        setFenError(false);
       }
     };
     let resizeTimer: number | undefined;
@@ -963,10 +971,10 @@ function App() {
     }
   }, [gameResult, isAiTurn, paused, onSquareClick]);
 
-  const applyMode = (mode: GameMode) => {
+  const applyMode = useCallback((mode: GameMode) => {
     setGameMode(mode);
     resetGame();
-  };
+  }, [resetGame]);
 
   const MIN_WIDTH = 60;
   const DEFAULT_LEFT = 320;
@@ -1015,6 +1023,12 @@ function App() {
   }, [rightWidth]);
 
   const isAiMode = gameMode !== 'PvP';
+  const currentModeLabel = GAME_MODES.find((candidate) => candidate.mode === gameMode)?.label ?? gameMode;
+  const pendingModeLabel = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode)?.label ?? pendingGameMode;
+  const pendingModeIsAi = pendingGameMode !== 'PvP';
+  const currentEvalText = typeof evalScore === 'number'
+    ? `${evalScore > 0 ? '+' : ''}${(evalScore / 100).toFixed(1)}`
+    : null;
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
   const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
@@ -1046,6 +1060,42 @@ function App() {
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
 
+  const closeSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
+
+  const toggleSettings = useCallback(() => {
+    setShowNewGameMenu(false);
+    setFenError(false);
+    setShowSettings((open) => !open);
+  }, []);
+
+  const closeNewGameMenu = useCallback(() => {
+    setShowNewGameMenu(false);
+    setFenError(false);
+  }, []);
+
+  const openNewGameMenu = useCallback(() => {
+    setShowSettings(false);
+    setPendingGameMode(gameMode);
+    setFenInput('');
+    setFenError(false);
+    setShowNewGameMenu(true);
+  }, [gameMode]);
+
+  const toggleNewGameMenu = useCallback(() => {
+    if (showNewGameMenu) {
+      closeNewGameMenu();
+      return;
+    }
+    openNewGameMenu();
+  }, [closeNewGameMenu, openNewGameMenu, showNewGameMenu]);
+
+  const startNewGameFromMenu = useCallback(() => {
+    applyMode(pendingGameMode);
+    closeNewGameMenu();
+  }, [applyMode, closeNewGameMenu, pendingGameMode]);
+
   const handleCopyPgn = useCallback(async () => {
     const moves = activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
@@ -1064,7 +1114,7 @@ function App() {
     }
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult]);
 
-  const handleLoadFen = useCallback((fen: string) => {
+  const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
     if (!ok) {
       setFenError(true);
@@ -1074,9 +1124,11 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setGameMode(nextGameMode);
     setFenInput('');
-    setShowNewGameMenu(false);
-  }, [handleCancelReview, loadFen, resetReview, stopAnalysis]);
+    setFenError(false);
+    closeNewGameMenu();
+  }, [closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
@@ -1253,7 +1305,7 @@ function App() {
               <button
                 type="button"
                 className="top-action-btn"
-                onClick={() => setShowNewGameMenu(m => !m)}
+                onClick={toggleNewGameMenu}
                 title="New game"
                 aria-label="Start new game"
                 aria-haspopup="dialog"
@@ -1278,9 +1330,10 @@ function App() {
               <button
                 type="button"
                 className="top-action-btn"
-                onClick={() => setShowSettings(s => !s)}
+                onClick={toggleSettings}
                 title="Settings"
                 aria-label="Open settings"
+                aria-haspopup="dialog"
                 aria-expanded={showSettings}
               >
                 <IconSettings />
@@ -1294,6 +1347,7 @@ function App() {
                 type="button"
                 onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT)}
                 title="Toggle graph panel"
+                aria-label="Toggle graph panel"
               >
                 <IconBarChart />
               </button>
@@ -1301,6 +1355,7 @@ function App() {
                 type="button"
                 onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT)}
                 title="Toggle tree panel"
+                aria-label="Toggle move tree panel"
               >
                 <IconTree />
               </button>
@@ -1321,7 +1376,7 @@ function App() {
         <>
           <div
             className="settings-backdrop"
-            onClick={() => setShowSettings(false)}
+            onClick={closeSettings}
             aria-hidden="true"
           />
           <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
@@ -1330,7 +1385,7 @@ function App() {
               <button
                 className="settings-close-btn"
                 type="button"
-                onClick={() => setShowSettings(false)}
+                onClick={closeSettings}
                 aria-label="Close settings"
               >
                 <IconX />
@@ -1497,16 +1552,19 @@ function App() {
         <>
           <div
             className="settings-backdrop"
-            onClick={() => setShowNewGameMenu(false)}
+            onClick={closeNewGameMenu}
             aria-hidden="true"
           />
           <div className="new-game-menu" role="dialog" aria-modal="true" aria-label="New game">
-            <div className="settings-header">
-              <h2>New Game</h2>
+            <div className="new-game-menu-header">
+              <div className="new-game-menu-copy">
+                <h2>New Game</h2>
+                <p>Choose a mode, set the AI before you start, or drop straight into a custom FEN.</p>
+              </div>
               <button
                 className="settings-close-btn"
                 type="button"
-                onClick={() => setShowNewGameMenu(false)}
+                onClick={closeNewGameMenu}
                 aria-label="Close"
               >
                 <IconX />
@@ -1517,14 +1575,15 @@ function App() {
                 <button
                   key={mode}
                   type="button"
-                  className={`new-game-mode-btn ${gameMode === mode ? 'new-game-mode-btn-active' : ''}`}
-                  onClick={() => { applyMode(mode); setShowNewGameMenu(false); }}
+                  className={`new-game-mode-btn ${pendingGameMode === mode ? 'new-game-mode-btn-active' : ''}`}
+                  onClick={() => setPendingGameMode(mode)}
+                  aria-pressed={pendingGameMode === mode}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            {gameMode !== 'PvP' && (
+            {pendingModeIsAi && (
               <div className="new-game-strength-section">
                 <p className="new-game-strength-label">AI Difficulty</p>
                 <div className="new-game-strength-pills">
@@ -1546,7 +1605,7 @@ function App() {
               <p className="new-game-strength-label">Load Position (FEN)</p>
               <form
                 className="new-game-fen-form"
-                onSubmit={(e) => { e.preventDefault(); handleLoadFen(fenInput); }}
+                onSubmit={(e) => { e.preventDefault(); handleLoadFen(fenInput, pendingGameMode); }}
               >
                 <input
                   className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
@@ -1564,6 +1623,19 @@ function App() {
                   {fenError ? 'Invalid FEN' : 'Load'}
                 </button>
               </form>
+            </div>
+            <div className="new-game-menu-footer">
+              <div className="new-game-selection">
+                <span className="new-game-selection-label">Selected</span>
+                <strong>{pendingModeLabel}</strong>
+              </div>
+              <button
+                type="button"
+                className="new-game-start-btn"
+                onClick={startNewGameFromMenu}
+              >
+                Start Fresh Board
+              </button>
             </div>
           </div>
         </>
@@ -1638,6 +1710,49 @@ function App() {
 
         {/* ── Board stage ── */}
         <section className="board-stage" aria-label="Xiangqi board">
+          {!isMobile && (
+            <div className="board-stage-header">
+              <div className="board-stage-copy">
+                <span className="board-stage-kicker">
+                  {workspaceMode === 'analysis' ? 'Analysis board' : 'Play board'}
+                </span>
+                <h1>{currentModeLabel}</h1>
+                <p>
+                  {detectedOpening
+                    ? `${detectedOpening.name} is on the board. ${engineEnabled && currentEvalText ? `Live eval ${currentEvalText}.` : 'Keep exploring variations and review notes.'}`
+                    : workspaceMode === 'analysis'
+                      ? 'Engine lines, review, and move-tree navigation stay synced with the current position.'
+                      : 'A clean over-the-board workspace for local play and sparring.'}
+                </p>
+              </div>
+              <div className="board-stage-chips">
+                <span className={`board-stage-chip board-stage-chip-turn ${sideToMove === 'w' ? 'turn-red' : 'turn-black'}`}>
+                  <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
+                  {sideToMove === 'w' ? 'Red' : 'Black'} to move
+                </span>
+                <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
+                {currentEvalText ? (
+                  <span className={`board-stage-chip board-stage-chip-eval ${evalScore > 0 ? 'eval-positive' : evalScore < 0 ? 'eval-negative' : ''}`}>
+                    Eval {currentEvalText}
+                  </span>
+                ) : null}
+                {detectedOpening ? (
+                  <span className="board-stage-chip board-stage-chip-opening">
+                    {detectedOpening.chinese} · {detectedOpening.name}
+                  </span>
+                ) : (
+                  <span className="board-stage-chip board-stage-chip-muted">
+                    {engineEnabled ? 'Engine live' : 'Engine off'}
+                  </span>
+                )}
+                {isAiMode ? (
+                  <span className="board-stage-chip board-stage-chip-muted">
+                    {paused ? 'AI paused' : `AI ${aiSpeed === 'step' ? 'step mode' : aiSpeed}`}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          )}
           {isMobile && mobileView === 'board' && (
             <div className="mobile-board-header">
               <div className="mobile-board-turn-info">
@@ -1655,15 +1770,15 @@ function App() {
                 )}
               </div>
               <div className="mobile-board-actions">
-                <button className="mobile-action-btn" onClick={() => setShowNewGameMenu(m => !m)} title="New game"><IconRefresh /></button>
+                <button className="mobile-action-btn" type="button" onClick={toggleNewGameMenu} title="New game" aria-label="Open new game menu"><IconRefresh /></button>
                 {isAiMode && (
-                  <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'}>
+                  <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} type="button" onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'} aria-label={paused ? 'Resume AI' : 'Pause AI'}>
                     {paused ? <IconPlay /> : <IconPause />}
                   </button>
                 )}
-                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} onClick={() => setShowArrows(v => !v)} title="Toggle arrows"><IconArrow /></button>
-                <button className="mobile-action-btn" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board"><IconFlip /></button>
-                <button className="mobile-action-btn" onClick={() => setShowSettings(s => !s)} title="Settings"><IconSettings /></button>
+                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} type="button" onClick={() => setShowArrows(v => !v)} title="Toggle arrows" aria-label="Toggle board arrows"><IconArrow /></button>
+                <button className="mobile-action-btn" type="button" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board" aria-label="Flip board"><IconFlip /></button>
+                <button className="mobile-action-btn" type="button" onClick={toggleSettings} title="Settings" aria-label="Open settings"><IconSettings /></button>
               </div>
             </div>
           )}
@@ -1701,13 +1816,13 @@ function App() {
           </div>
           {isMobile && (
             <div className="mobile-board-nav">
-              <button className="mobile-nav-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>⏮</button>
-              <button className="mobile-nav-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>‹</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(-1)} disabled={!canGoBack} aria-label="Go to first move">⏮</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack} aria-label="Go to previous move">‹</button>
               <span className="mobile-nav-label">
                 {currentMoveIndex < 0 ? 'Start' : `${currentMoveIndex + 1} / ${moveHistory.length}`}
               </span>
-              <button className="mobile-nav-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>›</button>
-              <button className="mobile-nav-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>⏭</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward} aria-label="Go to next move">›</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward} aria-label="Go to latest move">⏭</button>
             </div>
           )}
         </section>
@@ -1893,7 +2008,7 @@ function App() {
               )}
               <span className="game-mode-badge">
                 {isAiMode && <IconBot />}
-                {GAME_MODES.find(m => m.mode === gameMode)?.label ?? gameMode}
+                {currentModeLabel}
               </span>
               {detectedOpening && (
                 <span className="opening-badge" title={detectedOpening.name}>

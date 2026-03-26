@@ -113,6 +113,27 @@ export function LibraryPanel({
           <option value="ongoing">Ongoing</option>
         </select>
       </div>
+      <div className="lib-summary-row">
+        <span className="lib-summary-pill">
+          <strong>{filteredSaved.length}</strong> saved
+        </span>
+        <span className="lib-summary-pill">
+          <strong>{filteredHistorical.length}</strong> classics
+        </span>
+        {(q || reviewFilter !== 'all' || resultFilter !== 'all') ? (
+          <button
+            type="button"
+            className="lib-clear-filters"
+            onClick={() => {
+              setSearch('');
+              setReviewFilter('all');
+              setResultFilter('all');
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </div>
 
       {/* ── Classic Games ── */}
       <div className="lib-section-header">Classic Games</div>
@@ -187,13 +208,14 @@ export function LibraryPanel({
                     <button type="button" className="chip-btn" onClick={() => setEditingId(null)}>Cancel</button>
                   </form>
                 ) : (
-                  <span
-                    className="lib-game-name"
+                  <button
+                    type="button"
+                    className="lib-game-name-button"
                     onClick={() => startEdit(game)}
-                    title="Click to rename"
+                    title="Rename saved game"
                   >
                     {game.label || `Game — ${formatDate(game.savedAt)}`}
-                  </span>
+                  </button>
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
                   <button

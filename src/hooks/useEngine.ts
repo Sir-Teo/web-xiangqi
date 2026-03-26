@@ -96,6 +96,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pendingSearchRef = useRef<SearchRequest | null>(null);
     const activeSearchSignatureRef = useRef('');
     const activeSearchTagRef = useRef<string | null>(null);
+    const handleUciOutRef = useRef<(rawMsg: string) => void>(() => {});
 
     useEffect(() => {
         onBestMoveRef.current = options.onBestMove;
@@ -346,7 +347,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 // Listen to stdout from the worker
                 engineInstance.addMessageListener((msg: string) => {
                     if (initToken !== initTokenRef.current) return;
-                    handleUciOut(msg);
+                    handleUciOutRef.current(msg);
                 });
 
                 // Send initialization commands
@@ -516,6 +517,8 @@ export function useEngine(options: EngineInitOptions = {}) {
             scheduleInfoFlush();
         }
     };
+
+    handleUciOutRef.current = handleUciOut;
 
     useEffect(() => {
         return () => {

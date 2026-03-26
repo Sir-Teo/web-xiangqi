@@ -87,8 +87,8 @@ export const Board = React.memo(function Board({
 
                 {/* The river dividing the board */}
                 <div className="river">
-                    <span className="river-text">楚　河</span>
-                    <span className="river-text river-text-flipped">漢　界</span>
+                    <span className="river-text">楚{'\u3000'}河</span>
+                    <span className="river-text river-text-flipped">漢{'\u3000'}界</span>
                 </div>
 
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}

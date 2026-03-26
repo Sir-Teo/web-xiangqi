@@ -7,12 +7,6 @@ import {
 
 export type AiSpeed = 'slow' | 'normal' | 'fast' | 'step';
 
-export const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
-    slow: 1500,
-    normal: 800,
-    fast: 150,
-};
-
 const SPEEDS: { id: AiSpeed; label: string }[] = [
     { id: 'slow', label: 'Slow' },
     { id: 'normal', label: 'Normal' },
@@ -183,7 +177,7 @@ export const WatchControls = memo(function WatchControls({
             {/* ── Paused indicator ── */}
             {paused && aiActive && (
                 <span className="wc-paused-label">
-                    <IconPause /> Analyzing
+                    <IconPause /> Paused
                 </span>
             )}
 

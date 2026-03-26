@@ -1,7 +1,7 @@
 .lib-panel {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.75rem;
 }
 
 /* ── Search ── */
@@ -14,7 +14,43 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
-  padding-bottom: 0.55rem;
+}
+
+.lib-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.lib-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.24rem 0.52rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.lib-summary-pill strong {
+  color: var(--text-primary);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.lib-clear-filters {
+  margin-left: auto;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.24rem 0.58rem;
 }
 
 .lib-search {
@@ -56,7 +92,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  padding: 0.6rem 0 0.2rem;
+  padding: 0.1rem 0 0.1rem;
   flex-shrink: 0;
 }
 
@@ -64,8 +100,7 @@
 .lib-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding-bottom: 0.5rem;
+  gap: 0.5rem;
 }
 
 
@@ -74,15 +109,17 @@
   background: var(--bg-elevated, rgba(255,255,255,0.04));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md, 8px);
-  padding: 0.55rem 0.7rem;
+  padding: 0.75rem 0.8rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  transition: border-color 0.15s;
+  gap: 0.35rem;
+  transition: border-color 0.15s, transform 0.15s ease, background 0.15s ease;
 }
 
 .lib-card:hover {
   border-color: rgba(255,255,255,0.15);
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
 }
 
 .lib-card-title {
@@ -235,11 +272,15 @@
 }
 
 /* ── Saved game name (clickable to rename) ── */
-.lib-game-name {
+.lib-game-name-button {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -247,9 +288,15 @@
   white-space: nowrap;
 }
 
-.lib-game-name:hover {
+.lib-game-name-button:hover {
   color: var(--accent, #10b981);
   text-decoration: underline;
+}
+
+.lib-game-name-button:focus-visible,
+.lib-clear-filters:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
 }
 
 /* ── Rename form ── */
@@ -279,7 +326,7 @@
 .lib-empty {
   font-size: 0.75rem;
   color: var(--text-tertiary);
-  padding: 0.5rem 0.25rem;
+  padding: 0.8rem 0.4rem;
   text-align: center;
   line-height: 1.5;
 }
