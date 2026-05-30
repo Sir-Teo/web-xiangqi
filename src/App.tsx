@@ -933,7 +933,7 @@ function App() {
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiStrength, currentPositionCommand, isAiTurn, isReady, isSearching, queueSearch, safeSearchDepth]);
+  }, [aiSpeed, aiStrength, currentPositionCommand, isAiTurn, isReady, isSearching, paused, queueSearch, safeSearchDepth]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
