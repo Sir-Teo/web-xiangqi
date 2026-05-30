@@ -50,6 +50,7 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
 ];
 
 export type AiStrength = 1 | 2 | 3 | 4 | 5;
+const WORKER_SAFE_MAX_DEPTH = 12;
 const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   slow: 1500,
   normal: 800,
@@ -62,14 +63,13 @@ const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
   4: 'Hard',
   5: 'Master',
 };
-const AI_SKILL_LEVEL: Record<AiStrength, number> = {
-  1: 3,
-  2: 7,
-  3: 12,
-  4: 17,
-  5: 20,
+const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
+  1: 2,
+  2: 4,
+  3: 6,
+  4: 9,
+  5: WORKER_SAFE_MAX_DEPTH,
 };
-const WORKER_SAFE_MAX_DEPTH = 12;
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
@@ -686,12 +686,6 @@ function App() {
     }
   }, [gameResult, stopAnalysis]);
 
-  // Apply AI skill level whenever it changes or engine becomes ready
-  useEffect(() => {
-    if (!isReady) return;
-    setOption('Skill Level', AI_SKILL_LEVEL[aiStrength]);
-  }, [isReady, aiStrength, setOption]);
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -898,6 +892,7 @@ function App() {
     const delayMs = aiSpeedRef.current === 'step'
       ? 0
       : (AI_SPEED_MS[aiSpeedRef.current as Exclude<AiSpeed, 'step'>] ?? 800);
+    const aiSearchDepth = Math.max(1, Math.min(safeSearchDepth, AI_DEPTH_LIMIT[aiStrength]));
 
     const timer = setTimeout(() => {
       // Check again in case pause was set during the delay
@@ -907,14 +902,14 @@ function App() {
       applyBestMoveRef.current = true;
       queueSearch(
         currentPositionCommand,
-        `go depth ${safeSearchDepth}`,
+        `go depth ${aiSearchDepth}`,
         0,
-        `${AI_TAG_PREFIX}|${currentPositionCommand}|${safeSearchDepth}`,
+        `${AI_TAG_PREFIX}|${currentPositionCommand}|${aiSearchDepth}`,
       );
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [currentPositionCommand, isAiTurn, isReady, isSearching, queueSearch, safeSearchDepth]);
+  }, [aiStrength, currentPositionCommand, isAiTurn, isReady, isSearching, queueSearch, safeSearchDepth]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
@@ -1781,7 +1776,7 @@ function App() {
                 )}
                 {isAiMode ? (
                   <span className="board-stage-chip board-stage-chip-muted">
-                    {paused ? 'AI paused' : `AI ${aiSpeed === 'step' ? 'step mode' : aiSpeed}`}
+                    {paused ? 'AI paused' : `${AI_STRENGTH_LABELS[aiStrength]} · ${aiSpeed === 'step' ? 'step' : aiSpeed}`}
                   </span>
                 ) : null}
               </div>
