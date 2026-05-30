@@ -15,7 +15,7 @@ import {
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
-import { uciToSquare, type Side } from './utils/xiangqi';
+import { START_FEN, uciToSquare, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { matchOpening } from './utils/openings';
@@ -250,6 +250,13 @@ function formatMaterialValue(valueTenths: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
 }
 
+function makeEnginePositionCommand(rootFen: string, moves: string[]) {
+  const rootParts = rootFen.trim().split(/\s+/);
+  const isDefaultStart = rootParts[0] === START_FEN && rootParts[1] === 'w';
+  const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
+  return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
+}
+
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
@@ -354,9 +361,15 @@ function App() {
   const viewportHeight = viewportSize.height;
   const isMobile = viewportWidth <= 900;
   const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
+  const currentLineMoves = useMemo(() => {
+    return activeLineNodeIds
+      .slice(0, currentMoveIndex + 1)
+      .map((nodeId) => treeNodes[nodeId]?.record?.uci)
+      .filter((uci): uci is string => Boolean(uci));
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes]);
   const currentPositionCommand = useMemo(() => {
-    return `position fen ${currentFen}`;
-  }, [currentFen]);
+    return makeEnginePositionCommand(rootFen, currentLineMoves);
+  }, [currentLineMoves, rootFen]);
   const isAiTurn =
     gameMode === 'AIvAI' ||
     (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
