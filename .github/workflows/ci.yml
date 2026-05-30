@@ -25,7 +25,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: React app checks
+        run: |
+          npm run lint
+          npm run build:react
 
       - name: Cache emsdk
         uses: actions/cache@v4
