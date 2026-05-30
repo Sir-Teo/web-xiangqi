@@ -11,6 +11,7 @@ export type ReviewSide = 'red' | 'black';
 
 export interface ReviewRecordLike {
     uci: string;
+    piece?: string;
     ply: number;
     evalScore?: number;
     bestMove?: string;
@@ -89,6 +90,23 @@ export function classifyMoveQuality(delta: number): ReviewMoveQuality {
     if (delta <= REVIEW_THRESHOLDS.inaccuracy) return 'inaccuracy';
     if (delta <= REVIEW_THRESHOLDS.mistake) return 'mistake';
     return 'blunder';
+}
+
+export function getReviewSideForRecord(record: ReviewRecordLike, moveIndex: number): ReviewSide {
+    if (record.piece) {
+        return record.piece === record.piece.toUpperCase() ? 'red' : 'black';
+    }
+    if (Number.isFinite(record.ply)) {
+        return record.ply % 2 === 1 ? 'red' : 'black';
+    }
+    return moveIndex % 2 === 0 ? 'red' : 'black';
+}
+
+export function getEvalLossForMove(evalBefore: number, evalAfter: number, side: ReviewSide): number {
+    const loss = side === 'red'
+        ? evalBefore - evalAfter
+        : evalAfter - evalBefore;
+    return Math.max(0, loss);
 }
 
 export function getMoveQualityClassName(quality?: ReviewMoveQuality): string {
@@ -204,7 +222,8 @@ export function computeReviewArtifacts(
         if (typeof currentEval !== 'number' || typeof parentEval !== 'number') continue;
 
         evaluated += 1;
-        const swing = Math.abs(currentEval - parentEval);
+        const side = getReviewSideForRecord(record, moveIndex);
+        const swing = getEvalLossForMove(parentEval, currentEval, side);
         const quality = classifyMoveQuality(swing);
         const note = buildReviewNote({
             quality,
@@ -212,7 +231,6 @@ export function computeReviewArtifacts(
             playedMove: record.uci,
             swing,
         });
-        const side: ReviewSide = moveIndex % 2 === 0 ? 'red' : 'black';
 
         counts[quality] += 1;
         annotations.push({

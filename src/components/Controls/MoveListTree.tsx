@@ -1,6 +1,11 @@
 import { memo, useEffect } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
-import { getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
+import {
+    getEvalLossForMove,
+    getMoveQualityClassName,
+    getReviewSideForRecord,
+    isCriticalReviewQuality,
+} from '../../utils/review';
 import { IconSpark, IconCornerDownRight } from '../icons';
 
 type Props = {
@@ -116,7 +121,7 @@ export const MoveListTree = memo(function MoveListTree({
         <div className="mtree-scroll">
             {rows}
             <div className="mtree-quality-legend">
-                <span className="legend-title">Move quality</span>
+                <span className="legend-title">Move loss</span>
                 <div className="legend-items">
                     <span className="legend-item quality-best"><span className="mtree-quality-dot" /> Best <em>≤40cp</em></span>
                     <span className="legend-item quality-good"><span className="mtree-quality-dot" /> Good <em>≤90cp</em></span>
@@ -167,14 +172,16 @@ function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeN
 
 function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {
     const node = treeNodes[nodeId];
-    if (node?.record?.quality) {
-        return getMoveQualityClassName(node.record.quality);
+    const record = node?.record;
+    if (record?.quality) {
+        return getMoveQualityClassName(record.quality);
     }
-    const currentEval = node?.record?.evalScore;
+    const currentEval = record?.evalScore;
     const parentEval = node?.parentId ? treeNodes[node.parentId]?.record?.evalScore : 0;
-    if (typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';
+    if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';
 
-    const delta = Math.abs(currentEval - parentEval);
+    const side = getReviewSideForRecord(record, record.ply - 1);
+    const delta = getEvalLossForMove(parentEval, currentEval, side);
     if (delta <= 40) return 'quality-best';
     if (delta <= 90) return 'quality-good';
     if (delta <= 180) return 'quality-inaccuracy';

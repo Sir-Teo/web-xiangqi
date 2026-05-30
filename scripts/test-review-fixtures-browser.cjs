@@ -85,12 +85,26 @@ async function main() {
         }
       }
 
+      const lossCases = [
+        [0, 200, "red", 0],
+        [200, 0, "red", 200],
+        [200, 0, "black", 0],
+        [0, 200, "black", 200],
+      ];
+
+      for (const [before, after, side, expected] of lossCases) {
+        const actual = review.getEvalLossForMove(before, after, side);
+        if (actual !== expected) {
+          throw new Error(`getEvalLossForMove(${before}, ${after}, ${side}) => ${actual}, expected ${expected}`);
+        }
+      }
+
       const treeNodes = {
         root: { parentId: null },
-        n1: { parentId: "root", record: { uci: "b2e2", ply: 1, evalScore: 22 } },
-        n2: { parentId: "n1", record: { uci: "h9g7", ply: 2, evalScore: 148, bestMove: "b9c7" } },
-        n3: { parentId: "n2", record: { uci: "h0g2", ply: 3, evalScore: -76, bestMove: "a0a1" } },
-        n4: { parentId: "n3", record: { uci: "b9c7", ply: 4, evalScore: -461, bestMove: "i0i1" } },
+        n1: { parentId: "root", record: { uci: "b2e2", piece: "C", ply: 1, evalScore: 22 } },
+        n2: { parentId: "n1", record: { uci: "h9g7", piece: "n", ply: 2, evalScore: 148, bestMove: "b9c7" } },
+        n3: { parentId: "n2", record: { uci: "h0g2", piece: "N", ply: 3, evalScore: -76, bestMove: "a0a1" } },
+        n4: { parentId: "n3", record: { uci: "b9c7", piece: "n", ply: 4, evalScore: 300, bestMove: "i0i1" } },
       };
 
       const { summary, annotations } = review.computeReviewArtifacts(

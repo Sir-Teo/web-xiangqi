@@ -33,6 +33,8 @@ import {
 } from './utils/analysisProfile';
 import {
   computeReviewArtifacts,
+  getEvalLossForMove,
+  getReviewSideForRecord,
   makeReviewLineSignature,
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
@@ -1064,11 +1066,13 @@ function App() {
   const lastMoveTo   = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(2, 4)) : null, [lastMoveUci]);
 
   const lastMoveArrowColor = useMemo(() => {
-    const currentEval = treeNodes[currentNodeId]?.record?.evalScore;
+    const record = treeNodes[currentNodeId]?.record;
+    const currentEval = record?.evalScore;
     const parentId    = treeNodes[currentNodeId]?.parentId;
     const parentEval  = parentId ? treeNodes[parentId]?.record?.evalScore : 0;
-    if (typeof currentEval !== 'number' || typeof parentEval !== 'number') return '#94a3b8';
-    const delta = Math.abs(currentEval - parentEval);
+    if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return '#94a3b8';
+    const side = getReviewSideForRecord(record, record.ply - 1);
+    const delta = getEvalLossForMove(parentEval, currentEval, side);
     if (delta <= 40)  return '#22c55e'; // best   — bright green
     if (delta <= 90)  return '#4ade80'; // good   — light green
     if (delta <= 180) return '#facc15'; // inaccuracy — yellow
