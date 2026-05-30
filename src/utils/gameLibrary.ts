@@ -160,7 +160,8 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         ? rawGameMode as GameMode
         : undefined;
     const moves = Array.isArray(raw.moves) ? raw.moves.filter((move): move is string => typeof move === 'string') : [];
-    if (!id || typeof savedAt !== 'number' || !gameMode || moves.length === 0) {
+    const startFen = asString(raw.startFen);
+    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen)) {
         return null;
     }
 
@@ -173,7 +174,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         savedAt,
         gameMode,
         moves,
-        startFen: asString(raw.startFen),
+        startFen,
         result,
         label: asString(raw.label),
         opening: asString(raw.opening),

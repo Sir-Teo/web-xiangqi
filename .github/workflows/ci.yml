@@ -34,6 +34,7 @@ jobs:
         run: |
           npm run lint
           npm run test:openings
+          npm run test:library
           npm run build:react
 
       - name: Cache emsdk

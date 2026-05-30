@@ -118,6 +118,7 @@ const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
 };
 const CAPTURED_BY_RED: PieceCode[] = ['r', 'n', 'c', 'a', 'b', 'p'];
 const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
+const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 type ReviewPhase = 'base' | 'revisit';
 
@@ -1286,6 +1287,7 @@ function App() {
     : materialSummary.deltaTenths < 0
       ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
       : 'Material even';
+  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN;
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
   const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
@@ -2364,8 +2366,8 @@ function App() {
               <button
                 className="gc-btn"
                 onClick={handleSaveGame}
-                disabled={moveHistory.length === 0}
-                title="Save current game to library"
+                disabled={!canSaveCurrentPosition}
+                title="Save current game or custom position to library"
                 data-testid="save-game-btn"
               >
                 <IconSave /> Save

@@ -21,6 +21,7 @@
     "test:review:browser": "node scripts/test-review-browser.cjs",
     "test:review:parity": "node scripts/test-review-parity.cjs",
     "test:openings": "node scripts/test-openings.cjs",
+    "test:library": "node scripts/test-library.cjs",
     "bench:nps": "node scripts/bench-nps.cjs",
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
   },
