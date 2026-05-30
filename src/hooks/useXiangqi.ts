@@ -116,6 +116,27 @@ function getPositionFromNode(treeNodes: Record<string, MoveTreeNode>, nodeId: st
     };
 }
 
+function repetitionKey(board: BoardState, sideToMove: Side) {
+    return boardToFen(board, sideToMove, 1).split(/\s+/).slice(0, 2).join(' ');
+}
+
+function countPositionOccurrences(
+    rootPosition: RootPosition,
+    treeNodes: Record<string, MoveTreeNode>,
+    lineNodeIds: string[],
+    targetKey: string
+) {
+    let count = repetitionKey(rootPosition.board, rootPosition.sideToMove) === targetKey ? 1 : 0;
+    for (const nodeId of lineNodeIds) {
+        const record = treeNodes[nodeId]?.record;
+        if (!record) continue;
+        if (repetitionKey(record.board, record.sideToMove) === targetKey) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
     const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
@@ -128,9 +149,6 @@ export function useXiangqi() {
     const [validTargets, setValidTargets] = useState<{ file: number; rank: number; capture: boolean }[]>([]);
     const [inCheck, setInCheck] = useState<boolean>(false);
     const [gameResult, setGameResult] = useState<GameResult>(null);
-
-    // Position history for repetition detection (FEN → count)
-    const positionHistoryRef = useRef<Map<string, number>>(new Map());
 
     const nodeCounterRef = useRef(1);
 
@@ -163,7 +181,6 @@ export function useXiangqi() {
         setValidTargets([]);
         setInCheck(root.inCheck);
         setGameResult(null);
-        positionHistoryRef.current = new Map();
         nodeCounterRef.current = 1;
     }, []);
 
@@ -197,7 +214,6 @@ export function useXiangqi() {
             setValidTargets([]);
             setInCheck(root.inCheck);
             setGameResult(null);
-            positionHistoryRef.current = new Map();
             nodeCounterRef.current = 1;
             return true;
         } catch {
@@ -318,14 +334,14 @@ export function useXiangqi() {
         const nextSide = sideToMove === 'w' ? 'b' : 'w';
         const nextInCheck = isInCheck(nextBoard, nextSide);
 
+        const activePrefix = activeLineNodeIds.slice(0, currentMoveIndex + 1);
+
         // Game over: in Xiangqi, no legal moves = loss for the player to move
         if (!hasAnyLegalMove(nextBoard, nextSide)) {
             setGameResult(nextSide === 'w' ? 'black-wins' : 'red-wins');
         } else {
-            // Threefold repetition detection (position key = board + side to move)
-            const posKey = boardToFen(nextBoard, nextSide);
-            const posCount = (positionHistoryRef.current.get(posKey) ?? 0) + 1;
-            positionHistoryRef.current.set(posKey, posCount);
+            const posKey = repetitionKey(nextBoard, nextSide);
+            const posCount = countPositionOccurrences(rootPosition, treeNodes, activePrefix, posKey) + 1;
             if (posCount >= 3) {
                 setGameResult('draw');
             }
@@ -334,8 +350,6 @@ export function useXiangqi() {
         const parentNodeId = currentNodeId;
         const parentNode = treeNodes[parentNodeId];
         const existingChildId = parentNode?.childrenIds.find((childId) => treeNodes[childId]?.record?.uci === mv.raw);
-
-        const activePrefix = activeLineNodeIds.slice(0, currentMoveIndex + 1);
 
         if (existingChildId) {
             const existingChild = treeNodes[existingChildId];
@@ -398,7 +412,7 @@ export function useXiangqi() {
         setCurrentMoveIndex(activePrefix.length);
         syncPositionForNode(nextTree, newNodeId);
         return true;
-    }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, syncPositionForNode]);
+    }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, rootPosition, syncPositionForNode]);
 
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
