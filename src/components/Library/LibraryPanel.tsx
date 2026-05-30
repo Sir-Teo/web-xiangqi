@@ -135,50 +135,6 @@ export function LibraryPanel({
         ) : null}
       </div>
 
-      {/* ── Classic Games ── */}
-      <div className="lib-section-header">Classic Games</div>
-      <div className="lib-list">
-        {filteredHistorical.length === 0 ? (
-          <p className="lib-empty">No games match your search.</p>
-        ) : (
-          filteredHistorical.map((game) => (
-            <div key={game.id} className="lib-card">
-              <div className="lib-card-title">
-                <span className="lib-matchup">
-                  {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}
-                </span>
-                <span className={`lib-result lib-result--${game.result}`}>
-                  {resultLabel(game.result)}
-                </span>
-              </div>
-              <div className="lib-card-meta">
-                <span>{game.event}</span>
-                <span className="lib-dot">·</span>
-                <span>{game.date}</span>
-                <span className="lib-dot">·</span>
-                <span>{game.moves.length} moves</span>
-                {game.opening && (
-                  <>
-                    <span className="lib-dot">·</span>
-                    <span className="lib-opening">{game.opening}</span>
-                  </>
-                )}
-              </div>
-              <div className="lib-card-actions">
-                <button
-                  type="button"
-                  className="chip-btn chip-btn-primary"
-                  onClick={() => onLoadHistorical(game)}
-                  data-testid={`load-historical-${game.id}`}
-                >
-                  <IconRefresh /> Load
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
       <div className="lib-list">
@@ -279,6 +235,50 @@ export function LibraryPanel({
                   </span>
                 </div>
               ) : null}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── Classic Games ── */}
+      <div className="lib-section-header">Classic Games</div>
+      <div className="lib-list">
+        {filteredHistorical.length === 0 ? (
+          <p className="lib-empty">No games match your search.</p>
+        ) : (
+          filteredHistorical.map((game) => (
+            <div key={game.id} className="lib-card">
+              <div className="lib-card-title">
+                <span className="lib-matchup">
+                  {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}
+                </span>
+                <span className={`lib-result lib-result--${game.result}`}>
+                  {resultLabel(game.result)}
+                </span>
+              </div>
+              <div className="lib-card-meta">
+                <span>{game.event}</span>
+                <span className="lib-dot">·</span>
+                <span>{game.date}</span>
+                <span className="lib-dot">·</span>
+                <span>{game.moves.length} moves</span>
+                {game.opening && (
+                  <>
+                    <span className="lib-dot">·</span>
+                    <span className="lib-opening">{game.opening}</span>
+                  </>
+                )}
+              </div>
+              <div className="lib-card-actions">
+                <button
+                  type="button"
+                  className="chip-btn chip-btn-primary"
+                  onClick={() => onLoadHistorical(game)}
+                  data-testid={`load-historical-${game.id}`}
+                >
+                  <IconRefresh /> Load
+                </button>
+              </div>
             </div>
           ))
         )}
