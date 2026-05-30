@@ -178,6 +178,21 @@ function countPositionOccurrences(
     return count;
 }
 
+function gameResultForPosition(
+    rootPosition: RootPosition,
+    treeNodes: Record<string, MoveTreeNode>,
+    lineNodeIds: string[],
+    board: BoardState,
+    sideToMove: Side
+): GameResult {
+    if (!hasAnyLegalMove(board, sideToMove)) {
+        return sideToMove === 'w' ? 'black-wins' : 'red-wins';
+    }
+
+    const posKey = repetitionKey(board, sideToMove);
+    return countPositionOccurrences(rootPosition, treeNodes, lineNodeIds, posKey) >= 3 ? 'draw' : null;
+}
+
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
     const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
@@ -229,10 +244,8 @@ export function useXiangqi() {
     const loadFen = useCallback((fen: string): boolean => {
         const root = parseRootPositionFromFen(fen);
         if (!root) return false;
-        const nextGameResult = hasAnyLegalMove(root.board, root.sideToMove)
-            ? null
-            : root.sideToMove === 'w' ? 'black-wins' : 'red-wins';
         const rootTree = createRootTree();
+        const nextGameResult = gameResultForPosition(root, rootTree, [], root.board, root.sideToMove);
         setTreeNodes(rootTree);
         setRootPosition(root);
         setActiveLineNodeIds([]);
@@ -303,7 +316,7 @@ export function useXiangqi() {
         setBoard(currentBoard);
         setSideToMove(currentSide);
         setInCheck(isInCheck(currentBoard, currentSide));
-        setGameResult(null);
+        setGameResult(gameResultForPosition(root, tree, activeLine, currentBoard, currentSide));
         setSelected(null);
         setValidTargets([]);
         return activeLine;
@@ -318,15 +331,20 @@ export function useXiangqi() {
 
         setActiveLineNodeIds(nextActiveLine);
         setCurrentMoveIndex(nextIndex);
+        const position = getPositionFromNode(treeNodes, targetId, rootPosition);
+        setGameResult(gameResultForPosition(rootPosition, treeNodes, path, position.board, position.sideToMove));
         syncPositionForNode(treeNodes, targetId);
-    }, [treeNodes, syncPositionForNode]);
+    }, [rootPosition, treeNodes, syncPositionForNode]);
 
     const jumpToMove = useCallback((index: number) => {
         if (index < -1 || index >= activeLineNodeIds.length) return;
         const nodeId = index === -1 ? ROOT_NODE_ID : activeLineNodeIds[index];
+        const path = activeLineNodeIds.slice(0, index + 1);
+        const position = getPositionFromNode(treeNodes, nodeId, rootPosition);
         setCurrentMoveIndex(index);
+        setGameResult(gameResultForPosition(rootPosition, treeNodes, path, position.board, position.sideToMove));
         syncPositionForNode(treeNodes, nodeId);
-    }, [activeLineNodeIds, treeNodes, syncPositionForNode]);
+    }, [activeLineNodeIds, rootPosition, treeNodes, syncPositionForNode]);
 
     const applyUciMove = useCallback((uci: string, evalScore?: number) => {
         const fromSquare = uci.substring(0, 2);
@@ -363,17 +381,6 @@ export function useXiangqi() {
 
         const activePrefix = activeLineNodeIds.slice(0, currentMoveIndex + 1);
 
-        // Game over: in Xiangqi, no legal moves = loss for the player to move
-        if (!hasAnyLegalMove(nextBoard, nextSide)) {
-            setGameResult(nextSide === 'w' ? 'black-wins' : 'red-wins');
-        } else {
-            const posKey = repetitionKey(nextBoard, nextSide);
-            const posCount = countPositionOccurrences(rootPosition, treeNodes, activePrefix, posKey) + 1;
-            if (posCount >= 3) {
-                setGameResult('draw');
-            }
-        }
-
         const parentNodeId = currentNodeId;
         const parentNode = treeNodes[parentNodeId];
         const existingChildId = parentNode?.childrenIds.find((childId) => treeNodes[childId]?.record?.uci === mv.raw);
@@ -404,6 +411,7 @@ export function useXiangqi() {
 
             setActiveLineNodeIds(nextActiveLine);
             setCurrentMoveIndex(nextIndex);
+            setGameResult(gameResultForPosition(rootPosition, nextTree, [...activePrefix, existingChildId], nextBoard, nextSide));
             syncPositionForNode(nextTree, existingChildId);
             return true;
         }
@@ -437,6 +445,7 @@ export function useXiangqi() {
         setTreeNodes(nextTree);
         setActiveLineNodeIds([...activePrefix, newNodeId]);
         setCurrentMoveIndex(activePrefix.length);
+        setGameResult(gameResultForPosition(rootPosition, nextTree, [...activePrefix, newNodeId], nextBoard, nextSide));
         syncPositionForNode(nextTree, newNodeId);
         return true;
     }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, rootPosition, syncPositionForNode]);
