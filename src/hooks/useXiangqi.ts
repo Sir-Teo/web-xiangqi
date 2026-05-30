@@ -41,6 +41,13 @@ export interface MoveTreeNode {
     record?: MoveRecord;
 }
 
+interface RootPosition {
+    board: BoardState;
+    sideToMove: Side;
+    inCheck: boolean;
+    fullmove: number;
+}
+
 const ROOT_NODE_ID = 'root';
 
 function createRootTree(): Record<string, MoveTreeNode> {
@@ -50,6 +57,15 @@ function createRootTree(): Record<string, MoveTreeNode> {
             parentId: null,
             childrenIds: [],
         },
+    };
+}
+
+function createStartRootPosition(): RootPosition {
+    return {
+        board: parseFenBoard(START_FEN),
+        sideToMove: 'w',
+        inCheck: false,
+        fullmove: 1,
     };
 }
 
@@ -77,20 +93,20 @@ function preferredContinuation(treeNodes: Record<string, MoveTreeNode>, startNod
     return continuation;
 }
 
-function getPositionFromNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string) {
+function getPositionFromNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string, rootPosition: RootPosition) {
     if (nodeId === ROOT_NODE_ID) {
         return {
-            board: parseFenBoard(START_FEN),
-            sideToMove: 'w' as Side,
-            inCheck: false,
+            board: rootPosition.board,
+            sideToMove: rootPosition.sideToMove,
+            inCheck: rootPosition.inCheck,
         };
     }
     const node = treeNodes[nodeId];
     if (!node?.record) {
         return {
-            board: parseFenBoard(START_FEN),
-            sideToMove: 'w' as Side,
-            inCheck: false,
+            board: rootPosition.board,
+            sideToMove: rootPosition.sideToMove,
+            inCheck: rootPosition.inCheck,
         };
     }
     return {
@@ -102,6 +118,7 @@ function getPositionFromNode(treeNodes: Record<string, MoveTreeNode>, nodeId: st
 
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
+    const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
     const [activeLineNodeIds, setActiveLineNodeIds] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
 
@@ -122,27 +139,29 @@ export function useXiangqi() {
         () => activeLineNodeIds.map((nodeId) => treeNodes[nodeId]?.record).filter((record): record is MoveRecord => Boolean(record)),
         [activeLineNodeIds, treeNodes]
     );
-    const currentFen = boardToFen(board, sideToMove, 1 + Math.floor((currentMoveIndex + 1) / 2));
+    const currentFen = boardToFen(board, sideToMove, rootPosition.fullmove + Math.floor((currentMoveIndex + 1) / 2));
 
     const syncPositionForNode = useCallback((nextTree: Record<string, MoveTreeNode>, nodeId: string) => {
-        const position = getPositionFromNode(nextTree, nodeId);
+        const position = getPositionFromNode(nextTree, nodeId, rootPosition);
         setBoard(position.board);
         setSideToMove(position.sideToMove);
         setInCheck(position.inCheck);
         setSelected(null);
         setValidTargets([]);
-    }, []);
+    }, [rootPosition]);
 
     const resetBoard = useCallback(() => {
         const rootTree = createRootTree();
+        const root = createStartRootPosition();
         setTreeNodes(rootTree);
+        setRootPosition(root);
         setActiveLineNodeIds([]);
         setCurrentMoveIndex(-1);
-        setBoard(parseFenBoard(START_FEN));
-        setSideToMove('w');
+        setBoard(root.board);
+        setSideToMove(root.sideToMove);
         setSelected(null);
         setValidTargets([]);
-        setInCheck(false);
+        setInCheck(root.inCheck);
         setGameResult(null);
         positionHistoryRef.current = new Map();
         nodeCounterRef.current = 1;
@@ -157,15 +176,26 @@ export function useXiangqi() {
             if (!flat.includes('K') || !flat.includes('k')) return false;
             const sideChar = parts[1];
             const side: Side = sideChar === 'b' ? 'b' : 'w';
+            const parsedFullmove = Number(parts[5]);
+            const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
+                ? Math.trunc(parsedFullmove)
+                : 1;
+            const root: RootPosition = {
+                board,
+                sideToMove: side,
+                inCheck: isInCheck(board, side),
+                fullmove,
+            };
             const rootTree = createRootTree();
             setTreeNodes(rootTree);
+            setRootPosition(root);
             setActiveLineNodeIds([]);
             setCurrentMoveIndex(-1);
-            setBoard(board);
-            setSideToMove(side);
+            setBoard(root.board);
+            setSideToMove(root.sideToMove);
             setSelected(null);
             setValidTargets([]);
-            setInCheck(isInCheck(board, side));
+            setInCheck(root.inCheck);
             setGameResult(null);
             positionHistoryRef.current = new Map();
             nodeCounterRef.current = 1;
@@ -176,6 +206,7 @@ export function useXiangqi() {
     }, []);
 
     const loadMoves = useCallback((moves: string[]) => {
+        const root = createStartRootPosition();
         let currentBoard = parseFenBoard(START_FEN);
         let currentSide: Side = 'w';
         const tree: Record<string, MoveTreeNode> = createRootTree();
@@ -223,6 +254,7 @@ export function useXiangqi() {
         }
 
         nodeCounterRef.current = counter;
+        setRootPosition(root);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(lastIndex);
@@ -385,11 +417,11 @@ export function useXiangqi() {
     }, [currentNodeId]);
 
     const getNodeFen = useCallback((nodeId: string): string => {
-        const pos = getPositionFromNode(treeNodes, nodeId);
+        const pos = getPositionFromNode(treeNodes, nodeId, rootPosition);
         const node = treeNodes[nodeId];
-        const ply = node?.record?.ply ?? 1;
-        return boardToFen(pos.board, pos.sideToMove, 1 + Math.floor(ply / 2));
-    }, [treeNodes]);
+        const ply = node?.record?.ply ?? 0;
+        return boardToFen(pos.board, pos.sideToMove, rootPosition.fullmove + Math.floor(ply / 2));
+    }, [rootPosition, treeNodes]);
 
     const setNodeEval = useCallback((nodeId: string, evalScore: number) => {
         if (!Number.isFinite(evalScore) || nodeId === ROOT_NODE_ID) return;
