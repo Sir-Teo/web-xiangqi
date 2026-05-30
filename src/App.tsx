@@ -148,6 +148,19 @@ function makeReviewTag(phase: ReviewPhase, nodeId: string) {
   return `${REVIEW_TAG_PREFIX}|${phase}|${nodeId}`;
 }
 
+function makeAiTag(positionCommand: string, depth: number) {
+  return `${AI_TAG_PREFIX}|${depth}|${positionCommand}`;
+}
+
+function parseAiTag(tag: string | null) {
+  if (!tag || !tag.startsWith(`${AI_TAG_PREFIX}|`)) return null;
+  const [, depthText, ...rest] = tag.split('|');
+  const depth = Number(depthText);
+  const positionCommand = rest.join('|');
+  if (!Number.isFinite(depth) || !positionCommand) return null;
+  return { depth, positionCommand };
+}
+
 function parseReviewTag(tag: string | null) {
   if (!tag || !tag.startsWith(`${REVIEW_TAG_PREFIX}|`)) return null;
   const [, phase, nodeId] = tag.split('|');
@@ -243,6 +256,7 @@ function App() {
     // In step mode: allow exactly one AI move then re-pause
     stepPendingRef.current = true;
     pausedRef.current = false;
+    setPaused(false);
   }, []);
 
   const {
@@ -533,12 +547,20 @@ function App() {
         return;
       }
 
-      if (searchTag?.startsWith(`${AI_TAG_PREFIX}|`)) {
+      const aiTag = parseAiTag(searchTag);
+      if (aiTag) {
+        const shouldApplyAiMove =
+          applyBestMoveRef.current &&
+          isAiTurn &&
+          !gameResult &&
+          aiTag.positionCommand === currentPositionCommand;
         applyBestMoveRef.current = false;
-        if (uci) {
+
+        if (shouldApplyAiMove && uci) {
           applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
         }
-        if (aiSpeedRef.current === 'step' || stepPendingRef.current) {
+
+        if (shouldApplyAiMove && (aiSpeedRef.current === 'step' || stepPendingRef.current)) {
           stepPendingRef.current = false;
           pausedRef.current = true;
           setPaused(true);
@@ -906,7 +928,7 @@ function App() {
         currentPositionCommand,
         `go depth ${aiSearchDepth}`,
         0,
-        `${AI_TAG_PREFIX}|${currentPositionCommand}|${aiSearchDepth}`,
+        makeAiTag(currentPositionCommand, aiSearchDepth),
       );
     }, delayMs);
 
