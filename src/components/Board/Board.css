@@ -135,6 +135,53 @@
     transform: scale(-1);
 }
 
+/* ─── Coordinates ───────────────────────────────────────────────────────── */
+.coords-layer {
+    position: absolute;
+    top: var(--board-pad);
+    left: var(--board-pad);
+    width: calc(100% - 2 * var(--board-pad));
+    height: calc(100% - 2 * var(--board-pad));
+    pointer-events: none;
+    z-index: 4;
+}
+
+.coord-label {
+    position: absolute;
+    color: rgba(45, 22, 5, 0.58);
+    font-family: "JetBrains Mono", "SF Mono", monospace;
+    font-size: 0.62rem;
+    font-size: clamp(0.48rem, 2.1cqi, 0.68rem);
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(255, 220, 120, 0.34);
+    user-select: none;
+}
+
+.coord-file {
+    transform: translateX(-50%);
+}
+
+.coord-file-top {
+    top: calc(-0.55 * var(--board-pad));
+}
+
+.coord-file-bottom {
+    bottom: calc(-0.55 * var(--board-pad));
+}
+
+.coord-rank {
+    transform: translateY(-50%);
+}
+
+.coord-rank-left {
+    left: calc(-0.58 * var(--board-pad));
+}
+
+.coord-rank-right {
+    right: calc(-0.58 * var(--board-pad));
+}
+
 /* ─── Hitboxes ───────────────────────────────────────────────────────────── */
 .hitboxes-layer {
     position: absolute;
@@ -148,6 +195,9 @@
 
 .hitbox {
     position: absolute;
+    padding: 0;
+    border: 0;
+    background: transparent;
     /* 100% = playing-area width (pieces-layer is already inset by board-pad).
        One cell spacing = 100%/8. Hitbox is slightly larger for easy tapping. */
     width: calc(100% / 8 + 6px);
@@ -160,6 +210,12 @@
 
 .hitbox:hover {
     background: rgba(255, 235, 160, 0.18);
+}
+
+.hitbox:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: rgba(255, 235, 160, 0.22);
 }
 
 /* ─── Pieces Layer ───────────────────────────────────────────────────────── */
@@ -330,6 +386,10 @@
     }
     .river-text {
         font-size: 1.15rem;
+    }
+    .coord-file-top,
+    .coord-rank-right {
+        display: none;
     }
     .target-dot {
         width:  14px !important;

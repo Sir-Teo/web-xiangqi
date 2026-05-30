@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { BoardArrows } from './BoardArrows';
@@ -26,6 +26,45 @@ const PIECE_LABELS: Record<string, string> = {
     k: "將", a: "士", b: "象", n: "馬", r: "車", c: "砲", p: "卒"
 };
 
+const PIECE_NAMES: Record<string, string> = {
+    K: 'red general',
+    A: 'red advisor',
+    B: 'red elephant',
+    N: 'red horse',
+    R: 'red chariot',
+    C: 'red cannon',
+    P: 'red soldier',
+    k: 'black general',
+    a: 'black advisor',
+    b: 'black elephant',
+    n: 'black horse',
+    r: 'black chariot',
+    c: 'black cannon',
+    p: 'black soldier',
+};
+
+const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
+const BOARD_RANKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const BOARD_FILES = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+
+function formatSquareName(file: number, rank: number) {
+    return `${FILE_LABELS[file]}${rank}`;
+}
+
+function formatSquareAriaLabel(
+    file: number,
+    rank: number,
+    piece: string,
+    isSelected: boolean,
+    target?: { capture: boolean }
+) {
+    const parts = [formatSquareName(file, rank)];
+    parts.push(piece ? PIECE_NAMES[piece] ?? piece : 'empty');
+    if (isSelected) parts.push('selected');
+    if (target) parts.push(target.capture ? 'legal capture' : 'legal move');
+    return parts.join(', ');
+}
+
 interface BoardProps {
     board: BoardState;
     selected: { file: number, rank: number } | null;
@@ -50,6 +89,13 @@ export const Board = React.memo(function Board({
 }: BoardProps) {
     const ranks = orientation === 'black' ? RANKS_BLACK : RANKS_RED;
     const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
+    const targetBySquare = useMemo(() => {
+        const map = new Map<string, { capture: boolean }>();
+        for (const target of validTargets) {
+            map.set(`${target.file}:${target.rank}`, { capture: target.capture });
+        }
+        return map;
+    }, [validTargets]);
 
     const handleHitboxClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('[data-file]');
@@ -94,18 +140,60 @@ export const Board = React.memo(function Board({
                     <span className="river-text river-text-flipped">漢{'\u3000'}界</span>
                 </div>
 
+                <div className="coords-layer" aria-hidden="true">
+                    {BOARD_FILES.map(file => (
+                        <React.Fragment key={`coord-file-${file}`}>
+                            <span
+                                className="coord-label coord-file coord-file-top"
+                                style={{ left: leftFor(file, orientation) }}
+                            >
+                                {FILE_LABELS[file]}
+                            </span>
+                            <span
+                                className="coord-label coord-file coord-file-bottom"
+                                style={{ left: leftFor(file, orientation) }}
+                            >
+                                {FILE_LABELS[file]}
+                            </span>
+                        </React.Fragment>
+                    ))}
+                    {BOARD_RANKS.map(rank => (
+                        <React.Fragment key={`coord-rank-${rank}`}>
+                            <span
+                                className="coord-label coord-rank coord-rank-left"
+                                style={{ top: topFor(rank, orientation) }}
+                            >
+                                {rank}
+                            </span>
+                            <span
+                                className="coord-label coord-rank coord-rank-right"
+                                style={{ top: topFor(rank, orientation) }}
+                            >
+                                {rank}
+                            </span>
+                        </React.Fragment>
+                    ))}
+                </div>
+
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}
                 <div className="hitboxes-layer" onClick={handleHitboxClick}>
                     {ranks.map(rank => (
-                        files.map(file => (
-                            <div
-                                key={`hitbox-${file}-${rank}`}
-                                className="hitbox"
-                                style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
-                                data-file={file}
-                                data-rank={rank}
-                            />
-                        ))
+                        files.map(file => {
+                            const piece = board[rank][file];
+                            const isSelected = selected?.file === file && selected?.rank === rank;
+                            const target = targetBySquare.get(`${file}:${rank}`);
+                            return (
+                                <button
+                                    key={`hitbox-${file}-${rank}`}
+                                    type="button"
+                                    className="hitbox"
+                                    style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
+                                    data-file={file}
+                                    data-rank={rank}
+                                    aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
+                                />
+                            );
+                        })
                     ))}
                 </div>
 
