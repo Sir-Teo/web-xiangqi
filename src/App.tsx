@@ -43,6 +43,14 @@ import {
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
 type AnalysisEngineMode = 'stable' | 'optimized';
+type BoardSquare = { file: number; rank: number };
+type BoardArrow = {
+  from: BoardSquare;
+  to: BoardSquare;
+  color: string;
+  opacity?: number;
+  strokeWidth?: number;
+};
 
 const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
   { mode: 'PvP', label: 'Local' },
@@ -204,6 +212,8 @@ function App() {
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
   const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph'>('moves');
   const [showArrows, setShowArrows] = useState(true);
+  const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
+  const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
@@ -1009,12 +1019,49 @@ function App() {
     };
   }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
+  const clearBoardMarkers = useCallback(() => {
+    setUserHighlights((prev) => prev.length ? [] : prev);
+    setUserArrows((prev) => prev.length ? [] : prev);
+  }, []);
+
+  const handleToggleHighlight = useCallback((square: BoardSquare) => {
+    setUserHighlights((prev) => {
+      const exists = prev.some((item) => item.file === square.file && item.rank === square.rank);
+      if (exists) {
+        return prev.filter((item) => item.file !== square.file || item.rank !== square.rank);
+      }
+      return [...prev, square].slice(-12);
+    });
+  }, []);
+
+  const handleAddUserArrow = useCallback((from: BoardSquare, to: BoardSquare) => {
+    setUserArrows((prev) => {
+      const isSameArrow = (arrow: BoardArrow) =>
+        arrow.from.file === from.file &&
+        arrow.from.rank === from.rank &&
+        arrow.to.file === to.file &&
+        arrow.to.rank === to.rank;
+      const exists = prev.some(isSameArrow);
+      const withoutExisting = prev.filter((arrow) => !isSameArrow(arrow));
+      if (exists) return withoutExisting;
+      return [
+        ...withoutExisting,
+        { from, to, color: '#60a5fa', opacity: 0.72, strokeWidth: 4 },
+      ].slice(-12);
+    });
+  }, []);
+
+  useEffect(() => {
+    clearBoardMarkers();
+  }, [clearBoardMarkers, currentNodeId]);
+
   const handleSquareClick = useCallback((file: number, rank: number) => {
     if (gameResult) return;
+    clearBoardMarkers();
     if (!isAiTurn || paused) {
       onSquareClick(file, rank);
     }
-  }, [gameResult, isAiTurn, paused, onSquareClick]);
+  }, [clearBoardMarkers, gameResult, isAiTurn, paused, onSquareClick]);
 
   const applyMode = useCallback((mode: GameMode) => {
     setGameMode(mode);
@@ -1266,7 +1313,8 @@ function App() {
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const boardArrows = useMemo(() => {
-    const result: Array<{ from: { file: number; rank: number }; to: { file: number; rank: number }; color: string; opacity?: number; strokeWidth?: number }> = [];
+    if (!showArrows) return [];
+    const result: BoardArrow[] = [];
 
     // Last played move — color encodes quality (green=good … red=blunder)
     if (lastMoveFrom && lastMoveTo) {
@@ -1290,9 +1338,8 @@ function App() {
       if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55, strokeWidth: 3.5 });
     }
 
-    if (!showArrows) return [];
-    return result;
-  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines, showArrows]);
+    return [...result, ...userArrows];
+  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines, showArrows, userArrows]);
 
   return (
     <main className="app-shell" data-mobile-view={isMobile ? mobileView : undefined}>
@@ -1351,8 +1398,8 @@ function App() {
                 type="button"
                 className={`top-action-btn ${showArrows ? 'top-action-btn-active' : ''}`}
                 onClick={() => setShowArrows(v => !v)}
-                title={showArrows ? 'Hide arrows' : 'Show arrows'}
-                aria-label="Toggle board arrows"
+                title={showArrows ? 'Hide arrows and markers' : 'Show arrows and markers'}
+                aria-label="Toggle board arrows and markers"
               >
                 <IconArrow />
                 <span className="btn-label-desktop">Arrows</span>
@@ -1831,7 +1878,7 @@ function App() {
                     {paused ? <IconPlay /> : <IconPause />}
                   </button>
                 )}
-                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} type="button" onClick={() => setShowArrows(v => !v)} title="Toggle arrows" aria-label="Toggle board arrows"><IconArrow /></button>
+                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} type="button" onClick={() => setShowArrows(v => !v)} title="Toggle arrows and markers" aria-label="Toggle board arrows and markers"><IconArrow /></button>
                 <button className="mobile-action-btn" type="button" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board" aria-label="Flip board"><IconFlip /></button>
                 <button className="mobile-action-btn" type="button" onClick={toggleSettings} title="Settings" aria-label="Open settings"><IconSettings /></button>
               </div>
@@ -1860,6 +1907,9 @@ function App() {
               validTargets={validTargets}
               onSquareClick={handleSquareClick}
               orientation={orientation}
+              highlights={showArrows ? userHighlights : []}
+              onToggleHighlight={handleToggleHighlight}
+              onAddArrow={handleAddUserArrow}
               arrows={boardArrows}
             />
             {inCheck && (

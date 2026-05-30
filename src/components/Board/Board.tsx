@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { BoardArrows } from './BoardArrows';
@@ -65,17 +65,33 @@ function formatSquareAriaLabel(
     return parts.join(', ');
 }
 
+function squareFromElement(element: Element | null) {
+    const squareElement = element?.closest<HTMLElement>('[data-file][data-rank]');
+    if (!squareElement) return null;
+    return {
+        file: parseInt(squareElement.dataset.file!, 10),
+        rank: parseInt(squareElement.dataset.rank!, 10),
+    };
+}
+
 interface BoardProps {
     board: BoardState;
     selected: { file: number, rank: number } | null;
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
     orientation?: BoardOrientation;
+    highlights?: Array<{ file: number; rank: number }>;
+    onToggleHighlight?: (square: { file: number; rank: number }) => void;
+    onAddArrow?: (
+        from: { file: number; rank: number },
+        to: { file: number; rank: number }
+    ) => void;
     arrows?: Array<{
         from: { file: number; rank: number };
         to: { file: number; rank: number };
         color: string;
         opacity?: number;
+        strokeWidth?: number;
     }>;
 }
 
@@ -85,10 +101,14 @@ export const Board = React.memo(function Board({
     validTargets,
     onSquareClick,
     orientation = 'red',
+    highlights = [],
+    onToggleHighlight,
+    onAddArrow,
     arrows = [],
 }: BoardProps) {
     const ranks = orientation === 'black' ? RANKS_BLACK : RANKS_RED;
     const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
+    const markerDragStartRef = useRef<{ file: number; rank: number } | null>(null);
     const targetBySquare = useMemo(() => {
         const map = new Map<string, { capture: boolean }>();
         for (const target of validTargets) {
@@ -98,16 +118,43 @@ export const Board = React.memo(function Board({
     }, [validTargets]);
 
     const handleHitboxClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-        const el = (e.target as HTMLElement).closest<HTMLElement>('[data-file]');
-        if (!el) return;
-        const file = parseInt(el.dataset.file!);
-        const rank = parseInt(el.dataset.rank!);
-        onSquareClick(file, rank);
+        const square = squareFromElement(e.target as Element);
+        if (!square) return;
+        onSquareClick(square.file, square.rank);
     }, [onSquareClick]);
+
+    const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
+        event.preventDefault();
+        markerDragStartRef.current = { file, rank };
+    }, [onAddArrow, onToggleHighlight]);
+
+    const handleMarkerPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
+        event.preventDefault();
+        const start = markerDragStartRef.current;
+        markerDragStartRef.current = null;
+        if (!start) return;
+        const end = squareFromElement(document.elementFromPoint(event.clientX, event.clientY)) ?? { file, rank };
+        if (start.file === end.file && start.rank === end.rank) {
+            onToggleHighlight?.(end);
+            return;
+        }
+        onAddArrow?.(start, end);
+    }, [onAddArrow, onToggleHighlight]);
+
+    const handleMarkerPointerCancel = useCallback(() => {
+        markerDragStartRef.current = null;
+    }, []);
+
+    const handleContextMenu = useCallback((event: React.MouseEvent) => {
+        if (!onToggleHighlight && !onAddArrow) return;
+        event.preventDefault();
+    }, [onAddArrow, onToggleHighlight]);
 
     return (
         <div className="xiangqi-board-container">
-            <div className="xiangqi-board">
+            <div className="xiangqi-board" onContextMenu={handleContextMenu}>
                 {/* Single SVG for all grid lines + palace diagonals.
                     ViewBox "0 0 8 9" matches piece coordinate system exactly:
                     left=(file/8)*100% ↔ x=file, top=(rank/9)*100% ↔ y=rank-row.
@@ -191,6 +238,9 @@ export const Board = React.memo(function Board({
                                     data-file={file}
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
+                                    onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
+                                    onPointerUp={(event) => handleMarkerPointerUp(event, file, rank)}
+                                    onPointerCancel={handleMarkerPointerCancel}
                                 />
                             );
                         })
@@ -204,6 +254,15 @@ export const Board = React.memo(function Board({
 
                 {/* The piece layer */}
                 <div className="pieces-layer">
+                    {/* User analysis markers */}
+                    {highlights.map(highlight => (
+                        <div
+                            key={`marker-${highlight.file}-${highlight.rank}`}
+                            className="marker-highlight"
+                            style={{ left: leftFor(highlight.file, orientation), top: topFor(highlight.rank, orientation) }}
+                        />
+                    ))}
+
                     {/* Valid Target overlays */}
                     {validTargets.map(target => {
                         if (target.capture) {

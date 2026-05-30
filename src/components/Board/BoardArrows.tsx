@@ -44,12 +44,12 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 overflow: 'visible',
             }}
         >
-            {arrows.map((arrow) => {
+            {arrows.map((arrow, index) => {
                 if (arrow.from.file === arrow.to.file && arrow.from.rank === arrow.to.rank) return null;
 
                 const opacity = arrow.opacity ?? 0.82;
                 const strokeWidth = arrow.strokeWidth ?? 5;
-                const key = `${arrow.from.file},${arrow.from.rank}-${arrow.to.file},${arrow.to.rank}-${arrow.color}`;
+                const key = `${index}-${arrow.from.file},${arrow.from.rank}-${arrow.to.file},${arrow.to.rank}-${arrow.color}`;
 
                 const x1 = xCoord(arrow.from.file, orientation);
                 const y1 = yCoord(arrow.from.rank, orientation);
