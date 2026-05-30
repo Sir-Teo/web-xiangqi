@@ -29,6 +29,7 @@ export interface EngineInitOptions {
     allowSIMD?: boolean;
     threads?: number;
     hashMB?: number;
+    captureInfoLines?: boolean;
     onBestMove?: (uci: string, score: number, searchTag: string | null) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
@@ -91,6 +92,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pendingEvalRef = useRef<number | null>(null);
     const pendingWdlRef = useRef<WdlStats | null>(null);
     const pvDirtyRef = useRef(false);
+    const captureInfoLinesRef = useRef(options.captureInfoLines ?? false);
     const infoFlushTimerRef = useRef<number | null>(null);
     const queuedSearchTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
@@ -110,6 +112,10 @@ export function useEngine(options: EngineInitOptions = {}) {
     useEffect(() => {
         onWorkerErrorRef.current = options.onWorkerError;
     }, [options.onWorkerError]);
+
+    useEffect(() => {
+        captureInfoLinesRef.current = options.captureInfoLines ?? false;
+    }, [options.captureInfoLines]);
 
     useEffect(() => {
         const handleWindowError = (event: ErrorEvent) => {
@@ -162,10 +168,10 @@ export function useEngine(options: EngineInitOptions = {}) {
             infoFlushTimerRef.current = null;
         }
 
-        if (pendingInfoLineRef.current) {
+        if (pendingInfoLineRef.current && captureInfoLinesRef.current) {
             commitOutputLines([...outputLinesRef.current, pendingInfoLineRef.current]);
-            pendingInfoLineRef.current = null;
         }
+        pendingInfoLineRef.current = null;
 
         if (pendingEvalRef.current !== null && pendingEvalRef.current !== latestEvalRef.current) {
             latestEvalRef.current = pendingEvalRef.current;

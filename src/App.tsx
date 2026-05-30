@@ -590,6 +590,7 @@ function App() {
     allowSIMD: engineBootConfig.allowSIMD,
     threads: engineBootConfig.threads,
     hashMB: engineBootConfig.hashMB,
+    captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
     onWorkerError: handleEngineWorkerError,
     onBestMove: (uci, score, searchTag) => {
       const reviewTag = parseReviewTag(searchTag);
