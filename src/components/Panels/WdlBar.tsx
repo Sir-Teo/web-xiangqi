@@ -12,9 +12,9 @@ export function WdlBar({ wdl, isSearching = false }: WdlBarProps) {
             <div className="wdl-bar-wrap">
                 <div className="wdl-bar wdl-bar-empty" />
                 <div className="wdl-labels">
-                    <span className="wdl-label wdl-win">W —</span>
+                    <span className="wdl-label wdl-win">Red —</span>
                     <span className="wdl-label wdl-draw">D —</span>
-                    <span className="wdl-label wdl-loss">L —</span>
+                    <span className="wdl-label wdl-loss">Black —</span>
                 </div>
             </div>
         );
@@ -27,15 +27,15 @@ export function WdlBar({ wdl, isSearching = false }: WdlBarProps) {
 
     return (
         <div className={`wdl-bar-wrap ${isSearching ? 'wdl-bar-live' : ''}`}>
-            <div className="wdl-bar" role="img" aria-label={`Win ${wdl.win} Draw ${wdl.draw} Loss ${wdl.loss}`}>
+            <div className="wdl-bar" role="img" aria-label={`Red ${wdl.win} Draw ${wdl.draw} Black ${wdl.loss}`}>
                 <div className="wdl-segment wdl-segment-win" style={{ width: `${winPct}%` }} />
                 <div className="wdl-segment wdl-segment-draw" style={{ width: `${drawPct}%` }} />
                 <div className="wdl-segment wdl-segment-loss" style={{ width: `${lossPct}%` }} />
             </div>
             <div className="wdl-labels">
-                <span className="wdl-label wdl-win">W {wdl.win}</span>
+                <span className="wdl-label wdl-win">Red {wdl.win}</span>
                 <span className="wdl-label wdl-draw">D {wdl.draw}</span>
-                <span className="wdl-label wdl-loss">L {wdl.loss}</span>
+                <span className="wdl-label wdl-loss">Black {wdl.loss}</span>
             </div>
         </div>
     );

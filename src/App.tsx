@@ -12,9 +12,9 @@ import {
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck
 } from './components/icons';
-import { useEngine } from './hooks/useEngine';
+import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
-import { uciToSquare } from './utils/xiangqi';
+import { uciToSquare, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { matchOpening } from './utils/openings';
@@ -151,6 +151,31 @@ function parseReviewTag(tag: string | null) {
   const [, phase, nodeId] = tag.split('|');
   if ((phase !== 'base' && phase !== 'revisit') || !nodeId) return null;
   return { phase, nodeId };
+}
+
+function sideFromFen(fen: string): Side {
+  return fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
+}
+
+function normalizeEvalForSide(score: number, side: Side) {
+  return side === 'b' ? -score : score;
+}
+
+function normalizeEvalForFen(score: number, fen: string) {
+  return normalizeEvalForSide(score, sideFromFen(fen));
+}
+
+function normalizeWdlForSide(stats: WdlStats | null, side: Side): WdlStats | null {
+  if (!stats || side === 'w') return stats;
+  return {
+    win: stats.loss,
+    draw: stats.draw,
+    loss: stats.win,
+  };
+}
+
+function formatEvalScore(score: number, decimals = 1) {
+  return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
 }
 
 function App() {
@@ -476,7 +501,8 @@ function App() {
         }
 
         controller.currentNodeId = null;
-        queueReviewEvalUpdate(reviewTag.nodeId, score);
+        const normalizedScore = normalizeEvalForFen(score, getNodeFen(reviewTag.nodeId));
+        queueReviewEvalUpdate(reviewTag.nodeId, normalizedScore);
 
         // Store engine's recommended move for the child node that was actually played
         // so the coach UI can show "Engine suggests X" when a move was a mistake/blunder
@@ -490,7 +516,7 @@ function App() {
           const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
           const parentEval = parentId ? getEffectiveNodeEval(parentId) : undefined;
           if (typeof parentEval === 'number') {
-            const swing = Math.abs(score - parentEval);
+            const swing = Math.abs(normalizedScore - parentEval);
             if (swing >= reviewPolicy.revisitThreshold) {
               const previousSwing = controller.criticalNodeSwings.get(reviewTag.nodeId) ?? 0;
               if (swing > previousSwing) {
@@ -508,7 +534,7 @@ function App() {
       if (searchTag?.startsWith(`${AI_TAG_PREFIX}|`)) {
         applyBestMoveRef.current = false;
         if (uci) {
-          applyUciMove(uci, score);
+          applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
         }
         if (aiSpeedRef.current === 'step' || stepPendingRef.current) {
           stepPendingRef.current = false;
@@ -531,7 +557,7 @@ function App() {
       }
 
       if (currentMoveIndex >= 0 && reviewStatus !== 'done') {
-        setCurrentNodeEval(score);
+        setCurrentNodeEval(normalizeEvalForSide(score, sideToMove));
       }
 
       if (
@@ -1026,8 +1052,16 @@ function App() {
   const currentModeLabel = GAME_MODES.find((candidate) => candidate.mode === gameMode)?.label ?? gameMode;
   const pendingModeLabel = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode)?.label ?? pendingGameMode;
   const pendingModeIsAi = pendingGameMode !== 'PvP';
-  const currentEvalText = typeof evalScore === 'number'
-    ? `${evalScore > 0 ? '+' : ''}${(evalScore / 100).toFixed(1)}`
+  const displayEvalScore = useMemo(
+    () => normalizeEvalForSide(evalScore, sideToMove),
+    [evalScore, sideToMove]
+  );
+  const displayWdl = useMemo(
+    () => normalizeWdlForSide(wdl, sideToMove),
+    [sideToMove, wdl]
+  );
+  const currentEvalText = typeof displayEvalScore === 'number'
+    ? formatEvalScore(displayEvalScore)
     : null;
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
@@ -1154,7 +1188,7 @@ function App() {
       .filter((uci): uci is string => Boolean(uci));
     saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
-      finalEval: evalScore,
+      finalEval: displayEvalScore,
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
       review: reviewStatus === 'done' && reviewSummary
         ? {
@@ -1166,7 +1200,7 @@ function App() {
           }
         : undefined,
     });
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, evalScore, gameMode, gameResult, reviewStatus, reviewSummary, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
@@ -1674,11 +1708,11 @@ function App() {
             <div className="panel-content">
               {leftPanelTab === 'graph' ? (
                 <>
-                  {engineEnabled && <WdlBar wdl={wdl} isSearching={isSearching} />}
+                  {engineEnabled && <WdlBar wdl={displayWdl} isSearching={isSearching} />}
                   <EvalGraph
                     history={moveHistory}
                     currentMoveIndex={currentMoveIndex}
-                    currentEval={evalScore}
+                    currentEval={displayEvalScore}
                     isSearching={isSearching}
                     branchCounts={graphBranchCounts}
                     rootBranchCount={rootGraphBranchCount}
@@ -1732,7 +1766,7 @@ function App() {
                 </span>
                 <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
                 {currentEvalText ? (
-                  <span className={`board-stage-chip board-stage-chip-eval ${evalScore > 0 ? 'eval-positive' : evalScore < 0 ? 'eval-negative' : ''}`}>
+                  <span className={`board-stage-chip board-stage-chip-eval ${displayEvalScore > 0 ? 'eval-positive' : displayEvalScore < 0 ? 'eval-negative' : ''}`}>
                     Eval {currentEvalText}
                   </span>
                 ) : null}
@@ -1758,9 +1792,9 @@ function App() {
               <div className="mobile-board-turn-info">
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
-                {engineEnabled && evalScore !== null && (
-                  <span className={`mobile-eval-chip ${evalScore > 0 ? 'eval-positive' : evalScore < 0 ? 'eval-negative' : ''}`}>
-                    {evalScore > 0 ? '+' : ''}{(evalScore / 100).toFixed(1)}
+                {engineEnabled && displayEvalScore !== null && (
+                  <span className={`mobile-eval-chip ${displayEvalScore > 0 ? 'eval-positive' : displayEvalScore < 0 ? 'eval-negative' : ''}`}>
+                    {formatEvalScore(displayEvalScore)}
                   </span>
                 )}
                 {detectedOpening && (
@@ -1929,15 +1963,20 @@ function App() {
                   <div className="pv-lines-container">
                     {pvLines.length === 0 ? (
                       <div className="text-muted small">No PV available yet.</div>
-                    ) : pvLines.map((pv, i) => (
-                      <div key={i} className="pv-line premium-card">
-                        <div className={`pv-score ${pv.score > 0 ? 'positive' : 'negative'}`}>{pv.scoreStr}</div>
-                        <div className="pv-moves">
-                          <span className="turnNum">Depth {pv.depth}</span>
-                          <span className="move">{pv.moves.slice(0, 7).join(' ')}</span>
+                    ) : pvLines.map((pv, i) => {
+                      const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
+                      return (
+                        <div key={i} className="pv-line premium-card">
+                          <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
+                            {formatEvalScore(normalizedScore, 0)}
+                          </div>
+                          <div className="pv-moves">
+                            <span className="turnNum">Depth {pv.depth}</span>
+                            <span className="move">{pv.moves.slice(0, 7).join(' ')}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="engine-output-terminal mt-4">
                     {outputLines.slice(-20).map((line, i) => (
