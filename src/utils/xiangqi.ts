@@ -32,17 +32,31 @@ export function isBlackPiece(ch: string): boolean {
 export function parseFenBoard(fen: string): BoardState {
     const [placement] = fen.trim().split(/\s+/);
     const rows = placement.split("/");
+    if (rows.length !== 10) {
+        throw new Error("FEN board must contain 10 ranks");
+    }
     const out = Array.from({ length: 10 }, () => Array(9).fill(""));
     for (let visualRow = 0; visualRow < 10; visualRow++) {
         let file = 0;
         for (const ch of rows[visualRow]) {
-            if (/\d/.test(ch)) {
+            if (/^[1-9]$/.test(ch)) {
                 file += Number(ch);
-            } else {
+                if (file > 9) {
+                    throw new Error("FEN rank has too many files");
+                }
+            } else if (/^[rnbakcpRNBAKCP]$/.test(ch)) {
+                if (file >= 9) {
+                    throw new Error("FEN rank has too many files");
+                }
                 const rank = 9 - visualRow; // fen is top->bottom, our rank is bottom->top
                 out[rank][file] = ch;
                 file += 1;
+            } else {
+                throw new Error("FEN rank contains an invalid piece");
             }
+        }
+        if (file !== 9) {
+            throw new Error("FEN rank must contain exactly 9 files");
         }
     }
     return out;
