@@ -95,8 +95,10 @@ export function useEngine(options: EngineInitOptions = {}) {
     const queuedSearchTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
     const initTokenRef = useRef(0);
+    const isSearchingRef = useRef(false);
     const stopRequestedRef = useRef(false);
     const pendingSearchRef = useRef<SearchRequest | null>(null);
+    const pendingOptionCommandsRef = useRef<Map<string, string>>(new Map());
     const activeSearchSignatureRef = useRef('');
     const activeSearchTagRef = useRef<string | null>(null);
     const handleUciOutRef = useRef<(rawMsg: string) => void>(() => {});
@@ -191,9 +193,6 @@ export function useEngine(options: EngineInitOptions = {}) {
         }, INFO_FLUSH_MS);
     }, [flushBufferedInfo]);
 
-    // Ref mirrors isSearching so stopSearch doesn't need it in its deps
-    const isSearchingRef = useRef(false);
-
     const clearPvLines = useCallback(() => {
         pvSlotRef.current = {};
         pvLinesRef.current = [];
@@ -231,7 +230,24 @@ export function useEngine(options: EngineInitOptions = {}) {
             const normalizedValue = typeof value === 'boolean' ? (value ? 'true' : 'false') : value;
             suffix = ` value ${normalizedValue}`;
         }
-        sendCommand(`setoption name ${name}${suffix}`);
+        const command = `setoption name ${name}${suffix}`;
+
+        if (!engineRef.current || isSearchingRef.current || stopRequestedRef.current) {
+            pendingOptionCommandsRef.current.set(name, command);
+            return;
+        }
+
+        sendCommand(command);
+    }, [sendCommand]);
+
+    const flushPendingOptions = useCallback(() => {
+        if (!engineRef.current || isSearchingRef.current || pendingOptionCommandsRef.current.size === 0) {
+            return;
+        }
+
+        const commands = Array.from(pendingOptionCommandsRef.current.values());
+        pendingOptionCommandsRef.current.clear();
+        commands.forEach((command) => sendCommand(command));
     }, [sendCommand]);
 
     // Track searching state from actual UCI search commands only.
@@ -272,6 +288,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         const nextRequest = pendingSearchRef.current;
         pendingSearchRef.current = null;
+        flushPendingOptions();
         activeSearchSignatureRef.current = nextRequest.signature;
         activeSearchTagRef.current = nextRequest.tag ?? null;
         stopRequestedRef.current = false;
@@ -286,7 +303,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         setWdl(null);
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
-    }, [startSearch, stopSearch]);
+    }, [flushPendingOptions, startSearch, stopSearch]);
 
     const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0, tag?: string) => {
         const signature = `${positionCmd}\n${goCmd}\n${tag ?? ''}`;
@@ -330,6 +347,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
         clearQueuedSearch();
         activeSearchSignatureRef.current = '';
+        pendingOptionCommandsRef.current.clear();
         stopRequestedRef.current = false;
 
         // Wait for the constructor. We'll use "auto" variant as default.
@@ -395,6 +413,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             outputLinesRef.current = [];
             activeSearchSignatureRef.current = '';
             activeSearchTagRef.current = null;
+            pendingOptionCommandsRef.current.clear();
             stopRequestedRef.current = false;
             didConfigureSessionRef.current = false;
             setIsReady(false);
@@ -501,6 +520,8 @@ export function useEngine(options: EngineInitOptions = {}) {
             onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
+            } else {
+                flushPendingOptions();
             }
         } else if (!msg.startsWith('info')) {
             appendOutputLine(msg);
