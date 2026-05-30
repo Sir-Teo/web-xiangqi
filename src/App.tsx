@@ -1195,6 +1195,7 @@ function App() {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
   }, [analysisRequestKey, engineEnabled, pvLines]);
+  const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const liveEvalScore = currentAnalysisPvLines[0]?.score ?? null;
   const displayEvalScore = useMemo(
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
@@ -2263,6 +2264,28 @@ function App() {
                 />
               ) : (
                 <>
+                  <div className="engine-dashboard" aria-label="Engine diagnostics">
+                    <div className="engine-stat">
+                      <span>Core</span>
+                      <strong>{engineVariant}</strong>
+                      <em>{engineBootConfig.threads}T · {engineBootConfig.hashMB}MB</em>
+                    </div>
+                    <div className="engine-stat">
+                      <span>Profile</span>
+                      <strong>{analysisEngineMode}</strong>
+                      <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
+                    </div>
+                    <div className="engine-stat">
+                      <span>Search</span>
+                      <strong>D{liveAnalysisPolicy.primary.depth}</strong>
+                      <em>{liveAnalysisPolicy.primary.moveTimeMs}ms primary</em>
+                    </div>
+                    <div className="engine-stat">
+                      <span>Detail</span>
+                      <strong>{engineDetailEnabled ? 'MultiPV 3' : 'MultiPV 1'}</strong>
+                      <em>{currentShowWdlRef.current ? 'WDL on' : 'WDL off'}</em>
+                    </div>
+                  </div>
                   <div className="pv-lines-container">
                     {currentAnalysisPvLines.length === 0 ? (
                       <div className="text-muted small">No PV available yet.</div>
@@ -2281,12 +2304,29 @@ function App() {
                       );
                     })}
                   </div>
-                  <div className="engine-output-terminal mt-4">
-                    {outputLines.slice(-20).map((line, i) => (
-                      <div key={i}>{line}</div>
-                    ))}
-                    {outputLines.length === 0 && <div>Waiting for engine…</div>}
-                  </div>
+                  {assistMode === 'pro' ? (
+                    <div className="engine-output-terminal mt-4">
+                      {outputLines.slice(-20).map((line, i) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                      {outputLines.length === 0 && <div>Waiting for engine…</div>}
+                    </div>
+                  ) : (
+                    <div className="engine-coach-summary">
+                      <div className="engine-coach-item">
+                        <span>Best</span>
+                        <strong>{topAnalysisPv?.moves[0] ? formatUciLine([topAnalysisPv.moves[0]], 1) : 'Waiting'}</strong>
+                      </div>
+                      <div className="engine-coach-item">
+                        <span>Depth</span>
+                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : `D${liveAnalysisPolicy.primary.depth}`}</strong>
+                      </div>
+                      <div className="engine-coach-item engine-coach-line">
+                        <span>Line</span>
+                        <strong>{topAnalysisPv?.moves.length ? formatUciLine(topAnalysisPv.moves, 5) : 'No line yet'}</strong>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

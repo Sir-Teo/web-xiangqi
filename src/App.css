@@ -3683,6 +3683,49 @@ summary:active {
 }
 
 /* Engine tab cards */
+.engine-dashboard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.engine-stat,
+.engine-coach-item {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  padding: 0.48rem 0.56rem;
+}
+
+.engine-stat span,
+.engine-coach-item span {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.engine-stat strong,
+.engine-coach-item strong {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.engine-stat em {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-family: "JetBrains Mono", monospace;
+}
+
 .pv-lines-container {
   display: flex;
   flex-direction: column;
@@ -3747,6 +3790,22 @@ summary:active {
   font-size: 0.7rem;
   font-family: "JetBrains Mono", monospace;
   padding: 0.6rem;
+}
+
+.engine-coach-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.engine-coach-line {
+  grid-column: 1 / -1;
+}
+
+.engine-coach-item strong {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.74rem;
 }
 
 /* Xiangqi watch controls extras not in web-chess */
