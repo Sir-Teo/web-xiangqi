@@ -23,7 +23,7 @@ async function waitForHttp(url, timeoutMs) {
 async function waitForEngineReady(page, timeoutMs) {
   await page.waitForFunction(() => {
     const body = document.body.textContent || "";
-    return /Pikafish ready/i.test(body);
+    return /(?:Engine|Pikafish) ready/i.test(body);
   }, null, { timeout: timeoutMs });
 }
 
