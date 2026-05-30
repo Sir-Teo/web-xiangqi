@@ -17,6 +17,7 @@ export function useGameLibrary() {
             opening?: string;
             finalEval?: number;
             label?: string;
+            startFen?: string;
             result?: SavedGame['result'];
             review?: SavedGame['review'];
         } = {}

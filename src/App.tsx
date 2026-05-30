@@ -281,6 +281,7 @@ function App() {
     treeNodes,
     activeLineNodeIds,
     currentFen,
+    rootFen,
     inCheck,
     gameResult,
     setGameResult,
@@ -1286,6 +1287,7 @@ function App() {
     saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
+      startFen: rootFen,
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
       review: reviewStatus === 'done' && reviewSummary
         ? {
@@ -1297,14 +1299,14 @@ function App() {
           }
         : undefined,
     });
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
     handleCancelReview();
     resetReview();
     setLeftPanelTab('graph');
-    const loadedNodeIds = loadMoves(game.moves);
+    const loadedNodeIds = loadMoves(game.moves, game.startFen);
     if (game.review) {
       setNodeReviewDataBulk(
         game.review.annotations

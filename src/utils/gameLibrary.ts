@@ -21,6 +21,7 @@ export interface SavedGame {
     savedAt: number;
     gameMode: GameMode;
     moves: string[];            // UCI strings from root to leaf
+    startFen?: string;          // root position for custom-FEN games
     result?: SavedResult;
     label?: string;             // user-editable
     opening?: string;           // matched opening name
@@ -172,6 +173,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         savedAt,
         gameMode,
         moves,
+        startFen: asString(raw.startFen),
         result,
         label: asString(raw.label),
         opening: asString(raw.opening),

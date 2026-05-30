@@ -72,6 +72,44 @@ function createStartRootPosition(): RootPosition {
     };
 }
 
+function parseRootPositionFromFen(fen: string): RootPosition | null {
+    try {
+        const parts = fen.trim().split(/\s+/);
+        if (parts.length < 2) return null;
+        const board = parseFenBoard(parts[0]);
+        const flat = board.flat();
+        if (flat.filter((piece) => piece === 'K').length !== 1) return null;
+        if (flat.filter((piece) => piece === 'k').length !== 1) return null;
+        const sideChar = parts[1];
+        if (sideChar !== 'w' && sideChar !== 'b') return null;
+        const side: Side = sideChar === 'b' ? 'b' : 'w';
+        const redKing = findKing(board, 'w');
+        const blackKing = findKing(board, 'b');
+        if (!redKing || !blackKing) return null;
+        if (!inPalace('w', redKing.file, redKing.rank)) return null;
+        if (!inPalace('b', blackKing.file, blackKing.rank)) return null;
+        if (kingsFacing(board)) return null;
+        const parsedFullmove = Number(parts[5]);
+        const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
+            ? Math.trunc(parsedFullmove)
+            : 1;
+        return {
+            board,
+            sideToMove: side,
+            inCheck: isInCheck(board, side),
+            fullmove,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function fullmoveForPly(rootPosition: RootPosition, ply: number) {
+    const normalizedPly = Math.max(0, Math.trunc(ply));
+    const blackRootOffset = rootPosition.sideToMove === 'b' ? 1 : 0;
+    return rootPosition.fullmove + Math.floor((normalizedPly + blackRootOffset) / 2);
+}
+
 function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string[] {
     if (!treeNodes[nodeId]) return [];
     const path: string[] = [];
@@ -160,7 +198,8 @@ export function useXiangqi() {
         () => activeLineNodeIds.map((nodeId) => treeNodes[nodeId]?.record).filter((record): record is MoveRecord => Boolean(record)),
         [activeLineNodeIds, treeNodes]
     );
-    const currentFen = boardToFen(board, sideToMove, rootPosition.fullmove + Math.floor((currentMoveIndex + 1) / 2));
+    const currentFen = boardToFen(board, sideToMove, fullmoveForPly(rootPosition, currentMoveIndex + 1));
+    const rootFen = boardToFen(rootPosition.board, rootPosition.sideToMove, rootPosition.fullmove);
 
     const syncPositionForNode = useCallback((nextTree: Record<string, MoveTreeNode>, nodeId: string) => {
         const position = getPositionFromNode(nextTree, nodeId, rootPosition);
@@ -188,57 +227,30 @@ export function useXiangqi() {
     }, []);
 
     const loadFen = useCallback((fen: string): boolean => {
-        try {
-            const parts = fen.trim().split(/\s+/);
-            if (parts.length < 2) return false;
-            const board = parseFenBoard(parts[0]);
-            const flat = board.flat();
-            if (flat.filter((piece) => piece === 'K').length !== 1) return false;
-            if (flat.filter((piece) => piece === 'k').length !== 1) return false;
-            const sideChar = parts[1];
-            if (sideChar !== 'w' && sideChar !== 'b') return false;
-            const side: Side = sideChar === 'b' ? 'b' : 'w';
-            const redKing = findKing(board, 'w');
-            const blackKing = findKing(board, 'b');
-            if (!redKing || !blackKing) return false;
-            if (!inPalace('w', redKing.file, redKing.rank)) return false;
-            if (!inPalace('b', blackKing.file, blackKing.rank)) return false;
-            if (kingsFacing(board)) return false;
-            const parsedFullmove = Number(parts[5]);
-            const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
-                ? Math.trunc(parsedFullmove)
-                : 1;
-            const nextGameResult = hasAnyLegalMove(board, side)
-                ? null
-                : side === 'w' ? 'black-wins' : 'red-wins';
-            const root: RootPosition = {
-                board,
-                sideToMove: side,
-                inCheck: isInCheck(board, side),
-                fullmove,
-            };
-            const rootTree = createRootTree();
-            setTreeNodes(rootTree);
-            setRootPosition(root);
-            setActiveLineNodeIds([]);
-            setCurrentMoveIndex(-1);
-            setBoard(root.board);
-            setSideToMove(root.sideToMove);
-            setSelected(null);
-            setValidTargets([]);
-            setInCheck(root.inCheck);
-            setGameResult(nextGameResult);
-            nodeCounterRef.current = 1;
-            return true;
-        } catch {
-            return false;
-        }
+        const root = parseRootPositionFromFen(fen);
+        if (!root) return false;
+        const nextGameResult = hasAnyLegalMove(root.board, root.sideToMove)
+            ? null
+            : root.sideToMove === 'w' ? 'black-wins' : 'red-wins';
+        const rootTree = createRootTree();
+        setTreeNodes(rootTree);
+        setRootPosition(root);
+        setActiveLineNodeIds([]);
+        setCurrentMoveIndex(-1);
+        setBoard(root.board);
+        setSideToMove(root.sideToMove);
+        setSelected(null);
+        setValidTargets([]);
+        setInCheck(root.inCheck);
+        setGameResult(nextGameResult);
+        nodeCounterRef.current = 1;
+        return true;
     }, []);
 
-    const loadMoves = useCallback((moves: string[]) => {
-        const root = createStartRootPosition();
-        let currentBoard = parseFenBoard(START_FEN);
-        let currentSide: Side = 'w';
+    const loadMoves = useCallback((moves: string[], startFen?: string) => {
+        const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
+        let currentBoard = root.board;
+        let currentSide: Side = root.sideToMove;
         const tree: Record<string, MoveTreeNode> = createRootTree();
         let parentNodeId = ROOT_NODE_ID;
         const activeLine: string[] = [];
@@ -291,6 +303,7 @@ export function useXiangqi() {
         setBoard(currentBoard);
         setSideToMove(currentSide);
         setInCheck(isInCheck(currentBoard, currentSide));
+        setGameResult(null);
         setSelected(null);
         setValidTargets([]);
         return activeLine;
@@ -448,7 +461,7 @@ export function useXiangqi() {
         const pos = getPositionFromNode(treeNodes, nodeId, rootPosition);
         const node = treeNodes[nodeId];
         const ply = node?.record?.ply ?? 0;
-        return boardToFen(pos.board, pos.sideToMove, rootPosition.fullmove + Math.floor(ply / 2));
+        return boardToFen(pos.board, pos.sideToMove, fullmoveForPly(rootPosition, ply));
     }, [rootPosition, treeNodes]);
 
     const setNodeEval = useCallback((nodeId: string, evalScore: number) => {
@@ -631,6 +644,7 @@ export function useXiangqi() {
         selected,
         validTargets,
         currentFen,
+        rootFen,
         inCheck,
         gameResult,
         setGameResult,
