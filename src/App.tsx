@@ -10,7 +10,8 @@ import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck, IconCopy
+  IconPawn, IconCheck, IconCopy, IconSkipBack, IconChevronLeft, IconChevronRight,
+  IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
@@ -43,6 +44,7 @@ import {
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
+type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
@@ -53,14 +55,15 @@ type BoardArrow = {
   strokeWidth?: number;
 };
 
-const GAME_MODES: Array<{ mode: GameMode; label: string; icon?: string }> = [
-  { mode: 'PvP', label: 'Local' },
-  { mode: 'PvAI-Black', label: 'vs AI (Red)' },
-  { mode: 'PvAI-Red', label: 'vs AI (Black)' },
-  { mode: 'AIvAI', label: 'AI vs AI' },
+const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; description: string }> = [
+  { mode: 'PvP', label: 'Local board', shortLabel: 'Local', description: 'Two players, one board, no engine moves.' },
+  { mode: 'PvAI-Black', label: 'You play Red', shortLabel: 'Red vs AI', description: 'Red moves first while the engine replies as Black.' },
+  { mode: 'PvAI-Red', label: 'You play Black', shortLabel: 'Black vs AI', description: 'The engine starts as Red, then you defend as Black.' },
+  { mode: 'AIvAI', label: 'AI exhibition', shortLabel: 'AI vs AI', description: 'Both sides are engine-driven for watching and review.' },
 ];
 
 export type AiStrength = 1 | 2 | 3 | 4 | 5;
+type PieceCode = 'K' | 'A' | 'B' | 'N' | 'R' | 'C' | 'P' | 'k' | 'a' | 'b' | 'n' | 'r' | 'c' | 'p';
 const WORKER_SAFE_MAX_DEPTH = 12;
 const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   slow: 1500,
@@ -84,6 +87,37 @@ const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
+const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
+const INITIAL_PIECE_COUNTS: Record<PieceCode, number> = {
+  K: 1, A: 2, B: 2, N: 2, R: 2, C: 2, P: 5,
+  k: 1, a: 2, b: 2, n: 2, r: 2, c: 2, p: 5,
+};
+const PIECE_SYMBOLS: Record<PieceCode, string> = {
+  K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
+  k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
+};
+const PIECE_NAMES: Record<PieceCode, string> = {
+  K: 'Red general',
+  A: 'Red advisor',
+  B: 'Red elephant',
+  N: 'Red horse',
+  R: 'Red chariot',
+  C: 'Red cannon',
+  P: 'Red soldier',
+  k: 'Black general',
+  a: 'Black advisor',
+  b: 'Black elephant',
+  n: 'Black horse',
+  r: 'Black chariot',
+  c: 'Black cannon',
+  p: 'Black soldier',
+};
+const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
+  K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
+  k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
+};
+const CAPTURED_BY_RED: PieceCode[] = ['r', 'n', 'c', 'a', 'b', 'p'];
+const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
 
 type ReviewPhase = 'base' | 'revisit';
 
@@ -202,9 +236,24 @@ function formatEvalScore(score: number, decimals = 1) {
   return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
 }
 
+function isPieceCode(value: string): value is PieceCode {
+  return value in PIECE_SYMBOLS;
+}
+
+function formatSquare(square: BoardSquare | null) {
+  if (!square) return '';
+  return `${FILE_LABELS[square.file]}${square.rank}`;
+}
+
+function formatMaterialValue(valueTenths: number) {
+  const value = valueTenths / 10;
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+}
+
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
+  const [assistMode, setAssistMode] = useState<AssistMode>('coach');
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(320);
   const [topPanelOpen, setTopPanelOpen] = useState(true);
@@ -1124,8 +1173,10 @@ function App() {
     document.addEventListener('mouseup', onUp);
   }, [rightWidth]);
 
-  const currentModeLabel = GAME_MODES.find((candidate) => candidate.mode === gameMode)?.label ?? gameMode;
-  const pendingModeLabel = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode)?.label ?? pendingGameMode;
+  const currentModeMeta = GAME_MODES.find((candidate) => candidate.mode === gameMode) ?? GAME_MODES[0];
+  const pendingModeMeta = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode) ?? GAME_MODES[0];
+  const currentModeLabel = currentModeMeta.label;
+  const pendingModeLabel = pendingModeMeta.label;
   const pendingModeIsAi = pendingGameMode !== 'PvP';
   const currentAnalysisPvLines = useMemo(() => {
     if (!engineEnabled) return [];
@@ -1150,6 +1201,69 @@ function App() {
       : displayEvalScore < 0
         ? 'eval-negative'
         : '';
+
+  const sideToMoveLabel = sideToMove === 'w' ? 'Red' : 'Black';
+  const selectedPieceRaw = selected ? board[selected.rank][selected.file] : '';
+  const selectedPiece = selectedPieceRaw && isPieceCode(selectedPieceRaw) ? selectedPieceRaw : null;
+  const legalCaptureCount = useMemo(
+    () => validTargets.filter((target) => target.capture).length,
+    [validTargets]
+  );
+  const selectedSquareText = selected ? formatSquare(selected) : '';
+  const selectedPieceText = selectedPiece
+    ? `${PIECE_NAMES[selectedPiece]} on ${selectedSquareText}`
+    : 'No piece selected';
+  const legalMoveText = selectedPiece
+    ? `${validTargets.length} ${validTargets.length === 1 ? 'move' : 'moves'}${legalCaptureCount > 0 ? ` · ${legalCaptureCount} ${legalCaptureCount === 1 ? 'capture' : 'captures'}` : ''}`
+    : `${sideToMoveLabel} to move`;
+
+  const materialSummary = useMemo(() => {
+    const currentCounts = Object.keys(INITIAL_PIECE_COUNTS).reduce((acc, key) => {
+      acc[key as PieceCode] = 0;
+      return acc;
+    }, {} as Record<PieceCode, number>);
+
+    board.forEach((row) => {
+      row.forEach((piece) => {
+        if (piece && isPieceCode(piece)) {
+          currentCounts[piece] += 1;
+        }
+      });
+    });
+
+    const makeCaptured = (pieces: PieceCode[]) => pieces
+      .map((piece) => ({
+        piece,
+        count: Math.max(0, INITIAL_PIECE_COUNTS[piece] - currentCounts[piece]),
+      }))
+      .filter((item) => item.count > 0);
+
+    const redCaptured = makeCaptured(CAPTURED_BY_RED);
+    const blackCaptured = makeCaptured(CAPTURED_BY_BLACK);
+    const redMaterialTenths = redCaptured.reduce(
+      (sum, item) => sum + PIECE_VALUES_TENTHS[item.piece] * item.count,
+      0
+    );
+    const blackMaterialTenths = blackCaptured.reduce(
+      (sum, item) => sum + PIECE_VALUES_TENTHS[item.piece] * item.count,
+      0
+    );
+    const deltaTenths = redMaterialTenths - blackMaterialTenths;
+
+    return {
+      redCaptured,
+      blackCaptured,
+      redMaterialTenths,
+      blackMaterialTenths,
+      deltaTenths,
+    };
+  }, [board]);
+
+  const materialText = materialSummary.deltaTenths > 0
+    ? `Red +${formatMaterialValue(materialSummary.deltaTenths)}`
+    : materialSummary.deltaTenths < 0
+      ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
+      : 'Material even';
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
   const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
@@ -1373,7 +1487,11 @@ function App() {
   }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, showArrows, userArrows]);
 
   return (
-    <main className="app-shell" data-mobile-view={isMobile ? mobileView : undefined}>
+    <main
+      className="app-shell"
+      data-mobile-view={isMobile ? mobileView : undefined}
+      data-assist-mode={assistMode}
+    >
       {/* ── Top bar ── */}
       <section className={`panel top ${topPanelOpen ? '' : 'hidden'}`}>
         <div className="panel-inner">
@@ -1392,6 +1510,7 @@ function App() {
                 type="button"
                 className={`gc-pill ${workspaceMode === 'play' ? 'gc-pill-active' : ''}`}
                 onClick={() => setWorkspaceMode('play')}
+                aria-pressed={workspaceMode === 'play'}
               >
                 Play
               </button>
@@ -1399,6 +1518,7 @@ function App() {
                 type="button"
                 className={`gc-pill ${workspaceMode === 'analysis' ? 'gc-pill-active' : ''}`}
                 onClick={() => setWorkspaceMode('analysis')}
+                aria-pressed={workspaceMode === 'analysis'}
               >
                 Analysis
               </button>
@@ -1407,7 +1527,8 @@ function App() {
             {engineEnabled ? (
               <div className="top-engine-state">
                 <span className={`status-dot ${isReady ? 'healthy' : ''}`} />
-                {isReady ? `Pikafish ready (${engineVariant})` : 'Loading engine…'}
+                <span>{isReady ? 'Engine ready' : 'Loading engine'}</span>
+                {isReady ? <span className="engine-variant">{engineVariant}</span> : null}
               </div>
             ) : null}
 
@@ -1431,6 +1552,7 @@ function App() {
                 onClick={() => setShowArrows(v => !v)}
                 title={showArrows ? 'Hide arrows and markers' : 'Show arrows and markers'}
                 aria-label="Toggle board arrows and markers"
+                aria-pressed={showArrows}
               >
                 <IconArrow />
                 <span className="btn-label-desktop">Arrows</span>
@@ -1535,6 +1657,28 @@ function App() {
                 <option value="analysis">Analysis</option>
                 <option value="play">Play</option>
               </select>
+            </div>
+
+            <div className="settings-group">
+              <label>Interface</label>
+              <div className="settings-inline-toggles">
+                <button
+                  type="button"
+                  className={`pill-btn ${assistMode === 'coach' ? 'pill-btn-active' : ''}`}
+                  onClick={() => setAssistMode('coach')}
+                  aria-pressed={assistMode === 'coach'}
+                >
+                  Coach
+                </button>
+                <button
+                  type="button"
+                  className={`pill-btn ${assistMode === 'pro' ? 'pill-btn-active' : ''}`}
+                  onClick={() => setAssistMode('pro')}
+                  aria-pressed={assistMode === 'pro'}
+                >
+                  Pro
+                </button>
+              </div>
             </div>
 
             <div className="settings-group">
@@ -1704,7 +1848,7 @@ function App() {
               </button>
             </div>
             <div className="new-game-menu-modes">
-              {GAME_MODES.map(({ mode, label }) => (
+              {GAME_MODES.map(({ mode, label, description }) => (
                 <button
                   key={mode}
                   type="button"
@@ -1712,7 +1856,8 @@ function App() {
                   onClick={() => setPendingGameMode(mode)}
                   aria-pressed={pendingGameMode === mode}
                 >
-                  {label}
+                  <span>{label}</span>
+                  <small>{description}</small>
                 </button>
               ))}
             </div>
@@ -1761,6 +1906,7 @@ function App() {
               <div className="new-game-selection">
                 <span className="new-game-selection-label">Selected</span>
                 <strong>{pendingModeLabel}</strong>
+                <em>{pendingModeMeta.description}</em>
               </div>
               <button
                 type="button"
@@ -1854,14 +2000,14 @@ function App() {
                   {detectedOpening
                     ? `${detectedOpening.name} is on the board. ${engineEnabled && currentEvalText ? `Live eval ${currentEvalText}.` : 'Keep exploring variations and review notes.'}`
                     : workspaceMode === 'analysis'
-                      ? 'Engine lines, review, and move-tree navigation stay synced with the current position.'
-                      : 'A clean over-the-board workspace for local play and sparring.'}
+                      ? `${currentModeMeta.description} Engine lines and review stay synced with the current position.`
+                      : currentModeMeta.description}
                 </p>
               </div>
               <div className="board-stage-chips">
                 <span className={`board-stage-chip board-stage-chip-turn ${sideToMove === 'w' ? 'turn-red' : 'turn-black'}`}>
                   <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
-                  {sideToMove === 'w' ? 'Red' : 'Black'} to move
+                  {sideToMoveLabel} to move
                 </span>
                 <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
                 {currentEvalText ? (
@@ -1916,49 +2062,91 @@ function App() {
             </div>
           )}
           <div className="mobile-board-center">
-          <div className="board-wrap">
-            {isAiMode && (
-              <div className="board-ai-status">
-                <IconBot />
-                {paused ? (
-                  <span className="ai-status-paused"><IconPause /> AI Paused</span>
-                ) : isSearching && applyBestMoveRef.current ? (
-                  <span className="ai-status-thinking">
-                    <span className="thinking-dots">
-                      <span /><span /><span />
-                    </span>
-                    Thinking…
-                  </span>
-                ) : null}
+            <div className="board-workspace">
+              <div className="board-wrap">
+                {isAiMode && (
+                  <div className="board-ai-status">
+                    <IconBot />
+                    {paused ? (
+                      <span className="ai-status-paused"><IconPause /> AI Paused</span>
+                    ) : isSearching && applyBestMoveRef.current ? (
+                      <span className="ai-status-thinking">
+                        <span className="thinking-dots">
+                          <span /><span /><span />
+                        </span>
+                        Thinking…
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+                <Board
+                  board={board}
+                  selected={selected}
+                  validTargets={validTargets}
+                  onSquareClick={handleSquareClick}
+                  orientation={orientation}
+                  highlights={showArrows ? userHighlights : []}
+                  onToggleHighlight={handleToggleHighlight}
+                  onAddArrow={handleAddUserArrow}
+                  arrows={boardArrows}
+                />
+                {inCheck && (
+                  <div className="check-overlay">
+                    <span className="check-badge">CHECK</span>
+                  </div>
+                )}
               </div>
-            )}
-            <Board
-              board={board}
-              selected={selected}
-              validTargets={validTargets}
-              onSquareClick={handleSquareClick}
-              orientation={orientation}
-              highlights={showArrows ? userHighlights : []}
-              onToggleHighlight={handleToggleHighlight}
-              onAddArrow={handleAddUserArrow}
-              arrows={boardArrows}
-            />
-            {inCheck && (
-              <div className="check-overlay">
-                <span className="check-badge">CHECK</span>
+
+              <div className="position-dock" aria-live="polite">
+                <div className="position-stat position-stat-turn">
+                  <span>Turn</span>
+                  <strong>{sideToMoveLabel}</strong>
+                  <em>{inCheck ? 'Check' : currentModeMeta.shortLabel}</em>
+                </div>
+                <div className="position-stat position-stat-selection">
+                  <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
+                  <strong>{selectedPieceText}</strong>
+                  <em>{legalMoveText}</em>
+                </div>
+                <div className="position-stat position-stat-material">
+                  <span>Material</span>
+                  <strong>{materialText}</strong>
+                  <em>Red {formatMaterialValue(materialSummary.redMaterialTenths)} · Black {formatMaterialValue(materialSummary.blackMaterialTenths)}</em>
+                </div>
+                <div className="capture-trays">
+                  <div className="capture-tray">
+                    <span>Red took</span>
+                    <div className="captured-pieces" aria-label="Pieces captured by Red">
+                      {materialSummary.redCaptured.length > 0 ? materialSummary.redCaptured.map(({ piece, count }) => (
+                        <span key={piece} className="captured-piece captured-piece-black" title={PIECE_NAMES[piece]}>
+                          {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
+                        </span>
+                      )) : <em>None</em>}
+                    </div>
+                  </div>
+                  <div className="capture-tray">
+                    <span>Black took</span>
+                    <div className="captured-pieces" aria-label="Pieces captured by Black">
+                      {materialSummary.blackCaptured.length > 0 ? materialSummary.blackCaptured.map(({ piece, count }) => (
+                        <span key={piece} className="captured-piece captured-piece-red" title={PIECE_NAMES[piece]}>
+                          {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
+                        </span>
+                      )) : <em>None</em>}
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
           </div>
           {isMobile && (
             <div className="mobile-board-nav">
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(-1)} disabled={!canGoBack} aria-label="Go to first move">⏮</button>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack} aria-label="Go to previous move">‹</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(-1)} disabled={!canGoBack} aria-label="Go to first move"><IconSkipBack /></button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack} aria-label="Go to previous move"><IconChevronLeft /></button>
               <span className="mobile-nav-label">
                 {currentMoveIndex < 0 ? 'Start' : `${currentMoveIndex + 1} / ${moveHistory.length}`}
               </span>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward} aria-label="Go to next move">›</button>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward} aria-label="Go to latest move">⏭</button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward} aria-label="Go to next move"><IconChevronRight /></button>
+              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward} aria-label="Go to latest move"><IconSkipForward /></button>
             </div>
           )}
         </section>
