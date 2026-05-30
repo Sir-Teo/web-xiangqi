@@ -14,7 +14,7 @@ import {
   IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
-import { useXiangqi } from './hooks/useXiangqi';
+import { useXiangqi, type GameResult } from './hooks/useXiangqi';
 import { START_FEN, uciToSquare, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
@@ -255,6 +255,13 @@ function makeEnginePositionCommand(rootFen: string, moves: string[]) {
   const isDefaultStart = rootParts[0] === START_FEN && rootParts[1] === 'w';
   const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
   return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
+}
+
+function savedResultToGameResult(result: SavedGame['result']): GameResult {
+  if (result === 'red') return 'red-wins';
+  if (result === 'black') return 'black-wins';
+  if (result === 'draw') return 'draw';
+  return null;
 }
 
 function App() {
@@ -1433,8 +1440,10 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setGameMode(game.gameMode);
     setLeftPanelTab('graph');
     const loadedNodeIds = loadMoves(game.moves, game.startFen);
+    setGameResult(savedResultToGameResult(game.result));
     if (game.review) {
       setNodeReviewDataBulk(
         game.review.annotations
@@ -1459,12 +1468,13 @@ function App() {
       setAnalysisTab('review');
     }
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, hydrateReview, loadMoves, resetReview, setNodeReviewDataBulk, stopAnalysis]);
+  }, [handleCancelReview, hydrateReview, loadMoves, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setGameMode('PvP');
     setLeftPanelTab('graph');
     loadMoves(game.moves);
     setGraphLoadSweepToken((token) => token + 1);
