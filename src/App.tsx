@@ -509,7 +509,6 @@ function App() {
     setOption,
     outputLines,
     pvLines,
-    evalScore,
     wdl,
   } = useEngine({
     restartToken: engineRestartToken,
@@ -811,6 +810,8 @@ function App() {
       analysisStageRef.current = 'idle';
       clearAnalysisDeepenTimer();
       clearQueuedSearch();
+      clearPvLines();
+      clearWdl();
       if (isSearching && !applyBestMoveRef.current) {
         stopSearch();
       }
@@ -821,6 +822,8 @@ function App() {
       activeAnalysisRequestRef.current = analysisRequestKey;
       analysisStageRef.current = 'idle';
       clearAnalysisDeepenTimer();
+      clearPvLines();
+      clearWdl();
       applyBestMoveRef.current = false;
     }
 
@@ -839,6 +842,8 @@ function App() {
     analysisRequestKey,
     clearAnalysisDeepenTimer,
     clearQueuedSearch,
+    clearPvLines,
+    clearWdl,
     currentPositionCommand,
     engineEnabled,
     isAiTurn,
@@ -1118,9 +1123,14 @@ function App() {
   const currentModeLabel = GAME_MODES.find((candidate) => candidate.mode === gameMode)?.label ?? gameMode;
   const pendingModeLabel = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode)?.label ?? pendingGameMode;
   const pendingModeIsAi = pendingGameMode !== 'PvP';
+  const currentAnalysisPvLines = useMemo(() => {
+    if (!engineEnabled) return [];
+    return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
+  }, [analysisRequestKey, engineEnabled, pvLines]);
+  const liveEvalScore = currentAnalysisPvLines[0]?.score ?? null;
   const displayEvalScore = useMemo(
-    () => normalizeEvalForSide(evalScore, sideToMove),
-    [evalScore, sideToMove]
+    () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
+    [liveEvalScore, sideToMove]
   );
   const displayWdl = useMemo(
     () => normalizeWdlForSide(wdl, sideToMove),
@@ -1129,6 +1139,13 @@ function App() {
   const currentEvalText = typeof displayEvalScore === 'number'
     ? formatEvalScore(displayEvalScore)
     : null;
+  const displayEvalClass = displayEvalScore === null
+    ? ''
+    : displayEvalScore > 0
+      ? 'eval-positive'
+      : displayEvalScore < 0
+        ? 'eval-negative'
+        : '';
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
   const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
@@ -1256,7 +1273,7 @@ function App() {
       .filter((uci): uci is string => Boolean(uci));
     saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
-      finalEval: displayEvalScore,
+      finalEval: displayEvalScore ?? undefined,
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
       review: reviewStatus === 'done' && reviewSummary
         ? {
@@ -1322,8 +1339,8 @@ function App() {
     }
 
     // Engine best move (green)
-    if (engineEnabled && pvLines[0]?.moves[0]) {
-      const uci = pvLines[0].moves[0];
+    if (engineEnabled && currentAnalysisPvLines[0]?.moves[0]) {
+      const uci = currentAnalysisPvLines[0].moves[0];
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
       if (from && to) result.push({ from, to, color: '#10b981', opacity: 0.88, strokeWidth: 6 });
@@ -1331,7 +1348,7 @@ function App() {
 
     // Alternative engine lines (muted green)
     for (let idx = 1; idx <= 2; idx++) {
-      const uci = pvLines[idx]?.moves[0];
+      const uci = currentAnalysisPvLines[idx]?.moves[0];
       if (!uci) continue;
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
@@ -1339,7 +1356,7 @@ function App() {
     }
 
     return [...result, ...userArrows];
-  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, engineEnabled, pvLines, showArrows, userArrows]);
+  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, showArrows, userArrows]);
 
   return (
     <main className="app-shell" data-mobile-view={isMobile ? mobileView : undefined}>
@@ -1834,7 +1851,7 @@ function App() {
                 </span>
                 <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
                 {currentEvalText ? (
-                  <span className={`board-stage-chip board-stage-chip-eval ${displayEvalScore > 0 ? 'eval-positive' : displayEvalScore < 0 ? 'eval-negative' : ''}`}>
+                  <span className={`board-stage-chip board-stage-chip-eval ${displayEvalClass}`}>
                     Eval {currentEvalText}
                   </span>
                 ) : null}
@@ -1861,7 +1878,7 @@ function App() {
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {engineEnabled && displayEvalScore !== null && (
-                  <span className={`mobile-eval-chip ${displayEvalScore > 0 ? 'eval-positive' : displayEvalScore < 0 ? 'eval-negative' : ''}`}>
+                  <span className={`mobile-eval-chip ${displayEvalClass}`}>
                     {formatEvalScore(displayEvalScore)}
                   </span>
                 )}
@@ -2032,9 +2049,9 @@ function App() {
               ) : (
                 <>
                   <div className="pv-lines-container">
-                    {pvLines.length === 0 ? (
+                    {currentAnalysisPvLines.length === 0 ? (
                       <div className="text-muted small">No PV available yet.</div>
-                    ) : pvLines.map((pv, i) => {
+                    ) : currentAnalysisPvLines.map((pv, i) => {
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
                       return (
                         <div key={i} className="pv-line premium-card">

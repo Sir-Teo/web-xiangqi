@@ -11,6 +11,7 @@ type PvLine = {
     scoreStr: string;
     moves: string[];
     multipv?: number;
+    searchTag: string | null;
 };
 
 export type WdlStats = { win: number; draw: number; loss: number };
@@ -272,6 +273,15 @@ export function useEngine(options: EngineInitOptions = {}) {
         activeSearchSignatureRef.current = nextRequest.signature;
         activeSearchTagRef.current = nextRequest.tag ?? null;
         stopRequestedRef.current = false;
+        pendingInfoLineRef.current = null;
+        pendingEvalRef.current = null;
+        pendingWdlRef.current = null;
+        latestEvalRef.current = 0;
+        pvSlotRef.current = {};
+        pvLinesRef.current = [];
+        pvDirtyRef.current = false;
+        setPvLines([]);
+        setWdl(null);
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
     }, [startSearch, stopSearch]);
@@ -507,6 +517,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                     scoreStr,
                     moves: pvMatch[1].trim().split(' '),
                     multipv: multipvIndex,
+                    searchTag: activeSearchTagRef.current,
                 };
 
                 // Direct slot assignment — no array manipulation in hot path

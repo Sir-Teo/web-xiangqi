@@ -5,7 +5,7 @@ import { formatReviewQuality, getMoveQualityClassName, isCriticalReviewQuality }
 interface EvalGraphProps {
     history: MoveRecord[];
     currentMoveIndex: number;
-    currentEval: number;
+    currentEval: number | null;
     isSearching?: boolean;
     branchCounts?: Record<number, number>;
     rootBranchCount?: number;
@@ -75,7 +75,7 @@ export const EvalGraph = React.memo(function EvalGraph({
         const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
         const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
         const currentPlyHasStoredEval = typeof currentMove?.evalScore === 'number';
-        const shouldProjectLiveEval = Number.isFinite(currentEval) && (isSearching || !currentPlyHasStoredEval);
+        const shouldProjectLiveEval = typeof currentEval === 'number' && (isSearching || !currentPlyHasStoredEval);
         if (shouldProjectLiveEval) {
             next[activePointIndex] = {
                 ...next[activePointIndex],
