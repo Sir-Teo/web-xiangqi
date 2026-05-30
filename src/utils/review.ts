@@ -1,3 +1,5 @@
+import { formatUciMove } from './moveNotation';
+
 export const REVIEW_THRESHOLDS = {
     best: 40,
     good: 90,
@@ -185,7 +187,7 @@ export function buildReviewNote({
             : quality === 'mistake'
                 ? 'Missed a stronger continuation.'
                 : 'Small slip.';
-        return `${prefix} ${bestMove.toUpperCase()} was stronger by ${cpSwing}.`;
+        return `${prefix} ${formatUciMove(bestMove)} was stronger by ${cpSwing}.`;
     }
     if (quality === 'blunder') {
         return `Major evaluation swing: ${cpSwing}.`;

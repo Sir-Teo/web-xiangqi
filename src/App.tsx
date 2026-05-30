@@ -25,6 +25,7 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, copyToClipboard } from './utils/gameExport';
+import { formatUciLine } from './utils/moveNotation';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -2071,7 +2072,7 @@ function App() {
                           </div>
                           <div className="pv-moves">
                             <span className="turnNum">Depth {pv.depth}</span>
-                            <span className="move">{pv.moves.slice(0, 7).join(' ')}</span>
+                            <span className="move">{formatUciLine(pv.moves, 7)}</span>
                           </div>
                         </div>
                       );

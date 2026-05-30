@@ -6,6 +6,7 @@ import {
     getReviewSideForRecord,
     isCriticalReviewQuality,
 } from '../../utils/review';
+import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
 import { IconSpark, IconCornerDownRight } from '../icons';
 
 type Props = {
@@ -69,8 +70,8 @@ export const MoveListTree = memo(function MoveListTree({
                     {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
                 </button>
                 {isBadMove && coachMove && (
-                    <span className="mtree-coach-hint" title={`Engine suggested: ${coachMove}`}>
-                        <IconSpark /> {coachMove}
+                    <span className="mtree-coach-hint" title={`Engine suggested: ${formatUciMove(coachMove)}`}>
+                        <IconSpark /> {formatUciMove(coachMove)}
                     </span>
                 )}
                 {note ? (
@@ -136,26 +137,12 @@ export const MoveListTree = memo(function MoveListTree({
 
 MoveListTree.displayName = 'MoveListTree';
 
-const PIECE_CHAR: Record<string, string> = {
-    'R': '車', 'r': '車',
-    'N': '馬', 'n': '馬',
-    'B': '象', 'b': '象',
-    'A': '仕', 'a': '士',
-    'K': '帥', 'k': '將',
-    'C': '炮', 'c': '炮',
-    'P': '兵', 'p': '卒',
-};
-
 function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
-    return `${record.piece.toUpperCase()}${record.captured ? 'x' : '-'}${record.uci.substring(2, 4)}`;
+    return formatMoveRecordLabel(record);
 }
 
 function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
-    const char = PIECE_CHAR[record.piece] ?? record.piece.toUpperCase();
-    const from = record.uci.slice(0, 2);
-    const to = record.uci.slice(2, 4);
-    const action = record.captured ? '×' : '→';
-    return `${char} ${from}${action}${to}`;
+    return formatMoveRecordTitle(record);
 }
 
 function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeNode>): string[] {

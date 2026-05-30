@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewSummary } from '../../utils/review';
 import { formatReviewQuality, getMoveQualityClassName } from '../../utils/review';
+import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
     status: ReviewStatus;
@@ -118,12 +119,12 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         <strong>{moment.side} · ply {moment.ply}</strong>
                                     </div>
                                     <div className="review-moment-main">
-                                        <span>{moment.playedMove.toUpperCase()}</span>
+                                        <span>{formatUciMove(moment.playedMove)}</span>
                                         <strong>{formatSwing(moment.swing)}</strong>
                                     </div>
                                     <p>{moment.note}</p>
                                     {moment.bestMove ? (
-                                        <em>Engine line: {moment.bestMove.toUpperCase()}</em>
+                                        <em>Engine line: {formatUciMove(moment.bestMove)}</em>
                                     ) : null}
                                 </button>
                             ))}

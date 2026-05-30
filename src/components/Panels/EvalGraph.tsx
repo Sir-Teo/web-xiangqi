@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
 import { formatReviewQuality, getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
+import { formatUciMove } from '../../utils/moveNotation';
 
 interface EvalGraphProps {
     history: MoveRecord[];
@@ -474,7 +475,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             ) : null}
                             {tooltipPoint?.reviewNote ? <span>{tooltipPoint.reviewNote}</span> : null}
                             {tooltipPoint?.bestMove && tooltipPoint.bestMove !== tooltipPoint.uci ? (
-                                <em>Engine: {tooltipPoint.bestMove.toUpperCase()}</em>
+                                <em>Engine: {formatUciMove(tooltipPoint.bestMove)}</em>
                             ) : null}
                             {tooltipBranchCount > 1 ? <em>{tooltipBranchCount} branches</em> : null}
                         </div>
@@ -503,5 +504,5 @@ function formatEval(score: number): string {
 function formatPointLabel(point: EvalPoint): string {
     if (point.moveIndex === -1) return 'Start';
     const side = point.mover === 'red' ? 'Red' : 'Black';
-    return `${side} ${point.uci?.toUpperCase() ?? ''}`.trim();
+    return `${side} ${point.uci ? formatUciMove(point.uci) : ''}`.trim();
 }
