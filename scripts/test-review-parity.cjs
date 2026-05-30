@@ -1,4 +1,5 @@
 const path = require("path");
+const { loadPikafishNode } = require("./load-pikafish-node.cjs");
 
 async function waitFor(engine, lines, predicate, timeoutMs, label) {
   for (const line of lines) {
@@ -44,11 +45,13 @@ function parseLatestScore(lines) {
 
 async function initEngine(variant) {
   const distDir = path.resolve(__dirname, "..", "dist");
-  const createPikafish = require(path.join(distDir, "pikafish.js"));
-  const engine = await createPikafish({
+  const pikafish = loadPikafishNode(distDir, variant, `pikafish-review-${variant}`);
+  const engine = await pikafish.createPikafish({
     basePath: distDir,
     nnuePath: path.join(distDir, "pikafish.nnue"),
-    variant,
+    variant: pikafish.variant,
+    coreFactory: pikafish.coreFactory,
+    allowSIMD: pikafish.variant.includes("simd"),
     autoTune: false,
   });
   await engine.uci({ timeoutMs: 20000 });

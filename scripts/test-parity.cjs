@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { loadPikafishNode } = require("./load-pikafish-node.cjs");
 
 async function waitFor(engine, lines, predicate, timeoutMs, label) {
   for (const line of lines) {
@@ -41,12 +42,14 @@ async function waitForFile(engine, filePath, timeoutMs) {
 async function main() {
   const variant = (process.argv[2] || process.env.PIKAFISH_VARIANT || "single").trim();
   const distDir = path.resolve(__dirname, "..", "dist");
-  const createPikafish = require(path.join(distDir, "pikafish.js"));
+  const pikafish = loadPikafishNode(distDir, variant, "pikafish-parity");
 
-  const engine = await createPikafish({
+  const engine = await pikafish.createPikafish({
     basePath: distDir,
     nnuePath: path.join(distDir, "pikafish.nnue"),
-    variant,
+    variant: pikafish.variant,
+    coreFactory: pikafish.coreFactory,
+    allowSIMD: pikafish.variant.includes("simd"),
     autoTune: false,
   });
 

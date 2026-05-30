@@ -1,5 +1,5 @@
-const fs = require("fs");
 const path = require("path");
+const { loadPikafishNode } = require("./load-pikafish-node.cjs");
 
 async function waitFor(engine, lines, predicate, timeoutMs, label) {
   for (const line of lines) {
@@ -31,12 +31,14 @@ async function waitFor(engine, lines, predicate, timeoutMs, label) {
 async function main() {
   const variant = (process.argv[2] || process.env.PIKAFISH_VARIANT || "threaded").trim();
   const distDir = path.resolve(__dirname, "..", "dist");
-  const createPikafish = require(path.join(distDir, "pikafish.js"));
+  const pikafish = loadPikafishNode(distDir, variant, "pikafish-smoke");
 
-  const engine = await createPikafish({
+  const engine = await pikafish.createPikafish({
     basePath: distDir,
     nnuePath: path.join(distDir, "pikafish.nnue"),
-    variant,
+    variant: pikafish.variant,
+    coreFactory: pikafish.coreFactory,
+    allowSIMD: pikafish.variant.includes("simd"),
   });
 
   const lines = [];
@@ -70,7 +72,7 @@ async function main() {
     throw new Error("Did not receive engine id");
   }
 
-  console.log(`\nSmoke test passed (${variant}).`);
+  console.log(`\nSmoke test passed (${pikafish.variant}).`);
 }
 
 main().catch((err) => {
