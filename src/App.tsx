@@ -310,7 +310,9 @@ function App() {
     gameMode === 'AIvAI' ||
     (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
     (gameMode === 'PvAI-Red' && sideToMove === 'w');
+  const isAiMode = gameMode !== 'PvP';
   const engineEnabled = workspaceMode === 'analysis';
+  const engineRequired = engineEnabled || isAiMode;
 
   const {
     status: reviewStatus,
@@ -511,6 +513,7 @@ function App() {
     pvLines,
     wdl,
   } = useEngine({
+    enabled: engineRequired,
     restartToken: engineRestartToken,
     variant: engineBootConfig.variant,
     allowSIMD: engineBootConfig.allowSIMD,
@@ -1119,7 +1122,6 @@ function App() {
     document.addEventListener('mouseup', onUp);
   }, [rightWidth]);
 
-  const isAiMode = gameMode !== 'PvP';
   const currentModeLabel = GAME_MODES.find((candidate) => candidate.mode === gameMode)?.label ?? gameMode;
   const pendingModeLabel = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode)?.label ?? pendingGameMode;
   const pendingModeIsAi = pendingGameMode !== 'PvP';

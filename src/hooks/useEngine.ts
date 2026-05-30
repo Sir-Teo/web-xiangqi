@@ -24,6 +24,7 @@ type SearchRequest = {
 };
 
 export interface EngineInitOptions {
+    enabled?: boolean;
     variant?: EngineRuntimeVariant;
     allowSIMD?: boolean;
     threads?: number;
@@ -77,6 +78,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
     const [evalScore, setEvalScore] = useState<number>(0);
     const [wdl, setWdl] = useState<WdlStats | null>(null);
+    const enabled = options.enabled ?? true;
 
     const engineRef = useRef<any>(null);
     const onBestMoveRef = useRef(options.onBestMove);
@@ -377,6 +379,42 @@ export function useEngine(options: EngineInitOptions = {}) {
     }, [clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
 
     useEffect(() => {
+        const resetInactiveEngineState = () => {
+            clearQueuedSearch();
+            if (infoFlushTimerRef.current !== null) {
+                window.clearTimeout(infoFlushTimerRef.current);
+                infoFlushTimerRef.current = null;
+            }
+            pendingInfoLineRef.current = null;
+            pendingEvalRef.current = null;
+            pendingWdlRef.current = null;
+            latestEvalRef.current = 0;
+            pvSlotRef.current = {};
+            pvLinesRef.current = [];
+            pvDirtyRef.current = false;
+            outputLinesRef.current = [];
+            activeSearchSignatureRef.current = '';
+            activeSearchTagRef.current = null;
+            stopRequestedRef.current = false;
+            didConfigureSessionRef.current = false;
+            setIsReady(false);
+            setIsSearching(false);
+            isSearchingRef.current = false;
+            setVariant('disabled');
+            setOutputLines([]);
+            setPvLines([]);
+            setEvalScore(0);
+            setWdl(null);
+        };
+
+        if (!enabled) {
+            initTokenRef.current += 1;
+            terminateEngineInstance(engineRef.current);
+            engineRef.current = null;
+            resetInactiveEngineState();
+            return;
+        }
+
         // Prefer the script already declared in index.html. Only inject a loader
         // when the page didn't include Pikafish yet.
         const initToken = ++initTokenRef.current;
@@ -416,7 +454,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             engineRef.current = null;
             activeSearchTagRef.current = null;
         };
-    }, [clearQueuedSearch, initializeEngine, terminateEngineInstance, options.restartToken]);
+    }, [clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
