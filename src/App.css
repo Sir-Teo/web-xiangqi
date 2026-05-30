@@ -5469,6 +5469,11 @@ summary:active {
 
 [data-assist-mode="pro"] .position-stat em,
 [data-assist-mode="pro"] .capture-tray > span {
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+}
+
+[data-assist-mode="pro"] .position-stat em {
   display: none;
 }
 
