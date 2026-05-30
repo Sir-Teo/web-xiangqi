@@ -1,5 +1,13 @@
 // Xiangqi opening recognition — WXF/standard classification
 // Move sequences are UCI strings from the starting position.
+import {
+    START_FEN,
+    parseFenBoard,
+    uciToSquare,
+    validatePieceMove,
+    type BoardState,
+    type Side,
+} from './xiangqi';
 
 export interface OpeningEntry {
     name: string;
@@ -94,17 +102,17 @@ export const OPENINGS: OpeningEntry[] = [
     {
         name: 'Pawn Opening',
         chinese: '仙人指路',
-        moves: ['a0a1'],
+        moves: ['c3c4'],
     },
     {
-        name: 'Pawn Opening — Edge Pawn Attack',
-        chinese: '仙人指路對卒底炮',
-        moves: ['a0a1', 'a9a8'],
+        name: 'Pawn Opening — Pawn Counter',
+        chinese: '仙人指路對挺卒',
+        moves: ['c3c4', 'c6c5'],
     },
     {
         name: 'Pawn Opening — Cannon Reply',
         chinese: '仙人指路對中炮',
-        moves: ['a0a1', 'h7e7'],
+        moves: ['c3c4', 'h7e7'],
     },
 
     // ── Chariot Opening ────────────────────────────────────────────────────
@@ -228,9 +236,9 @@ export const OPENINGS: OpeningEntry[] = [
         moves: ['h2e2', 'h9g7', 'b0c2', 'b9c7', 'a0a4'],
     },
     {
-        name: 'Pawns Opening — Elephant Cannon',
+        name: 'Pawn Opening — Elephant Counter',
         chinese: '起兵對象',
-        moves: ['c0a2', 'c9a7'],
+        moves: ['c3c4', 'c9e7'],
     },
     {
         name: 'Screen Horse — Cannon Reply',
@@ -425,7 +433,7 @@ export const OPENINGS: OpeningEntry[] = [
     {
         name: 'Elephant Opening — Pawn Opening Counter',
         chinese: '飛象對仙人指路',
-        moves: ['c0e2', 'a9a8'],
+        moves: ['c0e2', 'c6c5'],
     },
 
     // ── Guard Opening (士角炮) extended ────────────────────────────────────
@@ -496,32 +504,32 @@ export const OPENINGS: OpeningEntry[] = [
     {
         name: 'Pawn Opening — Horse Counter',
         chinese: '仙人指路對馬',
-        moves: ['a0a1', 'h9g7'],
+        moves: ['c3c4', 'h9g7'],
     },
     {
         name: 'Pawn Opening — Screen Horse Counter',
         chinese: '仙人指路對屏風馬',
-        moves: ['a0a1', 'b9c7'],
+        moves: ['c3c4', 'b9c7'],
     },
     {
         name: 'Pawn Opening — Elephant Counter',
         chinese: '仙人指路對象',
-        moves: ['a0a1', 'c9e7'],
+        moves: ['c3c4', 'c9e7'],
     },
     {
         name: 'Right Pawn Opening',
         chinese: '右仙人指路',
-        moves: ['i0i1'],
+        moves: ['g3g4'],
     },
     {
         name: 'High Pawn Opening',
         chinese: '挺兵',
-        moves: ['g0g3'],
+        moves: ['e3e4'],
     },
     {
         name: 'High Pawn — Cannon Reply',
         chinese: '挺兵對炮',
-        moves: ['g0g3', 'h7e7'],
+        moves: ['e3e4', 'h7e7'],
     },
 
     // ── Guard Defence (反宮馬) extended ────────────────────────────────────
@@ -621,7 +629,7 @@ export const OPENINGS: OpeningEntry[] = [
     {
         name: 'Central Cannon — Pawn Counter',
         chinese: '中炮對仙人指路',
-        moves: ['h2e2', 'a9a8'],
+        moves: ['h2e2', 'c6c5'],
     },
     {
         name: 'Central Cannon — Edge Pawn Counter',
@@ -648,9 +656,52 @@ export const OPENINGS: OpeningEntry[] = [
     {
         name: 'Mirror Pawn Opening',
         chinese: '對仙人指路',
-        moves: ['a0a1', 'a9a8', 'i0i1', 'i9i8'],
+        moves: ['c3c4', 'c6c5', 'g3g4', 'g6g5'],
     },
 ];
+
+let playableOpeningsCache: OpeningEntry[] | null = null;
+
+function applyOpeningMove(board: BoardState, uci: string, side: Side) {
+    const from = uciToSquare(uci.substring(0, 2));
+    const to = uciToSquare(uci.substring(2, 4));
+    if (!from || !to) return null;
+
+    const result = validatePieceMove(board, {
+        fromFile: from.file,
+        fromRank: from.rank,
+        toFile: to.file,
+        toRank: to.rank,
+        raw: uci,
+    }, side);
+    if (!result.ok) return null;
+
+    const nextBoard = board.map((row) => row.slice());
+    nextBoard[to.rank][to.file] = result.piece || '';
+    nextBoard[from.rank][from.file] = '';
+    return nextBoard;
+}
+
+function isPlayableOpening(entry: OpeningEntry) {
+    let board = parseFenBoard(START_FEN);
+    let side: Side = 'w';
+
+    for (const uci of entry.moves) {
+        const nextBoard = applyOpeningMove(board, uci, side);
+        if (!nextBoard) return false;
+        board = nextBoard;
+        side = side === 'w' ? 'b' : 'w';
+    }
+
+    return true;
+}
+
+function getPlayableOpenings() {
+    if (!playableOpeningsCache) {
+        playableOpeningsCache = OPENINGS.filter(isPlayableOpening);
+    }
+    return playableOpeningsCache;
+}
 
 /**
  * Find the longest named opening that matches a prefix of the given move history.
@@ -661,7 +712,7 @@ export function matchOpening(moveHistory: string[]): OpeningEntry | null {
 
     let best: OpeningEntry | null = null;
 
-    for (const entry of OPENINGS) {
+    for (const entry of getPlayableOpenings()) {
         if (entry.moves.length > moveHistory.length) continue;
         let match = true;
         for (let i = 0; i < entry.moves.length; i++) {
