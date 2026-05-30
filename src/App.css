@@ -4711,7 +4711,13 @@ summary:active {
 }
 
 .board-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: center;
   gap: 1rem;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.08), transparent 30%),
     radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.08), transparent 28%);
@@ -4812,7 +4818,19 @@ summary:active {
 }
 
 .board-wrap {
+  width: min(100cqw, 90cqh, 620px);
+  max-width: 100%;
   filter: drop-shadow(0 20px 38px rgba(0, 0, 0, 0.28));
+}
+
+.mobile-board-center {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  container-name: board-stage-center;
+  overflow: visible;
 }
 
 .mobile-board-header,

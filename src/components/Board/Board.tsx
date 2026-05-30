@@ -6,7 +6,10 @@ import { BoardArrows } from './BoardArrows';
 export type BoardOrientation = 'red' | 'black';
 
 // Module-level helpers — defined once, never re-created on render
-function leftFor(file: number) { return `${(file / 8) * 100}%`; }
+function leftFor(file: number, orientation: BoardOrientation) {
+    const visualFile = orientation === 'black' ? 8 - file : file;
+    return `${(visualFile / 8) * 100}%`;
+}
 function topFor(rank: number, orientation: BoardOrientation) {
     return orientation === 'black'
         ? `${(rank / 9) * 100}%`
@@ -98,7 +101,7 @@ export const Board = React.memo(function Board({
                             <div
                                 key={`hitbox-${file}-${rank}`}
                                 className="hitbox"
-                                style={{ left: leftFor(file), top: topFor(rank, orientation) }}
+                                style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
                                 data-file={file}
                                 data-rank={rank}
                             />
@@ -120,7 +123,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-ring"
-                                    style={{ left: leftFor(target.file), top: topFor(target.rank, orientation) }}
+                                    style={{ left: leftFor(target.file, orientation), top: topFor(target.rank, orientation) }}
                                 />
                             );
                         } else {
@@ -128,7 +131,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`target-${target.file}-${target.rank}`}
                                     className="target-dot"
-                                    style={{ left: leftFor(target.file), top: topFor(target.rank, orientation) }}
+                                    style={{ left: leftFor(target.file, orientation), top: topFor(target.rank, orientation) }}
                                 />
                             );
                         }
@@ -148,7 +151,7 @@ export const Board = React.memo(function Board({
                                 <div
                                     key={`piece-${file}-${rank}`}
                                     className={`piece ${colorClass} ${isSelected ? 'selected' : ''}`}
-                                    style={{ left: leftFor(file), top: topFor(rank, orientation) }}
+                                    style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
                                 >
                                     {PIECE_LABELS[piece] || piece}
                                 </div>

@@ -17,8 +17,9 @@ const CURVE_AMT = 30;  // viewBox units — perpendicular control point offset
 const HEAD_SIZE = 22;  // viewBox units — arrowhead depth
 const HEAD_WING = 11;  // viewBox units — arrowhead half-width
 
-function xCoord(file: number) {
-    return (file / 8) * VB_W;
+function xCoord(file: number, orientation: 'red' | 'black') {
+    const visualFile = orientation === 'black' ? 8 - file : file;
+    return (visualFile / 8) * VB_W;
 }
 function yCoord(rank: number, orientation: 'red' | 'black') {
     return orientation === 'black'
@@ -50,9 +51,9 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 const strokeWidth = arrow.strokeWidth ?? 5;
                 const key = `${arrow.from.file},${arrow.from.rank}-${arrow.to.file},${arrow.to.rank}-${arrow.color}`;
 
-                const x1 = xCoord(arrow.from.file);
+                const x1 = xCoord(arrow.from.file, orientation);
                 const y1 = yCoord(arrow.from.rank, orientation);
-                const x2 = xCoord(arrow.to.file);
+                const x2 = xCoord(arrow.to.file, orientation);
                 const y2 = yCoord(arrow.to.rank, orientation);
 
                 // Direction and perpendicular for control point
