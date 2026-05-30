@@ -12,7 +12,10 @@ import {
     squareToUci,
     uciToSquare,
     pieceSide,
+    findKing,
+    inPalace,
     isInCheck,
+    kingsFacing,
     hasAnyLegalMove,
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
@@ -187,16 +190,27 @@ export function useXiangqi() {
     const loadFen = useCallback((fen: string): boolean => {
         try {
             const parts = fen.trim().split(/\s+/);
+            if (parts.length < 2) return false;
             const board = parseFenBoard(parts[0]);
-            // Basic validation: both kings must be present
             const flat = board.flat();
-            if (!flat.includes('K') || !flat.includes('k')) return false;
+            if (flat.filter((piece) => piece === 'K').length !== 1) return false;
+            if (flat.filter((piece) => piece === 'k').length !== 1) return false;
             const sideChar = parts[1];
+            if (sideChar !== 'w' && sideChar !== 'b') return false;
             const side: Side = sideChar === 'b' ? 'b' : 'w';
+            const redKing = findKing(board, 'w');
+            const blackKing = findKing(board, 'b');
+            if (!redKing || !blackKing) return false;
+            if (!inPalace('w', redKing.file, redKing.rank)) return false;
+            if (!inPalace('b', blackKing.file, blackKing.rank)) return false;
+            if (kingsFacing(board)) return false;
             const parsedFullmove = Number(parts[5]);
             const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
                 ? Math.trunc(parsedFullmove)
                 : 1;
+            const nextGameResult = hasAnyLegalMove(board, side)
+                ? null
+                : side === 'w' ? 'black-wins' : 'red-wins';
             const root: RootPosition = {
                 board,
                 sideToMove: side,
@@ -213,7 +227,7 @@ export function useXiangqi() {
             setSelected(null);
             setValidTargets([]);
             setInCheck(root.inCheck);
-            setGameResult(null);
+            setGameResult(nextGameResult);
             nodeCounterRef.current = 1;
             return true;
         } catch {
