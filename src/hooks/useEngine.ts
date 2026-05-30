@@ -483,7 +483,6 @@ export function useEngine(options: EngineInitOptions = {}) {
             appendOutputLine(msg);
             if (!didConfigureSessionRef.current) {
                 didConfigureSessionRef.current = true;
-                setOption('UCI_Variant', 'xiangqi');
                 setOption('MultiPV', 1);
                 setOption('UCI_ShowWDL', false);
                 setOption('Ponder', false);
