@@ -20,6 +20,7 @@
     "test:review:fixtures": "node scripts/test-review-fixtures-browser.cjs",
     "test:review:browser": "node scripts/test-review-browser.cjs",
     "test:review:parity": "node scripts/test-review-parity.cjs",
+    "test:openings": "node scripts/test-openings.cjs",
     "bench:nps": "node scripts/bench-nps.cjs",
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
   },
