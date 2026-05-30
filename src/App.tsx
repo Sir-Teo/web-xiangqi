@@ -10,7 +10,7 @@ import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck
+  IconPawn, IconCheck, IconCopy
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi } from './hooks/useXiangqi';
@@ -1176,6 +1176,7 @@ function App() {
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   const [copiedToast, setCopiedToast] = useState(false);
+  const [copiedFenToast, setCopiedFenToast] = useState(false);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
 
@@ -1232,6 +1233,14 @@ function App() {
       setTimeout(() => setCopiedToast(false), 2000);
     }
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult]);
+
+  const handleCopyFen = useCallback(async () => {
+    const ok = await copyToClipboard(currentFen);
+    if (ok) {
+      setCopiedFenToast(true);
+      setTimeout(() => setCopiedFenToast(false), 2000);
+    }
+  }, [currentFen]);
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
@@ -2176,7 +2185,18 @@ function App() {
                 {inCheck ? <span className="check-badge">CHECK</span> : 'Play mode'}
               </div>
             )}
-            <div className="bottombar-fen">FEN: {currentFen}</div>
+            <div className="bottombar-fen-group">
+              <div className="bottombar-fen" title={currentFen}>FEN: {currentFen}</div>
+              <button
+                type="button"
+                className="bottombar-fen-copy"
+                onClick={handleCopyFen}
+                aria-label="Copy current FEN"
+                title="Copy current FEN"
+              >
+                {copiedFenToast ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+              </button>
+            </div>
           </div>
         </div>
       </section>
