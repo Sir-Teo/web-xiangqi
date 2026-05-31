@@ -164,6 +164,10 @@ function isGameMode(value: unknown): value is GameMode {
   return value === 'PvP' || value === 'PvAI-Black' || value === 'PvAI-Red' || value === 'AIvAI';
 }
 
+function isAiGameModeValue(mode: GameMode) {
+  return mode !== 'PvP';
+}
+
 type ShareUrlBuildResult = {
   url: string;
   treeOmitted: boolean;
@@ -1612,6 +1616,9 @@ function App() {
   }, [board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
 
   const applyMode = useCallback((mode: GameMode) => {
+    if (isAiGameModeValue(mode)) {
+      setWorkspaceMode('play');
+    }
     setGameMode(mode);
     resetGame();
   }, [resetGame]);
@@ -2175,6 +2182,9 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    if (isAiGameModeValue(nextGameMode)) {
+      setWorkspaceMode('play');
+    }
     setGameMode(nextGameMode);
     setFenInput('');
     clearFenError();
@@ -2223,6 +2233,9 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    if (isAiGameModeValue(nextGameMode)) {
+      setWorkspaceMode('play');
+    }
     setGameMode(nextGameMode);
     if (importedLine.hasVariations) {
       loadMoveTree(importedLine.moveTree, moves, startFen);
