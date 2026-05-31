@@ -31,6 +31,8 @@ export const ReviewPanel = memo(function ReviewPanel({
     onClear,
     onNavigateNode,
 }: Props) {
+    const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
+
     return (
         <div className="review-panel">
             <div className="review-panel-header">
@@ -71,10 +73,18 @@ export const ReviewPanel = memo(function ReviewPanel({
                 <div className="review-progress-card">
                     <div className="review-progress-copy">
                         <strong>Reviewing line…</strong>
-                        <span>{Math.round(progress * 100)}% complete</span>
+                        <span>{progressPercent}% complete</span>
                     </div>
-                    <div className="review-progress-track" aria-hidden="true">
-                        <div className="review-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+                    <div
+                        className="review-progress-track"
+                        role="progressbar"
+                        aria-label="Game review progress"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progressPercent}
+                        aria-valuetext={`${progressPercent}% complete`}
+                    >
+                        <div className="review-progress-fill" style={{ width: `${progressPercent}%` }} />
                     </div>
                 </div>
             ) : null}
@@ -118,6 +128,8 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     ].join(' ')}
                                     onClick={() => onNavigateNode(moment.nodeId)}
                                     data-testid={`review-moment-${moment.moveIndex}`}
+                                    aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
+                                    aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
                                 >
                                     <div className="review-moment-topline">
                                         <span>{formatReviewQuality(moment.quality)}</span>

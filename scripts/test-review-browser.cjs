@@ -85,7 +85,20 @@ async function main() {
     );
 
     const firstMoment = page.locator('[data-testid^="review-moment-"]').first();
+    const firstMomentLabel = await firstMoment.getAttribute("aria-label");
+    if (!firstMomentLabel || !/review moment/i.test(firstMomentLabel) || !/played/i.test(firstMomentLabel)) {
+      throw new Error(`Review moment did not expose an actionable label: ${firstMomentLabel}`);
+    }
     await firstMoment.click();
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('[data-testid^="review-moment-"][aria-current="true"]')),
+      null,
+      { timeout: 5000 }
+    );
+    const selectedMomentCurrent = await firstMoment.getAttribute("aria-current");
+    if (selectedMomentCurrent !== "true") {
+      throw new Error(`Selected review moment did not expose aria-current: ${selectedMomentCurrent}`);
+    }
 
     const graphPoint = await page.getByTestId("graph-current-point").textContent();
     if (!graphPoint || !/Ply/i.test(graphPoint)) {
