@@ -109,6 +109,9 @@ async function assertDesktopBoardLayout(page, viewport) {
       topPanel: toRect(".panel.top"),
       bottomPanel: toRect(".panel.bottom"),
       hitboxCount: document.querySelectorAll(".hitbox").length,
+      clippedGraphSummaryLabels: Array.from(document.querySelectorAll(".graph-summary-card span"))
+        .filter((el) => el.scrollWidth - el.clientWidth > 1)
+        .map((el) => el.textContent?.trim() || ""),
     };
   });
 
@@ -119,6 +122,9 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.hitboxCount !== 90) {
     throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
+  }
+  if (layout.clippedGraphSummaryLabels.length > 0) {
+    throw new Error(`Desktop graph summary labels are clipped: ${layout.clippedGraphSummaryLabels.join(", ")}`);
   }
   rectWithinDesktopLayout(layout);
 }

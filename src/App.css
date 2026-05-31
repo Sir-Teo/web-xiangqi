@@ -1765,6 +1765,7 @@ body.resizing * {
 .graph-wrap {
   position: relative;
   width: 100%;
+  container-type: inline-size;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-card);
@@ -1804,6 +1805,12 @@ body.resizing * {
   color: var(--text-primary);
   font-family: "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 420px) {
+  .graph-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .graph-scroll {
