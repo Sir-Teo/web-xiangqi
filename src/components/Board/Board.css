@@ -381,6 +381,20 @@
     to   { opacity: 0.88; transform: translate(-50%, -50%) scale(1); }
 }
 
+.board-arrow-group {
+    opacity: var(--arrow-opacity, 0.82);
+    animation: board-arrow-fade-in 180ms ease both;
+}
+
+@keyframes board-arrow-fade-in {
+    from { opacity: 0; }
+    to   { opacity: var(--arrow-opacity, 0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .board-arrow-group { animation: none; }
+}
+
 /* ─── Responsive container queries ───────────────────────────────────────── */
 
 /* Medium boards: phones in portrait, or analysis-view constrained layout     */

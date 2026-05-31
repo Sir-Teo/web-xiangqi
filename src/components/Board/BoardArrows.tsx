@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 interface ArrowDef {
     from: { file: number; rank: number };
     to: { file: number; rank: number };
@@ -89,9 +91,10 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 const shaftPath = `M ${x1} ${y1} Q ${cx} ${cy} ${bx} ${by}`;
                 const headPoints = `${x2},${y2} ${w1x},${w1y} ${w2x},${w2y}`;
 
+                const groupStyle = { '--arrow-opacity': opacity } as CSSProperties;
+
                 return (
-                    <g key={key} opacity={opacity}>
-                        <animate attributeName="opacity" from="0" to={String(opacity)} dur="0.18s" fill="freeze" />
+                    <g key={key} className="board-arrow-group" style={groupStyle}>
                         <circle cx={x1} cy={y1} r={strokeWidth * 0.9} fill={arrow.color} />
                         <path
                             d={shaftPath}

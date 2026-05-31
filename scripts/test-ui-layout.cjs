@@ -1457,6 +1457,24 @@ async function assertMoveTreeRespectsReducedMotion(page) {
     if (!calls.some((call) => call && call.behavior === "auto" && call.block === "nearest")) {
       throw new Error(`Move tree did not disable smooth scroll for reduced motion: ${JSON.stringify(calls)}`);
     }
+
+    const arrowMotionState = await page.evaluate(() => {
+      const arrowGroup = document.querySelector(".board-arrow-group");
+      return {
+        arrowVisible: Boolean(arrowGroup),
+        smilAnimations: document.querySelectorAll(".board-arrow-group animate").length,
+        animationName: arrowGroup ? getComputedStyle(arrowGroup).animationName : "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+    if (
+      !arrowMotionState.arrowVisible ||
+      arrowMotionState.smilAnimations !== 0 ||
+      arrowMotionState.animationName !== "none" ||
+      arrowMotionState.overflowX > 2
+    ) {
+      throw new Error(`Board arrows did not respect reduced motion: ${JSON.stringify(arrowMotionState)}`);
+    }
   } finally {
     await page.evaluate(() => {
       if (typeof window.__originalScrollIntoView === "function") {
