@@ -2087,12 +2087,23 @@ function App() {
       return;
     }
 
-    setShareLinkNotice(rawTree && !sharedMoveTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
+    const treeValidation = sharedMoveTree?.length ? validateMoveTree(sharedMoveTree, rawFen) : null;
+    const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true : false;
+    if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
+      return;
+    }
+
+    setShareLinkNotice(rawTree && !canLoadSharedTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
+    if (sharedMoveTree?.length && treeValidation && !treeValidation.ok) {
+      console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
+    }
     stopAnalysis();
     handleCancelReview();
     resetReview();
     setGameMode(mode);
-    if (sharedMoveTree?.length) {
+    if (sharedMoveTree?.length && canLoadSharedTree) {
       loadMoveTree(sharedMoveTree, moves, rawFen);
     } else if (moves.length > 0) {
       loadMoves(moves, rawFen);
@@ -2103,7 +2114,7 @@ function App() {
     setAnalysisTab('tree');
     setMobileView('board');
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence]);
+  }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
