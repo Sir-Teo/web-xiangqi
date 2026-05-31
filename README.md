@@ -58,10 +58,10 @@ npm run test:smoke:all
 
 ```bash
 npm run serve:demo
-# open http://localhost:8080
+# open http://localhost:8080/web-xiangqi/
 ```
 
-Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild automatically.
+Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild automatically. It also maps the Vite `/web-xiangqi/` base path locally and uses conditional caching so large engine artifacts can revalidate without downloading again on every visit.
 
 ## React app QA
 
@@ -72,6 +72,7 @@ npm install
 npm run build:react
 npm run test:library
 npm run test:openings
+npm run test:serve-demo
 npm run test:ui:install   # once per machine
 npm run test:ui:layout
 ```

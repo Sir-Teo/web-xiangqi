@@ -27,6 +27,7 @@
     "test:ui:layout": "node scripts/test-ui-layout.cjs",
     "test:openings": "node scripts/test-openings.cjs",
     "test:library": "node scripts/test-library.cjs",
+    "test:serve-demo": "node scripts/test-serve-demo.cjs",
     "bench:nps": "node scripts/bench-nps.cjs",
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
   },
