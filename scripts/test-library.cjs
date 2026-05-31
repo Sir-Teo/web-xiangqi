@@ -439,6 +439,10 @@ try {
     moveNotation.formatUciMove("b2e2q") === "B2E2Q",
     "Move formatter should not hide malformed suffixes as legal Xiangqi moves."
   );
+  assert(
+    moveNotation.formatUciLine(["b2e2", "h9g7", "b0c2"], 2) === "B2→E2 H9→G7 +1",
+    "Move line formatter should mark hidden continuation moves."
+  );
 
   const startBoard = xiangqi.parseFenBoard(xiangqi.START_FEN);
   const strictMove = xiangqi.validateMoveStr("b2e2junk", startBoard, "w");

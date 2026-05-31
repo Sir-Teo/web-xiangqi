@@ -56,7 +56,9 @@ export function formatUciMove(uci: string, separator = '→'): string {
 }
 
 export function formatUciLine(moves: string[], maxMoves = 7): string {
-    return moves.slice(0, maxMoves).map((move) => formatUciMove(move)).join(' ');
+    const visibleMoves = moves.slice(0, maxMoves).map((move) => formatUciMove(move)).join(' ');
+    const remainingMoves = moves.length - maxMoves;
+    return remainingMoves > 0 ? `${visibleMoves} +${remainingMoves}` : visibleMoves;
 }
 
 export function formatMoveRecordLabel(record: MoveNotationRecord): string {
