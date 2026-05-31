@@ -1316,6 +1316,79 @@ async function assertReviewBestMoveBranchAction(page) {
   }
 }
 
+async function assertCompletedReviewRerunRespectsEngineState(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const savedAt = 1710000006000;
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "review-rerun-state",
+      savedAt,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7"],
+      result: "ongoing",
+      label: "Review rerun QA",
+      review: {
+        summary: {
+          totalMoves: 2,
+          accuracy: 76,
+          bestCount: 1,
+          goodCount: 1,
+          inaccuracyCount: 0,
+          mistakeCount: 0,
+          blunderCount: 0,
+          reviewedAt: savedAt,
+          lineSignature: "b2e2 h9g7",
+          keyMoments: [],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: 35, quality: "best", swing: 20, reviewNote: "Best move." },
+          { moveIndex: 1, evalScore: 20, quality: "good", swing: 15, reviewNote: "Solid choice." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-rerun-state").click();
+  await page.getByTestId("rerun-review-btn").waitFor({ timeout: 5000 });
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="rerun-review-btn"]');
+    return button && !button.disabled;
+  }, null, { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="rerun-review-btn"]');
+    return button && button.disabled;
+  }, null, { timeout: 5000 });
+
+  const state = await page.evaluate(() => {
+    const rerun = document.querySelector('[data-testid="rerun-review-btn"]');
+    const play = [...document.querySelectorAll(".top-mode-pills button")]
+      .find((button) => button.textContent?.trim() === "Play");
+    return {
+      disabled: Boolean(rerun?.disabled),
+      title: rerun?.getAttribute("title") || "",
+      playPressed: play?.getAttribute("aria-pressed") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    !state.disabled ||
+    state.title !== "Switch to Analysis to review this line" ||
+    state.playPressed !== "true" ||
+    state.overflowX > 2
+  ) {
+    throw new Error(`Completed review rerun did not reflect engine availability: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertMoveLineImportErrorAccessibility(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2969,6 +3042,7 @@ async function main() {
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
+    await assertCompletedReviewRerunRespectsEngineState(page);
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertReplayedMoveKeepsChosenContinuation(page);
@@ -3006,7 +3080,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

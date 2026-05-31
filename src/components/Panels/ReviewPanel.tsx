@@ -49,7 +49,14 @@ export const ReviewPanel = memo(function ReviewPanel({
                         </button>
                     ) : status === 'done' ? (
                         <>
-                            <button type="button" className="chip-btn chip-btn-primary" onClick={onStart}>
+                            <button
+                                type="button"
+                                className="chip-btn chip-btn-primary"
+                                onClick={onStart}
+                                disabled={!canStart}
+                                title={startTitle}
+                                data-testid="rerun-review-btn"
+                            >
                                 Re-run
                             </button>
                             <button type="button" className="chip-btn" onClick={onClear}>
