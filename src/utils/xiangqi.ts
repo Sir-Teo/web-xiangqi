@@ -98,14 +98,15 @@ export function uciToSquare(square: string): { file: number, rank: number } | nu
 }
 
 export function parseMove(move: string): Move | null {
-    const m = String(move).trim().match(/^([a-i])([0-9])([a-i])([0-9])/);
+    const normalized = String(move).trim().toLowerCase();
+    const m = normalized.match(/^([a-i])([0-9])([a-i])([0-9])$/);
     if (!m) return null;
     const fromFile = FILES.indexOf(m[1]);
     const fromRank = Number(m[2]);
     const toFile = FILES.indexOf(m[3]);
     const toRank = Number(m[4]);
     if (fromFile < 0 || toFile < 0) return null;
-    return { fromFile, fromRank, toFile, toRank, raw: m[0] };
+    return { fromFile, fromRank, toFile, toRank, raw: normalized };
 }
 
 export function otherSide(side: Side): Side {

@@ -28,13 +28,13 @@ function stripPgnMetadata(text: string): string {
         .replace(/;.*$/gm, ' ');
 }
 
-const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])([a-z])?\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
+const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
 
 export function extractUciMoveLine(text: string): string[] {
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     return Array.from(cleaned.matchAll(UCI_MOVE_PATTERN), (match) => {
-        const from = match[1] ?? match[4];
-        const to = match[2] ?? match[5];
+        const from = match[1] ?? match[3];
+        const to = match[2] ?? match[4];
         return `${from}${to}`.toLowerCase();
     });
 }

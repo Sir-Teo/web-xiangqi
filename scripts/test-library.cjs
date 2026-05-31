@@ -38,6 +38,7 @@ try {
   const library = require(path.join(tempDir, "gameLibrary.js"));
   const gameExport = require(path.join(tempDir, "gameExport.js"));
   const moveImport = require(path.join(tempDir, "moveImport.js"));
+  const xiangqi = require(path.join(tempDir, "xiangqi.js"));
   const customFen = "9/9/9/9/9/9/9/9/4K4/4k4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -145,6 +146,21 @@ try {
     importedVariationMainline.join(" ") === "b2e2 h9g7",
     `PGN variation import should keep the mainline only, got: ${importedVariationMainline.join(" ")}`
   );
+
+  const promotedChessMove = moveImport.extractUciMoveLine(`
+    [Variant "Xiangqi"]
+    1. b2e2q
+  `);
+  assert(
+    promotedChessMove.length === 0,
+    `Xiangqi import should reject chess-style promotion suffixes, got: ${promotedChessMove.join(" ")}`
+  );
+
+  const startBoard = xiangqi.parseFenBoard(xiangqi.START_FEN);
+  const strictMove = xiangqi.validateMoveStr("b2e2junk", startBoard, "w");
+  assert(!strictMove.ok && strictMove.reason === "invalid move format", "validateMoveStr should reject suffixed UCI moves.");
+  const uppercaseStrictMove = xiangqi.validateMoveStr("B2E2", startBoard, "w");
+  assert(uppercaseStrictMove.ok && uppercaseStrictMove.mv.raw === "b2e2", "validateMoveStr should normalize uppercase UCI moves.");
 
   const importedFen = moveImport.extractFenTag(`
     [Variant "Xiangqi"]
