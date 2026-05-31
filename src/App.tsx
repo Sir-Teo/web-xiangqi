@@ -728,6 +728,18 @@ function App() {
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
+  const goToFirstMove = useCallback(() => {
+    jumpToMove(-1);
+  }, [jumpToMove]);
+  const goToPreviousMove = useCallback(() => {
+    jumpToMove(currentMoveIndex - 1);
+  }, [currentMoveIndex, jumpToMove]);
+  const goToNextMove = useCallback(() => {
+    jumpToMove(currentMoveIndex + 1);
+  }, [currentMoveIndex, jumpToMove]);
+  const goToLatestMove = useCallback(() => {
+    jumpToMove(moveHistory.length - 1);
+  }, [jumpToMove, moveHistory.length]);
   const viewedPly = Math.max(0, currentMoveIndex + 1);
   const currentLineSignature = useMemo(
     () => makeReviewLineSignature(activeLineNodeIds, treeNodes),
@@ -2235,10 +2247,10 @@ function App() {
                     onNavigate={jumpToMove}
                   />
                   <div className="graph-jump-controls">
-                    <button type="button" className="chip-btn" onClick={() => jumpToMove(-1)} disabled={!canGoBack}>Start</button>
-                    <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack}>Prev</button>
-                    <button type="button" className="chip-btn" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward}>Next</button>
-                    <button type="button" className="chip-btn" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward}>Live</button>
+                    <button type="button" className="chip-btn" onClick={goToFirstMove} disabled={!canGoBack}>Start</button>
+                    <button type="button" className="chip-btn" onClick={goToPreviousMove} disabled={!canGoBack}>Prev</button>
+                    <button type="button" className="chip-btn" onClick={goToNextMove} disabled={!canGoForward}>Next</button>
+                    <button type="button" className="chip-btn" onClick={goToLatestMove} disabled={!canGoForward}>Live</button>
                   </div>
                   <p className="panel-copy small">
                     Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
@@ -2441,13 +2453,13 @@ function App() {
           </div>
           {isMobile && (
             <div className="mobile-board-nav">
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(-1)} disabled={!canGoBack} aria-label="Go to first move"><IconSkipBack /></button>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex - 1)} disabled={!canGoBack} aria-label="Go to previous move"><IconChevronLeft /></button>
+              <button className="mobile-nav-btn" type="button" onClick={goToFirstMove} disabled={!canGoBack} aria-label="Go to first move"><IconSkipBack /></button>
+              <button className="mobile-nav-btn" type="button" onClick={goToPreviousMove} disabled={!canGoBack} aria-label="Go to previous move"><IconChevronLeft /></button>
               <span className="mobile-nav-label">
                 {currentMoveIndex < 0 ? 'Start' : `${currentMoveIndex + 1} / ${moveHistory.length}`}
               </span>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(currentMoveIndex + 1)} disabled={!canGoForward} aria-label="Go to next move"><IconChevronRight /></button>
-              <button className="mobile-nav-btn" type="button" onClick={() => jumpToMove(moveHistory.length - 1)} disabled={!canGoForward} aria-label="Go to latest move"><IconSkipForward /></button>
+              <button className="mobile-nav-btn" type="button" onClick={goToNextMove} disabled={!canGoForward} aria-label="Go to next move"><IconChevronRight /></button>
+              <button className="mobile-nav-btn" type="button" onClick={goToLatestMove} disabled={!canGoForward} aria-label="Go to latest move"><IconSkipForward /></button>
             </div>
           )}
         </section>
@@ -2730,10 +2742,10 @@ function App() {
             <WatchControls
               canGoBack={canGoBack}
               canGoForward={canGoForward}
-              onFirst={() => jumpToMove(-1)}
-              onPrev={() => jumpToMove(currentMoveIndex - 1)}
-              onNext={() => jumpToMove(currentMoveIndex + 1)}
-              onLast={() => jumpToMove(moveHistory.length - 1)}
+              onFirst={goToFirstMove}
+              onPrev={goToPreviousMove}
+              onNext={goToNextMove}
+              onLast={goToLatestMove}
               gameMode={gameMode}
               paused={paused}
               onPause={pause}
