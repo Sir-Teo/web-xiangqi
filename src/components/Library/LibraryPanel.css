@@ -42,6 +42,16 @@
   font-size: 0.72rem;
 }
 
+.lib-action-error {
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(248, 81, 73, 0.1);
+  color: #ff9b95;
+  padding: 0.48rem 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .lib-clear-filters {
   margin-left: auto;
   border: 1px solid var(--border-default);

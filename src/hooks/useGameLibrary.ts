@@ -34,14 +34,16 @@ export function useGameLibrary() {
         return saved;
     }, []);
 
-    const remove = useCallback((id: string) => {
-        deleteGame(id);
+    const remove = useCallback((id: string): boolean => {
+        const ok = deleteGame(id);
         setGames(loadAllGames());
+        return ok;
     }, []);
 
-    const rename = useCallback((id: string, label: string) => {
-        renameGame(id, label);
+    const rename = useCallback((id: string, label: string): boolean => {
+        const ok = renameGame(id, label);
         setGames(loadAllGames());
+        return ok;
     }, []);
 
     return { games, save, remove, rename, refresh };

@@ -1086,6 +1086,65 @@ async function assertLibraryPgnCopy(page) {
   }
 }
 
+async function assertLibraryMutationFailureFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-library-failure",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: "Mutation failure QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("Mutation failure QA").waitFor({ timeout: 10000 });
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItemWithLibraryFailure(key, value) {
+      if (key === "xiangqi-game-library") {
+        throw new DOMException("Simulated full storage", "QuotaExceededError");
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+
+  await page.getByRole("button", { name: "Mutation failure QA" }).click();
+  const renameForm = page.getByTestId("rename-form-saved-qa-library-failure");
+  await renameForm.locator("input").fill("Renamed failure");
+  await renameForm.getByRole("button", { name: "Save" }).click();
+  await page.getByTestId("library-action-error").getByText("Could not rename").waitFor({ timeout: 5000 });
+
+  const afterRename = await page.evaluate(() => ({
+    label: JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]")[0]?.label || "",
+    editing: Boolean(document.querySelector('[data-testid="rename-form-saved-qa-library-failure"]')),
+    alertRole: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
+  }));
+  if (afterRename.label !== "Mutation failure QA" || !afterRename.editing || afterRename.alertRole !== "alert") {
+    throw new Error(`Rename failure did not preserve data and editing state: ${JSON.stringify(afterRename)}`);
+  }
+
+  await renameForm.getByRole("button", { name: "Cancel" }).click();
+  await page.getByTestId("delete-saved-qa-library-failure").click();
+  await page.getByTestId("confirm-delete-saved-qa-library-failure").click();
+  await page.getByTestId("library-action-error").getByText("Could not delete").waitFor({ timeout: 5000 });
+
+  const afterDelete = await page.evaluate(() => ({
+    gameCount: JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]").length,
+    stillVisible: document.body.textContent?.includes("Mutation failure QA") || false,
+    confirmVisible: Boolean(document.querySelector('[data-testid="confirm-delete-saved-qa-library-failure"]')),
+  }));
+  if (afterDelete.gameCount !== 1 || !afterDelete.stillVisible || !afterDelete.confirmVisible) {
+    throw new Error(`Delete failure did not preserve the saved game and retry state: ${JSON.stringify(afterDelete)}`);
+  }
+}
+
 async function assertSaveFailureFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1294,6 +1353,7 @@ async function main() {
     await assertSaveFailureFeedback(page);
     await assertMobileSaveLibraryActions(page);
     await assertLibraryPgnCopy(page);
+    await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
     await assertGameOverReviewPreservesResult(page);
 
@@ -1301,7 +1361,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library failure feedback and PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

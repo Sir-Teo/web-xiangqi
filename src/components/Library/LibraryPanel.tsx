@@ -9,8 +9,8 @@ import './LibraryPanel.css';
 interface LibraryPanelProps {
   savedGames: SavedGame[];
   onLoadSavedGame: (game: SavedGame) => void;
-  onDeleteSavedGame: (id: string) => void;
-  onRenameSavedGame: (id: string, label: string) => void;
+  onDeleteSavedGame: (id: string) => boolean;
+  onRenameSavedGame: (id: string, label: string) => boolean;
   onLoadHistorical: (game: HistoricalGame) => void;
 }
 
@@ -67,6 +67,7 @@ export function LibraryPanel({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
@@ -113,17 +114,28 @@ export function LibraryPanel({
 
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
+    setActionError(null);
     setEditingId(game.id);
     setEditLabel(game.label ?? '');
   };
 
   const commitEdit = (id: string) => {
-    onRenameSavedGame(id, editLabel.trim());
+    const ok = onRenameSavedGame(id, editLabel.trim());
+    if (!ok) {
+      setActionError('Could not rename this game. Browser storage may be full or blocked.');
+      return;
+    }
+    setActionError(null);
     setEditingId(null);
   };
 
   const confirmDelete = (id: string) => {
-    onDeleteSavedGame(id);
+    const ok = onDeleteSavedGame(id);
+    if (!ok) {
+      setActionError('Could not delete this game. Browser storage may be full or blocked.');
+      return;
+    }
+    setActionError(null);
     setPendingDeleteId(null);
   };
 
@@ -217,6 +229,11 @@ export function LibraryPanel({
           </button>
         ) : null}
       </div>
+      {actionError ? (
+        <div className="lib-action-error" role="alert" data-testid="library-action-error">
+          {actionError}
+        </div>
+      ) : null}
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
@@ -235,6 +252,7 @@ export function LibraryPanel({
                   <form
                     className="lib-rename-form"
                     onSubmit={(e) => { e.preventDefault(); commitEdit(game.id); }}
+                    data-testid={`rename-form-saved-${game.id}`}
                   >
                     <input
                       autoFocus
@@ -244,7 +262,7 @@ export function LibraryPanel({
                       placeholder="Game name…"
                     />
                     <button type="submit" className="chip-btn">Save</button>
-                    <button type="button" className="chip-btn" onClick={() => setEditingId(null)}>Cancel</button>
+                    <button type="button" className="chip-btn" onClick={() => { setActionError(null); setEditingId(null); }}>Cancel</button>
                   </form>
                 ) : (
                   <button
@@ -299,7 +317,7 @@ export function LibraryPanel({
                       <button
                         type="button"
                         className="chip-btn"
-                        onClick={() => setPendingDeleteId(null)}
+                        onClick={() => { setActionError(null); setPendingDeleteId(null); }}
                         aria-label="Cancel delete saved game"
                       >
                         Cancel
@@ -311,6 +329,7 @@ export function LibraryPanel({
                       className="chip-btn chip-btn-danger"
                       onClick={() => {
                         setEditingId(null);
+                        setActionError(null);
                         setPendingDeleteId(game.id);
                       }}
                       title="Delete"
