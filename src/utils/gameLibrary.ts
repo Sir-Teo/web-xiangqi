@@ -200,11 +200,13 @@ function readAll(): SavedGame[] {
     }
 }
 
-function writeAll(games: SavedGame[]): void {
+function writeAll(games: SavedGame[]): boolean {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+        return true;
     } catch {
         console.warn('Game library: localStorage write failed.');
+        return false;
     }
 }
 
@@ -212,7 +214,7 @@ export function loadAllGames(): SavedGame[] {
     return readAll().sort((a, b) => b.savedAt - a.savedAt);
 }
 
-export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame {
+export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null {
     const saved: SavedGame = {
         ...game,
         id: crypto.randomUUID(),
@@ -220,15 +222,14 @@ export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame {
     };
     const games = readAll();
     games.push(saved);
-    writeAll(games);
-    return saved;
+    return writeAll(games) ? saved : null;
 }
 
-export function deleteGame(id: string): void {
-    writeAll(readAll().filter((g) => g.id !== id));
+export function deleteGame(id: string): boolean {
+    return writeAll(readAll().filter((g) => g.id !== id));
 }
 
-export function renameGame(id: string, label: string): void {
+export function renameGame(id: string, label: string): boolean {
     const games = readAll().map((g) => g.id === id ? { ...g, label } : g);
-    writeAll(games);
+    return writeAll(games);
 }

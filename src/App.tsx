@@ -1646,6 +1646,7 @@ function App() {
   const [clearedHashToast, setClearedHashToast] = useState(false);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
+  const [saveFailedToast, setSaveFailedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const copiedFenToastTimerRef = useRef<number | null>(null);
@@ -1995,7 +1996,7 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-    saveGameToLibrary(gameMode, moves, {
+    const saved = saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
       startFen: rootFen,
@@ -2014,10 +2015,12 @@ function App() {
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
     }
-    setSavedToast(true);
+    setSavedToast(Boolean(saved));
+    setSaveFailedToast(!saved);
     savedToastTimerRef.current = window.setTimeout(() => {
       savedToastTimerRef.current = null;
       setSavedToast(false);
+      setSaveFailedToast(false);
     }, 1800);
   }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
@@ -2783,15 +2786,15 @@ function App() {
               <div className="mobile-board-actions">
                 <button className="mobile-action-btn" type="button" onClick={toggleNewGameMenu} title="New game" aria-label="Open new game menu"><IconRefresh /></button>
                 <button
-                  className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''}`}
+                  className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''} ${saveFailedToast ? 'mobile-action-btn-warn' : ''}`}
                   type="button"
                   onClick={handleSaveGame}
                   disabled={!canSaveCurrentPosition}
-                  title={savedToast ? 'Saved' : 'Save current game'}
-                  aria-label={savedToast ? 'Current game saved' : 'Save current game'}
+                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : 'Save current game'}
+                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
                   data-testid="mobile-save-game-btn"
                 >
-                  {savedToast ? <IconCheck /> : <IconSave />}
+                  {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
                 </button>
                 <button
                   className="mobile-action-btn"
@@ -3197,13 +3200,13 @@ function App() {
                 <IconRefresh /> New Game
               </button>
               <button
-                className="gc-btn"
+                className={`gc-btn ${saveFailedToast ? 'gc-btn-warning' : ''}`}
                 onClick={handleSaveGame}
                 disabled={!canSaveCurrentPosition}
-                title="Save current game or custom position to library"
+                title={saveFailedToast ? 'Could not save to local storage' : 'Save current game or custom position to library'}
                 data-testid="save-game-btn"
               >
-                {savedToast ? <><IconCheck /> Saved</> : <><IconSave /> Save</>}
+                {saveFailedToast ? <><IconX /> Save Failed</> : savedToast ? <><IconCheck /> Saved</> : <><IconSave /> Save</>}
               </button>
               <button
                 className="gc-btn"

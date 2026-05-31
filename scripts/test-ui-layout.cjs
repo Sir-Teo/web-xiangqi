@@ -1086,6 +1086,46 @@ async function assertLibraryPgnCopy(page) {
   }
 }
 
+async function assertSaveFailureFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("xiangqi-game-library");
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.getByTestId("save-game-btn").waitFor({ timeout: 5000 });
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItemWithLibraryFailure(key, value) {
+      if (key === "xiangqi-game-library") {
+        throw new DOMException("Simulated full storage", "QuotaExceededError");
+      }
+      return originalSetItem.call(this, key, value);
+    };
+  });
+
+  await page.getByTestId("save-game-btn").click();
+  await page.getByTestId("save-game-btn").getByText("Save Failed").waitFor({ timeout: 5000 });
+  const state = await page.evaluate(() => ({
+    stored: localStorage.getItem("xiangqi-game-library"),
+    title: document.querySelector('[data-testid="save-game-btn"]')?.getAttribute("title") || "",
+    className: document.querySelector('[data-testid="save-game-btn"]')?.className || "",
+  }));
+
+  if (state.stored !== null) {
+    throw new Error(`Failed save wrote a library entry anyway: ${state.stored}`);
+  }
+  if (!state.title.includes("Could not save") || !state.className.includes("gc-btn-warning")) {
+    throw new Error(`Failed save did not expose warning feedback: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertMobileSaveLibraryActions(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1251,6 +1291,7 @@ async function main() {
     await assertBoardMarkersSurviveSelection(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
+    await assertSaveFailureFeedback(page);
     await assertMobileSaveLibraryActions(page);
     await assertLibraryPgnCopy(page);
     await assertLibraryDeleteConfirmation(page);
@@ -1260,7 +1301,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library failure feedback and PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

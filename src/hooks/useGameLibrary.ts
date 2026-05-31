@@ -21,14 +21,16 @@ export function useGameLibrary() {
             result?: SavedGame['result'];
             review?: SavedGame['review'];
         } = {}
-    ): SavedGame => {
+    ): SavedGame | null => {
         const saved = saveGame({
             gameMode,
             ...options,
             moves,
             result: options.result ?? 'ongoing',
         });
-        setGames(loadAllGames());
+        if (saved) {
+            setGames(loadAllGames());
+        }
         return saved;
     }, []);
 
