@@ -285,6 +285,23 @@ function savedResultToGameResult(result: SavedGame['result']): GameResult {
   return null;
 }
 
+function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
+  const selector = [
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    'a[href]',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(',');
+
+  return Array.from(container.querySelectorAll<HTMLElement>(selector))
+    .filter((element) => {
+      const style = window.getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+}
+
 function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
@@ -301,6 +318,8 @@ function App() {
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
+  const settingsDialogRef = useRef<HTMLDivElement | null>(null);
+  const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -852,6 +871,54 @@ function App() {
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
   }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
+
+  useEffect(() => {
+    const activeDialog = showSettings
+      ? settingsDialogRef.current
+      : showNewGameMenu
+        ? newGameDialogRef.current
+        : null;
+    if (!activeDialog) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusInitial = () => {
+      const firstFocusable = getDialogFocusableElements(activeDialog)[0];
+      (firstFocusable ?? activeDialog).focus({ preventScroll: true });
+    };
+
+    const frame = window.requestAnimationFrame(focusInitial);
+    const onDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const focusable = getDialogFocusableElements(activeDialog);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        activeDialog.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const current = document.activeElement;
+      if (event.shiftKey && (current === first || !activeDialog.contains(current))) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+
+    document.addEventListener('keydown', onDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onDialogKeyDown);
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus({ preventScroll: true });
+      }
+    };
+  }, [showNewGameMenu, showSettings]);
 
   // Sound effect: fire when a move is played (currentMoveIndex advanced by 1)
   const prevMoveIndexRef = useRef(currentMoveIndex);
@@ -1792,7 +1859,14 @@ function App() {
             onClick={closeSettings}
             aria-hidden="true"
           />
-          <div className="settings-body" role="dialog" aria-modal="true" aria-label="Settings">
+          <div
+            className="settings-body"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Settings"
+            ref={settingsDialogRef}
+            tabIndex={-1}
+          >
             <div className="settings-header">
               <h2>Settings</h2>
               <button
@@ -1990,7 +2064,14 @@ function App() {
             onClick={closeNewGameMenu}
             aria-hidden="true"
           />
-          <div className="new-game-menu" role="dialog" aria-modal="true" aria-label="New game">
+          <div
+            className="new-game-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="New game"
+            ref={newGameDialogRef}
+            tabIndex={-1}
+          >
             <div className="new-game-menu-header">
               <div className="new-game-menu-copy">
                 <h2>New Game</h2>

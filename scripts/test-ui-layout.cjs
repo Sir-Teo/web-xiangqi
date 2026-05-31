@@ -210,6 +210,48 @@ async function assertBottomNewGameMenuResetsDraft(page) {
   }
 }
 
+async function assertNewGameDialogFocusTrap(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector(".new-game-menu");
+    return Boolean(dialog && dialog.contains(document.activeElement));
+  }, null, { timeout: 5000 });
+
+  for (let i = 0; i < 30; i += 1) {
+    await page.keyboard.press("Tab");
+    const focusedInside = await page.evaluate(() => {
+      const dialog = document.querySelector(".new-game-menu");
+      return Boolean(dialog && dialog.contains(document.activeElement));
+    });
+    if (!focusedInside) {
+      throw new Error(`Focus escaped the New Game dialog after ${i + 1} Tab presses.`);
+    }
+  }
+
+  await page.keyboard.press("Shift+Tab");
+  const focusedInsideAfterReverseTab = await page.evaluate(() => {
+    const dialog = document.querySelector(".new-game-menu");
+    return Boolean(dialog && dialog.contains(document.activeElement));
+  });
+  if (!focusedInsideAfterReverseTab) {
+    throw new Error("Focus escaped the New Game dialog after Shift+Tab.");
+  }
+
+  await page.keyboard.press("Escape");
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  const activeLabel = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || "");
+  if (activeLabel !== "Start new game") {
+    throw new Error(`Focus was not restored to the opener after closing New Game: ${activeLabel}`);
+  }
+}
+
 async function assertBlackToMoveTreeNumbering(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -599,6 +641,7 @@ async function main() {
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
     await assertBottomNewGameMenuResetsDraft(page);
+    await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertFenTaggedMoveLineImport(page);
@@ -614,7 +657,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, dialog focus trap, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
