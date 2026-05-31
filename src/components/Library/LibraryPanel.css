@@ -237,8 +237,9 @@
 }
 
 .lib-card-actions--inline {
-  margin-top: 0;
-  flex-shrink: 0;
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: 0.1rem;
 }
 
 .lib-review-meta {

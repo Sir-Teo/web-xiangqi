@@ -1750,10 +1750,15 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
   const state = await page.evaluate(() => ({
     role: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
     loadClass: document.querySelector('[data-testid="load-saved-qa-invalid-load"]')?.className || "",
+    titleClipped: (() => {
+      const title = document.querySelector(".lib-game-name-button");
+      if (!title) return true;
+      return title.scrollWidth - title.clientWidth > 1;
+    })(),
     stillVisible: document.body.textContent?.includes("Invalid load QA") || false,
     moveRows: document.querySelectorAll(".mtree-row").length,
   }));
-  if (state.role !== "alert" || !state.loadClass.includes("chip-btn-warning") || !state.stillVisible || state.moveRows !== 0) {
+  if (state.role !== "alert" || !state.loadClass.includes("chip-btn-warning") || state.titleClipped || !state.stillVisible || state.moveRows !== 0) {
     throw new Error(`Invalid saved-game load did not preserve library state with retry feedback: ${JSON.stringify(state)}`);
   }
 }
