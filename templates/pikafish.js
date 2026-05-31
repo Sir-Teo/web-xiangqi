@@ -229,7 +229,8 @@
     if (opts && Number.isFinite(Number(opts.threads))) {
       return clampInt(Number(opts.threads), 1, 64);
     }
-    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || 8, 1, 64);
+    const defaultMaxThreads = isNode() ? 8 : 4;
+    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || defaultMaxThreads, 1, 64);
     const hw = detectHardwareThreads();
     const target = isNode() ? hw : Math.max(1, hw - 1);
     return clampInt(target, 1, maxAutoThreads);
