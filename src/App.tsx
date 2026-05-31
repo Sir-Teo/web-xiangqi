@@ -1124,6 +1124,7 @@ function App() {
       const visible = !document.hidden;
       setIsPageVisible(visible);
       if (!visible) {
+        applyBestMoveRef.current = false;
         activeAnalysisRequestRef.current = '';
         analysisStageRef.current = 'idle';
         clearAnalysisDeepenTimer();
@@ -1350,6 +1351,10 @@ function App() {
   // AI move effect
   useEffect(() => {
     if (!isReady) return;
+    if (!isPageVisible) {
+      applyBestMoveRef.current = false;
+      return undefined;
+    }
     if (gameResult || reviewControllerRef.current.active || reviewStatus === 'running') {
       applyBestMoveRef.current = false;
       return undefined;
@@ -1375,6 +1380,10 @@ function App() {
     const aiSearchDepth = Math.max(1, Math.min(safeSearchDepth, AI_DEPTH_LIMIT[aiStrength]));
 
     const timer = setTimeout(() => {
+      if (!isPageVisible) {
+        applyBestMoveRef.current = false;
+        return;
+      }
       // Check again in case pause was set during the delay
       if (pausedRef.current && !stepPendingRef.current) {
         return;
@@ -1389,7 +1398,7 @@ function App() {
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isReady, isSearching, paused, queueSearch, reviewStatus, safeSearchDepth]);
+  }, [aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearching, paused, queueSearch, reviewStatus, safeSearchDepth]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
