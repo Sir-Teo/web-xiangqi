@@ -114,6 +114,45 @@ async function assertDesktopBoardLayout(page, viewport) {
   rectWithinDesktopLayout(layout);
 }
 
+async function assertDesktopResizeFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const handle = page.locator(".panel.left .resize-handle-right");
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("Desktop resize handle is not visible.");
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  try {
+    const feedback = await page.evaluate(() => ({
+      bodyResizing: document.body.classList.contains("resizing"),
+      bodyCursor: getComputedStyle(document.body).cursor,
+      bodyUserSelect: getComputedStyle(document.body).userSelect,
+    }));
+
+    if (!feedback.bodyResizing) {
+      throw new Error("Body did not enter resizing state after dragging a panel handle.");
+    }
+    if (feedback.bodyCursor !== "col-resize") {
+      throw new Error(`Body resize cursor was not applied: ${feedback.bodyCursor}`);
+    }
+    if (feedback.bodyUserSelect !== "none") {
+      throw new Error(`Body text selection was not disabled during resize: ${feedback.bodyUserSelect}`);
+    }
+  } finally {
+    await page.mouse.up();
+  }
+
+  await page.waitForFunction(() => !document.body.classList.contains("resizing"), null, { timeout: 5000 });
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -296,6 +335,7 @@ async function main() {
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
+    await assertDesktopResizeFeedback(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -305,7 +345,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, save/library actions, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, resize feedback, save/library actions, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

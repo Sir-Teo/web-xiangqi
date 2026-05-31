@@ -27,6 +27,12 @@
   user-select: none;
 }
 
+body.resizing,
+body.resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
 /* ═══════════════════════════════════════════════════
    Panel system
    ═══════════════════════════════════════════════════ */
