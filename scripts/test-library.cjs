@@ -110,9 +110,70 @@ try {
   });
   assert(invalidTimestampSave === null, "Saved games with out-of-range timestamps should be rejected.");
 
+  const oversizedMoveSave = library.normalizeSavedGame({
+    id: "oversized-move-list",
+    savedAt: 1710000000006,
+    gameMode: "PvP",
+    moves: Array.from({ length: 1025 }, () => "b2e2"),
+  });
+  assert(oversizedMoveSave === null, "Saved games with oversized move lists should be rejected.");
+
+  const boundedTextSave = library.normalizeSavedGame({
+    id: "bounded-text",
+    savedAt: 1710000000007,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    label: ` ${"Label".repeat(40)} `,
+    opening: ` ${"Opening".repeat(40)} `,
+    review: {
+      summary: {
+        totalMoves: 999,
+        accuracy: 72,
+        lineSignature: "s".repeat(9000),
+        keyMoments: [{
+          nodeId: "node".repeat(60),
+          moveIndex: 0,
+          jumpTarget: 0,
+          ply: 1,
+          side: "red",
+          quality: "mistake",
+          swing: 220,
+          evalBefore: 0,
+          evalAfter: -220,
+          playedMove: "b2e2",
+          note: "note".repeat(200),
+        }],
+      },
+      annotations: [
+        { moveIndex: 0, reviewNote: "review".repeat(200) },
+        { moveIndex: 8, reviewNote: "off-line" },
+      ],
+    },
+  });
+  assert(boundedTextSave, "Shape-valid saved game text should normalize.");
+  assert(boundedTextSave.label.length === 120, "Saved labels should be trimmed and capped.");
+  assert(boundedTextSave.opening.length === 160, "Saved openings should be trimmed and capped.");
+  assert(boundedTextSave.review.summary.totalMoves === 1, "Review totalMoves should not exceed the saved line length.");
+  assert(boundedTextSave.review.summary.lineSignature.length === 8192, "Review line signatures should be capped.");
+  assert(boundedTextSave.review.summary.keyMoments[0].nodeId.length === 96, "Review node ids should be capped.");
+  assert(boundedTextSave.review.summary.keyMoments[0].note.length === 500, "Review key-moment notes should be capped.");
+  assert(boundedTextSave.review.annotations.length === 1, "Off-line review annotations should be dropped.");
+  assert(boundedTextSave.review.annotations[0].reviewNote.length === 500, "Review annotation notes should be capped.");
+
+  const manySavedGames = Array.from({ length: 505 }, (_, index) => ({
+    id: `saved-${index}`,
+    savedAt: 1710000010000 + index,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+  }));
+  const normalizedManySavedGames = library.normalizeSavedGames(manySavedGames);
+  assert(normalizedManySavedGames.length === 500, "Saved game lists should be capped for storage/rendering safety.");
+  assert(normalizedManySavedGames[0].id === "saved-5", "Saved game list capping should keep the newest entries.");
+  assert(normalizedManySavedGames.at(-1).id === "saved-504", "Saved game list capping should preserve newest saved entries.");
+
   const corruptReviewedSave = library.normalizeSavedGame({
     id: "corrupt-reviewed",
-    savedAt: 1710000000006,
+    savedAt: 1710000000008,
     gameMode: "PvP",
     moves: ["b2e2", "h9g7"],
     review: {
@@ -151,7 +212,7 @@ try {
   assert(corruptReviewedSave.review.summary.goodCount === 2, "Review counts should preserve valid integer portions.");
   assert(corruptReviewedSave.review.summary.inaccuracyCount === 0, "Negative review counts should normalize to zero.");
   assert(corruptReviewedSave.review.summary.mistakeCount === 1, "Review mistake counts should normalize.");
-  assert(corruptReviewedSave.review.summary.blunderCount === 3, "Review blunder counts should normalize.");
+  assert(corruptReviewedSave.review.summary.blunderCount === 2, "Review blunder counts should clamp to the saved line length.");
   assert(
     Number.isFinite(new Date(corruptReviewedSave.review.summary.reviewedAt).getTime()) &&
       corruptReviewedSave.review.summary.reviewedAt !== 1e100,
@@ -165,7 +226,7 @@ try {
 
   const savedStudyTree = library.normalizeSavedGame({
     id: "saved-study-tree",
-    savedAt: 1710000000006,
+    savedAt: 1710000000009,
     gameMode: "PvP",
     moves: ["B0C2"],
     moveTree: [
@@ -268,6 +329,10 @@ try {
     );
     const storedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
     assert(storedGames[0]?.id === fallbackIdSave.id, "Fallback id save should be persisted.");
+    assert(library.renameGame(fallbackIdSave.id, ` ${"Renamed".repeat(30)} `), "Renaming should work with long labels.");
+    const renamedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    assert(renamedGames[0]?.label.length === 120, "Saved game rename labels should be capped before persistence.");
+    assert(!renamedGames[0]?.label.startsWith(" "), "Saved game rename labels should be trimmed before persistence.");
   } finally {
     if (originalLocalStorageDescriptor) {
       Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);

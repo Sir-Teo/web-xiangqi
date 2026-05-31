@@ -15,7 +15,16 @@ const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
+const MAX_SAVED_GAMES = 500;
+const MAX_SAVED_MOVES = 1024;
 const MAX_SAVED_TREE_NODES = 512;
+const MAX_SAVED_LABEL_LENGTH = 120;
+const MAX_SAVED_OPENING_LENGTH = 160;
+const MAX_REVIEW_TEXT_LENGTH = 500;
+const MAX_REVIEW_LINE_SIGNATURE_LENGTH = 8192;
+const MAX_REVIEW_NODE_ID_LENGTH = 96;
+const MAX_REVIEW_KEY_MOMENTS = 128;
+const MAX_REVIEW_ANNOTATIONS = 1024;
 type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode {
@@ -66,6 +75,12 @@ function asString(value: unknown) {
     return typeof value === 'string' ? value : undefined;
 }
 
+function asBoundedString(value: unknown, maxLength: number) {
+    const text = asString(value);
+    if (typeof text !== 'string') return undefined;
+    return text.trim().slice(0, maxLength);
+}
+
 function normalizeSavedMove(value: unknown): string | null {
     const move = asString(value)?.trim().toLowerCase();
     return move && /^[a-i][0-9][a-i][0-9]$/.test(move) ? move : null;
@@ -74,6 +89,7 @@ function normalizeSavedMove(value: unknown): string | null {
 function normalizeSavedMoves(value: unknown): string[] | null {
     if (value === undefined) return [];
     if (!Array.isArray(value)) return null;
+    if (value.length > MAX_SAVED_MOVES) return null;
     const moves: string[] = [];
     for (const rawMove of value) {
         const move = normalizeSavedMove(rawMove);
@@ -138,10 +154,10 @@ function asCriticalQuality(value: unknown): ReviewCriticalQuality | undefined {
         : undefined;
 }
 
-function normalizeSavedReviewAnnotation(raw: unknown): SavedReviewAnnotation | null {
+function normalizeSavedReviewAnnotation(raw: unknown, moveCount: number): SavedReviewAnnotation | null {
     if (!isRecord(raw)) return null;
     const moveIndex = asNonNegativeInteger(raw.moveIndex);
-    if (typeof moveIndex !== 'number' || moveIndex < 0) return null;
+    if (typeof moveIndex !== 'number' || moveIndex < 0 || moveIndex >= moveCount) return null;
 
     return {
         moveIndex,
@@ -149,11 +165,11 @@ function normalizeSavedReviewAnnotation(raw: unknown): SavedReviewAnnotation | n
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         quality: asMoveQuality(raw.quality),
         swing: asFiniteNumber(raw.swing),
-        reviewNote: asString(raw.reviewNote),
+        reviewNote: asBoundedString(raw.reviewNote, MAX_REVIEW_TEXT_LENGTH) || undefined,
     };
 }
 
-function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string): ReviewKeyMoment | null {
+function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string, moveCount: number): ReviewKeyMoment | null {
     if (!isRecord(raw)) return null;
     const moveIndex = asNonNegativeInteger(raw.moveIndex);
     const jumpTarget = asNonNegativeInteger(raw.jumpTarget);
@@ -164,12 +180,14 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string): ReviewK
     const quality = asCriticalQuality(raw.quality);
     const side = raw.side === 'black' ? 'black' : raw.side === 'red' ? 'red' : undefined;
     const playedMove = normalizeSavedMove(raw.playedMove);
-    const note = asString(raw.note);
+    const note = asBoundedString(raw.note, MAX_REVIEW_TEXT_LENGTH);
 
     if (
         typeof moveIndex !== 'number' ||
         typeof jumpTarget !== 'number' ||
         typeof ply !== 'number' ||
+        moveIndex >= moveCount ||
+        jumpTarget >= moveCount ||
         typeof swing !== 'number' ||
         typeof evalBefore !== 'number' ||
         typeof evalAfter !== 'number' ||
@@ -182,7 +200,7 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string): ReviewK
     }
 
     return {
-        nodeId: asString(raw.nodeId) ?? fallbackNodeId,
+        nodeId: asBoundedString(raw.nodeId, MAX_REVIEW_NODE_ID_LENGTH) || fallbackNodeId,
         moveIndex,
         jumpTarget,
         ply,
@@ -202,20 +220,22 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
 
     const keyMoments = Array.isArray(raw.keyMoments)
         ? raw.keyMoments
-            .map((moment, index) => normalizeReviewKeyMoment(moment, `saved-${index}`))
+            .slice(0, MAX_REVIEW_KEY_MOMENTS)
+            .map((moment, index) => normalizeReviewKeyMoment(moment, `saved-${index}`, moves.length))
             .filter((moment): moment is ReviewKeyMoment => Boolean(moment))
         : [];
+    const totalMoves = asNonNegativeInteger(raw.totalMoves);
 
     return {
-        totalMoves: asNonNegativeInteger(raw.totalMoves) ?? moves.length,
+        totalMoves: typeof totalMoves === 'number' && totalMoves <= moves.length ? totalMoves : moves.length,
         accuracy: asClampedInteger(raw.accuracy, 0, 100) ?? 0,
-        bestCount: asNonNegativeInteger(raw.bestCount) ?? 0,
-        goodCount: asNonNegativeInteger(raw.goodCount) ?? 0,
-        inaccuracyCount: asNonNegativeInteger(raw.inaccuracyCount) ?? 0,
-        mistakeCount: asNonNegativeInteger(raw.mistakeCount) ?? 0,
-        blunderCount: asNonNegativeInteger(raw.blunderCount) ?? 0,
+        bestCount: asClampedInteger(raw.bestCount, 0, moves.length) ?? 0,
+        goodCount: asClampedInteger(raw.goodCount, 0, moves.length) ?? 0,
+        inaccuracyCount: asClampedInteger(raw.inaccuracyCount, 0, moves.length) ?? 0,
+        mistakeCount: asClampedInteger(raw.mistakeCount, 0, moves.length) ?? 0,
+        blunderCount: asClampedInteger(raw.blunderCount, 0, moves.length) ?? 0,
         reviewedAt: asValidTimestamp(raw.reviewedAt) ?? Date.now(),
-        lineSignature: asString(raw.lineSignature) ?? makeReviewLineSignatureFromMoves(moves),
+        lineSignature: asBoundedString(raw.lineSignature, MAX_REVIEW_LINE_SIGNATURE_LENGTH) || makeReviewLineSignatureFromMoves(moves),
         keyMoments,
     };
 }
@@ -228,7 +248,8 @@ function normalizeSavedReview(raw: unknown, moves: string[]): SavedReviewSnapsho
 
     const annotations = Array.isArray(raw.annotations)
         ? raw.annotations
-            .map((annotation) => normalizeSavedReviewAnnotation(annotation))
+            .slice(0, MAX_REVIEW_ANNOTATIONS)
+            .map((annotation) => normalizeSavedReviewAnnotation(annotation, moves.length))
             .filter((annotation): annotation is SavedReviewAnnotation => Boolean(annotation))
         : [];
 
@@ -265,8 +286,8 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         moves,
         startFen,
         result,
-        label: asString(raw.label),
-        opening: asString(raw.opening),
+        label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),
+        opening: asBoundedString(raw.opening, MAX_SAVED_OPENING_LENGTH),
         finalEval: asFiniteNumber(raw.finalEval),
         moveTree,
         review: normalizeSavedReview(raw.review, moves),
@@ -275,9 +296,12 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
 
 export function normalizeSavedGames(raw: unknown): SavedGame[] {
     if (!Array.isArray(raw)) return [];
-    return raw
-        .map((game) => normalizeSavedGame(game))
-        .filter((game): game is SavedGame => Boolean(game));
+    const games: SavedGame[] = [];
+    for (let index = raw.length - 1; index >= 0 && games.length < MAX_SAVED_GAMES; index -= 1) {
+        const game = normalizeSavedGame(raw[index]);
+        if (game) games.push(game);
+    }
+    return games.reverse();
 }
 
 function readAll(): SavedGame[] {
@@ -312,11 +336,12 @@ export function loadAllGames(): SavedGame[] {
 }
 
 export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null {
-    const saved: SavedGame = {
+    const saved = normalizeSavedGame({
         ...game,
         id: createSavedGameId(),
         savedAt: Date.now(),
-    };
+    });
+    if (!saved) return null;
     const games = readAll();
     games.push(saved);
     return writeAll(games) ? saved : null;
@@ -327,6 +352,7 @@ export function deleteGame(id: string): boolean {
 }
 
 export function renameGame(id: string, label: string): boolean {
-    const games = readAll().map((g) => g.id === id ? { ...g, label } : g);
+    const normalizedLabel = asBoundedString(label, MAX_SAVED_LABEL_LENGTH) ?? '';
+    const games = readAll().map((g) => g.id === id ? { ...g, label: normalizedLabel } : g);
     return writeAll(games);
 }
