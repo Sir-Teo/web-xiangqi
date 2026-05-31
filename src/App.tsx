@@ -2502,7 +2502,7 @@ function App() {
           {engineEnabled ? <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
             <div className="game-controls">
-              <button className="gc-btn" onClick={() => setShowNewGameMenu(m => !m)}>
+              <button className="gc-btn" onClick={toggleNewGameMenu}>
                 <IconRefresh /> New Game
               </button>
               <button

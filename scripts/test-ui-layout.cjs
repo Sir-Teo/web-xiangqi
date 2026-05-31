@@ -182,6 +182,34 @@ async function assertPausedAiTurnBlocksManualMove(page) {
   }
 }
 
+async function assertBottomNewGameMenuResetsDraft(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /You play Black/i }).click();
+  await page.getByLabel("FEN string").fill("stale draft fen");
+  await page.locator(".new-game-menu").getByRole("button", { name: "Close" }).click();
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+
+  await page.locator(".game-controls").getByRole("button", { name: "New Game" }).click();
+  await page.locator(".new-game-menu").waitFor({ timeout: 5000 });
+
+  const selectedMode = await page.locator(".new-game-selection strong").textContent();
+  if (String(selectedMode || "").trim() !== "Local board") {
+    throw new Error(`Bottom New Game reopened with stale selected mode: ${String(selectedMode || "").trim()}`);
+  }
+
+  const fenDraft = await page.getByLabel("FEN string").inputValue();
+  if (fenDraft !== "") {
+    throw new Error(`Bottom New Game reopened with stale FEN draft: ${fenDraft}`);
+  }
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -448,6 +476,7 @@ async function main() {
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
+    await assertBottomNewGameMenuResetsDraft(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -459,7 +488,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
