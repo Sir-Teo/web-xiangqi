@@ -2375,7 +2375,7 @@ body.resizing * {
   }
 
   /* Hide the panel that isn't active in analysis view */
-  [data-mobile-view="analysis"] .main-container[data-mobile-tab="moves"] .panel.left { display: none; }
+  [data-mobile-view="analysis"] .main-container:is([data-mobile-tab="moves"], [data-mobile-tab="review"], [data-mobile-tab="engine"]) .panel.left { display: none; }
   [data-mobile-view="analysis"] .main-container:is([data-mobile-tab="graph"], [data-mobile-tab="library"]) .panel.right { display: none; }
 
   /* No width transition on mobile — panels are shown/hidden by display */
@@ -4584,6 +4584,10 @@ summary:active {
     width: 100%;
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border-subtle);
+  }
+
+  [data-mobile-view="analysis"] .panel-header-tabs {
+    display: none;
   }
 
   .mobile-tab-btn {

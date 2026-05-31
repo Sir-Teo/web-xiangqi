@@ -518,7 +518,7 @@ function App() {
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
-  const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph' | 'library'>('moves');
+  const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'review' | 'engine' | 'graph' | 'library'>('moves');
   const [showArrows, setShowArrows] = useState(storedPreferences.showArrows ?? true);
   const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
@@ -1113,6 +1113,12 @@ function App() {
       setAnalysisTab('tree');
     }
   }, [engineEnabled, analysisTab]);
+
+  useEffect(() => {
+    if (!engineEnabled && mobileAnalysisTab === 'engine') {
+      setMobileAnalysisTab('moves');
+    }
+  }, [engineEnabled, mobileAnalysisTab]);
 
   useEffect(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return;
@@ -3408,13 +3414,48 @@ function App() {
               role="tab"
               id="mobile-analysis-tab-moves"
               className={`mobile-tab-btn ${mobileAnalysisTab === 'moves' ? 'active' : ''}`}
-              onClick={() => setMobileAnalysisTab('moves')}
+              onClick={() => {
+                setAnalysisTab('tree');
+                setMobileAnalysisTab('moves');
+              }}
               aria-selected={mobileAnalysisTab === 'moves'}
               aria-controls="right-analysis-content"
               data-testid="mobile-analysis-tab-moves"
             >
               <IconTree /> Moves
             </button>
+            <button
+              type="button"
+              role="tab"
+              id="mobile-analysis-tab-review"
+              className={`mobile-tab-btn ${mobileAnalysisTab === 'review' ? 'active' : ''}`}
+              onClick={() => {
+                setAnalysisTab('review');
+                setMobileAnalysisTab('review');
+              }}
+              aria-selected={mobileAnalysisTab === 'review'}
+              aria-controls="right-analysis-content"
+              data-testid="mobile-analysis-tab-review"
+            >
+              <IconBarChart /> Review
+            </button>
+            {engineEnabled ? (
+              <button
+                type="button"
+                role="tab"
+                id="mobile-analysis-tab-engine"
+                className={`mobile-tab-btn ${mobileAnalysisTab === 'engine' ? 'active' : ''}`}
+                onClick={() => {
+                  setAnalysisTab('engine');
+                  setMobileAnalysisTab('engine');
+                }}
+                aria-selected={mobileAnalysisTab === 'engine'}
+                aria-controls="right-analysis-content"
+                data-testid="mobile-analysis-tab-engine"
+              >
+                <IconBot /> Engine
+              </button>
+            ) : null}
             <button
               type="button"
               role="tab"
@@ -3467,7 +3508,10 @@ function App() {
                   role="tab"
                   id="analysis-tab-tree-tab"
                   className={`analysis-tab-btn ${analysisTab === 'tree' ? 'active' : ''}`}
-                  onClick={() => setAnalysisTab('tree')}
+                  onClick={() => {
+                    setAnalysisTab('tree');
+                    setMobileAnalysisTab('moves');
+                  }}
                   title="Game tree"
                   aria-label="Open game tree"
                   aria-selected={analysisTab === 'tree'}
@@ -3481,7 +3525,10 @@ function App() {
                   role="tab"
                   id="analysis-tab-review-tab"
                   className={`analysis-tab-btn ${analysisTab === 'review' ? 'active' : ''}`}
-                  onClick={() => setAnalysisTab('review')}
+                  onClick={() => {
+                    setAnalysisTab('review');
+                    setMobileAnalysisTab('review');
+                  }}
                   aria-selected={analysisTab === 'review'}
                   aria-controls="right-analysis-content"
                   data-testid="analysis-tab-review"
@@ -3494,7 +3541,10 @@ function App() {
                     role="tab"
                     id="analysis-tab-engine-tab"
                     className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
-                    onClick={() => setAnalysisTab('engine')}
+                    onClick={() => {
+                      setAnalysisTab('engine');
+                      setMobileAnalysisTab('engine');
+                    }}
                     aria-selected={analysisTab === 'engine'}
                     aria-controls="right-analysis-content"
                     data-testid="analysis-tab-engine"

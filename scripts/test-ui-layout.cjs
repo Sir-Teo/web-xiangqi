@@ -998,6 +998,17 @@ async function assertPanelTabAccessibility(page) {
 
   await page.getByTestId("mobile-view-analysis").click();
   await page.getByTestId("mobile-analysis-tab-moves").waitFor({ timeout: 5000 });
+  await page.getByTestId("mobile-analysis-tab-review").click();
+  await page.waitForFunction(() => {
+    return document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-selected") === "true" &&
+      document.querySelector('[data-testid="analysis-tab-review"]')?.getAttribute("aria-selected") === "true";
+  }, null, { timeout: 5000 });
+  await page.getByTestId("mobile-analysis-tab-engine").click();
+  await page.waitForFunction(() => {
+    return document.querySelector('[data-testid="mobile-analysis-tab-engine"]')?.getAttribute("aria-selected") === "true" &&
+      document.querySelector('[data-testid="analysis-tab-engine"]')?.getAttribute("aria-selected") === "true" &&
+      Boolean(document.querySelector(".engine-dashboard"));
+  }, null, { timeout: 5000 });
   await page.getByTestId("mobile-analysis-tab-library").click();
   await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
 
@@ -1005,18 +1016,26 @@ async function assertPanelTabAccessibility(page) {
     boardCurrent: document.querySelector('[data-testid="mobile-view-board"]')?.getAttribute("aria-current") || "",
     analysisCurrent: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current") || "",
     tablist: document.querySelector(".mobile-analysis-tabs")?.getAttribute("role") || "",
+    tabCount: document.querySelectorAll(".mobile-analysis-tabs [role='tab']").length,
     movesSelected: document.querySelector('[data-testid="mobile-analysis-tab-moves"]')?.getAttribute("aria-selected") || "",
+    reviewControls: document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-controls") || "",
+    engineControls: document.querySelector('[data-testid="mobile-analysis-tab-engine"]')?.getAttribute("aria-controls") || "",
     librarySelected: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-selected") || "",
     libraryControls: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-controls") || "",
+    hiddenPanelTabStrips: [...document.querySelectorAll(".panel-header-tabs")].every((el) => getComputedStyle(el).display === "none"),
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
     mobileUpdated.boardCurrent !== "" ||
     mobileUpdated.analysisCurrent !== "page" ||
     mobileUpdated.tablist !== "tablist" ||
+    mobileUpdated.tabCount !== 5 ||
     mobileUpdated.movesSelected !== "false" ||
+    mobileUpdated.reviewControls !== "right-analysis-content" ||
+    mobileUpdated.engineControls !== "right-analysis-content" ||
     mobileUpdated.librarySelected !== "true" ||
     mobileUpdated.libraryControls !== "left-panel-content" ||
+    !mobileUpdated.hiddenPanelTabStrips ||
     mobileUpdated.overflowX > 2
   ) {
     throw new Error(`Mobile panel tabs are not exposed accessibly: ${JSON.stringify(mobileUpdated)}`);
