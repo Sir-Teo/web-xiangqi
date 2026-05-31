@@ -565,7 +565,7 @@ async function assertMoveLineImport(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
   await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2');
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. B2-E2 h9→g7 2. b0->c2');
   await page.getByTestId("import-uci-line-btn").click();
   await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
 

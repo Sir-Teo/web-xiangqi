@@ -90,6 +90,24 @@ try {
     `UCI move import should extract and normalize moves, got: ${importedLine.join(" ")}`
   );
 
+  const importedSeparatedLine = moveImport.extractUciMoveLine(`
+    [Variant "Chinese Chess"]
+    1. B2-E2 h9→g7 2. b0->c2
+  `);
+  assert(
+    importedSeparatedLine.join(" ") === "b2e2 h9g7 b0c2",
+    `Coordinate-separated move import should normalize moves, got: ${importedSeparatedLine.join(" ")}`
+  );
+
+  const importedVariationMainline = moveImport.extractUciMoveLine(`
+    [Variant "Xiangqi"]
+    1. b2e2 (1. b0c2 {side line}) h9g7
+  `);
+  assert(
+    importedVariationMainline.join(" ") === "b2e2 h9g7",
+    `PGN variation import should keep the mainline only, got: ${importedVariationMainline.join(" ")}`
+  );
+
   const importedFen = moveImport.extractFenTag(`
     [Variant "Xiangqi"]
     [FEN "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17"]
