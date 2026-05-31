@@ -63,15 +63,10 @@ try {
   const openings = require(path.join(tempDir, "openings.js"));
 
   const illegalEntries = openings.OPENINGS.filter((entry) => !isPlayableOpening(entry, xiangqi));
-  assert(illegalEntries.length > 0, "Expected the raw book to contain invalid legacy entries for filter coverage.");
-
-  for (const entry of illegalEntries) {
-    const matched = openings.matchOpening(entry.moves);
-    assert(
-      !matched || matched.moves.join(" ") !== entry.moves.join(" "),
-      `Illegal opening matched directly: ${entry.name} (${entry.moves.join(" ")})`
-    );
-  }
+  assert(
+    illegalEntries.length === 0,
+    `Opening book contains unplayable entries: ${illegalEntries.map((entry) => entry.name).join(", ")}`
+  );
 
   const pawnOpening = openings.matchOpening(["c3c4"]);
   assert(pawnOpening?.name === "Pawn Opening", "c3c4 should identify the pawn opening.");
@@ -108,7 +103,7 @@ try {
   const chariotMove = openings.matchOpening(["a0a1"]);
   assert(chariotMove === null, "a0a1 is a chariot move and must not be labeled as a pawn opening.");
 
-  console.log(`Opening regression checks passed (${openings.OPENINGS.length} entries, ${illegalEntries.length} filtered).`);
+  console.log(`Opening regression checks passed (${openings.OPENINGS.length} playable entries, 0 filtered).`);
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
