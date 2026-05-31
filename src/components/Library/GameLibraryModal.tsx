@@ -43,6 +43,7 @@ export function GameLibraryModal({
             gameMode: game.gameMode,
             opening: game.opening,
             label: game.label,
+            startFen: game.startFen,
         });
         const ok = await copyToClipboard(pgn);
         if (ok) {

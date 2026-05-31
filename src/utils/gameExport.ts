@@ -1,12 +1,81 @@
 import type { MoveRecord } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
+import { START_FEN } from './xiangqi';
 
 const RESULT_TAG: Record<NonNullable<GameResult>, string> = {
     'red-wins':   '1-0',
     'black-wins': '0-1',
     'draw':       '1/2-1/2',
 };
+
+const DEFAULT_START_POSITION_FEN = `${START_FEN} w - - 0 1`;
+
+type PgnSide = 'w' | 'b';
+
+interface PgnStartPosition {
+    fen: string;
+    sideToMove: PgnSide;
+    fullmove: number;
+    isCustom: boolean;
+}
+
+function normalizeFen(fen?: string): string {
+    return String(fen || '').trim().replace(/\s+/g, ' ');
+}
+
+function parsePgnStartPosition(startFen?: string): PgnStartPosition {
+    const fen = normalizeFen(startFen) || DEFAULT_START_POSITION_FEN;
+    const parts = fen.split(/\s+/);
+    const sideToMove: PgnSide = parts[1] === 'b' ? 'b' : 'w';
+    const parsedFullmove = Number(parts[5]);
+    const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
+        ? Math.trunc(parsedFullmove)
+        : 1;
+
+    return {
+        fen,
+        sideToMove,
+        fullmove,
+        isCustom: fen !== DEFAULT_START_POSITION_FEN,
+    };
+}
+
+function escapeTagValue(value: string): string {
+    return String(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\r?\n/g, ' ');
+}
+
+function tagLine(name: string, value: string): string {
+    return `[${name} "${escapeTagValue(value)}"]`;
+}
+
+function buildMoveText(uciMoves: string[], startPosition: PgnStartPosition, result: string): string {
+    const movePairs: string[] = [];
+    let sideToMove = startPosition.sideToMove;
+    let moveNumber = startPosition.fullmove;
+
+    for (const uci of uciMoves) {
+        if (sideToMove === 'w') {
+            movePairs.push(`${moveNumber}. ${uci}`);
+        } else {
+            const whiteHalfMovePrefix = `${moveNumber}. `;
+            if (movePairs.length > 0 && movePairs[movePairs.length - 1].startsWith(whiteHalfMovePrefix)) {
+                movePairs[movePairs.length - 1] += ` ${uci}`;
+            } else {
+                movePairs.push(`${moveNumber}... ${uci}`);
+            }
+            moveNumber += 1;
+        }
+
+        sideToMove = sideToMove === 'w' ? 'b' : 'w';
+    }
+
+    const moveText = movePairs.join(' ');
+    return `${moveText}${moveText ? ' ' : ''}${result}`;
+}
 
 /**
  * Exports a game as a minimal PGN string using UCI (ICCS-compatible) move notation.
@@ -19,33 +88,24 @@ export function exportPgn(
         opening?: string;
         result?: GameResult;
         date?: string;
+        startFen?: string;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
     const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
-        `[Variant "Xiangqi"]`,
-        `[Date "${date}"]`,
-        options.gameMode ? `[Event "${options.gameMode}"]` : null,
-        options.opening ? `[Opening "${options.opening}"]` : null,
-        `[Result "${result}"]`,
+        tagLine('Variant', 'Xiangqi'),
+        tagLine('Date', date),
+        options.gameMode ? tagLine('Event', options.gameMode) : null,
+        options.opening ? tagLine('Opening', options.opening) : null,
+        startPosition.isCustom ? tagLine('SetUp', '1') : null,
+        startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    // Build move text: "1. e2e4 e9e8 2. ..."
-    const movePairs: string[] = [];
-    for (let i = 0; i < moves.length; i++) {
-        const record = moves[i];
-        const moveNum = Math.floor(i / 2) + 1;
-        if (i % 2 === 0) {
-            movePairs.push(`${moveNum}. ${record.uci}`);
-        } else {
-            movePairs[movePairs.length - 1] += ` ${record.uci}`;
-        }
-    }
-
-    const moveText = movePairs.join(' ');
-    return `${tags}\n\n${moveText}${moveText ? ' ' : ''}${result}\n`;
+    return `${tags}\n\n${buildMoveText(moves.map((move) => move.uci), startPosition, result)}\n`;
 }
 
 /**
@@ -59,32 +119,25 @@ export function exportPgnFromUci(
         result?: GameResult;
         label?: string;
         date?: string;
+        startFen?: string;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
     const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
-        `[Variant "Xiangqi"]`,
-        `[Date "${date}"]`,
-        options.gameMode ? `[Event "${options.gameMode}"]` : null,
-        options.label ? `[White "${options.label}"]` : null,
-        options.opening ? `[Opening "${options.opening}"]` : null,
-        `[Result "${result}"]`,
+        tagLine('Variant', 'Xiangqi'),
+        tagLine('Date', date),
+        options.gameMode ? tagLine('Event', options.gameMode) : null,
+        options.label ? tagLine('White', options.label) : null,
+        options.opening ? tagLine('Opening', options.opening) : null,
+        startPosition.isCustom ? tagLine('SetUp', '1') : null,
+        startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    const movePairs: string[] = [];
-    for (let i = 0; i < uciMoves.length; i++) {
-        const moveNum = Math.floor(i / 2) + 1;
-        if (i % 2 === 0) {
-            movePairs.push(`${moveNum}. ${uciMoves[i]}`);
-        } else {
-            movePairs[movePairs.length - 1] += ` ${uciMoves[i]}`;
-        }
-    }
-
-    const moveText = movePairs.join(' ');
-    return `${tags}\n\n${moveText}${moveText ? ' ' : ''}${result}\n`;
+    return `${tags}\n\n${buildMoveText(uciMoves, startPosition, result)}\n`;
 }
 
 /**

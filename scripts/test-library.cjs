@@ -29,10 +29,13 @@ function assert(condition, message) {
 
 try {
   compileTsModule("src/utils/moveNotation.ts");
+  compileTsModule("src/utils/xiangqi.ts");
   compileTsModule("src/utils/review.ts");
   compileTsModule("src/utils/gameLibrary.ts");
+  compileTsModule("src/utils/gameExport.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
+  const gameExport = require(path.join(tempDir, "gameExport.js"));
   const customFen = "9/9/9/9/9/9/9/9/4K4/4k4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -55,7 +58,27 @@ try {
   });
   assert(emptyLegacySave === null, "Empty saves without a startFen should still be rejected.");
 
-  console.log("Library normalization checks passed.");
+  const defaultPgn = gameExport.exportPgnFromUci(["b2e2", "h9g7"], {
+    gameMode: "PvP",
+    date: "2026.05.31",
+  });
+  assert(!defaultPgn.includes('[SetUp "1"]'), "Default-start PGN should not include SetUp.");
+  assert(!defaultPgn.includes("[FEN "), "Default-start PGN should not include a FEN tag.");
+  assert(defaultPgn.includes("1. b2e2 h9g7 *"), "Default-start PGN should keep ordinary move numbering.");
+
+  const blackToMoveFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17";
+  const customPgn = gameExport.exportPgnFromUci(["a6a5", "a3a4"], {
+    gameMode: "PvAI-Black",
+    date: "2026.05.31",
+    startFen: blackToMoveFen,
+    label: 'Custom "study"',
+  });
+  assert(customPgn.includes('[SetUp "1"]'), "Custom-FEN PGN should include SetUp.");
+  assert(customPgn.includes(`[FEN "${blackToMoveFen}"]`), "Custom-FEN PGN should include the exact root FEN.");
+  assert(customPgn.includes('[White "Custom \\"study\\""]'), "PGN tag values should escape quotes.");
+  assert(customPgn.includes("17... a6a5 18. a3a4 *"), "Black-to-move PGN should start with black move numbering.");
+
+  console.log("Library normalization and PGN export checks passed.");
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
 }

@@ -1384,13 +1384,14 @@ function App() {
       gameMode,
       opening: detectedOpening?.name,
       result: gameResult,
+      startFen: rootFen,
     });
     const ok = await copyToClipboard(pgn);
     if (ok) {
       setCopiedToast(true);
       setTimeout(() => setCopiedToast(false), 2000);
     }
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult, rootFen]);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
