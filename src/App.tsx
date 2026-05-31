@@ -1923,7 +1923,7 @@ function App() {
     }
 
     clearExportFailure();
-    setShareLinkNotice(share.treeOmitted ? { tone: 'warning', text: 'Shared without variations' } : null);
+    setShareLinkNotice(share.treeOmitted ? { tone: 'warning', text: 'Variations omitted' } : null);
     if (copiedShareToastTimerRef.current !== null) {
       window.clearTimeout(copiedShareToastTimerRef.current);
     }

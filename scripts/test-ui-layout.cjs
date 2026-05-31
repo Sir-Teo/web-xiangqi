@@ -1256,7 +1256,7 @@ async function assertOversizedShareTreeWarning(page) {
 
   await page.getByTestId("copy-share-link-btn").click();
   await page.getByTestId("copy-share-link-btn").getByText("Copied").waitFor({ timeout: 5000 });
-  await page.getByTestId("share-link-warning").getByText("Shared without variations").waitFor({ timeout: 5000 });
+  await page.getByTestId("share-link-warning").getByText("Variations omitted").waitFor({ timeout: 5000 });
 
   const state = await page.evaluate(() => {
     const copiedUrl = window.__oversizedShareWrites?.[0] ?? "";
@@ -1276,7 +1276,7 @@ async function assertOversizedShareTreeWarning(page) {
   if (
     state.moves !== "b2e2 h9g7 b0c2 b9c7" ||
     state.hasTree ||
-    !state.warning.includes("Shared without variations") ||
+    !state.warning.includes("Variations omitted") ||
     state.brandTextHeight > 22 ||
     state.brandWhiteSpace !== "nowrap" ||
     state.overflowX > 2
