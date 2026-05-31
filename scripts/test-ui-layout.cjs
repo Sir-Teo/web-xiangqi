@@ -982,6 +982,28 @@ async function assertLibraryPgnCopy(page) {
   if (!copiedPgn.includes("17... a6a5 18. a3a4 *")) {
     throw new Error(`Copied saved-game PGN used the wrong move numbering:\n${copiedPgn}`);
   }
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("download-pgn-saved-qa-copy-pgn-game").click();
+  const download = await downloadPromise;
+  const suggestedFilename = download.suggestedFilename();
+  if (!/^web-xiangqi-2024-03-09-pgn-copy-qa\.pgn$/.test(suggestedFilename)) {
+    throw new Error(`Unexpected saved-game PGN filename: ${suggestedFilename}`);
+  }
+
+  const savePath = path.resolve(__dirname, "..", ".saved-game-export-test.pgn");
+  try {
+    await download.saveAs(savePath);
+    const exportedPgn = fs.readFileSync(savePath, "utf8");
+    if (!exportedPgn.includes(`[FEN "${blackToMoveFen}"]`)) {
+      throw new Error(`Downloaded saved-game PGN omitted the root FEN:\n${exportedPgn}`);
+    }
+    if (!exportedPgn.includes("17... a6a5 18. a3a4 *")) {
+      throw new Error(`Downloaded saved-game PGN used the wrong move numbering:\n${exportedPgn}`);
+    }
+  } finally {
+    fs.rmSync(savePath, { force: true });
+  }
 }
 
 async function assertMobileSaveLibraryActions(page) {

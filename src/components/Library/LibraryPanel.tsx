@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
-import { exportPgnFromUci, copyToClipboard } from '../../utils/gameExport';
-import { IconCheck, IconCopy, IconRefresh, IconX } from '../icons';
+import { exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 
 interface LibraryPanelProps {
@@ -34,6 +34,26 @@ function savedResultToGameResult(result: SavedGame['result']) {
   return null;
 }
 
+function makeSavedGamePgnFilename(game: SavedGame) {
+  const date = new Date(game.savedAt).toISOString().slice(0, 10);
+  const slug = String(game.label || game.opening || 'saved-game')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'saved-game';
+  return `web-xiangqi-${date}-${slug}.pgn`;
+}
+
+function buildSavedGamePgn(game: SavedGame) {
+  return exportPgnFromUci(game.moves, {
+    gameMode: game.gameMode,
+    opening: game.opening,
+    result: savedResultToGameResult(game.result),
+    label: game.label,
+    startFen: game.startFen,
+  });
+}
+
 export function LibraryPanel({
   savedGames,
   onLoadSavedGame,
@@ -46,7 +66,9 @@ export function LibraryPanel({
   const [editLabel, setEditLabel] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
+  const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
   const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
 
@@ -54,6 +76,9 @@ export function LibraryPanel({
     return () => {
       if (copiedToastTimerRef.current !== null) {
         window.clearTimeout(copiedToastTimerRef.current);
+      }
+      if (downloadedToastTimerRef.current !== null) {
+        window.clearTimeout(downloadedToastTimerRef.current);
       }
     };
   }, []);
@@ -103,13 +128,7 @@ export function LibraryPanel({
   };
 
   const copySavedGamePgn = async (game: SavedGame) => {
-    const pgn = exportPgnFromUci(game.moves, {
-      gameMode: game.gameMode,
-      opening: game.opening,
-      result: savedResultToGameResult(game.result),
-      label: game.label,
-      startFen: game.startFen,
-    });
+    const pgn = buildSavedGamePgn(game);
     const ok = await copyToClipboard(pgn);
     if (!ok) return;
 
@@ -120,6 +139,24 @@ export function LibraryPanel({
     copiedToastTimerRef.current = window.setTimeout(() => {
       copiedToastTimerRef.current = null;
       setCopiedId(null);
+    }, 1800);
+  };
+
+  const downloadSavedGamePgn = (game: SavedGame) => {
+    const ok = downloadTextFile(
+      makeSavedGamePgnFilename(game),
+      buildSavedGamePgn(game),
+      'application/x-chess-pgn;charset=utf-8'
+    );
+    if (!ok) return;
+
+    if (downloadedToastTimerRef.current !== null) {
+      window.clearTimeout(downloadedToastTimerRef.current);
+    }
+    setDownloadedId(game.id);
+    downloadedToastTimerRef.current = window.setTimeout(() => {
+      downloadedToastTimerRef.current = null;
+      setDownloadedId(null);
     }, 1800);
   };
 
@@ -229,6 +266,16 @@ export function LibraryPanel({
                     data-testid={`copy-pgn-saved-${game.id}`}
                   >
                     {copiedId === game.id ? <><IconCheck /> Copied</> : <><IconCopy /> PGN</>}
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''}`}
+                    onClick={() => downloadSavedGamePgn(game)}
+                    title="Download PGN file"
+                    aria-label={downloadedId === game.id ? 'Saved game PGN downloaded' : 'Download saved game PGN'}
+                    data-testid={`download-pgn-saved-${game.id}`}
+                  >
+                    {downloadedId === game.id ? <><IconCheck /> Saved</> : <><IconDownload /> File</>}
                   </button>
                   <button
                     type="button"
