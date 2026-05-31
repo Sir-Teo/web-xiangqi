@@ -251,6 +251,36 @@ async function assertBlackToMoveTreeNumbering(page) {
   }
 }
 
+async function assertMoveLineImport(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+
+  const activePoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(activePoint || "").includes("Red B0") || !String(activePoint || "").includes("C2")) {
+    throw new Error(`Imported line did not land on the final move: ${String(activePoint || "").trim()}`);
+  }
+
+  const labels = await page.locator(".mtree-num").allTextContents();
+  const normalizedLabels = labels.map((label) => String(label || "").trim()).slice(0, 2);
+  if (normalizedLabels[0] !== "1." || normalizedLabels[1] !== "2.") {
+    throw new Error(`Imported line tree labels were wrong: ${normalizedLabels.join(" | ")}`);
+  }
+
+  const fen = await page.locator(".bottombar-fen").getAttribute("title");
+  if (!fen || !fen.includes(" b ")) {
+    throw new Error(`Imported line did not preserve side-to-move after three plies: ${fen}`);
+  }
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -519,6 +549,7 @@ async function main() {
     await assertPausedAiTurnBlocksManualMove(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertBlackToMoveTreeNumbering(page);
+    await assertMoveLineImport(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);

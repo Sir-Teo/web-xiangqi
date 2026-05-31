@@ -27,6 +27,7 @@ import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, copyToClipboard } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
+import { extractUciMoveLine } from './utils/moveImport';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -355,6 +356,7 @@ function App() {
     onSquareClick,
     resetBoard,
     loadMoves,
+    validateMoveSequence,
     loadFen,
     sideToMove,
     applyUciMove,
@@ -805,6 +807,7 @@ function App() {
         setShowSettings(false);
         setShowNewGameMenu(false);
         setFenError(false);
+        setMoveLineError(null);
       }
     };
     let resizeTimer: number | undefined;
@@ -1340,6 +1343,8 @@ function App() {
   const copiedPvTimerRef = useRef<number | null>(null);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
+  const [moveLineInput, setMoveLineInput] = useState('');
+  const [moveLineError, setMoveLineError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -1359,19 +1364,23 @@ function App() {
   const toggleSettings = useCallback(() => {
     setShowNewGameMenu(false);
     setFenError(false);
+    setMoveLineError(null);
     setShowSettings((open) => !open);
   }, []);
 
   const closeNewGameMenu = useCallback(() => {
     setShowNewGameMenu(false);
     setFenError(false);
+    setMoveLineError(null);
   }, []);
 
   const openNewGameMenu = useCallback(() => {
     setShowSettings(false);
     setPendingGameMode(gameMode);
     setFenInput('');
+    setMoveLineInput('');
     setFenError(false);
+    setMoveLineError(null);
     setShowNewGameMenu(true);
   }, [gameMode]);
 
@@ -1453,6 +1462,37 @@ function App() {
     setFenError(false);
     closeNewGameMenu();
   }, [closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
+
+  const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
+    const moves = extractUciMoveLine(text);
+    if (moves.length === 0) {
+      setMoveLineError('No UCI moves found');
+      return;
+    }
+
+    const startFen = fenInput.trim() || undefined;
+    const validation = validateMoveSequence(moves, startFen);
+    if (!validation.ok) {
+      setMoveLineError(
+        validation.move
+          ? `Move ${validation.failedIndex + 1} ${validation.move}: ${validation.reason}`
+          : validation.reason
+      );
+      return;
+    }
+
+    stopAnalysis();
+    handleCancelReview();
+    resetReview();
+    setGameMode(nextGameMode);
+    loadMoves(moves, startFen);
+    setFenInput('');
+    setFenError(false);
+    setMoveLineInput('');
+    setMoveLineError(null);
+    setGraphLoadSweepToken((token) => token + 1);
+    closeNewGameMenu();
+  }, [closeNewGameMenu, fenInput, handleCancelReview, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
@@ -1999,6 +2039,37 @@ function App() {
                 >
                   {fenError ? 'Invalid FEN' : 'Load'}
                 </button>
+              </form>
+            </div>
+            <div className="new-game-fen-section">
+              <p className="new-game-strength-label">Import Move Line</p>
+              <form
+                className="new-game-line-form"
+                onSubmit={(e) => { e.preventDefault(); handleImportMoveLine(moveLineInput, pendingGameMode); }}
+              >
+                <textarea
+                  className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
+                  value={moveLineInput}
+                  onChange={(e) => {
+                    setMoveLineInput(e.target.value);
+                    setMoveLineError(null);
+                  }}
+                  placeholder="1. b2e2 h9g7 b0c2"
+                  aria-label="UCI move line"
+                  rows={3}
+                  data-testid="uci-line-input"
+                />
+                <div className="new-game-line-actions">
+                  {moveLineError ? <span className="new-game-line-error">{moveLineError}</span> : <span />}
+                  <button
+                    type="submit"
+                    className="new-game-strength-btn new-game-strength-btn-active"
+                    disabled={!moveLineInput.trim()}
+                    data-testid="import-uci-line-btn"
+                  >
+                    Import
+                  </button>
+                </div>
               </form>
             </div>
             <div className="new-game-menu-footer">

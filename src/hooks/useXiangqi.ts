@@ -44,6 +44,10 @@ export interface MoveTreeNode {
     record?: MoveRecord;
 }
 
+export type MoveSequenceValidation =
+    | { ok: true }
+    | { ok: false; failedIndex: number; move: string; reason: string };
+
 interface RootPosition {
     board: BoardState;
     sideToMove: Side;
@@ -258,6 +262,53 @@ export function useXiangqi() {
         setGameResult(nextGameResult);
         nodeCounterRef.current = 1;
         return true;
+    }, []);
+
+    const validateMoveSequence = useCallback((moves: string[], startFen?: string): MoveSequenceValidation => {
+        const root = startFen ? parseRootPositionFromFen(startFen) : createStartRootPosition();
+        if (!root) {
+            return {
+                ok: false,
+                failedIndex: 0,
+                move: '',
+                reason: 'Invalid start FEN',
+            };
+        }
+
+        let currentBoard = root.board;
+        let currentSide: Side = root.sideToMove;
+
+        for (const [index, uci] of moves.entries()) {
+            const from = uciToSquare(uci.substring(0, 2));
+            const to = uciToSquare(uci.substring(2, 4));
+            if (!from || !to) {
+                return {
+                    ok: false,
+                    failedIndex: index,
+                    move: uci,
+                    reason: 'Invalid move format',
+                };
+            }
+
+            const mv = { fromFile: from.file, fromRank: from.rank, toFile: to.file, toRank: to.rank, raw: uci };
+            const result = validatePieceMove(currentBoard, mv, currentSide);
+            if (!result.ok) {
+                return {
+                    ok: false,
+                    failedIndex: index,
+                    move: uci,
+                    reason: result.reason ?? 'Illegal move',
+                };
+            }
+
+            const nextBoard = currentBoard.map(row => [...row]) as BoardState;
+            nextBoard[to.rank][to.file] = result.piece || '';
+            nextBoard[from.rank][from.file] = '';
+            currentBoard = nextBoard;
+            currentSide = currentSide === 'w' ? 'b' : 'w';
+        }
+
+        return { ok: true };
     }, []);
 
     const loadMoves = useCallback((moves: string[], startFen?: string) => {
@@ -668,6 +719,7 @@ export function useXiangqi() {
         clearAllReviewData,
         getNodeFen,
         loadMoves,
+        validateMoveSequence,
         loadFen,
         jumpToMove,
         jumpToNode,

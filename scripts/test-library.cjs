@@ -33,9 +33,11 @@ try {
   compileTsModule("src/utils/review.ts");
   compileTsModule("src/utils/gameLibrary.ts");
   compileTsModule("src/utils/gameExport.ts");
+  compileTsModule("src/utils/moveImport.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
   const gameExport = require(path.join(tempDir, "gameExport.js"));
+  const moveImport = require(path.join(tempDir, "moveImport.js"));
   const customFen = "9/9/9/9/9/9/9/9/4K4/4k4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -78,7 +80,17 @@ try {
   assert(customPgn.includes('[White "Custom \\"study\\""]'), "PGN tag values should escape quotes.");
   assert(customPgn.includes("17... a6a5 18. a3a4 *"), "Black-to-move PGN should start with black move numbering.");
 
-  console.log("Library normalization and PGN export checks passed.");
+  const importedLine = moveImport.extractUciMoveLine(`
+    [Variant "Xiangqi"]
+    1. B2E2 h9g7 {book} 2. b0c2 ; trailing comment
+    *
+  `);
+  assert(
+    importedLine.join(" ") === "b2e2 h9g7 b0c2",
+    `UCI move import should extract and normalize moves, got: ${importedLine.join(" ")}`
+  );
+
+  console.log("Library normalization, PGN export, and move import checks passed.");
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
