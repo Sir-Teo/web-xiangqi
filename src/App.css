@@ -3832,6 +3832,49 @@ summary:active {
   font-family: "JetBrains Mono", monospace;
 }
 
+.engine-pv-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-height: 2.25rem;
+  margin-bottom: 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  padding: 0.32rem 0.42rem 0.32rem 0.56rem;
+}
+
+.engine-pv-controls > span {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.engine-pv-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(2rem, 1fr));
+  gap: 0.28rem;
+  min-width: 7rem;
+}
+
+.engine-pv-btn {
+  min-height: 1.55rem;
+  padding: 0 0.42rem;
+  border-radius: var(--radius-sm);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+}
+
+.engine-pv-btn-active {
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: var(--accent) !important;
+}
+
 .pv-lines-container {
   display: flex;
   flex-direction: column;

@@ -212,6 +212,47 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
 }
 
+async function assertEnginePvLineControl(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByTestId("analysis-tab-engine").click();
+  await page.getByTestId("engine-pv-lines-3").waitFor({ timeout: 5000 });
+
+  const initial = await page.evaluate(() => ({
+    detail: [...document.querySelectorAll(".engine-stat")]
+      .map((el) => el.textContent || "")
+      .find((text) => text.includes("Detail")) || "",
+    active: document.querySelector('[data-testid="engine-pv-lines-3"]')?.getAttribute("aria-pressed") || "",
+  }));
+  if (!initial.detail.includes("MultiPV 3") || initial.active !== "true") {
+    throw new Error(`Engine PV selector did not start on 3 lines: ${JSON.stringify(initial)}`);
+  }
+
+  await page.getByTestId("engine-pv-lines-5").click();
+  const updated = await page.evaluate(() => ({
+    detail: [...document.querySelectorAll(".engine-stat")]
+      .map((el) => el.textContent || "")
+      .find((text) => text.includes("Detail")) || "",
+    active: document.querySelector('[data-testid="engine-pv-lines-5"]')?.getAttribute("aria-pressed") || "",
+    labels: [...document.querySelectorAll(".engine-pv-btn")].map((el) => el.textContent?.trim() || ""),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!updated.detail.includes("MultiPV 5") || updated.active !== "true") {
+    throw new Error(`Engine PV selector did not switch to 5 lines: ${JSON.stringify(updated)}`);
+  }
+  if (updated.labels.join(",") !== "1,3,5") {
+    throw new Error(`Engine PV selector labels changed unexpectedly: ${updated.labels.join(",")}`);
+  }
+  if (updated.overflowX > 2) {
+    throw new Error(`Engine PV selector introduced horizontal overflow: ${updated.overflowX}`);
+  }
+}
+
 async function assertBottomNewGameMenuResetsDraft(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -758,6 +799,7 @@ async function main() {
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
     await assertAiPlayModeShowsEngineStatus(page);
+    await assertEnginePvLineControl(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertInvalidFenToastTimerResets(page);
     await assertNewGameDialogFocusTrap(page);
@@ -777,7 +819,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

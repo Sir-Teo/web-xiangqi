@@ -47,6 +47,7 @@ export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
 type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
+type PvLineCount = 1 | 3 | 5;
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
@@ -86,6 +87,7 @@ const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
   4: 9,
   5: WORKER_SAFE_MAX_DEPTH,
 };
+const PV_LINE_OPTIONS: PvLineCount[] = [1, 3, 5];
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
@@ -342,6 +344,7 @@ function App() {
     typeof window !== 'undefined' && window.innerWidth <= 900 ? 6 : 8
   );
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
+  const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(3);
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
@@ -477,6 +480,8 @@ function App() {
   }, [baseEngineBootConfig, deviceProfile, engineSafetyBootLevel]);
 
   const engineDetailEnabled = engineEnabled && analysisTab === 'engine' && !isAiTurn && reviewStatus !== 'running';
+  const analysisMultiPv = engineDetailEnabled ? enginePvLineCount : 1;
+  const analysisWdlEnabled = engineDetailEnabled;
   const liveAnalysisPolicy = useMemo(() => resolveLiveAnalysisPolicy({
     tier: engineBootConfig.tier,
     mode: analysisEngineMode,
@@ -486,8 +491,8 @@ function App() {
 
   const reviewPolicy = useMemo(() => resolveReviewPolicy(deviceProfile), [deviceProfile]);
   const analysisRequestKey = useMemo(
-    () => `${currentPositionCommand}::mode:${analysisEngineMode}::policy:${liveAnalysisPolicy.signature}::detail:${engineDetailEnabled ? 'detail' : 'compact'}`,
-    [analysisEngineMode, currentPositionCommand, engineDetailEnabled, liveAnalysisPolicy.signature]
+    () => `${currentPositionCommand}::mode:${analysisEngineMode}::policy:${liveAnalysisPolicy.signature}::detail:${engineDetailEnabled ? 'detail' : 'compact'}::multipv:${analysisMultiPv}`,
+    [analysisEngineMode, analysisMultiPv, currentPositionCommand, engineDetailEnabled, liveAnalysisPolicy.signature]
   );
   currentAnalysisRequestKeyRef.current = analysisRequestKey;
 
@@ -970,8 +975,8 @@ function App() {
   useEffect(() => {
     if (!engineEnabled || !isReady) return;
 
-    const targetMultiPv = engineDetailEnabled ? 3 : 1;
-    const showWdl = engineDetailEnabled;
+    const targetMultiPv = analysisMultiPv;
+    const showWdl = analysisWdlEnabled;
 
     if (currentMultiPvRef.current !== targetMultiPv) {
       currentMultiPvRef.current = targetMultiPv;
@@ -990,7 +995,7 @@ function App() {
         clearWdl();
       }
     }
-  }, [clearPvLines, clearWdl, engineDetailEnabled, engineEnabled, isReady, setOption, trimPvLines]);
+  }, [analysisMultiPv, analysisWdlEnabled, clearPvLines, clearWdl, engineEnabled, isReady, setOption, trimPvLines]);
 
   // Analysis engine effect
   useEffect(() => {
@@ -2707,8 +2712,26 @@ function App() {
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>
-                      <strong>{engineDetailEnabled ? 'MultiPV 3' : 'MultiPV 1'}</strong>
+                      <strong>{`MultiPV ${analysisMultiPv}`}</strong>
                       <em>{currentShowWdlRef.current ? 'WDL on' : 'WDL off'}</em>
+                    </div>
+                  </div>
+                  <div className="engine-pv-controls" aria-label="Engine principal variation lines">
+                    <span>PV Lines</span>
+                    <div className="engine-pv-buttons">
+                      {PV_LINE_OPTIONS.map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          className={`engine-pv-btn ${enginePvLineCount === count ? 'engine-pv-btn-active' : ''}`}
+                          onClick={() => setEnginePvLineCount(count)}
+                          aria-pressed={enginePvLineCount === count}
+                          aria-label={`Set PV lines to ${count}`}
+                          data-testid={`engine-pv-lines-${count}`}
+                        >
+                          {count}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div className="pv-lines-container">
