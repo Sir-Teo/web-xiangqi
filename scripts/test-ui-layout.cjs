@@ -753,6 +753,27 @@ async function assertMoveLineImportPreservesVariations(page) {
   }
 }
 
+async function assertMoveLineImportRejectsInvalidVariation(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  const input = page.getByTestId("uci-line-input");
+  await input.fill('[Variant "Xiangqi"]\n1. b2e2 (1. a0a9) h9g7');
+  await page.getByTestId("import-uci-line-btn").click();
+
+  const error = page.locator("#new-game-line-error");
+  await error.waitFor({ timeout: 5000 });
+  const errorText = await error.textContent();
+  if (!String(errorText || "").includes("Variation a0a9")) {
+    throw new Error(`Invalid PGN variation did not show a branch-specific error: ${String(errorText || "").trim()}`);
+  }
+}
+
 async function assertMoveLineImportErrorAccessibility(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1822,6 +1843,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertMoveLineImportPreservesVariations(page);
+    await assertMoveLineImportRejectsInvalidVariation(page);
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertPgnTreeVariationExport(page);

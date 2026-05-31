@@ -579,6 +579,7 @@ function App() {
     resetBoard,
     loadMoves,
     loadMoveTree,
+    validateMoveTree,
     validateMoveSequence,
     loadFen,
     sideToMove,
@@ -2019,6 +2020,17 @@ function App() {
       );
       return;
     }
+    if (importedLine.hasVariations) {
+      const treeValidation = validateMoveTree(importedLine.moveTree, startFen);
+      if (!treeValidation.ok) {
+        setMoveLineError(
+          treeValidation.move
+            ? `Variation ${treeValidation.move}: ${treeValidation.reason}`
+            : treeValidation.reason
+        );
+        return;
+      }
+    }
 
     stopAnalysis();
     handleCancelReview();
@@ -2036,7 +2048,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
