@@ -1265,11 +1265,22 @@ async function assertOversizedShareTreeWarning(page) {
       moves: parsed.searchParams.get("moves"),
       hasTree: parsed.searchParams.has("tree"),
       warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+      brandTextHeight: document.querySelector(".app-brand-text")?.getBoundingClientRect().height ?? 0,
+      brandWhiteSpace: document.querySelector(".app-brand-text")
+        ? getComputedStyle(document.querySelector(".app-brand-text")).whiteSpace
+        : "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
 
-  if (state.moves !== "b2e2 h9g7 b0c2 b9c7" || state.hasTree || !state.warning.includes("Shared without variations") || state.overflowX > 2) {
+  if (
+    state.moves !== "b2e2 h9g7 b0c2 b9c7" ||
+    state.hasTree ||
+    !state.warning.includes("Shared without variations") ||
+    state.brandTextHeight > 22 ||
+    state.brandWhiteSpace !== "nowrap" ||
+    state.overflowX > 2
+  ) {
     throw new Error(`Oversized study share did not warn and fall back to a mainline-only link: ${JSON.stringify(state)}`);
   }
 }

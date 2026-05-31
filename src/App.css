@@ -351,6 +351,7 @@ body.resizing * {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 0 0 auto;
   margin-right: 0.75rem;
   padding-right: 0.75rem;
   border-right: 1px solid var(--border-subtle);
@@ -369,6 +370,7 @@ body.resizing * {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text-heading);
+  white-space: nowrap;
 }
 
 /* Toolbar divider */
@@ -3254,10 +3256,17 @@ summary:active {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
   font-size: 0.71rem;
   color: var(--text-tertiary);
   font-family: "JetBrains Mono", monospace;
   white-space: nowrap;
+}
+
+.top-engine-state > span:not(.status-dot) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-dot {
@@ -3283,6 +3292,7 @@ summary:active {
 }
 
 .top-engine-state-warning {
+  max-width: 12rem;
   color: var(--warning);
 }
 
