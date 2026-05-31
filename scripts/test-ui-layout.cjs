@@ -693,6 +693,33 @@ async function assertShareLinkRoundTrip(page) {
   }
 }
 
+async function assertInvalidShareLinkFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=a0a9", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("share-link-warning").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.trim() || "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+    hitboxCount: document.querySelectorAll(".hitbox").length,
+  }));
+  if (!state.warning.includes("Shared link not loaded")) {
+    throw new Error(`Invalid share link warning was not visible: ${JSON.stringify(state)}`);
+  }
+  if (!state.activePoint.includes("Start") || !state.fen.includes(" w - - 0 1")) {
+    throw new Error(`Invalid share link did not leave the app at the start position: ${JSON.stringify(state)}`);
+  }
+  if (state.overflowX > 2 || state.hitboxCount !== 90) {
+    throw new Error(`Invalid share link warning broke layout: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertMoveLineFileImport(page) {
   const importPath = path.resolve(__dirname, "..", ".move-line-import-test.pgn");
   fs.writeFileSync(importPath, '[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2\n');
@@ -1112,6 +1139,7 @@ async function main() {
     await assertMoveLineImport(page);
     await assertCurrentPgnDownload(page);
     await assertShareLinkRoundTrip(page);
+    await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
@@ -1127,7 +1155,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

@@ -49,6 +49,7 @@ type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
 type PvLineCount = 1 | 3 | 5;
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
+type ShareLinkNotice = { tone: 'warning'; text: string } | null;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
   from: BoardSquare;
@@ -459,6 +460,7 @@ function App() {
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
+  const [shareLinkNotice, setShareLinkNotice] = useState<ShareLinkNotice>(null);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>(initialAiSpeed);
   const aiSpeedRef = useRef<AiSpeed>(initialAiSpeed);
   const handleSpeedChange = useCallback((s: AiSpeed) => {
@@ -1944,14 +1946,17 @@ function App() {
     if (moves.length > 0) {
       const validation = validateMoveSequence(moves, rawFen);
       if (!validation.ok) {
+        setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
         console.warn('Ignored invalid shared Xiangqi line:', validation);
         return;
       }
     } else if (rawFen && !loadFen(rawFen)) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
       console.warn('Ignored invalid shared Xiangqi FEN.');
       return;
     }
 
+    setShareLinkNotice(null);
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -2140,6 +2145,16 @@ function App() {
                 <span className={`status-dot ${isReady ? 'healthy' : ''} ${engineNotice ? engineNotice.tone : ''}`} />
                 <span>{engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}</span>
                 {isReady ? <span className="engine-variant">{engineVariant}</span> : null}
+              </div>
+            ) : null}
+            {shareLinkNotice ? (
+              <div
+                className={`top-engine-state top-engine-state-${shareLinkNotice.tone}`}
+                role="status"
+                data-testid="share-link-warning"
+              >
+                <span className={`status-dot ${shareLinkNotice.tone}`} />
+                <span>{shareLinkNotice.text}</span>
               </div>
             ) : null}
 
