@@ -613,6 +613,65 @@ async function assertCurrentPgnDownload(page) {
   }
 }
 
+async function assertShareLinkRoundTrip(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate(() => {
+    window.__shareLinkWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__shareLinkWrites.push(String(text));
+        },
+      },
+    });
+  });
+
+  const shareButton = page.getByTestId("copy-share-link-btn");
+  if (!(await shareButton.isDisabled())) {
+    throw new Error("Share link should be disabled before a line or custom root exists.");
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  if (await shareButton.isDisabled()) {
+    throw new Error("Share link stayed disabled after importing a line.");
+  }
+  await shareButton.click();
+  await page.getByTestId("copy-share-link-btn").getByText("Copied").waitFor({ timeout: 5000 });
+
+  const copiedUrl = await page.evaluate(() => window.__shareLinkWrites?.[0] ?? "");
+  const parsed = new URL(copiedUrl);
+  if (parsed.origin !== "http://127.0.0.1:8192") {
+    throw new Error(`Share link used the wrong origin: ${copiedUrl}`);
+  }
+  if (parsed.searchParams.get("moves") !== "b2e2 h9g7") {
+    throw new Error(`Share link omitted the current line: ${copiedUrl}`);
+  }
+  if (parsed.searchParams.has("fen")) {
+    throw new Error(`Share link included an unnecessary start FEN: ${copiedUrl}`);
+  }
+
+  await page.goto(copiedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const activePoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+    throw new Error(`Share link did not restore the final move: ${String(activePoint || "").trim()}`);
+  }
+  const fen = await page.locator(".bottombar-fen").getAttribute("title");
+  if (!fen || !fen.includes(" w ")) {
+    throw new Error(`Share link did not restore side-to-move after two plies: ${fen}`);
+  }
+}
+
 async function assertMoveLineFileImport(page) {
   const importPath = path.resolve(__dirname, "..", ".move-line-import-test.pgn");
   fs.writeFileSync(importPath, '[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2\n');
@@ -1031,6 +1090,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertCurrentPgnDownload(page);
+    await assertShareLinkRoundTrip(page);
     await assertMoveLineFileImport(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
@@ -1046,7 +1106,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

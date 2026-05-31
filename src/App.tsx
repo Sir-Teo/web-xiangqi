@@ -10,7 +10,7 @@ import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck, IconCopy, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
+  IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
@@ -152,6 +152,27 @@ function makePgnDownloadFilename(opening?: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 48) || 'game';
   return `web-xiangqi-${date}-${slug}.pgn`;
+}
+
+function isGameMode(value: unknown): value is GameMode {
+  return value === 'PvP' || value === 'PvAI-Black' || value === 'PvAI-Red' || value === 'AIvAI';
+}
+
+function buildShareUrl(rootFen: string, moves: string[], mode: GameMode): string | null {
+  if (typeof window === 'undefined') return null;
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  if (rootFen !== START_POSITION_FEN) {
+    url.searchParams.set('fen', rootFen);
+  }
+  if (moves.length > 0) {
+    url.searchParams.set('moves', moves.join(' '));
+  }
+  if (mode !== 'PvP') {
+    url.searchParams.set('mode', mode);
+  }
+  return url.toString();
 }
 
 type ReviewPhase = 'base' | 'revisit';
@@ -1549,6 +1570,7 @@ function App() {
       : 'Material even';
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN;
   const canExportCurrentLine = currentMoveIndex >= 0 && moveHistory.length > 0;
+  const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
@@ -1614,16 +1636,19 @@ function App() {
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
+  const [copiedShareToast, setCopiedShareToast] = useState(false);
   const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const copiedFenToastTimerRef = useRef<number | null>(null);
+  const copiedShareToastTimerRef = useRef<number | null>(null);
   const downloadedPgnTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
   const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
+  const shareLinkLoadedRef = useRef(false);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
   const [moveLineInput, setMoveLineInput] = useState('');
@@ -1640,6 +1665,9 @@ function App() {
       }
       if (copiedFenToastTimerRef.current !== null) {
         window.clearTimeout(copiedFenToastTimerRef.current);
+      }
+      if (copiedShareToastTimerRef.current !== null) {
+        window.clearTimeout(copiedShareToastTimerRef.current);
       }
       if (downloadedPgnTimerRef.current !== null) {
         window.clearTimeout(downloadedPgnTimerRef.current);
@@ -1743,6 +1771,22 @@ function App() {
       setDownloadedPgnToast(false);
     }, 2000);
   }, [buildCurrentPgn, detectedOpening]);
+
+  const handleCopyShareLink = useCallback(async () => {
+    const url = buildShareUrl(rootFen, currentLineMoves, gameMode);
+    if (!url || !canShareCurrentPosition) return;
+    const ok = await copyToClipboard(url);
+    if (!ok) return;
+
+    if (copiedShareToastTimerRef.current !== null) {
+      window.clearTimeout(copiedShareToastTimerRef.current);
+    }
+    setCopiedShareToast(true);
+    copiedShareToastTimerRef.current = window.setTimeout(() => {
+      copiedShareToastTimerRef.current = null;
+      setCopiedShareToast(false);
+    }, 2000);
+  }, [canShareCurrentPosition, currentLineMoves, gameMode, rootFen]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -1867,6 +1911,42 @@ function App() {
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
   }, [closeNewGameMenu, fenInput, handleCancelReview, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
+
+  useEffect(() => {
+    if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
+    shareLinkLoadedRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const rawFen = params.get('fen')?.trim() || undefined;
+    const rawMoves = params.get('moves') || '';
+    const rawMode = params.get('mode');
+    const moves = extractUciMoveLine(rawMoves);
+    const mode = isGameMode(rawMode) ? rawMode : 'PvP';
+    if (!rawFen && moves.length === 0) return;
+
+    if (moves.length > 0) {
+      const validation = validateMoveSequence(moves, rawFen);
+      if (!validation.ok) {
+        console.warn('Ignored invalid shared Xiangqi line:', validation);
+        return;
+      }
+    } else if (rawFen && !loadFen(rawFen)) {
+      console.warn('Ignored invalid shared Xiangqi FEN.');
+      return;
+    }
+
+    stopAnalysis();
+    handleCancelReview();
+    resetReview();
+    setGameMode(mode);
+    if (moves.length > 0) {
+      loadMoves(moves, rawFen);
+    }
+    setWorkspaceMode('analysis');
+    setAnalysisTab('tree');
+    setMobileView('board');
+    setGraphLoadSweepToken((token) => token + 1);
+  }, [handleCancelReview, loadFen, loadMoves, resetReview, stopAnalysis, validateMoveSequence]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
@@ -2696,6 +2776,17 @@ function App() {
                   {downloadedPgnToast ? <IconCheck /> : <IconDownload />}
                 </button>
                 <button
+                  className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''}`}
+                  type="button"
+                  onClick={handleCopyShareLink}
+                  disabled={!canShareCurrentPosition}
+                  title={copiedShareToast ? 'Link copied' : 'Copy share link'}
+                  aria-label={copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                  data-testid="mobile-copy-share-link-btn"
+                >
+                  {copiedShareToast ? <IconCheck /> : <IconLink />}
+                </button>
+                <button
                   className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''}`}
                   type="button"
                   onClick={handleCopyFen}
@@ -3078,6 +3169,15 @@ function App() {
                 data-testid="download-pgn-btn"
               >
                 {downloadedPgnToast ? <><IconCheck /> Exported</> : <><IconDownload /> Export PGN</>}
+              </button>
+              <button
+                className="gc-btn"
+                onClick={handleCopyShareLink}
+                disabled={!canShareCurrentPosition}
+                title="Copy a link to this position"
+                data-testid="copy-share-link-btn"
+              >
+                {copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button
