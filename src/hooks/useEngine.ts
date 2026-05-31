@@ -4,6 +4,7 @@ import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
 const INFO_FLUSH_MS = 200;
+const ENGINE_SCRIPT_LOAD_TIMEOUT_MS = 12000;
 
 type PvLine = {
     depth: string;
@@ -344,7 +345,13 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const initializeEngine = useCallback((initToken: number) => {
         if (typeof (window as any).Pikafish !== 'function' || typeof (window as any).Pikafish.createWorkerEngine !== 'function') {
-            console.error("Pikafish is not loaded.");
+            setIsReady(false);
+            setIsSearching(false);
+            isSearchingRef.current = false;
+            activeSearchSignatureRef.current = '';
+            clearQueuedSearch();
+            onWorkerErrorRef.current?.('[boot-error] Pikafish loader finished without the engine API.');
+            console.warn('Pikafish loader finished without the engine API.');
             return;
         }
 
@@ -446,10 +453,51 @@ export function useEngine(options: EngineInitOptions = {}) {
         const initToken = ++initTokenRef.current;
         const engineScriptSrc = `${import.meta.env.BASE_URL}pikafish.js`;
         let script: HTMLScriptElement | null = null;
+        let scriptLoadTimer: number | null = null;
+        let didReportScriptFailure = false;
+
+        const clearScriptLoadWatch = () => {
+            if (scriptLoadTimer !== null) {
+                window.clearTimeout(scriptLoadTimer);
+                scriptLoadTimer = null;
+            }
+            if (script) {
+                script.removeEventListener('load', handleScriptLoad);
+                script.removeEventListener('error', handleScriptError);
+            }
+        };
+
+        const reportScriptFailure = (reason: string) => {
+            if (initToken !== initTokenRef.current || didReportScriptFailure) return;
+            didReportScriptFailure = true;
+            clearScriptLoadWatch();
+            setIsReady(false);
+            setIsSearching(false);
+            isSearchingRef.current = false;
+            activeSearchSignatureRef.current = '';
+            activeSearchTagRef.current = null;
+            clearQueuedSearch();
+            const message = `[boot-error] Pikafish loader failed: ${reason}.`;
+            onWorkerErrorRef.current?.(message);
+            console.warn(message);
+        };
 
         const start = () => {
             if (initToken !== initTokenRef.current) return;
             initializeEngine(initToken);
+        };
+
+        const handleScriptLoad = () => {
+            clearScriptLoadWatch();
+            if (typeof (window as any).Pikafish === 'function' && typeof (window as any).Pikafish.createWorkerEngine === 'function') {
+                start();
+                return;
+            }
+            reportScriptFailure('script loaded without registering the engine API');
+        };
+
+        const handleScriptError = () => {
+            reportScriptFailure(`could not download ${engineScriptSrc}`);
         };
 
         if (typeof (window as any).Pikafish === 'function' && typeof (window as any).Pikafish.createWorkerEngine === 'function') {
@@ -465,16 +513,20 @@ export function useEngine(options: EngineInitOptions = {}) {
                 script.id = 'pikafish-script';
                 script.src = engineScriptSrc;
                 script.async = true;
+            }
+            script.addEventListener('load', handleScriptLoad, { once: true });
+            script.addEventListener('error', handleScriptError, { once: true });
+            scriptLoadTimer = window.setTimeout(() => {
+                reportScriptFailure(`timed out loading ${engineScriptSrc}`);
+            }, ENGINE_SCRIPT_LOAD_TIMEOUT_MS);
+            if (!existingScript) {
                 document.body.appendChild(script);
             }
-            script.addEventListener('load', start, { once: true });
         }
 
         return () => {
             initTokenRef.current += 1;
-            if (script) {
-                script.removeEventListener('load', start);
-            }
+            clearScriptLoadWatch();
             clearQueuedSearch();
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;

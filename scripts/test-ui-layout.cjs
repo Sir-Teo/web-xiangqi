@@ -227,6 +227,35 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
 }
 
+async function assertEngineLoaderFailureShowsNotice(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.route("**/pikafish.js", (route) => route.abort("failed"));
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
+      return text && !/Loading engine/i.test(text);
+    }, null, { timeout: 10000 });
+
+    const state = await page.evaluate(() => ({
+      engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (!/Recovering engine|Engine paused after crashes/i.test(state.engineText)) {
+      throw new Error(`Engine loader failure did not surface a recovery notice: ${JSON.stringify(state)}`);
+    }
+    if (state.overflowX > 2) {
+      throw new Error(`Engine loader failure notice introduced horizontal overflow: ${state.overflowX}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertEnginePvLineControl(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2337,6 +2366,7 @@ async function main() {
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
     await assertAiPlayModeShowsEngineStatus(page);
+    await assertEngineLoaderFailureShowsNotice(browser);
     await assertEnginePvLineControl(page);
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
@@ -2383,7 +2413,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
