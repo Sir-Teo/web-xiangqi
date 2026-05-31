@@ -1537,6 +1537,7 @@ async function assertMoveTreeRespectsReducedMotion(page) {
         arrowVisible: Boolean(arrowGroup),
         smilAnimations: document.querySelectorAll(".board-arrow-group animate").length,
         animationName: arrowGroup ? getComputedStyle(arrowGroup).animationName : "",
+        bodyScrollBehavior: getComputedStyle(document.body).scrollBehavior,
         overflowX: document.body.scrollWidth - document.body.clientWidth,
       };
     });
@@ -1544,6 +1545,7 @@ async function assertMoveTreeRespectsReducedMotion(page) {
       !arrowMotionState.arrowVisible ||
       arrowMotionState.smilAnimations !== 0 ||
       arrowMotionState.animationName !== "none" ||
+      arrowMotionState.bodyScrollBehavior !== "auto" ||
       arrowMotionState.overflowX > 2
     ) {
       throw new Error(`Board arrows did not respect reduced motion: ${JSON.stringify(arrowMotionState)}`);
