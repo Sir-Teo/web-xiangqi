@@ -21,7 +21,6 @@ import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds'
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame } from './utils/gameLibrary';
-import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -42,6 +41,10 @@ import {
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
 } from './utils/review';
+
+const LazyLibraryPanel = React.lazy(() =>
+  import('./components/Library/LibraryPanel').then((module) => ({ default: module.LibraryPanel }))
+);
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
@@ -2700,13 +2703,15 @@ function App() {
                   </p>
                 </>
               ) : (
-                <LibraryPanel
-                  savedGames={savedGames}
-                  onLoadSavedGame={handleLoadGame}
-                  onDeleteSavedGame={deleteGameFromLibrary}
-                  onRenameSavedGame={renameGameInLibrary}
-                  onLoadHistorical={handleLoadHistoricalGame}
-                />
+                <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
+                  <LazyLibraryPanel
+                    savedGames={savedGames}
+                    onLoadSavedGame={handleLoadGame}
+                    onDeleteSavedGame={deleteGameFromLibrary}
+                    onRenameSavedGame={renameGameInLibrary}
+                    onLoadHistorical={handleLoadHistoricalGame}
+                  />
+                </React.Suspense>
               )}
             </div>
           </div>

@@ -104,6 +104,20 @@ body.resizing * {
   color: var(--text-tertiary);
 }
 
+.library-loading {
+  min-height: 9rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 /* ═══════════════════════════════════════════════════
    Buttons
    ═══════════════════════════════════════════════════ */
