@@ -8,6 +8,7 @@ async function main() {
   await Promise.all([
     fs.rm(path.join(distDir, "assets"), { recursive: true, force: true }),
     fs.rm(path.join(distDir, "index.html"), { force: true }),
+    fs.rm(path.join(distDir, "sw.js"), { force: true }),
     fs.rm(path.join(distDir, "vite.svg"), { force: true }),
   ]);
 }
