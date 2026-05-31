@@ -278,7 +278,7 @@ function App() {
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
-  const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph'>('moves');
+  const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph' | 'library'>('moves');
   const [showArrows, setShowArrows] = useState(true);
   const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
@@ -1155,7 +1155,7 @@ function App() {
   const openLibraryPanel = useCallback(() => {
     setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
     setLeftPanelTab('library');
-    setMobileAnalysisTab('graph');
+    setMobileAnalysisTab('library');
     setMobileView('analysis');
   }, []);
 
@@ -2244,9 +2244,21 @@ function App() {
             </button>
             <button
               className={`mobile-tab-btn ${mobileAnalysisTab === 'graph' ? 'active' : ''}`}
-              onClick={() => setMobileAnalysisTab('graph')}
+              onClick={() => {
+                setLeftPanelTab('graph');
+                setMobileAnalysisTab('graph');
+              }}
             >
               <IconBarChart /> Graph
+            </button>
+            <button
+              className={`mobile-tab-btn ${mobileAnalysisTab === 'library' ? 'active' : ''}`}
+              onClick={() => {
+                setLeftPanelTab('library');
+                setMobileAnalysisTab('library');
+              }}
+            >
+              <IconLibrary /> Library
             </button>
           </div>
         )}

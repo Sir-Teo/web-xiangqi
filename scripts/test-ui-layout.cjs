@@ -181,6 +181,10 @@ async function assertMobileSaveLibraryActions(page) {
   await libraryButton.click();
   await page.getByText("My Games").waitFor({ timeout: 5000 });
   await page.getByTestId(`load-saved-${savedGameId}`).waitFor({ timeout: 5000 });
+  const activeMobileTab = await page.locator(".mobile-tab-btn.active").textContent();
+  if (!String(activeMobileTab || "").includes("Library")) {
+    throw new Error(`Mobile library opened under the wrong analysis tab: ${String(activeMobileTab || "").trim()}`);
+  }
 }
 
 async function main() {

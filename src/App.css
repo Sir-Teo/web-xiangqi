@@ -2346,7 +2346,7 @@
 
   /* Hide the panel that isn't active in analysis view */
   [data-mobile-view="analysis"] .main-container[data-mobile-tab="moves"] .panel.left { display: none; }
-  [data-mobile-view="analysis"] .main-container[data-mobile-tab="graph"] .panel.right { display: none; }
+  [data-mobile-view="analysis"] .main-container:is([data-mobile-tab="graph"], [data-mobile-tab="library"]) .panel.right { display: none; }
 
   /* No width transition on mobile — panels are shown/hidden by display */
   .panel {
