@@ -368,7 +368,7 @@ body.resizing * {
 .app-brand-text {
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-heading);
   white-space: nowrap;
 }
@@ -4746,7 +4746,7 @@ summary:active {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-heading);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .settings-close-btn {
@@ -5355,10 +5355,10 @@ summary:active {
 .board-stage-copy h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  font-size: 1.7rem;
   font-weight: 700;
   color: var(--text-heading);
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .board-stage-copy p {
@@ -5481,7 +5481,7 @@ summary:active {
   margin: 0;
   font-size: 1.08rem;
   color: var(--text-heading);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .new-game-menu-copy p {
@@ -5680,7 +5680,7 @@ summary:active {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-heading);
 }
 
