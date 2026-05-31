@@ -3236,6 +3236,24 @@ summary:active {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
+.status-dot.warning {
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
+}
+
+.status-dot.danger {
+  background: var(--danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+}
+
+.top-engine-state-warning {
+  color: var(--warning);
+}
+
+.top-engine-state-danger {
+  color: var(--danger);
+}
+
 /* Settings controls used by Xiangqi-specific panel fields */
 .settings-group {
   display: grid;

@@ -47,6 +47,7 @@ export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
 type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
+type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
   from: BoardSquare;
@@ -343,6 +344,7 @@ function App() {
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
+  const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>('normal');
   const aiSpeedRef = useRef<AiSpeed>('normal');
   const handleSpeedChange = useCallback((s: AiSpeed) => {
@@ -597,9 +599,11 @@ function App() {
 
     if (engineRecoveryTimestampsRef.current.length > 3) {
       console.error('Pikafish worker crashed repeatedly; automatic restart suppressed.', message);
+      setEngineNotice({ tone: 'danger', text: 'Engine paused after crashes' });
       return;
     }
 
+    setEngineNotice({ tone: 'warning', text: 'Recovering engine' });
     if (workspaceMode === 'analysis') {
       setAnalysisEngineMode('stable');
     }
@@ -724,6 +728,14 @@ function App() {
       }
     },
   });
+
+  useEffect(() => {
+    if (!isReady) return;
+    setEngineNotice(engineSafetyBootLevel > 0
+      ? { tone: 'warning', text: 'Safe engine mode' }
+      : null
+    );
+  }, [engineSafetyBootLevel, isReady]);
 
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const canGoBack = currentMoveIndex >= 0;
@@ -1803,10 +1815,10 @@ function App() {
               </button>
             </div>
 
-            {engineEnabled ? (
-              <div className="top-engine-state">
-                <span className={`status-dot ${isReady ? 'healthy' : ''}`} />
-                <span>{isReady ? 'Engine ready' : 'Loading engine'}</span>
+            {engineRequired ? (
+              <div className={`top-engine-state ${engineNotice ? `top-engine-state-${engineNotice.tone}` : ''}`}>
+                <span className={`status-dot ${isReady ? 'healthy' : ''} ${engineNotice ? engineNotice.tone : ''}`} />
+                <span>{engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}</span>
                 {isReady ? <span className="engine-variant">{engineVariant}</span> : null}
               </div>
             ) : null}
