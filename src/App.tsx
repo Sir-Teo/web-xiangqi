@@ -148,6 +148,7 @@ const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
   p: 'Soldier: forward; sideways after crossing river',
 };
 const PREFERENCES_STORAGE_KEY = 'xiangqi-app-preferences';
+const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
   K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
   k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
@@ -333,6 +334,7 @@ function readStoredPreferences(): StoredPreferences {
   try {
     const raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
     if (!raw) return {};
+    if (raw.length > MAX_PREFERENCES_JSON_LENGTH) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const searchDepth = Number(parsed.searchDepth);
     return {

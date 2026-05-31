@@ -302,6 +302,27 @@ async function assertPreferencePersistence(page) {
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
+    await page.evaluate(() => {
+      localStorage.setItem("xiangqi-app-preferences", JSON.stringify({
+        assistMode: "pro",
+        analysisEngineMode: "stable",
+        enginePvLineCount: 5,
+        junk: "x".repeat(5000),
+      }));
+    });
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    const oversizedPrefsState = await page.evaluate(() => ({
+      assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (oversizedPrefsState.assistMode !== "coach" || oversizedPrefsState.overflowX > 2) {
+      throw new Error(`Oversized preferences were not ignored cleanly: ${JSON.stringify(oversizedPrefsState)}`);
+    }
+    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
     await page.getByRole("button", { name: "Open settings" }).click();
     const settings = page.locator(".settings-body");
     await settings.getByRole("button", { name: "Pro", exact: true }).click();
