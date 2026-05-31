@@ -313,6 +313,29 @@ async function assertPreferencePersistence(page) {
     if (restored.overflowX > 2) {
       throw new Error(`Restored preferences introduced horizontal overflow: ${restored.overflowX}`);
     }
+
+    await page.getByRole("button", { name: "Open settings" }).click();
+    await page.getByTestId("reset-preferences-btn").click();
+    const resetState = await page.evaluate(() => ({
+      assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
+      stored: JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"),
+      buttons: [...document.querySelectorAll(".settings-body .pill-btn-active")].map((el) => el.textContent?.trim() || ""),
+    }));
+
+    if (resetState.assistMode !== "coach") {
+      throw new Error(`Reset preferences did not restore coach mode: ${JSON.stringify(resetState)}`);
+    }
+    if (
+      resetState.stored.assistMode !== "coach" ||
+      resetState.stored.analysisEngineMode !== "optimized" ||
+      resetState.stored.soundEnabled !== true ||
+      resetState.stored.enginePvLineCount !== 3
+    ) {
+      throw new Error(`Reset preferences did not rewrite defaults: ${JSON.stringify(resetState.stored)}`);
+    }
+    if (!resetState.buttons.includes("Coach") || !resetState.buttons.includes("Optimized") || !resetState.buttons.includes("On")) {
+      throw new Error(`Reset preferences did not update settings controls: ${resetState.buttons.join(",")}`);
+    }
   } finally {
     await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences")).catch(() => {});
   }

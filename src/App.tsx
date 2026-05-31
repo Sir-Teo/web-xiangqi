@@ -269,6 +269,15 @@ function writeStoredPreferences(preferences: StoredPreferences) {
   }
 }
 
+function clearStoredPreferences() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(PREFERENCES_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures for the same reason.
+  }
+}
+
 function makeAnalysisTag(phase: 'primary' | 'deepen', requestKey: string) {
   return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
 }
@@ -425,6 +434,19 @@ function App() {
     setAiSpeed(s);
     aiSpeedRef.current = s;
   }, []);
+
+  const resetPreferences = useCallback(() => {
+    clearStoredPreferences();
+    setAssistMode('coach');
+    setOrientation('red');
+    setShowArrows(true);
+    handleSoundToggle(true);
+    setSearchDepth(defaultSearchDepth);
+    setAnalysisEngineMode('optimized');
+    setEnginePvLineCount(3);
+    setAiStrength(5);
+    handleSpeedChange('normal');
+  }, [defaultSearchDepth, handleSoundToggle, handleSpeedChange]);
 
   useEffect(() => {
     writeStoredPreferences({
@@ -2239,6 +2261,14 @@ function App() {
             </div>
 
             <div className="settings-group">
+              <button
+                type="button"
+                className="gc-btn settings-reset-btn"
+                onClick={resetPreferences}
+                data-testid="reset-preferences-btn"
+              >
+                <IconRefresh /> Reset Preferences
+              </button>
               <button
                 type="button"
                 className="gc-btn gc-btn-danger"
