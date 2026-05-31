@@ -256,6 +256,58 @@ async function assertEngineLoaderFailureShowsNotice(browser) {
   }
 }
 
+async function assertAnalysisResumesAfterVisibilityReturn(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.addInitScript(() => {
+      let qaDocumentHidden = true;
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => qaDocumentHidden,
+      });
+      window.__webXiangqiSetHiddenForQa = (hidden) => {
+        qaDocumentHidden = Boolean(hidden);
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+    });
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.waitForFunction(() => {
+      const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
+      return /Engine ready/i.test(text);
+    }, null, { timeout: 25000 });
+
+    const hiddenState = await page.evaluate(() => ({
+      pvLineCount: document.querySelectorAll('[data-testid^="play-engine-pv-"]').length,
+      emptyText: document.querySelector(".pv-lines-container")?.textContent?.trim() || "",
+    }));
+    if (hiddenState.pvLineCount !== 0 || !hiddenState.emptyText.includes("No PV available yet")) {
+      throw new Error(`Hidden analysis unexpectedly searched before visibility returned: ${JSON.stringify(hiddenState)}`);
+    }
+
+    await page.evaluate(() => window.__webXiangqiSetHiddenForQa(false));
+    await page.getByTestId("play-engine-pv-0").waitFor({ timeout: 25000 });
+
+    const resumedState = await page.evaluate(() => ({
+      pvLineCount: document.querySelectorAll('[data-testid^="play-engine-pv-"]').length,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (resumedState.pvLineCount < 1) {
+      throw new Error(`Analysis did not resume after visibility returned: ${JSON.stringify(resumedState)}`);
+    }
+    if (resumedState.overflowX > 2) {
+      throw new Error(`Visibility-return analysis introduced horizontal overflow: ${resumedState.overflowX}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertEnginePvLineControl(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2367,6 +2419,7 @@ async function main() {
     await assertPausedAiTurnBlocksManualMove(page);
     await assertAiPlayModeShowsEngineStatus(page);
     await assertEngineLoaderFailureShowsNotice(browser);
+    await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertEnginePvLineControl(page);
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
@@ -2413,7 +2466,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, visibility-return analysis resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

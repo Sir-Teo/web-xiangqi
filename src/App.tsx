@@ -508,6 +508,9 @@ function App() {
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
     height: typeof window === 'undefined' ? 800 : window.innerHeight,
   }));
+  const [isPageVisible, setIsPageVisible] = useState(() => (
+    typeof document === 'undefined' ? true : !document.hidden
+  ));
 
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const soundEnabledRef = useRef(initialSoundEnabled);
@@ -1118,7 +1121,9 @@ function App() {
       }, 50);
     };
     const onVisibilityChange = () => {
-      if (document.hidden) {
+      const visible = !document.hidden;
+      setIsPageVisible(visible);
+      if (!visible) {
         activeAnalysisRequestRef.current = '';
         analysisStageRef.current = 'idle';
         clearAnalysisDeepenTimer();
@@ -1235,7 +1240,7 @@ function App() {
 
   // Analysis engine effect
   useEffect(() => {
-    if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || document.hidden) {
+    if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || !isPageVisible) {
       activeAnalysisRequestRef.current = '';
       analysisStageRef.current = 'idle';
       clearAnalysisDeepenTimer();
@@ -1276,6 +1281,7 @@ function App() {
     clearWdl,
     currentPositionCommand,
     engineEnabled,
+    isPageVisible,
     isAiTurn,
     isReady,
     isSearching,
@@ -1294,7 +1300,7 @@ function App() {
       !isReady ||
       isAiTurn ||
       reviewControllerRef.current.active ||
-      document.hidden ||
+      !isPageVisible ||
       !engineDetailEnabled
     ) {
       analysisStageRef.current = 'settled';
@@ -1334,6 +1340,7 @@ function App() {
     currentPositionCommand,
     engineDetailEnabled,
     engineEnabled,
+    isPageVisible,
     isAiTurn,
     isReady,
     liveAnalysisPolicy.deepen,
