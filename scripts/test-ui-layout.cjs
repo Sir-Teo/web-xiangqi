@@ -225,10 +225,19 @@ async function assertBlackToMoveTreeNumbering(page) {
   await page.locator('.hitbox[data-file="0"][data-rank="6"]').click();
   await page.locator('.hitbox[data-file="0"][data-rank="5"]').click();
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.getByTestId("graph-current-point").waitFor({ timeout: 5000 });
+  const blackGraphPoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(blackGraphPoint || "").includes("Black A6")) {
+    throw new Error(`Custom black-to-move graph label used the wrong side: ${String(blackGraphPoint || "").trim()}`);
+  }
 
   await page.locator('.hitbox[data-file="0"][data-rank="3"]').click();
   await page.locator('.hitbox[data-file="0"][data-rank="4"]').click();
   await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+  const redGraphPoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(redGraphPoint || "").includes("Red A3")) {
+    throw new Error(`Custom black-to-move reply graph label used the wrong side: ${String(redGraphPoint || "").trim()}`);
+  }
 
   const labels = await page.locator(".mtree-num").allTextContents();
   const normalizedLabels = labels.map((label) => String(label || "").trim()).slice(0, 2);
@@ -521,7 +530,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering/graph labels, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

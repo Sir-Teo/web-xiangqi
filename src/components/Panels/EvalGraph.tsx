@@ -29,6 +29,13 @@ type EvalPoint = {
     bestMove?: MoveRecord['bestMove'];
 };
 
+function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover'] {
+    if (move.piece) {
+        return move.piece === move.piece.toUpperCase() ? 'red' : 'black';
+    }
+    return index % 2 === 0 ? 'red' : 'black';
+}
+
 export const EvalGraph = React.memo(function EvalGraph({
     history,
     currentMoveIndex,
@@ -64,7 +71,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 eval: previous,
                 ply: index + 1,
                 uci: move.uci,
-                mover: index % 2 === 0 ? 'red' : 'black',
+                mover: getMoveRecordMover(move, index),
                 branchCount: branchCounts[index] ?? 0,
                 quality: move.quality,
                 swing: move.swing,
