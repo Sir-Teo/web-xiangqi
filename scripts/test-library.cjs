@@ -222,6 +222,29 @@ try {
     importedVariationMainline.join(" ") === "b2e2 h9g7",
     `PGN variation import should keep the mainline only, got: ${importedVariationMainline.join(" ")}`
   );
+  const importedVariationTree = moveImport.extractUciMoveTree(`
+    [Variant "Xiangqi"]
+    1. b2e2 (1. b0c2 {side line}) h9g7
+  `);
+  assert(
+    importedVariationTree.moves.join(" ") === "b2e2 h9g7",
+    `PGN variation tree import should keep the active mainline, got: ${importedVariationTree.moves.join(" ")}`
+  );
+  assert(
+    importedVariationTree.hasVariations &&
+      importedVariationTree.moveTree[0]?.uci === "b2e2" &&
+      importedVariationTree.moveTree[1]?.uci === "b0c2",
+    `PGN variation tree import should preserve the root branch, got: ${JSON.stringify(importedVariationTree)}`
+  );
+  const importedNestedVariationTree = moveImport.extractUciMoveTree(`
+    [Variant "Xiangqi"]
+    1. b2e2 h9g7 (1... b9c7)
+  `);
+  assert(
+    importedNestedVariationTree.moveTree[0]?.children?.[0]?.uci === "h9g7" &&
+      importedNestedVariationTree.moveTree[0]?.children?.[1]?.uci === "b9c7",
+    `PGN variation tree import should preserve alternate replies, got: ${JSON.stringify(importedNestedVariationTree)}`
+  );
 
   const promotedChessMove = moveImport.extractUciMoveLine(`
     [Variant "Xiangqi"]

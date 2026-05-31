@@ -27,7 +27,7 @@ import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
-import { extractFenTag, extractUciMoveLine } from './utils/moveImport';
+import { extractFenTag, extractUciMoveLine, extractUciMoveTree } from './utils/moveImport';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -2002,7 +2002,8 @@ function App() {
   }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
-    const moves = extractUciMoveLine(text);
+    const importedLine = extractUciMoveTree(text);
+    const moves = importedLine.moves;
     if (moves.length === 0) {
       setMoveLineError('No UCI moves found');
       return;
@@ -2023,7 +2024,11 @@ function App() {
     handleCancelReview();
     resetReview();
     setGameMode(nextGameMode);
-    loadMoves(moves, startFen);
+    if (importedLine.hasVariations) {
+      loadMoveTree(importedLine.moveTree, moves, startFen);
+    } else {
+      loadMoves(moves, startFen);
+    }
     setFenInput('');
     clearFenError();
     setMoveLineInput('');
@@ -2031,7 +2036,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
