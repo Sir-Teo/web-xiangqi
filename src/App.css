@@ -3537,8 +3537,13 @@ summary:active {
   white-space: nowrap;
 }
 
+.opening-candidate-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .opening-candidate-btn:hover {
+  .opening-candidate-btn:hover:not(:disabled) {
     border-color: rgba(245, 158, 11, 0.32);
     background: rgba(245, 158, 11, 0.08);
   }

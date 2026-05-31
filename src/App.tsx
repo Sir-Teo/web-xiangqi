@@ -1580,11 +1580,11 @@ function App() {
   }, [applyUciMove, clearBoardMarkers, gameResult, sideToMove]);
 
   const handlePlayBookMove = useCallback((uci: string) => {
-    if (!uci || gameResult) return;
+    if (!uci || gameResult || isAiTurn) return;
     clearBoardMarkers();
     applyUciMove(uci);
     setAnalysisTab('tree');
-  }, [applyUciMove, clearBoardMarkers, gameResult]);
+  }, [applyUciMove, clearBoardMarkers, gameResult, isAiTurn]);
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
@@ -1778,7 +1778,7 @@ function App() {
             <div className="app-brand">
               <IconPawn className="app-brand-icon" />
               <span className="app-brand-text">Web Xiangqi</span>
-              <span className="brand-badge">Alpha</span>
+              <span className="brand-badge">Pikafish</span>
             </div>
 
             <span className="toolbar-divider desktop-only" />
@@ -2300,7 +2300,10 @@ function App() {
                             type="button"
                             className="opening-candidate-btn"
                             onClick={() => handlePlayBookMove(candidate.move)}
-                            title={candidate.names.join(' · ')}
+                            disabled={Boolean(gameResult) || isAiTurn}
+                            title={isAiTurn ? 'Wait for the AI move to finish' : candidate.names.join(' · ')}
+                            aria-label={`Play book continuation ${formatUciLine([candidate.move], 1)}: ${candidate.names[0] ?? candidate.chinese[0]}`}
+                            data-testid={`book-candidate-${candidate.move}`}
                           >
                             <strong>{formatUciLine([candidate.move], 1)}</strong>
                             <span>{candidate.chinese[0] ?? candidate.names[0]}</span>
