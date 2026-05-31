@@ -2679,8 +2679,9 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Workspace</label>
+              <label htmlFor="settings-workspace-mode">Workspace</label>
               <select
+                id="settings-workspace-mode"
                 className="premium-select"
                 value={workspaceMode}
                 onChange={(e) => setWorkspaceMode(e.target.value as WorkspaceMode)}
@@ -2691,8 +2692,8 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Interface</label>
-              <div className="settings-inline-toggles">
+              <span id="settings-interface-label" className="settings-label">Interface</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-interface-label">
                 <button
                   type="button"
                   className={`pill-btn ${assistMode === 'coach' ? 'pill-btn-active' : ''}`}
@@ -2713,8 +2714,9 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Game Mode</label>
+              <label htmlFor="settings-game-mode">Game Mode</label>
               <select
+                id="settings-game-mode"
                 className="premium-select"
                 value={gameMode}
                 onChange={(e) => {
@@ -2730,12 +2732,13 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Board Orientation</label>
-              <div className="settings-inline-toggles">
+              <span id="settings-orientation-label" className="settings-label">Board Orientation</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-orientation-label">
                 <button
                   type="button"
                   className={`pill-btn ${orientation === 'red' ? 'pill-btn-active' : ''}`}
                   onClick={() => setOrientation('red')}
+                  aria-pressed={orientation === 'red'}
                 >
                   Red at bottom
                 </button>
@@ -2743,6 +2746,7 @@ function App() {
                   type="button"
                   className={`pill-btn ${orientation === 'black' ? 'pill-btn-active' : ''}`}
                   onClick={() => setOrientation('black')}
+                  aria-pressed={orientation === 'black'}
                 >
                   Black at bottom
                 </button>
@@ -2750,12 +2754,13 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Layout</label>
-              <div className="settings-inline-toggles">
+              <span id="settings-layout-label" className="settings-label">Layout</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-layout-label">
                 <button
                   type="button"
                   className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
                   onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT_PANEL_WIDTH)}
+                  aria-pressed={leftPanelOpen}
                 >
                   Graph Panel
                 </button>
@@ -2763,6 +2768,7 @@ function App() {
                   type="button"
                   className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
                   onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT_PANEL_WIDTH)}
+                  aria-pressed={rightPanelOpen}
                 >
                   Tree Panel
                 </button>
@@ -2770,12 +2776,13 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>Analysis Engine</label>
-              <div className="settings-inline-toggles">
+              <span id="settings-analysis-engine-label" className="settings-label">Analysis Engine</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-analysis-engine-label">
                 <button
                   type="button"
                   className={`pill-btn ${analysisEngineMode === 'stable' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAnalysisEngineMode('stable')}
+                  aria-pressed={analysisEngineMode === 'stable'}
                 >
                   Stable
                 </button>
@@ -2783,6 +2790,7 @@ function App() {
                   type="button"
                   className={`pill-btn ${analysisEngineMode === 'optimized' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAnalysisEngineMode('optimized')}
+                  aria-pressed={analysisEngineMode === 'optimized'}
                 >
                   Optimized
                 </button>
@@ -2790,11 +2798,12 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label>
+              <label htmlFor="settings-search-depth">
                 Search Depth (AI / Live Analysis Cap) — {searchDepth}
                 {searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
               </label>
               <input
+                id="settings-search-depth"
                 type="range"
                 min="1"
                 max="24"
@@ -2806,14 +2815,15 @@ function App() {
 
             {isAiMode && (
               <div className="settings-group">
-                <label>AI Speed</label>
-                <div className="settings-inline-toggles">
+                <span id="settings-ai-speed-label" className="settings-label">AI Speed</span>
+                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-ai-speed-label">
                   {(['slow', 'normal', 'fast', 'step'] as AiSpeed[]).map((s) => (
                     <button
                       key={s}
                       type="button"
                       className={`pill-btn ${aiSpeed === s ? 'pill-btn-active' : ''}`}
                       onClick={() => handleSpeedChange(s)}
+                      aria-pressed={aiSpeed === s}
                     >
                       {s.charAt(0).toUpperCase() + s.slice(1)}
                     </button>
@@ -2823,12 +2833,13 @@ function App() {
             )}
 
             <div className="settings-group">
-              <label>Sound Effects</label>
-              <div className="settings-inline-toggles">
+              <span id="settings-sound-label" className="settings-label">Sound Effects</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-sound-label">
                 <button
                   type="button"
                   className={`pill-btn ${soundEnabled ? 'pill-btn-active' : ''}`}
                   onClick={() => handleSoundToggle(true)}
+                  aria-pressed={soundEnabled}
                 >
                   On
                 </button>
@@ -2836,6 +2847,7 @@ function App() {
                   type="button"
                   className={`pill-btn ${!soundEnabled ? 'pill-btn-active' : ''}`}
                   onClick={() => handleSoundToggle(false)}
+                  aria-pressed={!soundEnabled}
                 >
                   Off
                 </button>

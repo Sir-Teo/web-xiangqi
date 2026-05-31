@@ -713,6 +713,56 @@ async function assertPreferencePersistence(page) {
     await settings.getByRole("button", { name: "Pro", exact: true }).click();
     await settings.getByRole("button", { name: "Stable", exact: true }).click();
     await settings.getByRole("button", { name: "Off", exact: true }).click();
+    const settingsA11y = await settings.evaluate((root) => {
+      const byId = (id) => root.querySelector(`#${id}`);
+      const labelTextFor = (id) => byId(id)?.labels?.[0]?.textContent?.replace(/\s+/g, " ").trim() || "";
+      const groupLabel = (id) => root.querySelector(`[aria-labelledby="${id}"]`)?.textContent?.replace(/\s+/g, " ").trim() || "";
+      const pressed = (name) => [...root.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === name)
+        ?.getAttribute("aria-pressed") || "";
+      return {
+        workspaceLabel: labelTextFor("settings-workspace-mode"),
+        gameModeLabel: labelTextFor("settings-game-mode"),
+        searchDepthLabel: labelTextFor("settings-search-depth"),
+        interfaceGroup: groupLabel("settings-interface-label"),
+        orientationGroup: groupLabel("settings-orientation-label"),
+        layoutGroup: groupLabel("settings-layout-label"),
+        engineGroup: groupLabel("settings-analysis-engine-label"),
+        soundGroup: groupLabel("settings-sound-label"),
+        coachPressed: pressed("Coach"),
+        proPressed: pressed("Pro"),
+        stablePressed: pressed("Stable"),
+        optimizedPressed: pressed("Optimized"),
+        redPressed: pressed("Red at bottom"),
+        blackPressed: pressed("Black at bottom"),
+        graphPressed: pressed("Graph Panel"),
+        treePressed: pressed("Tree Panel"),
+        onPressed: pressed("On"),
+        offPressed: pressed("Off"),
+      };
+    });
+    if (
+      settingsA11y.workspaceLabel !== "Workspace" ||
+      settingsA11y.gameModeLabel !== "Game Mode" ||
+      !settingsA11y.searchDepthLabel.startsWith("Search Depth") ||
+      !settingsA11y.interfaceGroup.includes("Coach") ||
+      !settingsA11y.orientationGroup.includes("Red at bottom") ||
+      !settingsA11y.layoutGroup.includes("Graph Panel") ||
+      !settingsA11y.engineGroup.includes("Stable") ||
+      !settingsA11y.soundGroup.includes("On") ||
+      settingsA11y.coachPressed !== "false" ||
+      settingsA11y.proPressed !== "true" ||
+      settingsA11y.stablePressed !== "true" ||
+      settingsA11y.optimizedPressed !== "false" ||
+      settingsA11y.redPressed !== "true" ||
+      settingsA11y.blackPressed !== "false" ||
+      settingsA11y.graphPressed !== "true" ||
+      settingsA11y.treePressed !== "true" ||
+      settingsA11y.onPressed !== "false" ||
+      settingsA11y.offPressed !== "true"
+    ) {
+      throw new Error(`Settings controls are not fully accessible: ${JSON.stringify(settingsA11y)}`);
+    }
     await settings.getByRole("button", { name: "Close settings" }).click();
     await page.locator(".settings-body").waitFor({ state: "detached", timeout: 5000 });
 

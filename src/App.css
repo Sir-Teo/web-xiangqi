@@ -3306,7 +3306,7 @@ summary:active {
   gap: 0.45rem;
 }
 
-.settings-group label {
+.settings-group :is(label, .settings-label) {
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-secondary);
@@ -4776,7 +4776,7 @@ summary:active {
   margin-bottom: 1rem;
 }
 
-.settings-group label {
+.settings-group :is(label, .settings-label) {
   display: block;
   font-size: 0.74rem;
   font-weight: 600;
