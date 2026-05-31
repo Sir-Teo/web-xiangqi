@@ -1,4 +1,5 @@
 import type { GameMode } from '../App';
+import { parseFenBoard } from './xiangqi';
 import type {
     ReviewCriticalQuality,
     ReviewKeyMoment,
@@ -39,6 +40,40 @@ function asFiniteNumber(value: unknown) {
 
 function asString(value: unknown) {
     return typeof value === 'string' ? value : undefined;
+}
+
+function normalizeSavedMove(value: unknown): string | null {
+    const move = asString(value)?.trim().toLowerCase();
+    return move && /^[a-i][0-9][a-i][0-9]$/.test(move) ? move : null;
+}
+
+function normalizeSavedMoves(value: unknown): string[] | null {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) return null;
+    const moves: string[] = [];
+    for (const rawMove of value) {
+        const move = normalizeSavedMove(rawMove);
+        if (!move) return null;
+        moves.push(move);
+    }
+    return moves;
+}
+
+function normalizeStartFen(value: unknown): string | undefined | null {
+    const fen = asString(value)?.trim();
+    if (!fen) return undefined;
+    try {
+        const parts = fen.split(/\s+/);
+        if (parts.length < 2) return null;
+        const board = parseFenBoard(parts[0]);
+        const flat = board.flat();
+        if (flat.filter((piece) => piece === 'K').length !== 1) return null;
+        if (flat.filter((piece) => piece === 'k').length !== 1) return null;
+        if (parts[1] !== 'w' && parts[1] !== 'b') return null;
+        return fen;
+    } catch {
+        return null;
+    }
 }
 
 function asMoveQuality(value: unknown): ReviewMoveQuality | undefined {
@@ -159,8 +194,11 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     const gameMode = rawGameMode && SAVED_GAME_MODES.includes(rawGameMode as GameMode)
         ? rawGameMode as GameMode
         : undefined;
-    const moves = Array.isArray(raw.moves) ? raw.moves.filter((move): move is string => typeof move === 'string') : [];
-    const startFen = asString(raw.startFen);
+    const moves = normalizeSavedMoves(raw.moves);
+    const startFen = normalizeStartFen(raw.startFen);
+    if (!moves || startFen === null) {
+        return null;
+    }
     if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen)) {
         return null;
     }

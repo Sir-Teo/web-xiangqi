@@ -60,6 +60,44 @@ try {
   });
   assert(emptyLegacySave === null, "Empty saves without a startFen should still be rejected.");
 
+  const uppercaseMoveSave = library.normalizeSavedGame({
+    id: "uppercase-move",
+    savedAt: 1710000000002,
+    gameMode: "PvP",
+    moves: ["B2E2", "H9G7"],
+  });
+  assert(uppercaseMoveSave, "Uppercase coordinate saves should be accepted for legacy compatibility.");
+  assert(
+    uppercaseMoveSave.moves.join(" ") === "b2e2 h9g7",
+    `Saved moves should normalize to lowercase UCI, got: ${uppercaseMoveSave.moves.join(" ")}`
+  );
+
+  const malformedMoveSave = library.normalizeSavedGame({
+    id: "malformed-move",
+    savedAt: 1710000000003,
+    gameMode: "PvP",
+    moves: ["b2e2", "h9-g7"],
+  });
+  assert(malformedMoveSave === null, "Saved games with malformed coordinate moves should be rejected.");
+
+  const invalidFenSave = library.normalizeSavedGame({
+    id: "invalid-fen-root",
+    savedAt: 1710000000004,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    startFen: "9/9/9 w - - 0 1",
+  });
+  assert(invalidFenSave === null, "Saved games with invalid root FEN should be rejected.");
+
+  const missingKingFenSave = library.normalizeSavedGame({
+    id: "missing-king-root",
+    savedAt: 1710000000005,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    startFen: "9/9/9/9/9/9/9/9/9/4k4 w - - 0 1",
+  });
+  assert(missingKingFenSave === null, "Saved games with root FENs missing either king should be rejected.");
+
   const defaultPgn = gameExport.exportPgnFromUci(["b2e2", "h9g7"], {
     gameMode: "PvP",
     date: "2026.05.31",
