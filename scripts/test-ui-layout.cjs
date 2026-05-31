@@ -1422,6 +1422,37 @@ async function assertInvalidShareTreeFallsBackToMainline(page) {
   }
 }
 
+async function assertMismatchedShareTreeFallsBackToMainline(page) {
+  const tree = [
+    { uci: "b2e2", children: [{ uci: "h9g7" }] },
+  ];
+  const url = `http://127.0.0.1:8192/web-xiangqi/?moves=b0c2&tree=${encodeShareTreeParam(tree)}`;
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(url, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.getByTestId("share-link-warning").waitFor({ timeout: 5000 });
+  const loaded = await page.evaluate(() => ({
+    warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+    rows: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.trim() || "").join(" "),
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    !loaded.warning.includes("Shared variations not loaded") ||
+    !loaded.rows.includes("b0c2") ||
+    loaded.rows.includes("b2e2") ||
+    loaded.variations.includes("h9g7") ||
+    !loaded.activePoint.includes("Red B0") ||
+    loaded.overflowX > 2
+  ) {
+    throw new Error(`Mismatched share tree did not fall back to the explicit mainline: ${JSON.stringify(loaded)}`);
+  }
+}
+
 async function assertInvalidShareLinkFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=a0a9", {
@@ -2291,6 +2322,7 @@ async function main() {
     await assertOversizedShareTreeWarning(page);
     await assertLongShareVariationVisible(page);
     await assertInvalidShareTreeFallsBackToMainline(page);
+    await assertMismatchedShareTreeFallsBackToMainline(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
     await assertFenTaggedMoveLineImport(page);
@@ -2312,7 +2344,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

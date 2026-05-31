@@ -2143,7 +2143,8 @@ function App() {
     }
 
     const treeValidation = sharedMoveTree?.length ? validateMoveTree(sharedMoveTree, rawFen) : null;
-    const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true : false;
+    const sharedTreeContainsLine = sharedMoveTree?.length ? moveTreeContainsLine(sharedMoveTree, moves) : false;
+    const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true && sharedTreeContainsLine : false;
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
       console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
@@ -2153,6 +2154,8 @@ function App() {
     setShareLinkNotice(rawTree && !canLoadSharedTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok) {
       console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
+    } else if (sharedMoveTree?.length && treeValidation?.ok && !sharedTreeContainsLine) {
+      console.warn('Ignored shared Xiangqi variation tree whose main line is missing:', moves.join(' '));
     }
     stopAnalysis();
     handleCancelReview();
