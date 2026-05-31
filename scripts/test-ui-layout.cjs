@@ -3,6 +3,14 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
+function encodeShareTreeParam(tree) {
+  return Buffer.from(JSON.stringify(tree), "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
 async function waitForHttp(url, timeoutMs) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
@@ -1064,6 +1072,61 @@ async function assertShareTreeRoundTrip(page) {
   }
 }
 
+async function assertLongShareVariationVisible(page) {
+  const tree = [
+    {
+      uci: "b2e2",
+      children: [
+        {
+          uci: "h9g7",
+          children: [
+            {
+              uci: "b0c2",
+              children: [
+                {
+                  uci: "b9c7",
+                  children: [
+                    {
+                      uci: "c3c4",
+                      children: [
+                        {
+                          uci: "c6c5",
+                          children: [
+                            {
+                              uci: "h0g2",
+                              children: [{ uci: "g6g5" }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    { uci: "b0c2" },
+  ];
+  const url = `http://127.0.0.1:8192/web-xiangqi/?moves=b0c2&tree=${encodeShareTreeParam(tree)}`;
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(url, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const loaded = await page.evaluate(() => ({
+    activeRow: document.querySelector(".mtree-row")?.textContent?.trim() || "",
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!loaded.activeRow.includes("b0c2") || !loaded.variations.includes("h0g2") || !loaded.variations.includes("g6g5") || loaded.overflowX > 2) {
+    throw new Error(`Long share variation was truncated or broke layout: ${JSON.stringify(loaded)}`);
+  }
+}
+
 async function assertInvalidShareLinkFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=a0a9", {
@@ -1762,6 +1825,7 @@ async function main() {
     await assertMainExportFailureFeedback(page);
     await assertShareLinkRoundTrip(page);
     await assertShareTreeRoundTrip(page);
+    await assertLongShareVariationVisible(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
     await assertFenTaggedMoveLineImport(page);
@@ -1782,7 +1846,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, tree PGN variation export, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

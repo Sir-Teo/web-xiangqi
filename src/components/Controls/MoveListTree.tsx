@@ -28,6 +28,8 @@ type MoveListEntry = {
     side: MoveSide;
 };
 
+const MAX_VISIBLE_VARIATION_PLIES = 80;
+
 export const MoveListTree = memo(function MoveListTree({
     treeNodes,
     rootNodeId,
@@ -184,8 +186,10 @@ function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
 function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeNode>): string[] {
     const line: string[] = [];
     let cursor: string | undefined = startId;
-    let guard = 6;
-    while (cursor && guard-- > 0) {
+    const seen = new Set<string>();
+    let guard = MAX_VISIBLE_VARIATION_PLIES;
+    while (cursor && guard-- > 0 && !seen.has(cursor)) {
+        seen.add(cursor);
         line.push(cursor);
         const nextNodeId: string | undefined = treeNodes[cursor]?.childrenIds[0];
         cursor = nextNodeId;
