@@ -2405,6 +2405,7 @@ function App() {
     handleCancelReview();
     resetReview();
     setGameMode(game.gameMode);
+    setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
     const loadedNodeIds = game.moveTree?.length
       ? loadMoveTree(game.moveTree, game.moves, game.startFen)
@@ -2434,8 +2435,10 @@ function App() {
       setAnalysisTab('review');
       setMobileAnalysisTab('review');
     } else {
+      setAnalysisTab('tree');
       setMobileAnalysisTab('moves');
     }
+    setMobileView('analysis');
     setGraphLoadSweepToken((token) => token + 1);
     return true;
   }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
@@ -2445,8 +2448,11 @@ function App() {
     handleCancelReview();
     resetReview();
     setGameMode('PvP');
+    setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
+    setAnalysisTab('tree');
     loadMoves(game.moves);
+    setMobileView('analysis');
     setMobileAnalysisTab('moves');
     setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
