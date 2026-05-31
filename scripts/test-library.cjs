@@ -187,6 +187,46 @@ try {
     `Library export fallback should preserve the saved mainline instead of exporting a wrong tree branch:\n${mismatchedSavedTreeFallbackPgn}`
   );
 
+  const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  try {
+    const storedValues = new Map();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key) => storedValues.get(key) ?? null,
+        setItem: (key, value) => storedValues.set(key, String(value)),
+      },
+    });
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {},
+    });
+    const fallbackIdSave = library.saveGame({
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+    });
+    assert(fallbackIdSave, "Saving should work when crypto.randomUUID is unavailable.");
+    assert(
+      /^game-[a-z0-9]+-[a-z0-9]+$/.test(fallbackIdSave.id),
+      `Fallback saved-game id should be stable and nonempty, got: ${fallbackIdSave.id}`
+    );
+    const storedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    assert(storedGames[0]?.id === fallbackIdSave.id, "Fallback id save should be persisted.");
+  } finally {
+    if (originalLocalStorageDescriptor) {
+      Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
+    if (originalCryptoDescriptor) {
+      Object.defineProperty(globalThis, "crypto", originalCryptoDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "crypto");
+    }
+  }
+
   const encodedStudyTree = shareTree.encodeSavedMoveTreeParam(savedStudyTree.moveTree);
   assert(encodedStudyTree, "Saved study trees should encode into share-link params.");
   const decodedStudyTree = shareTree.decodeSavedMoveTreeParam(encodedStudyTree);

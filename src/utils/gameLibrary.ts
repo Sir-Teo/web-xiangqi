@@ -289,6 +289,13 @@ function writeAll(games: SavedGame[]): boolean {
     }
 }
 
+function createSavedGameId() {
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
+    }
+    return `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function loadAllGames(): SavedGame[] {
     return readAll().sort((a, b) => b.savedAt - a.savedAt);
 }
@@ -296,7 +303,7 @@ export function loadAllGames(): SavedGame[] {
 export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null {
     const saved: SavedGame = {
         ...game,
-        id: crypto.randomUUID(),
+        id: createSavedGameId(),
         savedAt: Date.now(),
     };
     const games = readAll();
