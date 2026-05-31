@@ -135,6 +135,7 @@ const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
   c: 'Cannon: straight; capture over 1 screen',
   p: 'Soldier: forward; sideways after crossing river',
 };
+const PREFERENCES_STORAGE_KEY = 'xiangqi-app-preferences';
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
   K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
   k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
@@ -144,6 +145,18 @@ const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 type ReviewPhase = 'base' | 'revisit';
+
+type StoredPreferences = {
+  assistMode?: AssistMode;
+  orientation?: BoardOrientation;
+  showArrows?: boolean;
+  soundEnabled?: boolean;
+  searchDepth?: number;
+  analysisEngineMode?: AnalysisEngineMode;
+  enginePvLineCount?: PvLineCount;
+  aiStrength?: AiStrength;
+  aiSpeed?: AiSpeed;
+};
 
 type ReviewController = {
   active: boolean;
@@ -197,6 +210,62 @@ function detectSimdSupport() {
     ]));
   } catch (_) {
     return false;
+  }
+}
+
+function isAssistMode(value: unknown): value is AssistMode {
+  return value === 'coach' || value === 'pro';
+}
+
+function isBoardOrientation(value: unknown): value is BoardOrientation {
+  return value === 'red' || value === 'black';
+}
+
+function isAnalysisEngineMode(value: unknown): value is AnalysisEngineMode {
+  return value === 'stable' || value === 'optimized';
+}
+
+function isAiStrength(value: unknown): value is AiStrength {
+  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+}
+
+function isAiSpeed(value: unknown): value is AiSpeed {
+  return value === 'slow' || value === 'normal' || value === 'fast' || value === 'step';
+}
+
+function isPvLineCount(value: unknown): value is PvLineCount {
+  return value === 1 || value === 3 || value === 5;
+}
+
+function readStoredPreferences(): StoredPreferences {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const searchDepth = Number(parsed.searchDepth);
+    return {
+      assistMode: isAssistMode(parsed.assistMode) ? parsed.assistMode : undefined,
+      orientation: isBoardOrientation(parsed.orientation) ? parsed.orientation : undefined,
+      showArrows: typeof parsed.showArrows === 'boolean' ? parsed.showArrows : undefined,
+      soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : undefined,
+      searchDepth: Number.isFinite(searchDepth) ? Math.max(1, Math.min(24, Math.trunc(searchDepth))) : undefined,
+      analysisEngineMode: isAnalysisEngineMode(parsed.analysisEngineMode) ? parsed.analysisEngineMode : undefined,
+      enginePvLineCount: isPvLineCount(parsed.enginePvLineCount) ? parsed.enginePvLineCount : undefined,
+      aiStrength: isAiStrength(parsed.aiStrength) ? parsed.aiStrength : undefined,
+      aiSpeed: isAiSpeed(parsed.aiSpeed) ? parsed.aiSpeed : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredPreferences(preferences: StoredPreferences) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+  } catch {
+    // Preferences are a convenience; storage failures should never interrupt play.
   }
 }
 
@@ -306,9 +375,13 @@ function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
 }
 
 function App() {
+  const storedPreferences = useMemo(() => readStoredPreferences(), []);
+  const defaultSearchDepth = typeof window !== 'undefined' && window.innerWidth <= 900 ? 6 : 8;
+  const initialSoundEnabled = storedPreferences.soundEnabled ?? true;
+  const initialAiSpeed = storedPreferences.aiSpeed ?? 'normal';
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
-  const [assistMode, setAssistMode] = useState<AssistMode>('coach');
+  const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
   const [leftWidth, setLeftWidth] = useState(320);
   const [rightWidth, setRightWidth] = useState(320);
   const [topPanelOpen, setTopPanelOpen] = useState(true);
@@ -316,7 +389,7 @@ function App() {
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
   const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'graph' | 'library'>('moves');
-  const [showArrows, setShowArrows] = useState(true);
+  const [showArrows, setShowArrows] = useState(storedPreferences.showArrows ?? true);
   const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
   const [showSettings, setShowSettings] = useState(false);
@@ -324,36 +397,58 @@ function App() {
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
-  const [aiStrength, setAiStrength] = useState<AiStrength>(5);
+  const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
-  const [orientation, setOrientation] = useState<BoardOrientation>('red');
+  const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
     height: typeof window === 'undefined' ? 800 : window.innerHeight,
   }));
 
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const soundEnabledRef = useRef(true);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
+  const soundEnabledRef = useRef(initialSoundEnabled);
   const handleSoundToggle = useCallback((enabled: boolean) => {
     soundEnabledRef.current = enabled;
     setSoundEnabled(enabled);
   }, []);
 
-  const [searchDepth, setSearchDepth] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth <= 900 ? 6 : 8
-  );
-  const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>('optimized');
-  const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(3);
+  const [searchDepth, setSearchDepth] = useState(storedPreferences.searchDepth ?? defaultSearchDepth);
+  const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>(storedPreferences.analysisEngineMode ?? 'optimized');
+  const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(storedPreferences.enginePvLineCount ?? 3);
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
-  const [aiSpeed, setAiSpeed] = useState<AiSpeed>('normal');
-  const aiSpeedRef = useRef<AiSpeed>('normal');
+  const [aiSpeed, setAiSpeed] = useState<AiSpeed>(initialAiSpeed);
+  const aiSpeedRef = useRef<AiSpeed>(initialAiSpeed);
   const handleSpeedChange = useCallback((s: AiSpeed) => {
     setAiSpeed(s);
     aiSpeedRef.current = s;
   }, []);
+
+  useEffect(() => {
+    writeStoredPreferences({
+      assistMode,
+      orientation,
+      showArrows,
+      soundEnabled,
+      searchDepth,
+      analysisEngineMode,
+      enginePvLineCount,
+      aiStrength,
+      aiSpeed,
+    });
+  }, [
+    aiSpeed,
+    aiStrength,
+    analysisEngineMode,
+    assistMode,
+    enginePvLineCount,
+    orientation,
+    searchDepth,
+    showArrows,
+    soundEnabled,
+  ]);
 
   // AI pause/resume state
   const [paused, setPaused] = useState(false);

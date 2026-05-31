@@ -253,6 +253,71 @@ async function assertEnginePvLineControl(page) {
   }
 }
 
+async function assertPreferencePersistence(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  try {
+    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    await page.getByRole("button", { name: "Open settings" }).click();
+    const settings = page.locator(".settings-body");
+    await settings.getByRole("button", { name: "Pro", exact: true }).click();
+    await settings.getByRole("button", { name: "Stable", exact: true }).click();
+    await settings.getByRole("button", { name: "Off", exact: true }).click();
+    await settings.getByRole("button", { name: "Close settings" }).click();
+    await page.locator(".settings-body").waitFor({ state: "detached", timeout: 5000 });
+
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("engine-pv-lines-5").click();
+
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"));
+    if (
+      stored.assistMode !== "pro" ||
+      stored.analysisEngineMode !== "stable" ||
+      stored.soundEnabled !== false ||
+      stored.enginePvLineCount !== 5
+    ) {
+      throw new Error(`Preferences were not written correctly: ${JSON.stringify(stored)}`);
+    }
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    const restoredAssist = await page.evaluate(() => document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "");
+    if (restoredAssist !== "pro") {
+      throw new Error(`Assist mode was not restored from preferences: ${restoredAssist}`);
+    }
+
+    await page.getByTestId("analysis-tab-engine").click();
+    const restored = await page.evaluate(() => ({
+      pv5Active: document.querySelector('[data-testid="engine-pv-lines-5"]')?.getAttribute("aria-pressed") || "",
+      detail: [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent || "")
+        .find((text) => text.includes("Detail")) || "",
+      profile: [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent || "")
+        .find((text) => text.includes("Profile")) || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+
+    if (restored.pv5Active !== "true" || !restored.detail.includes("MultiPV 5") || !restored.profile.includes("stable")) {
+      throw new Error(`Preferences were not restored into the UI: ${JSON.stringify(restored)}`);
+    }
+    if (restored.overflowX > 2) {
+      throw new Error(`Restored preferences introduced horizontal overflow: ${restored.overflowX}`);
+    }
+  } finally {
+    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences")).catch(() => {});
+  }
+}
+
 async function assertBottomNewGameMenuResetsDraft(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -800,6 +865,7 @@ async function main() {
     await assertPausedAiTurnBlocksManualMove(page);
     await assertAiPlayModeShowsEngineStatus(page);
     await assertEnginePvLineControl(page);
+    await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertInvalidFenToastTimerResets(page);
     await assertNewGameDialogFocusTrap(page);
@@ -819,7 +885,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
