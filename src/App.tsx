@@ -164,7 +164,12 @@ function isGameMode(value: unknown): value is GameMode {
   return value === 'PvP' || value === 'PvAI-Black' || value === 'PvAI-Red' || value === 'AIvAI';
 }
 
-function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTree?: SavedMoveTreeNode[]): string | null {
+type ShareUrlBuildResult = {
+  url: string;
+  treeOmitted: boolean;
+};
+
+function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTree?: SavedMoveTreeNode[]): ShareUrlBuildResult | null {
   if (typeof window === 'undefined') return null;
   const url = new URL(window.location.href);
   url.search = '';
@@ -175,16 +180,21 @@ function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTre
   if (moves.length > 0) {
     url.searchParams.set('moves', moves.join(' '));
   }
+  let treeIncluded = false;
   if (moveTree?.length) {
     const encodedTree = encodeSavedMoveTreeParam(moveTree);
     if (encodedTree) {
       url.searchParams.set('tree', encodedTree);
+      treeIncluded = true;
     }
   }
   if (mode !== 'PvP') {
     url.searchParams.set('mode', mode);
   }
-  return url.toString();
+  return {
+    url: url.toString(),
+    treeOmitted: Boolean(moveTree?.length) && !treeIncluded,
+  };
 }
 
 function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: string[]) {
@@ -1904,15 +1914,16 @@ function App() {
     const moveTree = Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const url = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
-    if (!url || !canShareCurrentPosition) return;
-    const ok = await copyToClipboard(url);
+    const share = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
+    if (!share || !canShareCurrentPosition) return;
+    const ok = await copyToClipboard(share.url);
     if (!ok) {
       showExportFailure('copy-share');
       return;
     }
 
     clearExportFailure();
+    setShareLinkNotice(share.treeOmitted ? { tone: 'warning', text: 'Shared without variations' } : null);
     if (copiedShareToastTimerRef.current !== null) {
       window.clearTimeout(copiedShareToastTimerRef.current);
     }

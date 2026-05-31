@@ -1206,6 +1206,74 @@ async function assertShareTreeRoundTrip(page) {
   }
 }
 
+async function assertOversizedShareTreeWarning(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const branch = {
+      uci: "b2e2",
+      children: [{
+        uci: "h9g7",
+        children: [{
+          uci: "b0c2",
+          children: [{ uci: "b9c7" }],
+        }],
+      }],
+    };
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-oversized-share-tree",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7", "b0c2", "b9c7"],
+      moveTree: Array.from({ length: 128 }, () => branch),
+      result: "ongoing",
+      label: "Oversized share tree QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    window.__oversizedShareWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__oversizedShareWrites.push(String(text));
+        },
+      },
+    });
+  });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("Oversized share tree QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("load-saved-qa-oversized-share-tree").click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Ply 4"),
+    null,
+    { timeout: 5000 }
+  );
+
+  await page.getByTestId("copy-share-link-btn").click();
+  await page.getByTestId("copy-share-link-btn").getByText("Copied").waitFor({ timeout: 5000 });
+  await page.getByTestId("share-link-warning").getByText("Shared without variations").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => {
+    const copiedUrl = window.__oversizedShareWrites?.[0] ?? "";
+    const parsed = new URL(copiedUrl);
+    return {
+      moves: parsed.searchParams.get("moves"),
+      hasTree: parsed.searchParams.has("tree"),
+      warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+
+  if (state.moves !== "b2e2 h9g7 b0c2 b9c7" || state.hasTree || !state.warning.includes("Shared without variations") || state.overflowX > 2) {
+    throw new Error(`Oversized study share did not warn and fall back to a mainline-only link: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertLongShareVariationVisible(page) {
   const tree = [
     {
@@ -2097,6 +2165,7 @@ async function main() {
     await assertMainExportFailureFeedback(page);
     await assertShareLinkRoundTrip(page);
     await assertShareTreeRoundTrip(page);
+    await assertOversizedShareTreeWarning(page);
     await assertLongShareVariationVisible(page);
     await assertInvalidShareTreeFallsBackToMainline(page);
     await assertInvalidShareLinkFeedback(page);
@@ -2120,7 +2189,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
