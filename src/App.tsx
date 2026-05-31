@@ -11,7 +11,7 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward
+  IconSkipForward, IconMore
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
@@ -465,6 +465,7 @@ function App() {
   const [showArrows, setShowArrows] = useState(storedPreferences.showArrows ?? true);
   const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
+  const [showMobileBoardActionMenu, setShowMobileBoardActionMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
@@ -1055,6 +1056,7 @@ function App() {
         event.preventDefault();
         setShowSettings(false);
         setShowNewGameMenu(false);
+        setShowMobileBoardActionMenu(false);
         if (fenErrorTimerRef.current !== null) {
           window.clearTimeout(fenErrorTimerRef.current);
           fenErrorTimerRef.current = null;
@@ -1468,6 +1470,7 @@ function App() {
   }, [resetGame]);
 
   const openLibraryPanel = useCallback(() => {
+    setShowMobileBoardActionMenu(false);
     setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
     setLeftPanelTab('library');
     setMobileAnalysisTab('library');
@@ -1773,6 +1776,7 @@ function App() {
   }, []);
 
   const toggleSettings = useCallback(() => {
+    setShowMobileBoardActionMenu(false);
     setShowNewGameMenu(false);
     clearFenError();
     setMoveLineError(null);
@@ -1781,11 +1785,13 @@ function App() {
 
   const closeNewGameMenu = useCallback(() => {
     setShowNewGameMenu(false);
+    setShowMobileBoardActionMenu(false);
     clearFenError();
     setMoveLineError(null);
   }, [clearFenError]);
 
   const openNewGameMenu = useCallback(() => {
+    setShowMobileBoardActionMenu(false);
     setShowSettings(false);
     setPendingGameMode(gameMode);
     setFenInput('');
@@ -2949,10 +2955,7 @@ function App() {
             </div>
           )}
           {isMobile && mobileView === 'board' && (
-            <div
-              className="mobile-board-header"
-              data-action-rich={showMobilePgnAction || showMobileShareAction ? 'true' : undefined}
-            >
+            <div className="mobile-board-header">
               <div className="mobile-board-turn-info">
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
@@ -2990,53 +2993,101 @@ function App() {
                 >
                   <IconLibrary />
                 </button>
-                {showMobilePgnAction ? (
-                  <button
-                    className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-btn-warn' : ''}`}
-                    type="button"
-                    onClick={handleDownloadPgn}
-                    disabled={!canExportCurrentLine}
-                    title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
-                    aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
-                    data-testid="mobile-download-pgn-btn"
-                  >
-                    {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
-                  </button>
-                ) : null}
-                {showMobileShareAction ? (
-                  <button
-                    className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-btn-warn' : ''}`}
-                    type="button"
-                    onClick={handleCopyShareLink}
-                    disabled={!canShareCurrentPosition}
-                    title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
-                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
-                    data-testid="mobile-copy-share-link-btn"
-                  >
-                    {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
-                  </button>
-                ) : null}
-                <button
-                  className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-btn-warn' : ''}`}
-                  type="button"
-                  onClick={handleCopyFen}
-                  title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
-                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
-                  data-testid="mobile-copy-fen-btn"
-                >
-                  {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
-                </button>
                 {isAiMode && (
                   <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} type="button" onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'} aria-label={paused ? 'Resume AI' : 'Pause AI'}>
                     {paused ? <IconPlay /> : <IconPause />}
                   </button>
                 )}
-                <button className={`mobile-action-btn ${showArrows ? 'mobile-action-btn-active' : ''}`} type="button" onClick={() => setShowArrows(v => !v)} title="Toggle arrows and markers" aria-label="Toggle board arrows and markers"><IconArrow /></button>
-                <button className="mobile-action-btn" type="button" onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')} title="Flip board" aria-label="Flip board"><IconFlip /></button>
+                <button
+                  className={`mobile-action-btn ${showMobileBoardActionMenu ? 'mobile-action-btn-active' : ''}`}
+                  type="button"
+                  onClick={() => setShowMobileBoardActionMenu((open) => !open)}
+                  title="More board actions"
+                  aria-label="More board actions"
+                  aria-haspopup="menu"
+                  aria-expanded={showMobileBoardActionMenu}
+                  aria-controls="mobile-board-action-menu"
+                  data-testid="mobile-more-actions-btn"
+                >
+                  <IconMore />
+                </button>
                 <button className="mobile-action-btn" type="button" onClick={toggleSettings} title="Settings" aria-label="Open settings"><IconSettings /></button>
               </div>
             </div>
           )}
+          {isMobile && mobileView === 'board' && showMobileBoardActionMenu ? (
+            <div
+              id="mobile-board-action-menu"
+              className="mobile-board-action-menu"
+              role="menu"
+              aria-label="More board actions"
+            >
+              {showMobilePgnAction ? (
+                <button
+                  className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
+                  type="button"
+                  onClick={handleDownloadPgn}
+                  disabled={!canExportCurrentLine}
+                  role="menuitem"
+                  title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
+                  aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
+                  data-testid="mobile-download-pgn-btn"
+                >
+                  {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
+                  <span>{exportFailureKey === 'download-pgn' ? 'Export failed' : downloadedPgnToast ? 'Exported' : 'Export PGN'}</span>
+                </button>
+              ) : null}
+              {showMobileShareAction ? (
+                <button
+                  className={`mobile-action-menu-btn ${copiedShareToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-menu-btn-warn' : ''}`}
+                  type="button"
+                  onClick={handleCopyShareLink}
+                  disabled={!canShareCurrentPosition}
+                  role="menuitem"
+                  title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
+                  aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                  data-testid="mobile-copy-share-link-btn"
+                >
+                  {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
+                  <span>{exportFailureKey === 'copy-share' ? 'Copy failed' : copiedShareToast ? 'Copied link' : 'Copy link'}</span>
+                </button>
+              ) : null}
+              <button
+                className={`mobile-action-menu-btn ${copiedFenToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-menu-btn-warn' : ''}`}
+                type="button"
+                onClick={handleCopyFen}
+                role="menuitem"
+                title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
+                aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                data-testid="mobile-copy-fen-btn"
+              >
+                {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
+                <span>{exportFailureKey === 'copy-fen' ? 'Copy failed' : copiedFenToast ? 'Copied FEN' : 'Copy FEN'}</span>
+              </button>
+              <button
+                className={`mobile-action-menu-btn ${showArrows ? 'mobile-action-menu-btn-active' : ''}`}
+                type="button"
+                onClick={() => setShowArrows(v => !v)}
+                role="menuitem"
+                title="Toggle arrows and markers"
+                aria-label="Toggle board arrows and markers"
+              >
+                <IconArrow />
+                <span>{showArrows ? 'Hide arrows' : 'Show arrows'}</span>
+              </button>
+              <button
+                className="mobile-action-menu-btn"
+                type="button"
+                onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
+                role="menuitem"
+                title="Flip board"
+                aria-label="Flip board"
+              >
+                <IconFlip />
+                <span>Flip board</span>
+              </button>
+            </div>
+          ) : null}
           <div className="mobile-board-center">
             <div className="board-workspace">
               <div className="board-wrap">

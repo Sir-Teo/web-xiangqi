@@ -154,6 +154,14 @@ export const IconUpload = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+export const IconMore = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+        <circle cx="5" cy="12" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <circle cx="19" cy="12" r="2" />
+    </svg>
+);
+
 export const IconCornerDownRight = (props: React.SVGProps<SVGSVGElement>) => (
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
         <polyline points="15 10 20 15 15 20" />

@@ -1838,8 +1838,10 @@ async function assertMobileSaveLibraryActions(page) {
 
   const saveButton = page.getByTestId("mobile-save-game-btn");
   const libraryButton = page.getByTestId("mobile-open-library-btn");
+  const moreButton = page.getByTestId("mobile-more-actions-btn");
   await saveButton.waitFor({ timeout: 10000 });
   await libraryButton.waitFor({ timeout: 10000 });
+  await moreButton.waitFor({ timeout: 10000 });
 
   if (!(await saveButton.isDisabled())) {
     throw new Error("Mobile save action should be disabled before any move or custom position.");
@@ -1856,10 +1858,12 @@ async function assertMobileSaveLibraryActions(page) {
   if (await saveButton.isDisabled()) {
     throw new Error("Mobile save action stayed disabled after a legal move.");
   }
+  await moreButton.click();
   await page.getByTestId("mobile-download-pgn-btn").waitFor({ timeout: 5000 });
   await page.getByTestId("mobile-copy-share-link-btn").waitFor({ timeout: 5000 });
   const actionStrip = await page.evaluate(() => {
     const el = document.querySelector(".mobile-board-actions");
+    const info = document.querySelector(".mobile-board-turn-info");
     const turnLabel = document.querySelector(".mobile-turn-label");
     return {
       clientWidth: el?.clientWidth ?? 0,
@@ -1868,12 +1872,20 @@ async function assertMobileSaveLibraryActions(page) {
       turnLabelClientWidth: turnLabel?.clientWidth ?? 0,
       turnLabelScrollWidth: turnLabel?.scrollWidth ?? 0,
       turnLabelText: turnLabel?.textContent?.trim() || "",
+      turnLabelRight: turnLabel?.getBoundingClientRect().right ?? 0,
+      turnInfoRight: info?.getBoundingClientRect().right ?? 0,
+      menuItems: document.querySelectorAll(".mobile-board-action-menu button").length,
     };
   });
   if (actionStrip.scrollWidth - actionStrip.clientWidth > 2 || actionStrip.overflowX > 2) {
     throw new Error(`Mobile board actions did not fit after export/share appeared: ${JSON.stringify(actionStrip)}`);
   }
-  if (actionStrip.turnLabelText !== "Black" || actionStrip.turnLabelScrollWidth - actionStrip.turnLabelClientWidth > 1) {
+  if (
+    actionStrip.turnLabelText !== "Black" ||
+    actionStrip.turnLabelScrollWidth - actionStrip.turnLabelClientWidth > 1 ||
+    actionStrip.turnLabelRight > actionStrip.turnInfoRight + 1 ||
+    actionStrip.menuItems < 5
+  ) {
     throw new Error(`Mobile turn label was clipped after export/share appeared: ${JSON.stringify(actionStrip)}`);
   }
 
