@@ -32,10 +32,12 @@ try {
   compileTsModule("src/utils/xiangqi.ts");
   compileTsModule("src/utils/review.ts");
   compileTsModule("src/utils/gameLibrary.ts");
+  compileTsModule("src/utils/shareTree.ts");
   compileTsModule("src/utils/gameExport.ts");
   compileTsModule("src/utils/moveImport.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
+  const shareTree = require(path.join(tempDir, "shareTree.js"));
   const gameExport = require(path.join(tempDir, "gameExport.js"));
   const moveImport = require(path.join(tempDir, "moveImport.js"));
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
@@ -163,6 +165,13 @@ try {
   });
   assert(savedStudyTreePgn.includes('[White "Saved Study"]'), `Saved study tree PGN should include the saved label:\n${savedStudyTreePgn}`);
   assert(savedStudyTreePgn.includes("1. b0c2 (1. b2e2 h9g7) *"), `Saved study tree PGN should preserve variations:\n${savedStudyTreePgn}`);
+
+  const encodedStudyTree = shareTree.encodeSavedMoveTreeParam(savedStudyTree.moveTree);
+  assert(encodedStudyTree, "Saved study trees should encode into share-link params.");
+  const decodedStudyTree = shareTree.decodeSavedMoveTreeParam(encodedStudyTree);
+  assert(decodedStudyTree?.[0]?.uci === "b2e2", "Share-link study tree root move should decode.");
+  assert(decodedStudyTree?.[0]?.children?.[0]?.uci === "h9g7", "Share-link study tree child move should decode.");
+  assert(shareTree.decodeSavedMoveTreeParam("not-valid-base64") === null, "Malformed share-link study trees should be rejected.");
 
   const blackRootTreePgn = gameExport.exportPgnTree({
     root: { id: "root", parentId: null, childrenIds: ["n1", "n2"] },

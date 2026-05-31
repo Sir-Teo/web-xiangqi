@@ -83,7 +83,7 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
     return normalizedChildren.length > 0 ? { uci, children: normalizedChildren } : { uci };
 }
 
-function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | undefined | null {
+export function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | undefined | null {
     if (value === undefined) return undefined;
     if (!Array.isArray(value)) return null;
     const state = { count: 0 };

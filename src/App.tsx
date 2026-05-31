@@ -21,6 +21,7 @@ import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds'
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
+import { decodeSavedMoveTreeParam, encodeSavedMoveTreeParam } from './utils/shareTree';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -163,7 +164,7 @@ function isGameMode(value: unknown): value is GameMode {
   return value === 'PvP' || value === 'PvAI-Black' || value === 'PvAI-Red' || value === 'AIvAI';
 }
 
-function buildShareUrl(rootFen: string, moves: string[], mode: GameMode): string | null {
+function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTree?: SavedMoveTreeNode[]): string | null {
   if (typeof window === 'undefined') return null;
   const url = new URL(window.location.href);
   url.search = '';
@@ -173,6 +174,12 @@ function buildShareUrl(rootFen: string, moves: string[], mode: GameMode): string
   }
   if (moves.length > 0) {
     url.searchParams.set('moves', moves.join(' '));
+  }
+  if (moveTree?.length) {
+    const encodedTree = encodeSavedMoveTreeParam(moveTree);
+    if (encodedTree) {
+      url.searchParams.set('tree', encodedTree);
+    }
   }
   if (mode !== 'PvP') {
     url.searchParams.set('mode', mode);
@@ -1861,7 +1868,10 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, detectedOpening, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
-    const url = buildShareUrl(rootFen, currentLineMoves, gameMode);
+    const moveTree = Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+      ? serializeSavedMoveTree(treeNodes, rootNodeId)
+      : undefined;
+    const url = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
     if (!url || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(url);
     if (!ok) {
@@ -1878,7 +1888,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, showExportFailure]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, rootNodeId, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -2030,37 +2040,42 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const rawFen = params.get('fen')?.trim() || undefined;
     const rawMoves = params.get('moves') || '';
+    const rawTree = params.get('tree');
+    const sharedMoveTree = decodeSavedMoveTreeParam(rawTree);
     const rawMode = params.get('mode');
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
-    if (!rawFen && moves.length === 0) return;
-
-    if (moves.length > 0) {
-      const validation = validateMoveSequence(moves, rawFen);
-      if (!validation.ok) {
+    if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
+      if (rawTree) {
         setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-        console.warn('Ignored invalid shared Xiangqi line:', validation);
-        return;
       }
-    } else if (rawFen && !loadFen(rawFen)) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-      console.warn('Ignored invalid shared Xiangqi FEN.');
       return;
     }
 
-    setShareLinkNotice(null);
+    const validation = validateMoveSequence(moves, rawFen);
+    if (!validation.ok) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      console.warn('Ignored invalid shared Xiangqi link:', validation);
+      return;
+    }
+
+    setShareLinkNotice(rawTree && !sharedMoveTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
     stopAnalysis();
     handleCancelReview();
     resetReview();
     setGameMode(mode);
-    if (moves.length > 0) {
+    if (sharedMoveTree?.length) {
+      loadMoveTree(sharedMoveTree, moves, rawFen);
+    } else if (moves.length > 0) {
       loadMoves(moves, rawFen);
+    } else if (rawFen) {
+      loadFen(rawFen);
     }
     setWorkspaceMode('analysis');
     setAnalysisTab('tree');
     setMobileView('board');
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, loadFen, loadMoves, resetReview, stopAnalysis, validateMoveSequence]);
+  }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
