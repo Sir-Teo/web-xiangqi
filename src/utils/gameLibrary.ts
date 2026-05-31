@@ -51,6 +51,17 @@ function asValidTimestamp(value: unknown) {
     return Number.isFinite(new Date(timestamp).getTime()) ? timestamp : undefined;
 }
 
+function asNonNegativeInteger(value: unknown) {
+    const number = asFiniteNumber(value);
+    return typeof number === 'number' && number >= 0 ? Math.trunc(number) : undefined;
+}
+
+function asClampedInteger(value: unknown, min: number, max: number) {
+    const number = asFiniteNumber(value);
+    if (typeof number !== 'number') return undefined;
+    return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
 function asString(value: unknown) {
     return typeof value === 'string' ? value : undefined;
 }
@@ -129,13 +140,13 @@ function asCriticalQuality(value: unknown): ReviewCriticalQuality | undefined {
 
 function normalizeSavedReviewAnnotation(raw: unknown): SavedReviewAnnotation | null {
     if (!isRecord(raw)) return null;
-    const moveIndex = asFiniteNumber(raw.moveIndex);
+    const moveIndex = asNonNegativeInteger(raw.moveIndex);
     if (typeof moveIndex !== 'number' || moveIndex < 0) return null;
 
     return {
         moveIndex,
         evalScore: asFiniteNumber(raw.evalScore),
-        bestMove: asString(raw.bestMove),
+        bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         quality: asMoveQuality(raw.quality),
         swing: asFiniteNumber(raw.swing),
         reviewNote: asString(raw.reviewNote),
@@ -144,15 +155,15 @@ function normalizeSavedReviewAnnotation(raw: unknown): SavedReviewAnnotation | n
 
 function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string): ReviewKeyMoment | null {
     if (!isRecord(raw)) return null;
-    const moveIndex = asFiniteNumber(raw.moveIndex);
-    const jumpTarget = asFiniteNumber(raw.jumpTarget);
-    const ply = asFiniteNumber(raw.ply);
+    const moveIndex = asNonNegativeInteger(raw.moveIndex);
+    const jumpTarget = asNonNegativeInteger(raw.jumpTarget);
+    const ply = asNonNegativeInteger(raw.ply);
     const swing = asFiniteNumber(raw.swing);
     const evalBefore = asFiniteNumber(raw.evalBefore);
     const evalAfter = asFiniteNumber(raw.evalAfter);
     const quality = asCriticalQuality(raw.quality);
     const side = raw.side === 'black' ? 'black' : raw.side === 'red' ? 'red' : undefined;
-    const playedMove = asString(raw.playedMove);
+    const playedMove = normalizeSavedMove(raw.playedMove);
     const note = asString(raw.note);
 
     if (
@@ -180,7 +191,7 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string): ReviewK
         swing,
         evalBefore,
         evalAfter,
-        bestMove: asString(raw.bestMove),
+        bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         playedMove,
         note,
     };
@@ -196,14 +207,14 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
         : [];
 
     return {
-        totalMoves: asFiniteNumber(raw.totalMoves) ?? moves.length,
-        accuracy: asFiniteNumber(raw.accuracy) ?? 0,
-        bestCount: asFiniteNumber(raw.bestCount) ?? 0,
-        goodCount: asFiniteNumber(raw.goodCount) ?? 0,
-        inaccuracyCount: asFiniteNumber(raw.inaccuracyCount) ?? 0,
-        mistakeCount: asFiniteNumber(raw.mistakeCount) ?? 0,
-        blunderCount: asFiniteNumber(raw.blunderCount) ?? 0,
-        reviewedAt: asFiniteNumber(raw.reviewedAt) ?? Date.now(),
+        totalMoves: asNonNegativeInteger(raw.totalMoves) ?? moves.length,
+        accuracy: asClampedInteger(raw.accuracy, 0, 100) ?? 0,
+        bestCount: asNonNegativeInteger(raw.bestCount) ?? 0,
+        goodCount: asNonNegativeInteger(raw.goodCount) ?? 0,
+        inaccuracyCount: asNonNegativeInteger(raw.inaccuracyCount) ?? 0,
+        mistakeCount: asNonNegativeInteger(raw.mistakeCount) ?? 0,
+        blunderCount: asNonNegativeInteger(raw.blunderCount) ?? 0,
+        reviewedAt: asValidTimestamp(raw.reviewedAt) ?? Date.now(),
         lineSignature: asString(raw.lineSignature) ?? makeReviewLineSignatureFromMoves(moves),
         keyMoments,
     };

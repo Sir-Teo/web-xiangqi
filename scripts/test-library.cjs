@@ -109,6 +109,59 @@ try {
   });
   assert(invalidTimestampSave === null, "Saved games with out-of-range timestamps should be rejected.");
 
+  const corruptReviewedSave = library.normalizeSavedGame({
+    id: "corrupt-reviewed",
+    savedAt: 1710000000006,
+    gameMode: "PvP",
+    moves: ["b2e2", "h9g7"],
+    review: {
+      summary: {
+        totalMoves: -3,
+        accuracy: 999.8,
+        bestCount: 1.9,
+        goodCount: 2.7,
+        inaccuracyCount: -4,
+        mistakeCount: 1.2,
+        blunderCount: 3.4,
+        reviewedAt: 1e100,
+        keyMoments: [{
+          moveIndex: 1.8,
+          jumpTarget: 1.1,
+          ply: 2.9,
+          side: "black",
+          quality: "blunder",
+          swing: 420.6,
+          evalBefore: 20,
+          evalAfter: -401,
+          bestMove: "B9C7",
+          playedMove: "H9G7",
+          note: "Large swing.",
+        }],
+      },
+      annotations: [
+        { moveIndex: 0.8, evalScore: 20, bestMove: "B9C7", quality: "best", reviewNote: "ok" },
+      ],
+    },
+  });
+  assert(corruptReviewedSave?.review, "Corrupt but shape-valid review snapshots should normalize.");
+  assert(corruptReviewedSave.review.summary.totalMoves === 2, "Negative reviewed move counts should fall back to the saved line length.");
+  assert(corruptReviewedSave.review.summary.accuracy === 100, "Review accuracy should be clamped to 0-100.");
+  assert(corruptReviewedSave.review.summary.bestCount === 1, "Review counts should be truncated to nonnegative integers.");
+  assert(corruptReviewedSave.review.summary.goodCount === 2, "Review counts should preserve valid integer portions.");
+  assert(corruptReviewedSave.review.summary.inaccuracyCount === 0, "Negative review counts should normalize to zero.");
+  assert(corruptReviewedSave.review.summary.mistakeCount === 1, "Review mistake counts should normalize.");
+  assert(corruptReviewedSave.review.summary.blunderCount === 3, "Review blunder counts should normalize.");
+  assert(
+    Number.isFinite(new Date(corruptReviewedSave.review.summary.reviewedAt).getTime()) &&
+      corruptReviewedSave.review.summary.reviewedAt !== 1e100,
+    "Invalid review timestamps should be replaced with a valid timestamp."
+  );
+  assert(corruptReviewedSave.review.summary.keyMoments[0]?.moveIndex === 1, "Review key moments should use integer move indexes.");
+  assert(corruptReviewedSave.review.summary.keyMoments[0]?.bestMove === "b9c7", "Review key-moment best moves should normalize.");
+  assert(corruptReviewedSave.review.summary.keyMoments[0]?.playedMove === "h9g7", "Review key-moment played moves should normalize.");
+  assert(corruptReviewedSave.review.annotations[0]?.moveIndex === 0, "Review annotation move indexes should normalize.");
+  assert(corruptReviewedSave.review.annotations[0]?.bestMove === "b9c7", "Review annotation best moves should normalize.");
+
   const savedStudyTree = library.normalizeSavedGame({
     id: "saved-study-tree",
     savedAt: 1710000000006,
