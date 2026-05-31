@@ -1,6 +1,6 @@
 import { normalizeSavedMoveTree, type SavedMoveTreeNode } from './gameLibrary';
 
-const MAX_SHARE_TREE_JSON_LENGTH = 12000;
+const MAX_SHARE_TREE_JSON_LENGTH = 8000;
 const MAX_SHARE_TREE_PARAM_LENGTH = Math.ceil(MAX_SHARE_TREE_JSON_LENGTH * 4 / 3) + 4;
 
 function toBase64Url(value: string): string | null {

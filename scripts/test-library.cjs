@@ -353,7 +353,7 @@ try {
   assert(decodedStudyTree?.[0]?.children?.[0]?.uci === "h9g7", "Share-link study tree child move should decode.");
   assert(shareTree.decodeSavedMoveTreeParam("not-valid-base64") === null, "Malformed share-link study trees should be rejected.");
   assert(
-    shareTree.decodeSavedMoveTreeParam("A".repeat(20000)) === null,
+    shareTree.decodeSavedMoveTreeParam("A".repeat(12000)) === null,
     "Oversized share-link study tree params should be rejected before parsing."
   );
 
