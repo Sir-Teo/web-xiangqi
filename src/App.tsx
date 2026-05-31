@@ -1638,6 +1638,7 @@ function App() {
   const [copiedFenToast, setCopiedFenToast] = useState(false);
   const [copiedShareToast, setCopiedShareToast] = useState(false);
   const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
+  const [clearedHashToast, setClearedHashToast] = useState(false);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
@@ -1645,6 +1646,7 @@ function App() {
   const copiedFenToastTimerRef = useRef<number | null>(null);
   const copiedShareToastTimerRef = useRef<number | null>(null);
   const downloadedPgnTimerRef = useRef<number | null>(null);
+  const clearedHashTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
   const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1671,6 +1673,9 @@ function App() {
       }
       if (downloadedPgnTimerRef.current !== null) {
         window.clearTimeout(downloadedPgnTimerRef.current);
+      }
+      if (clearedHashTimerRef.current !== null) {
+        window.clearTimeout(clearedHashTimerRef.current);
       }
       if (copiedPvTimerRef.current !== null) {
         window.clearTimeout(copiedPvTimerRef.current);
@@ -1843,6 +1848,18 @@ function App() {
       setCopiedPvIndex(null);
     }, 1800);
   }, []);
+
+  const handleClearEngineHash = useCallback(() => {
+    setOption('Clear Hash');
+    if (clearedHashTimerRef.current !== null) {
+      window.clearTimeout(clearedHashTimerRef.current);
+    }
+    setClearedHashToast(true);
+    clearedHashTimerRef.current = window.setTimeout(() => {
+      clearedHashTimerRef.current = null;
+      setClearedHashToast(false);
+    }, 1800);
+  }, [setOption]);
 
   const handlePlayPvMove = useCallback((uci: string | undefined, score: number) => {
     if (!uci || gameResult) return;
@@ -3052,6 +3069,19 @@ function App() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <div className="engine-pv-controls engine-cache-controls" aria-label="Engine cache controls">
+                    <span>Cache</span>
+                    <button
+                      type="button"
+                      className={`engine-cache-btn ${clearedHashToast ? 'engine-pv-btn-active' : ''}`}
+                      onClick={handleClearEngineHash}
+                      disabled={!isReady}
+                      title={isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
+                      data-testid="clear-engine-hash-btn"
+                    >
+                      {clearedHashToast ? <><IconCheck /> Cleared</> : 'Clear Hash'}
+                    </button>
                   </div>
                   <div className="pv-lines-container">
                     {currentAnalysisPvLines.length === 0 ? (

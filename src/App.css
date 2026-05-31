@@ -3883,6 +3883,24 @@ summary:active {
   color: var(--accent) !important;
 }
 
+.engine-cache-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 1.55rem;
+  padding: 0 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.engine-cache-btn svg {
+  width: 0.86rem;
+  height: 0.86rem;
+}
+
 .pv-lines-container {
   display: flex;
   flex-direction: column;

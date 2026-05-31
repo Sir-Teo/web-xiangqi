@@ -252,6 +252,27 @@ async function assertEnginePvLineControl(page) {
   if (updated.overflowX > 2) {
     throw new Error(`Engine PV selector introduced horizontal overflow: ${updated.overflowX}`);
   }
+
+  await page.getByTestId("clear-engine-hash-btn").waitFor({ timeout: 5000 });
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+    return button && !button.disabled;
+  }, null, { timeout: 15000 });
+  await page.getByTestId("clear-engine-hash-btn").click();
+  const cacheState = await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+    return {
+      text: button?.textContent?.trim() || "",
+      disabled: button?.disabled ?? null,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (cacheState.text !== "Cleared" || cacheState.disabled) {
+    throw new Error(`Clear Hash control did not show successful feedback: ${JSON.stringify(cacheState)}`);
+  }
+  if (cacheState.overflowX > 2) {
+    throw new Error(`Clear Hash control introduced horizontal overflow: ${cacheState.overflowX}`);
+  }
 }
 
 async function assertPreferencePersistence(page) {
