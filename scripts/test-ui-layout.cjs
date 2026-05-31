@@ -205,6 +205,43 @@ async function assertPausedAiTurnBlocksManualMove(page) {
   }
 }
 
+async function assertIllegalMoveShowsRuleHint(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="3"]').click();
+  await page.waitForFunction(() => {
+    const hint = document.querySelector(".position-stat-selection em")?.textContent?.trim() || "";
+    return /Horse moves in an L/i.test(hint);
+  }, null, { timeout: 5000 });
+
+  const illegalState = await page.evaluate(() => ({
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    hint: document.querySelector(".position-stat-selection em")?.textContent?.trim() || "",
+    warningClass: document.querySelector(".position-stat-selection em")?.classList.contains("position-warning") || false,
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (illegalState.fen !== beforeFen || !illegalState.warningClass || illegalState.overflowX > 2) {
+    throw new Error(`Illegal move hint failed: ${JSON.stringify(illegalState)}`);
+  }
+
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.waitForFunction((fen) => {
+    return document.querySelector(".bottombar-fen")?.getAttribute("title") !== fen;
+  }, beforeFen, { timeout: 5000 });
+
+  const clearedHint = await page.locator(".position-stat-selection em").textContent();
+  if (/Horse moves in an L/i.test(clearedHint || "")) {
+    throw new Error("Illegal move hint did not clear after a legal move.");
+  }
+}
+
 async function assertAiPlayModeShowsEngineStatus(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2544,6 +2581,7 @@ async function main() {
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
+    await assertIllegalMoveShowsRuleHint(page);
     await assertAiPlayModeShowsEngineStatus(page);
     await assertEngineLoaderFailureShowsNotice(browser);
     await assertAnalysisResumesAfterVisibilityReturn(browser);
@@ -2595,7 +2633,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

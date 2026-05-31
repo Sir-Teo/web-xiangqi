@@ -5884,6 +5884,11 @@ summary:active {
   -webkit-line-clamp: 2;
 }
 
+.position-stat-selection .position-warning {
+  color: var(--warning);
+  font-weight: 800;
+}
+
 .position-stat-turn {
   border-color: rgba(239, 68, 68, 0.16);
 }

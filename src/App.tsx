@@ -15,7 +15,7 @@ import {
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
-import { START_FEN, uciToSquare, type Side } from './utils/xiangqi';
+import { START_FEN, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
@@ -443,6 +443,40 @@ function formatSquare(square: BoardSquare | null) {
 function formatMaterialValue(valueTenths: number) {
   const value = valueTenths / 10;
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+}
+
+function formatMoveRuleHint(reason?: string) {
+  switch (reason) {
+    case 'horse leg blocked':
+      return 'Horse leg is blocked.';
+    case 'elephant eye blocked':
+      return 'Elephant eye is blocked.';
+    case 'cannon capture needs one screen':
+      return 'Cannon captures need exactly one screen.';
+    case 'cannon path blocked':
+      return 'Cannon path is blocked.';
+    case 'rook path blocked':
+      return 'Chariot path is blocked.';
+    case 'advisor must stay in palace':
+      return 'Advisor must stay inside the palace.';
+    case 'general must stay in palace':
+      return 'General must stay inside the palace.';
+    case 'generals cannot face each other':
+      return 'Generals cannot face each other.';
+    case 'move leaves general in check':
+      return 'That leaves your general in check.';
+    case 'elephant cannot cross river':
+      return 'Elephant cannot cross the river.';
+    case 'pawn move is illegal':
+      return 'Soldiers move forward, then sideways after crossing the river.';
+    case 'not your piece':
+      return 'Move the side whose turn it is.';
+    case 'cannot capture your own piece':
+      return 'Choose an empty square or an opposing piece.';
+    default:
+      if (!reason) return 'That move is not legal in this position.';
+      return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
+  }
 }
 
 function makeEnginePositionCommand(rootFen: string, moves: string[]) {
@@ -1515,15 +1549,62 @@ function App() {
     clearBoardMarkers();
   }, [clearBoardMarkers, currentNodeId]);
 
+  const [moveRuleHint, setMoveRuleHint] = useState<string | null>(null);
+  const moveRuleHintTimerRef = useRef<number | null>(null);
+  const clearMoveRuleHint = useCallback(() => {
+    if (moveRuleHintTimerRef.current !== null) {
+      window.clearTimeout(moveRuleHintTimerRef.current);
+      moveRuleHintTimerRef.current = null;
+    }
+    setMoveRuleHint(null);
+  }, []);
+
+  const showMoveRuleHint = useCallback((message: string) => {
+    if (moveRuleHintTimerRef.current !== null) {
+      window.clearTimeout(moveRuleHintTimerRef.current);
+    }
+    setMoveRuleHint(message);
+    moveRuleHintTimerRef.current = window.setTimeout(() => {
+      moveRuleHintTimerRef.current = null;
+      setMoveRuleHint(null);
+    }, 3200);
+  }, []);
+
   const handleSquareClick = useCallback((file: number, rank: number) => {
     if (gameResult) return;
     if (!isAiTurn) {
+      if (selected) {
+        const clickedPiece = board[rank]?.[file] || '';
+        const clickedOwnPiece = Boolean(clickedPiece) && pieceSide(clickedPiece) === sideToMove;
+        const clickedSameSquare = selected.file === file && selected.rank === rank;
+        const clickedLegalTarget = validTargets.some((target) => target.file === file && target.rank === rank);
+        if (!clickedSameSquare && !clickedOwnPiece && !clickedLegalTarget) {
+          const uci = squareToUci(selected.file, selected.rank) + squareToUci(file, rank);
+          const validation = validatePieceMove(board, {
+            fromFile: selected.file,
+            fromRank: selected.rank,
+            toFile: file,
+            toRank: rank,
+            raw: uci,
+          }, sideToMove);
+          showMoveRuleHint(formatMoveRuleHint(validation.reason));
+          return;
+        }
+      }
+
       const moved = onSquareClick(file, rank);
       if (moved) {
         clearBoardMarkers();
+        clearMoveRuleHint();
+      } else if (
+        !selected ||
+        (selected.file === file && selected.rank === rank) ||
+        pieceSide(board[rank]?.[file] || '') === sideToMove
+      ) {
+        clearMoveRuleHint();
       }
     }
-  }, [clearBoardMarkers, gameResult, isAiTurn, onSquareClick]);
+  }, [board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
 
   const applyMode = useCallback((mode: GameMode) => {
     setGameMode(mode);
@@ -1795,6 +1876,9 @@ function App() {
       }
       if (copiedPvTimerRef.current !== null) {
         window.clearTimeout(copiedPvTimerRef.current);
+      }
+      if (moveRuleHintTimerRef.current !== null) {
+        window.clearTimeout(moveRuleHintTimerRef.current);
       }
       if (exportFailureTimerRef.current !== null) {
         window.clearTimeout(exportFailureTimerRef.current);
@@ -3245,7 +3329,12 @@ function App() {
                 <div className="position-stat position-stat-selection">
                   <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
                   <strong>{selectedPieceText}</strong>
-                  <em title={legalMoveText}>{legalMoveText}</em>
+                  <em
+                    className={moveRuleHint ? 'position-warning' : undefined}
+                    title={moveRuleHint ?? legalMoveText}
+                  >
+                    {moveRuleHint ?? legalMoveText}
+                  </em>
                 </div>
                 <div className="position-stat position-stat-material">
                   <span>Material</span>
