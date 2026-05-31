@@ -4,7 +4,7 @@
 
 ## Status
 
-Working end-to-end in Node.js and ready for browser demo use (tested on macOS arm64):
+Working end-to-end in Node.js and ready for browser analysis-app use (tested on macOS arm64):
 
 - builds WASM from upstream `Pikafish`
 - outputs both flavors:
@@ -14,6 +14,7 @@ Working end-to-end in Node.js and ready for browser demo use (tested on macOS ar
 - speaks UCI through a JS `postMessage()`-style wrapper
 - wrapper auto-selects threaded vs single-thread in browser (`variant: "auto"`)
 - smoke tests pass for both flavors (`threaded` and `single`)
+- React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, historical games, and opening-book continuations
 
 ## What this repo contains
 
@@ -21,9 +22,10 @@ Working end-to-end in Node.js and ready for browser demo use (tested on macOS ar
 - `templates/emscripten/*`: Emscripten build overrides injected into upstream `Pikafish`
 - `templates/pikafish.js`: JS wrapper with auto flavor selection, NNUE loading, and browser worker helper (`createWorkerEngine`)
 - `scripts/build-pikafish.sh`: clone, patch, build, copy artifacts to `dist/`
-- `scripts/test-smoke.js`: Node smoke tests for threaded/single flavors
-- `scripts/serve-demo.js`: local static server with COOP/COEP headers
+- `scripts/test-smoke.cjs`: Node smoke tests for threaded/single flavors
+- `scripts/serve-demo.cjs`: local static server with COOP/COEP headers
 - `demo/index.html`: simple playable Xiangqi board UI + engine controls (worker-based)
+- `src/`: production React analysis app with board, engine, review, library, and opening-study UI
 
 ## Quick start
 
@@ -116,6 +118,6 @@ Artifacts are written to `dist/`:
 
 ## Future improvements
 
-- Add move legality validation / move highlighting in the browser GUI (current board UI intentionally applies moves without JS legality checks)
 - Add minified production bundle variants and optional WASM compression
-- Add benchmark/regression CI for both flavors
+- Add benchmark/regression CI for threaded, SIMD, and single-thread engine flavors
+- Add a larger curated master-game/opening corpus for deeper book coverage
