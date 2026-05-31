@@ -1724,6 +1724,40 @@ async function assertLibraryPgnFailureFeedback(page) {
   }
 }
 
+async function assertLibraryInvalidSavedGameLoadFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-invalid-load",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["a0a9"],
+      result: "ongoing",
+      label: "Invalid load QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("Invalid load QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("load-saved-qa-invalid-load").click();
+  await page.getByTestId("library-action-error").getByText("Could not load this game").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    role: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
+    loadClass: document.querySelector('[data-testid="load-saved-qa-invalid-load"]')?.className || "",
+    stillVisible: document.body.textContent?.includes("Invalid load QA") || false,
+    moveRows: document.querySelectorAll(".mtree-row").length,
+  }));
+  if (state.role !== "alert" || !state.loadClass.includes("chip-btn-warning") || !state.stillVisible || state.moveRows !== 0) {
+    throw new Error(`Invalid saved-game load did not preserve library state with retry feedback: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertLibraryMutationFailureFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2050,6 +2084,7 @@ async function main() {
     await assertLibraryPgnCopy(page);
     await assertSavedStudyTreeRoundTrip(page);
     await assertLibraryPgnFailureFeedback(page);
+    await assertLibraryInvalidSavedGameLoadFeedback(page);
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
     await assertGameOverReviewPreservesResult(page);
@@ -2058,7 +2093,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

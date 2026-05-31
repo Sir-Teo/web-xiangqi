@@ -187,6 +187,17 @@ function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTre
   return url.toString();
 }
 
+function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: string[]) {
+  if (moves.length === 0) return true;
+  let siblings = moveTree ?? [];
+  for (const move of moves) {
+    const child = siblings.find((node) => node.uci === move);
+    if (!child) return false;
+    siblings = child.children ?? [];
+  }
+  return true;
+}
+
 function serializeSavedMoveTree(
   treeNodes: Record<string, MoveTreeNode>,
   parentId: string,
@@ -2191,6 +2202,24 @@ function App() {
   }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
+    const lineValidation = validateMoveSequence(game.moves, game.startFen);
+    if (!lineValidation.ok) {
+      console.warn('Ignored invalid saved Xiangqi game:', lineValidation);
+      return false;
+    }
+
+    if (game.moveTree?.length) {
+      const treeValidation = validateMoveTree(game.moveTree, game.startFen);
+      if (!treeValidation.ok) {
+        console.warn('Ignored saved Xiangqi game with invalid variation tree:', treeValidation);
+        return false;
+      }
+      if (!moveTreeContainsLine(game.moveTree, game.moves)) {
+        console.warn('Ignored saved Xiangqi game whose main line is missing from its variation tree:', game.id);
+        return false;
+      }
+    }
+
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -2224,7 +2253,8 @@ function App() {
       setAnalysisTab('review');
     }
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis]);
+    return true;
+  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();

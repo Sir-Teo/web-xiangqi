@@ -8,7 +8,7 @@ import './LibraryPanel.css';
 
 interface LibraryPanelProps {
   savedGames: SavedGame[];
-  onLoadSavedGame: (game: SavedGame) => void;
+  onLoadSavedGame: (game: SavedGame) => boolean;
   onDeleteSavedGame: (id: string) => boolean;
   onRenameSavedGame: (id: string, label: string) => boolean;
   onLoadHistorical: (game: HistoricalGame) => void;
@@ -200,6 +200,18 @@ export function LibraryPanel({
     }, 1800);
   };
 
+  const loadSavedGame = (game: SavedGame) => {
+    const ok = onLoadSavedGame(game);
+    if (!ok) {
+      setFailedActionId(`load-${game.id}`);
+      setActionError('Could not load this game. Its saved move data is invalid.');
+      return;
+    }
+
+    setActionError(null);
+    setFailedActionId(null);
+  };
+
   return (
     <div className="lib-panel">
       <div className="lib-search-wrap">
@@ -325,8 +337,8 @@ export function LibraryPanel({
                   </button>
                   <button
                     type="button"
-                    className="chip-btn chip-btn-primary"
-                    onClick={() => onLoadSavedGame(game)}
+                    className={`chip-btn chip-btn-primary ${failedActionId === `load-${game.id}` ? 'chip-btn-warning' : ''}`}
+                    onClick={() => loadSavedGame(game)}
                     data-testid={`load-saved-${game.id}`}
                   >
                     <IconRefresh /> Load
