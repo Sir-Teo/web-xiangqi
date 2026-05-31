@@ -58,12 +58,15 @@ async function main() {
 
     await page.goto(`http://localhost:${port}/worker-parity.html`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector("#run-quick", { timeout: 30000 });
+    if (process.env.PIKAFISH_BROWSER_VARIANT) {
+      await page.selectOption("#variant", process.env.PIKAFISH_BROWSER_VARIANT);
+    }
     await page.click("#run-quick");
 
     await page.waitForFunction(() => {
       const el = document.querySelector("#status");
       return !!el && /worker parity passed/i.test(el.textContent || "");
-    }, { timeout: 300000 });
+    }, null, { timeout: 300000 });
 
     const status = await page.$eval("#status", (el) => el.textContent || "");
     const outputTail = await page.$eval("#out", (el) => {
