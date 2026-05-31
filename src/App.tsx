@@ -2621,9 +2621,11 @@ function App() {
                   type="button"
                   className={`analysis-tab-btn ${analysisTab === 'tree' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('tree')}
+                  title="Game tree"
+                  aria-label="Open game tree"
                   data-testid="analysis-tab-tree"
                 >
-                  <IconTree style={{ marginRight: '0.3rem' }} />Game Tree
+                  <IconTree style={{ marginRight: '0.3rem' }} />Tree
                 </button>
                 <button
                   type="button"

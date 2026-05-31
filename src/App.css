@@ -1141,6 +1141,7 @@ body.resizing * {
   font-weight: 600;
   padding: 0.34rem 0.46rem;
   border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 
 @media (hover: hover) and (pointer: fine) {
