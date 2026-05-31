@@ -586,6 +586,31 @@ async function assertMoveLineImport(page) {
   }
 }
 
+async function assertMoveLineImportIgnoresVariations(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 (1. b0c2 {side line}) h9g7');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  const rows = await page.locator(".mtree-row").allTextContents();
+  const rowText = rows.join(" ");
+  if (!rowText.includes("b2e2") || !rowText.includes("h9g7") || rowText.includes("b0c2")) {
+    throw new Error(`PGN variation moves leaked into the imported mainline: ${rowText}`);
+  }
+
+  const activePoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+    throw new Error(`Variation import did not land on the mainline final move: ${String(activePoint || "").trim()}`);
+  }
+}
+
 async function assertCurrentPgnDownload(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1159,6 +1184,7 @@ async function main() {
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
+    await assertMoveLineImportIgnoresVariations(page);
     await assertCurrentPgnDownload(page);
     await assertShareLinkRoundTrip(page);
     await assertInvalidShareLinkFeedback(page);
@@ -1177,7 +1203,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
