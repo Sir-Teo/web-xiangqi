@@ -5080,6 +5080,14 @@ summary:active {
   color: #e74c3c;
 }
 
+.new-game-fen-error {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .new-game-line-form {
   display: grid;
   gap: 0.45rem;

@@ -408,6 +408,22 @@ async function assertInvalidFenToastTimerResets(page) {
     null,
     { timeout: 5000 }
   );
+  const fenError = page.locator("#new-game-fen-error");
+  await fenError.waitFor({ timeout: 5000 });
+  const initialErrorState = await page.evaluate(() => ({
+    text: document.querySelector("#new-game-fen-error")?.textContent?.trim() || "",
+    role: document.querySelector("#new-game-fen-error")?.getAttribute("role") || "",
+    invalid: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-invalid") || "",
+    describedBy: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-describedby") || "",
+  }));
+  if (
+    !initialErrorState.text.includes("legal Xiangqi position") ||
+    initialErrorState.role !== "alert" ||
+    initialErrorState.invalid !== "true" ||
+    initialErrorState.describedBy !== "new-game-fen-error"
+  ) {
+    throw new Error(`Invalid FEN feedback was not accessible: ${JSON.stringify(initialErrorState)}`);
+  }
 
   await page.waitForTimeout(1200);
   await loadButton.click();
@@ -422,6 +438,14 @@ async function assertInvalidFenToastTimerResets(page) {
   const cleared = String(await loadButton.textContent() || "").trim();
   if (cleared !== "Load") {
     throw new Error(`Invalid FEN feedback did not clear after the reset timer: ${cleared}`);
+  }
+  const clearedErrorState = await page.evaluate(() => ({
+    errorVisible: Boolean(document.querySelector("#new-game-fen-error")),
+    invalid: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-invalid") || "",
+    describedBy: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-describedby") || "",
+  }));
+  if (clearedErrorState.errorVisible || clearedErrorState.invalid || clearedErrorState.describedBy) {
+    throw new Error(`Invalid FEN accessibility state did not clear: ${JSON.stringify(clearedErrorState)}`);
   }
 }
 

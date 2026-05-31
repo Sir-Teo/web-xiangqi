@@ -1024,7 +1024,11 @@ function App() {
         event.preventDefault();
         setShowSettings(false);
         setShowNewGameMenu(false);
-        setFenError(false);
+        if (fenErrorTimerRef.current !== null) {
+          window.clearTimeout(fenErrorTimerRef.current);
+          fenErrorTimerRef.current = null;
+        }
+        setFenError(null);
         setMoveLineError(null);
       }
     };
@@ -1661,7 +1665,7 @@ function App() {
   const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
   const shareLinkLoadedRef = useRef(false);
   const [fenInput, setFenInput] = useState('');
-  const [fenError, setFenError] = useState(false);
+  const [fenError, setFenError] = useState<string | null>(null);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
@@ -1717,22 +1721,30 @@ function App() {
     }, 2400);
   }, []);
 
+  const clearFenError = useCallback(() => {
+    if (fenErrorTimerRef.current !== null) {
+      window.clearTimeout(fenErrorTimerRef.current);
+      fenErrorTimerRef.current = null;
+    }
+    setFenError(null);
+  }, []);
+
   const closeSettings = useCallback(() => {
     setShowSettings(false);
   }, []);
 
   const toggleSettings = useCallback(() => {
     setShowNewGameMenu(false);
-    setFenError(false);
+    clearFenError();
     setMoveLineError(null);
     setShowSettings((open) => !open);
-  }, []);
+  }, [clearFenError]);
 
   const closeNewGameMenu = useCallback(() => {
     setShowNewGameMenu(false);
-    setFenError(false);
+    clearFenError();
     setMoveLineError(null);
-  }, []);
+  }, [clearFenError]);
 
   const openNewGameMenu = useCallback(() => {
     setShowSettings(false);
@@ -1740,10 +1752,10 @@ function App() {
     setFenInput('');
     setMoveLineInput('');
     setMoveLineFileName('');
-    setFenError(false);
+    clearFenError();
     setMoveLineError(null);
     setShowNewGameMenu(true);
-  }, [gameMode]);
+  }, [clearFenError, gameMode]);
 
   const toggleNewGameMenu = useCallback(() => {
     if (showNewGameMenu) {
@@ -1930,10 +1942,10 @@ function App() {
       if (fenErrorTimerRef.current !== null) {
         window.clearTimeout(fenErrorTimerRef.current);
       }
-      setFenError(true);
+      setFenError('FEN must describe a legal Xiangqi position with both generals and a side to move.');
       fenErrorTimerRef.current = window.setTimeout(() => {
         fenErrorTimerRef.current = null;
-        setFenError(false);
+        setFenError(null);
       }, 2000);
       return;
     }
@@ -1942,9 +1954,9 @@ function App() {
     resetReview();
     setGameMode(nextGameMode);
     setFenInput('');
-    setFenError(false);
+    clearFenError();
     closeNewGameMenu();
-  }, [closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
+  }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
     const moves = extractUciMoveLine(text);
@@ -1970,13 +1982,13 @@ function App() {
     setGameMode(nextGameMode);
     loadMoves(moves, startFen);
     setFenInput('');
-    setFenError(false);
+    clearFenError();
     setMoveLineInput('');
     setMoveLineFileName('');
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [closeNewGameMenu, fenInput, handleCancelReview, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -2585,9 +2597,14 @@ function App() {
                   className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
                   type="text"
                   value={fenInput}
-                  onChange={(e) => setFenInput(e.target.value)}
+                  onChange={(e) => {
+                    setFenInput(e.target.value);
+                    if (fenError) clearFenError();
+                  }}
                   placeholder="rnbakabnr/9/… w - - 0 1"
                   aria-label="FEN string"
+                  aria-invalid={fenError ? true : undefined}
+                  aria-describedby={fenError ? 'new-game-fen-error' : undefined}
                 />
                 <button
                   type="submit"
@@ -2597,6 +2614,11 @@ function App() {
                   {fenError ? 'Invalid FEN' : 'Load'}
                 </button>
               </form>
+              {fenError ? (
+                <span id="new-game-fen-error" className="new-game-fen-error" role="alert">
+                  {fenError}
+                </span>
+              ) : null}
             </div>
             <div className="new-game-fen-section">
               <p className="new-game-strength-label">Import Move Line</p>
