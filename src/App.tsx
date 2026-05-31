@@ -1700,6 +1700,14 @@ function App() {
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
+  const showMobilePgnAction =
+    canExportCurrentLine ||
+    downloadedPgnToast ||
+    exportFailureKey === 'download-pgn';
+  const showMobileShareAction =
+    canShareCurrentPosition ||
+    copiedShareToast ||
+    exportFailureKey === 'copy-share';
 
   useEffect(() => {
     return () => {
@@ -2956,7 +2964,7 @@ function App() {
                   </span>
                 )}
               </div>
-              <div className="mobile-board-actions">
+              <div className="mobile-board-actions" role="group" aria-label="Board actions">
                 <button className="mobile-action-btn" type="button" onClick={toggleNewGameMenu} title="New game" aria-label="Open new game menu"><IconRefresh /></button>
                 <button
                   className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''} ${saveFailedToast ? 'mobile-action-btn-warn' : ''}`}
@@ -2979,28 +2987,32 @@ function App() {
                 >
                   <IconLibrary />
                 </button>
-                <button
-                  className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-btn-warn' : ''}`}
-                  type="button"
-                  onClick={handleDownloadPgn}
-                  disabled={!canExportCurrentLine}
-                  title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
-                  aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
-                  data-testid="mobile-download-pgn-btn"
-                >
-                  {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
-                </button>
-                <button
-                  className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-btn-warn' : ''}`}
-                  type="button"
-                  onClick={handleCopyShareLink}
-                  disabled={!canShareCurrentPosition}
-                  title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
-                  aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
-                  data-testid="mobile-copy-share-link-btn"
-                >
-                  {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
-                </button>
+                {showMobilePgnAction ? (
+                  <button
+                    className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-btn-warn' : ''}`}
+                    type="button"
+                    onClick={handleDownloadPgn}
+                    disabled={!canExportCurrentLine}
+                    title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
+                    aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
+                    data-testid="mobile-download-pgn-btn"
+                  >
+                    {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
+                  </button>
+                ) : null}
+                {showMobileShareAction ? (
+                  <button
+                    className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-btn-warn' : ''}`}
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    disabled={!canShareCurrentPosition}
+                    title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
+                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                    data-testid="mobile-copy-share-link-btn"
+                  >
+                    {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
+                  </button>
+                ) : null}
                 <button
                   className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-btn-warn' : ''}`}
                   type="button"

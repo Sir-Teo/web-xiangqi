@@ -1844,12 +1844,20 @@ async function assertMobileSaveLibraryActions(page) {
   if (!(await saveButton.isDisabled())) {
     throw new Error("Mobile save action should be disabled before any move or custom position.");
   }
+  if ((await page.getByTestId("mobile-download-pgn-btn").count()) !== 0) {
+    throw new Error("Mobile PGN export action should stay hidden until there is a line to export.");
+  }
+  if ((await page.getByTestId("mobile-copy-share-link-btn").count()) !== 0) {
+    throw new Error("Mobile share action should stay hidden until there is a line or custom root.");
+  }
 
   await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
   await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
   if (await saveButton.isDisabled()) {
     throw new Error("Mobile save action stayed disabled after a legal move.");
   }
+  await page.getByTestId("mobile-download-pgn-btn").waitFor({ timeout: 5000 });
+  await page.getByTestId("mobile-copy-share-link-btn").waitFor({ timeout: 5000 });
 
   await saveButton.click();
   const savedGameId = await page.waitForFunction(() => {
@@ -2010,7 +2018,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
