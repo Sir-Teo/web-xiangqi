@@ -15,7 +15,13 @@ const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
+const MAX_SAVED_TREE_NODES = 512;
 type SavedResult = typeof SAVED_RESULTS[number];
+
+export interface SavedMoveTreeNode {
+    uci: string;
+    children?: SavedMoveTreeNode[];
+}
 
 export interface SavedGame {
     id: string;
@@ -27,6 +33,7 @@ export interface SavedGame {
     label?: string;             // user-editable
     opening?: string;           // matched opening name
     finalEval?: number;
+    moveTree?: SavedMoveTreeNode[];
     review?: SavedReviewSnapshot;
 }
 
@@ -57,6 +64,32 @@ function normalizeSavedMoves(value: unknown): string[] | null {
         moves.push(move);
     }
     return moves;
+}
+
+function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): SavedMoveTreeNode | null {
+    if (!isRecord(raw)) return null;
+    const uci = normalizeSavedMove(raw.uci);
+    if (!uci) return null;
+    state.count += 1;
+    if (state.count > MAX_SAVED_TREE_NODES) return null;
+
+    const rawChildren = raw.children;
+    if (rawChildren !== undefined && !Array.isArray(rawChildren)) return null;
+    const children = Array.isArray(rawChildren)
+        ? rawChildren.map((child) => normalizeSavedMoveTreeNode(child, state))
+        : [];
+    if (children.some((child) => child === null)) return null;
+    const normalizedChildren = children.filter((child): child is SavedMoveTreeNode => Boolean(child));
+    return normalizedChildren.length > 0 ? { uci, children: normalizedChildren } : { uci };
+}
+
+function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | undefined | null {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) return null;
+    const state = { count: 0 };
+    const tree = value.map((node) => normalizeSavedMoveTreeNode(node, state));
+    if (tree.some((node) => node === null)) return null;
+    return tree.filter((node): node is SavedMoveTreeNode => Boolean(node));
 }
 
 function normalizeStartFen(value: unknown): string | undefined | null {
@@ -195,8 +228,9 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         ? rawGameMode as GameMode
         : undefined;
     const moves = normalizeSavedMoves(raw.moves);
+    const moveTree = normalizeSavedMoveTree(raw.moveTree);
     const startFen = normalizeStartFen(raw.startFen);
-    if (!moves || startFen === null) {
+    if (!moves || moveTree === null || startFen === null) {
         return null;
     }
     if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen)) {
@@ -217,6 +251,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         label: asString(raw.label),
         opening: asString(raw.opening),
         finalEval: asFiniteNumber(raw.finalEval),
+        moveTree,
         review: normalizeSavedReview(raw.review, moves),
     };
 }

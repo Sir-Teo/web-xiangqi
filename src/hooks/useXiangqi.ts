@@ -48,6 +48,11 @@ export type MoveSequenceValidation =
     | { ok: true }
     | { ok: false; failedIndex: number; move: string; reason: string };
 
+export type SerializableMoveTreeNode = {
+    uci: string;
+    children?: SerializableMoveTreeNode[];
+};
+
 interface RootPosition {
     board: BoardState;
     sideToMove: Side;
@@ -372,6 +377,92 @@ export function useXiangqi() {
         setValidTargets([]);
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
+
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string) => {
+        const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
+        const tree: Record<string, MoveTreeNode> = createRootTree();
+        let counter = 1;
+
+        const appendChildren = (
+            children: SerializableMoveTreeNode[] | undefined,
+            parentNodeId: string,
+            parentBoard: BoardState,
+            parentSide: Side,
+            plyIndex: number
+        ) => {
+            if (!children?.length) return;
+
+            for (const child of children) {
+                const uci = String(child.uci || '').trim().toLowerCase();
+                const from = uciToSquare(uci.substring(0, 2));
+                const to = uciToSquare(uci.substring(2, 4));
+                if (!from || !to) continue;
+                const mv = { fromFile: from.file, fromRank: from.rank, toFile: to.file, toRank: to.rank, raw: uci };
+                const result = validatePieceMove(parentBoard, mv, parentSide);
+                if (!result.ok) continue;
+
+                const nextBoard = parentBoard.map(row => [...row]) as BoardState;
+                nextBoard[to.rank][to.file] = result.piece || '';
+                nextBoard[from.rank][from.file] = '';
+                const nextSide: Side = parentSide === 'w' ? 'b' : 'w';
+                const nextInCheck = isInCheck(nextBoard, nextSide);
+                const nodeId = `n${counter++}`;
+
+                tree[parentNodeId].childrenIds.push(nodeId);
+                tree[nodeId] = {
+                    id: nodeId,
+                    parentId: parentNodeId,
+                    childrenIds: [],
+                    record: {
+                        uci,
+                        piece: result.piece!,
+                        captured: result.captured || '',
+                        board: nextBoard,
+                        sideToMove: nextSide,
+                        inCheck: nextInCheck,
+                        ply: plyIndex + 1,
+                    },
+                };
+
+                appendChildren(child.children, nodeId, nextBoard, nextSide, plyIndex + 1);
+            }
+        };
+
+        appendChildren(moveTree, ROOT_NODE_ID, root.board, root.sideToMove, 0);
+
+        const activeLine: string[] = [];
+        let cursor = ROOT_NODE_ID;
+        for (const move of mainLineMoves) {
+            const childId = tree[cursor]?.childrenIds.find((id) => tree[id]?.record?.uci === move);
+            if (!childId) break;
+            activeLine.push(childId);
+            cursor = childId;
+        }
+
+        if (activeLine.length === 0 && tree[ROOT_NODE_ID].childrenIds.length > 0) {
+            cursor = ROOT_NODE_ID;
+            while (tree[cursor]?.childrenIds.length) {
+                const childId = tree[cursor].childrenIds[0];
+                activeLine.push(childId);
+                cursor = childId;
+            }
+        }
+
+        const activeNodeId = activeLine[activeLine.length - 1] ?? ROOT_NODE_ID;
+        const position = getPositionFromNode(tree, activeNodeId, root);
+        nodeCounterRef.current = counter;
+        setRootPosition(root);
+        setTreeNodes(tree);
+        setActiveLineNodeIds(activeLine);
+        setCurrentMoveIndex(activeLine.length - 1);
+        setBoard(position.board);
+        setSideToMove(position.sideToMove);
+        setInCheck(position.inCheck);
+        setGameResult(gameResultForPosition(root, tree, activeLine, position.board, position.sideToMove));
+        setSelected(null);
+        setValidTargets([]);
+        return activeLine;
+    }, []);
 
     const jumpToNode = useCallback((nodeId: string) => {
         const targetId = nodeId && treeNodes[nodeId] ? nodeId : ROOT_NODE_ID;
@@ -719,6 +810,7 @@ export function useXiangqi() {
         clearAllReviewData,
         getNodeFen,
         loadMoves,
+        loadMoveTree,
         validateMoveSequence,
         loadFen,
         jumpToMove,

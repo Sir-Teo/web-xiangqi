@@ -1,6 +1,7 @@
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
+import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_FEN } from './xiangqi';
 
 const RESULT_TAG: Record<NonNullable<GameResult>, string> = {
@@ -162,6 +163,31 @@ function hasTreeMoves(treeNodes: Record<string, MoveTreeNode>, rootNodeId: strin
     return Boolean(treeNodes[rootNodeId]?.childrenIds.some((childId) => treeNodes[childId]?.record));
 }
 
+function savedMoveTreeToNodes(moveTree: SavedMoveTreeNode[]) {
+    const rootNodeId = 'root';
+    const treeNodes: Record<string, MoveTreeNode> = {
+        [rootNodeId]: { id: rootNodeId, parentId: null, childrenIds: [] },
+    };
+    let counter = 1;
+
+    const appendChildren = (children: SavedMoveTreeNode[], parentId: string) => {
+        for (const child of children) {
+            const nodeId = `s${counter++}`;
+            treeNodes[parentId].childrenIds.push(nodeId);
+            treeNodes[nodeId] = {
+                id: nodeId,
+                parentId,
+                childrenIds: [],
+                record: { uci: child.uci } as MoveRecord,
+            };
+            appendChildren(child.children ?? [], nodeId);
+        }
+    };
+
+    appendChildren(moveTree, rootNodeId);
+    return { rootNodeId, treeNodes };
+}
+
 /**
  * Exports a game as a minimal PGN string using UCI (ICCS-compatible) move notation.
  * Compatible with analysis boards that accept Variant "Xiangqi".
@@ -171,6 +197,7 @@ export function exportPgn(
     options: {
         gameMode?: GameMode;
         opening?: string;
+        label?: string;
         result?: GameResult;
         date?: string;
         startFen?: string;
@@ -184,6 +211,7 @@ export function exportPgn(
         tagLine('Variant', 'Xiangqi'),
         tagLine('Date', date),
         options.gameMode ? tagLine('Event', options.gameMode) : null,
+        options.label ? tagLine('White', options.label) : null,
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -205,6 +233,7 @@ export function exportPgnTree(
         mainLineNodeIds?: string[];
         gameMode?: GameMode;
         opening?: string;
+        label?: string;
         result?: GameResult;
         date?: string;
         startFen?: string;
@@ -220,6 +249,7 @@ export function exportPgnTree(
         tagLine('Variant', 'Xiangqi'),
         tagLine('Date', date),
         options.gameMode ? tagLine('Event', options.gameMode) : null,
+        options.label ? tagLine('White', options.label) : null,
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -265,6 +295,40 @@ export function exportPgnFromUci(
     ].filter(Boolean).join('\n');
 
     return `${tags}\n\n${buildMoveText(uciMoves, startPosition, result)}\n`;
+}
+
+export function exportPgnFromMoveTree(
+    moveTree: SavedMoveTreeNode[],
+    options: {
+        mainLineMoves?: string[];
+        gameMode?: GameMode;
+        opening?: string;
+        result?: GameResult;
+        label?: string;
+        date?: string;
+        startFen?: string;
+    } = {}
+): string | null {
+    const { rootNodeId, treeNodes } = savedMoveTreeToNodes(moveTree);
+    const preferredNodeIds: string[] = [];
+    let cursor = rootNodeId;
+    for (const move of options.mainLineMoves ?? []) {
+        const childId = treeNodes[cursor]?.childrenIds.find((id) => treeNodes[id]?.record?.uci === move);
+        if (!childId) break;
+        preferredNodeIds.push(childId);
+        cursor = childId;
+    }
+
+    const pgn = exportPgnTree(treeNodes, rootNodeId, {
+        mainLineNodeIds: preferredNodeIds,
+        gameMode: options.gameMode,
+        opening: options.opening,
+        label: options.label,
+        result: options.result,
+        date: options.date,
+        startFen: options.startFen,
+    });
+    return pgn;
 }
 
 /**

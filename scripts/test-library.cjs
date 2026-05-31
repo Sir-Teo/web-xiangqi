@@ -99,6 +99,30 @@ try {
   });
   assert(missingKingFenSave === null, "Saved games with root FENs missing either king should be rejected.");
 
+  const savedStudyTree = library.normalizeSavedGame({
+    id: "saved-study-tree",
+    savedAt: 1710000000006,
+    gameMode: "PvP",
+    moves: ["B0C2"],
+    moveTree: [
+      { uci: "B2E2", children: [{ uci: "H9G7" }] },
+      { uci: "B0C2" },
+    ],
+  });
+  assert(savedStudyTree, "Saved study trees should be accepted.");
+  assert(savedStudyTree.moves.join(" ") === "b0c2", "Saved study mainline should normalize uppercase moves.");
+  assert(savedStudyTree.moveTree?.[0]?.uci === "b2e2", "Saved study tree root move should normalize uppercase moves.");
+  assert(savedStudyTree.moveTree?.[0]?.children?.[0]?.uci === "h9g7", "Saved study tree child move should normalize uppercase moves.");
+
+  const malformedSavedStudyTree = library.normalizeSavedGame({
+    id: "bad-study-tree",
+    savedAt: 1710000000007,
+    gameMode: "PvP",
+    moves: ["b0c2"],
+    moveTree: [{ uci: "b2e2q" }],
+  });
+  assert(malformedSavedStudyTree === null, "Saved study trees with malformed moves should be rejected.");
+
   const defaultPgn = gameExport.exportPgnFromUci(["b2e2", "h9g7"], {
     gameMode: "PvP",
     date: "2026.05.31",
@@ -130,6 +154,15 @@ try {
     mainLineNodeIds: ["n3"],
   });
   assert(studyTreePgn.includes("1. b0c2 (1. b2e2 h9g7) *"), `Tree PGN should preserve root variations:\n${studyTreePgn}`);
+
+  const savedStudyTreePgn = gameExport.exportPgnFromMoveTree(savedStudyTree.moveTree, {
+    gameMode: savedStudyTree.gameMode,
+    mainLineMoves: savedStudyTree.moves,
+    date: "2026.05.31",
+    label: "Saved Study",
+  });
+  assert(savedStudyTreePgn.includes('[White "Saved Study"]'), `Saved study tree PGN should include the saved label:\n${savedStudyTreePgn}`);
+  assert(savedStudyTreePgn.includes("1. b0c2 (1. b2e2 h9g7) *"), `Saved study tree PGN should preserve variations:\n${savedStudyTreePgn}`);
 
   const blackRootTreePgn = gameExport.exportPgnTree({
     root: { id: "root", parentId: null, childrenIds: ["n1", "n2"] },

@@ -19,6 +19,7 @@ export function useGameLibrary() {
             label?: string;
             startFen?: string;
             result?: SavedGame['result'];
+            moveTree?: SavedGame['moveTree'];
             review?: SavedGame['review'];
         } = {}
     ): SavedGame | null => {

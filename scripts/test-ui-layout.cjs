@@ -1328,6 +1328,66 @@ async function assertLibraryPgnCopy(page) {
   }
 }
 
+async function assertSavedStudyTreeRoundTrip(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("xiangqi-game-library");
+    window.__savedStudyPgnWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__savedStudyPgnWrites.push(String(text));
+        },
+      },
+    });
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="7"][data-rank="9"]').click();
+  await page.locator('.hitbox[data-file="6"][data-rank="7"]').click();
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  await page.getByTestId("save-game-btn").click();
+  const saved = await page.waitForFunction(() => {
+    const raw = localStorage.getItem("xiangqi-game-library");
+    if (!raw) return null;
+    const games = JSON.parse(raw);
+    return games.length === 1 ? games[0] : null;
+  }, null, { timeout: 5000 }).then((handle) => handle.jsonValue());
+  if (!saved?.id || saved.moves?.join(" ") !== "b0c2" || saved.moveTree?.length !== 2) {
+    throw new Error(`Saved study tree did not persist the mainline and branches: ${JSON.stringify(saved)}`);
+  }
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId(`copy-pgn-saved-${saved.id}`).click();
+  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+  const copiedPgn = await page.evaluate(() => window.__savedStudyPgnWrites?.[0] ?? "");
+  if (!copiedPgn.includes("1. b0c2 (1. b2e2 h9g7) *")) {
+    throw new Error(`Saved study tree PGN did not preserve variations:\n${copiedPgn}`);
+  }
+
+  await page.getByTestId(`load-saved-${saved.id}`).click();
+  await page.waitForFunction(() => document.querySelector(".mtree-row")?.textContent?.includes("b0c2"), null, { timeout: 5000 });
+  const loaded = await page.evaluate(() => ({
+    activeRow: document.querySelector(".mtree-row")?.textContent?.trim() || "",
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!loaded.activeRow.includes("b0c2") || !loaded.variations.includes("b2e2") || !loaded.variations.includes("h9g7") || loaded.overflowX > 2) {
+    throw new Error(`Saved study tree did not reload with variations visible: ${JSON.stringify(loaded)}`);
+  }
+}
+
 async function assertLibraryPgnFailureFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1662,6 +1722,7 @@ async function main() {
     await assertSaveFailureFeedback(page);
     await assertMobileSaveLibraryActions(page);
     await assertLibraryPgnCopy(page);
+    await assertSavedStudyTreeRoundTrip(page);
     await assertLibraryPgnFailureFeedback(page);
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
@@ -1671,7 +1732,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, tree PGN variation export, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, tree PGN variation export, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

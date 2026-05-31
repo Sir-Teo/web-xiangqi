@@ -14,13 +14,13 @@ import {
   IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
-import { useXiangqi, type GameResult } from './hooks/useXiangqi';
+import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
 import { START_FEN, uciToSquare, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import type { SavedGame } from './utils/gameLibrary';
+import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -178,6 +178,27 @@ function buildShareUrl(rootFen: string, moves: string[], mode: GameMode): string
     url.searchParams.set('mode', mode);
   }
   return url.toString();
+}
+
+function serializeSavedMoveTree(
+  treeNodes: Record<string, MoveTreeNode>,
+  parentId: string,
+  seen = new Set<string>()
+): SavedMoveTreeNode[] {
+  const parent = treeNodes[parentId];
+  if (!parent || seen.has(parentId)) return [];
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(parentId);
+  return parent.childrenIds
+    .map((childId): SavedMoveTreeNode | null => {
+      const child = treeNodes[childId];
+      const uci = child?.record?.uci;
+      if (!child || !uci) return null;
+      const children = serializeSavedMoveTree(treeNodes, childId, nextSeen);
+      return children.length > 0 ? { uci, children } : { uci };
+    })
+    .filter((node): node is SavedMoveTreeNode => Boolean(node));
 }
 
 type ReviewPhase = 'base' | 'revisit';
@@ -550,6 +571,7 @@ function App() {
     onSquareClick,
     resetBoard,
     loadMoves,
+    loadMoveTree,
     validateMoveSequence,
     loadFen,
     sideToMove,
@@ -2062,11 +2084,15 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
+    const moveTree = Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+      ? serializeSavedMoveTree(treeNodes, rootNodeId)
+      : undefined;
     const saved = saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
       startFen: rootFen,
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
+      moveTree,
       review: reviewStatus === 'done' && reviewSummary
         ? {
             ...savedReviewSnapshot!,
@@ -2088,7 +2114,7 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, 1800);
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     stopAnalysis();
@@ -2096,7 +2122,9 @@ function App() {
     resetReview();
     setGameMode(game.gameMode);
     setLeftPanelTab('graph');
-    const loadedNodeIds = loadMoves(game.moves, game.startFen);
+    const loadedNodeIds = game.moveTree?.length
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen)
+      : loadMoves(game.moves, game.startFen);
     setGameResult(savedResultToGameResult(game.result));
     if (game.review) {
       setNodeReviewDataBulk(
@@ -2122,7 +2150,7 @@ function App() {
       setAnalysisTab('review');
     }
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, hydrateReview, loadMoves, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis]);
+  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();

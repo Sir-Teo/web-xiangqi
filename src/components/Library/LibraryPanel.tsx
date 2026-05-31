@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
-import { exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 
@@ -45,6 +45,18 @@ function makeSavedGamePgnFilename(game: SavedGame) {
 }
 
 function buildSavedGamePgn(game: SavedGame) {
+  if (game.moveTree?.length) {
+    const pgn = exportPgnFromMoveTree(game.moveTree, {
+      mainLineMoves: game.moves,
+      gameMode: game.gameMode,
+      opening: game.opening,
+      result: savedResultToGameResult(game.result),
+      label: game.label,
+      startFen: game.startFen,
+    });
+    if (pgn) return pgn;
+  }
+
   return exportPgnFromUci(game.moves, {
     gameMode: game.gameMode,
     opening: game.opening,
