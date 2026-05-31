@@ -53,7 +53,7 @@ type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
 type PvLineCount = 1 | 3 | 5;
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
-type ShareLinkNotice = { tone: 'warning'; text: string } | null;
+type ShareLinkNotice = { tone: 'warning'; text: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | `copy-pv-${number}`;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
@@ -969,6 +969,10 @@ function App() {
     () => makeReviewLineSignature(activeLineNodeIds, treeNodes),
     [activeLineNodeIds, treeNodes]
   );
+  const shareNoticePositionKey = useMemo(
+    () => `${rootFen}::${currentLineSignature}`,
+    [currentLineSignature, rootFen]
+  );
 
   const breadcrumbNodeIds = useMemo(() => {
     const path: string[] = [];
@@ -1063,6 +1067,12 @@ function App() {
     if (reviewSummary.lineSignature === currentLineSignature) return;
     clearCompletedReview();
   }, [clearCompletedReview, currentLineSignature, reviewStatus, reviewSummary]);
+
+  useEffect(() => {
+    if (!shareLinkNotice?.positionKey) return;
+    if (shareLinkNotice.positionKey === shareNoticePositionKey) return;
+    setShareLinkNotice(null);
+  }, [shareLinkNotice, shareNoticePositionKey]);
 
   useEffect(() => {
     if (!showMobileBoardActionMenu) return;
@@ -1923,7 +1933,10 @@ function App() {
     }
 
     clearExportFailure();
-    setShareLinkNotice(share.treeOmitted ? { tone: 'warning', text: 'Variations omitted' } : null);
+    setShareLinkNotice(share.treeOmitted
+      ? { tone: 'warning', text: 'Variations omitted', positionKey: shareNoticePositionKey }
+      : null
+    );
     if (copiedShareToastTimerRef.current !== null) {
       window.clearTimeout(copiedShareToastTimerRef.current);
     }
@@ -1932,7 +1945,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, rootNodeId, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();

@@ -1283,6 +1283,14 @@ async function assertOversizedShareTreeWarning(page) {
   ) {
     throw new Error(`Oversized study share did not warn and fall back to a mainline-only link: ${JSON.stringify(state)}`);
   }
+
+  await page.locator('.hitbox[data-file="7"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="6"][data-rank="2"]').click();
+  await page.waitForFunction(
+    () => !document.querySelector('[data-testid="share-link-warning"]'),
+    null,
+    { timeout: 5000 }
+  );
 }
 
 async function assertLongShareVariationVisible(page) {
