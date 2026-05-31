@@ -544,7 +544,10 @@ export function useXiangqi() {
         syncPositionForNode(treeNodes, nodeId);
     }, [activeLineNodeIds, rootPosition, treeNodes, syncPositionForNode]);
 
-    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
+    const applyUciMoveAtNode = useCallback((parentNodeId: string, uci: string, evalScore?: number) => {
+        const parentNode = treeNodes[parentNodeId];
+        if (!parentNode) return false;
+
         const fromSquare = uci.substring(0, 2);
         const toSquare = uci.substring(2, 4);
 
@@ -556,6 +559,9 @@ export function useXiangqi() {
             return false;
         }
 
+        const parentPosition = getPositionFromNode(treeNodes, parentNodeId, rootPosition);
+        const parentBoard = parentPosition.board;
+        const parentSide = parentPosition.sideToMove;
         const mv = {
             fromFile: from.file,
             fromRank: from.rank,
@@ -564,23 +570,20 @@ export function useXiangqi() {
             raw: uci
         };
 
-        const result = validatePieceMove(board, mv, sideToMove);
+        const result = validatePieceMove(parentBoard, mv, parentSide);
         if (!result.ok) {
-            console.warn('Invalid programmatic move (engine move rejected):', result.reason, uci, 'Side:', sideToMove, 'Piece:', board[mv.fromRank][mv.fromFile]);
+            console.warn('Invalid programmatic move (engine move rejected):', result.reason, uci, 'Side:', parentSide, 'Piece:', parentBoard[mv.fromRank][mv.fromFile]);
             return false;
         }
 
-        const nextBoard = board.map((row) => [...row]);
+        const nextBoard = parentBoard.map((row) => [...row]);
         nextBoard[to.rank][to.file] = result.piece || '';
         nextBoard[from.rank][from.file] = '';
 
-        const nextSide = sideToMove === 'w' ? 'b' : 'w';
+        const nextSide = parentSide === 'w' ? 'b' : 'w';
         const nextInCheck = isInCheck(nextBoard, nextSide);
 
-        const activePrefix = activeLineNodeIds.slice(0, currentMoveIndex + 1);
-
-        const parentNodeId = currentNodeId;
-        const parentNode = treeNodes[parentNodeId];
+        const activePrefix = findPathToNode(treeNodes, parentNodeId);
         const existingChildId = parentNode?.childrenIds.find((childId) => treeNodes[childId]?.record?.uci === mv.raw);
 
         if (existingChildId) {
@@ -600,12 +603,9 @@ export function useXiangqi() {
 
             setTreeNodes(nextTree);
 
-            const keptFuture = activeLineNodeIds[currentMoveIndex + 1] === existingChildId
-                ? activeLineNodeIds.slice(currentMoveIndex + 1)
-                : [existingChildId, ...preferredContinuation(nextTree, existingChildId)];
-
+            const keptFuture = [existingChildId, ...preferredContinuation(nextTree, existingChildId)];
             const nextActiveLine = [...activePrefix, ...keptFuture];
-            const nextIndex = currentMoveIndex + 1;
+            const nextIndex = activePrefix.length;
 
             setActiveLineNodeIds(nextActiveLine);
             setCurrentMoveIndex(nextIndex);
@@ -623,7 +623,7 @@ export function useXiangqi() {
             board: nextBoard,
             sideToMove: nextSide,
             inCheck: nextInCheck,
-            ply: currentMoveIndex + 2,
+            ply: activePrefix.length + 1,
         };
 
         const nextTree: Record<string, MoveTreeNode> = {
@@ -646,7 +646,11 @@ export function useXiangqi() {
         setGameResult(gameResultForPosition(rootPosition, nextTree, [...activePrefix, newNodeId], nextBoard, nextSide));
         syncPositionForNode(nextTree, newNodeId);
         return true;
-    }, [board, sideToMove, currentNodeId, treeNodes, activeLineNodeIds, currentMoveIndex, rootPosition, syncPositionForNode]);
+    }, [rootPosition, syncPositionForNode, treeNodes]);
+
+    const applyUciMove = useCallback((uci: string, evalScore?: number) => {
+        return applyUciMoveAtNode(currentNodeId, uci, evalScore);
+    }, [applyUciMoveAtNode, currentNodeId]);
 
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
@@ -858,6 +862,7 @@ export function useXiangqi() {
         onSquareClick,
         resetBoard,
         applyUciMove,
+        applyUciMoveAtNode,
         setCurrentNodeEval,
         setNodeEval,
         setNodeEvals,

@@ -584,6 +584,7 @@ function App() {
     loadFen,
     sideToMove,
     applyUciMove,
+    applyUciMoveAtNode,
     setCurrentNodeEval,
     setNodeEvals,
     setNodeBestMove,
@@ -1980,6 +1981,16 @@ function App() {
     setAnalysisTab('tree');
   }, [applyUciMove, clearBoardMarkers, gameResult, isAiTurn]);
 
+  const handlePlayReviewBestMove = useCallback((nodeId: string, bestMove: string) => {
+    const parentNodeId = treeNodes[nodeId]?.parentId;
+    if (!parentNodeId || !bestMove || gameResult) return;
+    clearBoardMarkers();
+    const moved = applyUciMoveAtNode(parentNodeId, bestMove);
+    if (moved) {
+      setAnalysisTab('tree');
+    }
+  }, [applyUciMoveAtNode, clearBoardMarkers, gameResult, treeNodes]);
+
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
     if (!ok) {
@@ -3238,6 +3249,7 @@ function App() {
                   onCancel={handleCancelReview}
                   onClear={clearCompletedReview}
                   onNavigateNode={jumpToNode}
+                  onPlayBestMove={handlePlayReviewBestMove}
                 />
               ) : (
                 <>

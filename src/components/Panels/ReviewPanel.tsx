@@ -16,6 +16,7 @@ type Props = {
     onCancel: () => void;
     onClear: () => void;
     onNavigateNode: (nodeId: string) => void;
+    onPlayBestMove?: (nodeId: string, bestMove: string) => void;
 };
 
 export const ReviewPanel = memo(function ReviewPanel({
@@ -30,6 +31,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     onCancel,
     onClear,
     onNavigateNode,
+    onPlayBestMove,
 }: Props) {
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
 
@@ -118,32 +120,44 @@ export const ReviewPanel = memo(function ReviewPanel({
                     {summary.keyMoments.length > 0 ? (
                         <div className="review-moment-list">
                             {summary.keyMoments.map((moment) => (
-                                <button
-                                    key={`${moment.moveIndex}-${moment.nodeId}`}
-                                    type="button"
-                                    className={[
-                                        'review-moment-card',
-                                        getMoveQualityClassName(moment.quality),
-                                        currentNodeId === moment.nodeId ? 'review-moment-card-active' : '',
-                                    ].join(' ')}
-                                    onClick={() => onNavigateNode(moment.nodeId)}
-                                    data-testid={`review-moment-${moment.moveIndex}`}
-                                    aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                    aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
-                                >
-                                    <div className="review-moment-topline">
-                                        <span>{formatReviewQuality(moment.quality)}</span>
-                                        <strong>{moment.side} · ply {moment.ply}</strong>
-                                    </div>
-                                    <div className="review-moment-main">
-                                        <span>{formatUciMove(moment.playedMove)}</span>
-                                        <strong>{formatSwing(moment.swing)}</strong>
-                                    </div>
-                                    <p>{moment.note}</p>
-                                    {moment.bestMove ? (
-                                        <em>Engine line: {formatUciMove(moment.bestMove)}</em>
+                                <div key={`${moment.moveIndex}-${moment.nodeId}`} className="review-moment-entry">
+                                    <button
+                                        type="button"
+                                        className={[
+                                            'review-moment-card',
+                                            getMoveQualityClassName(moment.quality),
+                                            currentNodeId === moment.nodeId ? 'review-moment-card-active' : '',
+                                        ].join(' ')}
+                                        onClick={() => onNavigateNode(moment.nodeId)}
+                                        data-testid={`review-moment-${moment.moveIndex}`}
+                                        aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
+                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
+                                    >
+                                        <div className="review-moment-topline">
+                                            <span>{formatReviewQuality(moment.quality)}</span>
+                                            <strong>{moment.side} · ply {moment.ply}</strong>
+                                        </div>
+                                        <div className="review-moment-main">
+                                            <span>{formatUciMove(moment.playedMove)}</span>
+                                            <strong>{formatSwing(moment.swing)}</strong>
+                                        </div>
+                                        <p>{moment.note}</p>
+                                        {moment.bestMove ? (
+                                            <em>Best: {formatUciMove(moment.bestMove)}</em>
+                                        ) : null}
+                                    </button>
+                                    {moment.bestMove && onPlayBestMove ? (
+                                        <button
+                                            type="button"
+                                            className="review-best-move-btn"
+                                            onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
+                                            data-testid={`review-try-best-${moment.moveIndex}`}
+                                            aria-label={`Try engine suggestion ${formatUciMove(moment.bestMove)} instead of ${formatUciMove(moment.playedMove)}`}
+                                        >
+                                            Try best <strong>{formatUciMove(moment.bestMove)}</strong>
+                                        </button>
                                     ) : null}
-                                </button>
+                                </div>
                             ))}
                         </div>
                     ) : (

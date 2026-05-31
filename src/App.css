@@ -3758,6 +3758,11 @@ summary:active {
   overflow-y: auto;
 }
 
+.review-moment-entry {
+  display: grid;
+  gap: 0.28rem;
+}
+
 .review-moment-card {
   display: grid;
   gap: 0.28rem;
@@ -3820,6 +3825,36 @@ summary:active {
   font-style: normal;
   color: var(--accent);
   font-size: 0.68rem;
+}
+
+.review-best-move-btn {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.75rem;
+  margin-left: 0.35rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.review-best-move-btn strong {
+  color: var(--accent);
+  font-family: "JetBrains Mono", monospace;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .review-best-move-btn:hover {
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+    background: var(--accent-subtle);
+  }
 }
 
 /* Engine tab cards */

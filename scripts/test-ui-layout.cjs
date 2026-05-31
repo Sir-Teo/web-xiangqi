@@ -774,6 +774,73 @@ async function assertMoveLineImportRejectsInvalidVariation(page) {
   }
 }
 
+async function assertReviewBestMoveBranchAction(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const savedAt = 1710000005000;
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "review-best-branch",
+      savedAt,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7"],
+      result: "ongoing",
+      label: "Review best branch QA",
+      review: {
+        summary: {
+          totalMoves: 2,
+          accuracy: 40,
+          bestCount: 0,
+          goodCount: 1,
+          inaccuracyCount: 0,
+          mistakeCount: 1,
+          blunderCount: 0,
+          reviewedAt: savedAt,
+          lineSignature: "b2e2 h9g7",
+          keyMoments: [{
+            nodeId: "saved-0",
+            moveIndex: 0,
+            jumpTarget: 0,
+            ply: 1,
+            side: "red",
+            quality: "mistake",
+            swing: 240,
+            evalBefore: 0,
+            evalAfter: -240,
+            bestMove: "b0c2",
+            playedMove: "b2e2",
+            note: "Missed a stronger continuation. B0->C2 was stronger by 240cp.",
+          }],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, reviewNote: "Missed a stronger continuation. B0->C2 was stronger by 240cp." },
+          { moveIndex: 1, evalScore: -220, quality: "good", swing: 20, reviewNote: "Solid choice." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-best-branch").click();
+  await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
+  await page.getByTestId("review-try-best-0").click();
+  await page.getByTestId("move-tree-active").waitFor({ timeout: 5000 });
+  const state = await page.evaluate(() => ({
+    active: document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || "",
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    selectedTab: document.querySelector('[data-testid="analysis-tab-tree"]')?.getAttribute("aria-selected") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!state.active.includes("b0c2") || !state.variations.includes("b2e2") || state.selectedTab !== "true" || state.overflowX > 2) {
+    throw new Error(`Review best-move action did not create a visible study branch: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertMoveLineImportErrorAccessibility(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1844,6 +1911,7 @@ async function main() {
     await assertMoveLineImport(page);
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
+    await assertReviewBestMoveBranchAction(page);
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertPgnTreeVariationExport(page);
@@ -1872,7 +1940,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, root move variations, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
