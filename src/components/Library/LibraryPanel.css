@@ -220,6 +220,8 @@
 /* ── Card actions ── */
 .lib-card-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.3rem;
   margin-top: 0.15rem;
 }

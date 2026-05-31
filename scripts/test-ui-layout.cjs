@@ -277,6 +277,55 @@ async function assertLibraryDeleteConfirmation(page) {
   }
 }
 
+async function assertLibraryPgnCopy(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  const blackToMoveFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17";
+  await page.evaluate((fen) => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-copy-pgn-game",
+      savedAt: 1710000000000,
+      gameMode: "PvAI-Black",
+      moves: ["a6a5", "a3a4"],
+      startFen: fen,
+      result: "ongoing",
+      label: "PGN copy QA",
+      opening: "Custom study",
+    }]));
+  }, blackToMoveFen);
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    window.__libraryPgnWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__libraryPgnWrites.push(String(text));
+        },
+      },
+    });
+  });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("PGN copy QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("copy-pgn-saved-qa-copy-pgn-game").click();
+  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+
+  const copiedPgn = await page.evaluate(() => window.__libraryPgnWrites?.[0] ?? "");
+  if (!copiedPgn.includes('[SetUp "1"]')) {
+    throw new Error("Copied saved-game PGN omitted SetUp.");
+  }
+  if (!copiedPgn.includes(`[FEN "${blackToMoveFen}"]`)) {
+    throw new Error(`Copied saved-game PGN omitted the root FEN:\n${copiedPgn}`);
+  }
+  if (!copiedPgn.includes("17... a6a5 18. a3a4 *")) {
+    throw new Error(`Copied saved-game PGN used the wrong move numbering:\n${copiedPgn}`);
+  }
+}
+
 async function assertMobileSaveLibraryActions(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -369,13 +418,14 @@ async function main() {
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
+    await assertLibraryPgnCopy(page);
     await assertLibraryDeleteConfirmation(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library actions, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library PGN actions, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

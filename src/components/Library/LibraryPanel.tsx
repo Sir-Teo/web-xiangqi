@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
-import { IconRefresh, IconX } from '../icons';
+import { exportPgnFromUci, copyToClipboard } from '../../utils/gameExport';
+import { IconCheck, IconCopy, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 
 interface LibraryPanelProps {
@@ -26,6 +27,13 @@ function resultLabel(result: HistoricalGame['result'] | SavedGame['result']): st
   return 'Draw';
 }
 
+function savedResultToGameResult(result: SavedGame['result']) {
+  if (result === 'red') return 'red-wins';
+  if (result === 'black') return 'black-wins';
+  if (result === 'draw') return 'draw';
+  return null;
+}
+
 export function LibraryPanel({
   savedGames,
   onLoadSavedGame,
@@ -37,8 +45,18 @@ export function LibraryPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
   const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
+
+  useEffect(() => {
+    return () => {
+      if (copiedToastTimerRef.current !== null) {
+        window.clearTimeout(copiedToastTimerRef.current);
+      }
+    };
+  }, []);
 
   const q = search.trim().toLowerCase();
 
@@ -82,6 +100,27 @@ export function LibraryPanel({
   const confirmDelete = (id: string) => {
     onDeleteSavedGame(id);
     setPendingDeleteId(null);
+  };
+
+  const copySavedGamePgn = async (game: SavedGame) => {
+    const pgn = exportPgnFromUci(game.moves, {
+      gameMode: game.gameMode,
+      opening: game.opening,
+      result: savedResultToGameResult(game.result),
+      label: game.label,
+      startFen: game.startFen,
+    });
+    const ok = await copyToClipboard(pgn);
+    if (!ok) return;
+
+    if (copiedToastTimerRef.current !== null) {
+      window.clearTimeout(copiedToastTimerRef.current);
+    }
+    setCopiedId(game.id);
+    copiedToastTimerRef.current = window.setTimeout(() => {
+      copiedToastTimerRef.current = null;
+      setCopiedId(null);
+    }, 1800);
   };
 
   return (
@@ -181,6 +220,16 @@ export function LibraryPanel({
                   </button>
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
+                  <button
+                    type="button"
+                    className={`chip-btn ${copiedId === game.id ? 'chip-btn-primary' : ''}`}
+                    onClick={() => copySavedGamePgn(game)}
+                    title="Copy PGN to clipboard"
+                    aria-label={copiedId === game.id ? 'Saved game PGN copied' : 'Copy saved game PGN'}
+                    data-testid={`copy-pgn-saved-${game.id}`}
+                  >
+                    {copiedId === game.id ? <><IconCheck /> Copied</> : <><IconCopy /> PGN</>}
+                  </button>
                   <button
                     type="button"
                     className="chip-btn chip-btn-primary"
