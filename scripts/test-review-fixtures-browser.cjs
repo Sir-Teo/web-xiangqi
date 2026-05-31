@@ -67,6 +67,7 @@ async function main() {
       const review = await import(`${runtimeBasePath}src/utils/review.ts`);
       const storage = await import(`${runtimeBasePath}src/utils/gameLibrary.ts`);
       const gameExport = await import(`${runtimeBasePath}src/utils/gameExport.ts`);
+      const serviceWorkerCleanup = await import(`${runtimeBasePath}src/utils/serviceWorkerCleanup.ts`);
 
       const thresholdCases = [
         [40, "best"],
@@ -238,15 +239,68 @@ async function main() {
       }
       focusedInput.remove();
 
+      if (!serviceWorkerCleanup.isLegacyRuntimeCacheKey("pikafish-demo-v1-shell")) {
+        throw new Error("Legacy runtime cache prefix was not detected.");
+      }
+      if (serviceWorkerCleanup.isLegacyRuntimeCacheKey("unrelated-cache")) {
+        throw new Error("Unrelated cache key was treated as legacy runtime cache.");
+      }
+
+      const unregistered = [];
+      const deletedCaches = [];
+      const cleanupResult = await serviceWorkerCleanup.cleanupLegacyRuntimeStorage({
+        appBasePath: "/web-xiangqi/",
+        locationHref: "https://example.test/web-xiangqi/",
+        serviceWorker: {
+          getRegistrations: async () => [
+            {
+              scope: "https://example.test/web-xiangqi/",
+              active: { scriptURL: "https://example.test/web-xiangqi/sw.js" },
+              unregister: async () => {
+                unregistered.push("web-xiangqi");
+                return true;
+              },
+            },
+            {
+              scope: "https://example.test/other/",
+              active: { scriptURL: "https://example.test/other/sw.js" },
+              unregister: async () => {
+                unregistered.push("other");
+                return true;
+              },
+            },
+          ],
+        },
+        cacheStorage: {
+          keys: async () => ["pikafish-demo-v1-shell", "pikafish-demo-v1-engine", "app-cache"],
+          delete: async (cacheKey) => {
+            deletedCaches.push(cacheKey);
+            return true;
+          },
+        },
+      });
+
+      if (cleanupResult.registrationsChecked !== 2 || cleanupResult.registrationsUnregistered !== 1) {
+        throw new Error(`Unexpected legacy SW cleanup result: ${JSON.stringify(cleanupResult)}`);
+      }
+      if (unregistered.join(",") !== "web-xiangqi") {
+        throw new Error(`Unexpected service worker unregisters: ${unregistered.join(",")}`);
+      }
+      if (deletedCaches.join(",") !== "pikafish-demo-v1-shell,pikafish-demo-v1-engine") {
+        throw new Error(`Unexpected deleted cache keys: ${deletedCaches.join(",")}`);
+      }
+
       return {
         accuracy: summary.accuracy,
         keyMoments: summary.keyMoments.length,
+        cacheKeysDeleted: cleanupResult.cacheKeysDeleted,
       };
     }, basePath);
 
     console.log("Review fixture tests passed.");
     console.log(`Accuracy fixture: ${result.accuracy}%`);
     console.log(`Key moments fixture: ${result.keyMoments}`);
+    console.log(`Legacy runtime caches deleted: ${result.cacheKeysDeleted}`);
   } finally {
     try {
       if (browser) await browser.close();
