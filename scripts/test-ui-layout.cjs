@@ -1889,6 +1889,16 @@ async function assertMobileSaveLibraryActions(page) {
     throw new Error(`Mobile turn label was clipped after export/share appeared: ${JSON.stringify(actionStrip)}`);
   }
 
+  await page.locator(".mobile-board-action-backdrop").click();
+  await page.waitForFunction(() => !document.querySelector(".mobile-board-action-menu"), null, { timeout: 2000 });
+  await moreButton.click();
+  await page.getByTestId("mobile-download-pgn-btn").waitFor({ timeout: 5000 });
+  await page.getByTestId("mobile-view-analysis").click();
+  await page.getByTestId("mobile-view-board").click();
+  if ((await page.locator(".mobile-board-action-menu").count()) !== 0) {
+    throw new Error("Mobile board action menu reopened after switching away from the board view.");
+  }
+
   await saveButton.click();
   const savedGameId = await page.waitForFunction(() => {
     const raw = localStorage.getItem("xiangqi-game-library");

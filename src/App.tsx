@@ -1043,6 +1043,12 @@ function App() {
     clearCompletedReview();
   }, [clearCompletedReview, currentLineSignature, reviewStatus, reviewSummary]);
 
+  useEffect(() => {
+    if (!showMobileBoardActionMenu) return;
+    if (isMobile && mobileView === 'board') return;
+    setShowMobileBoardActionMenu(false);
+  }, [isMobile, mobileView, showMobileBoardActionMenu]);
+
   // Stop AI engine when game ends
   useEffect(() => {
     if (gameResult) {
@@ -3016,77 +3022,84 @@ function App() {
             </div>
           )}
           {isMobile && mobileView === 'board' && showMobileBoardActionMenu ? (
-            <div
-              id="mobile-board-action-menu"
-              className="mobile-board-action-menu"
-              role="menu"
-              aria-label="More board actions"
-            >
-              {showMobilePgnAction ? (
+            <>
+              <div
+                className="mobile-board-action-backdrop"
+                onClick={() => setShowMobileBoardActionMenu(false)}
+                aria-hidden="true"
+              />
+              <div
+                id="mobile-board-action-menu"
+                className="mobile-board-action-menu"
+                role="menu"
+                aria-label="More board actions"
+              >
+                {showMobilePgnAction ? (
+                  <button
+                    className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
+                    type="button"
+                    onClick={handleDownloadPgn}
+                    disabled={!canExportCurrentLine}
+                    role="menuitem"
+                    title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
+                    aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
+                    data-testid="mobile-download-pgn-btn"
+                  >
+                    {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
+                    <span>{exportFailureKey === 'download-pgn' ? 'Export failed' : downloadedPgnToast ? 'Exported' : 'Export PGN'}</span>
+                  </button>
+                ) : null}
+                {showMobileShareAction ? (
+                  <button
+                    className={`mobile-action-menu-btn ${copiedShareToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-menu-btn-warn' : ''}`}
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    disabled={!canShareCurrentPosition}
+                    role="menuitem"
+                    title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
+                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                    data-testid="mobile-copy-share-link-btn"
+                  >
+                    {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
+                    <span>{exportFailureKey === 'copy-share' ? 'Copy failed' : copiedShareToast ? 'Copied link' : 'Copy link'}</span>
+                  </button>
+                ) : null}
                 <button
-                  className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
+                  className={`mobile-action-menu-btn ${copiedFenToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-menu-btn-warn' : ''}`}
                   type="button"
-                  onClick={handleDownloadPgn}
-                  disabled={!canExportCurrentLine}
+                  onClick={handleCopyFen}
                   role="menuitem"
-                  title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
-                  aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
-                  data-testid="mobile-download-pgn-btn"
+                  title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
+                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                  data-testid="mobile-copy-fen-btn"
                 >
-                  {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
-                  <span>{exportFailureKey === 'download-pgn' ? 'Export failed' : downloadedPgnToast ? 'Exported' : 'Export PGN'}</span>
+                  {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
+                  <span>{exportFailureKey === 'copy-fen' ? 'Copy failed' : copiedFenToast ? 'Copied FEN' : 'Copy FEN'}</span>
                 </button>
-              ) : null}
-              {showMobileShareAction ? (
                 <button
-                  className={`mobile-action-menu-btn ${copiedShareToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-menu-btn-warn' : ''}`}
+                  className={`mobile-action-menu-btn ${showArrows ? 'mobile-action-menu-btn-active' : ''}`}
                   type="button"
-                  onClick={handleCopyShareLink}
-                  disabled={!canShareCurrentPosition}
+                  onClick={() => setShowArrows(v => !v)}
                   role="menuitem"
-                  title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
-                  aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
-                  data-testid="mobile-copy-share-link-btn"
+                  title="Toggle arrows and markers"
+                  aria-label="Toggle board arrows and markers"
                 >
-                  {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
-                  <span>{exportFailureKey === 'copy-share' ? 'Copy failed' : copiedShareToast ? 'Copied link' : 'Copy link'}</span>
+                  <IconArrow />
+                  <span>{showArrows ? 'Hide arrows' : 'Show arrows'}</span>
                 </button>
-              ) : null}
-              <button
-                className={`mobile-action-menu-btn ${copiedFenToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-menu-btn-warn' : ''}`}
-                type="button"
-                onClick={handleCopyFen}
-                role="menuitem"
-                title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
-                aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
-                data-testid="mobile-copy-fen-btn"
-              >
-                {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
-                <span>{exportFailureKey === 'copy-fen' ? 'Copy failed' : copiedFenToast ? 'Copied FEN' : 'Copy FEN'}</span>
-              </button>
-              <button
-                className={`mobile-action-menu-btn ${showArrows ? 'mobile-action-menu-btn-active' : ''}`}
-                type="button"
-                onClick={() => setShowArrows(v => !v)}
-                role="menuitem"
-                title="Toggle arrows and markers"
-                aria-label="Toggle board arrows and markers"
-              >
-                <IconArrow />
-                <span>{showArrows ? 'Hide arrows' : 'Show arrows'}</span>
-              </button>
-              <button
-                className="mobile-action-menu-btn"
-                type="button"
-                onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
-                role="menuitem"
-                title="Flip board"
-                aria-label="Flip board"
-              >
-                <IconFlip />
-                <span>Flip board</span>
-              </button>
-            </div>
+                <button
+                  className="mobile-action-menu-btn"
+                  type="button"
+                  onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
+                  role="menuitem"
+                  title="Flip board"
+                  aria-label="Flip board"
+                >
+                  <IconFlip />
+                  <span>Flip board</span>
+                </button>
+              </div>
+            </>
           ) : null}
           <div className="mobile-board-center">
             <div className="board-workspace">

@@ -4419,6 +4419,13 @@ summary:active {
   display: none;
 }
 
+.mobile-board-action-backdrop {
+  position: absolute;
+  inset: 40px 0 0;
+  z-index: 34;
+  cursor: default;
+}
+
 .mobile-action-btn {
   width: 32px; height: 32px; border-radius: 6px;
   background: var(--bg-elevated); border: 1px solid var(--border-default);
