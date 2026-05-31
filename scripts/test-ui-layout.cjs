@@ -1858,6 +1858,17 @@ async function assertMobileSaveLibraryActions(page) {
   }
   await page.getByTestId("mobile-download-pgn-btn").waitFor({ timeout: 5000 });
   await page.getByTestId("mobile-copy-share-link-btn").waitFor({ timeout: 5000 });
+  const actionStrip = await page.evaluate(() => {
+    const el = document.querySelector(".mobile-board-actions");
+    return {
+      clientWidth: el?.clientWidth ?? 0,
+      scrollWidth: el?.scrollWidth ?? 0,
+      overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+    };
+  });
+  if (actionStrip.scrollWidth - actionStrip.clientWidth > 2 || actionStrip.overflowX > 2) {
+    throw new Error(`Mobile board actions did not fit after export/share appeared: ${JSON.stringify(actionStrip)}`);
+  }
 
   await saveButton.click();
   const savedGameId = await page.waitForFunction(() => {

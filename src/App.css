@@ -4407,9 +4407,9 @@ summary:active {
 .mobile-board-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex-shrink: 0;
-  max-width: min(68vw, 340px);
+  max-width: min(76vw, 340px);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -4420,13 +4420,13 @@ summary:active {
 }
 
 .mobile-action-btn {
-  width: 32px; height: 32px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: 6px;
   background: var(--bg-elevated); border: 1px solid var(--border-default);
   color: var(--text-secondary);
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-.mobile-action-btn svg { width: 15px; height: 15px; }
+.mobile-action-btn svg { width: 14px; height: 14px; }
 .mobile-action-btn-active { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4); color: var(--accent); }
 .mobile-action-btn-warn   { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.45); color: #f87171; }
 .mobile-action-btn:disabled {
