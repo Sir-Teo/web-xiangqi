@@ -1828,6 +1828,60 @@ async function assertLibraryDeleteConfirmation(page) {
   }
 }
 
+async function assertLargeLibraryRendersProgressively(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const savedAtBase = 1710000000000;
+    const games = Array.from({ length: 150 }, (_, index) => ({
+      id: `qa-large-library-${index}`,
+      savedAt: savedAtBase + index,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: index === 0 ? "Needle hidden QA" : `Bulk saved game ${index}`,
+    }));
+    localStorage.setItem("xiangqi-game-library", JSON.stringify(games));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("library-show-more-saved").waitFor({ timeout: 10000 });
+
+  const initial = await page.evaluate(() => ({
+    savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
+    historicalCards: document.querySelectorAll('[data-testid="historical-game-list"] .lib-card').length,
+    showMoreText: document.querySelector('[data-testid="library-show-more-saved"]')?.textContent?.trim() || "",
+    needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (initial.savedCards !== 100 || initial.historicalCards !== 10 || !initial.showMoreText.includes("50 more") || initial.needleVisible || initial.overflowX > 2) {
+    throw new Error(`Large library did not render progressively: ${JSON.stringify(initial)}`);
+  }
+
+  await page.getByTestId("library-show-more-saved").click();
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length === 150, null, { timeout: 5000 });
+
+  await page.getByLabel("Search library").fill("Needle hidden QA");
+  await page.waitForFunction(() => {
+    const cards = document.querySelectorAll('[data-testid="saved-game-list"] .lib-card');
+    return cards.length === 1 && document.body.textContent?.includes("Needle hidden QA");
+  }, null, { timeout: 5000 });
+
+  const searched = await page.evaluate(() => ({
+    savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
+    needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
+    showMoreVisible: Boolean(document.querySelector('[data-testid="library-show-more-saved"]')),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (searched.savedCards !== 1 || !searched.needleVisible || searched.showMoreVisible || searched.overflowX > 2) {
+    throw new Error(`Large library search did not reach hidden saved games: ${JSON.stringify(searched)}`);
+  }
+}
+
 async function assertLibraryPgnCopy(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2473,13 +2527,14 @@ async function main() {
     await assertLibraryInvalidSavedGameLoadFeedback(page);
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
+    await assertLargeLibraryRendersProgressively(page);
     await assertGameOverReviewPreservesResult(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, visibility-return analysis resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine loader failure notice, visibility-return analysis resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

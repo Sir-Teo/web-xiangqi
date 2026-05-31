@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
+
+const SAVED_PAGE_SIZE = 100;
 
 interface LibraryPanelProps {
   savedGames: SavedGame[];
@@ -81,6 +83,7 @@ export function LibraryPanel({
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const [failedActionId, setFailedActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [savedVisibleLimit, setSavedVisibleLimit] = useState(SAVED_PAGE_SIZE);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
@@ -99,7 +102,11 @@ export function LibraryPanel({
 
   const q = search.trim().toLowerCase();
 
-  const filteredHistorical = HISTORICAL_GAMES.filter((g) => {
+  useEffect(() => {
+    setSavedVisibleLimit(SAVED_PAGE_SIZE);
+  }, [q, reviewFilter, resultFilter, savedGames.length]);
+
+  const filteredHistorical = useMemo(() => HISTORICAL_GAMES.filter((g) => {
     if (reviewFilter === 'reviewed') return false;
     if (resultFilter !== 'all' && g.result !== resultFilter) return false;
     if (!q) return true;
@@ -110,9 +117,9 @@ export function LibraryPanel({
       g.date.includes(q) ||
       (g.opening ?? '').toLowerCase().includes(q)
     );
-  });
+  }), [q, resultFilter, reviewFilter]);
 
-  const filteredSaved = savedGames.filter((g) => {
+  const filteredSaved = useMemo(() => savedGames.filter((g) => {
     const isReviewed = Boolean(g.review);
     if (reviewFilter === 'reviewed' && !isReviewed) return false;
     if (reviewFilter === 'unreviewed' && isReviewed) return false;
@@ -123,7 +130,8 @@ export function LibraryPanel({
       (g.opening ?? '').toLowerCase().includes(q) ||
       g.gameMode.toLowerCase().includes(q)
     );
-  });
+  }), [q, resultFilter, reviewFilter, savedGames]);
+  const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
 
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
@@ -277,7 +285,7 @@ export function LibraryPanel({
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
-      <div className="lib-list">
+      <div className="lib-list" data-testid="saved-game-list">
         {filteredSaved.length === 0 ? (
           <p className="lib-empty">
             {savedGames.length === 0
@@ -285,7 +293,7 @@ export function LibraryPanel({
               : 'No games match your search.'}
           </p>
         ) : (
-          filteredSaved.map((game) => (
+          visibleSaved.map((game) => (
             <div key={game.id} className="lib-card">
               <div className="lib-card-title">
                 {editingId === game.id ? (
@@ -429,10 +437,20 @@ export function LibraryPanel({
           ))
         )}
       </div>
+      {filteredSaved.length > visibleSaved.length ? (
+        <button
+          type="button"
+          className="lib-load-more"
+          onClick={() => setSavedVisibleLimit((limit) => limit + SAVED_PAGE_SIZE)}
+          data-testid="library-show-more-saved"
+        >
+          Show {Math.min(SAVED_PAGE_SIZE, filteredSaved.length - visibleSaved.length)} more saved games
+        </button>
+      ) : null}
 
       {/* ── Classic Games ── */}
       <div className="lib-section-header">Classic Games</div>
-      <div className="lib-list">
+      <div className="lib-list" data-testid="historical-game-list">
         {filteredHistorical.length === 0 ? (
           <p className="lib-empty">No games match your search.</p>
         ) : (

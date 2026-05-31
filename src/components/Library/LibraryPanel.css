@@ -63,6 +63,24 @@
   padding: 0.24rem 0.58rem;
 }
 
+.lib-load-more {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+
+.lib-load-more:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.08);
+}
+
 .lib-search {
   width: 100%;
   box-sizing: border-box;
@@ -310,7 +328,8 @@
 }
 
 .lib-panel .lib-game-name-button:focus-visible,
-.lib-clear-filters:focus-visible {
+.lib-clear-filters:focus-visible,
+.lib-load-more:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;
 }
