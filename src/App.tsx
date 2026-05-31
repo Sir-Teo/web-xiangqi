@@ -2713,7 +2713,7 @@ function App() {
                     <div className="engine-stat">
                       <span>Detail</span>
                       <strong>{`MultiPV ${analysisMultiPv}`}</strong>
-                      <em>{currentShowWdlRef.current ? 'WDL on' : 'WDL off'}</em>
+                      <em>{analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
                     </div>
                   </div>
                   <div className="engine-pv-controls" aria-label="Engine principal variation lines">

@@ -229,7 +229,7 @@ async function assertEnginePvLineControl(page) {
       .find((text) => text.includes("Detail")) || "",
     active: document.querySelector('[data-testid="engine-pv-lines-3"]')?.getAttribute("aria-pressed") || "",
   }));
-  if (!initial.detail.includes("MultiPV 3") || initial.active !== "true") {
+  if (!initial.detail.includes("MultiPV 3") || !initial.detail.includes("WDL on") || initial.active !== "true") {
     throw new Error(`Engine PV selector did not start on 3 lines: ${JSON.stringify(initial)}`);
   }
 
@@ -242,7 +242,7 @@ async function assertEnginePvLineControl(page) {
     labels: [...document.querySelectorAll(".engine-pv-btn")].map((el) => el.textContent?.trim() || ""),
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
-  if (!updated.detail.includes("MultiPV 5") || updated.active !== "true") {
+  if (!updated.detail.includes("MultiPV 5") || !updated.detail.includes("WDL on") || updated.active !== "true") {
     throw new Error(`Engine PV selector did not switch to 5 lines: ${JSON.stringify(updated)}`);
   }
   if (updated.labels.join(",") !== "1,3,5") {
