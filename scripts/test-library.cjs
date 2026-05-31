@@ -90,6 +90,14 @@ try {
     `UCI move import should extract and normalize moves, got: ${importedLine.join(" ")}`
   );
 
+  const importedFen = moveImport.extractFenTag(`
+    [Variant "Xiangqi"]
+    [FEN "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17"]
+
+    17... h9g7 *
+  `);
+  assert(importedFen === "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17", "Move import should extract a FEN tag.");
+
   console.log("Library normalization, PGN export, and move import checks passed.");
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });

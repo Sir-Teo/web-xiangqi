@@ -27,7 +27,7 @@ import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, copyToClipboard } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
-import { extractUciMoveLine } from './utils/moveImport';
+import { extractFenTag, extractUciMoveLine } from './utils/moveImport';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -1489,7 +1489,7 @@ function App() {
       return;
     }
 
-    const startFen = fenInput.trim() || undefined;
+    const startFen = fenInput.trim() || extractFenTag(text) || undefined;
     const validation = validateMoveSequence(moves, startFen);
     if (!validation.ok) {
       setMoveLineError(
