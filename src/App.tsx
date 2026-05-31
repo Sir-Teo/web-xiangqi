@@ -1160,9 +1160,11 @@ function App() {
 
   const handleSquareClick = useCallback((file: number, rank: number) => {
     if (gameResult) return;
-    clearBoardMarkers();
     if (!isAiTurn) {
-      onSquareClick(file, rank);
+      const moved = onSquareClick(file, rank);
+      if (moved) {
+        clearBoardMarkers();
+      }
     }
   }, [clearBoardMarkers, gameResult, isAiTurn, onSquareClick]);
 

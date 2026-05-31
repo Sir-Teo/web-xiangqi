@@ -281,6 +281,27 @@ async function assertMoveLineImport(page) {
   }
 }
 
+async function assertBoardMarkersSurviveSelection(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('.hitbox[data-file="4"][data-rank="4"]').click({ button: "right" });
+  await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 1, null, { timeout: 5000 });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  const markerCountAfterSelect = await page.locator(".marker-highlight").count();
+  if (markerCountAfterSelect !== 1) {
+    throw new Error(`Board marker cleared during piece selection: ${markerCountAfterSelect}`);
+  }
+
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 0, null, { timeout: 5000 });
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -550,6 +571,7 @@ async function main() {
     await assertBottomNewGameMenuResetsDraft(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
+    await assertBoardMarkersSurviveSelection(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -561,7 +583,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI import, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
