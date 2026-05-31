@@ -10,7 +10,7 @@
   "main": "dist/pikafish.js",
   "scripts": {
     "dev": "vite",
-    "build:react": "tsc -b && vite build",
+    "build:react": "node scripts/clean-react-dist.cjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "build": "bash scripts/build-pikafish.sh",

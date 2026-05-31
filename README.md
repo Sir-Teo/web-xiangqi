@@ -76,6 +76,8 @@ npm run test:ui:install   # once per machine
 npm run test:ui:layout
 ```
 
+`npm run build:react` cleans only the React HTML/assets/favicon from `dist/` before building, preserving the checked-in Pikafish JS/WASM/NNUE artifacts.
+
 Artifacts are written to `dist/`:
 
 - `dist/pikafish.js` (wrapper)
