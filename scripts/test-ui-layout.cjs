@@ -182,6 +182,36 @@ async function assertPausedAiTurnBlocksManualMove(page) {
   }
 }
 
+async function assertAiPlayModeShowsEngineStatus(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /You play Red/i }).click();
+  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() || "",
+    engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (state.workspace !== "Play") {
+    throw new Error(`AI engine status setup did not switch to Play workspace: ${state.workspace}`);
+  }
+  if (!state.engineText) {
+    throw new Error("AI Play mode hid the engine status.");
+  }
+  if (state.overflowX > 2) {
+    throw new Error(`AI Play mode introduced horizontal overflow: ${state.overflowX}`);
+  }
+}
+
 async function assertBottomNewGameMenuResetsDraft(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -693,6 +723,7 @@ async function main() {
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
+    await assertAiPlayModeShowsEngineStatus(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
@@ -711,7 +742,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
