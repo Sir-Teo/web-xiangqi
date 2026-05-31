@@ -285,9 +285,12 @@
 }
 
 /* ── Saved game name (clickable to rename) ── */
-.lib-game-name-button {
+.lib-panel .lib-game-name-button {
+  display: block;
+  width: 100%;
   font-size: 0.82rem;
   font-weight: 600;
+  line-height: 1.25;
   color: var(--text-primary);
   cursor: pointer;
   border: none;
@@ -301,12 +304,12 @@
   white-space: nowrap;
 }
 
-.lib-game-name-button:hover {
+.lib-panel .lib-game-name-button:hover {
   color: var(--accent, #10b981);
   text-decoration: underline;
 }
 
-.lib-game-name-button:focus-visible,
+.lib-panel .lib-game-name-button:focus-visible,
 .lib-clear-filters:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;

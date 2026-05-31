@@ -1755,10 +1755,26 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
       if (!title) return true;
       return title.scrollWidth - title.clientWidth > 1;
     })(),
+    titleDisplay: (() => {
+      const title = document.querySelector(".lib-game-name-button");
+      return title ? getComputedStyle(title).display : "";
+    })(),
+    titleTextAlign: (() => {
+      const title = document.querySelector(".lib-game-name-button");
+      return title ? getComputedStyle(title).textAlign : "";
+    })(),
     stillVisible: document.body.textContent?.includes("Invalid load QA") || false,
     moveRows: document.querySelectorAll(".mtree-row").length,
   }));
-  if (state.role !== "alert" || !state.loadClass.includes("chip-btn-warning") || state.titleClipped || !state.stillVisible || state.moveRows !== 0) {
+  if (
+    state.role !== "alert" ||
+    !state.loadClass.includes("chip-btn-warning") ||
+    state.titleClipped ||
+    state.titleDisplay !== "block" ||
+    state.titleTextAlign !== "left" ||
+    !state.stillVisible ||
+    state.moveRows !== 0
+  ) {
     throw new Error(`Invalid saved-game load did not preserve library state with retry feedback: ${JSON.stringify(state)}`);
   }
 }
