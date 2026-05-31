@@ -66,6 +66,7 @@ async function main() {
     const result = await page.evaluate(async (runtimeBasePath) => {
       const review = await import(`${runtimeBasePath}src/utils/review.ts`);
       const storage = await import(`${runtimeBasePath}src/utils/gameLibrary.ts`);
+      const gameExport = await import(`${runtimeBasePath}src/utils/gameExport.ts`);
 
       const thresholdCases = [
         [40, "best"],
@@ -184,6 +185,58 @@ async function main() {
       if (migratedReviewed.review.annotations[1]?.quality !== "inaccuracy") {
         throw new Error("Reviewed save annotations were not preserved.");
       }
+
+      const clipboardWrites = [];
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text) => {
+            clipboardWrites.push(String(text));
+          },
+        },
+      });
+      if (!(await gameExport.copyToClipboard("modern clipboard"))) {
+        throw new Error("Clipboard API copy failed.");
+      }
+      if (clipboardWrites[0] !== "modern clipboard") {
+        throw new Error("Clipboard API copy wrote the wrong text.");
+      }
+
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {
+            throw new DOMException("Blocked", "NotAllowedError");
+          },
+        },
+      });
+      const focusedInput = document.createElement("input");
+      focusedInput.value = "keep focus";
+      document.body.appendChild(focusedInput);
+      focusedInput.focus();
+      let fallbackCopyText = "";
+      Object.defineProperty(document, "execCommand", {
+        configurable: true,
+        value: (command) => {
+          if (command !== "copy") return false;
+          const active = document.activeElement;
+          fallbackCopyText = active && "value" in active ? String(active.value) : "";
+          return true;
+        },
+      });
+      if (!(await gameExport.copyToClipboard("fallback clipboard"))) {
+        throw new Error("Selection fallback copy failed.");
+      }
+      if (fallbackCopyText !== "fallback clipboard") {
+        throw new Error(`Selection fallback copied "${fallbackCopyText}" instead of the requested text.`);
+      }
+      if (document.querySelector("textarea[readonly]")) {
+        throw new Error("Selection fallback left a temporary textarea in the document.");
+      }
+      if (document.activeElement !== focusedInput) {
+        throw new Error("Selection fallback did not restore focus.");
+      }
+      focusedInput.remove();
 
       return {
         accuracy: summary.accuracy,

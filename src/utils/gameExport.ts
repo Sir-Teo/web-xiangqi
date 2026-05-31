@@ -91,10 +91,63 @@ export function exportPgnFromUci(
  * Copies text to clipboard, returning a promise that resolves to true on success.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
+    const value = String(text);
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
     try {
-        await navigator.clipboard.writeText(text);
-        return true;
+        if (clipboard?.writeText) {
+            await clipboard.writeText(value);
+            return true;
+        }
+    } catch (_) {
+        // Fall through to the selection-based fallback below.
+    }
+
+    return copyToClipboardWithSelection(value);
+}
+
+function copyToClipboardWithSelection(text: string): boolean {
+    if (typeof document === 'undefined' || !document.body) return false;
+
+    const previousActive = typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const selection = document.getSelection?.();
+    const ranges: Range[] = [];
+    if (selection) {
+        for (let i = 0; i < selection.rangeCount; i += 1) {
+            ranges.push(selection.getRangeAt(i));
+        }
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    textarea.style.width = '1px';
+    textarea.style.height = '1px';
+    textarea.style.padding = '0';
+    textarea.style.border = '0';
+    textarea.style.opacity = '0';
+    textarea.style.pointerEvents = 'none';
+
+    document.body.appendChild(textarea);
+    textarea.focus({ preventScroll: true });
+    textarea.select();
+
+    try {
+        return Boolean(document.execCommand?.('copy'));
     } catch (_) {
         return false;
+    } finally {
+        textarea.remove();
+        if (selection) {
+            selection.removeAllRanges();
+            for (const range of ranges) {
+                selection.addRange(range);
+            }
+        }
+        previousActive?.focus({ preventScroll: true });
     }
 }
