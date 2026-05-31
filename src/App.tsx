@@ -669,13 +669,15 @@ function App() {
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
   }, [currentLineMoves, rootFen]);
-  const isAiTurn =
-    gameMode === 'AIvAI' ||
-    (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
-    (gameMode === 'PvAI-Red' && sideToMove === 'w');
   const isAiMode = gameMode !== 'PvP';
   const engineEnabled = workspaceMode === 'analysis';
-  const engineRequired = engineEnabled || isAiMode;
+  const aiPlayActive = workspaceMode === 'play' && isAiMode;
+  const isAiTurn =
+    aiPlayActive &&
+    (gameMode === 'AIvAI' ||
+      (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
+      (gameMode === 'PvAI-Red' && sideToMove === 'w'));
+  const engineRequired = engineEnabled || aiPlayActive;
 
   const {
     status: reviewStatus,
@@ -3154,7 +3156,7 @@ function App() {
                     {engineEnabled ? 'Engine live' : 'Engine off'}
                   </span>
                 )}
-                {isAiMode ? (
+                {aiPlayActive ? (
                   <span className="board-stage-chip board-stage-chip-muted">
                     {paused ? 'AI paused' : `${AI_STRENGTH_LABELS[aiStrength]} · ${aiSpeed === 'step' ? 'step' : aiSpeed}`}
                   </span>
@@ -3201,7 +3203,7 @@ function App() {
                 >
                   <IconLibrary />
                 </button>
-                {isAiMode && (
+                {aiPlayActive && (
                   <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} type="button" onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'} aria-label={paused ? 'Resume AI' : 'Pause AI'}>
                     {paused ? <IconPlay /> : <IconPause />}
                   </button>
@@ -3306,7 +3308,7 @@ function App() {
           <div className="mobile-board-center">
             <div className="board-workspace">
               <div className="board-wrap">
-                {isAiMode && (
+                {aiPlayActive && (
                   <div className="board-ai-status">
                     <IconBot />
                     {paused ? (
@@ -3787,7 +3789,7 @@ function App() {
               onPrev={goToPreviousMove}
               onNext={goToNextMove}
               onLast={goToLatestMove}
-              gameMode={gameMode}
+              gameMode={aiPlayActive ? gameMode : 'PvP'}
               paused={paused}
               onPause={pause}
               onResume={resume}
