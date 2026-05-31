@@ -88,6 +88,9 @@ const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
+const PANEL_MIN_WIDTH = 60;
+const DEFAULT_LEFT_PANEL_WIDTH = 320;
+const DEFAULT_RIGHT_PANEL_WIDTH = 320;
 const INITIAL_PIECE_COUNTS: Record<PieceCode, number> = {
   K: 1, A: 2, B: 2, N: 2, R: 2, C: 2, P: 5,
   k: 1, a: 2, b: 2, n: 2, r: 2, c: 2, p: 5,
@@ -1149,9 +1152,12 @@ function App() {
     resetGame();
   }, [resetGame]);
 
-  const MIN_WIDTH = 60;
-  const DEFAULT_LEFT = 320;
-  const DEFAULT_RIGHT = 320;
+  const openLibraryPanel = useCallback(() => {
+    setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
+    setLeftPanelTab('library');
+    setMobileAnalysisTab('graph');
+    setMobileView('analysis');
+  }, []);
 
   const startLeftResize = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
@@ -1161,7 +1167,7 @@ function App() {
     let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW + e.clientX - startX;
-      last = next < MIN_WIDTH ? 0 : Math.min(next, 600);
+      last = next < PANEL_MIN_WIDTH ? 0 : Math.min(next, 600);
       document.documentElement.style.setProperty('--left-panel-w', last + 'px');
     };
     const onUp = () => {
@@ -1182,7 +1188,7 @@ function App() {
     let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW - (e.clientX - startX);
-      last = next < MIN_WIDTH ? 0 : Math.min(next, 600);
+      last = next < PANEL_MIN_WIDTH ? 0 : Math.min(next, 600);
       document.documentElement.style.setProperty('--right-panel-w', last + 'px');
     };
     const onUp = () => {
@@ -1319,8 +1325,18 @@ function App() {
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
+  const savedToastTimerRef = useRef<number | null>(null);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (savedToastTimerRef.current !== null) {
+        window.clearTimeout(savedToastTimerRef.current);
+      }
+    };
+  }, []);
 
   const closeSettings = useCallback(() => {
     setShowSettings(false);
@@ -1437,6 +1453,15 @@ function App() {
           }
         : undefined,
     });
+
+    if (savedToastTimerRef.current !== null) {
+      window.clearTimeout(savedToastTimerRef.current);
+    }
+    setSavedToast(true);
+    savedToastTimerRef.current = window.setTimeout(() => {
+      savedToastTimerRef.current = null;
+      setSavedToast(false);
+    }, 1800);
   }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
@@ -1600,8 +1625,7 @@ function App() {
                 type="button"
                 className="top-action-btn"
                 onClick={() => {
-                  if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT);
-                  setLeftPanelTab('library');
+                  openLibraryPanel();
                 }}
                 title="Game library"
                 aria-label="Open game library"
@@ -1627,7 +1651,7 @@ function App() {
             <div className="mobile-actions">
               <button
                 type="button"
-                onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT)}
+                onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT_PANEL_WIDTH)}
                 title="Toggle graph panel"
                 aria-label="Toggle graph panel"
               >
@@ -1635,7 +1659,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT)}
+                onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT_PANEL_WIDTH)}
                 title="Toggle tree panel"
                 aria-label="Toggle move tree panel"
               >
@@ -1751,14 +1775,14 @@ function App() {
                 <button
                   type="button"
                   className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT)}
+                  onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT_PANEL_WIDTH)}
                 >
                   Graph Panel
                 </button>
                 <button
                   type="button"
                   className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT)}
+                  onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT_PANEL_WIDTH)}
                 >
                   Tree Panel
                 </button>
@@ -1953,7 +1977,7 @@ function App() {
           <div
             className="resize-handle resize-handle-right"
             onMouseDown={startLeftResize}
-            onClick={() => { if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT); }}
+            onClick={() => { if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH); }}
             title="Drag to resize · click to expand"
           >
             <span className="resize-pill" />
@@ -2077,6 +2101,37 @@ function App() {
               </div>
               <div className="mobile-board-actions">
                 <button className="mobile-action-btn" type="button" onClick={toggleNewGameMenu} title="New game" aria-label="Open new game menu"><IconRefresh /></button>
+                <button
+                  className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''}`}
+                  type="button"
+                  onClick={handleSaveGame}
+                  disabled={!canSaveCurrentPosition}
+                  title={savedToast ? 'Saved' : 'Save current game'}
+                  aria-label={savedToast ? 'Current game saved' : 'Save current game'}
+                  data-testid="mobile-save-game-btn"
+                >
+                  {savedToast ? <IconCheck /> : <IconSave />}
+                </button>
+                <button
+                  className="mobile-action-btn"
+                  type="button"
+                  onClick={openLibraryPanel}
+                  title="Game library"
+                  aria-label="Open game library"
+                  data-testid="mobile-open-library-btn"
+                >
+                  <IconLibrary />
+                </button>
+                <button
+                  className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''}`}
+                  type="button"
+                  onClick={handleCopyFen}
+                  title={copiedFenToast ? 'FEN copied' : 'Copy FEN'}
+                  aria-label={copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                  data-testid="mobile-copy-fen-btn"
+                >
+                  {copiedFenToast ? <IconCheck /> : <IconCopy />}
+                </button>
                 {isAiMode && (
                   <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} type="button" onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'} aria-label={paused ? 'Resume AI' : 'Pause AI'}>
                     {paused ? <IconPlay /> : <IconPause />}
@@ -2201,7 +2256,7 @@ function App() {
           <div
             className="resize-handle resize-handle-left"
             onMouseDown={startRightResize}
-            onClick={() => { if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT); }}
+            onClick={() => { if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH); }}
             title="Drag to resize · click to expand"
           >
             <span className="resize-pill" />
@@ -2370,7 +2425,7 @@ function App() {
                 title="Save current game or custom position to library"
                 data-testid="save-game-btn"
               >
-                <IconSave /> Save
+                {savedToast ? <><IconCheck /> Saved</> : <><IconSave /> Save</>}
               </button>
               <button
                 className="gc-btn"

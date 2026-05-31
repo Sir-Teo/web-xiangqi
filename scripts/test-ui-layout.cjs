@@ -138,6 +138,51 @@ async function assertLibraryDeleteConfirmation(page) {
   }
 }
 
+async function assertMobileSaveLibraryActions(page) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("xiangqi-game-library");
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(500);
+
+  const saveButton = page.getByTestId("mobile-save-game-btn");
+  const libraryButton = page.getByTestId("mobile-open-library-btn");
+  await saveButton.waitFor({ timeout: 10000 });
+  await libraryButton.waitFor({ timeout: 10000 });
+
+  if (!(await saveButton.isDisabled())) {
+    throw new Error("Mobile save action should be disabled before any move or custom position.");
+  }
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  if (await saveButton.isDisabled()) {
+    throw new Error("Mobile save action stayed disabled after a legal move.");
+  }
+
+  await saveButton.click();
+  const savedGameId = await page.waitForFunction(() => {
+    const raw = localStorage.getItem("xiangqi-game-library");
+    if (!raw) return null;
+    const games = JSON.parse(raw);
+    return games.length === 1 ? games[0].id : null;
+  }, null, { timeout: 5000 }).then((handle) => handle.jsonValue());
+
+  if (!savedGameId) {
+    throw new Error("Mobile save did not create a saved game.");
+  }
+
+  await libraryButton.click();
+  await page.getByText("My Games").waitFor({ timeout: 5000 });
+  await page.getByTestId(`load-saved-${savedGameId}`).waitFor({ timeout: 5000 });
+}
+
 async function main() {
   let playwright;
   try {
@@ -177,13 +222,14 @@ async function main() {
 
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
+    await assertMobileSaveLibraryActions(page);
     await assertLibraryDeleteConfirmation(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Mobile board layout and library delete checks passed.");
+    console.log("Mobile board layout, save/library actions, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
