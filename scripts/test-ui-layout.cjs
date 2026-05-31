@@ -43,6 +43,77 @@ function rectWithinLayout(rects) {
   }
 }
 
+function rectWithinDesktopLayout(rects) {
+  const { boardSurface, positionDock, topPanel, bottomPanel } = rects;
+  if (!boardSurface || !positionDock || !topPanel || !bottomPanel) {
+    throw new Error("Missing desktop board layout elements.");
+  }
+
+  if (boardSurface.top < topPanel.bottom - 1) {
+    throw new Error(
+      `Board overlaps desktop top bar: board top ${boardSurface.top}, top bar bottom ${topPanel.bottom}`
+    );
+  }
+  if (positionDock.top < boardSurface.bottom - 1) {
+    throw new Error(
+      `Position dock overlaps desktop board: dock top ${positionDock.top}, board bottom ${boardSurface.bottom}`
+    );
+  }
+  if (positionDock.bottom > bottomPanel.top + 1) {
+    throw new Error(
+      `Position dock overlaps desktop bottom bar: dock bottom ${positionDock.bottom}, bottom bar top ${bottomPanel.top}`
+    );
+  }
+}
+
+async function assertDesktopBoardLayout(page, viewport) {
+  await page.setViewportSize(viewport);
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(500);
+
+  const layout = await page.evaluate(() => {
+    const toRect = (selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return {
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+
+    return {
+      body: {
+        scrollWidth: document.body.scrollWidth,
+        clientWidth: document.body.clientWidth,
+      },
+      boardSurface: toRect(".xiangqi-board"),
+      positionDock: toRect(".position-dock"),
+      topPanel: toRect(".panel.top"),
+      bottomPanel: toRect(".panel.bottom"),
+      hitboxCount: document.querySelectorAll(".hitbox").length,
+    };
+  });
+
+  if (layout.body.scrollWidth > layout.body.clientWidth + 2) {
+    throw new Error(
+      `Horizontal overflow at ${viewport.width}x${viewport.height}: ${layout.body.scrollWidth} > ${layout.body.clientWidth}`
+    );
+  }
+  if (layout.hitboxCount !== 90) {
+    throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
+  }
+  rectWithinDesktopLayout(layout);
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -224,6 +295,7 @@ async function main() {
     });
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
+    await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -233,7 +305,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Mobile board layout, save/library actions, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, save/library actions, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

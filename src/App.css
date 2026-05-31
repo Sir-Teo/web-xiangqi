@@ -5580,6 +5580,16 @@ summary:active {
   }
 }
 
+@media (min-width: 901px) and (max-width: 1100px) {
+  .board-stage {
+    padding: 0.75rem var(--space-lg);
+  }
+
+  .capture-trays {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .mobile-board-center {
     display: flex;
