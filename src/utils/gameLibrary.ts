@@ -10,7 +10,7 @@ import type {
 } from './review';
 import { makeReviewLineSignatureFromMoves } from './review';
 
-const STORAGE_KEY = 'xiangqi-game-library';
+export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi-game-library';
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
@@ -307,7 +307,7 @@ export function normalizeSavedGames(raw: unknown): SavedGame[] {
 
 function readAll(): SavedGame[] {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
         if (!raw) return [];
         if (raw.length > MAX_LIBRARY_JSON_LENGTH) return [];
         return normalizeSavedGames(JSON.parse(raw));
@@ -318,7 +318,7 @@ function readAll(): SavedGame[] {
 
 function writeAll(games: SavedGame[]): boolean {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+        localStorage.setItem(GAME_LIBRARY_STORAGE_KEY, JSON.stringify(games));
         return true;
     } catch {
         console.warn('Game library: localStorage write failed.');

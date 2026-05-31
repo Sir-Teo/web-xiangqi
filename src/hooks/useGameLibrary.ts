@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { loadAllGames, saveGame, deleteGame, renameGame } from '../utils/gameLibrary';
+import { useCallback, useEffect, useState } from 'react';
+import { GAME_LIBRARY_STORAGE_KEY, loadAllGames, saveGame, deleteGame, renameGame } from '../utils/gameLibrary';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { GameMode } from '../App';
 
@@ -9,6 +9,17 @@ export function useGameLibrary() {
     const refresh = useCallback(() => {
         setGames(loadAllGames());
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const onStorage = (event: StorageEvent) => {
+            if (event.storageArea && event.storageArea !== window.localStorage) return;
+            if (event.key !== GAME_LIBRARY_STORAGE_KEY && event.key !== null) return;
+            refresh();
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+    }, [refresh]);
 
     const save = useCallback((
         gameMode: GameMode,

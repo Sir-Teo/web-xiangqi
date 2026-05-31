@@ -1925,6 +1925,49 @@ async function assertLibraryDeleteConfirmation(page) {
   }
 }
 
+async function assertLibraryRespondsToStorageChanges(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", "[]");
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 10000 });
+
+  await page.evaluate(() => {
+    const key = "xiangqi-game-library";
+    const nextValue = JSON.stringify([{
+      id: "qa-storage-sync-game",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: "Storage sync QA",
+    }]);
+    localStorage.setItem(key, nextValue);
+    window.dispatchEvent(new StorageEvent("storage", {
+      key,
+      newValue: nextValue,
+      storageArea: localStorage,
+    }));
+  });
+
+  await page.getByText("Storage sync QA").waitFor({ timeout: 5000 });
+  const state = await page.evaluate(() => ({
+    savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
+    summaryText: document.querySelector(".lib-summary-row")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (state.savedCards !== 1 || !state.summaryText.includes("1 saved") || state.overflowX > 2) {
+    throw new Error(`Library did not refresh after storage change: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertLargeLibraryRendersProgressively(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2626,6 +2669,7 @@ async function main() {
     await assertLibraryInvalidSavedGameLoadFeedback(page);
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
+    await assertLibraryRespondsToStorageChanges(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertGameOverReviewPreservesResult(page);
 
@@ -2633,7 +2677,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
