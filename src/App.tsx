@@ -53,6 +53,7 @@ type AnalysisEngineMode = 'stable' | 'optimized';
 type PvLineCount = 1 | 3 | 5;
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type ShareLinkNotice = { tone: 'warning'; text: string } | null;
+type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | `copy-pv-${number}`;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
   from: BoardSquare;
@@ -1645,6 +1646,7 @@ function App() {
   const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
   const [clearedHashToast, setClearedHashToast] = useState(false);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
+  const [exportFailureKey, setExportFailureKey] = useState<ExportFailureKey | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const [saveFailedToast, setSaveFailedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
@@ -1654,6 +1656,7 @@ function App() {
   const downloadedPgnTimerRef = useRef<number | null>(null);
   const clearedHashTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
+  const exportFailureTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
   const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
   const shareLinkLoadedRef = useRef(false);
@@ -1686,10 +1689,32 @@ function App() {
       if (copiedPvTimerRef.current !== null) {
         window.clearTimeout(copiedPvTimerRef.current);
       }
+      if (exportFailureTimerRef.current !== null) {
+        window.clearTimeout(exportFailureTimerRef.current);
+      }
       if (fenErrorTimerRef.current !== null) {
         window.clearTimeout(fenErrorTimerRef.current);
       }
     };
+  }, []);
+
+  const clearExportFailure = useCallback(() => {
+    if (exportFailureTimerRef.current !== null) {
+      window.clearTimeout(exportFailureTimerRef.current);
+      exportFailureTimerRef.current = null;
+    }
+    setExportFailureKey(null);
+  }, []);
+
+  const showExportFailure = useCallback((key: ExportFailureKey) => {
+    if (exportFailureTimerRef.current !== null) {
+      window.clearTimeout(exportFailureTimerRef.current);
+    }
+    setExportFailureKey(key);
+    exportFailureTimerRef.current = window.setTimeout(() => {
+      exportFailureTimerRef.current = null;
+      setExportFailureKey(null);
+    }, 2400);
   }, []);
 
   const closeSettings = useCallback(() => {
@@ -1751,17 +1776,20 @@ function App() {
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = await copyToClipboard(pgn);
-    if (ok) {
-      if (copiedToastTimerRef.current !== null) {
-        window.clearTimeout(copiedToastTimerRef.current);
-      }
-      setCopiedToast(true);
-      copiedToastTimerRef.current = window.setTimeout(() => {
-        copiedToastTimerRef.current = null;
-        setCopiedToast(false);
-      }, 2000);
+    if (!ok) {
+      showExportFailure('copy-pgn');
+      return;
     }
-  }, [buildCurrentPgn]);
+    clearExportFailure();
+    if (copiedToastTimerRef.current !== null) {
+      window.clearTimeout(copiedToastTimerRef.current);
+    }
+    setCopiedToast(true);
+    copiedToastTimerRef.current = window.setTimeout(() => {
+      copiedToastTimerRef.current = null;
+      setCopiedToast(false);
+    }, 2000);
+  }, [buildCurrentPgn, clearExportFailure, showExportFailure]);
 
   const handleDownloadPgn = useCallback(() => {
     const pgn = buildCurrentPgn();
@@ -1771,8 +1799,12 @@ function App() {
       pgn,
       'application/x-chess-pgn;charset=utf-8'
     );
-    if (!ok) return;
+    if (!ok) {
+      showExportFailure('download-pgn');
+      return;
+    }
 
+    clearExportFailure();
     if (downloadedPgnTimerRef.current !== null) {
       window.clearTimeout(downloadedPgnTimerRef.current);
     }
@@ -1781,14 +1813,18 @@ function App() {
       downloadedPgnTimerRef.current = null;
       setDownloadedPgnToast(false);
     }, 2000);
-  }, [buildCurrentPgn, detectedOpening]);
+  }, [buildCurrentPgn, clearExportFailure, detectedOpening, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
     const url = buildShareUrl(rootFen, currentLineMoves, gameMode);
     if (!url || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(url);
-    if (!ok) return;
+    if (!ok) {
+      showExportFailure('copy-share');
+      return;
+    }
 
+    clearExportFailure();
     if (copiedShareToastTimerRef.current !== null) {
       window.clearTimeout(copiedShareToastTimerRef.current);
     }
@@ -1797,7 +1833,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, currentLineMoves, gameMode, rootFen]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, showExportFailure]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -1827,24 +1863,31 @@ function App() {
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
-    if (ok) {
-      if (copiedFenToastTimerRef.current !== null) {
-        window.clearTimeout(copiedFenToastTimerRef.current);
-      }
-      setCopiedFenToast(true);
-      copiedFenToastTimerRef.current = window.setTimeout(() => {
-        copiedFenToastTimerRef.current = null;
-        setCopiedFenToast(false);
-      }, 2000);
+    if (!ok) {
+      showExportFailure('copy-fen');
+      return;
     }
-  }, [currentFen]);
+    clearExportFailure();
+    if (copiedFenToastTimerRef.current !== null) {
+      window.clearTimeout(copiedFenToastTimerRef.current);
+    }
+    setCopiedFenToast(true);
+    copiedFenToastTimerRef.current = window.setTimeout(() => {
+      copiedFenToastTimerRef.current = null;
+      setCopiedFenToast(false);
+    }, 2000);
+  }, [clearExportFailure, currentFen, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
     const rawLine = moves.filter(Boolean).join(' ').trim();
     if (!rawLine) return;
     const ok = await copyToClipboard(rawLine);
-    if (!ok) return;
+    if (!ok) {
+      showExportFailure(`copy-pv-${lineIndex}`);
+      return;
+    }
 
+    clearExportFailure();
     if (copiedPvTimerRef.current !== null) {
       window.clearTimeout(copiedPvTimerRef.current);
     }
@@ -1853,7 +1896,7 @@ function App() {
       copiedPvTimerRef.current = null;
       setCopiedPvIndex(null);
     }, 1800);
-  }, []);
+  }, [clearExportFailure, showExportFailure]);
 
   const handleClearEngineHash = useCallback(() => {
     setOption('Clear Hash');
@@ -2807,36 +2850,36 @@ function App() {
                   <IconLibrary />
                 </button>
                 <button
-                  className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''}`}
+                  className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-btn-warn' : ''}`}
                   type="button"
                   onClick={handleDownloadPgn}
                   disabled={!canExportCurrentLine}
-                  title={downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
-                  aria-label={downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
+                  title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
+                  aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
                   data-testid="mobile-download-pgn-btn"
                 >
-                  {downloadedPgnToast ? <IconCheck /> : <IconDownload />}
+                  {exportFailureKey === 'download-pgn' ? <IconX /> : downloadedPgnToast ? <IconCheck /> : <IconDownload />}
                 </button>
                 <button
-                  className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''}`}
+                  className={`mobile-action-btn ${copiedShareToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-share' ? 'mobile-action-btn-warn' : ''}`}
                   type="button"
                   onClick={handleCopyShareLink}
                   disabled={!canShareCurrentPosition}
-                  title={copiedShareToast ? 'Link copied' : 'Copy share link'}
-                  aria-label={copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                  title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
+                  aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
                   data-testid="mobile-copy-share-link-btn"
                 >
-                  {copiedShareToast ? <IconCheck /> : <IconLink />}
+                  {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
                 </button>
                 <button
-                  className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''}`}
+                  className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-btn-warn' : ''}`}
                   type="button"
                   onClick={handleCopyFen}
-                  title={copiedFenToast ? 'FEN copied' : 'Copy FEN'}
-                  aria-label={copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                  title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
+                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
                   data-testid="mobile-copy-fen-btn"
                 >
-                  {copiedFenToast ? <IconCheck /> : <IconCopy />}
+                  {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
                 </button>
                 {isAiMode && (
                   <button className={`mobile-action-btn ${paused ? 'mobile-action-btn-warn' : ''}`} type="button" onClick={() => paused ? resume() : pause()} title={paused ? 'Resume AI' : 'Pause AI'} aria-label={paused ? 'Resume AI' : 'Pause AI'}>
@@ -3138,15 +3181,15 @@ function App() {
                             </button>
                             <button
                               type="button"
-                              className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''}`}
+                              className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''} ${exportFailureKey === `copy-pv-${i}` ? 'pv-action-btn-warning' : ''}`}
                               onClick={() => handleCopyPvLine(i, pv.moves)}
                               disabled={pv.moves.length === 0}
-                              title="Copy this engine line as raw UCI moves"
-                              aria-label={copiedPvIndex === i ? `Engine line ${i + 1} copied` : `Copy engine line ${i + 1}`}
+                              title={exportFailureKey === `copy-pv-${i}` ? 'Copy failed' : 'Copy this engine line as raw UCI moves'}
+                              aria-label={exportFailureKey === `copy-pv-${i}` ? `Engine line ${i + 1} copy failed` : copiedPvIndex === i ? `Engine line ${i + 1} copied` : `Copy engine line ${i + 1}`}
                               data-testid={`copy-engine-pv-${i}`}
                             >
-                              {copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
-                              <span>{copiedPvIndex === i ? 'Copied' : 'Copy'}</span>
+                              {exportFailureKey === `copy-pv-${i}` ? <IconX /> : copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
+                              <span>{exportFailureKey === `copy-pv-${i}` ? 'Failed' : copiedPvIndex === i ? 'Copied' : 'Copy'}</span>
                             </button>
                           </div>
                         </div>
@@ -3209,30 +3252,34 @@ function App() {
                 {saveFailedToast ? <><IconX /> Save Failed</> : savedToast ? <><IconCheck /> Saved</> : <><IconSave /> Save</>}
               </button>
               <button
-                className="gc-btn"
+                className={`gc-btn ${exportFailureKey === 'copy-pgn' ? 'gc-btn-warning' : ''}`}
                 onClick={handleCopyPgn}
                 disabled={!canExportCurrentLine}
-                title="Copy PGN to clipboard"
+                title={exportFailureKey === 'copy-pgn' ? 'Could not copy PGN to clipboard' : 'Copy PGN to clipboard'}
+                aria-label={exportFailureKey === 'copy-pgn' ? 'PGN copy failed' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
+                data-testid="copy-pgn-btn"
               >
-                {copiedToast ? <><IconCheck /> Copied</> : 'Copy PGN'}
+                {exportFailureKey === 'copy-pgn' ? <><IconX /> Copy Failed</> : copiedToast ? <><IconCheck /> Copied</> : 'Copy PGN'}
               </button>
               <button
-                className="gc-btn"
+                className={`gc-btn ${exportFailureKey === 'download-pgn' ? 'gc-btn-warning' : ''}`}
                 onClick={handleDownloadPgn}
                 disabled={!canExportCurrentLine}
-                title="Download current line as a PGN file"
+                title={exportFailureKey === 'download-pgn' ? 'Could not export PGN file' : 'Download current line as a PGN file'}
+                aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
                 data-testid="download-pgn-btn"
               >
-                {downloadedPgnToast ? <><IconCheck /> Exported</> : <><IconDownload /> Export PGN</>}
+                {exportFailureKey === 'download-pgn' ? <><IconX /> Export Failed</> : downloadedPgnToast ? <><IconCheck /> Exported</> : <><IconDownload /> Export PGN</>}
               </button>
               <button
-                className="gc-btn"
+                className={`gc-btn ${exportFailureKey === 'copy-share' ? 'gc-btn-warning' : ''}`}
                 onClick={handleCopyShareLink}
                 disabled={!canShareCurrentPosition}
-                title="Copy a link to this position"
+                title={exportFailureKey === 'copy-share' ? 'Could not copy share link' : 'Copy a link to this position'}
+                aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy a link to this position'}
                 data-testid="copy-share-link-btn"
               >
-                {copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
+                {exportFailureKey === 'copy-share' ? <><IconX /> Copy Failed</> : copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button
@@ -3317,12 +3364,13 @@ function App() {
               <div className="bottombar-fen" title={currentFen}>FEN: {currentFen}</div>
               <button
                 type="button"
-                className="bottombar-fen-copy"
+                className={`bottombar-fen-copy ${exportFailureKey === 'copy-fen' ? 'bottombar-fen-copy-warning' : ''}`}
                 onClick={handleCopyFen}
-                aria-label="Copy current FEN"
-                title="Copy current FEN"
+                aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                title={exportFailureKey === 'copy-fen' ? 'Could not copy FEN' : 'Copy current FEN'}
+                data-testid="copy-fen-btn"
               >
-                {copiedFenToast ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+                {exportFailureKey === 'copy-fen' ? <><IconX /> Failed</> : copiedFenToast ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
               </button>
             </div>
           </div>

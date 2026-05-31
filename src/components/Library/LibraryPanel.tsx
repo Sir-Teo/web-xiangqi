@@ -67,6 +67,7 @@ export function LibraryPanel({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
+  const [failedActionId, setFailedActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
@@ -115,6 +116,7 @@ export function LibraryPanel({
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
     setActionError(null);
+    setFailedActionId(null);
     setEditingId(game.id);
     setEditLabel(game.label ?? '');
   };
@@ -126,6 +128,7 @@ export function LibraryPanel({
       return;
     }
     setActionError(null);
+    setFailedActionId(null);
     setEditingId(null);
   };
 
@@ -136,14 +139,21 @@ export function LibraryPanel({
       return;
     }
     setActionError(null);
+    setFailedActionId(null);
     setPendingDeleteId(null);
   };
 
   const copySavedGamePgn = async (game: SavedGame) => {
     const pgn = buildSavedGamePgn(game);
     const ok = await copyToClipboard(pgn);
-    if (!ok) return;
+    if (!ok) {
+      setFailedActionId(`copy-${game.id}`);
+      setActionError('Could not copy this PGN. Check clipboard permissions and try again.');
+      return;
+    }
 
+    setActionError(null);
+    setFailedActionId(null);
     if (copiedToastTimerRef.current !== null) {
       window.clearTimeout(copiedToastTimerRef.current);
     }
@@ -160,8 +170,14 @@ export function LibraryPanel({
       buildSavedGamePgn(game),
       'application/x-chess-pgn;charset=utf-8'
     );
-    if (!ok) return;
+    if (!ok) {
+      setFailedActionId(`download-${game.id}`);
+      setActionError('Could not download this PGN. Browser downloads may be blocked.');
+      return;
+    }
 
+    setActionError(null);
+    setFailedActionId(null);
     if (downloadedToastTimerRef.current !== null) {
       window.clearTimeout(downloadedToastTimerRef.current);
     }
@@ -262,7 +278,7 @@ export function LibraryPanel({
                       placeholder="Game name…"
                     />
                     <button type="submit" className="chip-btn">Save</button>
-                    <button type="button" className="chip-btn" onClick={() => { setActionError(null); setEditingId(null); }}>Cancel</button>
+                    <button type="button" className="chip-btn" onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}>Cancel</button>
                   </form>
                 ) : (
                   <button
@@ -277,7 +293,7 @@ export function LibraryPanel({
                 <div className="lib-card-actions lib-card-actions--inline">
                   <button
                     type="button"
-                    className={`chip-btn ${copiedId === game.id ? 'chip-btn-primary' : ''}`}
+                    className={`chip-btn ${copiedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `copy-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => copySavedGamePgn(game)}
                     title="Copy PGN to clipboard"
                     aria-label={copiedId === game.id ? 'Saved game PGN copied' : 'Copy saved game PGN'}
@@ -287,7 +303,7 @@ export function LibraryPanel({
                   </button>
                   <button
                     type="button"
-                    className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''}`}
+                    className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `download-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => downloadSavedGamePgn(game)}
                     title="Download PGN file"
                     aria-label={downloadedId === game.id ? 'Saved game PGN downloaded' : 'Download saved game PGN'}
@@ -317,7 +333,7 @@ export function LibraryPanel({
                       <button
                         type="button"
                         className="chip-btn"
-                        onClick={() => { setActionError(null); setPendingDeleteId(null); }}
+                        onClick={() => { setActionError(null); setFailedActionId(null); setPendingDeleteId(null); }}
                         aria-label="Cancel delete saved game"
                       >
                         Cancel
@@ -330,6 +346,7 @@ export function LibraryPanel({
                       onClick={() => {
                         setEditingId(null);
                         setActionError(null);
+                        setFailedActionId(null);
                         setPendingDeleteId(game.id);
                       }}
                       title="Delete"

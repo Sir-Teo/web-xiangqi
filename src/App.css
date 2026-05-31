@@ -3613,6 +3613,12 @@ summary:active {
   color: var(--accent);
 }
 
+.chip-btn-warning {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+}
+
 .chip-btn:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text-primary);
@@ -4004,6 +4010,12 @@ summary:active {
   color: var(--accent) !important;
 }
 
+.pv-action-btn-warning {
+  border-color: rgba(239, 68, 68, 0.42) !important;
+  background: rgba(239, 68, 68, 0.14) !important;
+  color: #f87171 !important;
+}
+
 @media (max-width: 1120px) {
   .pv-line-actions {
     width: 100%;
@@ -4153,6 +4165,12 @@ summary:active {
   color: var(--text-primary);
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.07);
+}
+
+.bottombar-fen-copy-warning {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
 }
 
 .bottombar-fen-copy svg {

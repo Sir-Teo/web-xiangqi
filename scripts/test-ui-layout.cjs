@@ -714,6 +714,68 @@ async function assertCurrentPgnDownload(page) {
   }
 }
 
+async function assertMainExportFailureFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw new DOMException("Simulated clipboard denial", "NotAllowedError");
+        },
+      },
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: () => false,
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  const assertFailedButton = async (testId, expectedText, expectedTitleFragment, warningClass) => {
+    const button = page.getByTestId(testId);
+    await button.getByText(expectedText).waitFor({ timeout: 5000 });
+    const state = await button.evaluate((el) => ({
+      title: el.getAttribute("title") || "",
+      className: el.className || "",
+      text: el.textContent?.trim() || "",
+    }));
+    if (!state.title.includes(expectedTitleFragment) || !state.className.includes(warningClass)) {
+      throw new Error(`Export failure feedback missing on ${testId}: ${JSON.stringify(state)}`);
+    }
+  };
+
+  await page.getByTestId("copy-pgn-btn").click();
+  await assertFailedButton("copy-pgn-btn", "Copy Failed", "Could not copy", "gc-btn-warning");
+
+  await page.getByTestId("copy-share-link-btn").click();
+  await assertFailedButton("copy-share-link-btn", "Copy Failed", "Could not copy", "gc-btn-warning");
+
+  await page.getByTestId("copy-fen-btn").click();
+  await assertFailedButton("copy-fen-btn", "Failed", "Could not copy", "bottombar-fen-copy-warning");
+
+  await page.getByTestId("download-pgn-btn").click();
+  await assertFailedButton("download-pgn-btn", "Export Failed", "Could not export", "gc-btn-warning");
+
+  const overflowX = await page.evaluate(() => document.body.scrollWidth - document.body.clientWidth);
+  if (overflowX > 2) {
+    throw new Error(`Export failure feedback introduced horizontal overflow: ${overflowX}`);
+  }
+}
+
 async function assertShareLinkRoundTrip(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1086,6 +1148,70 @@ async function assertLibraryPgnCopy(page) {
   }
 }
 
+async function assertLibraryPgnFailureFeedback(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-library-export-failure",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7"],
+      result: "ongoing",
+      label: "Library export failure QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async () => {
+          throw new DOMException("Simulated clipboard denial", "NotAllowedError");
+        },
+      },
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: () => false,
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("Library export failure QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("copy-pgn-saved-qa-library-export-failure").click();
+  await page.getByTestId("library-action-error").getByText("Could not copy this PGN").waitFor({ timeout: 5000 });
+
+  const afterCopy = await page.evaluate(() => ({
+    role: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
+    copyText: document.querySelector('[data-testid="copy-pgn-saved-qa-library-export-failure"]')?.textContent?.trim() || "",
+    copyClass: document.querySelector('[data-testid="copy-pgn-saved-qa-library-export-failure"]')?.className || "",
+  }));
+  if (afterCopy.role !== "alert" || afterCopy.copyText.includes("Copied") || !afterCopy.copyClass.includes("chip-btn-warning")) {
+    throw new Error(`Library copy failure did not expose retryable alert state: ${JSON.stringify(afterCopy)}`);
+  }
+
+  await page.getByTestId("download-pgn-saved-qa-library-export-failure").click();
+  await page.getByTestId("library-action-error").getByText("Could not download this PGN").waitFor({ timeout: 5000 });
+
+  const afterDownload = await page.evaluate(() => ({
+    role: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
+    downloadText: document.querySelector('[data-testid="download-pgn-saved-qa-library-export-failure"]')?.textContent?.trim() || "",
+    downloadClass: document.querySelector('[data-testid="download-pgn-saved-qa-library-export-failure"]')?.className || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (afterDownload.role !== "alert" || afterDownload.downloadText.includes("Saved") || !afterDownload.downloadClass.includes("chip-btn-warning") || afterDownload.overflowX > 2) {
+    throw new Error(`Library download failure did not expose retryable alert state: ${JSON.stringify(afterDownload)}`);
+  }
+}
+
 async function assertLibraryMutationFailureFeedback(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1342,6 +1468,7 @@ async function main() {
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertCurrentPgnDownload(page);
+    await assertMainExportFailureFeedback(page);
     await assertShareLinkRoundTrip(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
@@ -1353,6 +1480,7 @@ async function main() {
     await assertSaveFailureFeedback(page);
     await assertMobileSaveLibraryActions(page);
     await assertLibraryPgnCopy(page);
+    await assertLibraryPgnFailureFeedback(page);
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
     await assertGameOverReviewPreservesResult(page);
@@ -1361,7 +1489,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

@@ -172,20 +172,27 @@ export function downloadTextFile(filename: string, text: string, mimeType = 'tex
         return false;
     }
 
-    const blob = new Blob([String(text)], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename || 'web-xiangqi-export.txt';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
+    let url: string | null = null;
+    let anchor: HTMLAnchorElement | null = null;
 
     try {
+        const blob = new Blob([String(text)], { type: mimeType });
+        url = URL.createObjectURL(blob);
+        anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename || 'web-xiangqi-export.txt';
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
         anchor.click();
         return true;
+    } catch (_) {
+        return false;
     } finally {
-        anchor.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        anchor?.remove();
+        if (url) {
+            const objectUrl = url;
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+        }
     }
 }
 
