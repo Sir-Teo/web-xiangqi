@@ -36,6 +36,7 @@ export function LibraryPanel({
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
   const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
 
@@ -68,6 +69,7 @@ export function LibraryPanel({
   });
 
   const startEdit = (game: SavedGame) => {
+    setPendingDeleteId(null);
     setEditingId(game.id);
     setEditLabel(game.label ?? '');
   };
@@ -75,6 +77,11 @@ export function LibraryPanel({
   const commitEdit = (id: string) => {
     onRenameSavedGame(id, editLabel.trim());
     setEditingId(null);
+  };
+
+  const confirmDelete = (id: string) => {
+    onDeleteSavedGame(id);
+    setPendingDeleteId(null);
   };
 
   return (
@@ -182,14 +189,41 @@ export function LibraryPanel({
                   >
                     <IconRefresh /> Load
                   </button>
-                  <button
-                    type="button"
-                    className="chip-btn chip-btn-danger"
-                    onClick={() => onDeleteSavedGame(game.id)}
-                    title="Delete"
-                  >
-                    <IconX />
-                  </button>
+                  {pendingDeleteId === game.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="chip-btn chip-btn-danger"
+                        onClick={() => confirmDelete(game.id)}
+                        data-testid={`confirm-delete-saved-${game.id}`}
+                        aria-label="Confirm delete saved game"
+                      >
+                        Delete?
+                      </button>
+                      <button
+                        type="button"
+                        className="chip-btn"
+                        onClick={() => setPendingDeleteId(null)}
+                        aria-label="Cancel delete saved game"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="chip-btn chip-btn-danger"
+                      onClick={() => {
+                        setEditingId(null);
+                        setPendingDeleteId(game.id);
+                      }}
+                      title="Delete"
+                      aria-label="Delete saved game"
+                      data-testid={`delete-saved-${game.id}`}
+                    >
+                      <IconX />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="lib-card-meta">

@@ -91,6 +91,53 @@ async function assertMobileBoardLayout(page, viewport) {
   rectWithinLayout(layout);
 }
 
+async function assertLibraryDeleteConfirmation(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "qa-delete-game",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: "Delete confirmation QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByText("Delete confirmation QA").waitFor({ timeout: 10000 });
+
+  await page.getByTestId("delete-saved-qa-delete-game").click();
+  await page.getByTestId("confirm-delete-saved-qa-delete-game").waitFor({ timeout: 5000 });
+  if (await page.getByText("Delete confirmation QA").count() !== 1) {
+    throw new Error("Saved game disappeared before delete confirmation.");
+  }
+
+  await page.getByRole("button", { name: "Cancel delete saved game" }).click();
+  if (await page.getByTestId("confirm-delete-saved-qa-delete-game").count() !== 0) {
+    throw new Error("Delete confirmation remained visible after cancel.");
+  }
+  if (await page.getByText("Delete confirmation QA").count() !== 1) {
+    throw new Error("Saved game disappeared after canceling delete.");
+  }
+
+  await page.getByTestId("delete-saved-qa-delete-game").click();
+  await page.getByTestId("confirm-delete-saved-qa-delete-game").click();
+  await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 5000 });
+  const remaining = await page.evaluate(() => {
+    const raw = localStorage.getItem("xiangqi-game-library");
+    return raw ? JSON.parse(raw).length : 0;
+  });
+  if (remaining !== 0) {
+    throw new Error(`Saved game remained in localStorage after confirmed delete: ${remaining}`);
+  }
+}
+
 async function main() {
   let playwright;
   try {
@@ -130,12 +177,13 @@ async function main() {
 
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
+    await assertLibraryDeleteConfirmation(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Mobile board layout checks passed.");
+    console.log("Mobile board layout and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
