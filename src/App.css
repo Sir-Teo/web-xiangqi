@@ -3749,6 +3749,7 @@ summary:active {
   display: flex;
   align-items: flex-start;
   gap: 0.48rem;
+  flex-wrap: wrap;
 }
 
 .pv-score {
@@ -3771,6 +3772,7 @@ summary:active {
   flex-direction: column;
   gap: 0.12rem;
   min-width: 0;
+  flex: 1 1 160px;
 }
 
 .pv-moves .turnNum {
@@ -3783,6 +3785,40 @@ summary:active {
   font-size: 0.72rem;
   font-family: "JetBrains Mono", monospace;
   word-break: break-word;
+}
+
+.pv-line-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.pv-action-btn {
+  min-height: 1.75rem;
+  padding: 0 0.48rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.pv-action-btn svg {
+  width: 0.86rem;
+  height: 0.86rem;
+}
+
+.pv-action-btn-active {
+  border-color: rgba(16, 185, 129, 0.36) !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  color: var(--accent) !important;
+}
+
+@media (max-width: 1120px) {
+  .pv-line-actions {
+    width: 100%;
+  }
 }
 
 .engine-output-terminal {

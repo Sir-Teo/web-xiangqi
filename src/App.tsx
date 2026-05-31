@@ -1334,8 +1334,10 @@ function App() {
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
+  const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
+  const copiedPvTimerRef = useRef<number | null>(null);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
 
@@ -1343,6 +1345,9 @@ function App() {
     return () => {
       if (savedToastTimerRef.current !== null) {
         window.clearTimeout(savedToastTimerRef.current);
+      }
+      if (copiedPvTimerRef.current !== null) {
+        window.clearTimeout(copiedPvTimerRef.current);
       }
     };
   }, []);
@@ -1409,6 +1414,29 @@ function App() {
       setTimeout(() => setCopiedFenToast(false), 2000);
     }
   }, [currentFen]);
+
+  const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
+    const rawLine = moves.filter(Boolean).join(' ').trim();
+    if (!rawLine) return;
+    const ok = await copyToClipboard(rawLine);
+    if (!ok) return;
+
+    if (copiedPvTimerRef.current !== null) {
+      window.clearTimeout(copiedPvTimerRef.current);
+    }
+    setCopiedPvIndex(lineIndex);
+    copiedPvTimerRef.current = window.setTimeout(() => {
+      copiedPvTimerRef.current = null;
+      setCopiedPvIndex(null);
+    }, 1800);
+  }, []);
+
+  const handlePlayPvMove = useCallback((uci: string | undefined, score: number) => {
+    if (!uci || gameResult) return;
+    clearBoardMarkers();
+    applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
+    setAnalysisTab('tree');
+  }, [applyUciMove, clearBoardMarkers, gameResult, sideToMove]);
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
@@ -2391,6 +2419,7 @@ function App() {
                       <div className="text-muted small">No PV available yet.</div>
                     ) : currentAnalysisPvLines.map((pv, i) => {
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
+                      const firstMove = pv.moves[0];
                       return (
                         <div key={i} className="pv-line premium-card">
                           <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
@@ -2399,6 +2428,32 @@ function App() {
                           <div className="pv-moves">
                             <span className="turnNum">Depth {pv.depth}</span>
                             <span className="move">{formatUciLine(pv.moves, 7)}</span>
+                          </div>
+                          <div className="pv-line-actions" aria-label={`Engine line ${i + 1} actions`}>
+                            <button
+                              type="button"
+                              className="pv-action-btn"
+                              onClick={() => handlePlayPvMove(firstMove, pv.score)}
+                              disabled={!firstMove || Boolean(gameResult)}
+                              title="Play the first move from this engine line"
+                              aria-label={`Play engine line ${i + 1} first move`}
+                              data-testid={`play-engine-pv-${i}`}
+                            >
+                              <IconPlay />
+                              <span>Play</span>
+                            </button>
+                            <button
+                              type="button"
+                              className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''}`}
+                              onClick={() => handleCopyPvLine(i, pv.moves)}
+                              disabled={pv.moves.length === 0}
+                              title="Copy this engine line as raw UCI moves"
+                              aria-label={copiedPvIndex === i ? `Engine line ${i + 1} copied` : `Copy engine line ${i + 1}`}
+                              data-testid={`copy-engine-pv-${i}`}
+                            >
+                              {copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
+                              <span>{copiedPvIndex === i ? 'Copied' : 'Copy'}</span>
+                            </button>
                           </div>
                         </div>
                       );
