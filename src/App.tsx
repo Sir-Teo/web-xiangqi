@@ -27,7 +27,13 @@ import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
-import { extractFenTag, extractUciMoveLine, extractUciMoveTree } from './utils/moveImport';
+import {
+  extractFenTag,
+  extractUciMoveLine,
+  extractUciMoveTree,
+  isMoveImportTextTooLarge,
+  MAX_MOVE_IMPORT_UCI_MOVES,
+} from './utils/moveImport';
 import {
   detectDeviceTier,
   resolveEngineBootConfig,
@@ -2069,8 +2075,17 @@ function App() {
   }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
+    if (isMoveImportTextTooLarge(text)) {
+      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+      return;
+    }
+
     const importedLine = extractUciMoveTree(text);
     const moves = importedLine.moves;
+    if (importedLine.tooLarge || moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
+      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+      return;
+    }
     if (moves.length === 0) {
       setMoveLineError('No UCI moves found');
       return;
@@ -2128,6 +2143,11 @@ function App() {
     const rawMode = params.get('mode');
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
+    if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      console.warn('Ignored oversized shared Xiangqi line.');
+      return;
+    }
     if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
       if (rawTree) {
         setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });

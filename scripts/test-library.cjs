@@ -388,6 +388,21 @@ try {
     importedLine.join(" ") === "b2e2 h9g7 b0c2",
     `UCI move import should extract and normalize moves, got: ${importedLine.join(" ")}`
   );
+  assert(
+    moveImport.isMoveImportTextTooLarge("x".repeat(moveImport.MAX_MOVE_IMPORT_TEXT_LENGTH + 1)),
+    "Move import should identify oversized pasted/file text before parsing."
+  );
+  const oversizedImportedLine = moveImport.extractUciMoveLine(
+    Array.from({ length: moveImport.MAX_MOVE_IMPORT_UCI_MOVES + 2 }, () => "b2e2").join(" ")
+  );
+  assert(
+    oversizedImportedLine.length === moveImport.MAX_MOVE_IMPORT_UCI_MOVES + 1,
+    "UCI line extraction should stop once it has enough moves to report an oversized import."
+  );
+  const oversizedImportedTree = moveImport.extractUciMoveTree(
+    Array.from({ length: moveImport.MAX_MOVE_IMPORT_TREE_NODES + 2 }, () => "b2e2").join(" ")
+  );
+  assert(oversizedImportedTree.tooLarge, "Move tree extraction should report oversized trees.");
 
   const importedSeparatedLine = moveImport.extractUciMoveLine(`
     [Variant "Chinese Chess"]

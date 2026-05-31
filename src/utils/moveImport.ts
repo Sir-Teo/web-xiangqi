@@ -1,5 +1,9 @@
 import type { SavedMoveTreeNode } from './gameLibrary';
 
+export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
+export const MAX_MOVE_IMPORT_UCI_MOVES = 1024;
+export const MAX_MOVE_IMPORT_TREE_NODES = 1024;
+
 function stripParentheticalVariations(text: string): string {
     let depth = 0;
     let result = '';
@@ -41,24 +45,34 @@ function mainLineFromTree(line: SavedMoveTreeNode[]): string[] {
     return line.map((node) => node.uci);
 }
 
+export function isMoveImportTextTooLarge(text: string): boolean {
+    return String(text).length > MAX_MOVE_IMPORT_TEXT_LENGTH;
+}
+
 export function extractUciMoveLine(text: string): string[] {
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
-    return Array.from(cleaned.matchAll(UCI_MOVE_PATTERN), (match) => {
+    const moves: string[] = [];
+    for (const match of cleaned.matchAll(UCI_MOVE_PATTERN)) {
         const from = match[1] ?? match[3];
         const to = match[2] ?? match[4];
-        return `${from}${to}`.toLowerCase();
-    });
+        moves.push(`${from}${to}`.toLowerCase());
+        if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) break;
+    }
+    return moves;
 }
 
 export function extractUciMoveTree(text: string): {
     moves: string[];
     moveTree: SavedMoveTreeNode[];
     hasVariations: boolean;
+    tooLarge: boolean;
 } {
     const cleaned = stripPgnMetadata(text);
     const root: SavedMoveTreeNode[] = [];
     const stack: SavedMoveTreeNode[][] = [];
     let currentLine: SavedMoveTreeNode[] = [];
+    let nodeCount = 0;
+    let tooLarge = false;
 
     for (const match of cleaned.matchAll(UCI_TREE_TOKEN_PATTERN)) {
         const token = match[0];
@@ -75,7 +89,12 @@ export function extractUciMoveTree(text: string): {
         const from = match[1] ?? match[3];
         const to = match[2] ?? match[4];
         if (!from || !to) continue;
+        if (nodeCount >= MAX_MOVE_IMPORT_TREE_NODES) {
+            tooLarge = true;
+            break;
+        }
 
+        nodeCount += 1;
         const node: SavedMoveTreeNode = { uci: `${from}${to}`.toLowerCase() };
         const parent = currentLine[currentLine.length - 1];
         if (parent) {
@@ -91,6 +110,7 @@ export function extractUciMoveTree(text: string): {
         moves: mainLineFromTree(currentLine),
         moveTree: root,
         hasVariations: root.length > 1 || hasBranch(root),
+        tooLarge,
     };
 }
 
