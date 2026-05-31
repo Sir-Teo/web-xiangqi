@@ -305,15 +305,21 @@ export function normalizeSavedGames(raw: unknown): SavedGame[] {
     return games.reverse();
 }
 
-function readAll(): SavedGame[] {
+function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {
     try {
         const raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
-        if (!raw) return [];
-        if (raw.length > MAX_LIBRARY_JSON_LENGTH) return [];
-        return normalizeSavedGames(JSON.parse(raw));
+        if (!raw) return { games: [], mutationBlocked: false };
+        if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
+            return { games: [], mutationBlocked: true };
+        }
+        return { games: normalizeSavedGames(JSON.parse(raw)), mutationBlocked: false };
     } catch {
-        return [];
+        return { games: [], mutationBlocked: false };
     }
+}
+
+function readAll(): SavedGame[] {
+    return readAllResult().games;
 }
 
 function writeAll(games: SavedGame[]): boolean {
@@ -344,17 +350,31 @@ export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | n
         savedAt: Date.now(),
     });
     if (!saved) return null;
-    const games = readAll();
+    const { games, mutationBlocked } = readAllResult();
+    if (mutationBlocked) {
+        console.warn('Game library: saved-game storage is too large to update safely.');
+        return null;
+    }
     games.push(saved);
     return writeAll(games.slice(-MAX_SAVED_GAMES)) ? saved : null;
 }
 
 export function deleteGame(id: string): boolean {
-    return writeAll(readAll().filter((g) => g.id !== id));
+    const { games, mutationBlocked } = readAllResult();
+    if (mutationBlocked) {
+        console.warn('Game library: saved-game storage is too large to update safely.');
+        return false;
+    }
+    return writeAll(games.filter((g) => g.id !== id));
 }
 
 export function renameGame(id: string, label: string): boolean {
     const normalizedLabel = asBoundedString(label, MAX_SAVED_LABEL_LENGTH) ?? '';
-    const games = readAll().map((g) => g.id === id ? { ...g, label: normalizedLabel } : g);
-    return writeAll(games);
+    const { games, mutationBlocked } = readAllResult();
+    if (mutationBlocked) {
+        console.warn('Game library: saved-game storage is too large to update safely.');
+        return false;
+    }
+    const renamed = games.map((g) => g.id === id ? { ...g, label: normalizedLabel } : g);
+    return writeAll(renamed);
 }

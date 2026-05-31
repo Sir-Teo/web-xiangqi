@@ -352,8 +352,23 @@ try {
     assert(cappedStoredGames.length === 500, "Saving past the game cap should not grow persisted storage.");
     assert(cappedStoredGames[0]?.id === "stored-1", "Saving past the cap should drop the oldest game.");
     assert(cappedStoredGames.at(-1)?.id === cappedSave.id, "The newest saved game should remain after capping.");
-    storedValues.set("xiangqi-game-library", "x".repeat(3_000_001));
+    const oversizedRawLibrary = "x".repeat(3_000_001);
+    storedValues.set("xiangqi-game-library", oversizedRawLibrary);
     assert(library.loadAllGames().length === 0, "Oversized raw saved-game storage should be ignored before JSON parsing.");
+    assert(
+      library.saveGame({ gameMode: "PvP", moves: ["b2e2"], result: "ongoing" }) === null,
+      "Saving should fail instead of overwriting oversized raw saved-game storage."
+    );
+    assert(
+      storedValues.get("xiangqi-game-library") === oversizedRawLibrary,
+      "Oversized raw saved-game storage should remain untouched after a failed save."
+    );
+    assert(!library.renameGame("stored-1", "Keep me"), "Renaming should fail while raw storage is oversized.");
+    assert(!library.deleteGame("stored-1"), "Deleting should fail while raw storage is oversized.");
+    assert(
+      storedValues.get("xiangqi-game-library") === oversizedRawLibrary,
+      "Oversized raw saved-game storage should remain untouched after failed mutations."
+    );
   } finally {
     if (originalLocalStorageDescriptor) {
       Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);
