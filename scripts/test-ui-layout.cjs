@@ -222,6 +222,8 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   const state = await page.evaluate(() => ({
     workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() || "",
     engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+    engineRole: document.querySelector(".top-engine-state")?.getAttribute("role") || "",
+    engineLabel: document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (state.workspace !== "Play") {
@@ -229,6 +231,9 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
   if (!state.engineText) {
     throw new Error("AI Play mode hid the engine status.");
+  }
+  if (state.engineRole !== "status" || !state.engineLabel || /readysingle|enginesingle/i.test(state.engineLabel)) {
+    throw new Error(`AI engine status was not announced cleanly: ${JSON.stringify(state)}`);
   }
   if (state.overflowX > 2) {
     throw new Error(`AI Play mode introduced horizontal overflow: ${state.overflowX}`);

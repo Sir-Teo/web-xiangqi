@@ -2401,7 +2401,11 @@ function App() {
             </div>
 
             {engineRequired ? (
-              <div className={`top-engine-state ${engineNotice ? `top-engine-state-${engineNotice.tone}` : ''}`}>
+              <div
+                className={`top-engine-state ${engineNotice ? `top-engine-state-${engineNotice.tone}` : ''}`}
+                role="status"
+                aria-label={`${engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}${isReady ? ` ${engineVariant}` : ''}`}
+              >
                 <span className={`status-dot ${isReady ? 'healthy' : ''} ${engineNotice ? engineNotice.tone : ''}`} />
                 <span>{engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}</span>
                 {isReady ? <span className="engine-variant">{engineVariant}</span> : null}
