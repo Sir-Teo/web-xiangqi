@@ -48,6 +48,15 @@ import {
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
 } from './utils/review';
+import {
+  AI_STRENGTH_LABELS,
+  WORKER_SAFE_MAX_DEPTH,
+  chooseAiMoveFromPv,
+  describeAiStrength,
+  getAiSearchConfig,
+  isAiStrength,
+  type AiStrength,
+} from './utils/aiOpponent';
 
 const LazyLibraryPanel = React.lazy(() =>
   import('./components/Library/LibraryPanel').then((module) => ({ default: module.LibraryPanel }))
@@ -77,27 +86,11 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; des
   { mode: 'AIvAI', label: 'AI exhibition', shortLabel: 'AI vs AI', description: 'Both sides are engine-driven for watching and review.' },
 ];
 
-export type AiStrength = 1 | 2 | 3 | 4 | 5;
 type PieceCode = 'K' | 'A' | 'B' | 'N' | 'R' | 'C' | 'P' | 'k' | 'a' | 'b' | 'n' | 'r' | 'c' | 'p';
-const WORKER_SAFE_MAX_DEPTH = 12;
 const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   slow: 1500,
   normal: 800,
   fast: 150,
-};
-const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
-  1: 'Beginner',
-  2: 'Easy',
-  3: 'Medium',
-  4: 'Hard',
-  5: 'Master',
-};
-const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
-  1: 2,
-  2: 4,
-  3: 6,
-  4: 9,
-  5: WORKER_SAFE_MAX_DEPTH,
 };
 const PV_LINE_OPTIONS: PvLineCount[] = [1, 3, 5];
 const ANALYSIS_TAG_PREFIX = 'analysis';
@@ -317,10 +310,6 @@ function isAnalysisEngineMode(value: unknown): value is AnalysisEngineMode {
   return value === 'stable' || value === 'optimized';
 }
 
-function isAiStrength(value: unknown): value is AiStrength {
-  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
-}
-
 function isAiSpeed(value: unknown): value is AiSpeed {
   return value === 'slow' || value === 'normal' || value === 'fast' || value === 'step';
 }
@@ -386,17 +375,18 @@ function makeReviewTag(phase: ReviewPhase, nodeId: string) {
   return `${REVIEW_TAG_PREFIX}|${phase}|${nodeId}`;
 }
 
-function makeAiTag(positionCommand: string, depth: number) {
-  return `${AI_TAG_PREFIX}|${depth}|${positionCommand}`;
+function makeAiTag(positionCommand: string, depth: number, strength: AiStrength) {
+  return `${AI_TAG_PREFIX}|${depth}|${strength}|${positionCommand}`;
 }
 
 function parseAiTag(tag: string | null) {
   if (!tag || !tag.startsWith(`${AI_TAG_PREFIX}|`)) return null;
-  const [, depthText, ...rest] = tag.split('|');
+  const [, depthText, strengthText, ...rest] = tag.split('|');
   const depth = Number(depthText);
+  const strength = Number(strengthText);
   const positionCommand = rest.join('|');
-  if (!Number.isFinite(depth) || !positionCommand) return null;
-  return { depth, positionCommand };
+  if (!Number.isFinite(depth) || !isAiStrength(strength) || !positionCommand) return null;
+  return { depth, strength, positionCommand };
 }
 
 function parseReviewTag(tag: string | null) {
@@ -894,7 +884,7 @@ function App() {
     hashMB: engineBootConfig.hashMB,
     captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
     onWorkerError: handleEngineWorkerError,
-    onBestMove: (uci, score, searchTag) => {
+    onBestMove: (uci, score, searchTag, completedPvLines) => {
       const reviewTag = parseReviewTag(searchTag);
       if (reviewTag && reviewControllerRef.current.active) {
         const controller = reviewControllerRef.current;
@@ -943,7 +933,14 @@ function App() {
         applyBestMoveRef.current = false;
 
         if (shouldApplyAiMove && uci) {
-          applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
+          const choice = chooseAiMoveFromPv({
+            fallbackMove: uci,
+            fallbackScore: score,
+            pvLines: completedPvLines,
+            searchTag,
+            strength: aiTag.strength,
+          });
+          applyUciMove(choice.move, normalizeEvalForSide(choice.score, sideToMove));
         }
 
         if (shouldApplyAiMove && (aiSpeedRef.current === 'step' || stepPendingRef.current)) {
@@ -995,6 +992,10 @@ function App() {
   }, [engineSafetyBootLevel, isReady]);
 
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
+  const aiSearchConfig = useMemo(
+    () => getAiSearchConfig(aiStrength, safeSearchDepth),
+    [aiStrength, safeSearchDepth]
+  );
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
   const goToFirstMove = useCallback(() => {
@@ -1249,10 +1250,14 @@ function App() {
   }, [currentMoveIndex, currentNodeId, treeNodes]);
 
   useEffect(() => {
-    if (!engineEnabled || !isReady) return;
+    if (!engineRequired || !isReady) return;
 
-    const targetMultiPv = analysisMultiPv;
-    const showWdl = analysisWdlEnabled;
+    const targetMultiPv = reviewStatus === 'running'
+      ? 1
+      : isAiTurn
+        ? aiSearchConfig.multiPv
+        : analysisMultiPv;
+    const showWdl = engineDetailEnabled && analysisWdlEnabled;
 
     if (currentMultiPvRef.current !== targetMultiPv) {
       currentMultiPvRef.current = targetMultiPv;
@@ -1271,7 +1276,7 @@ function App() {
         clearWdl();
       }
     }
-  }, [analysisMultiPv, analysisWdlEnabled, clearPvLines, clearWdl, engineEnabled, isReady, setOption, trimPvLines]);
+  }, [aiSearchConfig.multiPv, analysisMultiPv, analysisWdlEnabled, clearPvLines, clearWdl, engineDetailEnabled, engineRequired, isAiTurn, isReady, reviewStatus, setOption, trimPvLines]);
 
   // Analysis engine effect
   useEffect(() => {
@@ -1411,7 +1416,7 @@ function App() {
     const delayMs = aiSpeedRef.current === 'step'
       ? 0
       : (AI_SPEED_MS[aiSpeedRef.current as Exclude<AiSpeed, 'step'>] ?? 800);
-    const aiSearchDepth = Math.max(1, Math.min(safeSearchDepth, AI_DEPTH_LIMIT[aiStrength]));
+    const aiSearchDepth = aiSearchConfig.depth;
 
     const timer = setTimeout(() => {
       if (!isPageVisible) {
@@ -1427,12 +1432,12 @@ function App() {
         currentPositionCommand,
         `go depth ${aiSearchDepth}`,
         0,
-        makeAiTag(currentPositionCommand, aiSearchDepth),
+        makeAiTag(currentPositionCommand, aiSearchDepth, aiStrength),
       );
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearching, paused, queueSearch, reviewStatus, safeSearchDepth]);
+  }, [aiSearchConfig.depth, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearching, paused, queueSearch, reviewStatus]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
@@ -2875,7 +2880,8 @@ function App() {
                       type="button"
                       className={`new-game-strength-btn ${aiStrength === lvl ? 'new-game-strength-btn-active' : ''}`}
                       onClick={() => setAiStrength(lvl)}
-                      title={AI_STRENGTH_LABELS[lvl]}
+                      title={describeAiStrength(lvl)}
+                      aria-label={describeAiStrength(lvl)}
                     >
                       {AI_STRENGTH_LABELS[lvl]}
                     </button>

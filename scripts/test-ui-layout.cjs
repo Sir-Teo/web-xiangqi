@@ -277,6 +277,87 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
 }
 
+async function assertBeginnerAiUsesCandidatePv(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.addInitScript(() => {
+      localStorage.removeItem("xiangqi-app-preferences");
+      window.__engineCommands = [];
+      Math.random = () => 0.99;
+      window.Pikafish = function Pikafish() {};
+      window.Pikafish.createWorkerEngine = async () => {
+        const listeners = [];
+        const emit = (line) => listeners.forEach((listener) => listener(line));
+        return {
+          variant: "fake-pv",
+          addMessageListener(listener) {
+            listeners.push(listener);
+          },
+          removeMessageListener(listener) {
+            const index = listeners.indexOf(listener);
+            if (index >= 0) listeners.splice(index, 1);
+          },
+          postMessage(command) {
+            window.__engineCommands.push(command);
+            if (command === "uci") {
+              setTimeout(() => {
+                emit("id name Fake Pikafish");
+                emit("option name MultiPV type spin default 1 min 1 max 128");
+                emit("option name UCI_ShowWDL type check default false");
+                emit("uciok");
+              }, 0);
+            } else if (command === "isready") {
+              setTimeout(() => emit("readyok"), 0);
+            } else if (/^go\b/.test(command)) {
+              setTimeout(() => {
+                emit("info depth 2 multipv 1 score cp 50 pv h0g2");
+                emit("info depth 2 multipv 2 score cp 10 pv b0c2");
+                emit("bestmove h0g2");
+              }, 20);
+            }
+          },
+          terminate() {
+            return Promise.resolve();
+          },
+        };
+      };
+    });
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByRole("button", { name: /You play Black/i }).click();
+    await page.getByRole("button", { name: /Beginner: depth 2/i }).click();
+    await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+    await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector(".mtree-row")?.textContent || "";
+      return text.includes("b0c2");
+    }, null, { timeout: 10000 });
+
+    const state = await page.evaluate(() => ({
+      commands: window.__engineCommands || [],
+      firstMove: document.querySelector(".mtree-row")?.textContent?.trim() || "",
+      fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    const multiPvIndex = state.commands.findIndex((command) => command === "setoption name MultiPV value 5");
+    const goIndex = state.commands.findIndex((command) => command === "go depth 2");
+    if (multiPvIndex < 0 || goIndex < 0 || multiPvIndex > goIndex) {
+      throw new Error(`Beginner AI did not configure candidate PVs before searching: ${JSON.stringify(state.commands)}`);
+    }
+    if (!state.firstMove.includes("b0c2") || !state.fen.includes(" b ") || state.overflowX > 2) {
+      throw new Error(`Beginner AI did not pick the tested candidate move cleanly: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertEngineLoaderFailureShowsNotice(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
@@ -2626,6 +2707,7 @@ async function main() {
     await assertPausedAiTurnBlocksManualMove(page);
     await assertIllegalMoveShowsRuleHint(page);
     await assertAiPlayModeShowsEngineStatus(page);
+    await assertBeginnerAiUsesCandidatePv(browser);
     await assertEngineLoaderFailureShowsNotice(browser);
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
@@ -2677,7 +2759,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, beginner AI candidate-PV play, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

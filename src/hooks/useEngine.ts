@@ -6,7 +6,7 @@ const OUTPUT_LINE_LIMIT = 100;
 const INFO_FLUSH_MS = 200;
 const ENGINE_SCRIPT_LOAD_TIMEOUT_MS = 12000;
 
-type PvLine = {
+export type PvLine = {
     depth: string;
     score: number;
     scoreStr: string;
@@ -31,7 +31,7 @@ export interface EngineInitOptions {
     threads?: number;
     hashMB?: number;
     captureInfoLines?: boolean;
-    onBestMove?: (uci: string, score: number, searchTag: string | null) => void;
+    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[]) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
 }
@@ -575,7 +575,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             activeSearchTagRef.current = null;
             const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
             const uciMove = moveMatch?.[1] ?? '';
-            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag);
+            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice());
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
             } else {
