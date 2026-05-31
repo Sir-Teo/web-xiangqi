@@ -404,6 +404,54 @@ async function assertInvalidFenToastTimerResets(page) {
   }
 }
 
+async function assertDisabledControlsLookInactive(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const bottomExportStyle = await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="download-pgn-btn"]');
+    if (!button) return null;
+    const style = getComputedStyle(button);
+    return {
+      disabled: button.disabled,
+      opacity: Number(style.opacity),
+      cursor: style.cursor,
+    };
+  });
+  if (!bottomExportStyle?.disabled || bottomExportStyle.opacity > 0.65 || bottomExportStyle.cursor !== "not-allowed") {
+    throw new Error(`Disabled bottom export control did not look inactive: ${JSON.stringify(bottomExportStyle)}`);
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  const dialogDisabledStyles = await page.evaluate(() => {
+    const fenLoad = document.querySelector(".new-game-fen-form button[type='submit']");
+    const importButton = document.querySelector('[data-testid="import-uci-line-btn"]');
+    const read = (button) => {
+      if (!button) return null;
+      const style = getComputedStyle(button);
+      return {
+        disabled: button.disabled,
+        opacity: Number(style.opacity),
+        cursor: style.cursor,
+      };
+    };
+    return {
+      fenLoad: read(fenLoad),
+      importButton: read(importButton),
+    };
+  });
+
+  for (const [label, style] of Object.entries(dialogDisabledStyles)) {
+    if (!style?.disabled || style.opacity > 0.65 || style.cursor !== "not-allowed") {
+      throw new Error(`Disabled ${label} control did not look inactive: ${JSON.stringify(style)}`);
+    }
+  }
+}
+
 async function assertNewGameDialogFocusTrap(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -894,18 +942,20 @@ async function assertGameOverReviewPreservesResult(page) {
   await page.getByRole("button", { name: "Load" }).click();
 
   await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  await page.waitForFunction(() => document.activeElement?.classList.contains("game-over-btn-primary"), null, { timeout: 5000 });
   const dialogState = await page.evaluate(() => {
     const modal = document.querySelector(".game-over-modal");
     return {
       role: modal?.getAttribute("role") || "",
       ariaModal: modal?.getAttribute("aria-modal") || "",
       activeText: document.activeElement?.textContent?.trim() || "",
+      activeIsPrimary: document.activeElement?.classList.contains("game-over-btn-primary") || false,
     };
   });
   if (dialogState.role !== "dialog" || dialogState.ariaModal !== "true") {
     throw new Error(`Game-over modal was not exposed as a modal dialog: ${JSON.stringify(dialogState)}`);
   }
-  if (dialogState.activeText !== "New Game") {
+  if (!dialogState.activeIsPrimary) {
     throw new Error(`Game-over modal did not focus the primary action: ${JSON.stringify(dialogState)}`);
   }
 
@@ -976,6 +1026,7 @@ async function main() {
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertInvalidFenToastTimerResets(page);
+    await assertDisabledControlsLookInactive(page);
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
@@ -995,7 +1046,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
