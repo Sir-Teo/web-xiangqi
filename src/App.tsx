@@ -1090,6 +1090,10 @@ function App() {
   // AI move effect
   useEffect(() => {
     if (!isReady) return;
+    if (gameResult || reviewControllerRef.current.active || reviewStatus === 'running') {
+      applyBestMoveRef.current = false;
+      return undefined;
+    }
 
     if (!isAiTurn) {
       applyBestMoveRef.current = false;
@@ -1125,7 +1129,7 @@ function App() {
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSpeed, aiStrength, currentPositionCommand, isAiTurn, isReady, isSearching, paused, queueSearch, safeSearchDepth]);
+  }, [aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isReady, isSearching, paused, queueSearch, reviewStatus, safeSearchDepth]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
@@ -1174,6 +1178,11 @@ function App() {
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
     if (!engineEnabled || !isReady) return;
+    if (isAiMode) {
+      stepPendingRef.current = false;
+      pausedRef.current = true;
+      setPaused(true);
+    }
     stopAnalysis();
     resetReviewController(true);
     clearAllReviewData();
@@ -1199,7 +1208,7 @@ function App() {
       baseQueue: [rootNodeId, ...activeLineNodeIds],
       total: totalSteps,
     };
-  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isReady, resetReviewController, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
+  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isAiMode, isReady, resetReviewController, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
   const clearBoardMarkers = useCallback(() => {
     setUserHighlights((prev) => prev.length ? [] : prev);
@@ -1398,12 +1407,15 @@ function App() {
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
-  const canStartReview = engineEnabled && isReady && moveHistory.length > 0;
+  const aiMoveSearchActive = isAiTurn && isSearching;
+  const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const reviewStartTitle = !engineEnabled
     ? 'Switch to Analysis to review this line'
     : !isReady
       ? 'Engine is still loading'
-      : moveHistory.length === 0
+      : aiMoveSearchActive
+        ? 'AI is finishing its move'
+        : moveHistory.length === 0
         ? 'Play or import moves before running review'
         : 'Analyze all moves in the current line';
   const reviewStartLabel = canStartReview
@@ -1412,6 +1424,8 @@ function App() {
       ? 'Analysis Off'
       : !isReady
         ? 'Engine Loading'
+        : aiMoveSearchActive
+          ? 'AI Thinking'
         : 'No Moves Yet';
 
   useEffect(() => {
