@@ -1,4 +1,5 @@
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
@@ -516,6 +517,54 @@ async function assertMoveLineImport(page) {
   }
 }
 
+async function assertCurrentPgnDownload(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const downloadButton = page.getByTestId("download-pgn-btn");
+  if (!(await downloadButton.isDisabled())) {
+    throw new Error("Current-line PGN download should be disabled before any move.");
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  if (await downloadButton.isDisabled()) {
+    throw new Error("Current-line PGN download stayed disabled after importing moves.");
+  }
+
+  const downloadPromise = page.waitForEvent("download");
+  await downloadButton.click();
+  const download = await downloadPromise;
+  const suggestedFilename = download.suggestedFilename();
+  if (!/^web-xiangqi-\d{4}-\d{2}-\d{2}-[\w-]+\.pgn$/.test(suggestedFilename)) {
+    throw new Error(`Unexpected PGN filename: ${suggestedFilename}`);
+  }
+
+  const savePath = path.resolve(__dirname, "..", ".current-line-export-test.pgn");
+  try {
+    await download.saveAs(savePath);
+    const exportedPgn = fs.readFileSync(savePath, "utf8");
+    if (!exportedPgn.includes('[Variant "Xiangqi"]')) {
+      throw new Error(`Downloaded PGN omitted the Xiangqi variant tag:\n${exportedPgn}`);
+    }
+    if (!exportedPgn.includes('[Event "PvP"]')) {
+      throw new Error(`Downloaded PGN omitted the current game mode:\n${exportedPgn}`);
+    }
+    if (!/1\. b2e2 h9g7 \*/i.test(exportedPgn)) {
+      throw new Error(`Downloaded PGN omitted the current imported line:\n${exportedPgn}`);
+    }
+  } finally {
+    fs.rmSync(savePath, { force: true });
+  }
+}
+
 async function assertFenTaggedMoveLineImport(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -894,6 +943,7 @@ async function main() {
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
+    await assertCurrentPgnDownload(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
     await assertBoardMarkersSurviveSelection(page);
@@ -908,7 +958,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

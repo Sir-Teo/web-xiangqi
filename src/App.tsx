@@ -10,7 +10,7 @@ import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck, IconCopy, IconSkipBack, IconChevronLeft, IconChevronRight,
+  IconPawn, IconCheck, IconCopy, IconDownload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
@@ -25,7 +25,7 @@ import { LibraryPanel } from './components/Library/LibraryPanel';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
-import { exportPgn, copyToClipboard } from './utils/gameExport';
+import { exportPgn, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
 import { extractFenTag, extractUciMoveLine } from './utils/moveImport';
 import {
@@ -143,6 +143,16 @@ const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
 const CAPTURED_BY_RED: PieceCode[] = ['r', 'n', 'c', 'a', 'b', 'p'];
 const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
+
+function makePgnDownloadFilename(opening?: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const slug = String(opening || 'game')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'game';
+  return `web-xiangqi-${date}-${slug}.pgn`;
+}
 
 type ReviewPhase = 'base' | 'revisit';
 
@@ -1538,6 +1548,7 @@ function App() {
       ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
       : 'Material even';
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN;
+  const canExportCurrentLine = currentMoveIndex >= 0 && moveHistory.length > 0;
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
@@ -1603,11 +1614,13 @@ function App() {
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
+  const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const copiedFenToastTimerRef = useRef<number | null>(null);
+  const downloadedPgnTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
   const [fenInput, setFenInput] = useState('');
@@ -1625,6 +1638,9 @@ function App() {
       }
       if (copiedFenToastTimerRef.current !== null) {
         window.clearTimeout(copiedFenToastTimerRef.current);
+      }
+      if (downloadedPgnTimerRef.current !== null) {
+        window.clearTimeout(downloadedPgnTimerRef.current);
       }
       if (copiedPvTimerRef.current !== null) {
         window.clearTimeout(copiedPvTimerRef.current);
@@ -1675,18 +1691,23 @@ function App() {
     closeNewGameMenu();
   }, [applyMode, closeNewGameMenu, pendingGameMode]);
 
-  const handleCopyPgn = useCallback(async () => {
+  const buildCurrentPgn = useCallback(() => {
     const moves = activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
       .map(id => treeNodes[id]?.record)
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    if (moves.length === 0) return;
-    const pgn = exportPgn(moves, {
+    if (moves.length === 0) return null;
+    return exportPgn(moves, {
       gameMode,
       opening: detectedOpening?.name,
       result: gameResult,
       startFen: rootFen,
     });
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult, rootFen]);
+
+  const handleCopyPgn = useCallback(async () => {
+    const pgn = buildCurrentPgn();
+    if (!pgn) return;
     const ok = await copyToClipboard(pgn);
     if (ok) {
       if (copiedToastTimerRef.current !== null) {
@@ -1698,7 +1719,27 @@ function App() {
         setCopiedToast(false);
       }, 2000);
     }
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult, rootFen]);
+  }, [buildCurrentPgn]);
+
+  const handleDownloadPgn = useCallback(() => {
+    const pgn = buildCurrentPgn();
+    if (!pgn) return;
+    const ok = downloadTextFile(
+      makePgnDownloadFilename(detectedOpening?.name),
+      pgn,
+      'application/x-chess-pgn;charset=utf-8'
+    );
+    if (!ok) return;
+
+    if (downloadedPgnTimerRef.current !== null) {
+      window.clearTimeout(downloadedPgnTimerRef.current);
+    }
+    setDownloadedPgnToast(true);
+    downloadedPgnTimerRef.current = window.setTimeout(() => {
+      downloadedPgnTimerRef.current = null;
+      setDownloadedPgnToast(false);
+    }, 2000);
+  }, [buildCurrentPgn, detectedOpening]);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
@@ -2593,6 +2634,17 @@ function App() {
                   <IconLibrary />
                 </button>
                 <button
+                  className={`mobile-action-btn ${downloadedPgnToast ? 'mobile-action-btn-active' : ''}`}
+                  type="button"
+                  onClick={handleDownloadPgn}
+                  disabled={!canExportCurrentLine}
+                  title={downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
+                  aria-label={downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
+                  data-testid="mobile-download-pgn-btn"
+                >
+                  {downloadedPgnToast ? <IconCheck /> : <IconDownload />}
+                </button>
+                <button
                   className={`mobile-action-btn ${copiedFenToast ? 'mobile-action-btn-active' : ''}`}
                   type="button"
                   onClick={handleCopyFen}
@@ -2962,10 +3014,19 @@ function App() {
               <button
                 className="gc-btn"
                 onClick={handleCopyPgn}
-                disabled={moveHistory.length === 0}
+                disabled={!canExportCurrentLine}
                 title="Copy PGN to clipboard"
               >
                 {copiedToast ? <><IconCheck /> Copied</> : 'Copy PGN'}
+              </button>
+              <button
+                className="gc-btn"
+                onClick={handleDownloadPgn}
+                disabled={!canExportCurrentLine}
+                title="Download current line as a PGN file"
+                data-testid="download-pgn-btn"
+              >
+                {downloadedPgnToast ? <><IconCheck /> Exported</> : <><IconDownload /> Export PGN</>}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button

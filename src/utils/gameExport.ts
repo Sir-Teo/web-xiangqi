@@ -158,6 +158,37 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return copyToClipboardWithSelection(value);
 }
 
+/**
+ * Downloads plain text through a temporary object URL.
+ */
+export function downloadTextFile(filename: string, text: string, mimeType = 'text/plain;charset=utf-8'): boolean {
+    if (
+        typeof document === 'undefined' ||
+        !document.body ||
+        typeof Blob === 'undefined' ||
+        typeof URL === 'undefined' ||
+        typeof URL.createObjectURL !== 'function'
+    ) {
+        return false;
+    }
+
+    const blob = new Blob([String(text)], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename || 'web-xiangqi-export.txt';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+
+    try {
+        anchor.click();
+        return true;
+    } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+}
+
 function copyToClipboardWithSelection(text: string): boolean {
     if (typeof document === 'undefined' || !document.body) return false;
 
