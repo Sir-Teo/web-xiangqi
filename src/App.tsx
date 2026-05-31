@@ -1484,7 +1484,10 @@ function App() {
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [savedToast, setSavedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
+  const copiedToastTimerRef = useRef<number | null>(null);
+  const copiedFenToastTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
+  const fenErrorTimerRef = useRef<number | null>(null);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
   const [moveLineInput, setMoveLineInput] = useState('');
@@ -1495,8 +1498,17 @@ function App() {
       if (savedToastTimerRef.current !== null) {
         window.clearTimeout(savedToastTimerRef.current);
       }
+      if (copiedToastTimerRef.current !== null) {
+        window.clearTimeout(copiedToastTimerRef.current);
+      }
+      if (copiedFenToastTimerRef.current !== null) {
+        window.clearTimeout(copiedFenToastTimerRef.current);
+      }
       if (copiedPvTimerRef.current !== null) {
         window.clearTimeout(copiedPvTimerRef.current);
+      }
+      if (fenErrorTimerRef.current !== null) {
+        window.clearTimeout(fenErrorTimerRef.current);
       }
     };
   }, []);
@@ -1555,16 +1567,28 @@ function App() {
     });
     const ok = await copyToClipboard(pgn);
     if (ok) {
+      if (copiedToastTimerRef.current !== null) {
+        window.clearTimeout(copiedToastTimerRef.current);
+      }
       setCopiedToast(true);
-      setTimeout(() => setCopiedToast(false), 2000);
+      copiedToastTimerRef.current = window.setTimeout(() => {
+        copiedToastTimerRef.current = null;
+        setCopiedToast(false);
+      }, 2000);
     }
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult, rootFen]);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
     if (ok) {
+      if (copiedFenToastTimerRef.current !== null) {
+        window.clearTimeout(copiedFenToastTimerRef.current);
+      }
       setCopiedFenToast(true);
-      setTimeout(() => setCopiedFenToast(false), 2000);
+      copiedFenToastTimerRef.current = window.setTimeout(() => {
+        copiedFenToastTimerRef.current = null;
+        setCopiedFenToast(false);
+      }, 2000);
     }
   }, [currentFen]);
 
@@ -1601,8 +1625,14 @@ function App() {
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
     if (!ok) {
+      if (fenErrorTimerRef.current !== null) {
+        window.clearTimeout(fenErrorTimerRef.current);
+      }
       setFenError(true);
-      setTimeout(() => setFenError(false), 2000);
+      fenErrorTimerRef.current = window.setTimeout(() => {
+        fenErrorTimerRef.current = null;
+        setFenError(false);
+      }, 2000);
       return;
     }
     stopAnalysis();

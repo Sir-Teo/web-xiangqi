@@ -240,6 +240,40 @@ async function assertBottomNewGameMenuResetsDraft(page) {
   }
 }
 
+async function assertInvalidFenToastTimerResets(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByLabel("FEN string").fill("not a legal fen");
+  const loadButton = page.locator(".new-game-fen-form button");
+  await loadButton.click();
+  await page.waitForFunction(
+    () => document.querySelector(".new-game-fen-form button")?.textContent?.trim() === "Invalid FEN",
+    null,
+    { timeout: 5000 }
+  );
+
+  await page.waitForTimeout(1200);
+  await loadButton.click();
+  await page.waitForTimeout(1200);
+
+  const stillInvalid = String(await loadButton.textContent() || "").trim();
+  if (stillInvalid !== "Invalid FEN") {
+    throw new Error(`Invalid FEN feedback did not reset its timer after a repeated submit: ${stillInvalid}`);
+  }
+
+  await page.waitForTimeout(1000);
+  const cleared = String(await loadButton.textContent() || "").trim();
+  if (cleared !== "Load") {
+    throw new Error(`Invalid FEN feedback did not clear after the reset timer: ${cleared}`);
+  }
+}
+
 async function assertNewGameDialogFocusTrap(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -725,6 +759,7 @@ async function main() {
     await assertPausedAiTurnBlocksManualMove(page);
     await assertAiPlayModeShowsEngineStatus(page);
     await assertBottomNewGameMenuResetsDraft(page);
+    await assertInvalidFenToastTimerResets(page);
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
@@ -742,7 +777,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
