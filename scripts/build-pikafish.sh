@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM_DIR="${PIKAFISH_UPSTREAM_DIR:-$ROOT/.deps/pikafish}"
+UPSTREAM_URL="${PIKAFISH_UPSTREAM_URL:-https://github.com/official-pikafish/Pikafish}"
+# Keep CI/CD reproducible. Update this only after refreshing
+# patches/pikafish-wasm.patch against a newer upstream Pikafish commit.
+UPSTREAM_REF="${PIKAFISH_UPSTREAM_REF:-d632087b88e64d4ced5dd0e966bd70d5e03d10e5}"
 EMSDK_DIR="${EMSDK_DIR:-$ROOT/.deps/emsdk}"
 DIST_DIR="$ROOT/dist"
 PUBLIC_DIR="$ROOT/public"
@@ -20,8 +24,16 @@ WASM_DISABLE_RTTI="${WASM_DISABLE_RTTI:-yes}"
 mkdir -p "$ROOT/.deps" "$DIST_DIR" "$PUBLIC_DIR"
 
 if [ ! -d "$UPSTREAM_DIR/.git" ]; then
-  git clone --depth=1 https://github.com/official-pikafish/Pikafish "$UPSTREAM_DIR"
+  rm -rf "$UPSTREAM_DIR"
+  git clone --no-checkout "$UPSTREAM_URL" "$UPSTREAM_DIR"
+else
+  git -C "$UPSTREAM_DIR" remote set-url origin "$UPSTREAM_URL"
 fi
+
+echo "Using Pikafish upstream ref $UPSTREAM_REF"
+git -C "$UPSTREAM_DIR" fetch --depth=1 origin "$UPSTREAM_REF"
+git -C "$UPSTREAM_DIR" checkout --force --detach FETCH_HEAD
+git -C "$UPSTREAM_DIR" clean -fdx
 
 mkdir -p "$UPSTREAM_DIR/src/emscripten"
 cp "$ROOT/templates/emscripten/wasm-makefile.mk" "$UPSTREAM_DIR/src/emscripten/wasm-makefile.mk"
