@@ -68,6 +68,7 @@ async function main() {
       const storage = await import(`${runtimeBasePath}src/utils/gameLibrary.ts`);
       const gameExport = await import(`${runtimeBasePath}src/utils/gameExport.ts`);
       const serviceWorkerCleanup = await import(`${runtimeBasePath}src/utils/serviceWorkerCleanup.ts`);
+      const engineHook = await import(`${runtimeBasePath}src/hooks/useEngine.ts`);
 
       const thresholdCases = [
         [40, "best"],
@@ -99,6 +100,23 @@ async function main() {
         if (actual !== expected) {
           throw new Error(`getEvalLossForMove(${before}, ${after}, ${side}) => ${actual}, expected ${expected}`);
         }
+      }
+
+      if (!engineHook.shouldSuppressEngineRuntimeError("/web-xiangqi/pikafish-core.js", "RuntimeError: memory access out of bounds")) {
+        throw new Error("Pikafish window runtime memory error was not suppressed.");
+      }
+      if (engineHook.shouldSuppressEngineRuntimeError("/web-xiangqi/assets/index.js", "RuntimeError: memory access out of bounds")) {
+        throw new Error("Non-engine window memory error was incorrectly suppressed.");
+      }
+      const engineRejection = new Error("memory access out of bounds");
+      engineRejection.stack = "RuntimeError: memory access out of bounds\n    at wasm-function[123]\n    at http://127.0.0.1/web-xiangqi/pikafish-core-simd.js:1:123";
+      if (!engineHook.shouldSuppressEngineRuntimeRejection(engineRejection)) {
+        throw new Error("Pikafish rejection runtime memory error was not suppressed.");
+      }
+      const appRejection = new Error("memory access out of bounds");
+      appRejection.stack = "RuntimeError: memory access out of bounds\n    at http://127.0.0.1/web-xiangqi/assets/index.js:10:20";
+      if (engineHook.shouldSuppressEngineRuntimeRejection(appRejection)) {
+        throw new Error("Non-engine rejection memory error was incorrectly suppressed.");
       }
 
       const treeNodes = {

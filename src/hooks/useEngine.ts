@@ -24,6 +24,8 @@ type SearchRequest = {
     tag?: string;
 };
 
+type NavigatorWithDeviceMemory = Navigator & { deviceMemory?: number };
+
 export interface EngineInitOptions {
     enabled?: boolean;
     variant?: EngineRuntimeVariant;
@@ -55,21 +57,47 @@ function detectUiSafeThreads() {
 
 function detectUiSafeHashMB() {
     const isCompact = typeof window !== 'undefined' && window.innerWidth <= 900;
-    const memGB = (navigator as any).deviceMemory || 0;
+    const memGB = Number((navigator as NavigatorWithDeviceMemory).deviceMemory ?? 0);
     if (isCompact) return memGB >= 4 ? 32 : 16;
     if (memGB >= 8) return 128;
     if (memGB >= 4) return 64;
     return 32;
 }
 
-function shouldSuppressEngineRuntimeError(filename: string, message: string) {
+function hasPikafishRuntimeHint(value: string) {
+    const normalized = value.toLowerCase();
+    return normalized.includes('pikafish.js') ||
+        normalized.includes('pikafish-core') ||
+        normalized.includes('pikafishcore') ||
+        normalized.includes('pikafish worker') ||
+        normalized.includes('worker engine');
+}
+
+function hasMemoryAccessOutOfBounds(value: string) {
+    return value.toLowerCase().includes('memory access out of bounds');
+}
+
+function reasonToDiagnosticText(reason: unknown) {
+    if (!reason) return '';
+    if (reason instanceof Error) {
+        return [reason.name, reason.message, reason.stack].filter(Boolean).join('\n');
+    }
+    if (typeof reason === 'object') {
+        const record = reason as Record<string, unknown>;
+        return [record.name, record.message, record.stack, String(reason)].filter(Boolean).join('\n');
+    }
+    return String(reason);
+}
+
+export function shouldSuppressEngineRuntimeError(filename: string, message: string) {
     const normalizedFilename = String(filename || '');
     const normalizedMessage = String(message || '');
-    const fromPikafishRuntime =
-        normalizedFilename.includes('/pikafish-core.js') ||
-        normalizedFilename.includes('/pikafish.js') ||
-        normalizedFilename.includes('/pikafish-core.wasm');
-    return fromPikafishRuntime && normalizedMessage.includes('memory access out of bounds');
+    return hasMemoryAccessOutOfBounds(normalizedMessage) && hasPikafishRuntimeHint(normalizedFilename);
+}
+
+export function shouldSuppressEngineRuntimeRejection(reason: unknown) {
+    const diagnostic = reasonToDiagnosticText(reason);
+    return hasMemoryAccessOutOfBounds(diagnostic) && hasPikafishRuntimeHint(diagnostic);
 }
 
 export function useEngine(options: EngineInitOptions = {}) {
@@ -127,11 +155,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         };
 
         const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-            const reason = event.reason;
-            const message = String(reason?.message || reason?.stack || reason || '');
-            if (!message.includes('memory access out of bounds')) {
-                return;
-            }
+            if (!shouldSuppressEngineRuntimeRejection(event.reason)) return;
             event.preventDefault();
         };
 
