@@ -85,7 +85,7 @@ Artifacts are written to `dist/`:
 - `dist/pikafish-core-single.js` / `dist/pikafish-core-single.wasm` (fallback)
 - `dist/pikafish-core.worker.js` (pthread worker; if generated)
 - `dist/pikafish.nnue`
-- `dist/index.html` (browser demo)
+- `dist/index.html` (React analysis app after `npm run build:react`; browser demo after `npm run build`)
 
 ## Notes
 
@@ -102,6 +102,7 @@ Artifacts are written to `dist/`:
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
+- The React app lazy-loads `pikafish.js` through `useEngine` instead of parser-blocking the app shell before first paint.
 - The React app unregisters legacy demo service workers and clears `pikafish-demo-*` caches at startup so older cached demo shells do not keep serving stale engine/app assets.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
 - Local Node benchmark helper: `npm run bench:nps -- --variant threaded-simd --depth 8 --repeats 3 --out /tmp/pika-before.json` (and `--compare <file>` for before/after deltas).
