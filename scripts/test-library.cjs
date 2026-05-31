@@ -40,6 +40,7 @@ try {
   const shareTree = require(path.join(tempDir, "shareTree.js"));
   const gameExport = require(path.join(tempDir, "gameExport.js"));
   const moveImport = require(path.join(tempDir, "moveImport.js"));
+  const moveNotation = require(path.join(tempDir, "moveNotation.js"));
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
   const customFen = "9/9/9/9/9/9/9/9/4K4/4k4 w - - 0 1";
 
@@ -367,6 +368,11 @@ try {
   assert(
     promotedChessMove.length === 0,
     `Xiangqi import should reject chess-style promotion suffixes, got: ${promotedChessMove.join(" ")}`
+  );
+
+  assert(
+    moveNotation.formatUciMove("b2e2q") === "B2E2Q",
+    "Move formatter should not hide malformed suffixes as legal Xiangqi moves."
   );
 
   const startBoard = xiangqi.parseFenBoard(xiangqi.START_FEN);

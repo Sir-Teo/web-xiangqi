@@ -40,7 +40,7 @@ export interface MoveNotationRecord {
 
 function splitUciMove(uci: string) {
     const normalized = String(uci || '').trim();
-    if (!/^[a-i][0-9][a-i][0-9]/i.test(normalized)) {
+    if (!/^[a-i][0-9][a-i][0-9]$/i.test(normalized)) {
         return null;
     }
     return {
