@@ -333,6 +333,27 @@ try {
     const renamedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
     assert(renamedGames[0]?.label.length === 120, "Saved game rename labels should be capped before persistence.");
     assert(!renamedGames[0]?.label.startsWith(" "), "Saved game rename labels should be trimmed before persistence.");
+    storedValues.set("xiangqi-game-library", JSON.stringify(
+      Array.from({ length: 500 }, (_, index) => ({
+        id: `stored-${index}`,
+        savedAt: 1710001000000 + index,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+      }))
+    ));
+    const cappedSave = library.saveGame({
+      gameMode: "PvP",
+      moves: ["b0c2"],
+      result: "ongoing",
+    });
+    assert(cappedSave, "Saving should work when the library is at the saved-game cap.");
+    const cappedStoredGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    assert(cappedStoredGames.length === 500, "Saving past the game cap should not grow persisted storage.");
+    assert(cappedStoredGames[0]?.id === "stored-1", "Saving past the cap should drop the oldest game.");
+    assert(cappedStoredGames.at(-1)?.id === cappedSave.id, "The newest saved game should remain after capping.");
+    storedValues.set("xiangqi-game-library", "x".repeat(3_000_001));
+    assert(library.loadAllGames().length === 0, "Oversized raw saved-game storage should be ignored before JSON parsing.");
   } finally {
     if (originalLocalStorageDescriptor) {
       Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);

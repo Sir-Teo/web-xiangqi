@@ -15,6 +15,7 @@ const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
+const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
 const MAX_SAVED_GAMES = 500;
 const MAX_SAVED_MOVES = 1024;
 const MAX_SAVED_TREE_NODES = 512;
@@ -308,6 +309,7 @@ function readAll(): SavedGame[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
+        if (raw.length > MAX_LIBRARY_JSON_LENGTH) return [];
         return normalizeSavedGames(JSON.parse(raw));
     } catch {
         return [];
@@ -344,7 +346,7 @@ export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | n
     if (!saved) return null;
     const games = readAll();
     games.push(saved);
-    return writeAll(games) ? saved : null;
+    return writeAll(games.slice(-MAX_SAVED_GAMES)) ? saved : null;
 }
 
 export function deleteGame(id: string): boolean {
