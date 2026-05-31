@@ -61,6 +61,19 @@ npm run serve:demo
 
 Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild automatically.
 
+## React app QA
+
+The Vite/React analysis app can be checked without rebuilding Pikafish:
+
+```bash
+npm install
+npm run build:react
+npm run test:library
+npm run test:openings
+npm run test:ui:install   # once per machine
+npm run test:ui:layout
+```
+
 Artifacts are written to `dist/`:
 
 - `dist/pikafish.js` (wrapper)
