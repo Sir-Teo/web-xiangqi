@@ -159,6 +159,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     }, []);
 
     const appendOutputLine = useCallback((line: string) => {
+        if (!captureInfoLinesRef.current) return;
         commitOutputLines([...outputLinesRef.current, line]);
     }, [commitOutputLines]);
 
