@@ -952,6 +952,50 @@ async function assertNewGameDialogFocusTrap(page) {
   }
 }
 
+async function assertMobileNewGameStartButtonVisible(page) {
+  await page.setViewportSize({ width: 390, height: 624 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Open new game menu" }).click();
+  await page.locator(".new-game-menu").waitFor({ timeout: 5000 });
+  await page.locator(".new-game-mode-btn").filter({ hasText: "You play Black" }).click();
+  await page.locator('button[aria-label^="Beginner: depth 2"]').click();
+
+  const layout = await page.evaluate(() => {
+    const menu = document.querySelector(".new-game-menu");
+    const footer = document.querySelector(".new-game-menu-footer");
+    const start = document.querySelector(".new-game-start-btn");
+    const menuRect = menu?.getBoundingClientRect();
+    const startRect = start?.getBoundingClientRect();
+    const footerStyle = footer ? getComputedStyle(footer) : null;
+    return {
+      innerHeight: window.innerHeight,
+      menu: menuRect ? { top: menuRect.top, bottom: menuRect.bottom, height: menuRect.height } : null,
+      start: startRect ? { top: startRect.top, bottom: startRect.bottom, height: startRect.height } : null,
+      footerPosition: footerStyle?.position || "",
+      menuScrollTop: menu?.scrollTop ?? -1,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+
+  if (!layout.menu || !layout.start || layout.footerPosition !== "sticky") {
+    throw new Error(`Mobile New Game footer was not sticky: ${JSON.stringify(layout)}`);
+  }
+  if (layout.start.bottom > layout.innerHeight - 6 || layout.start.top < 0) {
+    throw new Error(`Mobile New Game start button was not immediately reachable: ${JSON.stringify(layout)}`);
+  }
+  if (layout.overflowX > 2) {
+    throw new Error(`Mobile New Game dialog introduced horizontal overflow: ${layout.overflowX}`);
+  }
+
+  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+}
+
 async function assertBlackToMoveTreeNumbering(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2718,6 +2762,7 @@ async function main() {
     await assertDisabledControlsLookInactive(page);
     await assertPanelTabAccessibility(page);
     await assertNewGameDialogFocusTrap(page);
+    await assertMobileNewGameStartButtonVisible(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertMoveLineImportPreservesVariations(page);
@@ -2759,7 +2804,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, beginner AI candidate-PV play, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, beginner AI candidate-PV play, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

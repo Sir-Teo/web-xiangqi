@@ -5566,12 +5566,23 @@ summary:active {
 
   .new-game-menu {
     width: min(100vw - 1rem, 420px);
+    max-height: calc(100dvh - 1rem);
     padding: 1rem;
+    padding-bottom: 0;
   }
 
   .new-game-menu-footer {
+    position: sticky;
+    bottom: -1px;
     flex-direction: column;
     align-items: stretch;
+    margin: 1rem -1rem 0;
+    padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+    border-top-color: var(--border-default);
+    background:
+      linear-gradient(180deg, rgba(12, 14, 17, 0.94), rgba(6, 8, 10, 0.99)),
+      var(--bg-surface);
+    box-shadow: 0 -18px 32px rgba(0, 0, 0, 0.28);
   }
 
   .new-game-selection strong {
