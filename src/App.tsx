@@ -116,6 +116,22 @@ const PIECE_NAMES: Record<PieceCode, string> = {
   c: 'Black cannon',
   p: 'Black soldier',
 };
+const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
+  K: 'General: palace steps; open-file capture',
+  A: 'Advisor: diagonal inside palace',
+  B: 'Elephant: 2-point diagonal; no river',
+  N: 'Horse: L move; leg can block',
+  R: 'Chariot: straight lines, no blockers',
+  C: 'Cannon: straight; capture over 1 screen',
+  P: 'Soldier: forward; sideways after crossing river',
+  k: 'General: palace steps; open-file capture',
+  a: 'Advisor: diagonal inside palace',
+  b: 'Elephant: 2-point diagonal; no river',
+  n: 'Horse: L move; leg can block',
+  r: 'Chariot: straight lines, no blockers',
+  c: 'Cannon: straight; capture over 1 screen',
+  p: 'Soldier: forward; sideways after crossing river',
+};
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
   K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
   k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
@@ -1245,8 +1261,9 @@ function App() {
   const selectedPieceText = selectedPiece
     ? `${PIECE_NAMES[selectedPiece]} on ${selectedSquareText}`
     : 'No piece selected';
+  const legalMoveCountText = `${validTargets.length} ${validTargets.length === 1 ? 'move' : 'moves'}${legalCaptureCount > 0 ? ` · ${legalCaptureCount} ${legalCaptureCount === 1 ? 'capture' : 'captures'}` : ''}`;
   const legalMoveText = selectedPiece
-    ? `${validTargets.length} ${validTargets.length === 1 ? 'move' : 'moves'}${legalCaptureCount > 0 ? ` · ${legalCaptureCount} ${legalCaptureCount === 1 ? 'capture' : 'captures'}` : ''}`
+    ? `${assistMode === 'coach' ? `${PIECE_MOVE_HINTS[selectedPiece]} · ` : ''}${legalMoveCountText}`
     : `${sideToMoveLabel} to move`;
 
   const materialSummary = useMemo(() => {
@@ -2307,7 +2324,7 @@ function App() {
                 <div className="position-stat position-stat-selection">
                   <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
                   <strong>{selectedPieceText}</strong>
-                  <em>{legalMoveText}</em>
+                  <em title={legalMoveText}>{legalMoveText}</em>
                 </div>
                 <div className="position-stat position-stat-material">
                   <span>Material</span>

@@ -5472,6 +5472,14 @@ summary:active {
   white-space: nowrap;
 }
 
+.position-stat-selection em {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .position-stat-turn {
   border-color: rgba(239, 68, 68, 0.16);
 }
