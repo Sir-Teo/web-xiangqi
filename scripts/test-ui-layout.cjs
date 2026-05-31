@@ -565,6 +565,42 @@ async function assertCurrentPgnDownload(page) {
   }
 }
 
+async function assertMoveLineFileImport(page) {
+  const importPath = path.resolve(__dirname, "..", ".move-line-import-test.pgn");
+  fs.writeFileSync(importPath, '[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2\n');
+
+  try {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByTestId("uci-line-file-input").setInputFiles(importPath);
+
+    await page.waitForFunction(() => {
+      const input = document.querySelector('[data-testid="uci-line-input"]');
+      return input && "value" in input && String(input.value).includes("B2E2 h9g7");
+    }, null, { timeout: 5000 });
+    const loadedText = await page.getByTestId("uci-line-input").inputValue();
+    if (!loadedText.includes("B2E2 h9g7")) {
+      throw new Error(`Move-line file did not load into the import box:\n${loadedText}`);
+    }
+    await page.getByText(".move-line-import-test.pgn").waitFor({ timeout: 5000 });
+
+    await page.getByTestId("import-uci-line-btn").click();
+    await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+    const activePoint = await page.getByTestId("graph-current-point").textContent();
+    if (!String(activePoint || "").includes("Red B0") || !String(activePoint || "").includes("C2")) {
+      throw new Error(`File-imported line did not land on the final move: ${String(activePoint || "").trim()}`);
+    }
+  } finally {
+    fs.rmSync(importPath, { force: true });
+  }
+}
+
 async function assertFenTaggedMoveLineImport(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -944,6 +980,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertCurrentPgnDownload(page);
+    await assertMoveLineFileImport(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
     await assertBoardMarkersSurviveSelection(page);
@@ -958,7 +995,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, invalid-FEN feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import, current-line PGN download, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

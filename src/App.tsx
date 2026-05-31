@@ -10,7 +10,7 @@ import { MoveListTree } from './components/Controls/MoveListTree';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck, IconCopy, IconDownload, IconSkipBack, IconChevronLeft, IconChevronRight,
+  IconPawn, IconCheck, IconCopy, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
@@ -1623,9 +1623,11 @@ function App() {
   const downloadedPgnTimerRef = useRef<number | null>(null);
   const copiedPvTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
+  const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState(false);
   const [moveLineInput, setMoveLineInput] = useState('');
+  const [moveLineFileName, setMoveLineFileName] = useState('');
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1673,6 +1675,7 @@ function App() {
     setPendingGameMode(gameMode);
     setFenInput('');
     setMoveLineInput('');
+    setMoveLineFileName('');
     setFenError(false);
     setMoveLineError(null);
     setShowNewGameMenu(true);
@@ -1740,6 +1743,32 @@ function App() {
       setDownloadedPgnToast(false);
     }, 2000);
   }, [buildCurrentPgn, detectedOpening]);
+
+  const handlePickMoveLineFile = useCallback(() => {
+    moveLineFileInputRef.current?.click();
+  }, []);
+
+  const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    if (file.size > 1024 * 1024) {
+      setMoveLineFileName('');
+      setMoveLineError('File is too large');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      setMoveLineInput(text);
+      setMoveLineFileName(file.name);
+      setMoveLineError(null);
+    } catch {
+      setMoveLineFileName('');
+      setMoveLineError('Could not read file');
+    }
+  }, []);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
@@ -1833,6 +1862,7 @@ function App() {
     setFenInput('');
     setFenError(false);
     setMoveLineInput('');
+    setMoveLineFileName('');
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
@@ -2418,6 +2448,7 @@ function App() {
                   value={moveLineInput}
                   onChange={(e) => {
                     setMoveLineInput(e.target.value);
+                    setMoveLineFileName('');
                     setMoveLineError(null);
                   }}
                   placeholder="1. b2e2 h9g7 b0c2"
@@ -2425,6 +2456,26 @@ function App() {
                   rows={3}
                   data-testid="uci-line-input"
                 />
+                <div className="new-game-file-row">
+                  <button
+                    type="button"
+                    className="new-game-file-btn"
+                    onClick={handlePickMoveLineFile}
+                    data-testid="load-uci-file-btn"
+                  >
+                    <IconUpload /> Open PGN
+                  </button>
+                  <input
+                    ref={moveLineFileInputRef}
+                    className="new-game-file-input"
+                    type="file"
+                    accept=".pgn,.txt,text/plain,application/x-chess-pgn"
+                    onChange={handleMoveLineFileChange}
+                    aria-label="Open PGN file"
+                    data-testid="uci-line-file-input"
+                  />
+                  {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
+                </div>
                 <div className="new-game-line-actions">
                   {moveLineError ? <span className="new-game-line-error">{moveLineError}</span> : <span />}
                   <button
