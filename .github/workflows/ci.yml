@@ -67,4 +67,6 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Browser worker parity (quick)
-        run: npm run test:worker-parity:browser
+        run: |
+          npm run test:ui:layout
+          npm run test:worker-parity:browser
