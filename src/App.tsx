@@ -1398,6 +1398,21 @@ function App() {
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
+  const canStartReview = engineEnabled && isReady && moveHistory.length > 0;
+  const reviewStartTitle = !engineEnabled
+    ? 'Switch to Analysis to review this line'
+    : !isReady
+      ? 'Engine is still loading'
+      : moveHistory.length === 0
+        ? 'Play or import moves before running review'
+        : 'Analyze all moves in the current line';
+  const reviewStartLabel = canStartReview
+    ? 'Run Review'
+    : !engineEnabled
+      ? 'Analysis Off'
+      : !isReady
+        ? 'Engine Loading'
+        : 'No Moves Yet';
 
   useEffect(() => {
     if (!gameResult) {
@@ -2568,7 +2583,9 @@ function App() {
                   progress={reviewProgress}
                   summary={reviewSummary}
                   currentNodeId={currentNodeId}
-                  canStart={engineEnabled && moveHistory.length > 0}
+                  canStart={canStartReview}
+                  startLabel={reviewStartLabel}
+                  startTitle={reviewStartTitle}
                   onStart={startGameReview}
                   onCancel={handleCancelReview}
                   onClear={clearCompletedReview}
@@ -2707,8 +2724,14 @@ function App() {
                 {copiedToast ? <><IconCheck /> Copied</> : 'Copy PGN'}
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
-                <button className="gc-btn" onClick={startGameReview} title="Analyse all moves" data-testid="start-review-btn">
-                  Review Game
+                <button
+                  className="gc-btn"
+                  onClick={startGameReview}
+                  title={reviewStartTitle}
+                  disabled={!canStartReview}
+                  data-testid="start-review-bottom-btn"
+                >
+                  {isReady ? 'Review Game' : 'Loading Engine'}
                 </button>
               )}
               {reviewStatus === 'running' && (

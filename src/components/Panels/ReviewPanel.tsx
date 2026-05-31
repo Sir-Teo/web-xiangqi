@@ -10,6 +10,8 @@ type Props = {
     summary: ReviewSummary | null;
     currentNodeId: string;
     canStart: boolean;
+    startLabel?: string;
+    startTitle?: string;
     onStart: () => void;
     onCancel: () => void;
     onClear: () => void;
@@ -22,6 +24,8 @@ export const ReviewPanel = memo(function ReviewPanel({
     summary,
     currentNodeId,
     canStart,
+    startLabel,
+    startTitle,
     onStart,
     onCancel,
     onClear,
@@ -54,9 +58,10 @@ export const ReviewPanel = memo(function ReviewPanel({
                             className="chip-btn chip-btn-primary"
                             onClick={onStart}
                             disabled={!canStart}
+                            title={startTitle}
                             data-testid="start-review-btn"
                         >
-                            Run Review
+                            {startLabel ?? (canStart ? 'Run Review' : 'Engine Loading')}
                         </button>
                     )}
                 </div>
