@@ -30,7 +30,7 @@ type MoveListEntry = {
 
 export const MoveListTree = memo(function MoveListTree({
     treeNodes,
-    rootNodeId: _rootNodeId,
+    rootNodeId,
     rootFen,
     currentNodeId,
     currentMoveIndex: _currentMoveIndex,
@@ -148,6 +148,7 @@ export const MoveListTree = memo(function MoveListTree({
             </div>
         );
 
+        if (lineIndex === 0) pushVariations(rootNodeId, -1);
         if (redEntry) pushVariations(redEntry.nodeId, redEntry.lineIndex);
         if (blackEntry) pushVariations(blackEntry.nodeId, blackEntry.lineIndex);
         lineIndex += consumed;

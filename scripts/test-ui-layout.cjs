@@ -639,6 +639,33 @@ async function assertMoveLineImportErrorAccessibility(page) {
   }
 }
 
+async function assertRootMoveVariationsVisible(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  const activeRowText = await page.locator(".mtree-row").first().textContent();
+  const variationText = await page.locator(".mtree-variation").allTextContents();
+  const combinedVariationText = variationText.join(" ");
+  if (!String(activeRowText || "").includes("b0c2")) {
+    throw new Error(`Root variation setup did not keep the second first move active: ${String(activeRowText || "").trim()}`);
+  }
+  if (!combinedVariationText.includes("b2e2")) {
+    throw new Error(`Alternate root move was hidden from the move tree: ${combinedVariationText}`);
+  }
+}
+
 async function assertCurrentPgnDownload(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1214,6 +1241,7 @@ async function main() {
     await assertMoveLineImport(page);
     await assertMoveLineImportIgnoresVariations(page);
     await assertMoveLineImportErrorAccessibility(page);
+    await assertRootMoveVariationsVisible(page);
     await assertCurrentPgnDownload(page);
     await assertShareLinkRoundTrip(page);
     await assertInvalidShareLinkFeedback(page);
@@ -1232,7 +1260,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
