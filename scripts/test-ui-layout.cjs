@@ -375,6 +375,39 @@ async function assertMobileSaveLibraryActions(page) {
   }
 }
 
+async function assertGameOverReviewPreservesResult(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("xiangqi-game-library");
+  });
+
+  const terminalFen = "4k4/3RRR3/9/9/9/9/9/9/9/4K4 b - - 0 1";
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByLabel("FEN string").fill(terminalFen);
+  await page.getByRole("button", { name: "Load" }).click();
+
+  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  await page.locator(".game-over-modal").getByRole("button", { name: "Review" }).click();
+  await page.locator(".game-over-modal").waitFor({ state: "detached", timeout: 5000 });
+  await page.getByText("Game Review").waitFor({ timeout: 5000 });
+
+  await page.getByTestId("save-game-btn").click();
+  const savedResult = await page.waitForFunction(() => {
+    const raw = localStorage.getItem("xiangqi-game-library");
+    if (!raw) return null;
+    const games = JSON.parse(raw);
+    return games.length === 1 ? games[0].result : null;
+  }, null, { timeout: 5000 }).then((handle) => handle.jsonValue());
+
+  if (savedResult !== "red") {
+    throw new Error(`Game-over Review action lost the finished result before save: ${savedResult}`);
+  }
+}
+
 async function main() {
   let playwright;
   try {
@@ -420,12 +453,13 @@ async function main() {
     await assertMobileSaveLibraryActions(page);
     await assertLibraryPgnCopy(page);
     await assertLibraryDeleteConfirmation(page);
+    await assertGameOverReviewPreservesResult(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library PGN actions, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

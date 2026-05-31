@@ -1294,6 +1294,15 @@ function App() {
       ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
       : 'Material even';
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN;
+  const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
+  const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
+  const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
+
+  useEffect(() => {
+    if (!gameResult) {
+      setDismissedGameOverKey(null);
+    }
+  }, [gameResult]);
 
   const lastMoveUci = treeNodes[currentNodeId]?.record?.uci ?? null;
   const lastMoveFrom = useMemo(() => lastMoveUci ? uciToSquare(lastMoveUci.substring(0, 2)) : null, [lastMoveUci]);
@@ -1508,6 +1517,16 @@ function App() {
     loadMoves(game.moves);
     setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
+
+  const dismissGameOverForReview = useCallback(() => {
+    if (gameOverKey) {
+      setDismissedGameOverKey(gameOverKey);
+    }
+    setWorkspaceMode('analysis');
+    setAnalysisTab('review');
+    setMobileView('analysis');
+    setMobileAnalysisTab('moves');
+  }, [gameOverKey]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const boardArrows = useMemo(() => {
@@ -2548,11 +2567,11 @@ function App() {
         </nav>
       )}
 
-      {gameResult && (
+      {visibleGameResult && (
         <GameOverModal
-          result={gameResult}
+          result={visibleGameResult}
           onNewGame={() => { setGameResult(null); resetGame(); }}
-          onReview={() => setGameResult(null)}
+          onReview={dismissGameOverForReview}
         />
       )}
     </main>
