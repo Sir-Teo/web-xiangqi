@@ -12,15 +12,26 @@ import { IconSpark, IconCornerDownRight } from '../icons';
 type Props = {
     treeNodes: Record<string, MoveTreeNode>;
     rootNodeId: string;
+    rootFen: string;
     currentNodeId: string;
     currentMoveIndex: number;
     activeLineNodeIds: string[];
     onNavigateNode: (nodeId: string) => void;
 };
 
+type MoveSide = 'w' | 'b';
+
+type MoveListEntry = {
+    nodeId: string;
+    lineIndex: number;
+    moveNumber: number;
+    side: MoveSide;
+};
+
 export const MoveListTree = memo(function MoveListTree({
     treeNodes,
     rootNodeId: _rootNodeId,
+    rootFen,
     currentNodeId,
     currentMoveIndex: _currentMoveIndex,
     activeLineNodeIds,
@@ -40,6 +51,12 @@ export const MoveListTree = memo(function MoveListTree({
     }
 
     const rows: JSX.Element[] = [];
+    const rootContext = parseRootMoveContext(rootFen);
+    const entryAt = (lineIndex: number): MoveListEntry | null => {
+        const nodeId = activeLineNodeIds[lineIndex];
+        if (!nodeId) return null;
+        return makeMoveListEntry(nodeId, lineIndex, rootContext);
+    };
 
     const renderMoveChip = (nodeId: string, compact = false) => {
         const node = treeNodes[nodeId];
@@ -99,23 +116,41 @@ export const MoveListTree = memo(function MoveListTree({
         });
     };
 
-    let index = 0;
-    while (index < activeLineNodeIds.length) {
-        const whiteNodeId = activeLineNodeIds[index];
-        const blackNodeId = activeLineNodeIds[index + 1] ?? null;
-        const moveNo = Math.ceil((index + 1) / 2);
+    let lineIndex = 0;
+    while (lineIndex < activeLineNodeIds.length) {
+        const entry = entryAt(lineIndex);
+        if (!entry) break;
 
+        let redEntry: MoveListEntry | null = null;
+        let blackEntry: MoveListEntry | null = null;
+        let consumed = 1;
+        let rowLabel = `${entry.moveNumber}.`;
+
+        if (entry.side === 'w') {
+            redEntry = entry;
+            const nextEntry = entryAt(lineIndex + 1);
+            if (nextEntry?.side === 'b' && nextEntry.moveNumber === entry.moveNumber) {
+                blackEntry = nextEntry;
+                consumed = 2;
+            }
+        } else {
+            blackEntry = entry;
+            rowLabel = `${entry.moveNumber}...`;
+        }
+
+        const rowKey = redEntry?.nodeId ?? blackEntry?.nodeId ?? `row-${lineIndex}`;
+        const rowIndex = rows.length;
         rows.push(
-            <div key={`row-${whiteNodeId}`} className="mtree-row">
-                <span className="mtree-num">{moveNo}.</span>
-                {whiteNodeId ? renderMoveChip(whiteNodeId) : <span className="mtree-spacer" />}
-                {blackNodeId ? renderMoveChip(blackNodeId) : <span className="mtree-spacer" />}
+            <div key={`row-${rowKey}`} className="mtree-row">
+                <span className="mtree-num" data-testid={`move-tree-row-label-${rowIndex}`}>{rowLabel}</span>
+                {redEntry ? renderMoveChip(redEntry.nodeId) : <span className="mtree-spacer" />}
+                {blackEntry ? renderMoveChip(blackEntry.nodeId) : <span className="mtree-spacer" />}
             </div>
         );
 
-        pushVariations(whiteNodeId, index);
-        if (blackNodeId) pushVariations(blackNodeId, index + 1);
-        index += 2;
+        if (redEntry) pushVariations(redEntry.nodeId, redEntry.lineIndex);
+        if (blackEntry) pushVariations(blackEntry.nodeId, blackEntry.lineIndex);
+        lineIndex += consumed;
     }
 
     return (
@@ -155,6 +190,33 @@ function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeN
         cursor = nextNodeId;
     }
     return line;
+}
+
+function parseRootMoveContext(rootFen: string): { sideToMove: MoveSide; fullmove: number } {
+    const parts = rootFen.trim().split(/\s+/);
+    const sideToMove: MoveSide = parts[1] === 'b' ? 'b' : 'w';
+    const parsedFullmove = Number(parts[5]);
+    const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
+        ? Math.trunc(parsedFullmove)
+        : 1;
+    return { sideToMove, fullmove };
+}
+
+function makeMoveListEntry(
+    nodeId: string,
+    lineIndex: number,
+    rootContext: { sideToMove: MoveSide; fullmove: number }
+): MoveListEntry {
+    const side: MoveSide = rootContext.sideToMove === 'w'
+        ? (lineIndex % 2 === 0 ? 'w' : 'b')
+        : (lineIndex % 2 === 0 ? 'b' : 'w');
+    const blackRootOffset = rootContext.sideToMove === 'b' ? 1 : 0;
+    return {
+        nodeId,
+        lineIndex,
+        side,
+        moveNumber: rootContext.fullmove + Math.floor((lineIndex + blackRootOffset) / 2),
+    };
 }
 
 function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {

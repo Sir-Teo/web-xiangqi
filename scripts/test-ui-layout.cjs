@@ -210,6 +210,38 @@ async function assertBottomNewGameMenuResetsDraft(page) {
   }
 }
 
+async function assertBlackToMoveTreeNumbering(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByLabel("FEN string").fill("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17");
+  await page.getByRole("button", { name: "Load" }).click();
+
+  await page.locator('.hitbox[data-file="0"][data-rank="6"]').click();
+  await page.locator('.hitbox[data-file="0"][data-rank="5"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  await page.locator('.hitbox[data-file="0"][data-rank="3"]').click();
+  await page.locator('.hitbox[data-file="0"][data-rank="4"]').click();
+  await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+
+  const labels = await page.locator(".mtree-num").allTextContents();
+  const normalizedLabels = labels.map((label) => String(label || "").trim()).slice(0, 2);
+  if (normalizedLabels[0] !== "17..." || normalizedLabels[1] !== "18.") {
+    throw new Error(`Custom black-to-move tree labels were wrong: ${normalizedLabels.join(" | ")}`);
+  }
+
+  const firstRowText = await page.locator(".mtree-row").first().textContent();
+  if (!String(firstRowText || "").includes("a6a5")) {
+    throw new Error(`Custom black-to-move first move was not rendered in the first tree row: ${String(firstRowText || "").trim()}`);
+  }
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -477,6 +509,7 @@ async function main() {
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
     await assertBottomNewGameMenuResetsDraft(page);
+    await assertBlackToMoveTreeNumbering(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -488,7 +521,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, new-game reset, custom-FEN move numbering, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

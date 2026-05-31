@@ -2372,6 +2372,7 @@ function App() {
                   <MoveListTree
                     treeNodes={treeNodes}
                     rootNodeId={rootNodeId}
+                    rootFen={rootFen}
                     currentNodeId={currentNodeId}
                     currentMoveIndex={currentMoveIndex}
                     activeLineNodeIds={activeLineNodeIds}
