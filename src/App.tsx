@@ -1142,10 +1142,10 @@ function App() {
   const handleSquareClick = useCallback((file: number, rank: number) => {
     if (gameResult) return;
     clearBoardMarkers();
-    if (!isAiTurn || paused) {
+    if (!isAiTurn) {
       onSquareClick(file, rank);
     }
-  }, [clearBoardMarkers, gameResult, isAiTurn, paused, onSquareClick]);
+  }, [clearBoardMarkers, gameResult, isAiTurn, onSquareClick]);
 
   const applyMode = useCallback((mode: GameMode) => {
     setGameMode(mode);

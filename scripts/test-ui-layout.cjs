@@ -153,6 +153,35 @@ async function assertDesktopResizeFeedback(page) {
   await page.waitForFunction(() => !document.body.classList.contains("resizing"), null, { timeout: 5000 });
 }
 
+async function assertPausedAiTurnBlocksManualMove(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /You play Red/i }).click();
+  await page.getByLabel("FEN string").fill("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 1");
+  await page.getByRole("button", { name: "Load" }).click();
+  await page.getByRole("button", { name: "Pause AI game" }).click();
+
+  const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+  if (!beforeFen || !beforeFen.includes(" b ")) {
+    throw new Error(`AI-turn FEN was not loaded as black-to-move: ${beforeFen}`);
+  }
+
+  await page.locator('.hitbox[data-file="0"][data-rank="6"]').click();
+  await page.locator('.hitbox[data-file="0"][data-rank="5"]').click();
+  await page.waitForTimeout(300);
+
+  const afterFen = await page.locator(".bottombar-fen").getAttribute("title");
+  if (afterFen !== beforeFen) {
+    throw new Error(`Paused AI turn accepted a manual move. Before: ${beforeFen}; after: ${afterFen}`);
+  }
+}
+
 async function assertMobileBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -336,6 +365,7 @@ async function main() {
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertDesktopResizeFeedback(page);
+    await assertPausedAiTurnBlocksManualMove(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
     await assertMobileSaveLibraryActions(page);
@@ -345,7 +375,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, resize feedback, save/library actions, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, resize feedback, save/library actions, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
