@@ -938,6 +938,48 @@ async function assertReplayedMoveKeepsChosenContinuation(page) {
   }
 }
 
+async function assertMoveTreeRespectsReducedMotion(page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  try {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.evaluate(() => {
+      window.__moveTreeScrollCalls = [];
+      window.__originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+        configurable: true,
+        value(options) {
+          window.__moveTreeScrollCalls.push(options || null);
+          if (typeof window.__originalScrollIntoView === "function") {
+            window.__originalScrollIntoView.call(this, options);
+          }
+        },
+      });
+    });
+
+    await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+    await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+    await page.getByTestId("move-tree-active").waitFor({ timeout: 5000 });
+
+    const calls = await page.evaluate(() => window.__moveTreeScrollCalls || []);
+    if (!calls.some((call) => call && call.behavior === "auto" && call.block === "nearest")) {
+      throw new Error(`Move tree did not disable smooth scroll for reduced motion: ${JSON.stringify(calls)}`);
+    }
+  } finally {
+    await page.evaluate(() => {
+      if (typeof window.__originalScrollIntoView === "function") {
+        HTMLElement.prototype.scrollIntoView = window.__originalScrollIntoView;
+      }
+    }).catch(() => {});
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+  }
+}
+
 async function assertPgnTreeVariationExport(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -2220,6 +2262,7 @@ async function main() {
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertReplayedMoveKeepsChosenContinuation(page);
+    await assertMoveTreeRespectsReducedMotion(page);
     await assertPgnTreeVariationExport(page);
     await assertCurrentPgnDownload(page);
     await assertMainExportFailureFeedback(page);
@@ -2249,7 +2292,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, and invalid-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

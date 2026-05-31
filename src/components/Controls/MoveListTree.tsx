@@ -41,7 +41,8 @@ export const MoveListTree = memo(function MoveListTree({
 }: Props) {
     useEffect(() => {
         const el = document.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
-        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        el?.scrollIntoView({ block: 'nearest', behavior });
     }, [currentNodeId]);
 
     if (activeLineNodeIds.length === 0) {
