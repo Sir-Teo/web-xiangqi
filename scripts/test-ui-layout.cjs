@@ -109,6 +109,11 @@ async function assertDesktopBoardLayout(page, viewport) {
       topPanel: toRect(".panel.top"),
       bottomPanel: toRect(".panel.bottom"),
       hitboxCount: document.querySelectorAll(".hitbox").length,
+      tabbableHitboxCount: Array.from(document.querySelectorAll(".hitbox"))
+        .filter((el) => el.tabIndex >= 0).length,
+      emptyHitboxTabStops: Array.from(document.querySelectorAll(".hitbox"))
+        .filter((el) => el.tabIndex >= 0 && (el.getAttribute("aria-label") || "").includes("empty"))
+        .map((el) => el.getAttribute("aria-label") || ""),
       clippedGraphSummaryLabels: Array.from(document.querySelectorAll(".graph-summary-card span"))
         .filter((el) => el.scrollWidth - el.clientWidth > 1)
         .map((el) => el.textContent?.trim() || ""),
@@ -122,6 +127,9 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.hitboxCount !== 90) {
     throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
+  }
+  if (layout.tabbableHitboxCount !== 32 || layout.emptyHitboxTabStops.length > 0) {
+    throw new Error(`Board tab order should include only actionable pieces at the start: ${JSON.stringify(layout)}`);
   }
   if (layout.clippedGraphSummaryLabels.length > 0) {
     throw new Error(`Desktop graph summary labels are clipped: ${layout.clippedGraphSummaryLabels.join(", ")}`);

@@ -238,6 +238,7 @@ export const Board = React.memo(function Board({
                                     data-file={file}
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
+                                    tabIndex={piece || isSelected || target ? 0 : -1}
                                     onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
                                     onPointerUp={(event) => handleMarkerPointerUp(event, file, rank)}
                                     onPointerCancel={handleMarkerPointerCancel}
