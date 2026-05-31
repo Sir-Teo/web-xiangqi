@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM_DIR="${PIKAFISH_UPSTREAM_DIR:-$ROOT/.deps/pikafish}"
 UPSTREAM_URL="${PIKAFISH_UPSTREAM_URL:-https://github.com/official-pikafish/Pikafish}"
 # Keep CI/CD reproducible. Update this only after refreshing
-# patches/pikafish-wasm.patch against a newer upstream Pikafish commit.
-UPSTREAM_REF="${PIKAFISH_UPSTREAM_REF:-d632087b88e64d4ced5dd0e966bd70d5e03d10e5}"
+# patches/pikafish-wasm.patch and public/pikafish.nnue together.
+UPSTREAM_REF="${PIKAFISH_UPSTREAM_REF:-beeca5cc785ceb2026c5f9248f6e057573b12906}"
 EMSDK_DIR="${EMSDK_DIR:-$ROOT/.deps/emsdk}"
 DIST_DIR="$ROOT/dist"
 PUBLIC_DIR="$ROOT/public"
@@ -140,8 +140,14 @@ cp "$ROOT/demo/"*.html "$DIST_DIR/"
 if [ -f "$ROOT/demo/sw.js" ]; then
   cp "$ROOT/demo/sw.js" "$DIST_DIR/sw.js"
 fi
-cp "$UPSTREAM_DIR/src/pikafish.nnue" "$DIST_DIR/pikafish.nnue"
-cp "$UPSTREAM_DIR/src/pikafish.nnue" "$PUBLIC_DIR/pikafish.nnue"
+NNUE_SOURCE="$UPSTREAM_DIR/src/pikafish.nnue"
+if [ -f "$PUBLIC_DIR/pikafish.nnue" ]; then
+  NNUE_SOURCE="$PUBLIC_DIR/pikafish.nnue"
+fi
+cp "$NNUE_SOURCE" "$DIST_DIR/pikafish.nnue"
+if [ "$NNUE_SOURCE" != "$PUBLIC_DIR/pikafish.nnue" ]; then
+  cp "$NNUE_SOURCE" "$PUBLIC_DIR/pikafish.nnue"
+fi
 
 # Mark dist/ as CJS so Node.js doesn't treat pikafish.js as ES module
 # (root package.json has "type":"module" but pikafish.js uses module.exports)

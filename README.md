@@ -74,7 +74,8 @@ Artifacts are written to `dist/`:
 
 - `scripts/build-pikafish.sh` is now idempotent for the local upstream checkout:
   - it pins the upstream Pikafish checkout by default so CI and GitHub Pages builds do not break when upstream `master` changes
-  - set `PIKAFISH_UPSTREAM_REF=<commit-or-ref>` to test a newer upstream revision after updating `patches/pikafish-wasm.patch`
+  - it publishes the checked-in `public/pikafish.nnue` by default so CI does not pair an older engine with a moving `master-net`
+  - set `PIKAFISH_UPSTREAM_REF=<commit-or-ref>` to test a newer upstream revision after updating `patches/pikafish-wasm.patch` and `public/pikafish.nnue`
   - it falls back to `grep` if `rg` (ripgrep) is not installed
   - it skips patch application if the patch was already applied
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
