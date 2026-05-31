@@ -2744,6 +2744,7 @@ function App() {
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
               onScrub={jumpToMove}
+              shortcutsEnabled={!showSettings && !showNewGameMenu && !visibleGameResult}
             />
           </div>
 

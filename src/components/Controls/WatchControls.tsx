@@ -35,6 +35,7 @@ type Props = {
     currentMoveIndex: number;
     totalMoves: number;
     onScrub: (index: number) => void;
+    shortcutsEnabled?: boolean;
 };
 
 export const WatchControls = memo(function WatchControls({
@@ -54,6 +55,7 @@ export const WatchControls = memo(function WatchControls({
     currentMoveIndex,
     totalMoves,
     onScrub,
+    shortcutsEnabled = true,
 }: Props) {
     const aiActive = gameMode !== 'PvP';
     const stepMode = aiSpeed === 'step';
@@ -61,9 +63,20 @@ export const WatchControls = memo(function WatchControls({
     // Keyboard shortcuts
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
+            if (!shortcutsEnabled) return;
             if (e.defaultPrevented) return;
-            const tag = (e.target as HTMLElement).tagName;
-            if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            const target = e.target instanceof HTMLElement ? e.target : null;
+            const tag = target?.tagName;
+            if (
+                tag === 'INPUT' ||
+                tag === 'SELECT' ||
+                tag === 'TEXTAREA' ||
+                target?.isContentEditable ||
+                target?.closest('[role="dialog"]')
+            ) {
+                return;
+            }
             if (e.key === 'ArrowLeft') { e.preventDefault(); onPrev(); }
             if (e.key === 'ArrowRight') { e.preventDefault(); onNext(); }
             if (e.key === 'ArrowUp') { e.preventDefault(); onFirst(); }
@@ -71,7 +84,7 @@ export const WatchControls = memo(function WatchControls({
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onPrev, onNext, onFirst, onLast]);
+    }, [onPrev, onNext, onFirst, onLast, shortcutsEnabled]);
 
     return (
         <div className="watch-controls">

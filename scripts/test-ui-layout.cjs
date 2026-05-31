@@ -353,6 +353,39 @@ async function assertFenTaggedMoveLineImport(page) {
   }
 }
 
+async function assertDialogsBlockMoveShortcuts(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. B2E2 h9g7 2. b0c2');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+  const beforePoint = String(await page.getByTestId("graph-current-point").textContent() || "").trim();
+  if (!beforePoint.includes("Ply 3")) {
+    throw new Error(`Shortcut guard setup did not land on ply 3: ${beforePoint}`);
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector(".new-game-menu");
+    return Boolean(dialog && dialog.contains(document.activeElement));
+  }, null, { timeout: 5000 });
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Escape");
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+
+  const afterPoint = String(await page.getByTestId("graph-current-point").textContent() || "").trim();
+  if (afterPoint !== beforePoint) {
+    throw new Error(`Move navigation shortcut changed the game behind a dialog. Before: ${beforePoint}; after: ${afterPoint}`);
+  }
+}
+
 async function assertBoardMarkersSurviveSelection(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -645,6 +678,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertFenTaggedMoveLineImport(page);
+    await assertDialogsBlockMoveShortcuts(page);
     await assertBoardMarkersSurviveSelection(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
@@ -657,7 +691,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, dialog focus trap, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, custom-FEN move numbering/graph labels, UCI/FEN-tag import, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
