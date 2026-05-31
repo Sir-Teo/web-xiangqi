@@ -2120,6 +2120,16 @@ async function assertGameOverReviewPreservesResult(page) {
     throw new Error(`Game-over modal did not focus the primary action: ${JSON.stringify(dialogState)}`);
   }
 
+  await page.keyboard.press("Shift+Tab");
+  const wrappedBackward = await page.evaluate(() => document.activeElement?.textContent?.trim() || "");
+  await page.keyboard.press("Tab");
+  const wrappedForward = await page.evaluate(() => document.activeElement?.textContent?.trim() || "");
+  await page.keyboard.press("Tab");
+  const cycledForward = await page.evaluate(() => document.activeElement?.textContent?.trim() || "");
+  if (wrappedBackward !== "Review" || wrappedForward !== "New Game" || cycledForward !== "Review") {
+    throw new Error(`Game-over modal focus escaped or did not wrap: ${JSON.stringify({ wrappedBackward, wrappedForward, cycledForward })}`);
+  }
+
   await page.mouse.click(12, 12);
   if (await page.locator(".game-over-modal").count() !== 1) {
     throw new Error("Game-over modal closed after a backdrop click.");

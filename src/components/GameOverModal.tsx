@@ -15,6 +15,7 @@ const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; subtitle: 
 
 export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProps) {
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!result) return;
@@ -26,6 +27,34 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
       if (event.key === 'Escape') {
         event.preventDefault();
         onReview();
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        const focusable = Array.from(
+          modalRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') ?? []
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (!active || !modalRef.current?.contains(active)) {
+          event.preventDefault();
+          first.focus();
+          return;
+        }
+
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+          return;
+        }
+
+        if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
 
@@ -43,6 +72,7 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
     <div className="game-over-backdrop">
       <div
         className="game-over-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="game-over-title"
