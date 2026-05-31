@@ -2568,6 +2568,8 @@ function App() {
                   }}
                   placeholder="1. b2e2 h9g7 b0c2"
                   aria-label="UCI move line"
+                  aria-invalid={moveLineError ? true : undefined}
+                  aria-describedby={moveLineError ? 'new-game-line-error' : undefined}
                   rows={3}
                   data-testid="uci-line-input"
                 />
@@ -2592,7 +2594,7 @@ function App() {
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
                 </div>
                 <div className="new-game-line-actions">
-                  {moveLineError ? <span className="new-game-line-error">{moveLineError}</span> : <span />}
+                  {moveLineError ? <span id="new-game-line-error" className="new-game-line-error" role="alert">{moveLineError}</span> : <span />}
                   <button
                     type="submit"
                     className="new-game-strength-btn new-game-strength-btn-active"
@@ -3252,8 +3254,16 @@ function App() {
                   <span className="quality-blunder"> {reviewSummary.blunderCount}B</span>
                   <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
                   <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
-                  <button className="chip-btn" onClick={() => setAnalysisTab('review')}>View</button>
-                  <button className="chip-btn" onClick={clearCompletedReview}><IconX /></button>
+                  <button type="button" className="chip-btn" onClick={() => setAnalysisTab('review')}>View</button>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={clearCompletedReview}
+                    title="Clear completed review"
+                    aria-label="Clear completed review"
+                  >
+                    <IconX />
+                  </button>
                 </span>
               )}
               <span className="game-mode-badge">

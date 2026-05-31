@@ -611,6 +611,34 @@ async function assertMoveLineImportIgnoresVariations(page) {
   }
 }
 
+async function assertMoveLineImportErrorAccessibility(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  const input = page.getByTestId("uci-line-input");
+  await input.fill("this is not a move");
+  await page.getByTestId("import-uci-line-btn").click();
+
+  const error = page.locator("#new-game-line-error");
+  await error.waitFor({ timeout: 5000 });
+  const errorText = await error.textContent();
+  if (!String(errorText || "").includes("No UCI moves found")) {
+    throw new Error(`Invalid import did not show a helpful error: ${String(errorText || "").trim()}`);
+  }
+
+  const role = await error.getAttribute("role");
+  const invalid = await input.getAttribute("aria-invalid");
+  const describedBy = await input.getAttribute("aria-describedby");
+  if (role !== "alert" || invalid !== "true" || describedBy !== "new-game-line-error") {
+    throw new Error(`Invalid import was not announced accessibly: role=${role} invalid=${invalid} describedBy=${describedBy}`);
+  }
+}
+
 async function assertCurrentPgnDownload(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1185,6 +1213,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertMoveLineImportIgnoresVariations(page);
+    await assertMoveLineImportErrorAccessibility(page);
     await assertCurrentPgnDownload(page);
     await assertShareLinkRoundTrip(page);
     await assertInvalidShareLinkFeedback(page);
@@ -1203,7 +1232,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, current-line PGN download/share link, board marker persistence, save/library PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
