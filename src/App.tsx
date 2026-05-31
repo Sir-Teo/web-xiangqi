@@ -825,6 +825,7 @@ function App() {
     resetReviewController(false);
     completeReview(summary);
     setAnalysisTab('review');
+    setMobileAnalysisTab('review');
   }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, setNodeReviewDataBulk, treeNodes]);
 
   const handleEngineWorkerError = useCallback((message: string) => {
@@ -1513,6 +1514,7 @@ function App() {
     setOption('MultiPV', 1);
     setOption('UCI_ShowWDL', false);
     setAnalysisTab('review');
+    setMobileAnalysisTab('review');
 
     const totalSteps = activeLineNodeIds.length + 1;
     if (!startReview(totalSteps)) {
@@ -2155,6 +2157,7 @@ function App() {
     clearBoardMarkers();
     applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
     setAnalysisTab('tree');
+    setMobileAnalysisTab('moves');
   }, [applyUciMove, clearBoardMarkers, gameResult, sideToMove]);
 
   const handlePlayBookMove = useCallback((uci: string) => {
@@ -2162,6 +2165,7 @@ function App() {
     clearBoardMarkers();
     applyUciMove(uci);
     setAnalysisTab('tree');
+    setMobileAnalysisTab('moves');
   }, [applyUciMove, clearBoardMarkers, gameResult, isAiTurn]);
 
   const handlePlayReviewBestMove = useCallback((nodeId: string, bestMove: string) => {
@@ -2171,6 +2175,7 @@ function App() {
     const moved = applyUciMoveAtNode(parentNodeId, bestMove);
     if (moved) {
       setAnalysisTab('tree');
+      setMobileAnalysisTab('moves');
     }
   }, [applyUciMoveAtNode, clearBoardMarkers, gameResult, treeNodes]);
 
@@ -2318,6 +2323,7 @@ function App() {
     }
     setWorkspaceMode('analysis');
     setAnalysisTab('tree');
+    setMobileAnalysisTab('moves');
     setMobileView('board');
     setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
@@ -2426,6 +2432,9 @@ function App() {
         lineSignature: makeReviewLineSignatureFromMoves(game.moves),
       }, loadedNodeIds));
       setAnalysisTab('review');
+      setMobileAnalysisTab('review');
+    } else {
+      setMobileAnalysisTab('moves');
     }
     setGraphLoadSweepToken((token) => token + 1);
     return true;
@@ -2438,6 +2447,7 @@ function App() {
     setGameMode('PvP');
     setLeftPanelTab('graph');
     loadMoves(game.moves);
+    setMobileAnalysisTab('moves');
     setGraphLoadSweepToken((token) => token + 1);
   }, [handleCancelReview, loadMoves, resetReview, stopAnalysis]);
 
@@ -2448,7 +2458,7 @@ function App() {
     setWorkspaceMode('analysis');
     setAnalysisTab('review');
     setMobileView('analysis');
-    setMobileAnalysisTab('moves');
+    setMobileAnalysisTab('review');
   }, [gameOverKey]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
@@ -3808,7 +3818,16 @@ function App() {
                   <span className="quality-blunder"> {reviewSummary.blunderCount}B</span>
                   <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
                   <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
-                  <button type="button" className="chip-btn" onClick={() => setAnalysisTab('review')}>View</button>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={() => {
+                      setAnalysisTab('review');
+                      setMobileAnalysisTab('review');
+                    }}
+                  >
+                    View
+                  </button>
                   <button
                     type="button"
                     className="chip-btn"

@@ -2792,6 +2792,25 @@ async function assertMobileSaveLibraryActions(page) {
   if (!String(activeMobileTab || "").includes("Library")) {
     throw new Error(`Mobile library opened under the wrong analysis tab: ${String(activeMobileTab || "").trim()}`);
   }
+
+  await page.getByTestId(`load-saved-${savedGameId}`).click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const loadedState = await page.evaluate(() => ({
+    activeMobileTab: document.querySelector(".mobile-tab-btn.active")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    rowText: document.querySelector(".mtree-row")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    rightPanelVisible: getComputedStyle(document.querySelector(".panel.right")).display !== "none",
+    leftPanelHidden: getComputedStyle(document.querySelector(".panel.left")).display === "none",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    loadedState.activeMobileTab !== "Moves" ||
+    !loadedState.rowText.includes("b2e2") ||
+    !loadedState.rightPanelVisible ||
+    !loadedState.leftPanelHidden ||
+    loadedState.overflowX > 2
+  ) {
+    throw new Error(`Mobile saved-game load did not switch to the move tree: ${JSON.stringify(loadedState)}`);
+  }
 }
 
 async function assertGameOverReviewPreservesResult(page) {
@@ -2856,6 +2875,36 @@ async function assertGameOverReviewPreservesResult(page) {
 
   if (savedResult !== "red") {
     throw new Error(`Game-over Review action lost the finished result before save: ${savedResult}`);
+  }
+}
+
+async function assertMobileGameOverReviewOpensReviewTab(page) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const terminalFen = encodeURIComponent("4k4/3RRR3/9/9/9/9/9/9/9/4K4 b - - 0 1");
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${terminalFen}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    mobileAnalysisCurrent: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current") || "",
+    activeMobileTab: document.querySelector(".mobile-tab-btn.active")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    reviewSelected: document.querySelector('[data-testid="analysis-tab-review"]')?.getAttribute("aria-selected") || "",
+    reviewPanelVisible: Boolean(document.querySelector(".review-panel")),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    state.mobileAnalysisCurrent !== "page" ||
+    state.activeMobileTab !== "Review" ||
+    state.reviewSelected !== "true" ||
+    !state.reviewPanelVisible ||
+    state.overflowX > 2
+  ) {
+    throw new Error(`Mobile game-over Review did not open the Review tab: ${JSON.stringify(state)}`);
   }
 }
 
@@ -2951,12 +3000,13 @@ async function main() {
     await assertLibraryRespondsToStorageChanges(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertGameOverReviewPreservesResult(page);
+    await assertMobileGameOverReviewOpensReviewTab(page);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
