@@ -1860,14 +1860,21 @@ async function assertMobileSaveLibraryActions(page) {
   await page.getByTestId("mobile-copy-share-link-btn").waitFor({ timeout: 5000 });
   const actionStrip = await page.evaluate(() => {
     const el = document.querySelector(".mobile-board-actions");
+    const turnLabel = document.querySelector(".mobile-turn-label");
     return {
       clientWidth: el?.clientWidth ?? 0,
       scrollWidth: el?.scrollWidth ?? 0,
       overflowX: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      turnLabelClientWidth: turnLabel?.clientWidth ?? 0,
+      turnLabelScrollWidth: turnLabel?.scrollWidth ?? 0,
+      turnLabelText: turnLabel?.textContent?.trim() || "",
     };
   });
   if (actionStrip.scrollWidth - actionStrip.clientWidth > 2 || actionStrip.overflowX > 2) {
     throw new Error(`Mobile board actions did not fit after export/share appeared: ${JSON.stringify(actionStrip)}`);
+  }
+  if (actionStrip.turnLabelText !== "Black" || actionStrip.turnLabelScrollWidth - actionStrip.turnLabelClientWidth > 1) {
+    throw new Error(`Mobile turn label was clipped after export/share appeared: ${JSON.stringify(actionStrip)}`);
   }
 
   await saveButton.click();

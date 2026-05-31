@@ -2949,7 +2949,10 @@ function App() {
             </div>
           )}
           {isMobile && mobileView === 'board' && (
-            <div className="mobile-board-header">
+            <div
+              className="mobile-board-header"
+              data-action-rich={showMobilePgnAction || showMobileShareAction ? 'true' : undefined}
+            >
               <div className="mobile-board-turn-info">
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>

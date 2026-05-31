@@ -4403,6 +4403,8 @@ summary:active {
 .mobile-eval-chip.eval-positive { color: #10b981; border-color: rgba(16,185,129,0.3); }
 .mobile-eval-chip.eval-negative { color: #ef4444; border-color: rgba(239,68,68,0.3); }
 .mobile-opening-pill { font-size: 0.68rem; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mobile-board-header[data-action-rich="true"] .mobile-eval-chip,
+.mobile-board-header[data-action-rich="true"] .mobile-opening-pill { display: none; }
 
 .mobile-board-actions {
   display: flex;
