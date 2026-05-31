@@ -1887,6 +1887,15 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
   await page.evaluate(() => {
     localStorage.setItem("xiangqi-game-library", JSON.stringify([
       {
+        id: "qa-long-label",
+        savedAt: 1710000001000,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "Long saved game label ".repeat(12),
+        opening: "Long opening name ".repeat(12),
+      },
+      {
         id: "qa-invalid-load",
         savedAt: 1710000000000,
         gameMode: "PvP",
@@ -1927,6 +1936,15 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
       const title = document.querySelector(".lib-game-name-button");
       return title ? getComputedStyle(title).textAlign : "";
     })(),
+    longTitleLength: (() => {
+      const title = document.querySelector('[data-testid="load-saved-qa-long-label"]')?.closest(".lib-card")?.querySelector(".lib-game-name-button");
+      return title?.textContent?.trim().length || 0;
+    })(),
+    longTitleClipped: (() => {
+      const title = document.querySelector('[data-testid="load-saved-qa-long-label"]')?.closest(".lib-card")?.querySelector(".lib-game-name-button");
+      if (!title) return true;
+      return title.scrollWidth - title.clientWidth > 1;
+    })(),
     stillVisible: document.body.textContent?.includes("Invalid load QA") || false,
     invalidTimestampVisible: document.body.textContent?.includes("Invalid timestamp QA") || false,
     moveRows: document.querySelectorAll(".mtree-row").length,
@@ -1937,6 +1955,8 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
     state.titleClipped ||
     state.titleDisplay !== "block" ||
     state.titleTextAlign !== "left" ||
+    state.longTitleLength > 120 ||
+    state.longTitleClipped ||
     !state.stillVisible ||
     state.invalidTimestampVisible ||
     state.moveRows !== 0

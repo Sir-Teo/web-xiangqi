@@ -144,11 +144,11 @@
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-primary);
-  flex: 1;
+  flex: 1 1 12rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .lib-vs {
@@ -287,7 +287,7 @@
 /* ── Saved game name (clickable to rename) ── */
 .lib-panel .lib-game-name-button {
   display: block;
-  width: 100%;
+  max-width: 100%;
   font-size: 0.82rem;
   font-weight: 600;
   line-height: 1.25;
@@ -297,11 +297,11 @@
   background: transparent;
   padding: 0;
   text-align: left;
-  flex: 1;
+  flex: 1 1 12rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .lib-panel .lib-game-name-button:hover {
