@@ -896,6 +896,42 @@ async function assertRootMoveVariationsVisible(page) {
   }
 }
 
+async function assertReplayedMoveKeepsChosenContinuation(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="9"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="7"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="3"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="4"]').click();
+
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.locator('.hitbox[data-file="7"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="6"][data-rank="2"]').click();
+
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="9"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="7"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.trim() || "").join(" "),
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    active: document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!state.active.includes("b9c7") || !state.rows.includes("h0g2") || !state.variations.includes("c3c4") || state.overflowX > 2) {
+    throw new Error(`Replaying an existing move did not preserve the chosen continuation: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertPgnTreeVariationExport(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1914,6 +1950,7 @@ async function main() {
     await assertReviewBestMoveBranchAction(page);
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
+    await assertReplayedMoveKeepsChosenContinuation(page);
     await assertPgnTreeVariationExport(page);
     await assertCurrentPgnDownload(page);
     await assertMainExportFailureFeedback(page);
@@ -1940,7 +1977,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation and accessible errors, actionable review suggestions, root move variations, active continuation replay, tree PGN variation export, long variation display, current-line PGN download/share link with study trees and export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, saved study-tree round-trip, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

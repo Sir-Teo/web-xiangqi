@@ -603,7 +603,12 @@ export function useXiangqi() {
 
             setTreeNodes(nextTree);
 
-            const keptFuture = [existingChildId, ...preferredContinuation(nextTree, existingChildId)];
+            const activeFutureStartsWithExistingMove =
+                parentNodeId === currentNodeId &&
+                activeLineNodeIds[currentMoveIndex + 1] === existingChildId;
+            const keptFuture = activeFutureStartsWithExistingMove
+                ? activeLineNodeIds.slice(currentMoveIndex + 1)
+                : [existingChildId, ...preferredContinuation(nextTree, existingChildId)];
             const nextActiveLine = [...activePrefix, ...keptFuture];
             const nextIndex = activePrefix.length;
 
@@ -646,7 +651,7 @@ export function useXiangqi() {
         setGameResult(gameResultForPosition(rootPosition, nextTree, [...activePrefix, newNodeId], nextBoard, nextSide));
         syncPositionForNode(nextTree, newNodeId);
         return true;
-    }, [rootPosition, syncPositionForNode, treeNodes]);
+    }, [activeLineNodeIds, currentMoveIndex, currentNodeId, rootPosition, syncPositionForNode, treeNodes]);
 
     const applyUciMove = useCallback((uci: string, evalScore?: number) => {
         return applyUciMoveAtNode(currentNodeId, uci, evalScore);
