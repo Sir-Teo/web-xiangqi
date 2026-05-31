@@ -1630,16 +1630,27 @@ async function assertLibraryPgnCopy(page) {
   });
   const blackToMoveFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17";
   await page.evaluate((fen) => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
-      id: "qa-copy-pgn-game",
-      savedAt: 1710000000000,
-      gameMode: "PvAI-Black",
-      moves: ["a6a5", "a3a4"],
-      startFen: fen,
-      result: "ongoing",
-      label: "PGN copy QA",
-      opening: "Custom study",
-    }]));
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+      {
+        id: "qa-copy-pgn-game",
+        savedAt: 1710000000000,
+        gameMode: "PvAI-Black",
+        moves: ["a6a5", "a3a4"],
+        startFen: fen,
+        result: "ongoing",
+        label: "PGN copy QA",
+        opening: "Custom study",
+      },
+      {
+        id: "qa-mismatched-tree-pgn-game",
+        savedAt: 1710000001000,
+        gameMode: "PvP",
+        moves: ["b0c2"],
+        moveTree: [{ uci: "b2e2", children: [{ uci: "h9g7" }] }],
+        result: "ongoing",
+        label: "Mismatched tree PGN QA",
+      },
+    ]));
   }, blackToMoveFen);
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.evaluate(() => {
@@ -1690,6 +1701,14 @@ async function assertLibraryPgnCopy(page) {
     }
   } finally {
     fs.rmSync(savePath, { force: true });
+  }
+
+  await page.getByText("Mismatched tree PGN QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("copy-pgn-saved-qa-mismatched-tree-pgn-game").click();
+  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+  const fallbackPgn = await page.evaluate(() => window.__libraryPgnWrites?.at(-1) ?? "");
+  if (!fallbackPgn.includes("1. b0c2 *") || fallbackPgn.includes("b2e2")) {
+    throw new Error(`Saved-game PGN exported a tree branch that does not contain the saved mainline:\n${fallbackPgn}`);
   }
 }
 

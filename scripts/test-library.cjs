@@ -166,6 +166,19 @@ try {
   assert(savedStudyTreePgn.includes('[White "Saved Study"]'), `Saved study tree PGN should include the saved label:\n${savedStudyTreePgn}`);
   assert(savedStudyTreePgn.includes("1. b0c2 (1. b2e2 h9g7) *"), `Saved study tree PGN should preserve variations:\n${savedStudyTreePgn}`);
 
+  const mismatchedSavedTreePgn = gameExport.exportPgnFromMoveTree(savedStudyTree.moveTree, {
+    mainLineMoves: ["a0a1"],
+    date: "2026.05.31",
+  });
+  assert(mismatchedSavedTreePgn === null, "Saved study tree PGN should fail when the saved mainline is not in the tree.");
+  const mismatchedSavedTreeFallbackPgn = mismatchedSavedTreePgn ?? gameExport.exportPgnFromUci(["a0a1"], {
+    date: "2026.05.31",
+  });
+  assert(
+    mismatchedSavedTreeFallbackPgn.includes("1. a0a1 *"),
+    `Library export fallback should preserve the saved mainline instead of exporting a wrong tree branch:\n${mismatchedSavedTreeFallbackPgn}`
+  );
+
   const encodedStudyTree = shareTree.encodeSavedMoveTreeParam(savedStudyTree.moveTree);
   assert(encodedStudyTree, "Saved study trees should encode into share-link params.");
   const decodedStudyTree = shareTree.decodeSavedMoveTreeParam(encodedStudyTree);

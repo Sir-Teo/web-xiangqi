@@ -311,10 +311,11 @@ export function exportPgnFromMoveTree(
 ): string | null {
     const { rootNodeId, treeNodes } = savedMoveTreeToNodes(moveTree);
     const preferredNodeIds: string[] = [];
+    const mainLineMoves = options.mainLineMoves ?? [];
     let cursor = rootNodeId;
-    for (const move of options.mainLineMoves ?? []) {
+    for (const move of mainLineMoves) {
         const childId = treeNodes[cursor]?.childrenIds.find((id) => treeNodes[id]?.record?.uci === move);
-        if (!childId) break;
+        if (!childId) return null;
         preferredNodeIds.push(childId);
         cursor = childId;
     }
