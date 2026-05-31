@@ -796,6 +796,56 @@ async function assertRootMoveVariationsVisible(page) {
   }
 }
 
+async function assertPgnTreeVariationExport(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate(() => {
+    window.__treePgnWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__treePgnWrites.push(String(text));
+        },
+      },
+    });
+  });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="7"][data-rank="9"]').click();
+  await page.locator('.hitbox[data-file="6"][data-rank="7"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  await page.getByTestId("copy-pgn-btn").click();
+  await page.getByTestId("copy-pgn-btn").getByText("Copied").waitFor({ timeout: 5000 });
+
+  const exported = await page.evaluate(() => ({
+    pgn: window.__treePgnWrites?.[0] ?? "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+    activeRow: document.querySelector(".mtree-row")?.textContent?.trim() || "",
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+  }));
+  if (!exported.pgn.includes('[Variant "Xiangqi"]')) {
+    throw new Error(`Tree PGN export omitted the variant tag:\n${exported.pgn}`);
+  }
+  if (!exported.pgn.includes("1. b0c2 (1. b2e2 h9g7) *")) {
+    throw new Error(`Tree PGN export did not preserve the root variation:\n${exported.pgn}`);
+  }
+  if (!exported.activeRow.includes("b0c2") || !exported.variations.includes("b2e2") || exported.overflowX > 2) {
+    throw new Error(`Tree PGN export setup did not keep the UI variation visible: ${JSON.stringify(exported)}`);
+  }
+}
+
 async function assertCurrentPgnDownload(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1598,6 +1648,7 @@ async function main() {
     await assertMoveLineImportIgnoresVariations(page);
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
+    await assertPgnTreeVariationExport(page);
     await assertCurrentPgnDownload(page);
     await assertMainExportFailureFeedback(page);
     await assertShareLinkRoundTrip(page);
@@ -1620,7 +1671,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, tree PGN variation export, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

@@ -1,4 +1,4 @@
-import type { MoveRecord } from '../hooks/useXiangqi';
+import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
 import { START_FEN } from './xiangqi';
@@ -77,6 +77,91 @@ function buildMoveText(uciMoves: string[], startPosition: PgnStartPosition, resu
     return `${moveText}${moveText ? ' ' : ''}${result}`;
 }
 
+function sideToMoveAtPly(startPosition: PgnStartPosition, plyIndex: number): PgnSide {
+    const startsWithRed = startPosition.sideToMove === 'w';
+    const redToMove = startsWithRed ? plyIndex % 2 === 0 : plyIndex % 2 !== 0;
+    return redToMove ? 'w' : 'b';
+}
+
+function moveNumberAtPly(startPosition: PgnStartPosition, plyIndex: number): number {
+    const blackRootOffset = startPosition.sideToMove === 'b' ? 1 : 0;
+    return startPosition.fullmove + Math.floor((plyIndex + blackRootOffset) / 2);
+}
+
+function formatPgnMove(uci: string, startPosition: PgnStartPosition, plyIndex: number, forceMoveNumber: boolean) {
+    const side = sideToMoveAtPly(startPosition, plyIndex);
+    const moveNumber = moveNumberAtPly(startPosition, plyIndex);
+    if (side === 'w') return `${moveNumber}. ${uci}`;
+    return forceMoveNumber ? `${moveNumber}... ${uci}` : uci;
+}
+
+function buildPreferredChildMap(mainLineNodeIds: string[], treeNodes: Record<string, MoveTreeNode>) {
+    const preferred = new Map<string, string>();
+    for (const nodeId of mainLineNodeIds) {
+        const parentId = treeNodes[nodeId]?.parentId;
+        if (parentId) preferred.set(parentId, nodeId);
+    }
+    return preferred;
+}
+
+function buildTreeMoveText(
+    treeNodes: Record<string, MoveTreeNode>,
+    rootNodeId: string,
+    startPosition: PgnStartPosition,
+    mainLineNodeIds: string[],
+    result: string
+): string {
+    const preferredChildByParent = buildPreferredChildMap(mainLineNodeIds, treeNodes);
+    const renderFromParent = (parentId: string, plyIndex: number, forceMoveNumber: boolean, seen: Set<string>): string => {
+        const parent = treeNodes[parentId];
+        if (!parent?.childrenIds.length) return '';
+
+        const preferredChild = preferredChildByParent.get(parentId);
+        const mainChildId = preferredChild && parent.childrenIds.includes(preferredChild)
+            ? preferredChild
+            : parent.childrenIds[0];
+        const variations = parent.childrenIds
+            .filter((childId) => childId !== mainChildId)
+            .map((childId) => renderLineFromNode(childId, parentId, plyIndex, true, seen))
+            .filter(Boolean)
+            .map((line) => `(${line})`);
+        const mainText = renderMoveWithVariations(mainChildId, parentId, plyIndex, forceMoveNumber, variations, seen);
+
+        return mainText;
+    };
+
+    const renderMoveWithVariations = (
+        nodeId: string,
+        parentId: string,
+        plyIndex: number,
+        forceMoveNumber: boolean,
+        parentVariations: string[],
+        seen: Set<string>
+    ): string => {
+        if (seen.has(nodeId)) return '';
+        const node = treeNodes[nodeId];
+        const record = node?.record;
+        if (!node || !record || node.parentId !== parentId) return '';
+
+        const nextSeen = new Set(seen);
+        nextSeen.add(nodeId);
+        const moveToken = formatPgnMove(record.uci, startPosition, plyIndex, forceMoveNumber);
+        const continuation = renderFromParent(nodeId, plyIndex + 1, false, nextSeen);
+        return [moveToken, ...parentVariations, continuation].filter(Boolean).join(' ');
+    };
+
+    const renderLineFromNode = (nodeId: string, parentId: string, plyIndex: number, forceMoveNumber: boolean, seen: Set<string>): string => {
+        return renderMoveWithVariations(nodeId, parentId, plyIndex, forceMoveNumber, [], seen);
+    };
+
+    const moveText = renderFromParent(rootNodeId, 0, true, new Set());
+    return `${moveText}${moveText ? ' ' : ''}${result}`;
+}
+
+function hasTreeMoves(treeNodes: Record<string, MoveTreeNode>, rootNodeId: string) {
+    return Boolean(treeNodes[rootNodeId]?.childrenIds.some((childId) => treeNodes[childId]?.record));
+}
+
 /**
  * Exports a game as a minimal PGN string using UCI (ICCS-compatible) move notation.
  * Compatible with analysis boards that accept Variant "Xiangqi".
@@ -106,6 +191,48 @@ export function exportPgn(
     ].filter(Boolean).join('\n');
 
     return `${tags}\n\n${buildMoveText(moves.map((move) => move.uci), startPosition, result)}\n`;
+}
+
+/**
+ * Exports the full move tree as PGN with sibling branches preserved as variations.
+ * The provided main line is used as the primary line; other legal children become
+ * parenthesized study variations.
+ */
+export function exportPgnTree(
+    treeNodes: Record<string, MoveTreeNode>,
+    rootNodeId: string,
+    options: {
+        mainLineNodeIds?: string[];
+        gameMode?: GameMode;
+        opening?: string;
+        result?: GameResult;
+        date?: string;
+        startFen?: string;
+    } = {}
+): string | null {
+    if (!hasTreeMoves(treeNodes, rootNodeId)) return null;
+
+    const result = options.result ? RESULT_TAG[options.result] : '*';
+    const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const startPosition = parsePgnStartPosition(options.startFen);
+
+    const tags = [
+        tagLine('Variant', 'Xiangqi'),
+        tagLine('Date', date),
+        options.gameMode ? tagLine('Event', options.gameMode) : null,
+        options.opening ? tagLine('Opening', options.opening) : null,
+        startPosition.isCustom ? tagLine('SetUp', '1') : null,
+        startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        tagLine('Result', result),
+    ].filter(Boolean).join('\n');
+
+    return `${tags}\n\n${buildTreeMoveText(
+        treeNodes,
+        rootNodeId,
+        startPosition,
+        options.mainLineNodeIds ?? [],
+        result
+    )}\n`;
 }
 
 /**

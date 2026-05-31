@@ -119,6 +119,40 @@ try {
   assert(customPgn.includes('[White "Custom \\"study\\""]'), "PGN tag values should escape quotes.");
   assert(customPgn.includes("17... a6a5 18. a3a4 *"), "Black-to-move PGN should start with black move numbering.");
 
+  const studyTreePgn = gameExport.exportPgnTree({
+    root: { id: "root", parentId: null, childrenIds: ["n1", "n3"] },
+    n1: { id: "n1", parentId: "root", childrenIds: ["n2"], record: { uci: "b2e2" } },
+    n2: { id: "n2", parentId: "n1", childrenIds: [], record: { uci: "h9g7" } },
+    n3: { id: "n3", parentId: "root", childrenIds: [], record: { uci: "b0c2" } },
+  }, "root", {
+    gameMode: "PvP",
+    date: "2026.05.31",
+    mainLineNodeIds: ["n3"],
+  });
+  assert(studyTreePgn.includes("1. b0c2 (1. b2e2 h9g7) *"), `Tree PGN should preserve root variations:\n${studyTreePgn}`);
+
+  const blackRootTreePgn = gameExport.exportPgnTree({
+    root: { id: "root", parentId: null, childrenIds: ["n1", "n2"] },
+    n1: { id: "n1", parentId: "root", childrenIds: [], record: { uci: "a6a5" } },
+    n2: { id: "n2", parentId: "root", childrenIds: [], record: { uci: "h9g7" } },
+  }, "root", {
+    date: "2026.05.31",
+    startFen: blackToMoveFen,
+    mainLineNodeIds: ["n1"],
+  });
+  assert(blackRootTreePgn.includes("17... a6a5 (17... h9g7) *"), `Tree PGN should number black-to-move root variations:\n${blackRootTreePgn}`);
+
+  const nestedVariationPgn = gameExport.exportPgnTree({
+    root: { id: "root", parentId: null, childrenIds: ["n1"] },
+    n1: { id: "n1", parentId: "root", childrenIds: ["n2", "n3"], record: { uci: "b2e2" } },
+    n2: { id: "n2", parentId: "n1", childrenIds: [], record: { uci: "h9g7" } },
+    n3: { id: "n3", parentId: "n1", childrenIds: [], record: { uci: "b9c7" } },
+  }, "root", {
+    date: "2026.05.31",
+    mainLineNodeIds: ["n1", "n2"],
+  });
+  assert(nestedVariationPgn.includes("1. b2e2 h9g7 (1... b9c7) *"), `Tree PGN should preserve black reply variations:\n${nestedVariationPgn}`);
+
   const importedLine = moveImport.extractUciMoveLine(`
     [Variant "Xiangqi"]
     1. B2E2 h9g7 {book} 2. b0c2 ; trailing comment

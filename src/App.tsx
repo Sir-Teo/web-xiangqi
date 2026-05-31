@@ -24,7 +24,7 @@ import type { SavedGame } from './utils/gameLibrary';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
-import { exportPgn, copyToClipboard, downloadTextFile } from './utils/gameExport';
+import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatUciLine } from './utils/moveNotation';
 import { extractFenTag, extractUciMoveLine } from './utils/moveImport';
 import {
@@ -1771,6 +1771,17 @@ function App() {
   }, [applyMode, closeNewGameMenu, pendingGameMode]);
 
   const buildCurrentPgn = useCallback(() => {
+    const hasStudyBranches = Object.values(treeNodes).some((node) => node.childrenIds.length > 1);
+    if (hasStudyBranches) {
+      return exportPgnTree(treeNodes, rootNodeId, {
+        mainLineNodeIds: activeLineNodeIds,
+        gameMode,
+        opening: detectedOpening?.name,
+        result: gameResult,
+        startFen: rootFen,
+      });
+    }
+
     const moves = activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
       .map(id => treeNodes[id]?.record)
@@ -1782,7 +1793,7 @@ function App() {
       result: gameResult,
       startFen: rootFen,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, gameMode, detectedOpening, gameResult, rootFen]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMode, detectedOpening, gameResult, rootFen]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
