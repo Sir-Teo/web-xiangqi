@@ -15,6 +15,13 @@ export interface OpeningEntry {
     moves: string[]; // UCI move sequence
 }
 
+export interface OpeningCandidate {
+    move: string;
+    count: number;
+    names: string[];
+    chinese: string[];
+}
+
 // ~120 named openings covering major Xiangqi opening systems
 export const OPENINGS: OpeningEntry[] = [
     // ── Central Cannon (中炮) openings ──────────────────────────────────────
@@ -727,4 +734,47 @@ export function matchOpening(moveHistory: string[]): OpeningEntry | null {
     }
 
     return best;
+}
+
+export function getOpeningCandidates(moveHistory: string[], limit = 6): OpeningCandidate[] {
+    const normalizedHistory = moveHistory.map((move) => String(move).toLowerCase());
+    const byMove = new Map<string, { entries: OpeningEntry[]; longestLine: number }>();
+
+    for (const entry of getPlayableOpenings()) {
+        if (entry.moves.length <= normalizedHistory.length) continue;
+
+        let prefixMatches = true;
+        for (let index = 0; index < normalizedHistory.length; index += 1) {
+            if (entry.moves[index] !== normalizedHistory[index]) {
+                prefixMatches = false;
+                break;
+            }
+        }
+        if (!prefixMatches) continue;
+
+        const nextMove = entry.moves[normalizedHistory.length];
+        const current = byMove.get(nextMove);
+        if (current) {
+            current.entries.push(entry);
+            current.longestLine = Math.max(current.longestLine, entry.moves.length);
+        } else {
+            byMove.set(nextMove, { entries: [entry], longestLine: entry.moves.length });
+        }
+    }
+
+    return Array.from(byMove.entries())
+        .map(([move, { entries, longestLine }]) => ({
+            move,
+            count: entries.length,
+            names: Array.from(new Set(entries.map((entry) => entry.name))).slice(0, 3),
+            chinese: Array.from(new Set(entries.map((entry) => entry.chinese))).slice(0, 3),
+            longestLine,
+        }))
+        .sort((left, right) =>
+            right.count - left.count ||
+            right.longestLine - left.longestLine ||
+            left.move.localeCompare(right.move)
+        )
+        .slice(0, Math.max(0, Math.trunc(limit)))
+        .map(({ longestLine: _longestLine, ...candidate }) => candidate);
 }

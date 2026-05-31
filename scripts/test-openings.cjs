@@ -76,6 +76,23 @@ try {
   const pawnOpening = openings.matchOpening(["c3c4"]);
   assert(pawnOpening?.name === "Pawn Opening", "c3c4 should identify the pawn opening.");
 
+  const startingCandidates = openings.getOpeningCandidates([]);
+  assert(startingCandidates.length > 0, "Starting position should expose book candidates.");
+  assert(
+    startingCandidates.some((candidate) => candidate.move === "h2e2"),
+    "Starting candidates should include Central Cannon h2e2."
+  );
+
+  const centralCannonCandidates = openings.getOpeningCandidates(["h2e2"]);
+  assert(
+    centralCannonCandidates.some((candidate) => candidate.move === "h9g7"),
+    "Central Cannon candidates should include Screen Horse h9g7."
+  );
+  assert(
+    centralCannonCandidates.every((candidate) => candidate.names.length > 0 && candidate.count > 0),
+    "Opening candidates should carry display names and line counts."
+  );
+
   const pawnCannonReply = openings.matchOpening(["c3c4", "h7e7"]);
   assert(
     pawnCannonReply?.name === "Pawn Opening — Cannon Reply",

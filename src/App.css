@@ -3468,6 +3468,82 @@ summary:active {
   gap: 0.35rem;
 }
 
+.opening-candidates-card {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(255, 255, 255, 0.018)),
+    rgba(8, 10, 12, 0.54);
+  padding: 0.55rem;
+}
+
+.opening-candidates-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.opening-candidates-head strong {
+  color: var(--warning);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.opening-candidates-list {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.opening-candidate-btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  padding: 0.38rem 0.48rem;
+}
+
+.opening-candidate-btn strong {
+  color: var(--text-primary);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+}
+
+.opening-candidate-btn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.opening-candidate-btn em {
+  color: var(--text-tertiary);
+  font-style: normal;
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .opening-candidate-btn:hover {
+    border-color: rgba(245, 158, 11, 0.32);
+    background: rgba(245, 158, 11, 0.08);
+  }
+}
+
 .chip-btn {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);

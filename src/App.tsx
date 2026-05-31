@@ -18,7 +18,7 @@ import { useXiangqi, type GameResult } from './hooks/useXiangqi';
 import { START_FEN, uciToSquare, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
-import { matchOpening } from './utils/openings';
+import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame } from './utils/gameLibrary';
 import { LibraryPanel } from './components/Library/LibraryPanel';
@@ -1458,6 +1458,11 @@ function App() {
     const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
     return matchOpening(uciMoves);
   }, [moveHistory, currentMoveIndex]);
+  const openingCandidates = useMemo(() => {
+    if (rootFen !== START_POSITION_FEN) return [];
+    const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
+    return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4);
+  }, [assistMode, currentMoveIndex, moveHistory, rootFen]);
 
   // Game library
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
@@ -1573,6 +1578,13 @@ function App() {
     applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
     setAnalysisTab('tree');
   }, [applyUciMove, clearBoardMarkers, gameResult, sideToMove]);
+
+  const handlePlayBookMove = useCallback((uci: string) => {
+    if (!uci || gameResult) return;
+    clearBoardMarkers();
+    applyUciMove(uci);
+    setAnalysisTab('tree');
+  }, [applyUciMove, clearBoardMarkers, gameResult]);
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
@@ -2275,6 +2287,29 @@ function App() {
                     loadSweepToken={graphLoadSweepToken}
                     onNavigate={jumpToMove}
                   />
+                  {openingCandidates.length > 0 ? (
+                    <div className="opening-candidates-card">
+                      <div className="opening-candidates-head">
+                        <span>Book continuations</span>
+                        <strong>{openingCandidates.length}</strong>
+                      </div>
+                      <div className="opening-candidates-list">
+                        {openingCandidates.map((candidate) => (
+                          <button
+                            key={candidate.move}
+                            type="button"
+                            className="opening-candidate-btn"
+                            onClick={() => handlePlayBookMove(candidate.move)}
+                            title={candidate.names.join(' · ')}
+                          >
+                            <strong>{formatUciLine([candidate.move], 1)}</strong>
+                            <span>{candidate.chinese[0] ?? candidate.names[0]}</span>
+                            <em>{candidate.count} line{candidate.count === 1 ? '' : 's'}</em>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="graph-jump-controls">
                     <button type="button" className="chip-btn" onClick={goToFirstMove} disabled={!canGoBack}>Start</button>
                     <button type="button" className="chip-btn" onClick={goToPreviousMove} disabled={!canGoBack}>Prev</button>
