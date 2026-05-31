@@ -1,6 +1,7 @@
 import { normalizeSavedMoveTree, type SavedMoveTreeNode } from './gameLibrary';
 
 const MAX_SHARE_TREE_JSON_LENGTH = 12000;
+const MAX_SHARE_TREE_PARAM_LENGTH = Math.ceil(MAX_SHARE_TREE_JSON_LENGTH * 4 / 3) + 4;
 
 function toBase64Url(value: string): string | null {
     if (typeof globalThis.btoa !== 'function') return null;
@@ -29,9 +30,10 @@ export function encodeSavedMoveTreeParam(moveTree: SavedMoveTreeNode[]): string 
 
 export function decodeSavedMoveTreeParam(value: string | null): SavedMoveTreeNode[] | null {
     if (!value) return null;
+    if (value.length > MAX_SHARE_TREE_PARAM_LENGTH) return null;
     try {
         const json = fromBase64Url(value);
-        if (!json) return null;
+        if (!json || json.length > MAX_SHARE_TREE_JSON_LENGTH) return null;
         const parsed = JSON.parse(json);
         const normalized = normalizeSavedMoveTree(parsed);
         return normalized?.length ? normalized : null;

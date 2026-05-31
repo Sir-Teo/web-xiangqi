@@ -352,6 +352,10 @@ try {
   assert(decodedStudyTree?.[0]?.uci === "b2e2", "Share-link study tree root move should decode.");
   assert(decodedStudyTree?.[0]?.children?.[0]?.uci === "h9g7", "Share-link study tree child move should decode.");
   assert(shareTree.decodeSavedMoveTreeParam("not-valid-base64") === null, "Malformed share-link study trees should be rejected.");
+  assert(
+    shareTree.decodeSavedMoveTreeParam("A".repeat(20000)) === null,
+    "Oversized share-link study tree params should be rejected before parsing."
+  );
 
   const blackRootTreePgn = gameExport.exportPgnTree({
     root: { id: "root", parentId: null, childrenIds: ["n1", "n2"] },
