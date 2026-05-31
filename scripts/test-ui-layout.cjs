@@ -473,6 +473,112 @@ async function assertDisabledControlsLookInactive(page) {
   }
 }
 
+async function assertPanelTabAccessibility(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const desktopInitial = await page.evaluate(() => ({
+    leftTablist: document.querySelector(".panel.left .analysis-tab-strip")?.getAttribute("role") || "",
+    leftGraphRole: document.querySelector('[data-testid="left-panel-tab-graph"]')?.getAttribute("role") || "",
+    leftGraphSelected: document.querySelector('[data-testid="left-panel-tab-graph"]')?.getAttribute("aria-selected") || "",
+    leftLibrarySelected: document.querySelector('[data-testid="left-panel-tab-library"]')?.getAttribute("aria-selected") || "",
+    leftPanelRole: document.querySelector("#left-panel-content")?.getAttribute("role") || "",
+    leftPanelLabel: document.querySelector("#left-panel-content")?.getAttribute("aria-labelledby") || "",
+    rightTablist: document.querySelector(".panel.right .analysis-tab-strip")?.getAttribute("role") || "",
+    treeSelected: document.querySelector('[data-testid="analysis-tab-tree"]')?.getAttribute("aria-selected") || "",
+    reviewSelected: document.querySelector('[data-testid="analysis-tab-review"]')?.getAttribute("aria-selected") || "",
+    rightPanelRole: document.querySelector("#right-analysis-content")?.getAttribute("role") || "",
+    rightPanelLabel: document.querySelector("#right-analysis-content")?.getAttribute("aria-labelledby") || "",
+    duplicateLeftPanels: document.querySelectorAll("#left-panel-content").length,
+    duplicateRightPanels: document.querySelectorAll("#right-analysis-content").length,
+  }));
+  if (
+    desktopInitial.leftTablist !== "tablist" ||
+    desktopInitial.leftGraphRole !== "tab" ||
+    desktopInitial.leftGraphSelected !== "true" ||
+    desktopInitial.leftLibrarySelected !== "false" ||
+    desktopInitial.leftPanelRole !== "tabpanel" ||
+    desktopInitial.leftPanelLabel !== "left-panel-tab-graph" ||
+    desktopInitial.rightTablist !== "tablist" ||
+    desktopInitial.treeSelected !== "true" ||
+    desktopInitial.reviewSelected !== "false" ||
+    desktopInitial.rightPanelRole !== "tabpanel" ||
+    desktopInitial.rightPanelLabel !== "analysis-tab-tree-tab" ||
+    desktopInitial.duplicateLeftPanels !== 1 ||
+    desktopInitial.duplicateRightPanels !== 1
+  ) {
+    throw new Error(`Desktop panel tabs are not exposed accessibly: ${JSON.stringify(desktopInitial)}`);
+  }
+
+  await page.getByTestId("left-panel-tab-library").click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="left-panel-tab-library"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
+  await page.getByTestId("analysis-tab-review").click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="analysis-tab-review"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
+
+  const desktopUpdated = await page.evaluate(() => ({
+    leftGraphSelected: document.querySelector('[data-testid="left-panel-tab-graph"]')?.getAttribute("aria-selected") || "",
+    leftLibrarySelected: document.querySelector('[data-testid="left-panel-tab-library"]')?.getAttribute("aria-selected") || "",
+    leftPanelLabel: document.querySelector("#left-panel-content")?.getAttribute("aria-labelledby") || "",
+    treeSelected: document.querySelector('[data-testid="analysis-tab-tree"]')?.getAttribute("aria-selected") || "",
+    reviewSelected: document.querySelector('[data-testid="analysis-tab-review"]')?.getAttribute("aria-selected") || "",
+    rightPanelLabel: document.querySelector("#right-analysis-content")?.getAttribute("aria-labelledby") || "",
+  }));
+  if (
+    desktopUpdated.leftGraphSelected !== "false" ||
+    desktopUpdated.leftLibrarySelected !== "true" ||
+    desktopUpdated.leftPanelLabel !== "left-panel-tab-library" ||
+    desktopUpdated.treeSelected !== "false" ||
+    desktopUpdated.reviewSelected !== "true" ||
+    desktopUpdated.rightPanelLabel !== "analysis-tab-review-tab"
+  ) {
+    throw new Error(`Desktop tab aria-selected state did not update: ${JSON.stringify(desktopUpdated)}`);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const mobileInitial = await page.evaluate(() => ({
+    boardCurrent: document.querySelector('[data-testid="mobile-view-board"]')?.getAttribute("aria-current") || "",
+    analysisCurrent: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current") || "",
+  }));
+  if (mobileInitial.boardCurrent !== "page" || mobileInitial.analysisCurrent !== "") {
+    throw new Error(`Mobile view nav did not expose the active view: ${JSON.stringify(mobileInitial)}`);
+  }
+
+  await page.getByTestId("mobile-view-analysis").click();
+  await page.getByTestId("mobile-analysis-tab-moves").waitFor({ timeout: 5000 });
+  await page.getByTestId("mobile-analysis-tab-library").click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
+
+  const mobileUpdated = await page.evaluate(() => ({
+    boardCurrent: document.querySelector('[data-testid="mobile-view-board"]')?.getAttribute("aria-current") || "",
+    analysisCurrent: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current") || "",
+    tablist: document.querySelector(".mobile-analysis-tabs")?.getAttribute("role") || "",
+    movesSelected: document.querySelector('[data-testid="mobile-analysis-tab-moves"]')?.getAttribute("aria-selected") || "",
+    librarySelected: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-selected") || "",
+    libraryControls: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-controls") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    mobileUpdated.boardCurrent !== "" ||
+    mobileUpdated.analysisCurrent !== "page" ||
+    mobileUpdated.tablist !== "tablist" ||
+    mobileUpdated.movesSelected !== "false" ||
+    mobileUpdated.librarySelected !== "true" ||
+    mobileUpdated.libraryControls !== "left-panel-content" ||
+    mobileUpdated.overflowX > 2
+  ) {
+    throw new Error(`Mobile panel tabs are not exposed accessibly: ${JSON.stringify(mobileUpdated)}`);
+  }
+}
+
 async function assertNewGameDialogFocusTrap(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1461,6 +1567,7 @@ async function main() {
     await assertBottomNewGameMenuResetsDraft(page);
     await assertInvalidFenToastTimerResets(page);
     await assertDisabledControlsLookInactive(page);
+    await assertPanelTabAccessibility(page);
     await assertNewGameDialogFocusTrap(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
@@ -1489,7 +1596,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, AI-turn lock, AI Play engine status, engine PV controls, preference persistence, panel tab accessibility, dialog focus trap, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation handling and accessible errors, root move variations, current-line PGN download/share link with export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

@@ -2683,24 +2683,39 @@ function App() {
           </div>
           <div className="panel-inner" style={{ opacity: (!isMobile && leftWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
-              <div className="analysis-tab-strip">
+              <div className="analysis-tab-strip" role="tablist" aria-label="Graph and library panels">
                 <button
                   type="button"
+                  role="tab"
+                  id="left-panel-tab-graph"
                   className={`analysis-tab-btn ${leftPanelTab === 'graph' ? 'active' : ''}`}
                   onClick={() => setLeftPanelTab('graph')}
+                  aria-selected={leftPanelTab === 'graph'}
+                  aria-controls="left-panel-content"
+                  data-testid="left-panel-tab-graph"
                 >
                   <IconBarChart style={{ marginRight: '0.3rem' }} />Graph
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  id="left-panel-tab-library"
                   className={`analysis-tab-btn ${leftPanelTab === 'library' ? 'active' : ''}`}
                   onClick={() => setLeftPanelTab('library')}
+                  aria-selected={leftPanelTab === 'library'}
+                  aria-controls="left-panel-content"
+                  data-testid="left-panel-tab-library"
                 >
                   <IconLibrary style={{ marginRight: '0.3rem' }} />Library
                 </button>
               </div>
             </header>
-            <div className="panel-content">
+            <div
+              className="panel-content"
+              role="tabpanel"
+              id="left-panel-content"
+              aria-labelledby={`left-panel-tab-${leftPanelTab}`}
+            >
               {leftPanelTab === 'graph' ? (
                 <>
                   {engineEnabled && <WdlBar wdl={displayWdl} isSearching={isSearching} />}
@@ -2984,28 +2999,46 @@ function App() {
 
         {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
         {isMobile && (
-          <div className="mobile-analysis-tabs">
+          <div className="mobile-analysis-tabs" role="tablist" aria-label="Mobile analysis panels">
             <button
+              type="button"
+              role="tab"
+              id="mobile-analysis-tab-moves"
               className={`mobile-tab-btn ${mobileAnalysisTab === 'moves' ? 'active' : ''}`}
               onClick={() => setMobileAnalysisTab('moves')}
+              aria-selected={mobileAnalysisTab === 'moves'}
+              aria-controls="right-analysis-content"
+              data-testid="mobile-analysis-tab-moves"
             >
               <IconTree /> Moves
             </button>
             <button
+              type="button"
+              role="tab"
+              id="mobile-analysis-tab-graph"
               className={`mobile-tab-btn ${mobileAnalysisTab === 'graph' ? 'active' : ''}`}
               onClick={() => {
                 setLeftPanelTab('graph');
                 setMobileAnalysisTab('graph');
               }}
+              aria-selected={mobileAnalysisTab === 'graph'}
+              aria-controls="left-panel-content"
+              data-testid="mobile-analysis-tab-graph"
             >
               <IconBarChart /> Graph
             </button>
             <button
+              type="button"
+              role="tab"
+              id="mobile-analysis-tab-library"
               className={`mobile-tab-btn ${mobileAnalysisTab === 'library' ? 'active' : ''}`}
               onClick={() => {
                 setLeftPanelTab('library');
                 setMobileAnalysisTab('library');
               }}
+              aria-selected={mobileAnalysisTab === 'library'}
+              aria-controls="left-panel-content"
+              data-testid="mobile-analysis-tab-library"
             >
               <IconLibrary /> Library
             </button>
@@ -3025,21 +3058,29 @@ function App() {
           <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
               <h2>Analysis</h2>
-              <div className="analysis-tab-strip">
+              <div className="analysis-tab-strip" role="tablist" aria-label="Analysis panels">
                 <button
                   type="button"
+                  role="tab"
+                  id="analysis-tab-tree-tab"
                   className={`analysis-tab-btn ${analysisTab === 'tree' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('tree')}
                   title="Game tree"
                   aria-label="Open game tree"
+                  aria-selected={analysisTab === 'tree'}
+                  aria-controls="right-analysis-content"
                   data-testid="analysis-tab-tree"
                 >
                   <IconTree style={{ marginRight: '0.3rem' }} />Tree
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  id="analysis-tab-review-tab"
                   className={`analysis-tab-btn ${analysisTab === 'review' ? 'active' : ''}`}
                   onClick={() => setAnalysisTab('review')}
+                  aria-selected={analysisTab === 'review'}
+                  aria-controls="right-analysis-content"
                   data-testid="analysis-tab-review"
                 >
                   <IconBarChart style={{ marginRight: '0.3rem' }} />Review
@@ -3047,8 +3088,12 @@ function App() {
                 {engineEnabled ? (
                   <button
                     type="button"
+                    role="tab"
+                    id="analysis-tab-engine-tab"
                     className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
                     onClick={() => setAnalysisTab('engine')}
+                    aria-selected={analysisTab === 'engine'}
+                    aria-controls="right-analysis-content"
                     data-testid="analysis-tab-engine"
                   >
                     <IconBot style={{ marginRight: '0.3rem' }} />Engine
@@ -3056,7 +3101,12 @@ function App() {
                 ) : null}
               </div>
             </header>
-            <div className="panel-content">
+            <div
+              className="panel-content"
+              role="tabpanel"
+              id="right-analysis-content"
+              aria-labelledby={`analysis-tab-${analysisTab}-tab`}
+            >
               {analysisTab === 'tree' ? (
                 <>
                   <div className="tree-breadcrumb">
@@ -3379,10 +3429,12 @@ function App() {
 
       {/* ── Persistent bottom tab bar (mobile only) ── */}
       {isMobile && (
-        <nav className="mobile-tab-bar">
+        <nav className="mobile-tab-bar" aria-label="Mobile view">
           <button
             className={`mobile-tab-bar-btn ${mobileView === 'board' ? 'active' : ''}`}
             onClick={() => setMobileView('board')}
+            aria-current={mobileView === 'board' ? 'page' : undefined}
+            data-testid="mobile-view-board"
           >
             <IconPawn style={{ fontSize: '1.1rem' }} />
             Board
@@ -3390,6 +3442,8 @@ function App() {
           <button
             className={`mobile-tab-bar-btn ${mobileView === 'analysis' ? 'active' : ''}`}
             onClick={() => setMobileView('analysis')}
+            aria-current={mobileView === 'analysis' ? 'page' : undefined}
+            data-testid="mobile-view-analysis"
           >
             <IconBarChart />
             Analysis
