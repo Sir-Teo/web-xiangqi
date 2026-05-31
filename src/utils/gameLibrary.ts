@@ -45,6 +45,12 @@ function asFiniteNumber(value: unknown) {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function asValidTimestamp(value: unknown) {
+    const timestamp = asFiniteNumber(value);
+    if (typeof timestamp !== 'number') return undefined;
+    return Number.isFinite(new Date(timestamp).getTime()) ? timestamp : undefined;
+}
+
 function asString(value: unknown) {
     return typeof value === 'string' ? value : undefined;
 }
@@ -222,7 +228,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     if (!isRecord(raw)) return null;
 
     const id = asString(raw.id);
-    const savedAt = asFiniteNumber(raw.savedAt);
+    const savedAt = asValidTimestamp(raw.savedAt);
     const rawGameMode = asString(raw.gameMode);
     const gameMode = rawGameMode && SAVED_GAME_MODES.includes(rawGameMode as GameMode)
         ? rawGameMode as GameMode

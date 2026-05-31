@@ -1843,14 +1843,24 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
-      id: "qa-invalid-load",
-      savedAt: 1710000000000,
-      gameMode: "PvP",
-      moves: ["a0a9"],
-      result: "ongoing",
-      label: "Invalid load QA",
-    }]));
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+      {
+        id: "qa-invalid-load",
+        savedAt: 1710000000000,
+        gameMode: "PvP",
+        moves: ["a0a9"],
+        result: "ongoing",
+        label: "Invalid load QA",
+      },
+      {
+        id: "qa-invalid-timestamp",
+        savedAt: 1e100,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "Invalid timestamp QA",
+      },
+    ]));
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
 
@@ -1876,6 +1886,7 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
       return title ? getComputedStyle(title).textAlign : "";
     })(),
     stillVisible: document.body.textContent?.includes("Invalid load QA") || false,
+    invalidTimestampVisible: document.body.textContent?.includes("Invalid timestamp QA") || false,
     moveRows: document.querySelectorAll(".mtree-row").length,
   }));
   if (
@@ -1885,6 +1896,7 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
     state.titleDisplay !== "block" ||
     state.titleTextAlign !== "left" ||
     !state.stillVisible ||
+    state.invalidTimestampVisible ||
     state.moveRows !== 0
   ) {
     throw new Error(`Invalid saved-game load did not preserve library state with retry feedback: ${JSON.stringify(state)}`);

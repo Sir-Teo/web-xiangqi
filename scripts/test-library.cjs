@@ -101,6 +101,14 @@ try {
   });
   assert(missingKingFenSave === null, "Saved games with root FENs missing either king should be rejected.");
 
+  const invalidTimestampSave = library.normalizeSavedGame({
+    id: "invalid-timestamp",
+    savedAt: 1e100,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+  });
+  assert(invalidTimestampSave === null, "Saved games with out-of-range timestamps should be rejected.");
+
   const savedStudyTree = library.normalizeSavedGame({
     id: "saved-study-tree",
     savedAt: 1710000000006,
