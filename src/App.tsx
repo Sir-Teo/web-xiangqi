@@ -285,7 +285,7 @@ type ReviewController = {
   baseQueue: string[];
   revisitQueue: string[];
   provisionalEvals: Map<string, number>;
-  criticalNodeSwings: Map<string, number>;
+  criticalDecisionSwings: Map<string, number>;
   pendingEvals: Map<string, number>;
   completed: number;
   total: number;
@@ -300,7 +300,7 @@ function createReviewController(): ReviewController {
     baseQueue: [],
     revisitQueue: [],
     provisionalEvals: new Map(),
-    criticalNodeSwings: new Map(),
+    criticalDecisionSwings: new Map(),
     pendingEvals: new Map(),
     completed: 0,
     total: 0,
@@ -1114,12 +1114,12 @@ function App() {
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
           const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
           const parentEval = parentId ? getEffectiveNodeEval(parentId) : undefined;
-          if (typeof parentEval === 'number') {
+          if (parentId && typeof parentEval === 'number') {
             const swing = Math.abs(normalizedScore - parentEval);
             if (swing >= reviewPolicy.revisitThreshold) {
-              const previousSwing = controller.criticalNodeSwings.get(reviewTag.nodeId) ?? 0;
+              const previousSwing = controller.criticalDecisionSwings.get(parentId) ?? 0;
               if (swing > previousSwing) {
-                controller.criticalNodeSwings.set(reviewTag.nodeId, swing);
+                controller.criticalDecisionSwings.set(parentId, swing);
               }
             }
           }
@@ -1671,7 +1671,7 @@ function App() {
 
     if (controller.phase === 'base' && controller.baseQueue.length === 0) {
       if (reviewPolicy.revisit && controller.revisitQueue.length === 0) {
-        controller.revisitQueue = Array.from(controller.criticalNodeSwings.entries())
+        controller.revisitQueue = Array.from(controller.criticalDecisionSwings.entries())
           .sort((left, right) => right[1] - left[1])
           .slice(0, reviewPolicy.revisitLimit)
           .map(([nodeId]) => nodeId);
