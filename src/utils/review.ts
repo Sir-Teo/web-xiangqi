@@ -6,6 +6,7 @@ export const REVIEW_THRESHOLDS = {
     inaccuracy: 180,
     mistake: 320,
 } as const;
+export const REVIEW_DECISIVE_ADVANTAGE_CP = 600;
 
 export type ReviewMoveQuality = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
 export type ReviewCriticalQuality = Extract<ReviewMoveQuality, 'inaccuracy' | 'mistake' | 'blunder'>;
@@ -102,6 +103,22 @@ export function classifyMoveQuality(delta: number): ReviewMoveQuality {
     if (delta <= REVIEW_THRESHOLDS.inaccuracy) return 'inaccuracy';
     if (delta <= REVIEW_THRESHOLDS.mistake) return 'mistake';
     return 'blunder';
+}
+
+export function getEvalForReviewSide(evalScore: number, side: ReviewSide): number {
+    return side === 'red' ? evalScore : -evalScore;
+}
+
+export function hasDecisiveAdvantageAfterMove(evalAfter: number, side: ReviewSide): boolean {
+    return getEvalForReviewSide(evalAfter, side) >= REVIEW_DECISIVE_ADVANTAGE_CP;
+}
+
+export function classifyMoveQualityForEval(delta: number, evalAfter: number, side: ReviewSide): ReviewMoveQuality {
+    const rawQuality = classifyMoveQuality(delta);
+    if (!hasDecisiveAdvantageAfterMove(evalAfter, side)) return rawQuality;
+    if (rawQuality === 'blunder') return 'mistake';
+    if (rawQuality === 'mistake') return 'inaccuracy';
+    return rawQuality;
 }
 
 export function getReviewSideForRecord(record: ReviewRecordLike, moveIndex: number): ReviewSide {
@@ -223,11 +240,13 @@ export function buildReviewNote({
     bestMove,
     playedMove,
     swing,
+    retainedDecisiveAdvantage,
 }: {
     quality: ReviewMoveQuality;
     bestMove?: string;
     playedMove: string;
     swing: number;
+    retainedDecisiveAdvantage?: boolean;
 }): string {
     const cpSwing = `${Math.round(swing)}cp`;
     if (quality === 'best') {
@@ -237,6 +256,9 @@ export function buildReviewNote({
         return `Solid choice. Only ${cpSwing} off the best line.`;
     }
     if (bestMove && bestMove !== playedMove) {
+        if (retainedDecisiveAdvantage && isCriticalReviewQuality(quality)) {
+            return `Still winning, but ${formatUciMove(bestMove)} kept more of the advantage (${cpSwing}).`;
+        }
         const prefix = quality === 'blunder'
             ? 'Big miss.'
             : quality === 'mistake'
@@ -246,6 +268,9 @@ export function buildReviewNote({
     }
     if (quality === 'blunder') {
         return `Major evaluation swing: ${cpSwing}.`;
+    }
+    if (retainedDecisiveAdvantage && isCriticalReviewQuality(quality)) {
+        return `Still winning, but evaluation dropped by ${cpSwing}.`;
     }
     if (quality === 'mistake') {
         return `Noticeable drop of ${cpSwing}.`;
@@ -282,12 +307,14 @@ export function computeReviewArtifacts(
         evaluated += 1;
         const side = getReviewSideForRecord(record, moveIndex);
         const swing = getEvalLossForMove(parentEval, currentEval, side);
-        const quality = classifyMoveQuality(swing);
+        const retainedDecisiveAdvantage = hasDecisiveAdvantageAfterMove(currentEval, side);
+        const quality = classifyMoveQualityForEval(swing, currentEval, side);
         const note = buildReviewNote({
             quality,
             bestMove: record.bestMove,
             playedMove: record.uci,
             swing,
+            retainedDecisiveAdvantage,
         });
 
         counts[quality] += 1;

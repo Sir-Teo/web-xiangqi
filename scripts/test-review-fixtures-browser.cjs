@@ -88,6 +88,20 @@ async function main() {
         }
       }
 
+      const contextualQualityCases = [
+        [220, 750, "red", "inaccuracy"],
+        [350, 650, "red", "mistake"],
+        [350, -650, "black", "mistake"],
+        [350, 200, "red", "blunder"],
+      ];
+
+      for (const [delta, evalAfter, side, expected] of contextualQualityCases) {
+        const actual = review.classifyMoveQualityForEval(delta, evalAfter, side);
+        if (actual !== expected) {
+          throw new Error(`classifyMoveQualityForEval(${delta}, ${evalAfter}, ${side}) => ${actual}, expected ${expected}`);
+        }
+      }
+
       const lossCases = [
         [0, 200, "red", 0],
         [200, 0, "red", 200],
@@ -162,6 +176,26 @@ async function main() {
       const rankedMoments = summary.keyMoments.map((moment) => `${moment.moveIndex}:${moment.quality}`).join(",");
       if (rankedMoments !== "3:blunder,2:mistake,1:inaccuracy") {
         throw new Error(`Unexpected key-moment order: ${rankedMoments}`);
+      }
+
+      const decisiveTreeNodes = {
+        root: { parentId: null },
+        n1: { parentId: "root", record: { uci: "b2e2", piece: "C", ply: 1, evalScore: 650, bestMove: "b0c2" } },
+      };
+      const decisiveReview = review.computeReviewArtifacts(
+        ["n1"],
+        decisiveTreeNodes,
+        { root: 1000 },
+        1700000000001,
+      );
+      const decisiveAnnotation = decisiveReview.annotations[0];
+      if (
+        decisiveAnnotation?.quality !== "mistake" ||
+        decisiveReview.summary.blunderCount !== 0 ||
+        decisiveReview.summary.mistakeCount !== 1 ||
+        !decisiveAnnotation.reviewNote.includes("Still winning")
+      ) {
+        throw new Error(`Decisive advantage review was over-punished: ${JSON.stringify(decisiveReview)}`);
       }
 
       const migratedLegacy = storage.normalizeSavedGame({
