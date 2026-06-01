@@ -21,6 +21,7 @@ interface EvalGraphProps {
 }
 
 const PADDING = { top: 18, right: 20, bottom: 44, left: 42 } as const;
+const MIN_POINT_MARKER_GAP_PX = 7;
 
 type EvalPoint = {
     moveIndex: number;
@@ -142,6 +143,24 @@ export const EvalGraph = React.memo(function EvalGraph({
     const currentDisplay = formatEval(currentPoint?.eval ?? 0);
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
+    const pointRenderStep = pixelsPerPoint >= MIN_POINT_MARKER_GAP_PX
+        ? 1
+        : Math.max(1, Math.ceil(MIN_POINT_MARKER_GAP_PX / Math.max(0.01, pixelsPerPoint)));
+    const visiblePointIndexes = useMemo(() => {
+        const indexes = new Set<number>([0, currentPointIndex, points.length - 1]);
+
+        computedPoints.forEach((pt, pointIndex) => {
+            const mustRender =
+                pointIndex === currentPointIndex ||
+                pointIndex === hoverPointIndex ||
+                pointIndex % pointRenderStep === 0 ||
+                pt.branchCount > 1 ||
+                Boolean(pt.quality && isCriticalReviewQuality(pt.quality));
+            if (mustRender) indexes.add(pointIndex);
+        });
+
+        return Array.from(indexes).sort((left, right) => left - right);
+    }, [computedPoints, currentPointIndex, hoverPointIndex, pointRenderStep, points.length]);
     const xTickStep = Math.max(1, Math.ceil(56 / Math.max(1, pixelsPerPoint)));
     const xTickIndexes = useMemo(() => {
         const indexes = new Set<number>([0, currentPointIndex, points.length - 1]);
@@ -355,6 +374,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                             aria-valuenow={currentPointIndex}
                             aria-valuetext={currentValueText}
                             aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End Enter Space"
+                            data-rendered-points={visiblePointIndexes.length}
+                            data-total-points={points.length}
                             tabIndex={0}
                         >
                             <defs>
@@ -434,52 +455,55 @@ export const EvalGraph = React.memo(function EvalGraph({
                                         strokeDasharray="3 4"
                                     />
                                 ) : null}
-                                {computedPoints.map((pt, pointIndex) => (
-                                    <g key={`point-${pt.ply}`}>
-                                        {pt.quality && isCriticalReviewQuality(pt.quality) ? (
+                                {visiblePointIndexes.map((pointIndex) => {
+                                    const pt = computedPoints[pointIndex];
+                                    return (
+                                        <g key={`point-${pointIndex}-${pt.ply}`}>
+                                            {pt.quality && isCriticalReviewQuality(pt.quality) ? (
+                                                <circle
+                                                    className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
+                                                    cx={pt.x}
+                                                    cy={pt.y}
+                                                    r={6.4}
+                                                />
+                                            ) : null}
                                             <circle
-                                                className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
+                                                className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
                                                 cx={pt.x}
                                                 cy={pt.y}
-                                                r={6.4}
-                                            />
-                                        ) : null}
-                                        <circle
-                                            className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
-                                            cx={pt.x}
-                                            cy={pt.y}
-                                            r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                onNavigate?.(pt.moveIndex);
-                                            }}
-                                        />
-                                        {pt.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
-                                            <g
-                                                className="graph-branch-badge"
+                                                r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
                                                 onClick={(event) => {
                                                     event.stopPropagation();
                                                     onNavigate?.(pt.moveIndex);
                                                 }}
-                                            >
-                                                <rect
-                                                    x={pt.x + 6}
-                                                    y={pt.y - 19}
-                                                    width={18}
-                                                    height={12}
-                                                    rx={6}
-                                                />
-                                                <text
-                                                    x={pt.x + 15}
-                                                    y={pt.y - 10}
-                                                    textAnchor="middle"
+                                            />
+                                            {pt.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
+                                                <g
+                                                    className="graph-branch-badge"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        onNavigate?.(pt.moveIndex);
+                                                    }}
                                                 >
-                                                    {pt.branchCount}
-                                                </text>
-                                            </g>
-                                        ) : null}
-                                    </g>
-                                ))}
+                                                    <rect
+                                                        x={pt.x + 6}
+                                                        y={pt.y - 19}
+                                                        width={18}
+                                                        height={12}
+                                                        rx={6}
+                                                    />
+                                                    <text
+                                                        x={pt.x + 15}
+                                                        y={pt.y - 10}
+                                                        textAnchor="middle"
+                                                    >
+                                                        {pt.branchCount}
+                                                    </text>
+                                                </g>
+                                            ) : null}
+                                        </g>
+                                    );
+                                })}
                             </g>
                         </svg>
                         {isSweepingLoad ? <div className="graph-load-sweep-overlay" aria-hidden="true" data-testid="graph-load-sweep" /> : null}

@@ -5472,6 +5472,69 @@ async function assertSimpleRepetitionDoesNotAutoDraw(page) {
   }
 }
 
+async function assertDenseEvalGraphLimitsPointMarkers(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  const cycle = ["b0c2", "b9c7", "c2b0", "c7b9"];
+  const denseLine = Array.from({ length: 64 }, () => cycle).flat().join(" ");
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${encodeURIComponent(denseLine)}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Ply 256"),
+    null,
+    { timeout: 10000 }
+  );
+
+  const initial = await page.evaluate(() => {
+    const graph = document.querySelector(".winrate-graph");
+    return {
+      totalPoints: Number(graph?.getAttribute("data-total-points") || 0),
+      renderedPoints: Number(graph?.getAttribute("data-rendered-points") || 0),
+      pointNodes: document.querySelectorAll(".graph-point").length,
+      activePoints: document.querySelectorAll(".graph-point-active").length,
+      valueMax: graph?.getAttribute("aria-valuemax") || "",
+      activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    initial.totalPoints !== 257 ||
+    initial.renderedPoints >= 90 ||
+    initial.pointNodes !== initial.renderedPoints ||
+    initial.activePoints !== 1 ||
+    initial.valueMax !== "256" ||
+    !initial.activePoint.includes("Ply 256") ||
+    initial.overflowX > 2
+  ) {
+    throw new Error(`Dense evaluation graph did not thin decorative markers: ${JSON.stringify(initial)}`);
+  }
+
+  await page.locator(".winrate-graph").focus();
+  await page.keyboard.press("Home");
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Start"),
+    null,
+    { timeout: 5000 }
+  );
+  await page.keyboard.press("End");
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Ply 256"),
+    null,
+    { timeout: 5000 }
+  );
+
+  const navigated = await page.evaluate(() => ({
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    activePoints: document.querySelectorAll(".graph-point-active").length,
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!navigated.activePoint.includes("Ply 256") || navigated.activePoints !== 1 || navigated.overflowX > 2) {
+    throw new Error(`Dense evaluation graph navigation failed after marker thinning: ${JSON.stringify(navigated)}`);
+  }
+}
+
 async function assertStalemateLossIsLabeled(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   const stalemateFen = encodeURIComponent("4k4/R8/9/9/9/4P4/9/9/9/3RKR3 b - - 0 1");
@@ -5709,6 +5772,7 @@ async function main() {
     await assertLibraryRespondsToStorageChanges(page);
     await assertLibrarySavedGameSorting(page);
     await assertLargeLibraryRendersProgressively(page);
+    await assertDenseEvalGraphLimitsPointMarkers(page);
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertStalemateLossIsLabeled(page);
     await assertGameOverReviewPreservesResult(page);
