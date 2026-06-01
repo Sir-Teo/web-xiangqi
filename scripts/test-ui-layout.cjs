@@ -2369,8 +2369,16 @@ async function assertReviewBestMoveBranchAction(page) {
     mistakeLabel: document.querySelector('[data-testid="review-quality-mistake"]')?.getAttribute("aria-label") || "",
     blunderLabel: document.querySelector('[data-testid="review-quality-blunder"]')?.getAttribute("aria-label") || "",
     mistakeTitle: document.querySelector('[data-testid="review-quality-mistake"]')?.getAttribute("title") || "",
+    rerunLabel: document.querySelector('[data-testid="rerun-review-btn"]')?.getAttribute("aria-label") || "",
+    rerunTitle: document.querySelector('[data-testid="rerun-review-btn"]')?.getAttribute("title") || "",
+    clearReviewLabel: document.querySelector('[data-testid="clear-review-btn"]')?.getAttribute("aria-label") || "",
+    clearReviewTitle: document.querySelector('[data-testid="clear-review-btn"]')?.getAttribute("title") || "",
     bottomSummaryText: document.querySelector('[data-testid="bottom-review-summary"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     bottomSummaryLabel: document.querySelector('[data-testid="bottom-review-summary"]')?.getAttribute("aria-label") || "",
+    bottomViewLabel: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("aria-label") || "",
+    bottomViewTitle: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("title") || "",
+    bottomClearLabel: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("aria-label") || "",
+    bottomClearTitle: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("title") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
@@ -2388,12 +2396,20 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.mistakeLabel !== "1 mistake" ||
     reviewReadout.blunderLabel !== "0 blunders" ||
     reviewReadout.mistakeTitle !== "1 mistake" ||
+    reviewReadout.rerunLabel !== "Re-run game review unavailable: Engine is still loading" ||
+    reviewReadout.rerunTitle !== "Engine is still loading" ||
+    reviewReadout.clearReviewLabel !== "Clear completed game review" ||
+    reviewReadout.clearReviewTitle !== "Clear completed game review" ||
     !reviewReadout.bottomSummaryText.includes("40% accuracy") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
     !reviewReadout.bottomSummaryLabel.includes("Review summary: 40% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
+    reviewReadout.bottomViewLabel !== "Open completed game review" ||
+    reviewReadout.bottomViewTitle !== "Open completed game review" ||
+    reviewReadout.bottomClearLabel !== "Clear completed game review" ||
+    reviewReadout.bottomClearTitle !== "Clear completed game review" ||
     reviewReadout.overflowX > 2
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);

@@ -52,7 +52,14 @@ export const ReviewPanel = memo(function ReviewPanel({
                 </div>
                 <div className="review-panel-actions">
                     {status === 'running' ? (
-                        <button type="button" className="chip-btn" onClick={onCancel}>
+                        <button
+                            type="button"
+                            className="chip-btn"
+                            onClick={onCancel}
+                            title="Cancel running game review"
+                            aria-label="Cancel running game review"
+                            data-testid="cancel-review-btn"
+                        >
                             Cancel
                         </button>
                     ) : status === 'done' ? (
@@ -63,11 +70,19 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 onClick={onStart}
                                 disabled={!canStart}
                                 title={startTitle}
+                                aria-label={canStart ? 'Re-run game review' : `Re-run game review unavailable: ${startTitle ?? 'not ready'}`}
                                 data-testid="rerun-review-btn"
                             >
                                 Re-run
                             </button>
-                            <button type="button" className="chip-btn" onClick={onClear}>
+                            <button
+                                type="button"
+                                className="chip-btn"
+                                onClick={onClear}
+                                title="Clear completed game review"
+                                aria-label="Clear completed game review"
+                                data-testid="clear-review-btn"
+                            >
                                 Clear
                             </button>
                         </>
@@ -78,6 +93,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                             onClick={onStart}
                             disabled={!canStart}
                             title={startTitle}
+                            aria-label={canStart ? 'Run game review' : `Game review unavailable: ${startTitle ?? 'not ready'}`}
                             data-testid="start-review-btn"
                         >
                             {startLabel ?? (canStart ? 'Run Review' : 'Engine Loading')}

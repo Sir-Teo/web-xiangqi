@@ -4204,9 +4204,11 @@ function App() {
               </button>
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button
+                  type="button"
                   className="gc-btn"
                   onClick={startGameReview}
                   title={reviewStartTitle}
+                  aria-label={canStartReview ? 'Start game review' : `Game review unavailable: ${reviewStartTitle}`}
                   disabled={!canStartReview}
                   data-testid="start-review-bottom-btn"
                 >
@@ -4216,7 +4218,16 @@ function App() {
               {reviewStatus === 'running' && (
                 <span className="review-progress">
                   Reviewing… {Math.round(reviewProgress * 100)}%
-                  <button className="chip-btn" onClick={handleCancelReview}>Cancel</button>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={handleCancelReview}
+                    title="Cancel running game review"
+                    aria-label="Cancel running game review"
+                    data-testid="cancel-review-bottom-btn"
+                  >
+                    Cancel
+                  </button>
                 </span>
               )}
               {reviewStatus === 'done' && reviewSummary && (
@@ -4243,6 +4254,9 @@ function App() {
                       setAnalysisTab('review');
                       setMobileAnalysisTab('review');
                     }}
+                    title="Open completed game review"
+                    aria-label="Open completed game review"
+                    data-testid="view-completed-review-btn"
                   >
                     View
                   </button>
@@ -4250,8 +4264,9 @@ function App() {
                     type="button"
                     className="chip-btn"
                     onClick={clearCompletedReview}
-                    title="Clear completed review"
-                    aria-label="Clear completed review"
+                    title="Clear completed game review"
+                    aria-label="Clear completed game review"
+                    data-testid="clear-review-bottom-btn"
                   >
                     <IconX />
                   </button>
