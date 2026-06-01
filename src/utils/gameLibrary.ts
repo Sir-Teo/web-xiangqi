@@ -306,11 +306,13 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
 export function normalizeSavedGames(raw: unknown): SavedGame[] {
     if (!Array.isArray(raw)) return [];
     const games: SavedGame[] = [];
-    for (let index = raw.length - 1; index >= 0 && games.length < MAX_SAVED_GAMES; index -= 1) {
-        const game = normalizeSavedGame(raw[index]);
+    for (const rawGame of raw) {
+        const game = normalizeSavedGame(rawGame);
         if (game) games.push(game);
     }
-    return games.reverse();
+    return games
+        .sort((a, b) => a.savedAt - b.savedAt)
+        .slice(-MAX_SAVED_GAMES);
 }
 
 function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {

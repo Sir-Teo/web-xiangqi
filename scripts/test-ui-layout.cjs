@@ -391,7 +391,9 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
     await page.addInitScript(() => {
-      localStorage.removeItem("xiangqi-app-preferences");
+      try {
+        window.localStorage?.removeItem("xiangqi-app-preferences");
+      } catch (_) {}
       window.__engineCommands = [];
       Math.random = () => 0.99;
       window.Pikafish = function Pikafish() {};
@@ -472,7 +474,9 @@ async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
     await page.addInitScript(() => {
-      localStorage.removeItem("xiangqi-app-preferences");
+      try {
+        window.localStorage?.removeItem("xiangqi-app-preferences");
+      } catch (_) {}
       window.__engineCommands = [];
       window.Pikafish = function Pikafish() {};
       window.Pikafish.createWorkerEngine = async () => {
@@ -765,7 +769,9 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
     await page.addInitScript(() => {
-      localStorage.removeItem("xiangqi-app-preferences");
+      try {
+        window.localStorage?.removeItem("xiangqi-app-preferences");
+      } catch (_) {}
       window.__engineCommands = [];
       window.__goCount = 0;
       window.Pikafish = function Pikafish() {};

@@ -199,6 +199,10 @@ try {
   assert(normalizedManySavedGames.length === 500, "Saved game lists should be capped for storage/rendering safety.");
   assert(normalizedManySavedGames[0].id === "saved-5", "Saved game list capping should keep the newest entries.");
   assert(normalizedManySavedGames.at(-1).id === "saved-504", "Saved game list capping should preserve newest saved entries.");
+  const normalizedReversedSavedGames = library.normalizeSavedGames(manySavedGames.slice().reverse());
+  assert(normalizedReversedSavedGames.length === 500, "Reversed saved game lists should still be capped.");
+  assert(normalizedReversedSavedGames[0].id === "saved-5", "Saved game capping should use savedAt rather than storage order.");
+  assert(normalizedReversedSavedGames.at(-1).id === "saved-504", "Saved game capping should keep the newest timestamp in reversed storage.");
 
   const corruptReviewedSave = library.normalizeSavedGame({
     id: "corrupt-reviewed",
