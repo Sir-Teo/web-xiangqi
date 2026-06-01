@@ -3300,15 +3300,19 @@ async function assertMobileSaveLibraryActions(page) {
   }
 
   await saveButton.click();
-  const savedGameId = await page.waitForFunction(() => {
+  const savedGame = await page.waitForFunction(() => {
     const raw = localStorage.getItem("xiangqi-game-library");
     if (!raw) return null;
     const games = JSON.parse(raw);
-    return games.length === 1 ? games[0].id : null;
+    return games.length === 1 ? games[0] : null;
   }, null, { timeout: 5000 }).then((handle) => handle.jsonValue());
+  const savedGameId = savedGame?.id;
 
   if (!savedGameId) {
     throw new Error("Mobile save did not create a saved game.");
+  }
+  if (Object.prototype.hasOwnProperty.call(savedGame, "startFen")) {
+    throw new Error(`Default-start saves should not persist a redundant root FEN: ${JSON.stringify(savedGame)}`);
   }
 
   await libraryButton.click();

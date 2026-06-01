@@ -2390,7 +2390,7 @@ function App() {
     const saved = saveGameToLibrary(gameMode, moves, {
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
-      startFen: rootFen,
+      startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
       moveTree,
       review: reviewStatus === 'done' && reviewSummary
