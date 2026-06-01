@@ -164,6 +164,11 @@ async function installFakePikafish(page, fakeConfig) {
                 }
                 emit("bestmove h9g7");
               }, 20);
+            } else if (config.variant === "fake-telemetry") {
+              setTimeout(() => {
+                emit("info depth 8 seldepth 12 multipv 1 score cp 42 nodes 123456 nps 789000 hashfull 23 time 156 pv b2e2 h9g7");
+                emit("bestmove b2e2");
+              }, 20);
             }
           }
         },
@@ -916,6 +921,52 @@ async function assertEnginePvLineControl(page) {
   }
   if (cacheState.overflowX > 2) {
     throw new Error(`Clear Hash control introduced horizontal overflow: ${cacheState.overflowX}`);
+  }
+}
+
+async function assertEngineTelemetryDashboard(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-telemetry" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.waitForFunction(() => {
+      const searchCard = [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+        .find((text) => text.includes("Search")) || "";
+      const pvText = document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "";
+      return searchCard.includes("D8/S12") &&
+        searchCard.includes("789k nps") &&
+        searchCard.includes("hash 2%") &&
+        pvText.includes("B2→E2");
+    }, null, { timeout: 15000 });
+
+    const telemetry = await page.evaluate(() => {
+      const searchCard = [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+        .find((text) => text.includes("Search")) || "";
+      return {
+        searchCard,
+        pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+
+    if (
+      !telemetry.searchCard.includes("D8/S12") ||
+      !telemetry.searchCard.includes("789k nps") ||
+      !telemetry.searchCard.includes("hash 2%") ||
+      !telemetry.pvText.includes("B2→E2") ||
+      telemetry.overflowX > 2
+    ) {
+      throw new Error(`Engine telemetry dashboard did not render UCI search stats: ${JSON.stringify(telemetry)}`);
+    }
+  } finally {
+    await context.close();
   }
 }
 
@@ -3796,6 +3847,7 @@ async function main() {
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
+    await assertEngineTelemetryDashboard(browser);
     await assertEngineRestartDropsBufferedInfo(browser);
     await assertPlayedEnginePvDoesNotStoreRootEval(browser);
     await assertPreferencePersistence(page);

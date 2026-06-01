@@ -13,7 +13,7 @@ import {
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward, IconMore
 } from './components/icons';
-import { useEngine, type WdlStats } from './hooks/useEngine';
+import { useEngine, type EngineSearchStats, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
@@ -434,6 +434,45 @@ function normalizeWdlForSide(stats: WdlStats | null, side: Side): WdlStats | nul
 
 function formatEvalScore(score: number, decimals = 1) {
   return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
+}
+
+function formatCompactCount(value: number) {
+  const normalized = Math.max(0, Math.trunc(value));
+  if (normalized >= 1_000_000) {
+    return `${(normalized / 1_000_000).toFixed(normalized >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`;
+  }
+  if (normalized >= 1_000) {
+    return `${(normalized / 1_000).toFixed(normalized >= 100_000 ? 0 : 1).replace(/\.0$/, '')}k`;
+  }
+  return `${normalized}`;
+}
+
+function formatEngineDepthLabel(stats: EngineSearchStats | null, fallbackDepth: number) {
+  const depth = stats?.depth ?? fallbackDepth;
+  const seldepth = stats?.seldepth;
+  if (seldepth && seldepth > depth) {
+    return `D${depth}/S${seldepth}`;
+  }
+  return `D${depth}`;
+}
+
+function formatEngineTelemetry(stats: EngineSearchStats | null, fallbackMoveTimeMs: number) {
+  if (!stats) return `${fallbackMoveTimeMs}ms primary`;
+
+  const parts: string[] = [];
+  if (typeof stats.nps === 'number') {
+    parts.push(`${formatCompactCount(stats.nps)} nps`);
+  } else if (typeof stats.nodes === 'number') {
+    parts.push(`${formatCompactCount(stats.nodes)} nodes`);
+  }
+  if (typeof stats.hashfull === 'number') {
+    parts.push(`hash ${Math.round(stats.hashfull / 10)}%`);
+  }
+  if (parts.length === 0 && typeof stats.timeMs === 'number') {
+    parts.push(`${stats.timeMs}ms`);
+  }
+
+  return parts.length > 0 ? parts.slice(0, 2).join(' · ') : `${fallbackMoveTimeMs}ms primary`;
 }
 
 function isPieceCode(value: string): value is PieceCode {
@@ -920,6 +959,7 @@ function App() {
     outputLines,
     pvLines,
     wdl,
+    searchStats,
   } = useEngine({
     enabled: engineRequired,
     restartToken: engineRestartToken,
@@ -3760,8 +3800,8 @@ function App() {
                     </div>
                     <div className="engine-stat">
                       <span>Search</span>
-                      <strong>D{liveAnalysisPolicy.primary.depth}</strong>
-                      <em>{liveAnalysisPolicy.primary.moveTimeMs}ms primary</em>
+                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth)}</strong>
+                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.moveTimeMs)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>

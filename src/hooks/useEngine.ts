@@ -17,6 +17,15 @@ export type PvLine = {
 
 export type WdlStats = { win: number; draw: number; loss: number };
 
+export type EngineSearchStats = {
+    depth?: number;
+    seldepth?: number;
+    nodes?: number;
+    nps?: number;
+    hashfull?: number;
+    timeMs?: number;
+};
+
 type SearchRequest = {
     positionCmd: string;
     goCmd: string;
@@ -123,6 +132,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
     const [evalScore, setEvalScore] = useState<number>(0);
     const [wdl, setWdl] = useState<WdlStats | null>(null);
+    const [searchStats, setSearchStats] = useState<EngineSearchStats | null>(null);
     const enabled = options.enabled ?? true;
 
     const engineRef = useRef<any>(null);
@@ -135,6 +145,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pendingInfoLineRef = useRef<string | null>(null);
     const pendingEvalRef = useRef<number | null>(null);
     const pendingWdlRef = useRef<WdlStats | null>(null);
+    const pendingSearchStatsRef = useRef<EngineSearchStats | null>(null);
     const pvDirtyRef = useRef(false);
     const captureInfoLinesRef = useRef(options.captureInfoLines ?? false);
     const infoFlushTimerRef = useRef<number | null>(null);
@@ -211,6 +222,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         pendingInfoLineRef.current = null;
         pendingEvalRef.current = null;
         pendingWdlRef.current = null;
+        pendingSearchStatsRef.current = null;
         pvDirtyRef.current = false;
     }, []);
 
@@ -234,6 +246,11 @@ export function useEngine(options: EngineInitOptions = {}) {
         if (pendingWdlRef.current !== null) {
             setWdl(pendingWdlRef.current);
             pendingWdlRef.current = null;
+        }
+
+        if (pendingSearchStatsRef.current !== null) {
+            setSearchStats(pendingSearchStatsRef.current);
+            pendingSearchStatsRef.current = null;
         }
 
         if (pvDirtyRef.current) {
@@ -359,6 +376,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvDirtyRef.current = false;
         setPvLines([]);
         setWdl(null);
+        setSearchStats(null);
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
     }, [flushPendingOptions, startSearch, stopSearch]);
@@ -423,6 +441,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         didConfigureSessionRef.current = false;
         setIsReady(false);
         setIsSearching(false);
+        setSearchStats(null);
         setVariant('unknown');
 
         // Boot engine using the wrapper component
@@ -484,6 +503,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             setPvLines([]);
             setEvalScore(0);
             setWdl(null);
+            setSearchStats(null);
         };
 
         if (!enabled) {
@@ -620,6 +640,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             activeSearchSignatureRef.current = '';
             activeSearchTagRef.current = null;
             clearQueuedSearch();
+            setSearchStats(null);
             stopRequestedRef.current = false;
             onWorkerErrorRef.current?.(msg);
         } else if (msg.startsWith('bestmove')) {
@@ -649,8 +670,45 @@ export function useEngine(options: EngineInitOptions = {}) {
             const mateMatch = msg.match(/\bscore mate ([+-]?\d+)/);
             const multipvMatch = msg.match(/\bmultipv (\d+)/);
             const wdlMatch = msg.match(/\bwdl (\d+) (\d+) (\d+)/);
+            const seldepthMatch = msg.match(/\bseldepth (\d+)/);
+            const nodesMatch = msg.match(/\bnodes (\d+)/);
+            const npsMatch = msg.match(/\bnps (\d+)/);
+            const hashfullMatch = msg.match(/\bhashfull (\d+)/);
+            const timeMatch = msg.match(/\btime (\d+)/);
 
             const multipvIndex = multipvMatch ? parseInt(multipvMatch[1], 10) - 1 : 0;
+            const nextSearchStats: EngineSearchStats = {};
+            let hasSearchStats = false;
+            if (depthMatch) {
+                nextSearchStats.depth = parseInt(depthMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (seldepthMatch) {
+                nextSearchStats.seldepth = parseInt(seldepthMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (nodesMatch) {
+                nextSearchStats.nodes = parseInt(nodesMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (npsMatch) {
+                nextSearchStats.nps = parseInt(npsMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (hashfullMatch) {
+                nextSearchStats.hashfull = parseInt(hashfullMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (timeMatch) {
+                nextSearchStats.timeMs = parseInt(timeMatch[1], 10);
+                hasSearchStats = true;
+            }
+            if (hasSearchStats) {
+                pendingSearchStatsRef.current = {
+                    ...(pendingSearchStatsRef.current ?? {}),
+                    ...nextSearchStats,
+                };
+            }
 
             let finalScore = 0;
             if (scoreMatch) {
@@ -737,5 +795,6 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvLines,
         evalScore,
         wdl,
+        searchStats,
     };
 }
