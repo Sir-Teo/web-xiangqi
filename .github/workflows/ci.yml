@@ -36,8 +36,8 @@ jobs:
           npm run lint
           npm run test:openings
           npm run test:library
-          npm run test:serve-demo
           npm run build:react
+          npm run test:serve-demo
 
       - name: Cache emsdk
         uses: actions/cache@v5
