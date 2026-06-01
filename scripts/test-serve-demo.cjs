@@ -52,6 +52,7 @@ async function main() {
     assertMetaTag(html, "name", "theme-color", "#050505");
     assertMetaTag(html, "property", "og:title", "Web Xiangqi");
     assertMetaTag(html, "name", "twitter:card", "summary");
+    assert.match(html, /<link rel="preload" href="\/web-xiangqi\/pikafish\.js" as="script"\s*\/?>/);
     const assetPath = html.match(/src="([^"]+\/assets\/[^"]+\.js)"/)?.[1];
     assert(assetPath, "React build should reference a hashed JS asset.");
 
