@@ -3178,10 +3178,18 @@ function App() {
                     </div>
                   ) : null}
                   <div className="graph-jump-controls">
-                    <button type="button" className="chip-btn" onClick={goToFirstMove} disabled={!canGoBack}>Start</button>
-                    <button type="button" className="chip-btn" onClick={goToPreviousMove} disabled={!canGoBack}>Prev</button>
-                    <button type="button" className="chip-btn" onClick={goToNextMove} disabled={!canGoForward}>Next</button>
-                    <button type="button" className="chip-btn" onClick={goToLatestMove} disabled={!canGoForward}>Live</button>
+                    <button type="button" className="chip-btn graph-jump-btn" onClick={goToFirstMove} disabled={!canGoBack} title="Go to first position" aria-label="Go to first position">
+                      <IconSkipBack aria-hidden="true" focusable="false" />
+                    </button>
+                    <button type="button" className="chip-btn graph-jump-btn" onClick={goToPreviousMove} disabled={!canGoBack} title="Go to previous move" aria-label="Go to previous move">
+                      <IconChevronLeft aria-hidden="true" focusable="false" />
+                    </button>
+                    <button type="button" className="chip-btn graph-jump-btn" onClick={goToNextMove} disabled={!canGoForward} title="Go to next move" aria-label="Go to next move">
+                      <IconChevronRight aria-hidden="true" focusable="false" />
+                    </button>
+                    <button type="button" className="chip-btn graph-jump-btn" onClick={goToLatestMove} disabled={!canGoForward} title="Go to latest move" aria-label="Go to latest move">
+                      <IconSkipForward aria-hidden="true" focusable="false" />
+                    </button>
                   </div>
                   <p className="panel-copy small">
                     Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}

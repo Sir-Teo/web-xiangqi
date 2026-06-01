@@ -268,6 +268,14 @@ async function assertDesktopBoardLayout(page, viewport) {
         .filter((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
         .filter((text) => /keyboard navigation|left and right arrows|press enter/i.test(text)),
+      graphJumpButtons: Array.from(document.querySelectorAll(".graph-jump-controls .graph-jump-btn"))
+        .map((el) => ({
+          label: el.getAttribute("aria-label") || "",
+          title: el.getAttribute("title") || "",
+          visibleText: el.textContent?.replace(/\s+/g, " ").trim() || "",
+          width: el.getBoundingClientRect().width,
+          height: el.getBoundingClientRect().height,
+        })),
       centralCannonCandidateText: document.querySelector('[data-testid="book-candidate-h2e2"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       clippedBookCandidateLabels: Array.from(document.querySelectorAll(".opening-candidate-main > span, .opening-candidate-main small"))
         .filter((el) => el.scrollWidth - el.clientWidth > 1)
@@ -307,6 +315,22 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.visibleGraphShortcutPrompts.length > 0) {
     throw new Error(`Evaluation graph shortcut copy should stay out of the visible UI: ${JSON.stringify(layout)}`);
+  }
+  const expectedGraphJumpLabels = [
+    "Go to first position",
+    "Go to previous move",
+    "Go to next move",
+    "Go to latest move",
+  ];
+  const graphJumpLabels = layout.graphJumpButtons.map((button) => button.label);
+  const graphJumpTitles = layout.graphJumpButtons.map((button) => button.title);
+  if (
+    layout.graphJumpButtons.length !== 4 ||
+    JSON.stringify(graphJumpLabels) !== JSON.stringify(expectedGraphJumpLabels) ||
+    JSON.stringify(graphJumpTitles) !== JSON.stringify(expectedGraphJumpLabels) ||
+    layout.graphJumpButtons.some((button) => button.visibleText || button.width < 28 || button.height < 28)
+  ) {
+    throw new Error(`Evaluation graph jump controls are not compact and accessible: ${JSON.stringify(layout.graphJumpButtons)}`);
   }
   if (
     !layout.centralCannonCandidateText.includes("Central Cannon") ||
