@@ -56,6 +56,9 @@ export const MoveListTree = memo(function MoveListTree({
 
     const rows: JSX.Element[] = [];
     const rootContext = parseRootMoveContext(rootFen);
+    const hasMoveQualityLegend = activeLineNodeIds.some((nodeId) => (
+        getMoveQualityClass(treeNodes, nodeId) !== 'quality-pending'
+    ));
     const entryAt = (lineIndex: number): MoveListEntry | null => {
         const nodeId = activeLineNodeIds[lineIndex];
         if (!nodeId) return null;
@@ -164,7 +167,7 @@ export const MoveListTree = memo(function MoveListTree({
     return (
         <div className="mtree-scroll">
             {rows}
-            <div className="mtree-quality-legend">
+            {hasMoveQualityLegend ? <div className="mtree-quality-legend">
                 <span className="legend-title">Move loss</span>
                 <div className="legend-items">
                     <span className="legend-item quality-best"><span className="mtree-quality-dot" /> Best <em>≤40cp</em></span>
@@ -173,7 +176,7 @@ export const MoveListTree = memo(function MoveListTree({
                     <span className="legend-item quality-mistake"><span className="mtree-quality-dot" /> Mistake <em>≤320cp</em></span>
                     <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> Blunder <em>&gt;320cp</em></span>
                 </div>
-            </div>
+            </div> : null}
         </div>
     );
 });

@@ -417,6 +417,11 @@ async function assertBoardKeyboardNavigation(page) {
   if (moveState.fen === beforeFen || !moveState.movedPiece.includes("red horse") || moveState.overflowX > 2) {
     throw new Error(`Board keyboard activation did not play the focused move: ${JSON.stringify(moveState)}`);
   }
+
+  const qualityLegendCount = await page.locator(".mtree-quality-legend").count();
+  if (qualityLegendCount !== 0) {
+    throw new Error("Move-loss legend appeared before the line had review or eval quality data.");
+  }
 }
 
 async function assertBoardKeyboardNavigationFlipped(page) {
