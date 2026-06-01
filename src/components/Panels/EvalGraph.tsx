@@ -321,6 +321,9 @@ export const EvalGraph = React.memo(function EvalGraph({
             <div className="graph-scroll" ref={viewportRef}>
                 <div className="graph-scroll-inner">
                     <div className={`graph-svg-stage ${isSweepingLoad ? 'graph-svg-stage-sweeping' : ''}`}>
+                        <p id="evaluation-graph-instructions" className="sr-only">
+                            Use left and right arrows to move across the line. Press Enter to jump to the hovered point.
+                        </p>
                         <svg
                             className="winrate-graph"
                             width={chartWidth}
@@ -335,7 +338,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             onTouchEnd={onTouchEnd}
                             style={{ cursor: onNavigate ? 'pointer' : 'default' }}
                             aria-label="Evaluation graph"
-                            aria-description="Use left and right arrows to move across the line. Press Enter to jump to the hovered point."
+                            aria-describedby="evaluation-graph-instructions"
                             role="img"
                             tabIndex={0}
                         >

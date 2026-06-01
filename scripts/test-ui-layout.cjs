@@ -114,6 +114,12 @@ async function assertDesktopBoardLayout(page, viewport) {
       emptyHitboxTabStops: Array.from(document.querySelectorAll(".hitbox"))
         .filter((el) => el.tabIndex >= 0 && (el.getAttribute("aria-label") || "").includes("empty"))
         .map((el) => el.getAttribute("aria-label") || ""),
+      graphDescribedBy: document.querySelector(".winrate-graph")?.getAttribute("aria-describedby") || "",
+      graphDescriptionText: (() => {
+        const id = document.querySelector(".winrate-graph")?.getAttribute("aria-describedby");
+        return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
+      })(),
+      graphLegacyDescription: document.querySelector(".winrate-graph")?.getAttribute("aria-description") || "",
       clippedGraphSummaryLabels: Array.from(document.querySelectorAll(".graph-summary-card span"))
         .filter((el) => el.scrollWidth - el.clientWidth > 1)
         .map((el) => el.textContent?.trim() || ""),
@@ -133,6 +139,13 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.clippedGraphSummaryLabels.length > 0) {
     throw new Error(`Desktop graph summary labels are clipped: ${layout.clippedGraphSummaryLabels.join(", ")}`);
+  }
+  if (
+    layout.graphDescribedBy !== "evaluation-graph-instructions" ||
+    !layout.graphDescriptionText.includes("Use left and right arrows") ||
+    layout.graphLegacyDescription
+  ) {
+    throw new Error(`Evaluation graph instructions are not exposed accessibly: ${JSON.stringify(layout)}`);
   }
   rectWithinDesktopLayout(layout);
 }
