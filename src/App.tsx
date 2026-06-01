@@ -97,6 +97,30 @@ const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   fast: 150,
 };
 const PV_LINE_OPTIONS: PvLineCount[] = [1, 3, 5];
+const PV_LINE_CONTROL_COPY: Record<PvLineCount, { ariaLabel: string; title: string }> = {
+  1: {
+    ariaLabel: 'Set principal variation lines to 1, fastest best-move search',
+    title: 'Show 1 engine line for the fastest best-move search.',
+  },
+  3: {
+    ariaLabel: 'Set principal variation lines to 3, compare main candidates',
+    title: 'Show 3 engine lines to compare main candidate moves.',
+  },
+  5: {
+    ariaLabel: 'Set principal variation lines to 5, broad option scan',
+    title: 'Show 5 engine lines for a broader option scan. This uses more engine time.',
+  },
+};
+const ANALYSIS_ENGINE_MODE_COPY: Record<AnalysisEngineMode, { ariaLabel: string; title: string }> = {
+  stable: {
+    ariaLabel: 'Stable analysis engine profile, safer boot and conservative resources',
+    title: 'Stable profile: safer boot and conservative engine resources.',
+  },
+  optimized: {
+    ariaLabel: 'Optimized analysis engine profile, faster search when supported',
+    title: 'Optimized profile: faster search when this device supports it.',
+  },
+};
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
@@ -3035,6 +3059,8 @@ function App() {
                   className={`pill-btn ${analysisEngineMode === 'stable' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAnalysisEngineMode('stable')}
                   aria-pressed={analysisEngineMode === 'stable'}
+                  aria-label={ANALYSIS_ENGINE_MODE_COPY.stable.ariaLabel}
+                  title={ANALYSIS_ENGINE_MODE_COPY.stable.title}
                 >
                   Stable
                 </button>
@@ -3043,6 +3069,8 @@ function App() {
                   className={`pill-btn ${analysisEngineMode === 'optimized' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAnalysisEngineMode('optimized')}
                   aria-pressed={analysisEngineMode === 'optimized'}
+                  aria-label={ANALYSIS_ENGINE_MODE_COPY.optimized.ariaLabel}
+                  title={ANALYSIS_ENGINE_MODE_COPY.optimized.title}
                 >
                   Optimized
                 </button>
@@ -3954,7 +3982,8 @@ function App() {
                           className={`engine-pv-btn ${enginePvLineCount === count ? 'engine-pv-btn-active' : ''}`}
                           onClick={() => setEnginePvLineCount(count)}
                           aria-pressed={enginePvLineCount === count}
-                          aria-label={`Set PV lines to ${count}`}
+                          aria-label={PV_LINE_CONTROL_COPY[count].ariaLabel}
+                          title={PV_LINE_CONTROL_COPY[count].title}
                           data-testid={`engine-pv-lines-${count}`}
                         >
                           {count}

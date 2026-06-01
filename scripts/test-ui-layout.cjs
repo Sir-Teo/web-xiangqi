@@ -1078,8 +1078,24 @@ async function assertEnginePvLineControl(page) {
       .map((el) => el.textContent || "")
       .find((text) => text.includes("Detail")) || "",
     active: document.querySelector('[data-testid="engine-pv-lines-3"]')?.getAttribute("aria-pressed") || "",
+    buttonLabels: [1, 3, 5].map((count) => document.querySelector(`[data-testid="engine-pv-lines-${count}"]`)?.getAttribute("aria-label") || ""),
+    buttonTitles: [1, 3, 5].map((count) => document.querySelector(`[data-testid="engine-pv-lines-${count}"]`)?.getAttribute("title") || ""),
   }));
-  if (!initial.detail.includes("MultiPV 3") || !initial.detail.includes("WDL on") || initial.active !== "true") {
+  if (
+    !initial.detail.includes("MultiPV 3") ||
+    !initial.detail.includes("WDL on") ||
+    initial.active !== "true" ||
+    initial.buttonLabels.join("|") !== [
+      "Set principal variation lines to 1, fastest best-move search",
+      "Set principal variation lines to 3, compare main candidates",
+      "Set principal variation lines to 5, broad option scan",
+    ].join("|") ||
+    initial.buttonTitles.join("|") !== [
+      "Show 1 engine line for the fastest best-move search.",
+      "Show 3 engine lines to compare main candidate moves.",
+      "Show 5 engine lines for a broader option scan. This uses more engine time.",
+    ].join("|")
+  ) {
     throw new Error(`Engine PV selector did not start on 3 lines: ${JSON.stringify(initial)}`);
   }
 
@@ -1466,7 +1482,10 @@ async function assertPreferencePersistence(page) {
     await page.getByRole("button", { name: "Open settings" }).click();
     const settings = page.locator(".settings-body");
     await settings.getByRole("button", { name: "Pro", exact: true }).click();
-    await settings.getByRole("button", { name: "Stable", exact: true }).click();
+    await settings.getByRole("button", {
+      name: "Stable analysis engine profile, safer boot and conservative resources",
+      exact: true,
+    }).click();
     await settings.getByRole("button", { name: "Off", exact: true }).click();
     const settingsA11y = await settings.evaluate((root) => {
       const byId = (id) => root.querySelector(`#${id}`);
@@ -1475,6 +1494,16 @@ async function assertPreferencePersistence(page) {
       const pressed = (name) => [...root.querySelectorAll("button")]
         .find((button) => button.textContent?.trim() === name)
         ?.getAttribute("aria-pressed") || "";
+      const buttonMeta = (name) => {
+        const button = [...root.querySelectorAll("button")]
+          .find((candidate) => candidate.textContent?.trim() === name);
+        return {
+          label: button?.getAttribute("aria-label") || "",
+          title: button?.getAttribute("title") || "",
+        };
+      };
+      const stableMeta = buttonMeta("Stable");
+      const optimizedMeta = buttonMeta("Optimized");
       return {
         workspaceLabel: labelTextFor("settings-workspace-mode"),
         gameModeLabel: labelTextFor("settings-game-mode"),
@@ -1494,6 +1523,10 @@ async function assertPreferencePersistence(page) {
         treePressed: pressed("Tree Panel"),
         onPressed: pressed("On"),
         offPressed: pressed("Off"),
+        stableLabel: stableMeta.label,
+        stableTitle: stableMeta.title,
+        optimizedLabel: optimizedMeta.label,
+        optimizedTitle: optimizedMeta.title,
       };
     });
     if (
@@ -1514,7 +1547,11 @@ async function assertPreferencePersistence(page) {
       settingsA11y.graphPressed !== "true" ||
       settingsA11y.treePressed !== "true" ||
       settingsA11y.onPressed !== "false" ||
-      settingsA11y.offPressed !== "true"
+      settingsA11y.offPressed !== "true" ||
+      settingsA11y.stableLabel !== "Stable analysis engine profile, safer boot and conservative resources" ||
+      settingsA11y.stableTitle !== "Stable profile: safer boot and conservative engine resources." ||
+      settingsA11y.optimizedLabel !== "Optimized analysis engine profile, faster search when supported" ||
+      settingsA11y.optimizedTitle !== "Optimized profile: faster search when this device supports it."
     ) {
       throw new Error(`Settings controls are not fully accessible: ${JSON.stringify(settingsA11y)}`);
     }
