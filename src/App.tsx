@@ -2685,6 +2685,7 @@ function App() {
         bestMove: record.bestMove,
         quality: record.quality,
         swing: record.swing,
+        winPercentLoss: record.winPercentLoss,
         reviewNote: record.reviewNote,
       })),
     };
@@ -2770,6 +2771,7 @@ function App() {
               bestMove: annotation.bestMove,
               quality: annotation.quality,
               swing: annotation.swing,
+              winPercentLoss: annotation.winPercentLoss,
               reviewNote: annotation.reviewNote,
             };
           })

@@ -31,6 +31,7 @@ export interface MoveRecord {
     bestMove?: string; // engine's best move from the parent position (set during review)
     quality?: ReviewMoveQuality;
     swing?: number;
+    winPercentLoss?: number;
     reviewNote?: string;
     board: BoardState;
     sideToMove: Side;
@@ -721,6 +722,7 @@ export function useXiangqi() {
         bestMove?: string;
         quality?: ReviewMoveQuality;
         swing?: number;
+        winPercentLoss?: number;
         reviewNote?: string;
     }>) => {
         if (updates.length === 0) return;
@@ -739,6 +741,7 @@ export function useXiangqi() {
                     bestMove: update.bestMove ?? record.bestMove,
                     quality: update.quality,
                     swing: typeof update.swing === 'number' ? update.swing : undefined,
+                    winPercentLoss: typeof update.winPercentLoss === 'number' ? update.winPercentLoss : undefined,
                     reviewNote: update.reviewNote,
                 };
 
@@ -747,6 +750,7 @@ export function useXiangqi() {
                     nextRecord.bestMove !== record.bestMove ||
                     nextRecord.quality !== record.quality ||
                     nextRecord.swing !== record.swing ||
+                    nextRecord.winPercentLoss !== record.winPercentLoss ||
                     nextRecord.reviewNote !== record.reviewNote;
                 if (!changed) continue;
 
@@ -775,6 +779,7 @@ export function useXiangqi() {
                     record.bestMove === undefined &&
                     record.quality === undefined &&
                     record.swing === undefined &&
+                    record.winPercentLoss === undefined &&
                     record.reviewNote === undefined
                 ) {
                     continue;
@@ -791,6 +796,7 @@ export function useXiangqi() {
                         bestMove: undefined,
                         quality: undefined,
                         swing: undefined,
+                        winPercentLoss: undefined,
                         reviewNote: undefined,
                     },
                 };

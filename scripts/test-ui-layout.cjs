@@ -2533,6 +2533,7 @@ async function assertReviewBestMoveBranchAction(page) {
             side: "red",
             quality: "mistake",
             swing: 240,
+            winPercentLoss: 20.75881993130915,
             evalBefore: 0,
             evalAfter: -240,
             bestMove: "b0c2",
@@ -2541,8 +2542,8 @@ async function assertReviewBestMoveBranchAction(page) {
           }],
         },
         annotations: [
-          { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, reviewNote: "Missed a stronger continuation. B0->C2 was stronger by 240cp." },
-          { moveIndex: 1, evalScore: -220, quality: "good", swing: 20, reviewNote: "Solid choice." },
+          { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, winPercentLoss: 20.75881993130915, reviewNote: "Missed a stronger continuation. B0->C2 was stronger by 240cp." },
+          { moveIndex: 1, evalScore: -220, quality: "good", swing: 20, winPercentLoss: 1.5, reviewNote: "Solid choice." },
         ],
       },
     }]));
@@ -2677,6 +2678,28 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.overflowX > 2
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);
+  }
+  await page.getByTestId("save-game-btn").click();
+  await page.getByTestId("save-game-btn").getByText("Saved").waitFor({ timeout: 5000 });
+  const resavedReview = await page.evaluate(() => {
+    const games = JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]");
+    const copy = games.find((game) => game.id !== "review-best-branch" && game.review);
+    return {
+      count: games.length,
+      annotationChance: copy?.review?.annotations?.[0]?.winPercentLoss,
+      keyMomentChance: copy?.review?.summary?.keyMoments?.[0]?.winPercentLoss,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    resavedReview.count !== 2 ||
+    typeof resavedReview.annotationChance !== "number" ||
+    typeof resavedReview.keyMomentChance !== "number" ||
+    Math.abs(resavedReview.annotationChance - 20.75881993130915) > 0.001 ||
+    Math.abs(resavedReview.keyMomentChance - 20.75881993130915) > 0.001 ||
+    resavedReview.overflowX > 2
+  ) {
+    throw new Error(`Loaded review chance loss was not preserved when re-saving: ${JSON.stringify(resavedReview)}`);
   }
   await page.getByTestId("review-try-best-0").click();
   await page.getByTestId("move-tree-active").waitFor({ timeout: 5000 });
