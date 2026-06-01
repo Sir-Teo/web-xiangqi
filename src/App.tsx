@@ -126,6 +126,16 @@ const ANALYSIS_ENGINE_MODE_COPY: Record<AnalysisEngineMode, { ariaLabel: string;
     title: 'Optimized profile: faster search when this device supports it.',
   },
 };
+const ASSIST_MODE_COPY: Record<AssistMode, { ariaLabel: string; title: string }> = {
+  coach: {
+    ariaLabel: 'Coach interface, show rule hints and guided move context',
+    title: 'Coach interface: show rule hints and guided move context.',
+  },
+  pro: {
+    ariaLabel: 'Pro interface, compact analysis with fewer teaching prompts',
+    title: 'Pro interface: compact analysis with fewer teaching prompts.',
+  },
+};
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
@@ -3245,6 +3255,8 @@ function App() {
                   className={`pill-btn ${assistMode === 'coach' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAssistMode('coach')}
                   aria-pressed={assistMode === 'coach'}
+                  aria-label={ASSIST_MODE_COPY.coach.ariaLabel}
+                  title={ASSIST_MODE_COPY.coach.title}
                 >
                   Coach
                 </button>
@@ -3253,6 +3265,8 @@ function App() {
                   className={`pill-btn ${assistMode === 'pro' ? 'pill-btn-active' : ''}`}
                   onClick={() => setAssistMode('pro')}
                   aria-pressed={assistMode === 'pro'}
+                  aria-label={ASSIST_MODE_COPY.pro.ariaLabel}
+                  title={ASSIST_MODE_COPY.pro.title}
                 >
                   Pro
                 </button>

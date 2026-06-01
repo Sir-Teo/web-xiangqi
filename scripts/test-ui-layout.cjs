@@ -1711,7 +1711,8 @@ async function assertEngineTelemetryDashboard(browser) {
       throw new Error(`Engine telemetry leaked after the position changed: ${JSON.stringify(cleared)}`);
     }
 
-    await page.evaluate(() => window.__finishFakeTelemetrySearch?.());
+    await page.waitForFunction(() => typeof window.__finishFakeTelemetrySearch === "function", null, { timeout: 10000 });
+    await page.evaluate(() => window.__finishFakeTelemetrySearch());
     await page.waitForFunction((beforeCount) => {
       const clearHashCommandCount = (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
       const buttonText = document.querySelector('[data-testid="clear-engine-hash-btn"]')?.textContent?.replace(/\s+/g, " ").trim() || "";
@@ -2026,7 +2027,10 @@ async function assertPreferencePersistence(page) {
 
     await page.getByRole("button", { name: "Open settings" }).click();
     const settings = page.locator(".settings-body");
-    await settings.getByRole("button", { name: "Pro", exact: true }).click();
+    await settings.getByRole("button", {
+      name: "Pro interface, compact analysis with fewer teaching prompts",
+      exact: true,
+    }).click();
     await settings.getByRole("button", {
       name: "Stable analysis engine profile, safer boot and conservative resources",
       exact: true,
@@ -2047,6 +2051,8 @@ async function assertPreferencePersistence(page) {
           title: button?.getAttribute("title") || "",
         };
       };
+      const coachMeta = buttonMeta("Coach");
+      const proMeta = buttonMeta("Pro");
       const stableMeta = buttonMeta("Stable");
       const optimizedMeta = buttonMeta("Optimized");
       const noticeLink = root.querySelector(".settings-link");
@@ -2069,6 +2075,10 @@ async function assertPreferencePersistence(page) {
         treePressed: pressed("Tree Panel"),
         onPressed: pressed("On"),
         offPressed: pressed("Off"),
+        coachLabel: coachMeta.label,
+        coachTitle: coachMeta.title,
+        proLabel: proMeta.label,
+        proTitle: proMeta.title,
         stableLabel: stableMeta.label,
         stableTitle: stableMeta.title,
         optimizedLabel: optimizedMeta.label,
@@ -2098,6 +2108,10 @@ async function assertPreferencePersistence(page) {
       settingsA11y.treePressed !== "true" ||
       settingsA11y.onPressed !== "false" ||
       settingsA11y.offPressed !== "true" ||
+      settingsA11y.coachLabel !== "Coach interface, show rule hints and guided move context" ||
+      settingsA11y.coachTitle !== "Coach interface: show rule hints and guided move context." ||
+      settingsA11y.proLabel !== "Pro interface, compact analysis with fewer teaching prompts" ||
+      settingsA11y.proTitle !== "Pro interface: compact analysis with fewer teaching prompts." ||
       settingsA11y.stableLabel !== "Stable analysis engine profile, safer boot and conservative resources" ||
       settingsA11y.stableTitle !== "Stable profile: safer boot and conservative engine resources." ||
       settingsA11y.optimizedLabel !== "Optimized analysis engine profile, faster search when supported" ||
