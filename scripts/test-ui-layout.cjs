@@ -4512,6 +4512,7 @@ async function assertLibrarySavedGameSorting(page) {
   const readOrder = async () => page.evaluate(() => ({
     labels: Array.from(document.querySelectorAll('[data-testid="saved-game-list"] .lib-game-name-button'))
       .map((node) => node.textContent?.trim() || ""),
+    summaryText: document.querySelector(".lib-summary-row")?.textContent?.replace(/\s+/g, " ").trim() || "",
     summaryLabel: document.querySelector(".lib-summary-row")?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
@@ -4526,6 +4527,12 @@ async function assertLibrarySavedGameSorting(page) {
     if (
       expectedPrefix.some((label, index) => state.labels[index] !== label) ||
       !state.summaryLabel.includes(expectedSummary) ||
+      !state.summaryText.includes("3 reviewed") ||
+      !state.summaryText.includes("68% avg") ||
+      !state.summaryText.includes("109cp loss") ||
+      !state.summaryLabel.includes("3 reviewed games") ||
+      !state.summaryLabel.includes("average accuracy 68%") ||
+      !state.summaryLabel.includes("average centipawn loss 109cp") ||
       state.overflowX > 2
     ) {
       throw new Error(`Saved-game sort ${sortValue} produced the wrong order: ${JSON.stringify(state)}`);

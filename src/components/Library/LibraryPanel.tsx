@@ -221,10 +221,42 @@ export function LibraryPanel({
       );
     })
     .sort((left, right) => compareSavedGames(left, right, savedSort)), [q, resultFilter, reviewFilter, savedGames, savedSort]);
+  const reviewInsight = useMemo(() => {
+    const reviewed = filteredSaved
+      .map((game) => game.review?.summary)
+      .filter((summary): summary is ReviewSummary => Boolean(summary));
+    if (reviewed.length === 0) return null;
+
+    const accuracy = Math.round(
+      reviewed.reduce((sum, summary) => sum + summary.accuracy, 0) / reviewed.length
+    );
+    const lossSummaries = reviewed.filter((summary) => typeof summary.averageCentipawnLoss === 'number');
+    const averageCentipawnLoss = lossSummaries.length > 0
+      ? Math.round(
+        lossSummaries.reduce((sum, summary) => sum + (summary.averageCentipawnLoss ?? 0), 0) / lossSummaries.length
+      )
+      : undefined;
+
+    return {
+      reviewedCount: reviewed.length,
+      accuracy,
+      averageCentipawnLoss,
+    };
+  }, [filteredSaved]);
   const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
   const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
+  const reviewedGameSummaryLabel = reviewInsight?.reviewedCount === 1 ? 'reviewed game' : 'reviewed games';
   const savedSortLabel = SAVED_SORT_LABELS[savedSort];
+  const reviewInsightLabel = reviewInsight
+    ? [
+      `${reviewInsight.reviewedCount} ${reviewedGameSummaryLabel}`,
+      `average accuracy ${reviewInsight.accuracy}%`,
+      typeof reviewInsight.averageCentipawnLoss === 'number'
+        ? `average centipawn loss ${formatAverageCentipawnLoss(reviewInsight.averageCentipawnLoss)}`
+        : '',
+    ].filter(Boolean).join(', ')
+    : '';
 
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
@@ -365,7 +397,12 @@ export function LibraryPanel({
       </div>
       <div
         className="lib-summary-row"
-        aria-label={`${filteredSaved.length} ${savedGameSummaryLabel}. ${filteredHistorical.length} ${classicGameSummaryLabel}. Sorted by ${savedSortLabel}.`}
+        aria-label={[
+          `${filteredSaved.length} ${savedGameSummaryLabel}.`,
+          `${filteredHistorical.length} ${classicGameSummaryLabel}.`,
+          reviewInsightLabel ? `${reviewInsightLabel}.` : '',
+          `Sorted by ${savedSortLabel}.`,
+        ].filter(Boolean).join(' ')}
       >
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
@@ -373,6 +410,30 @@ export function LibraryPanel({
         <span className="lib-summary-pill">
           <strong>{filteredHistorical.length}</strong> classics
         </span>
+        {reviewInsight ? (
+          <>
+            <span
+              className="lib-summary-pill"
+              aria-label={`${reviewInsight.reviewedCount} ${reviewedGameSummaryLabel}`}
+            >
+              <strong>{reviewInsight.reviewedCount}</strong> reviewed
+            </span>
+            <span
+              className="lib-summary-pill"
+              aria-label={`Average reviewed-game accuracy ${reviewInsight.accuracy}%`}
+            >
+              <strong>{reviewInsight.accuracy}%</strong> avg
+            </span>
+            {typeof reviewInsight.averageCentipawnLoss === 'number' ? (
+              <span
+                className="lib-summary-pill"
+                aria-label={`Average reviewed-game centipawn loss ${formatAverageCentipawnLoss(reviewInsight.averageCentipawnLoss)}`}
+              >
+                <strong>{formatAverageCentipawnLoss(reviewInsight.averageCentipawnLoss)}</strong> loss
+              </span>
+            ) : null}
+          </>
+        ) : null}
         {(q || reviewFilter !== 'all' || resultFilter !== 'all' || savedSort !== 'recent') ? (
           <button
             type="button"
