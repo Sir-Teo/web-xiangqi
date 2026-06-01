@@ -26,7 +26,7 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
-import { formatUciLine } from './utils/moveNotation';
+import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -316,7 +316,14 @@ function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typ
   if (nodeId === rootNodeId) return 'Start';
   const record = treeNodes[nodeId]?.record;
   if (!record) return 'Node';
-  return `${record.ply}. ${record.uci}`;
+  return `${record.ply}. ${formatMoveRecordLabel(record)}`;
+}
+
+function nodeTitle(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
+  if (nodeId === rootNodeId) return 'Start position';
+  const record = treeNodes[nodeId]?.record;
+  if (!record) return 'Move node';
+  return `Ply ${record.ply}: ${formatMoveRecordTitle(record)}`;
 }
 
 function detectCoarsePointer() {
@@ -4118,17 +4125,23 @@ function App() {
               {analysisTab === 'tree' ? (
                 <>
                   <div className="tree-breadcrumb" ref={treeBreadcrumbRef}>
-                    {breadcrumbNodeIds.map((nodeId, index) => (
-                      <button
-                        key={nodeId}
-                        type="button"
-                        className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
-                        onClick={() => jumpToNode(nodeId)}
-                      >
-                        {nodeLabel(nodeId, rootNodeId, treeNodes)}
-                        {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
-                      </button>
-                    ))}
+                    {breadcrumbNodeIds.map((nodeId, index) => {
+                      const label = nodeLabel(nodeId, rootNodeId, treeNodes);
+                      const title = nodeTitle(nodeId, rootNodeId, treeNodes);
+                      return (
+                        <button
+                          key={nodeId}
+                          type="button"
+                          className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
+                          onClick={() => jumpToNode(nodeId)}
+                          title={title}
+                          aria-label={title}
+                        >
+                          {label}
+                          {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
+                        </button>
+                      );
+                    })}
                   </div>
                   <MoveListTree
                     treeNodes={treeNodes}

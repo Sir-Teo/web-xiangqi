@@ -5520,6 +5520,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
       breadcrumbScrollWidth: breadcrumb ? Math.round(breadcrumb.scrollWidth) : null,
       breadcrumbClientWidth: breadcrumb ? Math.round(breadcrumb.clientWidth) : null,
       breadcrumbScrollLeft: breadcrumb ? Math.round(breadcrumb.scrollLeft) : null,
+      activeBreadcrumbText: activeBreadcrumb?.textContent?.replace(/\s+/g, " ").trim() || "",
+      activeBreadcrumbLabel: activeBreadcrumb?.getAttribute("aria-label") || "",
       activeBreadcrumbVisible: Boolean(
         breadcrumbRect &&
         activeBreadcrumbRect &&
@@ -5543,6 +5545,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     !(initial.breadcrumbHeight <= 60) ||
     !(initial.breadcrumbScrollWidth > initial.breadcrumbClientWidth) ||
     !(initial.breadcrumbScrollLeft > 0) ||
+    !initial.activeBreadcrumbText.includes("馬 C7→B9") ||
+    !initial.activeBreadcrumbLabel.includes("Ply 256: Black horse from C7 moves to B9") ||
     !initial.activeBreadcrumbVisible ||
     initial.overflowX > 2
   ) {
@@ -5576,6 +5580,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
       activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       activePoints: document.querySelectorAll(".graph-point-active").length,
       activeMove: activeMove?.textContent?.replace(/\s+/g, " ").trim() || "",
+      activeBreadcrumbText: activeBreadcrumb?.textContent?.replace(/\s+/g, " ").trim() || "",
+      activeBreadcrumbLabel: activeBreadcrumb?.getAttribute("aria-label") || "",
       activeMoveVisible: Boolean(
         treeRect &&
         activeMoveRect &&
@@ -5595,6 +5601,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     !navigated.activePoint.includes("Ply 256") ||
     navigated.activePoints !== 1 ||
     !navigated.activeMove.includes("c7b9") ||
+    !navigated.activeBreadcrumbText.includes("馬 C7→B9") ||
+    !navigated.activeBreadcrumbLabel.includes("Ply 256: Black horse from C7 moves to B9") ||
     !navigated.activeMoveVisible ||
     !navigated.activeBreadcrumbVisible ||
     navigated.overflowX > 2
