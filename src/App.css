@@ -3424,9 +3424,24 @@ summary:active {
 
 .pv-score {
   min-width: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-family: var(--font-mono);
+  line-height: 1.1;
+}
+
+.pv-score strong {
   font-size: 0.77rem;
   font-weight: 700;
-  font-family: var(--font-mono);
+}
+
+.pv-score span {
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 0.56rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .pv-score.positive {

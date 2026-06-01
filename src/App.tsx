@@ -2029,6 +2029,8 @@ function App() {
   const currentEvalText = typeof displayEvalScore === 'number'
     ? formatEvalScore(displayEvalScore)
     : null;
+  const redPerspectiveEvalText = currentEvalText ? `Red POV ${currentEvalText}` : null;
+  const liveEvalLabel = currentEvalText ? `Live engine evaluation, ${redPerspectiveEvalText}` : undefined;
   const displayEvalClass = displayEvalScore === null
     ? ''
     : displayEvalScore > 0
@@ -3623,7 +3625,7 @@ function App() {
                 <h1>{currentModeLabel}</h1>
                 <p>
                   {detectedOpening
-                    ? `${detectedOpening.name} is on the board. ${engineEnabled && currentEvalText ? `Live eval ${currentEvalText}.` : 'Keep exploring variations and review notes.'}`
+                    ? `${detectedOpening.name} is on the board. ${engineEnabled && redPerspectiveEvalText ? `Live eval ${redPerspectiveEvalText}.` : 'Keep exploring variations and review notes.'}`
                     : workspaceMode === 'analysis'
                       ? `${currentModeMeta.description} Engine lines and review stay synced with the current position.`
                       : currentModeMeta.description}
@@ -3635,9 +3637,13 @@ function App() {
                   {sideToMoveLabel} to move
                 </span>
                 <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
-                {currentEvalText ? (
-                  <span className={`board-stage-chip board-stage-chip-eval ${displayEvalClass}`}>
-                    Eval {currentEvalText}
+                {redPerspectiveEvalText ? (
+                  <span
+                    className={`board-stage-chip board-stage-chip-eval ${displayEvalClass}`}
+                    aria-label={liveEvalLabel}
+                    title={liveEvalLabel}
+                  >
+                    {redPerspectiveEvalText}
                   </span>
                 ) : null}
                 {detectedOpening ? (
@@ -3663,7 +3669,11 @@ function App() {
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {engineEnabled && displayEvalScore !== null && (
-                  <span className={`mobile-eval-chip ${displayEvalClass}`}>
+                  <span
+                    className={`mobile-eval-chip ${displayEvalClass}`}
+                    aria-label={liveEvalLabel}
+                    title={liveEvalLabel}
+                  >
                     {formatEvalScore(displayEvalScore)}
                   </span>
                 )}
@@ -4196,6 +4206,9 @@ function App() {
                       const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
                       const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
+                      const pvScoreText = formatEvalScore(normalizedScore, 0);
+                      const pvScoreLabel = `Red POV score ${formatEvalScore(normalizedScore, 1)}`;
+                      const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
                       const pvLineText = pv.moves.length ? formatUciLine(pv.moves, 7) : 'No moves yet';
@@ -4216,7 +4229,7 @@ function App() {
                           className={`pv-line premium-card ${spotlightPvIndex === i ? 'pv-line-spotlight' : ''}`}
                           role="group"
                           tabIndex={0}
-                          aria-label={`Engine line ${i + 1}, ${lineStanding}, score ${formatEvalScore(normalizedScore, 1)}, ${depthLabel}, ${pvLineLabel}`}
+                          aria-label={`Engine line ${i + 1}, ${lineStanding}, ${pvScoreLabel}, ${depthLabel}, ${pvLineLabel}`}
                           onMouseEnter={() => setSpotlightPvIndex(i)}
                           onMouseLeave={() => setSpotlightPvIndex(null)}
                           onFocus={() => setSpotlightPvIndex(i)}
@@ -4228,8 +4241,14 @@ function App() {
                           data-testid={`engine-pv-line-${i}`}
                           data-spotlight={spotlightPvIndex === i ? 'true' : undefined}
                         >
-                          <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
-                            {formatEvalScore(normalizedScore, 0)}
+                          <div
+                            className={['pv-score', pvScoreClass].filter(Boolean).join(' ')}
+                            aria-label={pvScoreLabel}
+                            title={pvScoreLabel}
+                            data-testid={`engine-pv-score-${i}`}
+                          >
+                            <strong>{pvScoreText}</strong>
+                            <span>Red POV</span>
                           </div>
                           <div className="pv-moves">
                             <div className="pv-line-heading">
