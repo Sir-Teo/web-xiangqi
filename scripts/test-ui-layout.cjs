@@ -4797,14 +4797,66 @@ async function assertLargeLibraryRendersProgressively(page) {
   });
   await page.evaluate(() => {
     const savedAtBase = 1710000000000;
-    const games = Array.from({ length: 150 }, (_, index) => ({
-      id: `qa-large-library-${index}`,
-      savedAt: savedAtBase + index,
-      gameMode: "PvP",
-      moves: ["b2e2"],
-      result: "ongoing",
-      label: index === 0 ? "Needle hidden QA" : `Bulk saved game ${index}`,
-    }));
+    const games = Array.from({ length: 150 }, (_, index) => {
+      const baseGame = {
+        id: `qa-large-library-${index}`,
+        savedAt: savedAtBase + index,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: `Bulk saved game ${index}`,
+      };
+      if (index === 0) {
+        return {
+          ...baseGame,
+          label: "Move metadata QA",
+          moves: ["b0c2", "h9g7"],
+          moveTree: [{ uci: "b0c2", children: [{ uci: "c0e2" }] }],
+          review: {
+            summary: {
+              totalMoves: 2,
+              accuracy: 51,
+              averageCentipawnLoss: 220,
+              redAccuracy: 42,
+              blackAccuracy: 60,
+              bestCount: 0,
+              goodCount: 1,
+              inaccuracyCount: 0,
+              mistakeCount: 0,
+              blunderCount: 1,
+              reviewedAt: savedAtBase,
+              lineSignature: "b0c2 h9g7",
+              keyMoments: [{
+                nodeId: "qa-large-library-0-0",
+                moveIndex: 0,
+                jumpTarget: 0,
+                ply: 1,
+                side: "red",
+                quality: "blunder",
+                swing: 420,
+                winPercentLoss: 35,
+                evalBefore: 0,
+                evalAfter: -420,
+                bestMove: "c0e2",
+                playedMove: "b0c2",
+                note: "Hidden branch move decides the study.",
+              }],
+            },
+            annotations: [
+              { moveIndex: 0, evalScore: -420, bestMove: "c0e2", quality: "blunder", swing: 420, winPercentLoss: 35, reviewNote: "Hidden branch move decides the study." },
+              { moveIndex: 1, evalScore: -390, quality: "good", swing: 30, winPercentLoss: 2, reviewNote: "Solid reply." },
+            ],
+          },
+        };
+      }
+      if (index === 1) {
+        return {
+          ...baseGame,
+          label: "Needle hidden QA",
+        };
+      }
+      return baseGame;
+    });
     localStorage.setItem("xiangqi-game-library", JSON.stringify(games));
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
@@ -4840,6 +4892,52 @@ async function assertLargeLibraryRendersProgressively(page) {
   }));
   if (searched.savedCards !== 1 || !searched.needleVisible || searched.showMoreVisible || searched.overflowX > 2) {
     throw new Error(`Large library search did not reach hidden saved games: ${JSON.stringify(searched)}`);
+  }
+
+  await page.getByLabel("Search library").fill("c0e2");
+  await page.waitForFunction(() => {
+    const cards = document.querySelectorAll('[data-testid="saved-game-list"] .lib-card');
+    return cards.length === 1 && document.body.textContent?.includes("Move metadata QA");
+  }, null, { timeout: 5000 });
+
+  const branchSearched = await page.evaluate(() => ({
+    savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
+    metadataVisible: document.body.textContent?.includes("Move metadata QA") || false,
+    needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
+    showMoreVisible: Boolean(document.querySelector('[data-testid="library-show-more-saved"]')),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    branchSearched.savedCards !== 1 ||
+    !branchSearched.metadataVisible ||
+    branchSearched.needleVisible ||
+    branchSearched.showMoreVisible ||
+    branchSearched.overflowX > 2
+  ) {
+    throw new Error(`Large library search did not find hidden branch moves: ${JSON.stringify(branchSearched)}`);
+  }
+
+  await page.getByLabel("Search library").fill("blunder");
+  await page.waitForFunction(() => {
+    const cards = document.querySelectorAll('[data-testid="saved-game-list"] .lib-card');
+    return cards.length === 1 && document.body.textContent?.includes("1 blunder");
+  }, null, { timeout: 5000 });
+
+  const reviewSearched = await page.evaluate(() => ({
+    savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
+    metadataVisible: document.body.textContent?.includes("Move metadata QA") || false,
+    reviewText: document.querySelector('[data-testid="review-blunders-saved-qa-large-library-0"]')?.textContent?.trim() || "",
+    showMoreVisible: Boolean(document.querySelector('[data-testid="library-show-more-saved"]')),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    reviewSearched.savedCards !== 1 ||
+    !reviewSearched.metadataVisible ||
+    reviewSearched.reviewText !== "1 blunder" ||
+    reviewSearched.showMoreVisible ||
+    reviewSearched.overflowX > 2
+  ) {
+    throw new Error(`Large library search did not find hidden review metadata: ${JSON.stringify(reviewSearched)}`);
   }
 }
 

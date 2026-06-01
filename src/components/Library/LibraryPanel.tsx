@@ -99,6 +99,60 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
+function collectSavedMoveTreeMoves(nodes: SavedGame['moveTree'], moves: string[] = []) {
+  if (!nodes?.length) return moves;
+  for (const node of nodes) {
+    moves.push(node.uci);
+    collectSavedMoveTreeMoves(node.children, moves);
+  }
+  return moves;
+}
+
+function getSavedGameSearchText(game: SavedGame) {
+  const summary = game.review?.summary;
+  const annotations = game.review?.annotations ?? [];
+  const treeMoves = collectSavedMoveTreeMoves(game.moveTree);
+
+  const parts = [
+    game.label,
+    game.opening,
+    game.gameMode,
+    resultLabel(game.result ?? 'ongoing'),
+    formatDate(game.savedAt),
+    formatSavedGameMoveCount(game),
+    formatSavedStudyLines(game),
+    game.startFen,
+    game.moves.join(' '),
+    treeMoves.join(' '),
+    typeof game.finalEval === 'number'
+      ? `${game.finalEval}cp final evaluation ${(game.finalEval / 100).toFixed(2)}`
+      : '',
+    summary ? formatLibraryReviewSummary(summary) : '',
+    summary?.lineSignature,
+    summary ? formatReviewEngineSummary(summary.engine) : '',
+    ...(summary?.keyMoments ?? []).flatMap((moment) => [
+      moment.side,
+      moment.quality,
+      moment.playedMove,
+      moment.bestMove,
+      moment.note,
+      `${moment.swing}cp swing`,
+    ]),
+    ...annotations.flatMap((annotation) => [
+      annotation.bestMove,
+      annotation.quality,
+      annotation.reviewNote,
+      typeof annotation.evalScore === 'number' ? `${annotation.evalScore}cp evaluation` : '',
+      typeof annotation.swing === 'number' ? `${annotation.swing}cp swing` : '',
+    ]),
+  ];
+
+  return parts
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' ')
+    .toLowerCase();
+}
+
 function compareDefinedNumbers(
   left: number | undefined,
   right: number | undefined,
@@ -214,11 +268,7 @@ export function LibraryPanel({
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
       if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
       if (!q) return true;
-      return (
-        (g.label ?? '').toLowerCase().includes(q) ||
-        (g.opening ?? '').toLowerCase().includes(q) ||
-        g.gameMode.toLowerCase().includes(q)
-      );
+      return getSavedGameSearchText(g).includes(q);
     })
     .sort((left, right) => compareSavedGames(left, right, savedSort)), [q, resultFilter, reviewFilter, savedGames, savedSort]);
   const reviewInsight = useMemo(() => {
