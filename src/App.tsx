@@ -129,6 +129,7 @@ const ANALYSIS_ENGINE_MODE_COPY: Record<AnalysisEngineMode, { ariaLabel: string;
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
+const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const PANEL_MIN_WIDTH = 60;
 const PANEL_MAX_WIDTH = 600;
@@ -3377,6 +3378,14 @@ function App() {
             </div>
 
             <div className="settings-group">
+              <a
+                className="settings-link"
+                href={THIRD_PARTY_NOTICES_HREF}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <IconLink /> Engine Notices
+              </a>
               <button
                 type="button"
                 className="gc-btn settings-reset-btn"

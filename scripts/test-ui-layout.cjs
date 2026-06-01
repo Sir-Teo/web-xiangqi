@@ -1902,6 +1902,7 @@ async function assertPreferencePersistence(page) {
       };
       const stableMeta = buttonMeta("Stable");
       const optimizedMeta = buttonMeta("Optimized");
+      const noticeLink = root.querySelector(".settings-link");
       return {
         workspaceLabel: labelTextFor("settings-workspace-mode"),
         gameModeLabel: labelTextFor("settings-game-mode"),
@@ -1925,6 +1926,10 @@ async function assertPreferencePersistence(page) {
         stableTitle: stableMeta.title,
         optimizedLabel: optimizedMeta.label,
         optimizedTitle: optimizedMeta.title,
+        noticeText: noticeLink?.textContent?.replace(/\s+/g, " ").trim() || "",
+        noticeHref: noticeLink?.getAttribute("href") || "",
+        noticeTarget: noticeLink?.getAttribute("target") || "",
+        noticeRel: noticeLink?.getAttribute("rel") || "",
       };
     });
     if (
@@ -1949,7 +1954,12 @@ async function assertPreferencePersistence(page) {
       settingsA11y.stableLabel !== "Stable analysis engine profile, safer boot and conservative resources" ||
       settingsA11y.stableTitle !== "Stable profile: safer boot and conservative engine resources." ||
       settingsA11y.optimizedLabel !== "Optimized analysis engine profile, faster search when supported" ||
-      settingsA11y.optimizedTitle !== "Optimized profile: faster search when this device supports it."
+      settingsA11y.optimizedTitle !== "Optimized profile: faster search when this device supports it." ||
+      settingsA11y.noticeText !== "Engine Notices" ||
+      !settingsA11y.noticeHref.endsWith("/web-xiangqi/THIRD_PARTY_NOTICES.md") ||
+      settingsA11y.noticeTarget !== "_blank" ||
+      !settingsA11y.noticeRel.includes("noreferrer") ||
+      !settingsA11y.noticeRel.includes("noopener")
     ) {
       throw new Error(`Settings controls are not fully accessible: ${JSON.stringify(settingsA11y)}`);
     }

@@ -4336,6 +4336,23 @@ summary:active {
   gap: 0.4rem;
 }
 
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.settings-link:hover,
+.settings-link:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 /* ═══════════════════════════════════════════════════
    Top Action Buttons (Flip, New, Settings)
    ═══════════════════════════════════════════════════ */

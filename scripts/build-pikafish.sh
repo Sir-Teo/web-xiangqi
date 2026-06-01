@@ -136,6 +136,11 @@ fi
 
 cp "$ROOT/templates/pikafish.js" "$DIST_DIR/pikafish.js"
 cp "$ROOT/templates/pikafish.js" "$PUBLIC_DIR/pikafish.js"
+for notice_file in THIRD_PARTY_NOTICES.md Pikafish-Copying.txt; do
+  if [ -f "$PUBLIC_DIR/$notice_file" ]; then
+    cp "$PUBLIC_DIR/$notice_file" "$DIST_DIR/$notice_file"
+  fi
+done
 cp "$ROOT/demo/"*.html "$DIST_DIR/"
 if [ -f "$ROOT/demo/sw.js" ]; then
   cp "$ROOT/demo/sw.js" "$DIST_DIR/sw.js"

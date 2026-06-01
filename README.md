@@ -26,6 +26,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - `scripts/serve-demo.cjs`: local static server with COOP/COEP headers
 - `demo/index.html`: simple playable Xiangqi board UI + engine controls (worker-based)
 - `src/`: production React analysis app with board, engine, review, library, and opening-study UI
+- `public/THIRD_PARTY_NOTICES.md`: shipped engine license/source notice for bundled Pikafish artifacts
 
 ## Quick start
 
@@ -101,6 +102,7 @@ Artifacts are written to `dist/`:
 - Threaded builds prewarm a small pthread worker pool by default (`WASM_PTHREAD_POOL_SIZE=4`) so the React app's device-aware thread counts are ready without over-allocating workers on modest machines.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
+- Deployed builds expose `THIRD_PARTY_NOTICES.md` and `Pikafish-Copying.txt` under the `/web-xiangqi/` base path so users can trace the bundled engine source and license.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
 - The React app preloads the lightweight `pikafish.js` wrapper, then lazy-loads the selected core/NNUE through `useEngine` instead of parser-blocking the app shell before first paint.

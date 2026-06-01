@@ -116,6 +116,18 @@ async function main() {
     assert.equal(nnueHead.headers.get("cache-control"), "public, max-age=0, must-revalidate");
     assert(Number(nnueHead.headers.get("content-length")) > 50_000_000);
 
+    const noticesResponse = await fetch(`${baseUrl}/web-xiangqi/THIRD_PARTY_NOTICES.md`);
+    assert.equal(noticesResponse.status, 200);
+    assert.match(noticesResponse.headers.get("content-type") || "", /text\/markdown/);
+    const noticesText = await noticesResponse.text();
+    assert.match(noticesText, /official-pikafish\/Pikafish/);
+    assert.match(noticesText, /beeca5cc785ceb2026c5f9248f6e057573b12906/);
+    assert.match(noticesText, /Pikafish-Copying\.txt/);
+
+    const copyingHead = await fetch(`${baseUrl}/web-xiangqi/Pikafish-Copying.txt`, { method: "HEAD" });
+    assert.equal(copyingHead.status, 200);
+    assert.match(copyingHead.headers.get("content-type") || "", /text\/plain/);
+
     const browser = await playwright.chromium.launch({
       headless: true,
       args: ["--no-sandbox"],
