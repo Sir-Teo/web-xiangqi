@@ -1231,7 +1231,7 @@ body.resizing * {
 
 .command-summary {
   margin: -0.18rem 0 0.45rem;
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
   color: var(--text-muted);
 }
 
@@ -1298,12 +1298,12 @@ body.resizing * {
 }
 
 .opening-move-row span:last-child {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   color: var(--text-muted);
 }
 
 .engine-command-inline {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
@@ -1344,7 +1344,7 @@ body.resizing * {
 
 .engine-lab-console input {
   min-width: 0;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
 }
 
@@ -1410,7 +1410,7 @@ body.resizing * {
   font-size: 0.68rem;
   line-height: 1.45;
   padding: 0.45rem 0.5rem;
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .engine-lab-inline {
@@ -1497,7 +1497,7 @@ body.resizing * {
   font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
 }
 
@@ -1513,7 +1513,7 @@ body.resizing * {
   margin-top: 0.18rem;
   font-size: 0.64rem;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
 
@@ -1563,7 +1563,7 @@ body.resizing * {
 
 .review-book-row span:first-child {
   color: var(--text-muted);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .review-book-row strong {
@@ -1708,7 +1708,7 @@ body.resizing * {
 }
 
 .move-uci {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
   opacity: 0.5;
   font-size: 0.66rem !important;
 }
@@ -1805,7 +1805,7 @@ body.resizing * {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1934,7 +1934,7 @@ body.resizing * {
 .graph-axis-text {
   font-size: 11px;
   fill: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .graph-area {
@@ -2011,7 +2011,7 @@ body.resizing * {
 .graph-legend strong {
   color: var(--accent);
   font-weight: 700;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2073,7 +2073,7 @@ body.resizing * {
 .sample-library-head span {
   font-size: 0.66rem;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .sample-filter-row {
@@ -2113,7 +2113,7 @@ body.resizing * {
 .sample-game-row header span {
   font-size: 0.64rem;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .sample-game-row p {
@@ -3011,7 +3011,7 @@ body.resizing * {
   font-size: 0.67rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   padding-left: 0.1rem;
   user-select: none;
 }
@@ -3165,7 +3165,7 @@ body.resizing * {
   align-items: center;
   gap: 0.2rem;
   font-size: 0.62rem;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   color: var(--accent);
   opacity: 0.75;
   padding: 0 0.2rem;
@@ -3259,7 +3259,7 @@ summary:active {
   min-width: 0;
   font-size: 0.71rem;
   color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -3364,7 +3364,7 @@ summary:active {
   color: var(--text-tertiary);
   font-size: 0.72rem;
   text-align: center;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .settings-inline-toggles {
@@ -3408,7 +3408,7 @@ summary:active {
   color: var(--text-tertiary);
   padding: 0.18rem 0.35rem;
   font-size: 0.64rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   cursor: pointer;
 }
 
@@ -3437,7 +3437,7 @@ summary:active {
 .graph-branch-badge text {
   fill: #d9fff1;
   font-size: 8px;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
 }
 
@@ -3485,7 +3485,7 @@ summary:active {
   color: var(--text-primary);
   padding: 0.38rem 0.48rem;
   font-size: 0.68rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   pointer-events: none;
   white-space: normal;
   max-width: 18rem;
@@ -3556,7 +3556,7 @@ summary:active {
 
 .opening-candidates-head strong {
   color: var(--warning);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .opening-candidates-list {
@@ -3580,7 +3580,7 @@ summary:active {
 
 .opening-candidate-btn strong {
   color: var(--text-primary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
 }
 
@@ -3654,7 +3654,7 @@ summary:active {
   gap: 0.6rem;
   font-size: 0.68rem;
   color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .review-panel {
@@ -3711,7 +3711,7 @@ summary:active {
 
 .review-progress-copy span {
   color: var(--accent);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .review-progress-track {
@@ -3753,7 +3753,7 @@ summary:active {
 .review-summary-card strong {
   color: var(--text-primary);
   font-size: 0.82rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .review-moment-header {
@@ -3823,7 +3823,7 @@ summary:active {
 
 .review-moment-topline strong,
 .review-moment-main strong {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .review-moment-main span {
@@ -3863,7 +3863,7 @@ summary:active {
 
 .review-best-move-btn strong {
   color: var(--accent);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3915,7 +3915,7 @@ summary:active {
   color: var(--text-muted);
   font-size: 0.66rem;
   font-style: normal;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .engine-pv-controls {
@@ -3951,7 +3951,7 @@ summary:active {
   min-height: 1.55rem;
   padding: 0 0.42rem;
   border-radius: var(--radius-sm);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
 }
 
@@ -4003,7 +4003,7 @@ summary:active {
   min-width: 48px;
   font-size: 0.77rem;
   font-weight: 700;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .pv-score.positive {
@@ -4030,7 +4030,7 @@ summary:active {
 .pv-moves .move {
   color: var(--text-secondary);
   font-size: 0.72rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   word-break: break-word;
 }
 
@@ -4083,7 +4083,7 @@ summary:active {
   background: #030404;
   color: #6ee7b7;
   font-size: 0.7rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   padding: 0.6rem;
 }
 
@@ -4099,7 +4099,7 @@ summary:active {
 }
 
 .engine-coach-item strong {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.74rem;
 }
 
@@ -4117,7 +4117,7 @@ summary:active {
 .wc-variation-label {
   color: var(--text-tertiary);
   font-size: 0.64rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   min-width: 44px;
   text-align: center;
 }
@@ -4142,7 +4142,7 @@ summary:active {
 .wc-meta strong {
   color: var(--text-secondary);
   font-size: 0.69rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .wc-scrubber {
@@ -4189,7 +4189,7 @@ summary:active {
 .bottombar-fen {
   color: var(--text-tertiary);
   font-size: 0.66rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4413,7 +4413,7 @@ summary:active {
 .turn-dot-black { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.25); }
 .mobile-turn-label { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); flex-shrink: 0; }
 .mobile-eval-chip {
-  font-size: 0.72rem; font-weight: 700; font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem; font-weight: 700; font-family: var(--font-mono);
   padding: 1px 6px; border-radius: 4px;
   background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-secondary); flex-shrink: 0;
 }
@@ -5191,7 +5191,7 @@ summary:active {
   min-width: 0;
   padding: 0.4rem 0.6rem;
   font-size: 0.74rem;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   background: var(--bg-input, var(--bg-elevated));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -5229,7 +5229,7 @@ summary:active {
   padding: 0.55rem 0.65rem;
   font-size: 0.74rem;
   line-height: 1.45;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
   background: var(--bg-input, var(--bg-elevated));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -5281,7 +5281,7 @@ summary:active {
 .new-game-file-name {
   min-width: 0;
   color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5683,7 +5683,7 @@ summary:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Noto Serif TC', serif;
+  font-family: var(--font-cjk-serif);
   font-size: 1.85rem;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.92);
@@ -5910,7 +5910,7 @@ summary:active {
 
 .position-stat-material strong {
   color: var(--warning);
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .capture-trays {
@@ -5957,7 +5957,7 @@ summary:active {
     radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.72), transparent 38%),
     linear-gradient(180deg, #f1dfa4, #b78937);
   color: #1f1306;
-  font-family: 'Noto Serif TC', serif;
+  font-family: var(--font-cjk-serif);
   font-size: 0.82rem;
   font-weight: 900;
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.24), 0 2px 5px rgba(0, 0, 0, 0.24);
@@ -5980,7 +5980,7 @@ summary:active {
   background: var(--bg-base);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.48rem;
   line-height: 1;
 }

@@ -121,7 +121,7 @@
     font-weight: 900;
     font-size: 1.3rem; /* fallback */
     font-size: clamp(0.9rem, 6cqi, 1.55rem);
-    font-family: 'Noto Serif TC', serif;
+    font-family: var(--font-cjk-serif);
     letter-spacing: 0.6em;
     text-shadow:
         0 1px 0 rgba(255, 220, 120, 0.55),
@@ -149,7 +149,7 @@
 .coord-label {
     position: absolute;
     color: rgba(45, 22, 5, 0.58);
-    font-family: "JetBrains Mono", "SF Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 0.62rem;
     font-size: clamp(0.48rem, 2.1cqi, 0.68rem);
     font-weight: 800;
@@ -261,7 +261,7 @@
     align-items: center;
     justify-content: center;
 
-    font-family: 'Noto Serif TC', serif;
+    font-family: var(--font-cjk-serif);
     font-weight: 900;
     font-size: 1.7rem; /* fallback */
     font-size: clamp(1.3rem, 7.5cqi, 2rem);

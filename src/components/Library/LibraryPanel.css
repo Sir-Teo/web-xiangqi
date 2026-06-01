@@ -38,7 +38,7 @@
 
 .lib-summary-pill strong {
   color: var(--text-primary);
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
 }
 
