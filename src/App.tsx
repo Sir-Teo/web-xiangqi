@@ -1215,11 +1215,14 @@ function App() {
       ? document.activeElement
       : null;
     const focusInitial = () => {
+      if (activeDialog.contains(document.activeElement)) return;
       const firstFocusable = getDialogFocusableElements(activeDialog)[0];
       (firstFocusable ?? activeDialog).focus({ preventScroll: true });
     };
 
+    focusInitial();
     const frame = window.requestAnimationFrame(focusInitial);
+    const retryTimer = window.setTimeout(focusInitial, 80);
     const onDialogKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
       const focusable = getDialogFocusableElements(activeDialog);
@@ -1244,6 +1247,7 @@ function App() {
     document.addEventListener('keydown', onDialogKeyDown);
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearTimeout(retryTimer);
       document.removeEventListener('keydown', onDialogKeyDown);
       if (previouslyFocused && document.contains(previouslyFocused)) {
         previouslyFocused.focus({ preventScroll: true });

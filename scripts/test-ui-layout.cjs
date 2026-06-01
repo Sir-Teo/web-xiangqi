@@ -1270,6 +1270,10 @@ async function assertMobileNewGameStartButtonVisible(page) {
 
   await page.getByRole("button", { name: "Open new game menu" }).click();
   await page.locator(".new-game-menu").waitFor({ timeout: 5000 });
+  await page.waitForFunction(() => {
+    const menu = document.querySelector(".new-game-menu");
+    return Boolean(menu && menu.contains(document.activeElement));
+  }, null, { timeout: 5000 });
   await page.locator(".new-game-mode-btn").filter({ hasText: "You play Black" }).click();
   await page.locator('button[aria-label^="Beginner: depth 2"]').click();
 
