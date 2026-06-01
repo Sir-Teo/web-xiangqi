@@ -214,7 +214,8 @@ function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeN
     while (cursor && guard-- > 0 && !seen.has(cursor)) {
         seen.add(cursor);
         line.push(cursor);
-        const nextNodeId: string | undefined = treeNodes[cursor]?.childrenIds[0];
+        const children: string[] = treeNodes[cursor]?.childrenIds ?? [];
+        const nextNodeId: string | undefined = children[children.length - 1];
         cursor = nextNodeId;
     }
     return line;
