@@ -161,6 +161,8 @@ async function installFakePikafish(page, fakeConfig) {
           } else if (command === "isready") {
             if (config.variant === "fake-stall-ready") return;
             setTimeout(() => emit("readyok"), 0);
+          } else if (command === "stop" && config.variant === "fake-review-hangs") {
+            setTimeout(() => emit("bestmove b0c2"), 0);
           } else if (/^go\b/.test(command)) {
             if (config.variant === "fake-pv") {
               setTimeout(() => {
@@ -250,6 +252,10 @@ async function installFakePikafish(page, fakeConfig) {
                 }
                 emit("info depth 9 multipv 1 score cp 0 pv b2e2");
                 emit("bestmove b2e2");
+              }, 20);
+            } else if (config.variant === "fake-review-hangs") {
+              setTimeout(() => {
+                emit("info depth 4 multipv 1 score cp 0 pv b0c2");
               }, 20);
             }
           }
@@ -2966,6 +2972,56 @@ async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
   }
 }
 
+async function assertRunningReviewCancelsOnLineChange(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-review-hangs" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2');
+    await page.getByTestId("import-uci-line-btn").click();
+    await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+    await page.getByTestId("analysis-tab-review").click();
+    await page.getByTestId("start-review-btn").click();
+    await page.getByTestId("cancel-review-bottom-btn").waitFor({ timeout: 5000 });
+
+    await page.getByLabel("h9, black horse").click();
+    await page.getByLabel("g7, empty, legal move").click();
+    await page.waitForFunction(() => {
+      return !document.querySelector('[data-testid="cancel-review-bottom-btn"]') &&
+        Boolean(document.querySelector('[data-testid="start-review-bottom-btn"]'));
+    }, null, { timeout: 5000 });
+
+    const state = await page.evaluate(() => ({
+      moveMeta: document.querySelector(".wc-meta strong")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      lastMoveArrow: Boolean(document.querySelector('.board-arrow-last[data-from="7:9"][data-to="6:7"]')),
+      cancelExists: Boolean(document.querySelector('[data-testid="cancel-review-bottom-btn"]')),
+      restartExists: Boolean(document.querySelector('[data-testid="start-review-bottom-btn"]')),
+      reviewPanelText: document.querySelector(".review-panel")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      stopSent: (window.__engineCommands || []).includes("stop"),
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (
+      state.moveMeta !== "2 / 2" ||
+      !state.lastMoveArrow ||
+      state.cancelExists ||
+      !state.restartExists ||
+      !state.reviewPanelText.includes("Run a review") ||
+      !state.stopSent ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Running review did not cancel after the reviewed line changed: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertReviewMomentFiltersResetOnLoad(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -5602,6 +5658,7 @@ async function main() {
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
     await assertLastMoveArrowUsesPracticalReviewQuality(page);
+    await assertRunningReviewCancelsOnLineChange(browser);
     await assertReviewMomentFiltersResetOnLoad(browser);
     await assertReviewRevisitRefreshesDecisionBestMove(browser);
     await assertReviewRevisitIgnoresGoodScoreSwings(browser);
@@ -5650,7 +5707,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

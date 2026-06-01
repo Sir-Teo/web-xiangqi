@@ -906,6 +906,7 @@ function App() {
   const currentMultiPvRef = useRef(1);
   const currentShowWdlRef = useRef(false);
   const reviewControllerRef = useRef<ReviewController>(createReviewController());
+  const reviewLineSignatureRef = useRef('');
   const engineRecoveryTimestampsRef = useRef<number[]>([]);
   const lastEngineRecoveryAtRef = useRef(0);
 
@@ -1294,6 +1295,7 @@ function App() {
   }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
 
   const handleCancelReview = useCallback(() => {
+    reviewLineSignatureRef.current = '';
     reviewControllerRef.current.active = false;
     reviewControllerRef.current.currentNodeId = null;
     flushReviewEvalUpdates();
@@ -1305,6 +1307,7 @@ function App() {
   }, [cancelReview, clearAllReviewData, clearQueuedSearch, flushReviewEvalUpdates, resetReviewController, stopSearch]);
 
   const clearCompletedReview = useCallback(() => {
+    reviewLineSignatureRef.current = '';
     reviewControllerRef.current.active = false;
     reviewControllerRef.current.currentNodeId = null;
     resetReviewController(false);
@@ -1349,6 +1352,17 @@ function App() {
     if (reviewSummary.lineSignature === currentLineSignature) return;
     clearCompletedReview();
   }, [clearCompletedReview, currentLineSignature, reviewStatus, reviewSummary]);
+
+  useEffect(() => {
+    if (reviewStatus !== 'running') return;
+    if (!reviewLineSignatureRef.current) {
+      reviewLineSignatureRef.current = currentLineSignature;
+      return;
+    }
+    if (reviewLineSignatureRef.current !== currentLineSignature) {
+      handleCancelReview();
+    }
+  }, [currentLineSignature, handleCancelReview, reviewStatus]);
 
   useEffect(() => {
     if (!shareLinkNotice?.positionKey) return;
@@ -1747,6 +1761,7 @@ function App() {
     setOption('UCI_ShowWDL', false);
     setAnalysisTab('review');
     setMobileAnalysisTab('review');
+    reviewLineSignatureRef.current = currentLineSignature;
 
     const totalSteps = activeLineNodeIds.length + 1;
     if (!startReview(totalSteps)) {
@@ -1762,7 +1777,7 @@ function App() {
       baseQueue: [rootNodeId, ...activeLineNodeIds],
       total: totalSteps,
     };
-  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isAiMode, isReady, resetReviewController, reviewEngineSummary, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
+  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, currentLineSignature, engineEnabled, isAiMode, isReady, resetReviewController, reviewEngineSummary, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
   const clearBoardMarkers = useCallback(() => {
     setUserHighlights((prev) => prev.length ? [] : prev);
