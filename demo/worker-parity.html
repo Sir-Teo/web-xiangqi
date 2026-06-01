@@ -168,6 +168,7 @@
   let activeEngine = null;
   let running = false;
   let logLines = [];
+  const DEMO_ENABLE_SERVICE_WORKER = false;
 
   function preferredVariant() {
     try {
@@ -492,7 +493,7 @@
   };
 
   variantEl.value = preferredVariant();
-  registerDemoServiceWorker();
+  if (DEMO_ENABLE_SERVICE_WORKER) registerDemoServiceWorker();
   appendOut("Worker parity page ready.");
   appendOut("Use `npm run serve:demo` and open /worker-parity.html for threaded WASM support.");
 })();
