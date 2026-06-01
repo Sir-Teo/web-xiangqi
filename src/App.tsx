@@ -44,6 +44,7 @@ import {
 import {
   computeReviewArtifacts,
   getEvalLossForMove,
+  formatReviewCount,
   getReviewSideForRecord,
   makeReviewLineSignature,
   makeReviewLineSignatureFromMoves,
@@ -830,6 +831,15 @@ function App() {
     cancelReview,
     resetReview,
   } = useGameReview();
+  const completedReviewSummaryLabel = useMemo(() => {
+    if (!reviewSummary) return '';
+    return [
+      `Review summary: ${reviewSummary.accuracy}% accuracy`,
+      formatReviewCount(reviewSummary.blunderCount, 'blunder'),
+      formatReviewCount(reviewSummary.mistakeCount, 'mistake'),
+      formatReviewCount(reviewSummary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
+    ].join(', ');
+  }, [reviewSummary]);
 
   const applyBestMoveRef = useRef(false);
   const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'settled'>('idle');
@@ -4146,11 +4156,22 @@ function App() {
                 </span>
               )}
               {reviewStatus === 'done' && reviewSummary && (
-                <span className="review-summary">
+                <span
+                  className="review-summary"
+                  aria-label={completedReviewSummaryLabel}
+                  title={completedReviewSummaryLabel}
+                  data-testid="bottom-review-summary"
+                >
                   <strong>{reviewSummary.accuracy}%</strong> accuracy
-                  <span className="quality-blunder"> {reviewSummary.blunderCount}B</span>
-                  <span className="quality-mistake"> {reviewSummary.mistakeCount}M</span>
-                  <span className="quality-inaccuracy"> {reviewSummary.inaccuracyCount}I</span>
+                  <span className="review-summary-issue quality-blunder">
+                    {formatReviewCount(reviewSummary.blunderCount, 'blunder')}
+                  </span>
+                  <span className="review-summary-issue quality-mistake">
+                    {formatReviewCount(reviewSummary.mistakeCount, 'mistake')}
+                  </span>
+                  <span className="review-summary-issue quality-inaccuracy">
+                    {formatReviewCount(reviewSummary.inaccuracyCount, 'inaccuracy', 'inaccuracies')}
+                  </span>
                   <button
                     type="button"
                     className="chip-btn"

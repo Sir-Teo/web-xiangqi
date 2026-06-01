@@ -1813,6 +1813,7 @@ body.resizing * {
 .review-summary {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
   font-size: 0.7rem;
   color: var(--text-secondary);
@@ -1821,6 +1822,10 @@ body.resizing * {
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
+}
+
+.review-summary-issue {
+  white-space: nowrap;
 }
 
 .review-summary strong {

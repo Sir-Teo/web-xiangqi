@@ -2292,6 +2292,8 @@ async function assertReviewBestMoveBranchAction(page) {
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistake: document.querySelector('[data-testid="review-quality-mistake"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blunder: document.querySelector('[data-testid="review-quality-blunder"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bottomSummaryText: document.querySelector('[data-testid="bottom-review-summary"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bottomSummaryLabel: document.querySelector('[data-testid="bottom-review-summary"]')?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
@@ -2303,6 +2305,12 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.inaccuracy !== "Inaccuracy0" ||
     reviewReadout.mistake !== "Mistake1" ||
     reviewReadout.blunder !== "Blunder0" ||
+    !reviewReadout.bottomSummaryText.includes("40% accuracy") ||
+    !reviewReadout.bottomSummaryText.includes("0 blunders") ||
+    !reviewReadout.bottomSummaryText.includes("1 mistake") ||
+    !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
+    !reviewReadout.bottomSummaryLabel.includes("Review summary: 40% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     reviewReadout.overflowX > 2
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);

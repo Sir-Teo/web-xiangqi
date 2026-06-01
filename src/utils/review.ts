@@ -130,6 +130,11 @@ export function formatReviewQuality(quality: ReviewMoveQuality): string {
     }
 }
 
+export function formatReviewCount(count: number, singular: string, plural = `${singular}s`): string {
+    const normalized = Math.max(0, Math.trunc(count));
+    return `${normalized} ${normalized === 1 ? singular : plural}`;
+}
+
 export function isCriticalReviewQuality(quality: ReviewMoveQuality): quality is ReviewCriticalQuality {
     return quality === 'inaccuracy' || quality === 'mistake' || quality === 'blunder';
 }

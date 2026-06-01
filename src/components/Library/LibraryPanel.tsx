@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
-import type { ReviewSummary } from '../../utils/review';
+import { formatReviewCount, type ReviewSummary } from '../../utils/review';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
@@ -66,11 +66,6 @@ function formatSavedStudyLines(game: SavedGame) {
   const lineCount = countStudyLines(game.moveTree);
   if (lineCount === 0) return null;
   return `${lineCount} study ${lineCount === 1 ? 'line' : 'lines'}`;
-}
-
-function formatReviewCount(count: number, singular: string, plural = `${singular}s`) {
-  const normalized = Math.max(0, Math.trunc(count));
-  return `${normalized} ${normalized === 1 ? singular : plural}`;
 }
 
 function formatLibraryReviewSummary(summary: ReviewSummary) {
