@@ -3584,14 +3584,30 @@ summary:active {
   font-size: 0.7rem;
 }
 
-.opening-candidate-btn span {
+.opening-candidate-main {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.opening-candidate-main > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.opening-candidate-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  font-size: 0.61rem;
+  font-weight: 800;
 }
 
 .opening-candidate-btn em {

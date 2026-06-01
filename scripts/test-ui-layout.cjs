@@ -123,6 +123,10 @@ async function assertDesktopBoardLayout(page, viewport) {
         return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
       })(),
       graphLegacyDescription: document.querySelector(".winrate-graph")?.getAttribute("aria-description") || "",
+      centralCannonCandidateText: document.querySelector('[data-testid="book-candidate-h2e2"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      clippedBookCandidateLabels: Array.from(document.querySelectorAll(".opening-candidate-main > span, .opening-candidate-main small"))
+        .filter((el) => el.scrollWidth - el.clientWidth > 1)
+        .map((el) => el.textContent?.trim() || ""),
       clippedGraphSummaryLabels: Array.from(document.querySelectorAll(".graph-summary-card span"))
         .filter((el) => el.scrollWidth - el.clientWidth > 1)
         .map((el) => el.textContent?.trim() || ""),
@@ -155,6 +159,13 @@ async function assertDesktopBoardLayout(page, viewport) {
     layout.graphLegacyDescription
   ) {
     throw new Error(`Evaluation graph instructions are not exposed accessibly: ${JSON.stringify(layout)}`);
+  }
+  if (
+    !layout.centralCannonCandidateText.includes("Central Cannon") ||
+    !layout.centralCannonCandidateText.includes("中炮") ||
+    layout.clippedBookCandidateLabels.length > 0
+  ) {
+    throw new Error(`Opening book candidates are not beginner/pro readable: ${JSON.stringify(layout)}`);
   }
   rectWithinDesktopLayout(layout);
 }

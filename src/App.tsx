@@ -3148,7 +3148,10 @@ function App() {
                             data-testid={`book-candidate-${candidate.move}`}
                           >
                             <strong>{formatUciLine([candidate.move], 1)}</strong>
-                            <span>{candidate.chinese[0] ?? candidate.names[0]}</span>
+                            <span className="opening-candidate-main">
+                              <span>{candidate.names[0] ?? candidate.chinese[0]}</span>
+                              {candidate.names[0] && candidate.chinese[0] ? <small>{candidate.chinese[0]}</small> : null}
+                            </span>
                             <em>{candidate.count} line{candidate.count === 1 ? '' : 's'}</em>
                           </button>
                         ))}
