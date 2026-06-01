@@ -6,6 +6,7 @@ const OUTPUT_LINE_LIMIT = 100;
 const INFO_FLUSH_MS = 200;
 const ENGINE_SCRIPT_LOAD_TIMEOUT_MS = 12000;
 const ENGINE_READY_TIMEOUT_MS = 45000;
+const MATE_SCORE_BASE = 30000;
 
 export type PvLine = {
     depth: string;
@@ -825,7 +826,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 finalScore = parseInt(scoreMatch[1], 10);
             } else if (mateMatch) {
                 const mateIn = parseInt(mateMatch[1], 10);
-                finalScore = mateIn > 0 ? 10000 - mateIn : -10000 - mateIn;
+                finalScore = mateIn > 0 ? MATE_SCORE_BASE - mateIn : -MATE_SCORE_BASE - mateIn;
             }
 
             // Only update eval and WDL from the primary PV line (multipv 1)

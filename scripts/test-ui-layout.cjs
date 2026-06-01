@@ -75,7 +75,12 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource = "" }) {
         } else if (command === "isready") {
           setTimeout(() => emit("readyok"), 0);
         } else if (/^go\\b/.test(command)) {
-          ${goSource || (variant === "fake-restart-options" ? `
+          ${goSource || (variant === "fake-mate-telemetry" ? `
+          setTimeout(() => {
+            emit("info depth 8 seldepth 10 multipv 1 score mate 3 wdl 1000 0 0 nodes 2345 nps 67890 hashfull 12 time 45 pv b2e2 h9g7");
+            emit("bestmove b2e2");
+          }, 20);
+          ` : variant === "fake-restart-options" ? `
           setTimeout(() => {
             emit("info depth 4 multipv 1 score cp 42 wdl 410 220 370 pv b2e2 h9g7");
             emit("bestmove b2e2");
@@ -228,6 +233,11 @@ async function installFakePikafish(page, fakeConfig) {
                 window.__finishFakeTelemetrySearch = finishSecondSearch;
                 timer = setTimeout(finishSecondSearch, 8000);
               }
+            } else if (config.variant === "fake-mate-telemetry") {
+              setTimeout(() => {
+                emit("info depth 8 seldepth 10 multipv 1 score mate 3 wdl 1000 0 0 nodes 2345 nps 67890 hashfull 12 time 45 pv b2e2 h9g7");
+                emit("bestmove b2e2");
+              }, 20);
             } else if (config.variant === "fake-review-revisit" || config.variant === "fake-review-good-swing") {
               const position = window.__lastPositionCommand || "";
               const count = (window.__reviewPositionCounts[position] || 0) + 1;
@@ -1720,6 +1730,91 @@ async function assertEngineTelemetryDashboard(browser) {
     }
   } finally {
     await context.close();
+  }
+}
+
+async function assertEngineMateScoresRenderAsMate(browser) {
+  const desktop = await newIsolatedPage(browser);
+  try {
+    const { context, page } = desktop;
+    await installFakePikafish(page, { variant: "fake-mate-telemetry" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.waitForFunction(() => {
+      return document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.includes("+M3") &&
+        document.querySelector(".board-stage-chip-eval")?.textContent?.includes("Red POV +M3");
+    }, null, { timeout: 15000 });
+
+    const state = await page.evaluate(() => ({
+      firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
+      firstScoreLabel: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("aria-label") || "",
+      firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
+      firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      stageEvalText: document.querySelector(".board-stage-chip-eval")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      stageEvalLabel: document.querySelector(".board-stage-chip-eval")?.getAttribute("aria-label") || "",
+      stageEvalClass: document.querySelector(".board-stage-chip-eval")?.className || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+
+    if (
+      !state.firstLineLabel.includes("Red POV score +M3") ||
+      state.firstScoreLabel !== "Red POV score +M3" ||
+      state.firstScoreTitle !== "Red POV score +M3" ||
+      state.firstScoreText !== "+M3Red POV" ||
+      state.stageEvalText !== "Red POV +M3" ||
+      state.stageEvalLabel !== "Live engine evaluation, Red POV +M3" ||
+      !state.stageEvalClass.includes("eval-positive") ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Engine mate score did not render as mate on desktop: ${JSON.stringify(state)}`);
+    }
+    await context.close();
+  } catch (error) {
+    try { await desktop.context.close(); } catch (_) {}
+    throw error;
+  }
+
+  const mobile = await newIsolatedPage(browser, { width: 390, height: 844 });
+  try {
+    const { context, page } = mobile;
+    await installFakePikafish(page, { variant: "fake-mate-telemetry" });
+    const blackToMoveFen = encodeURIComponent("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 1");
+    await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${blackToMoveFen}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForFunction(() => {
+      return document.querySelector(".mobile-eval-chip")?.textContent?.includes("-M3");
+    }, null, { timeout: 15000 });
+
+    const state = await page.evaluate(() => ({
+      turnText: document.querySelector(".mobile-turn-label")?.textContent?.trim() || "",
+      evalText: document.querySelector(".mobile-eval-chip")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      evalLabel: document.querySelector(".mobile-eval-chip")?.getAttribute("aria-label") || "",
+      evalTitle: document.querySelector(".mobile-eval-chip")?.getAttribute("title") || "",
+      evalClass: document.querySelector(".mobile-eval-chip")?.className || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+
+    if (
+      state.turnText !== "Black" ||
+      state.evalText !== "-M3" ||
+      state.evalLabel !== "Live engine evaluation, Red POV -M3" ||
+      state.evalTitle !== state.evalLabel ||
+      !state.evalClass.includes("eval-negative") ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Engine mate score did not flip for black-to-move mobile state: ${JSON.stringify(state)}`);
+    }
+    await context.close();
+  } catch (error) {
+    try { await mobile.context.close(); } catch (_) {}
+    throw error;
   }
 }
 
@@ -6118,6 +6213,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertEngineMateScoresRenderAsMate(browser);
     await assertEngineRestartDropsBufferedInfo(browser);
     await assertEngineRestartRestoresDetailOptions(browser);
     await assertPlayedEnginePvDoesNotStoreRootEval(browser);
@@ -6187,7 +6283,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

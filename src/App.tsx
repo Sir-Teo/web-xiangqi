@@ -13,7 +13,7 @@ import {
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward, IconMore
 } from './components/icons';
-import { useEngine, type EngineSearchStats, type WdlStats } from './hooks/useEngine';
+import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
@@ -488,6 +488,27 @@ function normalizeWdlForSide(stats: WdlStats | null, side: Side): WdlStats | nul
 
 function formatEvalScore(score: number, decimals = 1) {
   return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
+}
+
+function parseMateScoreText(scoreStr: string | undefined) {
+  const match = scoreStr?.match(/^([+-])M(\d+)$/);
+  if (!match) return null;
+  const distance = Number(match[2]);
+  if (!Number.isFinite(distance)) return null;
+  return match[1] === '-' ? -distance : distance;
+}
+
+function formatMateScoreText(distance: number) {
+  return distance >= 0 ? `+M${distance}` : `-M${Math.abs(distance)}`;
+}
+
+function formatRedPovEngineScore(pv: Pick<PvLine, 'score' | 'scoreStr'>, side: Side, decimals = 1) {
+  const mateDistance = parseMateScoreText(pv.scoreStr);
+  if (mateDistance !== null) {
+    const redPovMateDistance = side === 'b' ? -mateDistance : mateDistance;
+    return formatMateScoreText(redPovMateDistance);
+  }
+  return formatEvalScore(normalizeEvalForSide(pv.score, side), decimals);
 }
 
 function formatCompactCount(value: number) {
@@ -2106,8 +2127,8 @@ function App() {
     [sideToMove, wdl]
   );
   const shouldShowWdlBar = engineEnabled && (engineDetailEnabled || displayWdl !== null);
-  const currentEvalText = typeof displayEvalScore === 'number'
-    ? formatEvalScore(displayEvalScore)
+  const currentEvalText = topAnalysisPv
+    ? formatRedPovEngineScore(topAnalysisPv, sideToMove)
     : null;
   const redPerspectiveEvalText = currentEvalText ? `Red POV ${currentEvalText}` : null;
   const liveEvalLabel = currentEvalText ? `Live engine evaluation, ${redPerspectiveEvalText}` : undefined;
@@ -3774,7 +3795,7 @@ function App() {
                     aria-label={liveEvalLabel}
                     title={liveEvalLabel}
                   >
-                    {formatEvalScore(displayEvalScore)}
+                    {currentEvalText}
                   </span>
                 )}
                 {detectedOpening && (
@@ -4319,8 +4340,8 @@ function App() {
                       const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
                       const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
-                      const pvScoreText = formatEvalScore(normalizedScore, 0);
-                      const pvScoreLabel = `Red POV score ${formatEvalScore(normalizedScore, 1)}`;
+                      const pvScoreText = formatRedPovEngineScore(pv, sideToMove, 0);
+                      const pvScoreLabel = `Red POV score ${formatRedPovEngineScore(pv, sideToMove, 1)}`;
                       const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
