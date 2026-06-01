@@ -98,7 +98,7 @@ Artifacts are written to `dist/`:
   - it skips patch application if the patch was already applied
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
 - The wasm core build enables Emscripten/LLVM LTO by default (`WASM_ENABLE_LTO=yes`) and strips RTTI (`WASM_DISABLE_RTTI=yes`) for a smaller/faster core. Both are opt-out build env vars.
-- Threaded builds now prewarm a larger pthread worker pool by default (`WASM_PTHREAD_POOL_SIZE=8`) so higher thread counts don't pay runtime worker spawn costs as often.
+- Threaded builds prewarm a small pthread worker pool by default (`WASM_PTHREAD_POOL_SIZE=4`) so the React app's device-aware thread counts are ready without over-allocating workers on modest machines.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
