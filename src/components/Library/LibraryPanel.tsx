@@ -46,6 +46,27 @@ function makeSavedGamePgnFilename(game: SavedGame) {
   return `web-xiangqi-${date}-${slug}.pgn`;
 }
 
+function countStudyLines(nodes: SavedGame['moveTree']): number {
+  if (!nodes?.length) return 0;
+  return nodes.reduce((sum, node) => {
+    const childLines = countStudyLines(node.children);
+    return sum + Math.max(1, childLines);
+  }, 0);
+}
+
+function formatSavedGameMoveCount(game: SavedGame) {
+  if (game.moves.length > 0) {
+    return `${game.moves.length} ${game.moves.length === 1 ? 'move' : 'moves'}`;
+  }
+  return game.moveTree?.length ? 'Start position' : '0 moves';
+}
+
+function formatSavedStudyLines(game: SavedGame) {
+  const lineCount = countStudyLines(game.moveTree);
+  if (lineCount === 0) return null;
+  return `${lineCount} study ${lineCount === 1 ? 'line' : 'lines'}`;
+}
+
 function buildSavedGamePgn(game: SavedGame) {
   if (game.moveTree?.length) {
     const pgn = exportPgnFromMoveTree(game.moveTree, {
@@ -298,8 +319,10 @@ export function LibraryPanel({
               : 'No games match your search.'}
           </p>
         ) : (
-          visibleSaved.map((game) => (
-            <div key={game.id} className="lib-card">
+          visibleSaved.map((game) => {
+            const studyLineLabel = formatSavedStudyLines(game);
+            return (
+              <div key={game.id} className="lib-card">
               <div className="lib-card-title">
                 {editingId === game.id ? (
                   <form
@@ -402,7 +425,13 @@ export function LibraryPanel({
                   {resultLabel(game.result ?? 'ongoing')}
                 </span>
                 <span className="lib-dot">·</span>
-                <span>{game.moves.length} moves</span>
+                <span>{formatSavedGameMoveCount(game)}</span>
+                {studyLineLabel ? (
+                  <>
+                    <span className="lib-dot">·</span>
+                    <span>{studyLineLabel}</span>
+                  </>
+                ) : null}
                 {game.opening && (
                   <>
                     <span className="lib-dot">·</span>
@@ -438,8 +467,9 @@ export function LibraryPanel({
                   </span>
                 </div>
               ) : null}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
       {filteredSaved.length > visibleSaved.length ? (

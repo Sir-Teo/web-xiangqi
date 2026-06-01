@@ -2791,6 +2791,21 @@ async function assertRootStudyTreeShareExportSave(page) {
   }
 
   await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId(`load-saved-${exported.saved.id}`).waitFor({ timeout: 5000 });
+  const librarySummary = await page.evaluate((savedId) => {
+    const card = document.querySelector(`[data-testid="load-saved-${savedId}"]`)?.closest(".lib-card");
+    return {
+      meta: card?.querySelector(".lib-card-meta")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  }, exported.saved.id);
+  if (
+    !librarySummary.meta.includes("Start position") ||
+    !librarySummary.meta.includes("2 study lines") ||
+    librarySummary.overflowX > 2
+  ) {
+    throw new Error(`Root study library card did not summarize the study tree: ${JSON.stringify(librarySummary)}`);
+  }
   await page.getByTestId(`load-saved-${exported.saved.id}`).click();
   await page.waitForFunction(
     () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Start"),
