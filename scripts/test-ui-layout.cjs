@@ -846,6 +846,48 @@ async function assertIllegalMoveShowsRuleHint(page) {
   if (/Horse moves in an L|Chariot moves in straight lines/i.test(clearedHint || "")) {
     throw new Error("Illegal move hint did not clear after a legal move.");
   }
+
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-app-preferences", JSON.stringify({ assistMode: "pro" }));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const proBeforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="3"]').click();
+  await page.waitForFunction(() => {
+    const hint = document.querySelector(".position-stat-selection em");
+    const hintText = hint?.textContent?.trim() || "";
+    return !!hint && /Horse moves in an L/i.test(hintText) && getComputedStyle(hint).display !== "none";
+  }, null, { timeout: 5000 });
+
+  const proIllegalState = await page.evaluate(() => {
+    const hint = document.querySelector(".position-stat-selection em");
+    const hintRect = hint?.getBoundingClientRect();
+    return {
+      assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
+      fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+      hint: hint?.textContent?.trim() || "",
+      display: hint ? getComputedStyle(hint).display : "",
+      visibleHeight: hintRect?.height || 0,
+      warningClass: hint?.classList.contains("position-warning") || false,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    proIllegalState.assistMode !== "pro" ||
+    proIllegalState.fen !== proBeforeFen ||
+    !/Horse moves in an L/i.test(proIllegalState.hint) ||
+    proIllegalState.display === "none" ||
+    proIllegalState.visibleHeight <= 0 ||
+    !proIllegalState.warningClass ||
+    proIllegalState.overflowX > 2
+  ) {
+    throw new Error(`Pro illegal move hint failed: ${JSON.stringify(proIllegalState)}`);
+  }
+
+  await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
 }
 
 async function assertAiPlayModeShowsEngineStatus(page) {

@@ -5481,6 +5481,14 @@ summary:active {
   display: none;
 }
 
+[data-assist-mode="pro"] .position-stat-selection .position-warning {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .new-game-mode-btn {
   display: grid;
   justify-items: start;
