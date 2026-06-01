@@ -2228,6 +2228,10 @@ function App() {
       : isSearching
         ? 'Analyzing'
         : 'Idle';
+  const topEngineStatusText = engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine');
+  const topEngineStatusLabel = isReady
+    ? `${topEngineStatusText}, runtime ${engineVariant}`
+    : topEngineStatusText;
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';
   const engineUnavailableReviewLabel = engineNotice?.text === 'Engine paused after crashes'
@@ -3074,11 +3078,11 @@ function App() {
               <div
                 className={`top-engine-state ${engineNotice ? `top-engine-state-${engineNotice.tone}` : ''}`}
                 role="status"
-                aria-label={`${engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}${isReady ? ` ${engineVariant}` : ''}`}
+                aria-label={topEngineStatusLabel}
               >
                 <span className={`status-dot ${isReady ? 'healthy' : ''} ${engineNotice ? engineNotice.tone : ''}`} />
-                <span>{engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine')}</span>
-                {isReady ? <span className="engine-variant">{engineVariant}</span> : null}
+                <span>{topEngineStatusText}</span>
+                {isReady ? <span className="engine-variant" aria-hidden="true"> · {engineVariant}</span> : null}
               </div>
             ) : null}
             {shareLinkNotice ? (

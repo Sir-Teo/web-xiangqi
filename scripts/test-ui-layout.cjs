@@ -920,6 +920,9 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   await page.getByRole("button", { name: /You play Red/i }).click();
   await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
   await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  await page.waitForFunction(() => {
+    return /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
+  }, null, { timeout: 45000 });
 
   const state = await page.evaluate(() => ({
     workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() || "",
@@ -934,7 +937,12 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   if (!state.engineText) {
     throw new Error("AI Play mode hid the engine status.");
   }
-  if (state.engineRole !== "status" || !state.engineLabel || /readysingle|enginesingle/i.test(state.engineLabel)) {
+  if (
+    state.engineRole !== "status" ||
+    !state.engineLabel ||
+    !/Engine ready\s*·\s*\S+/i.test(state.engineText) ||
+    /readysingle|enginesingle/i.test(`${state.engineText} ${state.engineLabel}`)
+  ) {
     throw new Error(`AI engine status was not announced cleanly: ${JSON.stringify(state)}`);
   }
   if (state.overflowX > 2) {
