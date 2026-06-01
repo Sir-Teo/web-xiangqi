@@ -5948,6 +5948,42 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
   }
 }
 
+async function assertAppErrorBoundaryFallback(browser) {
+  const page = await browser.newPage();
+  try {
+    await page.setViewportSize({ width: 390, height: 720 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?qa-error-boundary=1", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".app-error-fallback", { timeout: 10000 });
+
+    const state = await page.evaluate(() => ({
+      role: document.querySelector(".app-error-fallback")?.getAttribute("role") || "",
+      title: document.querySelector("#app-error-title")?.textContent?.trim() || "",
+      message: document.querySelector("#app-error-message")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      button: document.querySelector(".app-error-fallback button")?.textContent?.trim() || "",
+      detail: document.querySelector(".app-error-fallback code")?.textContent?.trim() || "",
+      boardCount: document.querySelectorAll(".xiangqi-board").length,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+
+    if (
+      state.role !== "alert" ||
+      state.title !== "Something interrupted the board" ||
+      state.message !== "Reload the app to recover the analysis board." ||
+      state.button !== "Reload App" ||
+      state.detail !== "Forced error boundary QA" ||
+      state.boardCount !== 0 ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`App error boundary fallback is not recoverable: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   let playwright;
   try {
@@ -6065,12 +6101,13 @@ async function main() {
     await assertStalemateLossIsLabeled(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
+    await assertAppErrorBoundaryFallback(browser);
 
     if (pageConsole.length > 0) {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

@@ -164,3 +164,97 @@ body {
 #root {
   height: 100%;
 }
+
+.app-error-fallback {
+  min-height: 100vh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.85rem;
+  padding: 2rem;
+  text-align: center;
+  background: linear-gradient(180deg, #050505 0%, #0b0f0d 48%, #0a0a0a 100%);
+  color: var(--text-primary);
+}
+
+.app-error-mark {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid rgba(214, 179, 95, 0.55);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.65), transparent 32%),
+    radial-gradient(circle, #d6b35f 0%, #9b7330 100%);
+  color: #7f1d1d;
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 900;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.app-error-brand {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.app-error-fallback h1 {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--text-heading);
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.app-error-fallback p {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.96rem;
+}
+
+.app-error-fallback button {
+  margin-top: 0.35rem;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 0.72rem 1.1rem;
+}
+
+.app-error-fallback button:hover,
+.app-error-fallback button:focus-visible {
+  background: rgba(16, 185, 129, 0.22);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-error-fallback code {
+  max-width: min(32rem, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.55rem 0.7rem;
+}
+
+@media (max-width: 480px) {
+  .app-error-fallback h1 {
+    font-size: 1.55rem;
+  }
+}
