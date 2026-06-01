@@ -24,10 +24,11 @@
       color: var(--text);
     }
     main {
-      max-width: 1100px;
+      width: min(100%, 1100px);
       margin: 0 auto;
       display: grid;
       gap: 14px;
+      min-width: 0;
     }
     .panel {
       background: rgba(22, 32, 40, 0.94);
@@ -35,6 +36,7 @@
       border-radius: 14px;
       padding: 14px;
       box-shadow: 0 14px 30px rgba(0,0,0,0.25);
+      min-width: 0;
     }
     .row {
       display: flex;
@@ -54,6 +56,7 @@
     button {
       cursor: pointer;
       background: #1c2731;
+      white-space: normal;
     }
     button.primary {
       background: linear-gradient(180deg, #e98b3f, #c96a1d);
@@ -74,7 +77,10 @@
       vertical-align: top;
     }
     th { color: var(--muted); font-weight: 600; }
-    .mono { font-family: var(--mono); }
+    .mono {
+      font-family: var(--mono);
+      overflow-wrap: anywhere;
+    }
     .muted { color: var(--muted); }
     .ok { color: #7ed6ab; }
     .warn { color: #f1cc74; }
@@ -97,6 +103,18 @@
       white-space: pre-wrap;
     }
     a { color: #9fc4ff; }
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .table-scroll table {
+      min-width: 740px;
+    }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      h1 { font-size: 1.45rem; }
+      input, select, button { max-width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -144,6 +162,7 @@
   </section>
 
   <section class="panel">
+    <div class="table-scroll">
     <table>
       <thead>
         <tr>
@@ -161,6 +180,7 @@
         <tr><td colspan="8" class="muted">No runs yet.</td></tr>
       </tbody>
     </table>
+    </div>
   </section>
 
   <section class="panel">
