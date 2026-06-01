@@ -2519,6 +2519,9 @@ async function assertReviewBestMoveBranchAction(page) {
     blunderText: document.querySelector('[data-testid="review-blunders-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistakeText: document.querySelector('[data-testid="review-mistakes-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracyText: document.querySelector('[data-testid="review-inaccuracies-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    engineText: document.querySelector('[data-testid="review-engine-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    engineLabel: document.querySelector('[data-testid="review-engine-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    engineTitle: document.querySelector('[data-testid="review-engine-saved-review-best-branch"]')?.getAttribute("title") || "",
     loadLabel: document.querySelector('[data-testid="load-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
     copyLabel: document.querySelector('[data-testid="copy-pgn-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
     downloadLabel: document.querySelector('[data-testid="download-pgn-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
@@ -2530,8 +2533,13 @@ async function assertReviewBestMoveBranchAction(page) {
     libraryReviewMeta.blunderText !== "0 blunders" ||
     libraryReviewMeta.mistakeText !== "1 mistake" ||
     libraryReviewMeta.inaccuracyText !== "0 inaccuracies" ||
+    !libraryReviewMeta.engineText.includes("D10/1.5s") ||
+    !libraryReviewMeta.engineText.includes("revisit D12/3s") ||
+    !libraryReviewMeta.engineLabel.includes("Review engine: high tier engine") ||
+    !libraryReviewMeta.engineTitle.includes("base depth 10 for 1.5s") ||
     !libraryReviewMeta.metaLabel.includes("Review summary for Review best branch QA") ||
     !libraryReviewMeta.metaLabel.includes("1 mistake") ||
+    !libraryReviewMeta.metaLabel.includes("Engine: high tier engine") ||
     libraryReviewMeta.loadLabel !== "Load Review best branch QA" ||
     libraryReviewMeta.copyLabel !== "Copy PGN for Review best branch QA" ||
     libraryReviewMeta.downloadLabel !== "Download PGN for Review best branch QA" ||

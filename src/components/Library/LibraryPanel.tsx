@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
-import { formatReviewCount, type ReviewSummary } from '../../utils/review';
+import {
+  describeReviewEngineSummary,
+  formatReviewCount,
+  formatReviewEngineSummary,
+  type ReviewSummary,
+} from '../../utils/review';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
@@ -74,6 +79,7 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
     formatReviewCount(summary.blunderCount, 'blunder'),
     formatReviewCount(summary.mistakeCount, 'mistake'),
     formatReviewCount(summary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
+    `Engine: ${describeReviewEngineSummary(summary.engine)}`,
     `reviewed ${formatDate(summary.reviewedAt)}`,
   ].join(', ');
 }
@@ -337,6 +343,8 @@ export function LibraryPanel({
             const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
             const mistakeLabel = game.review ? formatReviewCount(game.review.summary.mistakeCount, 'mistake') : '';
             const inaccuracyLabel = game.review ? formatReviewCount(game.review.summary.inaccuracyCount, 'inaccuracy', 'inaccuracies') : '';
+            const reviewEngineLabel = game.review ? formatReviewEngineSummary(game.review.summary.engine) : '';
+            const reviewEngineDetail = game.review ? describeReviewEngineSummary(game.review.summary.engine) : '';
             return (
               <div key={game.id} className="lib-card">
               <div className="lib-card-title">
@@ -520,6 +528,14 @@ export function LibraryPanel({
                     data-testid={`review-inaccuracies-saved-${game.id}`}
                   >
                     {inaccuracyLabel}
+                  </span>
+                  <span
+                    className="lib-review-pill lib-review-pill-engine"
+                    aria-label={`Review engine: ${reviewEngineDetail}`}
+                    title={`Review engine: ${reviewEngineDetail}`}
+                    data-testid={`review-engine-saved-${game.id}`}
+                  >
+                    Engine {reviewEngineLabel}
                   </span>
                   <span className="lib-review-date">
                     Reviewed {formatDate(game.review.summary.reviewedAt)}

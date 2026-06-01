@@ -296,6 +296,15 @@
   color: #fbbf24;
 }
 
+.lib-review-pill-engine {
+  max-width: 100%;
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .lib-review-date {
   color: var(--text-muted);
   font-size: 0.63rem;
