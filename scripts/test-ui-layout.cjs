@@ -80,7 +80,77 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
 
 async function installFakePikafish(page, fakeConfig) {
   const source = buildFakePikafishScript(fakeConfig);
-  await page.addInitScript(source);
+  await page.addInitScript((config) => {
+    try {
+      window.localStorage?.removeItem("xiangqi-app-preferences");
+    } catch (_) {}
+    try {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    } catch (_) {}
+    window.__engineCommands = [];
+    if (config.variant === "fake-pv") {
+      Math.random = () => 0.99;
+    }
+    if (config.variant === "fake-pv-play") {
+      window.__goCount = 0;
+    }
+    window.Pikafish = function Pikafish() {};
+    window.Pikafish.createWorkerEngine = async () => {
+      const listeners = [];
+      const emit = (line) => listeners.forEach((listener) => listener(line));
+      return {
+        variant: config.variant,
+        addMessageListener(listener) {
+          listeners.push(listener);
+        },
+        removeMessageListener(listener) {
+          const index = listeners.indexOf(listener);
+          if (index >= 0) listeners.splice(index, 1);
+        },
+        postMessage(command) {
+          window.__engineCommands.push(command);
+          if (command === "uci") {
+            setTimeout(() => {
+              emit("id name Fake Pikafish");
+              emit("option name MultiPV type spin default 1 min 1 max 128");
+              emit("option name UCI_ShowWDL type check default false");
+              emit("uciok");
+            }, 0);
+          } else if (command === "isready") {
+            setTimeout(() => emit("readyok"), 0);
+          } else if (/^go\b/.test(command)) {
+            if (config.variant === "fake-pv") {
+              setTimeout(() => {
+                emit("info depth 2 multipv 1 score cp 50 pv h0g2");
+                emit("info depth 2 multipv 2 score cp 10 pv b0c2");
+                emit("bestmove h0g2");
+              }, 20);
+            } else if (config.variant === "fake-analysis-ai-guard") {
+              setTimeout(() => {
+                emit("info depth 2 multipv 1 score cp 42 pv h0g2");
+                emit("bestmove h0g2");
+              }, 20);
+            } else if (config.variant === "fake-pv-play") {
+              window.__goCount += 1;
+              const goCount = window.__goCount;
+              setTimeout(() => {
+                if (goCount === 1) {
+                  emit("info depth 4 multipv 1 score cp 300 pv b0c2");
+                  emit("bestmove b0c2");
+                  return;
+                }
+                emit("bestmove h9g7");
+              }, 20);
+            }
+          }
+        },
+        terminate() {
+          return Promise.resolve();
+        },
+      };
+    };
+  }, { variant: fakeConfig.variant });
   await page.route("**/pikafish.js", (route) => route.fulfill({
     status: 200,
     contentType: "application/javascript",
@@ -473,50 +543,6 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
         }, 20);
       `,
     });
-    await page.addInitScript(() => {
-      try {
-        window.localStorage?.removeItem("xiangqi-app-preferences");
-      } catch (_) {}
-      window.__engineCommands = [];
-      Math.random = () => 0.99;
-      window.Pikafish = function Pikafish() {};
-      window.Pikafish.createWorkerEngine = async () => {
-        const listeners = [];
-        const emit = (line) => listeners.forEach((listener) => listener(line));
-        return {
-          variant: "fake-pv",
-          addMessageListener(listener) {
-            listeners.push(listener);
-          },
-          removeMessageListener(listener) {
-            const index = listeners.indexOf(listener);
-            if (index >= 0) listeners.splice(index, 1);
-          },
-          postMessage(command) {
-            window.__engineCommands.push(command);
-            if (command === "uci") {
-              setTimeout(() => {
-                emit("id name Fake Pikafish");
-                emit("option name MultiPV type spin default 1 min 1 max 128");
-                emit("option name UCI_ShowWDL type check default false");
-                emit("uciok");
-              }, 0);
-            } else if (command === "isready") {
-              setTimeout(() => emit("readyok"), 0);
-            } else if (/^go\b/.test(command)) {
-              setTimeout(() => {
-                emit("info depth 2 multipv 1 score cp 50 pv h0g2");
-                emit("info depth 2 multipv 2 score cp 10 pv b0c2");
-                emit("bestmove h0g2");
-              }, 20);
-            }
-          },
-          terminate() {
-            return Promise.resolve();
-          },
-        };
-      };
-    });
 
     await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
       waitUntil: "domcontentloaded",
@@ -564,48 +590,6 @@ async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
           emit("bestmove h0g2");
         }, 20);
       `,
-    });
-    await page.addInitScript(() => {
-      try {
-        window.localStorage?.removeItem("xiangqi-app-preferences");
-      } catch (_) {}
-      window.__engineCommands = [];
-      window.Pikafish = function Pikafish() {};
-      window.Pikafish.createWorkerEngine = async () => {
-        const listeners = [];
-        const emit = (line) => listeners.forEach((listener) => listener(line));
-        return {
-          variant: "fake-analysis-ai-guard",
-          addMessageListener(listener) {
-            listeners.push(listener);
-          },
-          removeMessageListener(listener) {
-            const index = listeners.indexOf(listener);
-            if (index >= 0) listeners.splice(index, 1);
-          },
-          postMessage(command) {
-            window.__engineCommands.push(command);
-            if (command === "uci") {
-              setTimeout(() => {
-                emit("id name Fake Pikafish");
-                emit("option name MultiPV type spin default 1 min 1 max 128");
-                emit("option name UCI_ShowWDL type check default false");
-                emit("uciok");
-              }, 0);
-            } else if (command === "isready") {
-              setTimeout(() => emit("readyok"), 0);
-            } else if (/^go\b/.test(command)) {
-              setTimeout(() => {
-                emit("info depth 2 multipv 1 score cp 42 pv h0g2");
-                emit("bestmove h0g2");
-              }, 20);
-            }
-          },
-          terminate() {
-            return Promise.resolve();
-          },
-        };
-      };
     });
 
     const startFen = encodeURIComponent(
@@ -875,55 +859,6 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
           emit("bestmove h9g7");
         }, 20);
       `,
-    });
-    await page.addInitScript(() => {
-      try {
-        window.localStorage?.removeItem("xiangqi-app-preferences");
-      } catch (_) {}
-      window.__engineCommands = [];
-      window.__goCount = 0;
-      window.Pikafish = function Pikafish() {};
-      window.Pikafish.createWorkerEngine = async () => {
-        const listeners = [];
-        const emit = (line) => listeners.forEach((listener) => listener(line));
-        return {
-          variant: "fake-pv-play",
-          addMessageListener(listener) {
-            listeners.push(listener);
-          },
-          removeMessageListener(listener) {
-            const index = listeners.indexOf(listener);
-            if (index >= 0) listeners.splice(index, 1);
-          },
-          postMessage(command) {
-            window.__engineCommands.push(command);
-            if (command === "uci") {
-              setTimeout(() => {
-                emit("id name Fake Pikafish");
-                emit("option name MultiPV type spin default 1 min 1 max 128");
-                emit("option name UCI_ShowWDL type check default false");
-                emit("uciok");
-              }, 0);
-            } else if (command === "isready") {
-              setTimeout(() => emit("readyok"), 0);
-            } else if (/^go\b/.test(command)) {
-              window.__goCount += 1;
-              const goCount = window.__goCount;
-              setTimeout(() => {
-                if (goCount === 1) {
-                  emit("info depth 4 multipv 1 score cp 300 pv b0c2");
-                  emit("bestmove b0c2");
-                  return;
-                }
-                emit("bestmove h9g7");
-              }, 20);
-            }
-          },
-          terminate() {
-            return Promise.resolve();
-          },
-        };
-      };
     });
 
     await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
