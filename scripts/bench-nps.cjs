@@ -16,7 +16,7 @@ function parseArgs(argv) {
     if (!arg.startsWith("--")) continue;
     const key = arg.slice(2);
     const next = argv[i + 1];
-    if (key === "json" || key === "quiet") {
+    if (key === "json" || key === "quiet" || key === "no-depth-check") {
       out[key] = true;
       continue;
     }
@@ -31,8 +31,18 @@ function safeInt(v, fallback) {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
+function safeNumber(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, safeInt(v, min)));
+}
+
+function optionalPositiveNumber(v) {
+  const n = safeNumber(v, 0);
+  return n > 0 ? n : 0;
 }
 
 function getGitRef(rootDir) {
@@ -173,6 +183,39 @@ function printSummary(snapshot, compareTo) {
   console.log("  cold start:     " + formatPct(coldDelta) + " (" + Math.round(compareTo.coldStartMs) + " -> " + Math.round(snapshot.coldStartMs) + ")");
 }
 
+function validateSnapshot(snapshot, cfg) {
+  const failures = [];
+  if (snapshot.runs.length === 0) {
+    failures.push("no benchmark runs completed");
+  }
+
+  for (const run of snapshot.runs) {
+    if (!run.bestmove) {
+      failures.push(`run ${run.index} did not return a bestmove`);
+    }
+    if (cfg.requireDepth && run.depth < snapshot.depth) {
+      failures.push(`run ${run.index} reached depth ${run.depth || 0}, expected at least ${snapshot.depth}`);
+    }
+    if (run.nps < cfg.minRunNps) {
+      failures.push(`run ${run.index} reported ${Math.round(run.nps || 0)} nps, expected at least ${Math.round(cfg.minRunNps)}`);
+    }
+  }
+
+  if (cfg.minMedianNps > 0 && snapshot.medianNps < cfg.minMedianNps) {
+    failures.push(`median nps ${Math.round(snapshot.medianNps)} below threshold ${Math.round(cfg.minMedianNps)}`);
+  }
+  if (cfg.maxMedianWallMs > 0 && snapshot.medianWallMs > cfg.maxMedianWallMs) {
+    failures.push(`median wall ${Math.round(snapshot.medianWallMs)}ms above threshold ${Math.round(cfg.maxMedianWallMs)}ms`);
+  }
+  if (cfg.maxColdStartMs > 0 && snapshot.coldStartMs > cfg.maxColdStartMs) {
+    failures.push(`cold start ${Math.round(snapshot.coldStartMs)}ms above threshold ${Math.round(cfg.maxColdStartMs)}ms`);
+  }
+
+  if (failures.length > 0) {
+    throw new Error("Benchmark sanity checks failed:\n- " + failures.join("\n- "));
+  }
+}
+
 async function main() {
   const rootDir = path.resolve(__dirname, "..");
   const distDir = path.resolve(rootDir, "dist");
@@ -192,7 +235,12 @@ async function main() {
     label: String(args.label || process.env.PIKAFISH_BENCH_LABEL || "").trim(),
     fen: String(args.fen || process.env.PIKAFISH_BENCH_FEN || START_FEN).trim(),
     json: !!args.json,
-    quiet: !!args.quiet
+    quiet: !!args.quiet,
+    requireDepth: args["no-depth-check"] ? false : process.env.PIKAFISH_BENCH_REQUIRE_DEPTH !== "0",
+    minRunNps: optionalPositiveNumber(args["min-run-nps"] || process.env.PIKAFISH_BENCH_MIN_RUN_NPS || 1),
+    minMedianNps: optionalPositiveNumber(args["min-median-nps"] || process.env.PIKAFISH_BENCH_MIN_MEDIAN_NPS || 0),
+    maxMedianWallMs: optionalPositiveNumber(args["max-median-wall-ms"] || process.env.PIKAFISH_BENCH_MAX_MEDIAN_WALL_MS || 0),
+    maxColdStartMs: optionalPositiveNumber(args["max-cold-start-ms"] || process.env.PIKAFISH_BENCH_MAX_COLD_START_MS || 0)
   };
 
   if (!fs.existsSync(path.join(distDir, "pikafish.js"))) {
@@ -324,6 +372,8 @@ async function main() {
       fs.writeFileSync(cfg.outPath, JSON.stringify(snapshot, null, 2) + "\n");
       if (!cfg.quiet) console.log("saved snapshot: " + cfg.outPath);
     }
+
+    validateSnapshot(snapshot, cfg);
 
     if (cfg.json) {
       console.log(JSON.stringify({ snapshot, compareTo: compareSnapshot || null }, null, 2));
