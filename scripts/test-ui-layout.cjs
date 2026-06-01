@@ -979,8 +979,14 @@ async function assertAnalysisResumesAfterVisibilityReturn(browser) {
     const hiddenState = await page.evaluate(() => ({
       pvLineCount: document.querySelectorAll('[data-testid^="play-engine-pv-"]').length,
       emptyText: document.querySelector(".pv-lines-container")?.textContent?.trim() || "",
+      coachText: document.querySelector(".engine-coach-summary")?.textContent?.replace(/\s+/g, " ").trim() || "",
     }));
-    if (hiddenState.pvLineCount !== 0 || !hiddenState.emptyText.includes("No PV available yet")) {
+    if (
+      hiddenState.pvLineCount !== 0 ||
+      !hiddenState.emptyText.includes("No PV available yet") ||
+      !hiddenState.coachText.includes("BestNo engine move yet") ||
+      !hiddenState.coachText.includes("LineNo engine line yet")
+    ) {
       throw new Error(`Hidden analysis unexpectedly searched before visibility returned: ${JSON.stringify(hiddenState)}`);
     }
 
@@ -1588,10 +1594,26 @@ async function assertPreferencePersistence(page) {
       profile: [...document.querySelectorAll(".engine-stat")]
         .map((el) => el.textContent || "")
         .find((text) => text.includes("Profile")) || "",
+      terminalRole: document.querySelector('[data-testid="engine-output-terminal"]')?.getAttribute("role") || "",
+      terminalLabel: document.querySelector('[data-testid="engine-output-terminal"]')?.getAttribute("aria-label") || "",
+      terminalTitle: document.querySelector('[data-testid="engine-output-terminal"]')?.getAttribute("title") || "",
+      terminalLive: document.querySelector('[data-testid="engine-output-terminal"]')?.getAttribute("aria-live") || "",
+      terminalRelevant: document.querySelector('[data-testid="engine-output-terminal"]')?.getAttribute("aria-relevant") || "",
+      terminalText: document.querySelector('[data-testid="engine-output-terminal"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
 
-    if (restored.pv5Active !== "true" || !restored.detail.includes("MultiPV 5") || !restored.profile.includes("stable")) {
+    if (
+      restored.pv5Active !== "true" ||
+      !restored.detail.includes("MultiPV 5") ||
+      !restored.profile.includes("stable") ||
+      restored.terminalRole !== "log" ||
+      !restored.terminalLabel.startsWith("Raw engine UCI output, ") ||
+      restored.terminalTitle !== restored.terminalLabel ||
+      restored.terminalLive !== "off" ||
+      restored.terminalRelevant !== "additions text" ||
+      restored.terminalText.length === 0
+    ) {
       throw new Error(`Preferences were not restored into the UI: ${JSON.stringify(restored)}`);
     }
     if (restored.overflowX > 2) {

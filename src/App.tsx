@@ -1885,6 +1885,20 @@ function App() {
     [isReady, isSearchQueued, isSearching, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, searchStats]
   );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
+  const visibleEngineOutputLineCount = Math.min(outputLines.length, 20);
+  const engineOutputTerminalLabel = visibleEngineOutputLineCount > 0
+    ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
+    : 'Raw engine UCI output, waiting for engine output';
+  const coachBestMoveText = topAnalysisPv?.moves[0]
+    ? formatUciLine([topAnalysisPv.moves[0]], 1)
+    : isSearchQueued || isSearching
+      ? 'Waiting for engine'
+      : 'No engine move yet';
+  const coachLineText = topAnalysisPv?.moves.length
+    ? formatUciLine(topAnalysisPv.moves, 5)
+    : isSearchQueued || isSearching
+      ? 'Waiting for engine line'
+      : 'No engine line yet';
   const liveEvalScore = currentAnalysisPvLines[0]?.score ?? null;
   const displayEvalScore = useMemo(
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
@@ -4089,17 +4103,25 @@ function App() {
                     })}
                   </div>
                   {assistMode === 'pro' ? (
-                    <div className="engine-output-terminal mt-4">
+                    <div
+                      className="engine-output-terminal mt-4"
+                      role="log"
+                      aria-label={engineOutputTerminalLabel}
+                      aria-live="off"
+                      aria-relevant="additions text"
+                      title={engineOutputTerminalLabel}
+                      data-testid="engine-output-terminal"
+                    >
                       {outputLines.slice(-20).map((line, i) => (
                         <div key={i}>{line}</div>
                       ))}
-                      {outputLines.length === 0 && <div>Waiting for engine…</div>}
+                      {outputLines.length === 0 && <div>Waiting for engine output...</div>}
                     </div>
                   ) : (
                     <div className="engine-coach-summary">
                       <div className="engine-coach-item">
                         <span>Best</span>
-                        <strong>{topAnalysisPv?.moves[0] ? formatUciLine([topAnalysisPv.moves[0]], 1) : 'Waiting'}</strong>
+                        <strong>{coachBestMoveText}</strong>
                       </div>
                       <div className="engine-coach-item">
                         <span>Depth</span>
@@ -4107,7 +4129,7 @@ function App() {
                       </div>
                       <div className="engine-coach-item engine-coach-line">
                         <span>Line</span>
-                        <strong>{topAnalysisPv?.moves.length ? formatUciLine(topAnalysisPv.moves, 5) : 'No line yet'}</strong>
+                        <strong>{coachLineText}</strong>
                       </div>
                     </div>
                   )}
