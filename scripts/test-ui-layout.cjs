@@ -4575,6 +4575,17 @@ async function assertBoardMarkersSurviveSelection(page) {
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
+  await page.locator('.hitbox[data-file="4"][data-rank="4"]').focus();
+  const markerShortcuts = await page.evaluate(() => document.activeElement?.getAttribute("aria-keyshortcuts") || "");
+  if (!markerShortcuts.includes("Shift+Enter") || !markerShortcuts.includes("Shift+Space")) {
+    throw new Error(`Board markers are not keyboard discoverable from square shortcuts: ${markerShortcuts}`);
+  }
+
+  await page.keyboard.press("Shift+Enter");
+  await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 1, null, { timeout: 5000 });
+  await page.keyboard.press("Shift+Space");
+  await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 0, null, { timeout: 5000 });
+
   await page.locator('.hitbox[data-file="4"][data-rank="4"]').click({ button: "right" });
   await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 1, null, { timeout: 5000 });
 

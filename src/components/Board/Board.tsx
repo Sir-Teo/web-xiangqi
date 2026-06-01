@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { BoardArrows } from './BoardArrows';
@@ -46,6 +46,8 @@ const PIECE_NAMES: Record<string, string> = {
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const BOARD_RANKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const BOARD_FILES = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+const TOUCH_MARKER_DELAY_MS = 480;
+const TOUCH_MARKER_MOVE_TOLERANCE_PX = 10;
 
 function formatSquareName(file: number, rank: number) {
     return `${FILE_LABELS[file]}${rank}`;
@@ -115,6 +117,16 @@ export const Board = React.memo(function Board({
     const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
     const hitboxesRef = useRef<HTMLDivElement | null>(null);
     const markerDragStartRef = useRef<{ file: number; rank: number } | null>(null);
+    const touchMarkerTimerRef = useRef<number | null>(null);
+    const touchMarkerPointerRef = useRef<{
+        pointerId: number;
+        file: number;
+        rank: number;
+        clientX: number;
+        clientY: number;
+        triggered: boolean;
+    } | null>(null);
+    const suppressNextClickRef = useRef(false);
     const targetBySquare = useMemo(() => {
         const map = new Map<string, { capture: boolean }>();
         for (const target of validTargets) {
@@ -123,7 +135,25 @@ export const Board = React.memo(function Board({
         return map;
     }, [validTargets]);
 
+    const clearTouchMarkerTimer = useCallback(() => {
+        if (touchMarkerTimerRef.current !== null) {
+            window.clearTimeout(touchMarkerTimerRef.current);
+            touchMarkerTimerRef.current = null;
+        }
+    }, []);
+
+    const cancelTouchMarker = useCallback(() => {
+        clearTouchMarkerTimer();
+        touchMarkerPointerRef.current = null;
+    }, [clearTouchMarkerTimer]);
+
+    useEffect(() => cancelTouchMarker, [cancelTouchMarker]);
+
     const handleHitboxClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        if (suppressNextClickRef.current) {
+            suppressNextClickRef.current = false;
+            return;
+        }
         const square = squareFromElement(e.target as Element);
         if (!square) return;
         onSquareClick(square.file, square.rank);
@@ -143,6 +173,10 @@ export const Board = React.memo(function Board({
     ) => {
         if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
             event.preventDefault();
+            if (event.shiftKey && onToggleHighlight) {
+                onToggleHighlight({ file, rank });
+                return;
+            }
             onSquareClick(file, rank);
             return;
         }
@@ -169,36 +203,80 @@ export const Board = React.memo(function Board({
 
         event.preventDefault();
         focusSquare(clampSquare(nextFile, 8), clampSquare(nextRank, 9));
-    }, [focusSquare, onSquareClick, orientation]);
+    }, [focusSquare, onSquareClick, onToggleHighlight, orientation]);
 
     const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
-        if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
-        event.preventDefault();
-        markerDragStartRef.current = { file, rank };
-    }, [onAddArrow, onToggleHighlight]);
-
-    const handleMarkerPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
-        if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
-        event.preventDefault();
-        const start = markerDragStartRef.current;
-        markerDragStartRef.current = null;
-        if (!start) return;
-        const end = squareFromElement(document.elementFromPoint(event.clientX, event.clientY)) ?? { file, rank };
-        if (start.file === end.file && start.rank === end.rank) {
-            onToggleHighlight?.(end);
+        if (event.button === 2 && (onToggleHighlight || onAddArrow)) {
+            event.preventDefault();
+            markerDragStartRef.current = { file, rank };
             return;
         }
-        onAddArrow?.(start, end);
-    }, [onAddArrow, onToggleHighlight]);
+
+        if (event.pointerType === 'mouse' || event.button !== 0 || !onToggleHighlight) return;
+        cancelTouchMarker();
+        const pointerId = event.pointerId;
+        touchMarkerPointerRef.current = {
+            pointerId,
+            file,
+            rank,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            triggered: false,
+        };
+        touchMarkerTimerRef.current = window.setTimeout(() => {
+            const active = touchMarkerPointerRef.current;
+            if (!active || active.pointerId !== pointerId) return;
+            active.triggered = true;
+            suppressNextClickRef.current = true;
+            onToggleHighlight({ file: active.file, rank: active.rank });
+        }, TOUCH_MARKER_DELAY_MS);
+    }, [cancelTouchMarker, onAddArrow, onToggleHighlight]);
+
+    const handleMarkerPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+        const active = touchMarkerPointerRef.current;
+        if (!active || active.pointerId !== event.pointerId || active.triggered) return;
+        const moved = Math.hypot(event.clientX - active.clientX, event.clientY - active.clientY);
+        if (moved > TOUCH_MARKER_MOVE_TOLERANCE_PX) {
+            cancelTouchMarker();
+        }
+    }, [cancelTouchMarker]);
+
+    const handleMarkerPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.button === 2 && (onToggleHighlight || onAddArrow)) {
+            event.preventDefault();
+            const start = markerDragStartRef.current;
+            markerDragStartRef.current = null;
+            if (!start) return;
+            const end = squareFromElement(document.elementFromPoint(event.clientX, event.clientY)) ?? { file, rank };
+            if (start.file === end.file && start.rank === end.rank) {
+                onToggleHighlight?.(end);
+                return;
+            }
+            onAddArrow?.(start, end);
+            return;
+        }
+
+        const active = touchMarkerPointerRef.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        const triggered = active.triggered;
+        cancelTouchMarker();
+        if (triggered) {
+            event.preventDefault();
+        }
+    }, [cancelTouchMarker, onAddArrow, onToggleHighlight]);
 
     const handleMarkerPointerCancel = useCallback(() => {
         markerDragStartRef.current = null;
-    }, []);
+        cancelTouchMarker();
+    }, [cancelTouchMarker]);
 
     const handleContextMenu = useCallback((event: React.MouseEvent) => {
         if (!onToggleHighlight && !onAddArrow) return;
         event.preventDefault();
     }, [onAddArrow, onToggleHighlight]);
+    const squareKeyshortcuts = onToggleHighlight
+        ? 'Enter Space Shift+Enter Shift+Space ArrowUp ArrowDown ArrowLeft ArrowRight'
+        : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight';
 
     return (
         <div className="xiangqi-board-container">
@@ -286,10 +364,11 @@ export const Board = React.memo(function Board({
                                     data-file={file}
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
-                                    aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight"
+                                    aria-keyshortcuts={squareKeyshortcuts}
                                     tabIndex={piece || isSelected || target ? 0 : -1}
                                     onKeyDown={(event) => handleHitboxKeyDown(event, file, rank)}
                                     onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
+                                    onPointerMove={handleMarkerPointerMove}
                                     onPointerUp={(event) => handleMarkerPointerUp(event, file, rank)}
                                     onPointerCancel={handleMarkerPointerCancel}
                                 />
