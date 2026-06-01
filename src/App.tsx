@@ -1451,7 +1451,12 @@ function App() {
   }, [currentMoveIndex, currentNodeId, treeNodes]);
 
   useEffect(() => {
-    if (!engineRequired || !isReady) return;
+    if (!isReady) {
+      currentMultiPvRef.current = 1;
+      currentShowWdlRef.current = false;
+      return;
+    }
+    if (!engineRequired) return;
 
     const targetMultiPv = reviewStatus === 'running'
       ? 1

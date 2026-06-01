@@ -29,7 +29,8 @@ async function waitForHttp(url, timeoutMs) {
   throw new Error("Timed out waiting for " + url);
 }
 
-function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
+function buildFakePikafishScript({ variant, setupSource = "", goSource = "" }) {
+  const tracksInstances = variant === "fake-restart-buffer" || variant === "fake-restart-options";
   return `
 (() => {
   try {
@@ -40,9 +41,11 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
   } catch (_) {}
   window.__engineCommands = [];
+  ${tracksInstances ? "window.__engineInstanceCount = 0; window.__engineCommandsByInstance = [];" : ""}
   ${setupSource}
   window.Pikafish = function Pikafish() {};
   window.Pikafish.createWorkerEngine = async () => {
+    const instanceId = ${tracksInstances ? "++window.__engineInstanceCount" : "0"};
     const listeners = [];
     const emit = (line) => listeners.forEach((listener) => listener(line));
     return {
@@ -56,6 +59,9 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
       },
       postMessage(command) {
         window.__engineCommands.push(command);
+        if (Array.isArray(window.__engineCommandsByInstance)) {
+          window.__engineCommandsByInstance.push({ instanceId, command });
+        }
         if (/^position\b/.test(command)) {
           window.__lastPositionCommand = command;
         }
@@ -69,7 +75,12 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
         } else if (command === "isready") {
           setTimeout(() => emit("readyok"), 0);
         } else if (/^go\\b/.test(command)) {
-          ${goSource}
+          ${goSource || (variant === "fake-restart-options" ? `
+          setTimeout(() => {
+            emit("info depth 4 multipv 1 score cp 42 wdl 410 220 370 pv b2e2 h9g7");
+            emit("bestmove b2e2");
+          }, 20);
+          ` : "")}
         }
       },
       terminate() {
@@ -101,13 +112,14 @@ async function installFakePikafish(page, fakeConfig) {
     if (config.variant === "fake-telemetry") {
       window.__goCount = 0;
     }
-    if (config.variant === "fake-restart-buffer") {
+    if (config.variant === "fake-restart-buffer" || config.variant === "fake-restart-options") {
       window.__engineInstanceCount = 0;
       window.__goCount = 0;
+      window.__engineCommandsByInstance = [];
     }
     window.Pikafish = function Pikafish() {};
     window.Pikafish.createWorkerEngine = async () => {
-      const instanceId = config.variant === "fake-restart-buffer"
+      const instanceId = config.variant === "fake-restart-buffer" || config.variant === "fake-restart-options"
         ? ++window.__engineInstanceCount
         : 0;
       const listeners = [];
@@ -123,6 +135,9 @@ async function installFakePikafish(page, fakeConfig) {
         },
         postMessage(command) {
           window.__engineCommands.push(command);
+          if (Array.isArray(window.__engineCommandsByInstance)) {
+            window.__engineCommandsByInstance.push({ instanceId, command });
+          }
           if (/^position\b/.test(command)) {
             window.__lastPositionCommand = command;
           }
@@ -166,6 +181,12 @@ async function installFakePikafish(page, fakeConfig) {
                   return;
                 }
                 emit("bestmove h9g7");
+              }, 20);
+            } else if (config.variant === "fake-restart-options") {
+              window.__goCount += 1;
+              setTimeout(() => {
+                emit("info depth 4 multipv 1 score cp 42 wdl 410 220 370 pv b2e2 h9g7");
+                emit("bestmove b2e2");
               }, 20);
             } else if (config.variant === "fake-telemetry") {
               window.__goCount += 1;
@@ -1452,6 +1473,74 @@ async function assertEngineRestartDropsBufferedInfo(browser) {
       state.overflowX > 2
     ) {
       throw new Error(`Engine restart leaked buffered info from the previous worker: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+async function assertEngineRestartRestoresDetailOptions(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-restart-options" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.waitForFunction(() => {
+      return /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
+    }, null, { timeout: 15000 });
+    const activeInstanceId = await page.evaluate(() => window.__engineInstanceCount || 0);
+    await page.getByTestId("engine-pv-lines-5").click();
+    await page.waitForFunction((instanceId) => {
+      const firstCommands = (window.__engineCommandsByInstance || [])
+        .filter((entry) => entry.instanceId === instanceId)
+        .map((entry) => entry.command);
+      return firstCommands.includes("setoption name MultiPV value 5") &&
+        firstCommands.includes("setoption name UCI_ShowWDL value true");
+    }, activeInstanceId, { timeout: 10000 });
+
+    await page.getByTestId("restart-engine-btn").click();
+    await page.waitForFunction((instanceId) => {
+      return window.__engineInstanceCount > instanceId &&
+        /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
+    }, activeInstanceId, { timeout: 15000 });
+    const restartedInstanceId = await page.evaluate(() => window.__engineInstanceCount || 0);
+    await page.waitForFunction((instanceId) => {
+      const secondCommands = (window.__engineCommandsByInstance || [])
+        .filter((entry) => entry.instanceId === instanceId)
+        .map((entry) => entry.command);
+      return secondCommands.includes("setoption name MultiPV value 5") &&
+        secondCommands.includes("setoption name UCI_ShowWDL value true");
+    }, restartedInstanceId, { timeout: 10000 });
+
+    const state = await page.evaluate((instanceId) => {
+      const secondCommands = (window.__engineCommandsByInstance || [])
+        .filter((entry) => entry.instanceId === instanceId)
+        .map((entry) => entry.command);
+      return {
+        instanceCount: window.__engineInstanceCount,
+        detail: [...document.querySelectorAll(".engine-stat")]
+          .map((el) => el.textContent || "")
+          .find((text) => text.includes("Detail")) || "",
+        activeFive: document.querySelector('[data-testid="engine-pv-lines-5"]')?.getAttribute("aria-pressed") || "",
+        secondCommands,
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    }, restartedInstanceId);
+
+    if (
+      state.instanceCount <= activeInstanceId ||
+      !state.detail.includes("MultiPV 5") ||
+      !state.detail.includes("WDL on") ||
+      state.activeFive !== "true" ||
+      !state.secondCommands.includes("setoption name MultiPV value 5") ||
+      !state.secondCommands.includes("setoption name UCI_ShowWDL value true") ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Engine restart did not restore selected detail options: ${JSON.stringify(state)}`);
     }
   } finally {
     await context.close();
@@ -4717,6 +4806,7 @@ async function main() {
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
     await assertEngineRestartDropsBufferedInfo(browser);
+    await assertEngineRestartRestoresDetailOptions(browser);
     await assertPlayedEnginePvDoesNotStoreRootEval(browser);
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
@@ -4776,7 +4866,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
