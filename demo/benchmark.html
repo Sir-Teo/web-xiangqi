@@ -184,6 +184,7 @@
   const cliCmdPreviewEl = document.getElementById("cli-cmd-preview");
   const cliWorkflowPreviewEl = document.getElementById("cli-workflow-preview");
   const cliCopyStateEl = document.getElementById("cli-copy-state");
+  const DEMO_ENABLE_SERVICE_WORKER = false;
 
   let running = false;
   const rowsByVariant = new Map();
@@ -539,6 +540,17 @@
     });
   }
 
+  function disableServiceWorkerForCurrentScope() {
+    if (!("serviceWorker" in navigator)) return;
+    const scopeUrl = new URL("./", location.href).href;
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      for (const reg of regs || []) {
+        if (!reg || reg.scope !== scopeUrl) continue;
+        reg.unregister().catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
   document.getElementById("run-selected").onclick = () => runSequence([variantEl.value]);
   document.getElementById("run-supported").onclick = () => runSequence(supportedVariants());
   document.getElementById("clear-results").onclick = () => {
@@ -555,7 +567,8 @@
 
   refreshCapabilities();
   refreshCliBenchmarkPreview();
-  registerServiceWorker();
+  if (DEMO_ENABLE_SERVICE_WORKER) registerServiceWorker();
+  else disableServiceWorkerForCurrentScope();
   log("Tip: run 'supported variants' locally for the best comparison.");
 </script>
 </body>
