@@ -2079,7 +2079,7 @@ function App() {
   }, [board, inCheck, sideToMove, visibleGameResult]);
   const aiMoveSearchActive = isAiTurn && (isSearching || isSearchQueued);
   const bottomEngineStatus = !isReady
-    ? 'Loading engine'
+    ? engineNotice?.text ?? 'Loading engine'
     : isSearchQueued
       ? 'Queued'
       : isSearching

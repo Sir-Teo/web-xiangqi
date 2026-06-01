@@ -1091,11 +1091,15 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
 
     const state = await page.evaluate(() => ({
       engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+      bottomEngineText: document.querySelector(".bottom-engine-info")?.textContent?.trim() || "",
       commands: window.__engineCommands || [],
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
     if (!/Recovering engine|Engine paused after crashes/i.test(state.engineText)) {
       throw new Error(`Stalled engine handshake did not surface a recovery notice: ${JSON.stringify(state)}`);
+    }
+    if (!/Recovering engine|Engine paused after crashes/i.test(state.bottomEngineText)) {
+      throw new Error(`Stalled engine handshake left the bottom status stale: ${JSON.stringify(state)}`);
     }
     if (!state.commands.includes("uci") || !state.commands.includes("isready")) {
       throw new Error(`Stalled engine handshake did not reach the UCI readiness phase: ${JSON.stringify(state.commands)}`);
