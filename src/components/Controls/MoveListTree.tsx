@@ -1,6 +1,7 @@
 import { memo, useEffect } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
+    formatReviewQuality,
     getEvalLossForMove,
     getMoveQualityClassName,
     getReviewSideForRecord,
@@ -70,20 +71,23 @@ export const MoveListTree = memo(function MoveListTree({
         const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
         const note = record.quality && isCriticalReviewQuality(record.quality) ? record.reviewNote : null;
         const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
+        const isCurrent = currentNodeId === nodeId;
         return (
             <span key={nodeId} className="mtree-chip-wrap">
                 <button
                     data-node-id={nodeId}
-                    data-testid={currentNodeId === nodeId ? 'move-tree-active' : undefined}
+                    data-testid={isCurrent ? 'move-tree-active' : undefined}
                     type="button"
                     className={[
                         'mtree-chip',
                         qualityClass,
                         compact ? 'mtree-chip-compact' : '',
-                        currentNodeId === nodeId ? 'mtree-chip-active' : '',
+                        isCurrent ? 'mtree-chip-active' : '',
                     ].filter(Boolean).join(' ')}
                     onClick={() => onNavigateNode(nodeId)}
                     title={formatMoveTitle(record)}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove)}
                 >
                     {formatMoveLabel(record)}
                     <span className="move-uci">{record.uci}</span>
@@ -182,6 +186,21 @@ function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
 
 function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
     return formatMoveRecordTitle(record);
+}
+
+function formatMoveAriaLabel(
+    record: NonNullable<MoveTreeNode['record']>,
+    isCurrent: boolean,
+    coachMove: string | null
+) {
+    const parts = [
+        isCurrent ? 'Current move' : '',
+        formatMoveRecordTitle(record),
+        `UCI ${formatUciMove(record.uci)}`,
+        record.quality ? `Review quality ${formatReviewQuality(record.quality)}` : '',
+        coachMove ? `Engine suggestion ${formatUciMove(coachMove)}` : '',
+    ].filter(Boolean);
+    return parts.join(', ');
 }
 
 function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeNode>): string[] {

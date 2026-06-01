@@ -1637,9 +1637,19 @@ async function assertReplayedMoveKeepsChosenContinuation(page) {
     rows: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.trim() || "").join(" "),
     variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
     active: document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || "",
+    activeCurrent: document.querySelector('[data-testid="move-tree-active"]')?.getAttribute("aria-current") || "",
+    activeLabel: document.querySelector('[data-testid="move-tree-active"]')?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
-  if (!state.active.includes("b9c7") || !state.rows.includes("h0g2") || !state.variations.includes("c3c4") || state.overflowX > 2) {
+  if (
+    !state.active.includes("b9c7") ||
+    state.activeCurrent !== "step" ||
+    !state.activeLabel.includes("Current move") ||
+    !state.activeLabel.includes("UCI B9→C7") ||
+    !state.rows.includes("h0g2") ||
+    !state.variations.includes("c3c4") ||
+    state.overflowX > 2
+  ) {
     throw new Error(`Replaying an existing move did not preserve the chosen continuation: ${JSON.stringify(state)}`);
   }
 }
