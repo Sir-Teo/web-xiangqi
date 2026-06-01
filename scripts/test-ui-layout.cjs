@@ -1113,6 +1113,31 @@ async function assertEngineTelemetryDashboard(browser) {
         !searchCard.includes("hash 2%");
     }, null, { timeout: 1200 });
 
+    const clearHashCommandsBefore = await page.evaluate(() => {
+      return (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
+    });
+    await page.getByTestId("clear-engine-hash-btn").click();
+    const queuedHashState = await page.evaluate((beforeCount) => {
+      const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+      return {
+        text: button?.textContent?.replace(/\s+/g, " ").trim() || "",
+        label: button?.getAttribute("aria-label") || "",
+        title: button?.getAttribute("title") || "",
+        clearHashCommandCount: (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length,
+        beforeCount,
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    }, clearHashCommandsBefore);
+    if (
+      queuedHashState.text !== "Queued" ||
+      queuedHashState.label !== "Engine hash clear queued" ||
+      !queuedHashState.title.includes("queued after the current search") ||
+      queuedHashState.clearHashCommandCount !== queuedHashState.beforeCount ||
+      queuedHashState.overflowX > 2
+    ) {
+      throw new Error(`Clear Hash did not disclose queued search feedback: ${JSON.stringify(queuedHashState)}`);
+    }
+
     const cleared = await page.evaluate(() => {
       const searchCard = [...document.querySelectorAll(".engine-stat")]
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
@@ -1137,6 +1162,29 @@ async function assertEngineTelemetryDashboard(browser) {
       cleared.overflowX > 2
     ) {
       throw new Error(`Engine telemetry leaked after the position changed: ${JSON.stringify(cleared)}`);
+    }
+
+    await page.waitForFunction((beforeCount) => {
+      return (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length > beforeCount;
+    }, clearHashCommandsBefore, { timeout: 5000 });
+    const flushedHashState = await page.evaluate((beforeCount) => {
+      const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+      const clearHashCommandCount = (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
+      return {
+        text: button?.textContent?.replace(/\s+/g, " ").trim() || "",
+        label: button?.getAttribute("aria-label") || "",
+        clearHashCommandCount,
+        beforeCount,
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    }, clearHashCommandsBefore);
+    if (
+      flushedHashState.clearHashCommandCount <= flushedHashState.beforeCount ||
+      !["Cleared", "Clear Hash"].includes(flushedHashState.text) ||
+      !["Engine hash cleared", "Clear engine hash table"].includes(flushedHashState.label) ||
+      flushedHashState.overflowX > 2
+    ) {
+      throw new Error(`Queued Clear Hash did not flush after the search completed: ${JSON.stringify(flushedHashState)}`);
     }
   } finally {
     await context.close();

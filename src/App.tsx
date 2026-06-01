@@ -69,6 +69,7 @@ type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
 type PvLineCount = 1 | 3 | 5;
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
+type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | `copy-pv-${number}`;
 type BoardSquare = { file: number; rank: number };
@@ -2007,7 +2008,7 @@ function App() {
   const [copiedFenToast, setCopiedFenToast] = useState(false);
   const [copiedShareToast, setCopiedShareToast] = useState(false);
   const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
-  const [clearedHashToast, setClearedHashToast] = useState(false);
+  const [engineHashFeedback, setEngineHashFeedback] = useState<EngineHashFeedback>(null);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [exportFailureKey, setExportFailureKey] = useState<ExportFailureKey | null>(null);
   const [savedToast, setSavedToast] = useState(false);
@@ -2312,13 +2313,36 @@ function App() {
     setOption('Clear Hash');
     if (clearedHashTimerRef.current !== null) {
       window.clearTimeout(clearedHashTimerRef.current);
+      clearedHashTimerRef.current = null;
     }
-    setClearedHashToast(true);
+    if (isSearching) {
+      setEngineHashFeedback('queued');
+      return;
+    }
+    setEngineHashFeedback('cleared');
     clearedHashTimerRef.current = window.setTimeout(() => {
       clearedHashTimerRef.current = null;
-      setClearedHashToast(false);
+      setEngineHashFeedback(null);
     }, 1800);
-  }, [setOption]);
+  }, [isSearching, setOption]);
+
+  useEffect(() => {
+    if (engineHashFeedback !== 'queued') return;
+    if (!isReady) {
+      setEngineHashFeedback(null);
+      return;
+    }
+    if (isSearching || isSearchQueued) return;
+
+    if (clearedHashTimerRef.current !== null) {
+      window.clearTimeout(clearedHashTimerRef.current);
+    }
+    setEngineHashFeedback('cleared');
+    clearedHashTimerRef.current = window.setTimeout(() => {
+      clearedHashTimerRef.current = null;
+      setEngineHashFeedback(null);
+    }, 1800);
+  }, [engineHashFeedback, isReady, isSearchQueued, isSearching]);
 
   const handleRestartEngine = useCallback(() => {
     applyBestMoveRef.current = false;
@@ -3917,14 +3941,14 @@ function App() {
                       </button>
                       <button
                         type="button"
-                        className={`engine-cache-btn ${clearedHashToast ? 'engine-pv-btn-active' : ''}`}
+                        className={`engine-cache-btn ${engineHashFeedback ? 'engine-pv-btn-active' : ''}`}
                         onClick={handleClearEngineHash}
                         disabled={!isReady}
-                        title={isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
-                        aria-label={clearedHashToast ? 'Engine hash cleared' : 'Clear engine hash table'}
+                        title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
+                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear engine hash table'}
                         data-testid="clear-engine-hash-btn"
                       >
-                        {clearedHashToast ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
+                        {engineHashFeedback === 'queued' ? <><IconRefresh aria-hidden="true" focusable="false" /> Queued</> : engineHashFeedback === 'cleared' ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
                       </button>
                     </div>
                   </div>
