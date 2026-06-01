@@ -56,6 +56,9 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
       },
       postMessage(command) {
         window.__engineCommands.push(command);
+        if (/^position\b/.test(command)) {
+          window.__lastPositionCommand = command;
+        }
         if (command === "uci") {
           setTimeout(() => {
             emit("id name Fake Pikafish");
@@ -110,6 +113,9 @@ async function installFakePikafish(page, fakeConfig) {
         },
         postMessage(command) {
           window.__engineCommands.push(command);
+          if (/^position\b/.test(command)) {
+            window.__lastPositionCommand = command;
+          }
           if (command === "uci") {
             setTimeout(() => {
               emit("id name Fake Pikafish");
@@ -133,9 +139,9 @@ async function installFakePikafish(page, fakeConfig) {
               }, 20);
             } else if (config.variant === "fake-pv-play") {
               window.__goCount += 1;
-              const goCount = window.__goCount;
+              const isAfterPlayedPv = /\bmoves\b.*\bb0c2\b/.test(window.__lastPositionCommand || "");
               setTimeout(() => {
-                if (goCount === 1) {
+                if (!isAfterPlayedPv) {
                   emit("info depth 4 multipv 1 score cp 300 pv b0c2");
                   emit("bestmove b0c2");
                   return;
@@ -849,9 +855,9 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
       setupSource: "window.__goCount = 0;",
       goSource: `
         window.__goCount += 1;
-        const goCount = window.__goCount;
+        const isAfterPlayedPv = /\\bmoves\\b.*\\bb0c2\\b/.test(window.__lastPositionCommand || "");
         setTimeout(() => {
-          if (goCount === 1) {
+          if (!isAfterPlayedPv) {
             emit("info depth 4 multipv 1 score cp 300 pv b0c2");
             emit("bestmove b0c2");
             return;
@@ -2802,7 +2808,7 @@ async function assertLibraryRespondsToStorageChanges(page) {
   if (
     state.savedCards !== 1 ||
     !state.summaryText.includes("1 saved") ||
-    !state.summaryLabel.includes("1 saved games.") ||
+    !state.summaryLabel.includes("1 saved game.") ||
     state.overflowX > 2
   ) {
     throw new Error(`Library did not refresh after storage change: ${JSON.stringify(state)}`);

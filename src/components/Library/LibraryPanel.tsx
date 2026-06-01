@@ -132,6 +132,8 @@ export function LibraryPanel({
     );
   }), [q, resultFilter, reviewFilter, savedGames]);
   const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
+  const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
+  const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
 
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
@@ -258,7 +260,7 @@ export function LibraryPanel({
       </div>
       <div
         className="lib-summary-row"
-        aria-label={`${filteredSaved.length} saved games. ${filteredHistorical.length} classic games.`}
+        aria-label={`${filteredSaved.length} ${savedGameSummaryLabel}. ${filteredHistorical.length} ${classicGameSummaryLabel}.`}
       >
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
