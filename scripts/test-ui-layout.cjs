@@ -1192,6 +1192,28 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
     if (state.overflowX > 2) {
       throw new Error(`Stalled engine recovery notice introduced horizontal overflow: ${state.overflowX}`);
     }
+
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2');
+    await page.getByTestId("import-uci-line-btn").click();
+    await page.getByTestId("start-review-bottom-btn").waitFor({ timeout: 5000 });
+
+    const bottomState = await page.evaluate(() => ({
+      text: document.querySelector('[data-testid="start-review-bottom-btn"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      title: document.querySelector('[data-testid="start-review-bottom-btn"]')?.getAttribute("title") || "",
+      label: document.querySelector('[data-testid="start-review-bottom-btn"]')?.getAttribute("aria-label") || "",
+      disabled: Boolean(document.querySelector('[data-testid="start-review-bottom-btn"]')?.disabled),
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (
+      !bottomState.disabled ||
+      !/Recovering Engine|Engine Paused/.test(bottomState.text) ||
+      !/Recovering engine|Engine paused after crashes/.test(bottomState.title) ||
+      !/Game review unavailable: (Recovering engine|Engine paused after crashes)/.test(bottomState.label) ||
+      bottomState.overflowX > 2
+    ) {
+      throw new Error(`Bottom review action did not explain stalled engine state: ${JSON.stringify(bottomState)}`);
+    }
   } finally {
     await context.close();
   }

@@ -4506,7 +4506,7 @@ function App() {
                   disabled={!canStartReview}
                   data-testid="start-review-bottom-btn"
                 >
-                  {isReady ? 'Review Game' : 'Loading Engine'}
+                  {canStartReview ? 'Review Game' : reviewStartLabel}
                 </button>
               )}
               {reviewStatus === 'running' && (
