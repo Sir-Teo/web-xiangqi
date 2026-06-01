@@ -79,19 +79,19 @@ async function main() {
     await page.locator('.review-panel [data-testid="start-review-btn"]').click();
 
     await page.waitForFunction(
-      () => document.querySelectorAll('[data-testid^="review-moment-"]').length > 0,
+      () => document.querySelectorAll('.review-moment-card[data-testid^="review-moment-"]').length > 0,
       null,
       { timeout: 240000 }
     );
 
-    const firstMoment = page.locator('[data-testid^="review-moment-"]').first();
+    const firstMoment = page.locator('.review-moment-card[data-testid^="review-moment-"]').first();
     const firstMomentLabel = await firstMoment.getAttribute("aria-label");
     if (!firstMomentLabel || !/review moment/i.test(firstMomentLabel) || !/played/i.test(firstMomentLabel)) {
       throw new Error(`Review moment did not expose an actionable label: ${firstMomentLabel}`);
     }
     await firstMoment.click();
     await page.waitForFunction(
-      () => Boolean(document.querySelector('[data-testid^="review-moment-"][aria-current="true"]')),
+      () => Boolean(document.querySelector('.review-moment-card[data-testid^="review-moment-"][aria-current="true"]')),
       null,
       { timeout: 5000 }
     );
@@ -116,12 +116,12 @@ async function main() {
     await page.locator('[data-testid^="load-saved-"]').first().click();
     await page.getByTestId("analysis-tab-review").click();
     await page.waitForFunction(
-      () => document.querySelectorAll('[data-testid^="review-moment-"]').length > 0,
+      () => document.querySelectorAll('.review-moment-card[data-testid^="review-moment-"]').length > 0,
       null,
       { timeout: 20000 }
     );
 
-    const reviewCount = await page.locator('[data-testid^="review-moment-"]').count();
+    const reviewCount = await page.locator('.review-moment-card[data-testid^="review-moment-"]').count();
     const summaryText = await page.locator(".review-summary-card").first().textContent();
 
     console.log("Review browser smoke passed.");
