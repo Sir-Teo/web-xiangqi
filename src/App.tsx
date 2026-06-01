@@ -42,6 +42,7 @@ import {
   resolveReviewPolicy,
 } from './utils/analysisProfile';
 import {
+  classifyMoveQualityForEval,
   computeReviewArtifacts,
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
@@ -52,6 +53,7 @@ import {
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
   type ReviewEngineSummary,
+  type ReviewMoveQuality,
 } from './utils/review';
 import {
   AI_STRENGTH_LABELS,
@@ -560,6 +562,21 @@ function formatEngineTelemetryDetail(
 function formatEvalGap(centipawns: number) {
   const normalized = Math.max(0, Math.round(centipawns));
   return `${(normalized / 100).toFixed(1)} behind`;
+}
+
+function getQualityArrowColor(quality: ReviewMoveQuality) {
+  switch (quality) {
+    case 'best':
+      return '#22c55e';
+    case 'good':
+      return '#4ade80';
+    case 'inaccuracy':
+      return '#facc15';
+    case 'mistake':
+      return '#f97316';
+    case 'blunder':
+      return '#ef4444';
+  }
 }
 
 function isPieceCode(value: string): value is PieceCode {
@@ -2133,11 +2150,7 @@ function App() {
     if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return '#94a3b8';
     const side = getReviewSideForRecord(record, record.ply - 1);
     const delta = getEvalLossForMove(parentEval, currentEval, side);
-    if (delta <= 40)  return '#22c55e'; // best   — bright green
-    if (delta <= 90)  return '#4ade80'; // good   — light green
-    if (delta <= 180) return '#facc15'; // inaccuracy — yellow
-    if (delta <= 320) return '#f97316'; // mistake   — orange
-    return '#ef4444';                   // blunder   — red
+    return getQualityArrowColor(classifyMoveQualityForEval(delta, parentEval, currentEval, side));
   }, [currentNodeId, treeNodes]);
 
   // Opening recognition

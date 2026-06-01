@@ -2889,6 +2889,83 @@ async function assertReviewBestMoveBranchAction(page) {
   }
 }
 
+async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+      id: "decisive-arrow-quality",
+      savedAt: 1710000006000,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7", "b0c2"],
+      result: "ongoing",
+      label: "Decisive arrow quality QA",
+      review: {
+        summary: {
+          totalMoves: 3,
+          accuracy: 82,
+          averageCentipawnLoss: 123,
+          redAccuracy: 75,
+          blackAccuracy: 95,
+          redAverageCentipawnLoss: 175,
+          blackAverageCentipawnLoss: 0,
+          bestCount: 1,
+          goodCount: 1,
+          inaccuracyCount: 1,
+          mistakeCount: 0,
+          blunderCount: 0,
+          reviewedAt: 1710000006000,
+          lineSignature: "b2e2 h9g7 b0c2",
+          keyMoments: [{
+            nodeId: "saved-2",
+            moveIndex: 2,
+            jumpTarget: 2,
+            ply: 3,
+            side: "red",
+            quality: "inaccuracy",
+            swing: 350,
+            winPercentLoss: 5.9,
+            evalBefore: 1000,
+            evalAfter: 650,
+            bestMove: "h0g2",
+            playedMove: "b0c2",
+            note: "Still winning, but H0->G2 kept more of the advantage (350cp).",
+          }],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: 20, quality: "good", swing: 20, reviewNote: "Solid choice." },
+          { moveIndex: 1, evalScore: 1000, quality: "best", swing: 0, reviewNote: "Engine-approved move." },
+          { moveIndex: 2, evalScore: 650, bestMove: "h0g2", quality: "inaccuracy", swing: 350, winPercentLoss: 5.9, reviewNote: "Still winning, but H0->G2 kept more of the advantage (350cp)." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-decisive-arrow-quality").click();
+  await page.waitForFunction(() => {
+    const arrow = document.querySelector('.board-arrow-last[data-from="1:0"][data-to="2:2"] path');
+    return arrow?.getAttribute("stroke") === "#facc15";
+  }, null, { timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    arrowStroke: document.querySelector('.board-arrow-last[data-from="1:0"][data-to="2:2"] path')?.getAttribute("stroke") || "",
+    reviewMoment: document.querySelector('[data-testid="review-moment-2"]')?.getAttribute("aria-label") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    state.arrowStroke !== "#facc15" ||
+    !state.reviewMoment.includes("Inaccuracy review moment") ||
+    state.overflowX > 2
+  ) {
+    throw new Error(`Last-move arrow did not follow practical review quality: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertReviewMomentFiltersResetOnLoad(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -5507,6 +5584,7 @@ async function main() {
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
+    await assertLastMoveArrowUsesPracticalReviewQuality(page);
     await assertReviewMomentFiltersResetOnLoad(browser);
     await assertReviewRevisitRefreshesDecisionBestMove(browser);
     await assertReviewRevisitIgnoresGoodScoreSwings(browser);
@@ -5555,7 +5633,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
