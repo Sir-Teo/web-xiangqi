@@ -272,6 +272,8 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
     return {
         totalMoves: typeof totalMoves === 'number' && totalMoves <= moves.length ? totalMoves : moves.length,
         accuracy: asClampedInteger(raw.accuracy, 0, 100) ?? 0,
+        redAccuracy: asClampedInteger(raw.redAccuracy, 0, 100),
+        blackAccuracy: asClampedInteger(raw.blackAccuracy, 0, 100),
         bestCount: asClampedInteger(raw.bestCount, 0, moves.length) ?? 0,
         goodCount: asClampedInteger(raw.goodCount, 0, moves.length) ?? 0,
         inaccuracyCount: asClampedInteger(raw.inaccuracyCount, 0, moves.length) ?? 0,

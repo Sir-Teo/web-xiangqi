@@ -2510,7 +2510,9 @@ async function assertReviewBestMoveBranchAction(page) {
       review: {
         summary: {
           totalMoves: 2,
-          accuracy: 40,
+          accuracy: 66,
+          redAccuracy: 39,
+          blackAccuracy: 93,
           bestCount: 0,
           goodCount: 1,
           inaccuracyCount: 0,
@@ -2569,7 +2571,9 @@ async function assertReviewBestMoveBranchAction(page) {
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
-    !libraryReviewMeta.metaText.includes("40% accuracy") ||
+    !libraryReviewMeta.metaText.includes("66% accuracy") ||
+    !libraryReviewMeta.metaLabel.includes("Red 39%") ||
+    !libraryReviewMeta.metaLabel.includes("Black 93%") ||
     libraryReviewMeta.blunderText !== "0 blunders" ||
     libraryReviewMeta.mistakeText !== "1 mistake" ||
     libraryReviewMeta.inaccuracyText !== "0 inaccuracies" ||
@@ -2597,6 +2601,10 @@ async function assertReviewBestMoveBranchAction(page) {
     focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
     focusChance: document.querySelector('[data-testid="review-focus-chance"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     focusChanceLabel: document.querySelector('[data-testid="review-focus-chance"]')?.getAttribute("aria-label") || "",
+    redAccuracy: document.querySelector('[data-testid="review-red-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy"]')?.getAttribute("aria-label") || "",
+    blackAccuracy: document.querySelector('[data-testid="review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    blackAccuracyLabel: document.querySelector('[data-testid="review-black-accuracy"]')?.getAttribute("aria-label") || "",
     momentEval: document.querySelector('[data-testid="review-moment-eval-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
     momentChance: document.querySelector('[data-testid="review-moment-chance-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2640,6 +2648,10 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
     reviewReadout.focusChance !== "Chance-21%" ||
     reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
+    reviewReadout.redAccuracy !== "Red39%" ||
+    reviewReadout.redAccuracyLabel !== "Red accuracy 39%" ||
+    reviewReadout.blackAccuracy !== "Black93%" ||
+    reviewReadout.blackAccuracyLabel !== "Black accuracy 93%" ||
     !reviewReadout.momentEval.includes("0.00") ||
     !reviewReadout.momentEval.includes("-2.40") ||
     reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
@@ -2666,11 +2678,13 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.rerunTitle !== "Engine is still loading" ||
     reviewReadout.clearReviewLabel !== "Clear completed game review" ||
     reviewReadout.clearReviewTitle !== "Clear completed game review" ||
-    !reviewReadout.bottomSummaryText.includes("40% accuracy") ||
+    !reviewReadout.bottomSummaryText.includes("66% accuracy") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
-    !reviewReadout.bottomSummaryLabel.includes("Review summary: 40% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("Review summary: 66% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("Red 39% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("Black 93% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
     reviewReadout.bottomViewLabel !== "Open completed game review" ||

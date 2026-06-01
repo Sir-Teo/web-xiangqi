@@ -870,11 +870,13 @@ function App() {
     if (!reviewSummary) return '';
     return [
       `Review summary: ${reviewSummary.accuracy}% accuracy`,
+      typeof reviewSummary.redAccuracy === 'number' ? `Red ${reviewSummary.redAccuracy}% accuracy` : '',
+      typeof reviewSummary.blackAccuracy === 'number' ? `Black ${reviewSummary.blackAccuracy}% accuracy` : '',
       formatReviewCount(reviewSummary.blunderCount, 'blunder'),
       formatReviewCount(reviewSummary.mistakeCount, 'mistake'),
       formatReviewCount(reviewSummary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
       `Engine: ${describeReviewEngineSummary(reviewSummary.engine)}`,
-    ].join(', ');
+    ].filter(Boolean).join(', ');
   }, [reviewSummary]);
 
   const applyBestMoveRef = useRef(false);

@@ -76,12 +76,14 @@ function formatSavedStudyLines(game: SavedGame) {
 function formatLibraryReviewSummary(summary: ReviewSummary) {
   return [
     `${summary.accuracy}% accuracy`,
+    typeof summary.redAccuracy === 'number' ? `Red ${summary.redAccuracy}%` : '',
+    typeof summary.blackAccuracy === 'number' ? `Black ${summary.blackAccuracy}%` : '',
     formatReviewCount(summary.blunderCount, 'blunder'),
     formatReviewCount(summary.mistakeCount, 'mistake'),
     formatReviewCount(summary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
     `Engine: ${describeReviewEngineSummary(summary.engine)}`,
     `reviewed ${formatDate(summary.reviewedAt)}`,
-  ].join(', ');
+  ].filter(Boolean).join(', ');
 }
 
 function buildSavedGamePgn(game: SavedGame) {

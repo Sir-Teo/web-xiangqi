@@ -191,6 +191,9 @@ async function main() {
       if (summary.accuracy !== 55) {
         throw new Error(`Unexpected chance-loss accuracy: ${summary.accuracy}`);
       }
+      if (summary.redAccuracy !== 70 || summary.blackAccuracy !== 41) {
+        throw new Error(`Unexpected side accuracy: ${JSON.stringify({ redAccuracy: summary.redAccuracy, blackAccuracy: summary.blackAccuracy })}`);
+      }
 
       const rankedMoments = summary.keyMoments.map((moment) => `${moment.moveIndex}:${moment.quality}`).join(",");
       if (rankedMoments !== "3:blunder,2:mistake,1:inaccuracy") {
@@ -222,6 +225,8 @@ async function main() {
         decisiveReview.summary.mistakeCount !== 0 ||
         decisiveReview.summary.inaccuracyCount !== 1 ||
         decisiveReview.summary.accuracy !== 77 ||
+        decisiveReview.summary.redAccuracy !== 77 ||
+        decisiveReview.summary.blackAccuracy !== undefined ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss < 5 ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss > 7 ||
         !decisiveAnnotation.reviewNote.includes("Still winning")

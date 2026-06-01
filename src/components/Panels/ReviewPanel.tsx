@@ -46,6 +46,10 @@ export const ReviewPanel = memo(function ReviewPanel({
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
     const reviewEngineDetail = `Review engine: ${describeReviewEngineSummary(summary?.engine)}`;
+    const sideAccuracyBreakdown = summary ? [
+        { key: 'red', label: 'Red', value: summary.redAccuracy },
+        { key: 'black', label: 'Black', value: summary.blackAccuracy },
+    ].filter((item): item is { key: 'red' | 'black'; label: string; value: number } => typeof item.value === 'number') : [];
     const qualityBreakdown = summary ? [
         { key: 'best', label: 'Best', count: summary.bestCount },
         { key: 'good', label: 'Good', count: summary.goodCount },
@@ -140,6 +144,18 @@ export const ReviewPanel = memo(function ReviewPanel({
                             <span>Accuracy</span>
                             <strong>{summary.accuracy}%</strong>
                         </div>
+                        {sideAccuracyBreakdown.map((item) => (
+                            <div
+                                key={item.key}
+                                className="review-summary-card"
+                                data-testid={`review-${item.key}-accuracy`}
+                                aria-label={`${item.label} accuracy ${item.value}%`}
+                                title={`${item.label} accuracy ${item.value}%`}
+                            >
+                                <span>{item.label}</span>
+                                <strong>{item.value}%</strong>
+                            </div>
+                        ))}
                         <div className="review-summary-card">
                             <span>Blunders</span>
                             <strong>{summary.blunderCount}</strong>

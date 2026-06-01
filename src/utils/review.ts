@@ -59,6 +59,8 @@ export interface ReviewEngineSummary {
 export interface ReviewSummary {
     totalMoves: number;
     accuracy: number;
+    redAccuracy?: number;
+    blackAccuracy?: number;
     bestCount: number;
     goodCount: number;
     inaccuracyCount: number;
@@ -352,6 +354,10 @@ export function computeReviewArtifacts(
     const keyMoments: ReviewKeyMoment[] = [];
     let evaluated = 0;
     let accuracySum = 0;
+    const sideAccuracy = {
+        red: { sum: 0, count: 0 },
+        black: { sum: 0, count: 0 },
+    };
 
     for (const [moveIndex, nodeId] of activeLineNodeIds.entries()) {
         const node = treeNodes[nodeId];
@@ -373,7 +379,10 @@ export function computeReviewArtifacts(
         const winPercentLoss = getWinPercentLossForMove(parentEval, currentEval, side);
         const retainedDecisiveAdvantage = hasDecisiveAdvantageAfterMove(currentEval, side);
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
-        accuracySum += getMoveAccuracyForWinPercentLoss(winPercentLoss);
+        const moveAccuracy = getMoveAccuracyForWinPercentLoss(winPercentLoss);
+        accuracySum += moveAccuracy;
+        sideAccuracy[side].sum += moveAccuracy;
+        sideAccuracy[side].count += 1;
         const note = buildReviewNote({
             quality,
             bestMove: record.bestMove,
@@ -414,6 +423,12 @@ export function computeReviewArtifacts(
     }
 
     const accuracy = evaluated > 0 ? Math.round(accuracySum / evaluated) : 0;
+    const redAccuracy = sideAccuracy.red.count > 0
+        ? Math.round(sideAccuracy.red.sum / sideAccuracy.red.count)
+        : undefined;
+    const blackAccuracy = sideAccuracy.black.count > 0
+        ? Math.round(sideAccuracy.black.sum / sideAccuracy.black.count)
+        : undefined;
 
     keyMoments.sort((left, right) =>
         getReviewQualityPriority(right.quality) - getReviewQualityPriority(left.quality) ||
@@ -425,6 +440,8 @@ export function computeReviewArtifacts(
         summary: {
             totalMoves: evaluated,
             accuracy,
+            redAccuracy,
+            blackAccuracy,
             bestCount: counts.best,
             goodCount: counts.good,
             inaccuracyCount: counts.inaccuracy,
