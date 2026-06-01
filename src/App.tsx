@@ -1522,7 +1522,7 @@ function App() {
       return undefined;
     }
 
-    if (isSearching) {
+    if (isSearching || isSearchQueued) {
       return undefined;
     }
 
@@ -1555,13 +1555,13 @@ function App() {
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSearchConfig.depth, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearching, paused, queueSearch, reviewStatus]);
+  }, [aiSearchConfig.depth, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
     const controller = reviewControllerRef.current;
     if (!controller.active) return;
-    if (isSearching) return;
+    if (isSearching || isSearchQueued) return;
     if (!isReady) return;
     if (controller.currentNodeId) return;
 
@@ -1599,7 +1599,7 @@ function App() {
     const fen = getNodeFen(nodeId);
     const goCmd = controller.phase === 'base' ? reviewPolicy.base.goCmd : (reviewRevisitGoCmd ?? reviewPolicy.base.goCmd);
     queueSearch(`position fen ${fen}`, goCmd, 0, makeReviewTag(controller.phase, nodeId));
-  }, [finalizeReview, getNodeFen, isReady, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, updateReviewProgress]);
+  }, [finalizeReview, getNodeFen, isReady, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
@@ -1892,7 +1892,7 @@ function App() {
     if (hasAnyLegalMove(board, sideToMove)) return 'result';
     return inCheck ? 'checkmate' : 'stalemate';
   }, [board, inCheck, sideToMove, visibleGameResult]);
-  const aiMoveSearchActive = isAiTurn && isSearching;
+  const aiMoveSearchActive = isAiTurn && (isSearching || isSearchQueued);
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const reviewStartTitle = !engineEnabled
     ? 'Switch to Analysis to review this line'
@@ -3527,7 +3527,7 @@ function App() {
                     <IconBot />
                     {paused ? (
                       <span className="ai-status-paused"><IconPause /> AI Paused</span>
-                    ) : isSearching && applyBestMoveRef.current ? (
+                    ) : (isSearching || isSearchQueued) && applyBestMoveRef.current ? (
                       <span className="ai-status-thinking">
                         <span className="thinking-dots">
                           <span /><span /><span />
@@ -3962,7 +3962,7 @@ function App() {
           <span className="resize-pill horizontal" />
         </div>
         <div className="panel-inner">
-          {engineEnabled ? <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} /> : null}
+          {engineEnabled ? <div className={`analyzing-bar ${isSearching || isSearchQueued ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
             <div className="game-controls">
               <button
@@ -4094,7 +4094,7 @@ function App() {
           <div className="bottom-status-row">
             {engineEnabled ? (
               <div className="bottom-engine-info">
-                {isSearching ? 'Analyzing' : 'Idle'}
+                {isSearchQueued ? 'Queued' : isSearching ? 'Analyzing' : 'Idle'}
                 {inCheck ? <span className="check-badge">CHECK</span> : null}
               </div>
             ) : (

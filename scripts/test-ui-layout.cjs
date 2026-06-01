@@ -979,10 +979,12 @@ async function assertEngineTelemetryDashboard(browser) {
       const searchCard = [...document.querySelectorAll(".engine-stat")]
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
         .find((text) => text.includes("Search")) || "";
+      const bottomStatus = document.querySelector(".bottom-engine-info")?.textContent?.replace(/\s+/g, " ").trim() || "";
       return fen.includes(" b ") &&
         !fen.includes("1C5C1/9/RNBAKABNR w ") &&
         pvText.includes("No PV available yet") &&
         /Queued|Pending/.test(searchCard) &&
+        /Queued|Analyzing/.test(bottomStatus) &&
         searchCard.includes("target D8") &&
         !searchCard.includes("789k nps") &&
         !searchCard.includes("hash 2%");
@@ -995,6 +997,7 @@ async function assertEngineTelemetryDashboard(browser) {
       return {
         fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
         searchCard,
+        bottomStatus: document.querySelector(".bottom-engine-info")?.textContent?.replace(/\s+/g, " ").trim() || "",
         pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
         overflowX: document.body.scrollWidth - document.body.clientWidth,
       };
@@ -1005,6 +1008,7 @@ async function assertEngineTelemetryDashboard(browser) {
       cleared.fen.includes("1C5C1/9/RNBAKABNR w ") ||
       !cleared.pvText.includes("No PV available yet") ||
       !/Queued|Pending/.test(cleared.searchCard) ||
+      !/Queued|Analyzing/.test(cleared.bottomStatus) ||
       !cleared.searchCard.includes("target D8") ||
       /789k nps|hash 2%/.test(cleared.searchCard) ||
       cleared.overflowX > 2
