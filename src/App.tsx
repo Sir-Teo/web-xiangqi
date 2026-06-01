@@ -699,6 +699,7 @@ function App() {
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
+  const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -1260,6 +1261,31 @@ function App() {
     }
     return [rootNodeId, ...path];
   }, [currentNodeId, rootNodeId, treeNodes]);
+
+  useEffect(() => {
+    const container = treeBreadcrumbRef.current;
+    const active = container?.querySelector('.tree-breadcrumb-chip-active') as HTMLElement | null;
+    if (!container || !active) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const activeCenter = container.scrollLeft
+      + activeRect.left
+      - containerRect.left
+      + activeRect.width / 2;
+    const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    const targetLeft = Math.max(0, Math.min(maxLeft, activeCenter - container.clientWidth / 2));
+    const distance = Math.abs(targetLeft - container.scrollLeft);
+    const activeFullyVisible = activeRect.left >= containerRect.left && activeRect.right <= containerRect.right;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = prefersReducedMotion || !activeFullyVisible || distance > container.clientWidth
+      ? 'auto'
+      : 'smooth';
+
+    if (distance > 1) {
+      container.scrollTo({ left: targetLeft, behavior });
+    }
+  }, [breadcrumbNodeIds.length, currentNodeId]);
 
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -4091,7 +4117,7 @@ function App() {
             >
               {analysisTab === 'tree' ? (
                 <>
-                  <div className="tree-breadcrumb">
+                  <div className="tree-breadcrumb" ref={treeBreadcrumbRef}>
                     {breadcrumbNodeIds.map((nodeId, index) => (
                       <button
                         key={nodeId}

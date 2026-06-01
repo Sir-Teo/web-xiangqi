@@ -5492,9 +5492,11 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     const moveTree = document.querySelector(".mtree-scroll");
     const activeMove = document.querySelector('[data-testid="move-tree-active"]');
     const breadcrumb = document.querySelector(".tree-breadcrumb");
+    const activeBreadcrumb = document.querySelector(".tree-breadcrumb-chip-active");
     const treeRect = moveTree?.getBoundingClientRect();
     const activeMoveRect = activeMove?.getBoundingClientRect();
     const breadcrumbRect = breadcrumb?.getBoundingClientRect();
+    const activeBreadcrumbRect = activeBreadcrumb?.getBoundingClientRect();
     const activeMoveVisible = Boolean(
       treeRect &&
       activeMoveRect &&
@@ -5517,6 +5519,13 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
       breadcrumbHeight: breadcrumbRect ? Math.round(breadcrumbRect.height) : null,
       breadcrumbScrollWidth: breadcrumb ? Math.round(breadcrumb.scrollWidth) : null,
       breadcrumbClientWidth: breadcrumb ? Math.round(breadcrumb.clientWidth) : null,
+      breadcrumbScrollLeft: breadcrumb ? Math.round(breadcrumb.scrollLeft) : null,
+      activeBreadcrumbVisible: Boolean(
+        breadcrumbRect &&
+        activeBreadcrumbRect &&
+        activeBreadcrumbRect.left >= breadcrumbRect.left - 1 &&
+        activeBreadcrumbRect.right <= breadcrumbRect.right + 1
+      ),
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
@@ -5533,6 +5542,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     !(initial.moveTreeClientHeight >= 200) ||
     !(initial.breadcrumbHeight <= 60) ||
     !(initial.breadcrumbScrollWidth > initial.breadcrumbClientWidth) ||
+    !(initial.breadcrumbScrollLeft > 0) ||
+    !initial.activeBreadcrumbVisible ||
     initial.overflowX > 2
   ) {
     throw new Error(`Dense evaluation graph did not thin decorative markers: ${JSON.stringify(initial)}`);
@@ -5555,8 +5566,12 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
   const navigated = await page.evaluate(() => {
     const moveTree = document.querySelector(".mtree-scroll");
     const activeMove = document.querySelector('[data-testid="move-tree-active"]');
+    const breadcrumb = document.querySelector(".tree-breadcrumb");
+    const activeBreadcrumb = document.querySelector(".tree-breadcrumb-chip-active");
     const treeRect = moveTree?.getBoundingClientRect();
     const activeMoveRect = activeMove?.getBoundingClientRect();
+    const breadcrumbRect = breadcrumb?.getBoundingClientRect();
+    const activeBreadcrumbRect = activeBreadcrumb?.getBoundingClientRect();
     return {
       activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       activePoints: document.querySelectorAll(".graph-point-active").length,
@@ -5567,6 +5582,12 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
         activeMoveRect.top >= treeRect.top - 1 &&
         activeMoveRect.bottom <= treeRect.bottom + 1
       ),
+      activeBreadcrumbVisible: Boolean(
+        breadcrumbRect &&
+        activeBreadcrumbRect &&
+        activeBreadcrumbRect.left >= breadcrumbRect.left - 1 &&
+        activeBreadcrumbRect.right <= breadcrumbRect.right + 1
+      ),
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
@@ -5575,6 +5596,7 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     navigated.activePoints !== 1 ||
     !navigated.activeMove.includes("c7b9") ||
     !navigated.activeMoveVisible ||
+    !navigated.activeBreadcrumbVisible ||
     navigated.overflowX > 2
   ) {
     throw new Error(`Dense evaluation graph navigation failed after marker thinning: ${JSON.stringify(navigated)}`);
