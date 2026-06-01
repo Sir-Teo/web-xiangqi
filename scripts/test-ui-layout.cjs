@@ -275,6 +275,43 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   if (state.overflowX > 2) {
     throw new Error(`AI Play mode introduced horizontal overflow: ${state.overflowX}`);
   }
+
+  const fastSpeedButton = page.getByRole("button", { name: "Set speed to Fast", exact: true });
+  const fastSpeedCount = await fastSpeedButton.count();
+  if (fastSpeedCount !== 1) {
+    throw new Error(`Expected one Fast speed button, found ${fastSpeedCount}`);
+  }
+  await fastSpeedButton.click();
+  const speedA11y = await page.evaluate(() => {
+    const speedGroup = document.querySelector(".wc-speed");
+    const labelledBy = speedGroup?.getAttribute("aria-labelledby") || "";
+    const labelText = labelledBy
+      ? document.getElementById(labelledBy)?.textContent?.trim() || ""
+      : "";
+    const pressed = (name) => [...document.querySelectorAll(".wc-speed-pill")]
+      .find((button) => button.textContent?.trim() === name)
+      ?.getAttribute("aria-pressed") || "";
+    return {
+      groupRole: speedGroup?.getAttribute("role") || "",
+      groupLabel: labelText,
+      normalPressed: pressed("Normal"),
+      fastPressed: pressed("Fast"),
+      stepPressed: pressed("Step"),
+      scrubberValueText: document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    speedA11y.groupRole !== "group" ||
+    speedA11y.groupLabel !== "Speed" ||
+    speedA11y.normalPressed !== "false" ||
+    speedA11y.fastPressed !== "true" ||
+    speedA11y.stepPressed !== "false" ||
+    speedA11y.scrubberValueText !== "No moves" ||
+    speedA11y.overflowX > 2
+  ) {
+    throw new Error(`AI playback controls are not fully accessible: ${JSON.stringify(speedA11y)}`);
+  }
 }
 
 async function assertAiNewGameSwitchesToPlayWorkspace(page) {

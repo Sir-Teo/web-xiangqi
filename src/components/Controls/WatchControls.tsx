@@ -59,6 +59,13 @@ export const WatchControls = memo(function WatchControls({
 }: Props) {
     const aiActive = gameMode !== 'PvP';
     const stepMode = aiSpeed === 'step';
+    const scrubberValue = currentMoveIndex + 1;
+    const scrubberMax = Math.max(totalMoves, 1);
+    const scrubberValueText = totalMoves === 0
+        ? 'No moves'
+        : scrubberValue <= 0
+            ? `Start position, 0 of ${totalMoves} moves`
+            : `Move ${Math.min(scrubberValue, totalMoves)} of ${totalMoves}`;
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -89,7 +96,7 @@ export const WatchControls = memo(function WatchControls({
     return (
         <div className="watch-controls">
             {/* ── Navigation ── */}
-            <div className="wc-nav">
+            <div className="wc-nav" role="group" aria-label="Move navigation">
                 <button
                     type="button"
                     className="wc-btn"
@@ -134,7 +141,7 @@ export const WatchControls = memo(function WatchControls({
 
             {/* ── Play / Pause / Step (AI modes only) ── */}
             {aiActive && (
-                <div className="wc-play">
+                <div className="wc-play" role="group" aria-label="AI playback controls">
                     {stepMode && paused ? (
                         <button
                             type="button"
@@ -171,8 +178,8 @@ export const WatchControls = memo(function WatchControls({
 
             {/* ── Speed selector (AI modes only) ── */}
             {aiActive && (
-                <div className="wc-speed">
-                    <span className="wc-speed-label">Speed</span>
+                <div className="wc-speed" role="group" aria-labelledby="watch-speed-label">
+                    <span className="wc-speed-label" id="watch-speed-label">Speed</span>
                     {SPEEDS.map(({ id, label }) => (
                         <button
                             key={id}
@@ -180,6 +187,7 @@ export const WatchControls = memo(function WatchControls({
                             className={`wc-speed-pill ${aiSpeed === id ? 'wc-speed-active' : ''}`}
                             onClick={() => onSpeedChange(id)}
                             aria-label={`Set speed to ${label}`}
+                            aria-pressed={aiSpeed === id}
                         >
                             {label}
                         </button>
@@ -204,11 +212,12 @@ export const WatchControls = memo(function WatchControls({
                     type="range"
                     className="wc-scrubber"
                     min={0}
-                    max={Math.max(totalMoves, 1)}
-                    value={currentMoveIndex + 1}
+                    max={scrubberMax}
+                    value={scrubberValue}
                     onChange={(e) => onScrub(Number(e.target.value) - 1)}
                     disabled={totalMoves === 0}
                     aria-label="Jump to move"
+                    aria-valuetext={scrubberValueText}
                 />
             </div>
         </div>
