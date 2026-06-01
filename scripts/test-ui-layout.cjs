@@ -29,6 +29,61 @@ async function waitForHttp(url, timeoutMs) {
   throw new Error("Timed out waiting for " + url);
 }
 
+function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
+  return `
+(() => {
+  try {
+    window.localStorage?.removeItem("xiangqi-app-preferences");
+  } catch (_) {}
+  window.__engineCommands = [];
+  ${setupSource}
+  window.Pikafish = function Pikafish() {};
+  window.Pikafish.createWorkerEngine = async () => {
+    const listeners = [];
+    const emit = (line) => listeners.forEach((listener) => listener(line));
+    return {
+      variant: ${JSON.stringify(variant)},
+      addMessageListener(listener) {
+        listeners.push(listener);
+      },
+      removeMessageListener(listener) {
+        const index = listeners.indexOf(listener);
+        if (index >= 0) listeners.splice(index, 1);
+      },
+      postMessage(command) {
+        window.__engineCommands.push(command);
+        if (command === "uci") {
+          setTimeout(() => {
+            emit("id name Fake Pikafish");
+            emit("option name MultiPV type spin default 1 min 1 max 128");
+            emit("option name UCI_ShowWDL type check default false");
+            emit("uciok");
+          }, 0);
+        } else if (command === "isready") {
+          setTimeout(() => emit("readyok"), 0);
+        } else if (/^go\\b/.test(command)) {
+          ${goSource}
+        }
+      },
+      terminate() {
+        return Promise.resolve();
+      },
+    };
+  };
+})();
+`;
+}
+
+async function installFakePikafish(page, fakeConfig) {
+  const source = buildFakePikafishScript(fakeConfig);
+  await page.addInitScript(source);
+  await page.route("**/pikafish.js", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/javascript",
+    body: source,
+  }));
+}
+
 function rectWithinLayout(rects) {
   const { boardSurface, mobileHeader, mobileNav, bottomTab } = rects;
   if (!boardSurface || !mobileHeader || !mobileNav || !bottomTab) {
@@ -123,6 +178,10 @@ async function assertDesktopBoardLayout(page, viewport) {
         return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
       })(),
       graphLegacyDescription: document.querySelector(".winrate-graph")?.getAttribute("aria-description") || "",
+      visibleGraphShortcutPrompts: Array.from(document.querySelectorAll(".panel-copy.small"))
+        .filter((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
+        .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+        .filter((text) => /keyboard navigation|left and right arrows|press enter/i.test(text)),
       centralCannonCandidateText: document.querySelector('[data-testid="book-candidate-h2e2"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       clippedBookCandidateLabels: Array.from(document.querySelectorAll(".opening-candidate-main > span, .opening-candidate-main small"))
         .filter((el) => el.scrollWidth - el.clientWidth > 1)
@@ -159,6 +218,9 @@ async function assertDesktopBoardLayout(page, viewport) {
     layout.graphLegacyDescription
   ) {
     throw new Error(`Evaluation graph instructions are not exposed accessibly: ${JSON.stringify(layout)}`);
+  }
+  if (layout.visibleGraphShortcutPrompts.length > 0) {
+    throw new Error(`Evaluation graph shortcut copy should stay out of the visible UI: ${JSON.stringify(layout)}`);
   }
   if (
     !layout.centralCannonCandidateText.includes("Central Cannon") ||
@@ -390,6 +452,17 @@ async function assertAiNewGameSwitchesToPlayWorkspace(page) {
 async function assertBeginnerAiUsesCandidatePv(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
+    await installFakePikafish(page, {
+      variant: "fake-pv",
+      setupSource: "Math.random = () => 0.99;",
+      goSource: `
+        setTimeout(() => {
+          emit("info depth 2 multipv 1 score cp 50 pv h0g2");
+          emit("info depth 2 multipv 2 score cp 10 pv b0c2");
+          emit("bestmove h0g2");
+        }, 20);
+      `,
+    });
     await page.addInitScript(() => {
       try {
         window.localStorage?.removeItem("xiangqi-app-preferences");
@@ -473,6 +546,15 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
 async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
+    await installFakePikafish(page, {
+      variant: "fake-analysis-ai-guard",
+      goSource: `
+        setTimeout(() => {
+          emit("info depth 2 multipv 1 score cp 42 pv h0g2");
+          emit("bestmove h0g2");
+        }, 20);
+      `,
+    });
     await page.addInitScript(() => {
       try {
         window.localStorage?.removeItem("xiangqi-app-preferences");
@@ -768,6 +850,22 @@ async function assertEnginePvLineControl(page) {
 async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
+    await installFakePikafish(page, {
+      variant: "fake-pv-play",
+      setupSource: "window.__goCount = 0;",
+      goSource: `
+        window.__goCount += 1;
+        const goCount = window.__goCount;
+        setTimeout(() => {
+          if (goCount === 1) {
+            emit("info depth 4 multipv 1 score cp 300 pv b0c2");
+            emit("bestmove b0c2");
+            return;
+          }
+          emit("bestmove h9g7");
+        }, 20);
+      `,
+    });
     await page.addInitScript(() => {
       try {
         window.localStorage?.removeItem("xiangqi-app-preferences");

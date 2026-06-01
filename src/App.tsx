@@ -3184,7 +3184,7 @@ function App() {
                     <button type="button" className="chip-btn" onClick={goToLatestMove} disabled={!canGoForward}>Live</button>
                   </div>
                   <p className="panel-copy small">
-                    Active ply: <strong>{viewedPly}</strong> / {moveHistory.length} · focus the chart for keyboard navigation
+                    Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}
                   </p>
                 </>
               ) : (
