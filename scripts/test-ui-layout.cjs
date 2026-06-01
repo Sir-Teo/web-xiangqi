@@ -395,6 +395,8 @@ async function assertBoardKeyboardNavigation(page) {
     focusState.file !== "2" ||
     focusState.rank !== "2" ||
     !focusState.label.includes("legal move") ||
+    !focusState.shortcuts.includes("Enter") ||
+    !focusState.shortcuts.includes("Space") ||
     !focusState.shortcuts.includes("ArrowUp") ||
     focusState.overflowX > 2
   ) {
@@ -414,6 +416,59 @@ async function assertBoardKeyboardNavigation(page) {
 
   if (moveState.fen === beforeFen || !moveState.movedPiece.includes("red horse") || moveState.overflowX > 2) {
     throw new Error(`Board keyboard activation did not play the focused move: ${JSON.stringify(moveState)}`);
+  }
+}
+
+async function assertBoardKeyboardNavigationFlipped(page) {
+  await page.setViewportSize({ width: 1024, height: 720 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Flip board orientation" }).click();
+
+  const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+
+  const focusState = await page.evaluate(() => ({
+    file: document.activeElement?.getAttribute("data-file") || "",
+    rank: document.activeElement?.getAttribute("data-rank") || "",
+    label: document.activeElement?.getAttribute("aria-label") || "",
+    shortcuts: document.activeElement?.getAttribute("aria-keyshortcuts") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+
+  if (
+    focusState.file !== "2" ||
+    focusState.rank !== "2" ||
+    !focusState.label.includes("legal move") ||
+    !focusState.shortcuts.includes("Enter") ||
+    !focusState.shortcuts.includes("Space") ||
+    !focusState.shortcuts.includes("ArrowDown") ||
+    focusState.overflowX > 2
+  ) {
+    throw new Error(`Flipped board arrow-key navigation did not focus a legal target: ${JSON.stringify(focusState)}`);
+  }
+
+  await page.keyboard.press("Enter");
+  await page.waitForFunction((fen) => {
+    return document.querySelector(".bottombar-fen")?.getAttribute("title") !== fen;
+  }, beforeFen, { timeout: 5000 });
+
+  const moveState = await page.evaluate(() => ({
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    movedPiece: document.querySelector('.hitbox[data-file="2"][data-rank="2"]')?.getAttribute("aria-label") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+
+  if (moveState.fen === beforeFen || !moveState.movedPiece.includes("red horse") || moveState.overflowX > 2) {
+    throw new Error(`Flipped board keyboard activation did not play the focused move: ${JSON.stringify(moveState)}`);
   }
 }
 
@@ -1453,9 +1508,9 @@ async function assertInvalidFenToastTimerResets(page) {
     throw new Error(`Invalid FEN feedback was not accessible: ${JSON.stringify(initialErrorState)}`);
   }
 
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(800);
   await loadButton.click();
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1400);
 
   const stillInvalid = String(await loadButton.textContent() || "").trim();
   if (stillInvalid !== "Invalid FEN") {
@@ -3972,6 +4027,7 @@ async function main() {
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertBoardKeyboardNavigation(page);
+    await assertBoardKeyboardNavigationFlipped(page);
     await assertDesktopResizeFeedback(page);
     await assertPausedAiTurnBlocksManualMove(page);
     await assertIllegalMoveShowsRuleHint(page);
@@ -4041,7 +4097,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, board keyboard navigation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
