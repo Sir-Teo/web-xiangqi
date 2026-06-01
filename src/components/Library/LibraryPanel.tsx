@@ -256,7 +256,10 @@ export function LibraryPanel({
           <option value="ongoing">Ongoing</option>
         </select>
       </div>
-      <div className="lib-summary-row">
+      <div
+        className="lib-summary-row"
+        aria-label={`${filteredSaved.length} saved games. ${filteredHistorical.length} classic games.`}
+      >
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
         </span>

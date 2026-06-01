@@ -3072,7 +3072,7 @@ function App() {
               </form>
             </div>
             <div className="new-game-menu-footer">
-              <div className="new-game-selection">
+              <div className="new-game-selection" aria-label={`Selected ${pendingModeLabel}. ${pendingModeMeta.description}`}>
                 <span className="new-game-selection-label">Selected</span>
                 <strong>{pendingModeLabel}</strong>
                 <em>{pendingModeMeta.description}</em>

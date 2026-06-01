@@ -1517,6 +1517,7 @@ async function assertMobileNewGameStartButtonVisible(page) {
       menuScrollTop: menu?.scrollTop ?? -1,
       modeButtonLabels: Array.from(document.querySelectorAll(".new-game-mode-btn"))
         .map((button) => button.getAttribute("aria-label") || ""),
+      selectionLabel: document.querySelector(".new-game-selection")?.getAttribute("aria-label") || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
@@ -1526,6 +1527,9 @@ async function assertMobileNewGameStartButtonVisible(page) {
   }
   if (!layout.modeButtonLabels.every((label) => /^[^.]+\. .+/.test(label))) {
     throw new Error(`New Game mode buttons need readable accessible labels: ${JSON.stringify(layout)}`);
+  }
+  if (!/^Selected .+\. .+/.test(layout.selectionLabel)) {
+    throw new Error(`New Game selected mode summary needs a readable accessible label: ${JSON.stringify(layout)}`);
   }
   if (layout.start.bottom > layout.innerHeight - 6 || layout.start.top < 0) {
     throw new Error(`Mobile New Game start button was not immediately reachable: ${JSON.stringify(layout)}`);
@@ -2857,9 +2861,15 @@ async function assertLibraryRespondsToStorageChanges(page) {
   const state = await page.evaluate(() => ({
     savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
     summaryText: document.querySelector(".lib-summary-row")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    summaryLabel: document.querySelector(".lib-summary-row")?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
-  if (state.savedCards !== 1 || !state.summaryText.includes("1 saved") || state.overflowX > 2) {
+  if (
+    state.savedCards !== 1 ||
+    !state.summaryText.includes("1 saved") ||
+    !state.summaryLabel.includes("1 saved games.") ||
+    state.overflowX > 2
+  ) {
     throw new Error(`Library did not refresh after storage change: ${JSON.stringify(state)}`);
   }
 }
