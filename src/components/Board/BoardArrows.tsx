@@ -4,7 +4,7 @@ interface ArrowDef {
     from: { file: number; rank: number };
     to: { file: number; rank: number };
     color: string;
-    kind?: 'last' | 'engine' | 'book' | 'user';
+    kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'user';
     opacity?: number;
     strokeWidth?: number;
 }

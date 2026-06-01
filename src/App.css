@@ -3271,6 +3271,15 @@ summary:active {
   align-items: flex-start;
   gap: 0.48rem;
   flex-wrap: wrap;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.pv-line-spotlight,
+.pv-line:focus-visible {
+  border-color: rgba(56, 189, 248, 0.48);
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.16), rgba(16, 185, 129, 0.08));
+  box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.78), 0 0 0 1px rgba(56, 189, 248, 0.16);
 }
 
 .pv-score {

@@ -1334,6 +1334,35 @@ async function assertEngineTelemetryDashboard(browser) {
       throw new Error(`Engine telemetry dashboard did not render UCI search stats: ${JSON.stringify(telemetry)}`);
     }
 
+    await page.getByTestId("engine-pv-line-0").focus();
+    await page.waitForFunction(() => {
+      return document.querySelector('[data-testid="engine-pv-line-0"]')?.getAttribute("data-spotlight") === "true" &&
+        Boolean(document.querySelector('[data-testid^="board-arrow-engine-focus"]'));
+    }, null, { timeout: 5000 });
+    await page.getByTestId("copy-engine-pv-0").focus();
+    const spotlight = await page.evaluate(() => {
+      const line = document.querySelector('[data-testid="engine-pv-line-0"]');
+      const arrow = document.querySelector('[data-testid^="board-arrow-engine-focus"]');
+      return {
+        role: line?.getAttribute("role") || "",
+        tabIndex: line?.getAttribute("tabindex") || "",
+        spotlight: line?.getAttribute("data-spotlight") || "",
+        arrowFrom: arrow?.getAttribute("data-from") || "",
+        arrowTo: arrow?.getAttribute("data-to") || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+    if (
+      spotlight.role !== "group" ||
+      spotlight.tabIndex !== "0" ||
+      spotlight.spotlight !== "true" ||
+      spotlight.arrowFrom !== "1:2" ||
+      spotlight.arrowTo !== "4:2" ||
+      spotlight.overflowX > 2
+    ) {
+      throw new Error(`Engine PV spotlight did not keep candidate focus visible: ${JSON.stringify(spotlight)}`);
+    }
+
     await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
     await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
     await page.waitForFunction(() => {

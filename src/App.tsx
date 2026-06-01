@@ -78,7 +78,7 @@ type BoardArrow = {
   from: BoardSquare;
   to: BoardSquare;
   color: string;
-  kind?: 'last' | 'engine' | 'book' | 'user';
+  kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'user';
   opacity?: number;
   strokeWidth?: number;
 };
@@ -705,6 +705,7 @@ function App() {
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
+  const [spotlightPvIndex, setSpotlightPvIndex] = useState<number | null>(null);
   const [shareLinkNotice, setShareLinkNotice] = useState<ShareLinkNotice>(null);
   const [aiSpeed, setAiSpeed] = useState<AiSpeed>(initialAiSpeed);
   const aiSpeedRef = useRef<AiSpeed>(initialAiSpeed);
@@ -1926,6 +1927,10 @@ function App() {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
   }, [analysisRequestKey, engineEnabled, pvLines]);
+  const spotlightPvLine = spotlightPvIndex == null ? null : currentAnalysisPvLines[spotlightPvIndex] ?? null;
+  useEffect(() => {
+    setSpotlightPvIndex(null);
+  }, [analysisRequestKey]);
   const engineSearchDetail = useMemo(
     () => formatEngineTelemetryDetail(
       searchStats,
@@ -2816,7 +2821,7 @@ function App() {
     }
 
     // Engine best move (green)
-    if (engineEnabled && currentAnalysisPvLines[0]?.moves[0]) {
+    if (engineEnabled && spotlightPvIndex !== 0 && currentAnalysisPvLines[0]?.moves[0]) {
       const uci = currentAnalysisPvLines[0].moves[0];
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
@@ -2825,6 +2830,7 @@ function App() {
 
     // Alternative engine lines (muted green)
     for (let idx = 1; idx <= 2; idx++) {
+      if (spotlightPvIndex === idx) continue;
       const uci = currentAnalysisPvLines[idx]?.moves[0];
       if (!uci) continue;
       const from = uciToSquare(uci.substring(0, 2));
@@ -2832,8 +2838,17 @@ function App() {
       if (from && to) result.push({ from, to, color: '#6ee7b7', kind: 'engine', opacity: 0.55, strokeWidth: 3.5 });
     }
 
+    if (engineEnabled && spotlightPvLine?.moves[0]) {
+      const uci = spotlightPvLine.moves[0];
+      const from = uciToSquare(uci.substring(0, 2));
+      const to = uciToSquare(uci.substring(2, 4));
+      if (from && to) {
+        result.push({ from, to, color: '#38bdf8', kind: 'engine-focus', opacity: 0.95, strokeWidth: 7 });
+      }
+    }
+
     return [...result, ...userArrows];
-  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, userArrows]);
+  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, userArrows]);
 
   return (
     <main
@@ -4133,8 +4148,20 @@ function App() {
                       return (
                         <div
                           key={i}
-                          className="pv-line premium-card"
+                          className={`pv-line premium-card ${spotlightPvIndex === i ? 'pv-line-spotlight' : ''}`}
+                          role="group"
+                          tabIndex={0}
                           aria-label={`Engine line ${i + 1}, ${lineStanding}, score ${formatEvalScore(normalizedScore, 1)}, ${depthLabel}, ${pvLineLabel}`}
+                          onMouseEnter={() => setSpotlightPvIndex(i)}
+                          onMouseLeave={() => setSpotlightPvIndex(null)}
+                          onFocus={() => setSpotlightPvIndex(i)}
+                          onBlur={(event) => {
+                            const nextFocus = event.relatedTarget;
+                            if (nextFocus instanceof Node && event.currentTarget.contains(nextFocus)) return;
+                            setSpotlightPvIndex(null);
+                          }}
+                          data-testid={`engine-pv-line-${i}`}
+                          data-spotlight={spotlightPvIndex === i ? 'true' : undefined}
                         >
                           <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
                             {formatEvalScore(normalizedScore, 0)}
