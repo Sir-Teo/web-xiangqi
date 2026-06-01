@@ -36,6 +36,7 @@ try {
   compileTsModule("src/utils/gameExport.ts");
   compileTsModule("src/utils/moveImport.ts");
   compileTsModule("src/utils/aiOpponent.ts");
+  compileTsModule("src/utils/analysisProfile.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
   const shareTree = require(path.join(tempDir, "shareTree.js"));
@@ -44,6 +45,7 @@ try {
   const moveNotation = require(path.join(tempDir, "moveNotation.js"));
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
   const aiOpponent = require(path.join(tempDir, "aiOpponent.js"));
+  const analysisProfile = require(path.join(tempDir, "analysisProfile.js"));
   const customFen = "4k4/9/9/9/4p4/9/9/9/9/4K4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -694,6 +696,35 @@ try {
     17... h9g7 *
   `);
   assert(importedFen === "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17", "Move import should extract a FEN tag.");
+
+  const sanitizedProfile = analysisProfile.detectDeviceTier({
+    viewportWidth: Number.NaN,
+    viewportHeight: Number.POSITIVE_INFINITY,
+    hardwareConcurrency: Number.NaN,
+    deviceMemoryGB: Number.NaN,
+  });
+  assert(
+    sanitizedProfile.viewportWidth === 1280 &&
+      sanitizedProfile.viewportHeight === 800 &&
+      sanitizedProfile.hardwareConcurrency === 4 &&
+      sanitizedProfile.deviceMemoryGB === 0 &&
+      sanitizedProfile.signature === "low:desktop:4:na",
+    `Device profile should sanitize non-finite browser hints: ${JSON.stringify(sanitizedProfile)}`
+  );
+
+  const negativeProfile = analysisProfile.detectDeviceTier({
+    viewportWidth: -320,
+    viewportHeight: -240,
+    hardwareConcurrency: -8,
+    deviceMemoryGB: -4,
+  });
+  assert(
+    negativeProfile.viewportWidth === 0 &&
+      negativeProfile.viewportHeight === 0 &&
+      negativeProfile.hardwareConcurrency === 1 &&
+      negativeProfile.deviceMemoryGB === 0,
+    `Device profile should clamp negative browser hints: ${JSON.stringify(negativeProfile)}`
+  );
 
   console.log("Library normalization, PGN export, and move import checks passed.");
 } finally {

@@ -63,6 +63,11 @@ function hasLowMemory(deviceMemoryGB: number, maxGB: number) {
     return deviceMemoryGB > 0 && deviceMemoryGB <= maxGB;
 }
 
+function finiteNumber(value: unknown, fallback: number) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
 function buildGoCmd(depth: number, moveTimeMs: number) {
     return `go depth ${depth} movetime ${moveTimeMs}`;
 }
@@ -76,11 +81,11 @@ function resolveThreadedVariant(allowSIMD: boolean): EngineRuntimeVariant {
 }
 
 export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile {
-    const viewportWidth = Math.max(0, Math.trunc(input.viewportWidth ?? 1280));
-    const viewportHeight = Math.max(0, Math.trunc(input.viewportHeight ?? 800));
+    const viewportWidth = Math.max(0, Math.trunc(finiteNumber(input.viewportWidth, 1280)));
+    const viewportHeight = Math.max(0, Math.trunc(finiteNumber(input.viewportHeight, 800)));
     const minViewport = Math.min(viewportWidth || 1280, viewportHeight || 800);
-    const hardwareConcurrency = Math.max(1, Math.trunc(input.hardwareConcurrency ?? 4));
-    const deviceMemoryGB = Math.max(0, Number(input.deviceMemoryGB ?? 0));
+    const hardwareConcurrency = Math.max(1, Math.trunc(finiteNumber(input.hardwareConcurrency, 4)));
+    const deviceMemoryGB = Math.max(0, finiteNumber(input.deviceMemoryGB, 0));
     const coarsePointer = Boolean(input.coarsePointer);
     const mobileLike = coarsePointer || minViewport < 700 || hasLowMemory(deviceMemoryGB, 4);
 
