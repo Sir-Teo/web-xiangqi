@@ -4586,6 +4586,20 @@ async function assertBoardMarkersSurviveSelection(page) {
   await page.keyboard.press("Shift+Space");
   await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 0, null, { timeout: 5000 });
 
+  await page.locator('button[aria-label="Toggle board arrows and markers"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="4"]').focus();
+  const hiddenMarkerShortcuts = await page.evaluate(() => document.activeElement?.getAttribute("aria-keyshortcuts") || "");
+  if (hiddenMarkerShortcuts.includes("Shift+Enter") || hiddenMarkerShortcuts.includes("Shift+Space")) {
+    throw new Error(`Hidden marker mode should not advertise marker shortcuts: ${hiddenMarkerShortcuts}`);
+  }
+  await page.keyboard.press("Shift+Enter");
+  await page.waitForTimeout(100);
+  const hiddenMarkerCount = await page.locator(".marker-highlight").count();
+  if (hiddenMarkerCount !== 0) {
+    throw new Error(`Hidden marker mode created an invisible marker: ${hiddenMarkerCount}`);
+  }
+  await page.locator('button[aria-label="Toggle board arrows and markers"]').click();
+
   await page.locator('.hitbox[data-file="4"][data-rank="4"]').click({ button: "right" });
   await page.waitForFunction(() => document.querySelectorAll(".marker-highlight").length === 1, null, { timeout: 5000 });
 

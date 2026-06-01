@@ -3962,8 +3962,8 @@ function App() {
                   onSquareClick={handleSquareClick}
                   orientation={orientation}
                   highlights={showArrows ? userHighlights : []}
-                  onToggleHighlight={handleToggleHighlight}
-                  onAddArrow={handleAddUserArrow}
+                  onToggleHighlight={showArrows ? handleToggleHighlight : undefined}
+                  onAddArrow={showArrows ? handleAddUserArrow : undefined}
                   arrows={boardArrows}
                 />
                 {inCheck && (
