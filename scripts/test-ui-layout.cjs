@@ -1193,6 +1193,11 @@ async function assertEngineTelemetryDashboard(browser) {
           .map((el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`)
           .find((text) => text.includes("Search D8/S12")) || "",
         firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
+        firstLineActionsLabel: document.querySelector(".pv-line-actions")?.getAttribute("aria-label") || "",
+        playLineLabel: document.querySelector('[data-testid="play-engine-pv-0"]')?.getAttribute("aria-label") || "",
+        playLineTitle: document.querySelector('[data-testid="play-engine-pv-0"]')?.getAttribute("title") || "",
+        copyLineLabel: document.querySelector('[data-testid="copy-engine-pv-0"]')?.getAttribute("aria-label") || "",
+        copyLineTitle: document.querySelector('[data-testid="copy-engine-pv-0"]')?.getAttribute("title") || "",
         pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
         wdlLabel: document.querySelector(".wdl-bar")?.getAttribute("aria-label") || "",
         wdlTitle: document.querySelector(".wdl-bar")?.getAttribute("title") || "",
@@ -1208,6 +1213,13 @@ async function assertEngineTelemetryDashboard(browser) {
       !telemetry.searchDetail.includes("123k nodes") ||
       !telemetry.searchDetail.includes("156ms") ||
       !/Engine line 1, Best/.test(telemetry.firstLineLabel) ||
+      !telemetry.firstLineLabel.includes("depth 8") ||
+      !telemetry.firstLineLabel.includes("moves B2→E2 H9→G7") ||
+      telemetry.firstLineActionsLabel !== "Actions for engine line 1, depth 8, moves B2→E2 H9→G7" ||
+      telemetry.playLineLabel !== "Play B2→E2 from engine line 1" ||
+      telemetry.playLineTitle !== "Play B2→E2 from this engine line" ||
+      telemetry.copyLineLabel !== "Copy engine line 1: B2→E2 H9→G7" ||
+      telemetry.copyLineTitle !== "Copy this engine line as raw UCI moves: B2→E2 H9→G7" ||
       !/Line 1\s*Best/.test(telemetry.pvText) ||
       !telemetry.pvText.includes("B2→E2") ||
       telemetry.wdlLabel !== "Win/draw/loss estimate: Red 41.0%, Draw 23.0%, Black 36.0%" ||

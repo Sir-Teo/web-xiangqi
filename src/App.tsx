@@ -3997,11 +3997,24 @@ function App() {
                       const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
                       const firstMove = pv.moves[0];
+                      const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
+                      const pvLineText = pv.moves.length ? formatUciLine(pv.moves, 7) : 'No moves yet';
+                      const pvLineLabel = pv.moves.length ? `moves ${pvLineText}` : 'no moves yet';
+                      const firstMoveText = firstMove ? formatUciLine([firstMove], 1) : '';
+                      const lineActionContext = `engine line ${i + 1}, ${depthLabel}, ${pvLineLabel}`;
+                      const playPvLabel = firstMove
+                        ? `Play ${firstMoveText} from engine line ${i + 1}`
+                        : `Play engine line ${i + 1} first move unavailable`;
+                      const copyPvLabel = exportFailureKey === `copy-pv-${i}`
+                        ? `Engine line ${i + 1} copy failed: ${pvLineText}`
+                        : copiedPvIndex === i
+                          ? `Engine line ${i + 1} copied: ${pvLineText}`
+                          : `Copy engine line ${i + 1}: ${pvLineText}`;
                       return (
                         <div
                           key={i}
                           className="pv-line premium-card"
-                          aria-label={`Engine line ${i + 1}, ${lineStanding}, score ${formatEvalScore(normalizedScore, 1)}`}
+                          aria-label={`Engine line ${i + 1}, ${lineStanding}, score ${formatEvalScore(normalizedScore, 1)}, ${depthLabel}, ${pvLineLabel}`}
                         >
                           <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
                             {formatEvalScore(normalizedScore, 0)}
@@ -4016,14 +4029,14 @@ function App() {
                             <span className="turnNum">Depth {pv.depth}</span>
                             <span className="move">{formatUciLine(pv.moves, 7)}</span>
                           </div>
-                          <div className="pv-line-actions" aria-label={`Engine line ${i + 1} actions`}>
+                          <div className="pv-line-actions" aria-label={`Actions for ${lineActionContext}`}>
                             <button
                               type="button"
                               className="pv-action-btn"
                               onClick={() => handlePlayPvMove(firstMove)}
                               disabled={!firstMove || Boolean(gameResult)}
-                              title="Play the first move from this engine line"
-                              aria-label={`Play engine line ${i + 1} first move`}
+                              title={firstMove ? `Play ${firstMoveText} from this engine line` : 'No move to play from this engine line'}
+                              aria-label={playPvLabel}
                               data-testid={`play-engine-pv-${i}`}
                             >
                               <IconPlay />
@@ -4034,8 +4047,8 @@ function App() {
                               className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''} ${exportFailureKey === `copy-pv-${i}` ? 'pv-action-btn-warning' : ''}`}
                               onClick={() => handleCopyPvLine(i, pv.moves)}
                               disabled={pv.moves.length === 0}
-                              title={exportFailureKey === `copy-pv-${i}` ? 'Copy failed' : 'Copy this engine line as raw UCI moves'}
-                              aria-label={exportFailureKey === `copy-pv-${i}` ? `Engine line ${i + 1} copy failed` : copiedPvIndex === i ? `Engine line ${i + 1} copied` : `Copy engine line ${i + 1}`}
+                              title={exportFailureKey === `copy-pv-${i}` ? `Copy failed for ${pvLineText}` : `Copy this engine line as raw UCI moves: ${pvLineText}`}
+                              aria-label={copyPvLabel}
                               data-testid={`copy-engine-pv-${i}`}
                             >
                               {exportFailureKey === `copy-pv-${i}` ? <IconX /> : copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
