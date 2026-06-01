@@ -140,6 +140,12 @@ export const Board = React.memo(function Board({
         file: number,
         rank: number
     ) => {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+            event.preventDefault();
+            onSquareClick(file, rank);
+            return;
+        }
+
         let nextFile = file;
         let nextRank = rank;
 
@@ -162,7 +168,7 @@ export const Board = React.memo(function Board({
 
         event.preventDefault();
         focusSquare(clampSquare(nextFile, 8), clampSquare(nextRank, 9));
-    }, [focusSquare, orientation]);
+    }, [focusSquare, onSquareClick, orientation]);
 
     const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
         if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
@@ -279,7 +285,7 @@ export const Board = React.memo(function Board({
                                     data-file={file}
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
-                                    aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
+                                    aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight"
                                     tabIndex={piece || isSelected || target ? 0 : -1}
                                     onKeyDown={(event) => handleHitboxKeyDown(event, file, rank)}
                                     onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
