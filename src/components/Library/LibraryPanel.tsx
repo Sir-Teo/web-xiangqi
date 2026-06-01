@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
+import type { ReviewSummary } from '../../utils/review';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
@@ -65,6 +66,21 @@ function formatSavedStudyLines(game: SavedGame) {
   const lineCount = countStudyLines(game.moveTree);
   if (lineCount === 0) return null;
   return `${lineCount} study ${lineCount === 1 ? 'line' : 'lines'}`;
+}
+
+function formatReviewCount(count: number, singular: string, plural = `${singular}s`) {
+  const normalized = Math.max(0, Math.trunc(count));
+  return `${normalized} ${normalized === 1 ? singular : plural}`;
+}
+
+function formatLibraryReviewSummary(summary: ReviewSummary) {
+  return [
+    `${summary.accuracy}% accuracy`,
+    formatReviewCount(summary.blunderCount, 'blunder'),
+    formatReviewCount(summary.mistakeCount, 'mistake'),
+    formatReviewCount(summary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
+    `reviewed ${formatDate(summary.reviewedAt)}`,
+  ].join(', ');
 }
 
 function buildSavedGamePgn(game: SavedGame) {
@@ -321,6 +337,11 @@ export function LibraryPanel({
         ) : (
           visibleSaved.map((game) => {
             const studyLineLabel = formatSavedStudyLines(game);
+            const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
+            const reviewSummaryLabel = game.review ? formatLibraryReviewSummary(game.review.summary) : '';
+            const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
+            const mistakeLabel = game.review ? formatReviewCount(game.review.summary.mistakeCount, 'mistake') : '';
+            const inaccuracyLabel = game.review ? formatReviewCount(game.review.summary.inaccuracyCount, 'inaccuracy', 'inaccuracies') : '';
             return (
               <div key={game.id} className="lib-card">
               <div className="lib-card-title">
@@ -336,6 +357,7 @@ export function LibraryPanel({
                       value={editLabel}
                       onChange={(e) => setEditLabel(e.target.value)}
                       placeholder="Game name…"
+                      aria-label={`Rename ${savedGameLabel}`}
                     />
                     <button type="submit" className="chip-btn">Save</button>
                     <button type="button" className="chip-btn" onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}>Cancel</button>
@@ -345,9 +367,9 @@ export function LibraryPanel({
                     type="button"
                     className="lib-game-name-button"
                     onClick={() => startEdit(game)}
-                    title="Rename saved game"
+                    title={`Rename ${savedGameLabel}`}
                   >
-                    {game.label || `Game — ${formatDate(game.savedAt)}`}
+                    {savedGameLabel}
                   </button>
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
@@ -355,8 +377,8 @@ export function LibraryPanel({
                     type="button"
                     className={`chip-btn ${copiedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `copy-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => copySavedGamePgn(game)}
-                    title="Copy PGN to clipboard"
-                    aria-label={copiedId === game.id ? 'Saved game PGN copied' : 'Copy saved game PGN'}
+                    title={`Copy PGN for ${savedGameLabel}`}
+                    aria-label={copiedId === game.id ? `Copied PGN for ${savedGameLabel}` : `Copy PGN for ${savedGameLabel}`}
                     data-testid={`copy-pgn-saved-${game.id}`}
                   >
                     {copiedId === game.id ? <><IconCheck /> Copied</> : <><IconCopy /> PGN</>}
@@ -365,8 +387,8 @@ export function LibraryPanel({
                     type="button"
                     className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `download-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => downloadSavedGamePgn(game)}
-                    title="Download PGN file"
-                    aria-label={downloadedId === game.id ? 'Saved game PGN downloaded' : 'Download saved game PGN'}
+                    title={`Download PGN for ${savedGameLabel}`}
+                    aria-label={downloadedId === game.id ? `Downloaded PGN for ${savedGameLabel}` : `Download PGN for ${savedGameLabel}`}
                     data-testid={`download-pgn-saved-${game.id}`}
                   >
                     {downloadedId === game.id ? <><IconCheck /> Saved</> : <><IconDownload /> File</>}
@@ -375,6 +397,7 @@ export function LibraryPanel({
                     type="button"
                     className={`chip-btn chip-btn-primary ${failedActionId === `load-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => loadSavedGame(game)}
+                    aria-label={`Load ${savedGameLabel}`}
                     data-testid={`load-saved-${game.id}`}
                   >
                     <IconRefresh /> Load
@@ -386,7 +409,7 @@ export function LibraryPanel({
                         className="chip-btn chip-btn-danger"
                         onClick={() => confirmDelete(game.id)}
                         data-testid={`confirm-delete-saved-${game.id}`}
-                        aria-label="Confirm delete saved game"
+                        aria-label={`Confirm delete ${savedGameLabel}`}
                       >
                         Delete?
                       </button>
@@ -410,7 +433,7 @@ export function LibraryPanel({
                         setPendingDeleteId(game.id);
                       }}
                       title="Delete"
-                      aria-label="Delete saved game"
+                      aria-label={`Delete ${savedGameLabel}`}
                       data-testid={`delete-saved-${game.id}`}
                     >
                       <IconX />
@@ -449,18 +472,38 @@ export function LibraryPanel({
                 <span className="lib-date">{formatDate(game.savedAt)}</span>
               </div>
               {game.review ? (
-                <div className="lib-review-meta">
-                  <span className="lib-review-pill">
+                <div
+                  className="lib-review-meta"
+                  aria-label={`Review summary for ${savedGameLabel}: ${reviewSummaryLabel}`}
+                  title={reviewSummaryLabel}
+                  data-testid={`review-meta-saved-${game.id}`}
+                >
+                  <span className="lib-review-pill" aria-label={`${game.review.summary.accuracy}% review accuracy`}>
                     {game.review.summary.accuracy}% accuracy
                   </span>
-                  <span className="lib-review-pill lib-review-pill-blunder">
-                    {game.review.summary.blunderCount}B
+                  <span
+                    className="lib-review-pill lib-review-pill-blunder"
+                    aria-label={blunderLabel}
+                    title={blunderLabel}
+                    data-testid={`review-blunders-saved-${game.id}`}
+                  >
+                    {blunderLabel}
                   </span>
-                  <span className="lib-review-pill lib-review-pill-mistake">
-                    {game.review.summary.mistakeCount}M
+                  <span
+                    className="lib-review-pill lib-review-pill-mistake"
+                    aria-label={mistakeLabel}
+                    title={mistakeLabel}
+                    data-testid={`review-mistakes-saved-${game.id}`}
+                  >
+                    {mistakeLabel}
                   </span>
-                  <span className="lib-review-pill lib-review-pill-inaccuracy">
-                    {game.review.summary.inaccuracyCount}I
+                  <span
+                    className="lib-review-pill lib-review-pill-inaccuracy"
+                    aria-label={inaccuracyLabel}
+                    title={inaccuracyLabel}
+                    data-testid={`review-inaccuracies-saved-${game.id}`}
+                  >
+                    {inaccuracyLabel}
                   </span>
                   <span className="lib-review-date">
                     Reviewed {formatDate(game.review.summary.reviewedAt)}

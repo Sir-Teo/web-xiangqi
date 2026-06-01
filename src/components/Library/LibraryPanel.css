@@ -275,6 +275,7 @@
   font-size: 0.63rem;
   font-weight: 700;
   padding: 0.14rem 0.44rem;
+  white-space: nowrap;
 }
 
 .lib-review-pill-blunder {

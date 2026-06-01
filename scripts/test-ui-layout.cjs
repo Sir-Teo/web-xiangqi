@@ -2255,6 +2255,34 @@ async function assertReviewBestMoveBranchAction(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
   await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("review-meta-saved-review-best-branch").waitFor({ timeout: 5000 });
+  const libraryReviewMeta = await page.evaluate(() => ({
+    metaText: document.querySelector('[data-testid="review-meta-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    metaLabel: document.querySelector('[data-testid="review-meta-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    blunderText: document.querySelector('[data-testid="review-blunders-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    mistakeText: document.querySelector('[data-testid="review-mistakes-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    inaccuracyText: document.querySelector('[data-testid="review-inaccuracies-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    loadLabel: document.querySelector('[data-testid="load-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    copyLabel: document.querySelector('[data-testid="copy-pgn-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    downloadLabel: document.querySelector('[data-testid="download-pgn-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    deleteLabel: document.querySelector('[data-testid="delete-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    !libraryReviewMeta.metaText.includes("40% accuracy") ||
+    libraryReviewMeta.blunderText !== "0 blunders" ||
+    libraryReviewMeta.mistakeText !== "1 mistake" ||
+    libraryReviewMeta.inaccuracyText !== "0 inaccuracies" ||
+    !libraryReviewMeta.metaLabel.includes("Review summary for Review best branch QA") ||
+    !libraryReviewMeta.metaLabel.includes("1 mistake") ||
+    libraryReviewMeta.loadLabel !== "Load Review best branch QA" ||
+    libraryReviewMeta.copyLabel !== "Copy PGN for Review best branch QA" ||
+    libraryReviewMeta.downloadLabel !== "Download PGN for Review best branch QA" ||
+    libraryReviewMeta.deleteLabel !== "Delete Review best branch QA" ||
+    libraryReviewMeta.overflowX > 2
+  ) {
+    throw new Error(`Saved reviewed-game card is not self-describing: ${JSON.stringify(libraryReviewMeta)}`);
+  }
   await page.getByTestId("load-saved-review-best-branch").click();
   await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
   const reviewReadout = await page.evaluate(() => ({
@@ -3686,7 +3714,7 @@ async function assertLibraryPgnCopy(page) {
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByText("PGN copy QA").waitFor({ timeout: 10000 });
   await page.getByTestId("copy-pgn-saved-qa-copy-pgn-game").click();
-  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Copied PGN for PGN copy QA" }).waitFor({ timeout: 5000 });
 
   const copiedPgn = await page.evaluate(() => window.__libraryPgnWrites?.[0] ?? "");
   if (!copiedPgn.includes('[SetUp "1"]')) {
@@ -3723,7 +3751,7 @@ async function assertLibraryPgnCopy(page) {
 
   await page.getByText("Mismatched tree PGN QA").waitFor({ timeout: 10000 });
   await page.getByTestId("copy-pgn-saved-qa-mismatched-tree-pgn-game").click();
-  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+  await page.getByRole("button", { name: "Copied PGN for Mismatched tree PGN QA" }).waitFor({ timeout: 5000 });
   const fallbackPgn = await page.evaluate(() => window.__libraryPgnWrites?.at(-1) ?? "");
   if (!fallbackPgn.includes("1. b0c2 *") || fallbackPgn.includes("b2e2")) {
     throw new Error(`Saved-game PGN exported a tree branch that does not contain the saved mainline:\n${fallbackPgn}`);
@@ -3772,7 +3800,9 @@ async function assertSavedStudyTreeRoundTrip(page) {
 
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByTestId(`copy-pgn-saved-${saved.id}`).click();
-  await page.getByRole("button", { name: "Saved game PGN copied" }).waitFor({ timeout: 5000 });
+  await page.waitForFunction((savedId) => {
+    return (document.querySelector(`[data-testid="copy-pgn-saved-${savedId}"]`)?.getAttribute("aria-label") || "").startsWith("Copied PGN for ");
+  }, saved.id, { timeout: 5000 });
   const copiedPgn = await page.evaluate(() => window.__savedStudyPgnWrites?.[0] ?? "");
   if (!copiedPgn.includes("1. b0c2 (1. b2e2 h9g7) *")) {
     throw new Error(`Saved study tree PGN did not preserve variations:\n${copiedPgn}`);
@@ -4032,7 +4062,7 @@ async function assertLibraryMutationFailureFeedback(page) {
     };
   });
 
-  await page.getByRole("button", { name: "Mutation failure QA" }).click();
+  await page.getByRole("button", { name: "Mutation failure QA", exact: true }).click();
   const renameForm = page.getByTestId("rename-form-saved-qa-library-failure");
   await renameForm.locator("input").fill("Renamed failure");
   await renameForm.getByRole("button", { name: "Save" }).click();
