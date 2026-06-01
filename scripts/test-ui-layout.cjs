@@ -98,8 +98,15 @@ async function installFakePikafish(page, fakeConfig) {
     if (config.variant === "fake-pv-play") {
       window.__goCount = 0;
     }
+    if (config.variant === "fake-restart-buffer") {
+      window.__engineInstanceCount = 0;
+      window.__goCount = 0;
+    }
     window.Pikafish = function Pikafish() {};
     window.Pikafish.createWorkerEngine = async () => {
+      const instanceId = config.variant === "fake-restart-buffer"
+        ? ++window.__engineInstanceCount
+        : 0;
       const listeners = [];
       const emit = (line) => listeners.forEach((listener) => listener(line));
       return {
@@ -144,6 +151,15 @@ async function installFakePikafish(page, fakeConfig) {
                 if (!isAfterPlayedPv) {
                   emit("info depth 4 multipv 1 score cp 300 pv b0c2");
                   emit("bestmove b0c2");
+                  return;
+                }
+                emit("bestmove h9g7");
+              }, 20);
+            } else if (config.variant === "fake-restart-buffer") {
+              window.__goCount += 1;
+              setTimeout(() => {
+                if (instanceId === 1) {
+                  emit("info depth 6 multipv 1 score cp 900 pv b2e2 h9g7");
                   return;
                 }
                 emit("bestmove h9g7");
@@ -900,6 +916,48 @@ async function assertEnginePvLineControl(page) {
   }
   if (cacheState.overflowX > 2) {
     throw new Error(`Clear Hash control introduced horizontal overflow: ${cacheState.overflowX}`);
+  }
+}
+
+async function assertEngineRestartDropsBufferedInfo(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-restart-buffer" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("restart-engine-btn").waitFor({ timeout: 5000 });
+    await page.waitForFunction(() => window.__engineCommands?.some((cmd) => /^go\b/.test(cmd)), null, { timeout: 10000 });
+    await page.waitForTimeout(40);
+    await page.getByTestId("restart-engine-btn").click();
+    await page.waitForFunction(() => {
+      return window.__engineInstanceCount >= 2 &&
+        /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
+    }, null, { timeout: 15000 });
+    await page.waitForTimeout(300);
+
+    const state = await page.evaluate(() => ({
+      instanceCount: window.__engineInstanceCount,
+      goCount: window.__goCount,
+      pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      coachText: document.querySelector(".engine-coach-summary")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      engine: document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+
+    if (
+      state.instanceCount < 2 ||
+      /b2e2|9\.00|\+9/.test(`${state.pvText} ${state.coachText}`) ||
+      !/Engine ready/i.test(state.engine) ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Engine restart leaked buffered info from the previous worker: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await context.close();
   }
 }
 
@@ -3738,6 +3796,7 @@ async function main() {
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
+    await assertEngineRestartDropsBufferedInfo(browser);
     await assertPlayedEnginePvDoesNotStoreRootEval(browser);
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);

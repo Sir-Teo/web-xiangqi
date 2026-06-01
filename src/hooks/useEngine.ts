@@ -203,6 +203,17 @@ export function useEngine(options: EngineInitOptions = {}) {
         commitOutputLines([...outputLinesRef.current, line]);
     }, [commitOutputLines]);
 
+    const clearBufferedInfoState = useCallback(() => {
+        if (infoFlushTimerRef.current !== null) {
+            window.clearTimeout(infoFlushTimerRef.current);
+            infoFlushTimerRef.current = null;
+        }
+        pendingInfoLineRef.current = null;
+        pendingEvalRef.current = null;
+        pendingWdlRef.current = null;
+        pvDirtyRef.current = false;
+    }, []);
+
     const flushBufferedInfo = useCallback(() => {
         if (infoFlushTimerRef.current !== null) {
             window.clearTimeout(infoFlushTimerRef.current);
@@ -399,9 +410,11 @@ export function useEngine(options: EngineInitOptions = {}) {
             engineRef.current = null;
         }
         clearQueuedSearch();
+        clearBufferedInfoState();
         activeSearchSignatureRef.current = '';
         pendingOptionCommandsRef.current.clear();
         stopRequestedRef.current = false;
+        isSearchingRef.current = false;
 
         // Wait for the constructor. We'll use "auto" variant as default.
         const pikafishFactory = (window as any).Pikafish;
@@ -409,6 +422,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         const hashMB = options.hashMB ?? detectUiSafeHashMB();
         didConfigureSessionRef.current = false;
         setIsReady(false);
+        setIsSearching(false);
         setVariant('unknown');
 
         // Boot engine using the wrapper component
@@ -447,22 +461,15 @@ export function useEngine(options: EngineInitOptions = {}) {
                 onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
                 console.error("Failed to boot Pikafish engine", err);
             });
-    }, [clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
+    }, [clearBufferedInfoState, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
 
     useEffect(() => {
         const resetInactiveEngineState = () => {
             clearQueuedSearch();
-            if (infoFlushTimerRef.current !== null) {
-                window.clearTimeout(infoFlushTimerRef.current);
-                infoFlushTimerRef.current = null;
-            }
-            pendingInfoLineRef.current = null;
-            pendingEvalRef.current = null;
-            pendingWdlRef.current = null;
+            clearBufferedInfoState();
             latestEvalRef.current = 0;
             pvSlotRef.current = {};
             pvLinesRef.current = [];
-            pvDirtyRef.current = false;
             outputLinesRef.current = [];
             activeSearchSignatureRef.current = '';
             activeSearchTagRef.current = null;
@@ -494,6 +501,12 @@ export function useEngine(options: EngineInitOptions = {}) {
         let script: HTMLScriptElement | null = null;
         let scriptLoadTimer: number | null = null;
         let didReportScriptFailure = false;
+        clearBufferedInfoState();
+        isSearchingRef.current = false;
+        stopRequestedRef.current = false;
+        activeSearchSignatureRef.current = '';
+        activeSearchTagRef.current = null;
+        setIsSearching(false);
 
         const clearScriptLoadWatch = () => {
             if (scriptLoadTimer !== null) {
@@ -567,11 +580,15 @@ export function useEngine(options: EngineInitOptions = {}) {
             initTokenRef.current += 1;
             clearScriptLoadWatch();
             clearQueuedSearch();
+            clearBufferedInfoState();
+            isSearchingRef.current = false;
+            stopRequestedRef.current = false;
+            activeSearchSignatureRef.current = '';
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
             activeSearchTagRef.current = null;
         };
-    }, [clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
+    }, [clearBufferedInfoState, clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -695,14 +712,13 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     useEffect(() => {
         return () => {
-            if (infoFlushTimerRef.current !== null) {
-                window.clearTimeout(infoFlushTimerRef.current);
-            }
+            clearBufferedInfoState();
             if (queuedSearchTimerRef.current !== null) {
                 window.clearTimeout(queuedSearchTimerRef.current);
+                queuedSearchTimerRef.current = null;
             }
         };
-    }, []);
+    }, [clearBufferedInfoState]);
 
     return {
         isReady,
