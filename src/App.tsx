@@ -960,7 +960,7 @@ function App() {
             searchTag,
             strength: aiTag.strength,
           });
-          applyUciMove(choice.move, normalizeEvalForSide(choice.score, sideToMove));
+          applyUciMove(choice.move);
         }
 
         if (shouldApplyAiMove && (aiSpeedRef.current === 'step' || stepPendingRef.current)) {
@@ -2181,13 +2181,13 @@ function App() {
     }, 1800);
   }, [setOption]);
 
-  const handlePlayPvMove = useCallback((uci: string | undefined, score: number) => {
+  const handlePlayPvMove = useCallback((uci: string | undefined) => {
     if (!uci || gameResult) return;
     clearBoardMarkers();
-    applyUciMove(uci, normalizeEvalForSide(score, sideToMove));
+    applyUciMove(uci);
     setAnalysisTab('tree');
     setMobileAnalysisTab('moves');
-  }, [applyUciMove, clearBoardMarkers, gameResult, sideToMove]);
+  }, [applyUciMove, clearBoardMarkers, gameResult]);
 
   const handlePlayBookMove = useCallback((uci: string) => {
     if (!uci || gameResult || isAiTurn) return;
@@ -3773,7 +3773,7 @@ function App() {
                             <button
                               type="button"
                               className="pv-action-btn"
-                              onClick={() => handlePlayPvMove(firstMove, pv.score)}
+                              onClick={() => handlePlayPvMove(firstMove)}
                               disabled={!firstMove || Boolean(gameResult)}
                               title="Play the first move from this engine line"
                               aria-label={`Play engine line ${i + 1} first move`}

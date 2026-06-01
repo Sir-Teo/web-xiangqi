@@ -761,6 +761,91 @@ async function assertEnginePvLineControl(page) {
   }
 }
 
+async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.addInitScript(() => {
+      localStorage.removeItem("xiangqi-app-preferences");
+      window.__engineCommands = [];
+      window.__goCount = 0;
+      window.Pikafish = function Pikafish() {};
+      window.Pikafish.createWorkerEngine = async () => {
+        const listeners = [];
+        const emit = (line) => listeners.forEach((listener) => listener(line));
+        return {
+          variant: "fake-pv-play",
+          addMessageListener(listener) {
+            listeners.push(listener);
+          },
+          removeMessageListener(listener) {
+            const index = listeners.indexOf(listener);
+            if (index >= 0) listeners.splice(index, 1);
+          },
+          postMessage(command) {
+            window.__engineCommands.push(command);
+            if (command === "uci") {
+              setTimeout(() => {
+                emit("id name Fake Pikafish");
+                emit("option name MultiPV type spin default 1 min 1 max 128");
+                emit("option name UCI_ShowWDL type check default false");
+                emit("uciok");
+              }, 0);
+            } else if (command === "isready") {
+              setTimeout(() => emit("readyok"), 0);
+            } else if (/^go\b/.test(command)) {
+              window.__goCount += 1;
+              const goCount = window.__goCount;
+              setTimeout(() => {
+                if (goCount === 1) {
+                  emit("info depth 4 multipv 1 score cp 300 pv b0c2");
+                  emit("bestmove b0c2");
+                  return;
+                }
+                emit("bestmove h9g7");
+              }, 20);
+            }
+          },
+          terminate() {
+            return Promise.resolve();
+          },
+        };
+      };
+    });
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("play-engine-pv-0").waitFor({ timeout: 15000 });
+    await page.getByTestId("play-engine-pv-0").click();
+    await page.waitForFunction(() => {
+      const row = document.querySelector(".mtree-row")?.textContent || "";
+      return row.includes("b0c2");
+    }, null, { timeout: 5000 });
+
+    const state = await page.evaluate(() => ({
+      graphPoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      graphEval: document.querySelector(".graph-legend strong")?.textContent?.trim() || "",
+      rows: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "").join(" "),
+      goCount: window.__goCount,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (
+      !state.rows.includes("b0c2") ||
+      !state.graphPoint.includes("Red B0") ||
+      state.graphEval !== "0.00" ||
+      state.goCount < 1 ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Playing an engine PV stored the root eval on the child move: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertPreferencePersistence(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -3470,6 +3555,7 @@ async function main() {
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
+    await assertPlayedEnginePvDoesNotStoreRootEval(browser);
     await assertPreferencePersistence(page);
     await assertBottomNewGameMenuResetsDraft(page);
     await assertInvalidFenToastTimerResets(page);
@@ -3525,7 +3611,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
