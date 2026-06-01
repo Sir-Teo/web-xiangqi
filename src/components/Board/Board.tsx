@@ -74,6 +74,10 @@ function squareFromElement(element: Element | null) {
     };
 }
 
+function clampSquare(value: number, max: number) {
+    return Math.max(0, Math.min(max, value));
+}
+
 interface BoardProps {
     board: BoardState;
     selected: { file: number, rank: number } | null;
@@ -108,6 +112,7 @@ export const Board = React.memo(function Board({
 }: BoardProps) {
     const ranks = orientation === 'black' ? RANKS_BLACK : RANKS_RED;
     const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
+    const hitboxesRef = useRef<HTMLDivElement | null>(null);
     const markerDragStartRef = useRef<{ file: number; rank: number } | null>(null);
     const targetBySquare = useMemo(() => {
         const map = new Map<string, { capture: boolean }>();
@@ -122,6 +127,42 @@ export const Board = React.memo(function Board({
         if (!square) return;
         onSquareClick(square.file, square.rank);
     }, [onSquareClick]);
+
+    const focusSquare = useCallback((file: number, rank: number) => {
+        const target = hitboxesRef.current?.querySelector<HTMLButtonElement>(
+            `.hitbox[data-file="${file}"][data-rank="${rank}"]`
+        );
+        target?.focus({ preventScroll: true });
+    }, []);
+
+    const handleHitboxKeyDown = useCallback((
+        event: React.KeyboardEvent<HTMLButtonElement>,
+        file: number,
+        rank: number
+    ) => {
+        let nextFile = file;
+        let nextRank = rank;
+
+        switch (event.key) {
+            case 'ArrowLeft':
+                nextFile += orientation === 'black' ? 1 : -1;
+                break;
+            case 'ArrowRight':
+                nextFile += orientation === 'black' ? -1 : 1;
+                break;
+            case 'ArrowUp':
+                nextRank += orientation === 'black' ? -1 : 1;
+                break;
+            case 'ArrowDown':
+                nextRank += orientation === 'black' ? 1 : -1;
+                break;
+            default:
+                return;
+        }
+
+        event.preventDefault();
+        focusSquare(clampSquare(nextFile, 8), clampSquare(nextRank, 9));
+    }, [focusSquare, orientation]);
 
     const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
         if (event.button !== 2 || (!onToggleHighlight && !onAddArrow)) return;
@@ -223,7 +264,7 @@ export const Board = React.memo(function Board({
                 </div>
 
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}
-                <div className="hitboxes-layer" onClick={handleHitboxClick}>
+                <div className="hitboxes-layer" onClick={handleHitboxClick} ref={hitboxesRef}>
                     {ranks.map(rank => (
                         files.map(file => {
                             const piece = board[rank][file];
@@ -238,7 +279,9 @@ export const Board = React.memo(function Board({
                                     data-file={file}
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
+                                    aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
                                     tabIndex={piece || isSelected || target ? 0 : -1}
+                                    onKeyDown={(event) => handleHitboxKeyDown(event, file, rank)}
                                     onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
                                     onPointerUp={(event) => handleMarkerPointerUp(event, file, rank)}
                                     onPointerCancel={handleMarkerPointerCancel}
