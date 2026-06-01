@@ -303,6 +303,14 @@ async function assertDesktopBoardLayout(page, viewport) {
         return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
       })(),
       graphLegacyDescription: document.querySelector(".winrate-graph")?.getAttribute("aria-description") || "",
+      decorativeBoardLayers: {
+        gridHidden: document.querySelector(".board-svg-grid")?.getAttribute("aria-hidden") || "",
+        gridFocusable: document.querySelector(".board-svg-grid")?.getAttribute("focusable") || "",
+        riverHidden: document.querySelector(".river")?.getAttribute("aria-hidden") || "",
+        arrowsHidden: document.querySelector(".board-arrows-layer")?.getAttribute("aria-hidden") || "",
+        arrowsFocusable: document.querySelector(".board-arrows-layer")?.getAttribute("focusable") || "",
+        piecesHidden: document.querySelector(".pieces-layer")?.getAttribute("aria-hidden") || "",
+      },
       visibleGraphShortcutPrompts: Array.from(document.querySelectorAll(".panel-copy.small"))
         .filter((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
@@ -338,6 +346,16 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.hitboxCount !== 90) {
     throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
+  }
+  if (
+    layout.decorativeBoardLayers.gridHidden !== "true" ||
+    layout.decorativeBoardLayers.gridFocusable !== "false" ||
+    layout.decorativeBoardLayers.riverHidden !== "true" ||
+    layout.decorativeBoardLayers.arrowsHidden !== "true" ||
+    layout.decorativeBoardLayers.arrowsFocusable !== "false" ||
+    layout.decorativeBoardLayers.piecesHidden !== "true"
+  ) {
+    throw new Error(`Decorative board layers should stay out of the accessibility tree: ${JSON.stringify(layout.decorativeBoardLayers)}`);
   }
   if (layout.tabbableHitboxCount !== 32 || layout.emptyHitboxTabStops.length > 0) {
     throw new Error(`Board tab order should include only actionable pieces at the start: ${JSON.stringify(layout)}`);

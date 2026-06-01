@@ -207,7 +207,7 @@ export const Board = React.memo(function Board({
                     ViewBox "0 0 8 9" matches piece coordinate system exactly:
                     left=(file/8)*100% ↔ x=file, top=(rank/9)*100% ↔ y=rank-row.
                     vector-effect: non-scaling-stroke keeps lines crisp at any size. */}
-                <svg className="board-svg-grid" viewBox="0 0 8 9" preserveAspectRatio="none">
+                <svg className="board-svg-grid" viewBox="0 0 8 9" preserveAspectRatio="none" aria-hidden="true" focusable="false">
                     {/* 10 horizontal lines (rank rows 0–9) */}
                     {([0,1,2,3,4,5,6,7,8,9] as const).map(y => (
                         <line key={`h${y}`} x1={0} y1={y} x2={8} y2={y} className="grid-line" />
@@ -230,7 +230,7 @@ export const Board = React.memo(function Board({
                 </svg>
 
                 {/* The river dividing the board */}
-                <div className="river">
+                <div className="river" aria-hidden="true">
                     <span className="river-text">楚{'\u3000'}河</span>
                     <span className="river-text river-text-flipped">漢{'\u3000'}界</span>
                 </div>
@@ -304,7 +304,7 @@ export const Board = React.memo(function Board({
                 )}
 
                 {/* The piece layer */}
-                <div className="pieces-layer">
+                <div className="pieces-layer" aria-hidden="true">
                     {/* User analysis markers */}
                     {highlights.map(highlight => (
                         <div

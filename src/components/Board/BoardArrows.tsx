@@ -35,8 +35,11 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
 
     return (
         <svg
+            className="board-arrows-layer"
             viewBox={`0 0 ${VB_W} ${VB_H}`}
             preserveAspectRatio="none"
+            aria-hidden="true"
+            focusable="false"
             style={{
                 position: 'absolute',
                 inset: 'var(--board-pad)',
