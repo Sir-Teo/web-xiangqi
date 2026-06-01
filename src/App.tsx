@@ -416,6 +416,12 @@ function clearStoredPreferences() {
   }
 }
 
+function logDiagnosticWarning(message: string, ...details: unknown[]) {
+  if (import.meta.env.DEV) {
+    console.warn(message, ...details);
+  }
+}
+
 function makeAnalysisTag(phase: 'primary' | 'deepen', requestKey: string) {
   return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
 }
@@ -2693,14 +2699,14 @@ function App() {
     const rawMode = params.get('mode');
     if (isMoveImportTextTooLarge(rawMoves)) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-      console.warn('Ignored oversized shared Xiangqi line.');
+      logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
     }
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
     if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-      console.warn('Ignored oversized shared Xiangqi line.');
+      logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
     }
     if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
@@ -2713,7 +2719,7 @@ function App() {
     const validation = validateMoveSequence(moves, rawFen);
     if (!validation.ok) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-      console.warn('Ignored invalid shared Xiangqi link:', validation);
+      logDiagnosticWarning('Ignored invalid shared Xiangqi link:', validation);
       return;
     }
 
@@ -2722,15 +2728,15 @@ function App() {
     const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true && sharedTreeContainsLine : false;
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
-      console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
+      logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
       return;
     }
 
     setShareLinkNotice(rawTree && !canLoadSharedTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok) {
-      console.warn('Ignored invalid shared Xiangqi variation tree:', treeValidation);
+      logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
     } else if (sharedMoveTree?.length && treeValidation?.ok && !sharedTreeContainsLine) {
-      console.warn('Ignored shared Xiangqi variation tree whose main line is missing:', moves.join(' '));
+      logDiagnosticWarning('Ignored shared Xiangqi variation tree whose main line is missing:', moves.join(' '));
     }
     stopAnalysis();
     handleCancelReview();
@@ -2808,18 +2814,18 @@ function App() {
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
-      console.warn('Ignored invalid saved Xiangqi game:', lineValidation);
+      logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
       return false;
     }
 
     if (game.moveTree?.length) {
       const treeValidation = validateMoveTree(game.moveTree, game.startFen);
       if (!treeValidation.ok) {
-        console.warn('Ignored saved Xiangqi game with invalid variation tree:', treeValidation);
+        logDiagnosticWarning('Ignored saved Xiangqi game with invalid variation tree:', treeValidation);
         return false;
       }
       if (!moveTreeContainsLine(game.moveTree, game.moves)) {
-        console.warn('Ignored saved Xiangqi game whose main line is missing from its variation tree:', game.id);
+        logDiagnosticWarning('Ignored saved Xiangqi game whose main line is missing from its variation tree:', game.id);
         return false;
       }
     }
