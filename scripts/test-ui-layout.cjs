@@ -2357,6 +2357,51 @@ async function assertMoveLineFileImport(page) {
   }
 }
 
+async function assertOversizedMoveLineFileRejected(page) {
+  const importPath = path.resolve(__dirname, "..", ".move-line-oversized-test.pgn");
+  fs.writeFileSync(importPath, "b2e2 ".repeat(42000));
+
+  try {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByTestId("uci-line-file-input").setInputFiles(importPath);
+    await page.getByText("File is too large").waitFor({ timeout: 5000 });
+
+    const state = await page.evaluate(() => {
+      const input = document.querySelector('[data-testid="uci-line-input"]');
+      const importButton = document.querySelector('[data-testid="import-uci-line-btn"]');
+      return {
+        valueLength: input && "value" in input ? String(input.value).length : -1,
+        invalid: input?.getAttribute("aria-invalid") || "",
+        describedBy: input?.getAttribute("aria-describedby") || "",
+        fileNameVisible: Boolean(document.querySelector(".new-game-file-name")),
+        importDisabled: Boolean(importButton?.disabled),
+        error: document.querySelector("#new-game-line-error")?.textContent?.trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+    if (
+      state.valueLength !== 0 ||
+      state.invalid !== "true" ||
+      state.describedBy !== "new-game-line-error" ||
+      state.fileNameVisible ||
+      !state.importDisabled ||
+      !state.error.includes("1024 moves or fewer") ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Oversized move-line file was not rejected cleanly: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    fs.rmSync(importPath, { force: true });
+  }
+}
+
 async function assertFenTaggedMoveLineImport(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -3418,6 +3463,7 @@ async function main() {
     await assertMismatchedShareTreeFallsBackToMainline(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
+    await assertOversizedMoveLineFileRejected(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
     await assertBoardMarkersSurviveSelection(page);
@@ -3442,7 +3488,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file guard, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

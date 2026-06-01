@@ -32,6 +32,7 @@ import {
   extractUciMoveLine,
   extractUciMoveTree,
   isMoveImportTextTooLarge,
+  MAX_MOVE_IMPORT_TEXT_LENGTH,
   MAX_MOVE_IMPORT_UCI_MOVES,
 } from './utils/moveImport';
 import {
@@ -2107,14 +2108,21 @@ function App() {
     event.currentTarget.value = '';
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
+    if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
-      setMoveLineError('File is too large');
+      setMoveLineInput('');
+      setMoveLineError(`File is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
       return;
     }
 
     try {
       const text = await file.text();
+      if (isMoveImportTextTooLarge(text)) {
+        setMoveLineInput('');
+        setMoveLineFileName('');
+        setMoveLineError(`File is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+        return;
+      }
       setMoveLineInput(text);
       setMoveLineFileName(file.name);
       setMoveLineError(null);
