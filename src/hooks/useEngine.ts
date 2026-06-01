@@ -595,6 +595,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             appendOutputLine(msg);
             // The worker aborted. Mark the engine unavailable so callers do not
             // keep reissuing the same search in a loop.
+            terminateEngineInstance(engineRef.current);
             setIsReady(false);
             setIsSearching(false);
             isSearchingRef.current = false;
