@@ -1112,10 +1112,12 @@ function App() {
         }
 
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
+          const record = treeNodes[reviewTag.nodeId]?.record;
           const parentId = treeNodes[reviewTag.nodeId]?.parentId ?? null;
           const parentEval = parentId ? getEffectiveNodeEval(parentId) : undefined;
-          if (parentId && typeof parentEval === 'number') {
-            const swing = Math.abs(normalizedScore - parentEval);
+          if (record && parentId && typeof parentEval === 'number') {
+            const side = getReviewSideForRecord(record, Math.max(0, record.ply - 1));
+            const swing = getEvalLossForMove(parentEval, normalizedScore, side);
             if (swing >= reviewPolicy.revisitThreshold) {
               const previousSwing = controller.criticalDecisionSwings.get(parentId) ?? 0;
               if (swing > previousSwing) {
