@@ -2558,6 +2558,10 @@ async function assertReviewBestMoveBranchAction(page) {
   const libraryReviewMeta = await page.evaluate(() => ({
     metaText: document.querySelector('[data-testid="review-meta-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     metaLabel: document.querySelector('[data-testid="review-meta-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    redAccuracyText: document.querySelector('[data-testid="review-red-accuracy-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    blackAccuracyText: document.querySelector('[data-testid="review-black-accuracy-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    blackAccuracyLabel: document.querySelector('[data-testid="review-black-accuracy-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
     blunderText: document.querySelector('[data-testid="review-blunders-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistakeText: document.querySelector('[data-testid="review-mistakes-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracyText: document.querySelector('[data-testid="review-inaccuracies-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2572,8 +2576,14 @@ async function assertReviewBestMoveBranchAction(page) {
   }));
   if (
     !libraryReviewMeta.metaText.includes("66% accuracy") ||
+    !libraryReviewMeta.metaText.includes("Red 39%") ||
+    !libraryReviewMeta.metaText.includes("Black 93%") ||
     !libraryReviewMeta.metaLabel.includes("Red 39%") ||
     !libraryReviewMeta.metaLabel.includes("Black 93%") ||
+    libraryReviewMeta.redAccuracyText !== "Red 39%" ||
+    libraryReviewMeta.redAccuracyLabel !== "Red review accuracy 39%" ||
+    libraryReviewMeta.blackAccuracyText !== "Black 93%" ||
+    libraryReviewMeta.blackAccuracyLabel !== "Black review accuracy 93%" ||
     libraryReviewMeta.blunderText !== "0 blunders" ||
     libraryReviewMeta.mistakeText !== "1 mistake" ||
     libraryReviewMeta.inaccuracyText !== "0 inaccuracies" ||

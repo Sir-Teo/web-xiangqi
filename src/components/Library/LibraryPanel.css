@@ -278,6 +278,18 @@
   white-space: nowrap;
 }
 
+.lib-review-pill-red-accuracy {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.lib-review-pill-black-accuracy {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
 .lib-review-pill-blunder {
   border-color: rgba(239, 68, 68, 0.24);
   background: rgba(239, 68, 68, 0.12);

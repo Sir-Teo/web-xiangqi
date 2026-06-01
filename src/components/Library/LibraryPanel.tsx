@@ -347,6 +347,10 @@ export function LibraryPanel({
             const inaccuracyLabel = game.review ? formatReviewCount(game.review.summary.inaccuracyCount, 'inaccuracy', 'inaccuracies') : '';
             const reviewEngineLabel = game.review ? formatReviewEngineSummary(game.review.summary.engine) : '';
             const reviewEngineDetail = game.review ? describeReviewEngineSummary(game.review.summary.engine) : '';
+            const reviewSideAccuracy = game.review ? [
+              { key: 'red', label: 'Red', value: game.review.summary.redAccuracy },
+              { key: 'black', label: 'Black', value: game.review.summary.blackAccuracy },
+            ].filter((item): item is { key: 'red' | 'black'; label: string; value: number } => typeof item.value === 'number') : [];
             return (
               <div key={game.id} className="lib-card">
               <div className="lib-card-title">
@@ -507,6 +511,17 @@ export function LibraryPanel({
                   <span className="lib-review-pill" aria-label={`${game.review.summary.accuracy}% review accuracy`}>
                     {game.review.summary.accuracy}% accuracy
                   </span>
+                  {reviewSideAccuracy.map((item) => (
+                    <span
+                      key={item.key}
+                      className={`lib-review-pill lib-review-pill-${item.key}-accuracy`}
+                      aria-label={`${item.label} review accuracy ${item.value}%`}
+                      title={`${item.label} review accuracy ${item.value}%`}
+                      data-testid={`review-${item.key}-accuracy-saved-${game.id}`}
+                    >
+                      {item.label} {item.value}%
+                    </span>
+                  ))}
                   <span
                     className="lib-review-pill lib-review-pill-blunder"
                     aria-label={blunderLabel}
