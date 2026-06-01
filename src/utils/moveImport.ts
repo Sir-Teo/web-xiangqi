@@ -45,6 +45,11 @@ function mainLineFromTree(line: SavedMoveTreeNode[]): string[] {
     return line.map((node) => node.uci);
 }
 
+function recoverFinalMainLine(currentLine: SavedMoveTreeNode[], stack: SavedMoveTreeNode[][]): SavedMoveTreeNode[] {
+    if (stack.length === 0) return currentLine;
+    return stack[0].length > 0 ? stack[0] : currentLine;
+}
+
 export function isMoveImportTextTooLarge(text: string): boolean {
     return String(text).length > MAX_MOVE_IMPORT_TEXT_LENGTH;
 }
@@ -107,7 +112,7 @@ export function extractUciMoveTree(text: string): {
     }
 
     return {
-        moves: mainLineFromTree(currentLine),
+        moves: mainLineFromTree(recoverFinalMainLine(currentLine, stack)),
         moveTree: root,
         hasVariations: root.length > 1 || hasBranch(root),
         tooLarge,

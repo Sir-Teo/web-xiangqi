@@ -169,11 +169,24 @@ async function installFakePikafish(page, fakeConfig) {
               }, 20);
             } else if (config.variant === "fake-telemetry") {
               window.__goCount += 1;
-              const delay = window.__goCount === 1 ? 20 : 2200;
-              setTimeout(() => {
+              const finishTelemetrySearch = () => {
                 emit("info depth 8 seldepth 12 multipv 1 score cp 42 nodes 123456 nps 789000 hashfull 23 time 156 pv b2e2 h9g7");
                 emit("bestmove b2e2");
-              }, delay);
+              };
+              if (window.__goCount === 1) {
+                setTimeout(finishTelemetrySearch, 20);
+              } else {
+                let completed = false;
+                let timer = null;
+                const finishSecondSearch = () => {
+                  if (completed) return;
+                  completed = true;
+                  if (timer !== null) clearTimeout(timer);
+                  finishTelemetrySearch();
+                };
+                window.__finishFakeTelemetrySearch = finishSecondSearch;
+                timer = setTimeout(finishSecondSearch, 8000);
+              }
             }
           }
         },
@@ -1103,15 +1116,18 @@ async function assertEngineTelemetryDashboard(browser) {
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
         .find((text) => text.includes("Search")) || "";
       const bottomStatus = document.querySelector(".bottom-engine-info")?.textContent?.replace(/\s+/g, " ").trim() || "";
-      return fen.includes(" b ") &&
+      const clearTitle = document.querySelector('[data-testid="clear-engine-hash-btn"]')?.getAttribute("title") || "";
+      return (window.__goCount || 0) >= 2 &&
+        fen.includes(" b ") &&
         !fen.includes("1C5C1/9/RNBAKABNR w ") &&
         pvText.includes("No PV available yet") &&
         /Queued|Pending/.test(searchCard) &&
         /Queued|Analyzing/.test(bottomStatus) &&
+        clearTitle.includes("current search") &&
         searchCard.includes("target D8") &&
         !searchCard.includes("789k nps") &&
         !searchCard.includes("hash 2%");
-    }, null, { timeout: 1200 });
+    }, null, { timeout: 5000 });
 
     const clearHashCommandsBefore = await page.evaluate(() => {
       return (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
@@ -1164,8 +1180,11 @@ async function assertEngineTelemetryDashboard(browser) {
       throw new Error(`Engine telemetry leaked after the position changed: ${JSON.stringify(cleared)}`);
     }
 
+    await page.evaluate(() => window.__finishFakeTelemetrySearch?.());
     await page.waitForFunction((beforeCount) => {
-      return (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length > beforeCount;
+      const clearHashCommandCount = (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
+      const buttonText = document.querySelector('[data-testid="clear-engine-hash-btn"]')?.textContent?.replace(/\s+/g, " ").trim() || "";
+      return clearHashCommandCount > beforeCount && buttonText !== "Queued";
     }, clearHashCommandsBefore, { timeout: 5000 });
     const flushedHashState = await page.evaluate((beforeCount) => {
       const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
@@ -2019,6 +2038,36 @@ async function assertMoveLineImportPreservesVariations(page) {
   const activePoint = await page.getByTestId("graph-current-point").textContent();
   if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
     throw new Error(`Variation import did not land on the mainline final move: ${String(activePoint || "").trim()}`);
+  }
+}
+
+async function assertMoveLineImportRecoversUnclosedVariation(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7 (1... b9c7');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  const rows = await page.locator(".mtree-row").allTextContents();
+  const rowText = rows.join(" ");
+  if (!rowText.includes("b2e2") || !rowText.includes("h9g7") || rowText.includes("b9c7")) {
+    throw new Error(`Unclosed PGN variation changed the imported mainline: ${rowText}`);
+  }
+
+  const variationText = await page.locator(".mtree-variation").allTextContents();
+  if (!variationText.join(" ").includes("b9c7")) {
+    throw new Error(`Unclosed PGN variation was not visible after import: ${variationText.join(" ")}`);
+  }
+
+  const activePoint = await page.getByTestId("graph-current-point").textContent();
+  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+    throw new Error(`Unclosed variation import did not recover the mainline final move: ${String(activePoint || "").trim()}`);
   }
 }
 
@@ -4106,6 +4155,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertMoveLineImportPreservesVariations(page);
+    await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
     await assertCompletedReviewRerunRespectsEngineState(page);
@@ -4150,7 +4200,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
