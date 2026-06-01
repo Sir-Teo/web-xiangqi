@@ -14,13 +14,14 @@ import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons'
 import './LibraryPanel.css';
 
 const SAVED_PAGE_SIZE = 100;
-type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'red-accuracy-high' | 'black-accuracy-high';
+type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
 
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
   recent: 'Newest first',
   oldest: 'Oldest first',
   'accuracy-high': 'Highest accuracy',
   'accuracy-low': 'Lowest accuracy',
+  'average-loss-low': 'Lowest avg loss',
   'red-accuracy-high': 'Red accuracy',
   'black-accuracy-high': 'Black accuracy',
 };
@@ -120,6 +121,8 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
       return compareDefinedNumbers(left.review?.summary.accuracy, right.review?.summary.accuracy, 'desc') || recentTieBreak;
     case 'accuracy-low':
       return compareDefinedNumbers(left.review?.summary.accuracy, right.review?.summary.accuracy, 'asc') || recentTieBreak;
+    case 'average-loss-low':
+      return compareDefinedNumbers(left.review?.summary.averageCentipawnLoss, right.review?.summary.averageCentipawnLoss, 'asc') || recentTieBreak;
     case 'red-accuracy-high':
       return compareDefinedNumbers(left.review?.summary.redAccuracy, right.review?.summary.redAccuracy, 'desc') || recentTieBreak;
     case 'black-accuracy-high':
@@ -355,6 +358,7 @@ export function LibraryPanel({
           <option value="oldest">{SAVED_SORT_LABELS.oldest}</option>
           <option value="accuracy-high">{SAVED_SORT_LABELS['accuracy-high']}</option>
           <option value="accuracy-low">{SAVED_SORT_LABELS['accuracy-low']}</option>
+          <option value="average-loss-low">{SAVED_SORT_LABELS['average-loss-low']}</option>
           <option value="red-accuracy-high">{SAVED_SORT_LABELS['red-accuracy-high']}</option>
           <option value="black-accuracy-high">{SAVED_SORT_LABELS['black-accuracy-high']}</option>
         </select>

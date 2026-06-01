@@ -4448,10 +4448,11 @@ async function assertLibrarySavedGameSorting(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    const makeReview = (accuracy, redAccuracy, blackAccuracy) => ({
+    const makeReview = (accuracy, redAccuracy, blackAccuracy, averageCentipawnLoss) => ({
       summary: {
         totalMoves: 1,
         accuracy,
+        averageCentipawnLoss,
         redAccuracy,
         blackAccuracy,
         bestCount: 0,
@@ -4473,7 +4474,7 @@ async function assertLibrarySavedGameSorting(page) {
         moves: ["b2e2"],
         result: "ongoing",
         label: "Red Accuracy Peak QA",
-        review: makeReview(70, 90, 99),
+        review: makeReview(70, 90, 99, 35),
       },
       {
         id: "qa-sort-high",
@@ -4482,7 +4483,7 @@ async function assertLibrarySavedGameSorting(page) {
         moves: ["b2e2"],
         result: "ongoing",
         label: "High Accuracy QA",
-        review: makeReview(92, 88, 95),
+        review: makeReview(92, 88, 95, 12),
       },
       {
         id: "qa-sort-low",
@@ -4491,7 +4492,7 @@ async function assertLibrarySavedGameSorting(page) {
         moves: ["b2e2"],
         result: "ongoing",
         label: "Low Accuracy QA",
-        review: makeReview(42, 35, 70),
+        review: makeReview(42, 35, 70, 280),
       },
       {
         id: "qa-sort-recent-unreviewed",
@@ -4549,6 +4550,12 @@ async function assertLibrarySavedGameSorting(page) {
     "High Accuracy QA",
     "Recent Unreviewed QA",
   ], "Sorted by Lowest accuracy.");
+  await assertOrder("average-loss-low", [
+    "High Accuracy QA",
+    "Red Accuracy Peak QA",
+    "Low Accuracy QA",
+    "Recent Unreviewed QA",
+  ], "Sorted by Lowest avg loss.");
   await assertOrder("red-accuracy-high", [
     "Red Accuracy Peak QA",
     "High Accuracy QA",
