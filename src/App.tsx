@@ -2543,21 +2543,21 @@ function App() {
   }, [clearExportFailure, showExportFailure]);
 
   const handleClearEngineHash = useCallback(() => {
-    setOption('Clear Hash');
     if (clearedHashTimerRef.current !== null) {
       window.clearTimeout(clearedHashTimerRef.current);
       clearedHashTimerRef.current = null;
     }
-    if (isSearching) {
+    if (isSearching || isSearchQueued) {
       setEngineHashFeedback('queued');
       return;
     }
+    setOption('Clear Hash');
     setEngineHashFeedback('cleared');
     clearedHashTimerRef.current = window.setTimeout(() => {
       clearedHashTimerRef.current = null;
       setEngineHashFeedback(null);
     }, 1800);
-  }, [isSearching, setOption]);
+  }, [isSearchQueued, isSearching, setOption]);
 
   useEffect(() => {
     if (engineHashFeedback !== 'queued') return;
@@ -2570,12 +2570,13 @@ function App() {
     if (clearedHashTimerRef.current !== null) {
       window.clearTimeout(clearedHashTimerRef.current);
     }
+    setOption('Clear Hash');
     setEngineHashFeedback('cleared');
     clearedHashTimerRef.current = window.setTimeout(() => {
       clearedHashTimerRef.current = null;
       setEngineHashFeedback(null);
     }, 1800);
-  }, [engineHashFeedback, isReady, isSearchQueued, isSearching]);
+  }, [engineHashFeedback, isReady, isSearchQueued, isSearching, setOption]);
 
   const handleRestartEngine = useCallback(() => {
     applyBestMoveRef.current = false;
@@ -4251,7 +4252,7 @@ function App() {
                         className={`engine-cache-btn ${engineHashFeedback ? 'engine-pv-btn-active' : ''}`}
                         onClick={handleClearEngineHash}
                         disabled={!isReady}
-                        title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
+                        title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching || isSearchQueued ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
                         aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear engine hash table'}
                         data-testid="clear-engine-hash-btn"
                       >

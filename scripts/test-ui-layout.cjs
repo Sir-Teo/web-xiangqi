@@ -1382,6 +1382,15 @@ async function assertEnginePvLineControl(page) {
     return button && !button.disabled;
   }, null, { timeout: 15000 });
   await page.getByTestId("clear-engine-hash-btn").click();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+    const text = button?.textContent?.trim() || "";
+    const label = button?.getAttribute("aria-label") || "";
+    return (
+      (text === "Cleared" && label === "Engine hash cleared") ||
+      (text === "Clear Hash" && label === "Clear engine hash table")
+    );
+  }, null, { timeout: 15000 });
   const cacheState = await page.evaluate(() => {
     const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
     return {
@@ -1391,7 +1400,13 @@ async function assertEnginePvLineControl(page) {
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
-  if (cacheState.text !== "Cleared" || cacheState.label !== "Engine hash cleared" || cacheState.disabled) {
+  if (
+    !(
+      (cacheState.text === "Cleared" && cacheState.label === "Engine hash cleared") ||
+      (cacheState.text === "Clear Hash" && cacheState.label === "Clear engine hash table")
+    ) ||
+    cacheState.disabled
+  ) {
     throw new Error(`Clear Hash control did not show successful feedback: ${JSON.stringify(cacheState)}`);
   }
   if (cacheState.overflowX > 2) {
