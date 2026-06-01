@@ -411,7 +411,10 @@ try {
 
   const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  const originalConsoleWarn = console.warn;
+  const storageWarnings = [];
   try {
+    console.warn = (...args) => storageWarnings.push(args.map(String).join(" "));
     const storedValues = new Map();
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
@@ -476,7 +479,25 @@ try {
       storedValues.get("xiangqi-game-library") === oversizedRawLibrary,
       "Oversized raw saved-game storage should remain untouched after failed mutations."
     );
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: () => "[]",
+        setItem: () => {
+          throw new Error("storage blocked");
+        },
+      },
+    });
+    assert(
+      library.saveGame({ gameMode: "PvP", moves: ["b2e2"], result: "ongoing" }) === null,
+      "Saving should fail cleanly when browser storage writes are blocked."
+    );
+    assert(
+      storageWarnings.length === 0,
+      `Storage mutation failures should not write production console warnings: ${storageWarnings.join("; ")}`
+    );
   } finally {
+    console.warn = originalConsoleWarn;
     if (originalLocalStorageDescriptor) {
       Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);
     } else {
