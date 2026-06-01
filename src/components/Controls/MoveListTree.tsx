@@ -172,12 +172,12 @@ export const MoveListTree = memo(function MoveListTree({
                     <span className="legend-title">Move loss</span>
                     <div className="legend-items">
                         <span className="legend-item quality-best"><span className="mtree-quality-dot" /> Best <em>≤40cp</em></span>
-                        <span className="legend-item quality-good"><span className="mtree-quality-dot" /> Good <em>≤90cp</em></span>
-                        <span className="legend-item quality-inaccuracy"><span className="mtree-quality-dot" /> Inaccuracy <em>≤180cp</em></span>
-                        <span className="legend-item quality-mistake"><span className="mtree-quality-dot" /> Mistake <em>≤320cp</em></span>
-                        <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> Blunder <em>&gt;320cp</em></span>
+                        <span className="legend-item quality-good"><span className="mtree-quality-dot" /> Good <em>≤90cp / 5%</em></span>
+                        <span className="legend-item quality-inaccuracy"><span className="mtree-quality-dot" /> Inaccuracy <em>≤180cp / 20%</em></span>
+                        <span className="legend-item quality-mistake"><span className="mtree-quality-dot" /> Mistake <em>≤320cp / 30%</em></span>
+                        <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> Blunder <em>larger</em></span>
                     </div>
-                    <p>Large drops are softened when the mover still keeps a decisive advantage.</p>
+                    <p>Severity is capped by practical win-chance loss so lopsided positions are not over-punished.</p>
                 </div> : null}
         </div>
     );
@@ -262,5 +262,5 @@ function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: st
 
     const side = getReviewSideForRecord(record, record.ply - 1);
     const delta = getEvalLossForMove(parentEval, currentEval, side);
-    return getMoveQualityClassName(classifyMoveQualityForEval(delta, currentEval, side));
+    return getMoveQualityClassName(classifyMoveQualityForEval(delta, parentEval, currentEval, side));
 }

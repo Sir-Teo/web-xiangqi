@@ -89,17 +89,23 @@ async function main() {
       }
 
       const contextualQualityCases = [
-        [220, 750, "red", "inaccuracy"],
-        [350, 650, "red", "mistake"],
-        [350, -650, "black", "mistake"],
-        [350, 200, "red", "blunder"],
+        [220, 970, 750, "red", "good"],
+        [350, 1000, 650, "red", "inaccuracy"],
+        [350, -1000, -650, "black", "inaccuracy"],
+        [350, 0, -350, "red", "mistake"],
+        [400, 0, -400, "red", "blunder"],
       ];
 
-      for (const [delta, evalAfter, side, expected] of contextualQualityCases) {
-        const actual = review.classifyMoveQualityForEval(delta, evalAfter, side);
+      for (const [delta, evalBefore, evalAfter, side, expected] of contextualQualityCases) {
+        const actual = review.classifyMoveQualityForEval(delta, evalBefore, evalAfter, side);
         if (actual !== expected) {
-          throw new Error(`classifyMoveQualityForEval(${delta}, ${evalAfter}, ${side}) => ${actual}, expected ${expected}`);
+          throw new Error(`classifyMoveQualityForEval(${delta}, ${evalBefore}, ${evalAfter}, ${side}) => ${actual}, expected ${expected}`);
         }
+      }
+
+      const winLoss = review.getWinPercentLossForMove(1000, 650, "red");
+      if (winLoss < 5 || winLoss > 7) {
+        throw new Error(`Expected decisive-position win loss near 6%, got ${winLoss}`);
       }
 
       const lossCases = [
@@ -190,9 +196,10 @@ async function main() {
       );
       const decisiveAnnotation = decisiveReview.annotations[0];
       if (
-        decisiveAnnotation?.quality !== "mistake" ||
+        decisiveAnnotation?.quality !== "inaccuracy" ||
         decisiveReview.summary.blunderCount !== 0 ||
-        decisiveReview.summary.mistakeCount !== 1 ||
+        decisiveReview.summary.mistakeCount !== 0 ||
+        decisiveReview.summary.inaccuracyCount !== 1 ||
         !decisiveAnnotation.reviewNote.includes("Still winning")
       ) {
         throw new Error(`Decisive advantage review was over-punished: ${JSON.stringify(decisiveReview)}`);

@@ -6,6 +6,12 @@ export const REVIEW_THRESHOLDS = {
     inaccuracy: 180,
     mistake: 320,
 } as const;
+export const REVIEW_WIN_PERCENT_LOSS_THRESHOLDS = {
+    best: 2,
+    good: 5,
+    inaccuracy: 20,
+    mistake: 30,
+} as const;
 export const REVIEW_DECISIVE_ADVANTAGE_CP = 600;
 
 export type ReviewMoveQuality = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
@@ -88,6 +94,15 @@ export interface SavedReviewSnapshot {
 }
 
 type EvalOverrides = Map<string, number> | Record<string, number> | null | undefined;
+const REVIEW_QUALITY_PRIORITY: Record<ReviewMoveQuality, number> = {
+    best: 0,
+    good: 1,
+    inaccuracy: 2,
+    mistake: 3,
+    blunder: 4,
+};
+const WIN_PERCENT_EVAL_SLOPE = 0.00368208;
+const WIN_PERCENT_EVAL_LIMIT = 3000;
 
 export function getEvalOverride(nodeId: string, evalOverrides: EvalOverrides) {
     if (!evalOverrides) return undefined;
@@ -105,6 +120,14 @@ export function classifyMoveQuality(delta: number): ReviewMoveQuality {
     return 'blunder';
 }
 
+export function classifyWinPercentLoss(loss: number): ReviewMoveQuality {
+    if (loss <= REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.best) return 'best';
+    if (loss <= REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.good) return 'good';
+    if (loss <= REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.inaccuracy) return 'inaccuracy';
+    if (loss <= REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.mistake) return 'mistake';
+    return 'blunder';
+}
+
 export function getEvalForReviewSide(evalScore: number, side: ReviewSide): number {
     return side === 'red' ? evalScore : -evalScore;
 }
@@ -113,12 +136,31 @@ export function hasDecisiveAdvantageAfterMove(evalAfter: number, side: ReviewSid
     return getEvalForReviewSide(evalAfter, side) >= REVIEW_DECISIVE_ADVANTAGE_CP;
 }
 
-export function classifyMoveQualityForEval(delta: number, evalAfter: number, side: ReviewSide): ReviewMoveQuality {
+export function getWinningChancePercent(evalScore: number, side: ReviewSide): number {
+    const sideEval = getEvalForReviewSide(evalScore, side);
+    const boundedEval = Math.max(-WIN_PERCENT_EVAL_LIMIT, Math.min(WIN_PERCENT_EVAL_LIMIT, sideEval));
+    return 100 / (1 + Math.exp(-WIN_PERCENT_EVAL_SLOPE * boundedEval));
+}
+
+export function getWinPercentLossForMove(evalBefore: number, evalAfter: number, side: ReviewSide): number {
+    const loss = getWinningChancePercent(evalBefore, side) - getWinningChancePercent(evalAfter, side);
+    return Math.max(0, loss);
+}
+
+function getLessSevereReviewQuality(left: ReviewMoveQuality, right: ReviewMoveQuality): ReviewMoveQuality {
+    return REVIEW_QUALITY_PRIORITY[left] <= REVIEW_QUALITY_PRIORITY[right] ? left : right;
+}
+
+export function classifyMoveQualityForEval(
+    delta: number,
+    evalBefore: number,
+    evalAfter: number,
+    side: ReviewSide
+): ReviewMoveQuality {
     const rawQuality = classifyMoveQuality(delta);
-    if (!hasDecisiveAdvantageAfterMove(evalAfter, side)) return rawQuality;
-    if (rawQuality === 'blunder') return 'mistake';
-    if (rawQuality === 'mistake') return 'inaccuracy';
-    return rawQuality;
+    if (!Number.isFinite(evalBefore) || !Number.isFinite(evalAfter)) return rawQuality;
+    const practicalLoss = getWinPercentLossForMove(evalBefore, evalAfter, side);
+    return getLessSevereReviewQuality(classifyWinPercentLoss(practicalLoss), rawQuality);
 }
 
 export function getReviewSideForRecord(record: ReviewRecordLike, moveIndex: number): ReviewSide {
@@ -207,18 +249,7 @@ export function isCriticalReviewQuality(quality: ReviewMoveQuality): quality is 
 }
 
 export function getReviewQualityPriority(quality: ReviewMoveQuality): number {
-    switch (quality) {
-        case 'blunder':
-            return 4;
-        case 'mistake':
-            return 3;
-        case 'inaccuracy':
-            return 2;
-        case 'good':
-            return 1;
-        case 'best':
-            return 0;
-    }
+    return REVIEW_QUALITY_PRIORITY[quality];
 }
 
 export function makeReviewLineSignatureFromMoves(moves: string[]): string {
@@ -308,7 +339,7 @@ export function computeReviewArtifacts(
         const side = getReviewSideForRecord(record, moveIndex);
         const swing = getEvalLossForMove(parentEval, currentEval, side);
         const retainedDecisiveAdvantage = hasDecisiveAdvantageAfterMove(currentEval, side);
-        const quality = classifyMoveQualityForEval(swing, currentEval, side);
+        const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const note = buildReviewNote({
             quality,
             bestMove: record.bestMove,
