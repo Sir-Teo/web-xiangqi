@@ -5841,7 +5841,7 @@ async function assertStalemateLossIsLabeled(page) {
   }));
   if (
     stalemateState.title !== "Red Wins" ||
-    stalemateState.subtitle !== "Stalemate - no legal moves" ||
+    stalemateState.subtitle !== "No legal moves - Xiangqi counts this as a loss" ||
     !stalemateState.fen.includes(" b ") ||
     stalemateState.overflowX > 2
   ) {

@@ -17,7 +17,7 @@ const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; color: str
 function resultSubtitle(result: NonNullable<GameResult>, reason?: GameOverModalProps['reason']) {
   if (result === 'draw') return 'Game drawn';
   if (reason === 'checkmate') return 'Checkmate';
-  if (reason === 'stalemate') return 'Stalemate - no legal moves';
+  if (reason === 'stalemate') return 'No legal moves - Xiangqi counts this as a loss';
   return 'Game result';
 }
 
