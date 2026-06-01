@@ -814,7 +814,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
   await page.locator('.hitbox[data-file="1"][data-rank="3"]').click();
   await page.waitForFunction(() => {
     const hint = document.querySelector(".position-stat-selection em")?.textContent?.trim() || "";
-    return /Horse moves in an L/i.test(hint);
+    return /Horse moves one point straight, then one point diagonal/i.test(hint);
   }, null, { timeout: 5000 });
 
   const illegalState = await page.evaluate(() => ({
@@ -850,7 +850,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
   }, beforeFen, { timeout: 5000 });
 
   const clearedHint = await page.locator(".position-stat-selection em").textContent();
-  if (/Horse moves in an L|Chariot moves in straight lines/i.test(clearedHint || "")) {
+  if (/Horse moves one point straight, then one point diagonal|Chariot moves in straight lines/i.test(clearedHint || "")) {
     throw new Error("Illegal move hint did not clear after a legal move.");
   }
 
@@ -866,7 +866,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
   await page.waitForFunction(() => {
     const hint = document.querySelector(".position-stat-selection em");
     const hintText = hint?.textContent?.trim() || "";
-    return !!hint && /Horse moves in an L/i.test(hintText) && getComputedStyle(hint).display !== "none";
+    return !!hint && /Horse moves one point straight, then one point diagonal/i.test(hintText) && getComputedStyle(hint).display !== "none";
   }, null, { timeout: 5000 });
 
   const proIllegalState = await page.evaluate(() => {
@@ -885,7 +885,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
   if (
     proIllegalState.assistMode !== "pro" ||
     proIllegalState.fen !== proBeforeFen ||
-    !/Horse moves in an L/i.test(proIllegalState.hint) ||
+    !/Horse moves one point straight, then one point diagonal/i.test(proIllegalState.hint) ||
     proIllegalState.display === "none" ||
     proIllegalState.visibleHeight <= 0 ||
     !proIllegalState.warningClass ||

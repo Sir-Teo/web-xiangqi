@@ -629,6 +629,8 @@ function formatMoveRuleHint(reason?: string) {
       return 'Chariot moves in straight lines.';
     case 'rook path blocked':
       return 'Chariot path is blocked.';
+    case 'horse moves in an L':
+      return 'Horse moves one point straight, then one point diagonal.';
     case 'advisor moves 1 diagonally':
       return 'Advisor moves one point diagonally inside the palace.';
     case 'advisor must stay in palace':
