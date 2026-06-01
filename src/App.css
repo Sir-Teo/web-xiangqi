@@ -3976,6 +3976,13 @@ summary:active {
   min-width: 7rem;
 }
 
+.engine-runtime-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, auto));
+  gap: 0.32rem;
+  min-width: 0;
+}
+
 .engine-pv-btn {
   min-height: 1.55rem;
   padding: 0 0.42rem;

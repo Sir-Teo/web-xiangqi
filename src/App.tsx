@@ -2181,6 +2181,19 @@ function App() {
     }, 1800);
   }, [setOption]);
 
+  const handleRestartEngine = useCallback(() => {
+    applyBestMoveRef.current = false;
+    activeAnalysisRequestRef.current = '';
+    analysisStageRef.current = 'idle';
+    engineRecoveryTimestampsRef.current = [];
+    lastEngineRecoveryAtRef.current = 0;
+    clearAnalysisDeepenTimer();
+    clearQueuedSearch();
+    setEngineSafetyBootLevel(0);
+    setEngineNotice({ tone: 'warning', text: 'Restarting engine' });
+    restartEngine();
+  }, [clearAnalysisDeepenTimer, clearQueuedSearch, restartEngine]);
+
   const handlePlayPvMove = useCallback((uci: string | undefined) => {
     if (!uci || gameResult) return;
     clearBoardMarkers();
@@ -3749,18 +3762,32 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  <div className="engine-pv-controls engine-cache-controls" aria-label="Engine cache controls">
-                    <span>Cache</span>
-                    <button
-                      type="button"
-                      className={`engine-cache-btn ${clearedHashToast ? 'engine-pv-btn-active' : ''}`}
-                      onClick={handleClearEngineHash}
-                      disabled={!isReady}
-                      title={isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
-                      data-testid="clear-engine-hash-btn"
-                    >
-                      {clearedHashToast ? <><IconCheck /> Cleared</> : 'Clear Hash'}
-                    </button>
+                  <div className="engine-pv-controls engine-runtime-controls" aria-label="Engine runtime controls">
+                    <span>Runtime</span>
+                    <div className="engine-runtime-buttons">
+                      <button
+                        type="button"
+                        className="engine-cache-btn"
+                        onClick={handleRestartEngine}
+                        disabled={!engineRequired}
+                        title="Restart the engine worker"
+                        aria-label="Restart engine"
+                        data-testid="restart-engine-btn"
+                      >
+                        <IconRefresh aria-hidden="true" focusable="false" /> Restart
+                      </button>
+                      <button
+                        type="button"
+                        className={`engine-cache-btn ${clearedHashToast ? 'engine-pv-btn-active' : ''}`}
+                        onClick={handleClearEngineHash}
+                        disabled={!isReady}
+                        title={isSearching ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
+                        aria-label={clearedHashToast ? 'Engine hash cleared' : 'Clear engine hash table'}
+                        data-testid="clear-engine-hash-btn"
+                      >
+                        {clearedHashToast ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
+                      </button>
+                    </div>
                   </div>
                   <div className="pv-lines-container">
                     {currentAnalysisPvLines.length === 0 ? (

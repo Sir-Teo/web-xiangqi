@@ -849,6 +849,37 @@ async function assertEnginePvLineControl(page) {
     throw new Error(`Engine PV selector introduced horizontal overflow: ${updated.overflowX}`);
   }
 
+  await page.getByTestId("restart-engine-btn").waitFor({ timeout: 5000 });
+  const runtimeState = await page.evaluate(() => {
+    const restart = document.querySelector('[data-testid="restart-engine-btn"]');
+    const clear = document.querySelector('[data-testid="clear-engine-hash-btn"]');
+    return {
+      restartText: restart?.textContent?.replace(/\s+/g, " ").trim() || "",
+      restartLabel: restart?.getAttribute("aria-label") || "",
+      restartTitle: restart?.getAttribute("title") || "",
+      restartDisabled: restart?.disabled ?? null,
+      clearLabel: clear?.getAttribute("aria-label") || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    runtimeState.restartText !== "Restart" ||
+    runtimeState.restartLabel !== "Restart engine" ||
+    runtimeState.restartTitle !== "Restart the engine worker" ||
+    runtimeState.restartDisabled ||
+    runtimeState.clearLabel !== "Clear engine hash table"
+  ) {
+    throw new Error(`Engine runtime controls are not accessible: ${JSON.stringify(runtimeState)}`);
+  }
+  if (runtimeState.overflowX > 2) {
+    throw new Error(`Engine runtime controls introduced horizontal overflow: ${runtimeState.overflowX}`);
+  }
+
+  await page.getByTestId("restart-engine-btn").click();
+  await page.waitForFunction(() => {
+    return /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
+  }, null, { timeout: 30000 });
+
   await page.getByTestId("clear-engine-hash-btn").waitFor({ timeout: 5000 });
   await page.waitForFunction(() => {
     const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
@@ -859,11 +890,12 @@ async function assertEnginePvLineControl(page) {
     const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
     return {
       text: button?.textContent?.trim() || "",
+      label: button?.getAttribute("aria-label") || "",
       disabled: button?.disabled ?? null,
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
-  if (cacheState.text !== "Cleared" || cacheState.disabled) {
+  if (cacheState.text !== "Cleared" || cacheState.label !== "Engine hash cleared" || cacheState.disabled) {
     throw new Error(`Clear Hash control did not show successful feedback: ${JSON.stringify(cacheState)}`);
   }
   if (cacheState.overflowX > 2) {
