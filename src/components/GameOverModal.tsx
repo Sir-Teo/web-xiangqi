@@ -19,9 +19,13 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
 
   useEffect(() => {
     if (!result) return;
-    const frame = window.requestAnimationFrame(() => {
+    const focusPrimaryAction = () => {
+      if (modalRef.current?.contains(document.activeElement)) return;
       primaryButtonRef.current?.focus({ preventScroll: true });
-    });
+    };
+    focusPrimaryAction();
+    const frame = window.requestAnimationFrame(focusPrimaryAction);
+    const retryTimer = window.setTimeout(focusPrimaryAction, 80);
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -61,6 +65,7 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
     document.addEventListener('keydown', onKeyDown);
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearTimeout(retryTimer);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [onReview, result]);
