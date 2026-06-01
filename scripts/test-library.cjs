@@ -42,7 +42,7 @@ try {
   const moveImport = require(path.join(tempDir, "moveImport.js"));
   const moveNotation = require(path.join(tempDir, "moveNotation.js"));
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
-  const customFen = "9/9/9/9/9/9/9/9/4K4/4k4 w - - 0 1";
+  const customFen = "4k4/9/9/9/4p4/9/9/9/9/4K4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
     id: "fen-only",
@@ -101,6 +101,24 @@ try {
     startFen: "9/9/9/9/9/9/9/9/9/4k4 w - - 0 1",
   });
   assert(missingKingFenSave === null, "Saved games with root FENs missing either king should be rejected.");
+
+  const flyingKingsFenSave = library.normalizeSavedGame({
+    id: "flying-kings-root",
+    savedAt: 1710000000005,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    startFen: "4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1",
+  });
+  assert(flyingKingsFenSave === null, "Saved games with flying kings in the root FEN should be rejected.");
+
+  const palaceViolationFenSave = library.normalizeSavedGame({
+    id: "palace-violation-root",
+    savedAt: 1710000000005,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    startFen: "4k4/9/9/9/4p4/9/9/9/9/K8 w - - 0 1",
+  });
+  assert(palaceViolationFenSave === null, "Saved games with kings outside their palaces should be rejected.");
 
   const invalidTimestampSave = library.normalizeSavedGame({
     id: "invalid-timestamp",
