@@ -127,6 +127,17 @@ async function main() {
       if (engineHook.parseBestMoveUci("bestmove (none)") !== "") {
         throw new Error("Engine bestmove parser should ignore missing best moves.");
       }
+      const parsedPvMoves = engineHook.parsePvUciMoves("B2E2 h9g7 b0c2");
+      if (parsedPvMoves.join(" ") !== "b2e2 h9g7 b0c2") {
+        throw new Error(`Engine PV parser should normalize strict Xiangqi moves, got: ${parsedPvMoves.join(" ")}`);
+      }
+      const truncatedPvMoves = engineHook.parsePvUciMoves("b2e2 h9g7q b0c2");
+      if (truncatedPvMoves.join(" ") !== "b2e2") {
+        throw new Error(`Engine PV parser should stop at malformed tokens, got: ${truncatedPvMoves.join(" ")}`);
+      }
+      if (engineHook.parsePvUciMoves("b2e2q h9g7").length !== 0) {
+        throw new Error("Engine PV parser should reject a line whose first move is malformed.");
+      }
 
       const treeNodes = {
         root: { parentId: null },

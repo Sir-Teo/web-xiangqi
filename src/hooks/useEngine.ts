@@ -105,6 +105,16 @@ export function parseBestMoveUci(message: string) {
     return match?.[1].toLowerCase() ?? '';
 }
 
+export function parsePvUciMoves(value: string) {
+    const moves: string[] = [];
+    for (const token of String(value).trim().split(/\s+/)) {
+        if (!token) continue;
+        if (!/^[a-i][0-9][a-i][0-9]$/i.test(token)) break;
+        moves.push(token.toLowerCase());
+    }
+    return moves;
+}
+
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
@@ -648,6 +658,12 @@ export function useEngine(options: EngineInitOptions = {}) {
 
             const pvMatch = msg.match(/\bpv (.*)/);
             if (depthMatch && pvMatch && (scoreMatch || mateMatch)) {
+                const moves = parsePvUciMoves(pvMatch[1]);
+                if (moves.length === 0) {
+                    scheduleInfoFlush();
+                    return;
+                }
+
                 let scoreStr = '';
                 if (scoreMatch) {
                     scoreStr = finalScore > 0 ? `+${finalScore}` : `${finalScore}`;
@@ -660,7 +676,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                     depth: depthMatch[1],
                     score: finalScore,
                     scoreStr,
-                    moves: pvMatch[1].trim().split(' '),
+                    moves,
                     multipv: multipvIndex,
                     searchTag: activeSearchTagRef.current,
                 };
