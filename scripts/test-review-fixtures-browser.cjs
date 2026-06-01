@@ -113,6 +113,10 @@ async function main() {
       if (review.formatWinPercentLossLabel(winLoss, "red") !== "Red practical winning chance dropped by 5.9 percentage points") {
         throw new Error(`Unexpected formatted win loss label: ${review.formatWinPercentLossLabel(winLoss, "red")}`);
       }
+      const moveAccuracy = review.getMoveAccuracyForWinPercentLoss(winLoss);
+      if (moveAccuracy < 76 || moveAccuracy > 77) {
+        throw new Error(`Expected decisive-position move accuracy near 77%, got ${moveAccuracy}`);
+      }
 
       const lossCases = [
         [0, 200, "red", 0],
@@ -184,6 +188,9 @@ async function main() {
       if (qualities !== "best,inaccuracy,mistake,blunder") {
         throw new Error(`Unexpected annotation qualities: ${qualities}`);
       }
+      if (summary.accuracy !== 55) {
+        throw new Error(`Unexpected chance-loss accuracy: ${summary.accuracy}`);
+      }
 
       const rankedMoments = summary.keyMoments.map((moment) => `${moment.moveIndex}:${moment.quality}`).join(",");
       if (rankedMoments !== "3:blunder,2:mistake,1:inaccuracy") {
@@ -214,6 +221,7 @@ async function main() {
         decisiveReview.summary.blunderCount !== 0 ||
         decisiveReview.summary.mistakeCount !== 0 ||
         decisiveReview.summary.inaccuracyCount !== 1 ||
+        decisiveReview.summary.accuracy !== 77 ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss < 5 ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss > 7 ||
         !decisiveAnnotation.reviewNote.includes("Still winning")

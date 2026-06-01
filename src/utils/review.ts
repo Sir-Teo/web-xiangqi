@@ -106,6 +106,9 @@ const REVIEW_QUALITY_PRIORITY: Record<ReviewMoveQuality, number> = {
 };
 const WIN_PERCENT_EVAL_SLOPE = 0.00368208;
 const WIN_PERCENT_EVAL_LIMIT = 3000;
+const MOVE_ACCURACY_SCALE = 103.1668;
+const MOVE_ACCURACY_DECAY = 0.04354;
+const MOVE_ACCURACY_OFFSET = 3.1669;
 
 export function getEvalOverride(nodeId: string, evalOverrides: EvalOverrides) {
     if (!evalOverrides) return undefined;
@@ -167,6 +170,12 @@ export function formatWinPercentLossLabel(loss: number, side: ReviewSide): strin
     const precision = normalized < 10 ? 1 : 0;
     const formattedLoss = `${Number(normalized.toFixed(precision))} percentage points`;
     return `${side === 'red' ? 'Red' : 'Black'} practical winning chance dropped by ${formattedLoss}`;
+}
+
+export function getMoveAccuracyForWinPercentLoss(loss: number): number {
+    const normalized = clampWinPercentLoss(loss);
+    const accuracy = MOVE_ACCURACY_SCALE * Math.exp(-MOVE_ACCURACY_DECAY * normalized) - MOVE_ACCURACY_OFFSET;
+    return Math.max(0, Math.min(100, accuracy));
 }
 
 function getLessSevereReviewQuality(left: ReviewMoveQuality, right: ReviewMoveQuality): ReviewMoveQuality {
@@ -342,6 +351,7 @@ export function computeReviewArtifacts(
     const annotations: ReviewAnnotation[] = [];
     const keyMoments: ReviewKeyMoment[] = [];
     let evaluated = 0;
+    let accuracySum = 0;
 
     for (const [moveIndex, nodeId] of activeLineNodeIds.entries()) {
         const node = treeNodes[nodeId];
@@ -363,6 +373,7 @@ export function computeReviewArtifacts(
         const winPercentLoss = getWinPercentLossForMove(parentEval, currentEval, side);
         const retainedDecisiveAdvantage = hasDecisiveAdvantageAfterMove(currentEval, side);
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
+        accuracySum += getMoveAccuracyForWinPercentLoss(winPercentLoss);
         const note = buildReviewNote({
             quality,
             bestMove: record.bestMove,
@@ -402,13 +413,7 @@ export function computeReviewArtifacts(
         }
     }
 
-    const weights = { best: 100, good: 80, inaccuracy: 55, mistake: 30, blunder: 0 };
-    const weightedSum =
-        counts.best * weights.best +
-        counts.good * weights.good +
-        counts.inaccuracy * weights.inaccuracy +
-        counts.mistake * weights.mistake;
-    const accuracy = evaluated > 0 ? Math.round(weightedSum / evaluated) : 0;
+    const accuracy = evaluated > 0 ? Math.round(accuracySum / evaluated) : 0;
 
     keyMoments.sort((left, right) =>
         getReviewQualityPriority(right.quality) - getReviewQualityPriority(left.quality) ||
