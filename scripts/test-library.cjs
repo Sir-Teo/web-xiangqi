@@ -113,6 +113,15 @@ try {
   });
   assert(flyingKingsFenSave === null, "Saved games with flying kings in the root FEN should be rejected.");
 
+  const nonMovingSideInCheckFenSave = library.normalizeSavedGame({
+    id: "non-moving-side-check-root",
+    savedAt: 1710000000005,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    startFen: "4k4/4R4/9/9/9/9/9/9/9/4K4 w - - 0 1",
+  });
+  assert(nonMovingSideInCheckFenSave === null, "Saved games with the non-moving side in check should be rejected.");
+
   const palaceViolationFenSave = library.normalizeSavedGame({
     id: "palace-violation-root",
     savedAt: 1710000000005,

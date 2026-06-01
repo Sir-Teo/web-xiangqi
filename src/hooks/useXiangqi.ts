@@ -17,6 +17,7 @@ import {
     isInCheck,
     kingsFacing,
     hasAnyLegalMove,
+    otherSide,
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
 
@@ -98,6 +99,7 @@ function parseRootPositionFromFen(fen: string): RootPosition | null {
         if (!inPalace('w', redKing.file, redKing.rank)) return null;
         if (!inPalace('b', blackKing.file, blackKing.rank)) return null;
         if (kingsFacing(board)) return null;
+        if (isInCheck(board, otherSide(side))) return null;
         const parsedFullmove = Number(parts[5]);
         const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
             ? Math.trunc(parsedFullmove)

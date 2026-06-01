@@ -2296,6 +2296,29 @@ async function assertInvalidShareLinkFeedback(page) {
   ) {
     throw new Error(`Malformed share move parameter did not show feedback: ${JSON.stringify(malformedState)}`);
   }
+
+  const impossibleFen = encodeURIComponent("4k4/4R4/9/9/9/9/9/9/9/4K4 w - - 0 1");
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${impossibleFen}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("share-link-warning").waitFor({ timeout: 5000 });
+
+  const impossibleFenState = await page.evaluate(() => ({
+    warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.trim() || "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    !impossibleFenState.warning.includes("Shared link not loaded") ||
+    !impossibleFenState.activePoint.includes("Start") ||
+    !impossibleFenState.fen.includes(" w - - 0 1") ||
+    impossibleFenState.overflowX > 2
+  ) {
+    throw new Error(`Impossible checked-side FEN did not show feedback: ${JSON.stringify(impossibleFenState)}`);
+  }
 }
 
 async function assertMoveLineFileImport(page) {

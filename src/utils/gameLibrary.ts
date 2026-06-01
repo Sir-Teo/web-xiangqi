@@ -1,5 +1,5 @@
 import type { GameMode } from '../App';
-import { findKing, inPalace, kingsFacing, parseFenBoard } from './xiangqi';
+import { findKing, inPalace, isInCheck, kingsFacing, otherSide, parseFenBoard } from './xiangqi';
 import type {
     ReviewCriticalQuality,
     ReviewKeyMoment,
@@ -137,12 +137,14 @@ function normalizeStartFen(value: unknown): string | undefined | null {
         if (flat.filter((piece) => piece === 'K').length !== 1) return null;
         if (flat.filter((piece) => piece === 'k').length !== 1) return null;
         if (parts[1] !== 'w' && parts[1] !== 'b') return null;
+        const side = parts[1] === 'b' ? 'b' : 'w';
         const redKing = findKing(board, 'w');
         const blackKing = findKing(board, 'b');
         if (!redKing || !blackKing) return null;
         if (!inPalace('w', redKing.file, redKing.rank)) return null;
         if (!inPalace('b', blackKing.file, blackKing.rank)) return null;
         if (kingsFacing(board)) return null;
+        if (isInCheck(board, otherSide(side))) return null;
         return fen;
     } catch {
         return null;
