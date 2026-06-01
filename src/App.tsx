@@ -43,12 +43,14 @@ import {
 } from './utils/analysisProfile';
 import {
   computeReviewArtifacts,
+  describeReviewEngineSummary,
   getEvalLossForMove,
   formatReviewCount,
   getReviewSideForRecord,
   makeReviewLineSignature,
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
+  type ReviewEngineSummary,
 } from './utils/review';
 import {
   AI_STRENGTH_LABELS,
@@ -871,6 +873,7 @@ function App() {
       formatReviewCount(reviewSummary.blunderCount, 'blunder'),
       formatReviewCount(reviewSummary.mistakeCount, 'mistake'),
       formatReviewCount(reviewSummary.inaccuracyCount, 'inaccuracy', 'inaccuracies'),
+      `Engine: ${describeReviewEngineSummary(reviewSummary.engine)}`,
     ].join(', ');
   }, [reviewSummary]);
 
@@ -921,6 +924,17 @@ function App() {
   }), [analysisEngineMode, engineBootConfig.tier, engineDetailEnabled, safeSearchDepth]);
 
   const reviewPolicy = useMemo(() => resolveReviewPolicy(deviceProfile), [deviceProfile]);
+  const reviewEngineSummary = useMemo<ReviewEngineSummary>(() => ({
+    tier: reviewPolicy.tier,
+    baseDepth: reviewPolicy.base.depth,
+    baseMoveTimeMs: reviewPolicy.base.moveTimeMs,
+    ...(reviewPolicy.revisit
+      ? {
+          revisitDepth: reviewPolicy.revisit.depth,
+          revisitMoveTimeMs: reviewPolicy.revisit.moveTimeMs,
+        }
+      : {}),
+  }), [reviewPolicy]);
   const analysisRequestKey = useMemo(
     () => `${currentPositionCommand}::mode:${analysisEngineMode}::policy:${liveAnalysisPolicy.signature}::detail:${engineDetailEnabled ? 'detail' : 'compact'}::multipv:${analysisMultiPv}`,
     [analysisEngineMode, analysisMultiPv, currentPositionCommand, engineDetailEnabled, liveAnalysisPolicy.signature]
@@ -1002,6 +1016,7 @@ function App() {
       treeNodes,
       controller.provisionalEvals,
       reviewedAt,
+      reviewEngineSummary,
     );
     flushReviewEvalUpdates();
     setNodeReviewDataBulk(annotations);
@@ -1009,7 +1024,7 @@ function App() {
     completeReview(summary);
     setAnalysisTab('review');
     setMobileAnalysisTab('review');
-  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, setNodeReviewDataBulk, treeNodes]);
+  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, reviewEngineSummary, setNodeReviewDataBulk, treeNodes]);
 
   const handleEngineWorkerError = useCallback((message: string) => {
     const now = Date.now();
@@ -1712,7 +1727,7 @@ function App() {
 
     const totalSteps = activeLineNodeIds.length + 1;
     if (!startReview(totalSteps)) {
-      const { summary } = computeReviewArtifacts(activeLineNodeIds, treeNodes);
+      const { summary } = computeReviewArtifacts(activeLineNodeIds, treeNodes, undefined, Date.now(), reviewEngineSummary);
       completeReview(summary);
       return;
     }
@@ -1724,7 +1739,7 @@ function App() {
       baseQueue: [rootNodeId, ...activeLineNodeIds],
       total: totalSteps,
     };
-  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isAiMode, isReady, resetReviewController, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
+  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, engineEnabled, isAiMode, isReady, resetReviewController, reviewEngineSummary, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
   const clearBoardMarkers = useCallback(() => {
     setUserHighlights((prev) => prev.length ? [] : prev);

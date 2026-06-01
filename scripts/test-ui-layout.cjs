@@ -2479,6 +2479,13 @@ async function assertReviewBestMoveBranchAction(page) {
           blunderCount: 0,
           reviewedAt: savedAt,
           lineSignature: "b2e2 h9g7",
+          engine: {
+            tier: "high",
+            baseDepth: 10,
+            baseMoveTimeMs: 1500,
+            revisitDepth: 12,
+            revisitMoveTimeMs: 3000,
+          },
           keyMoments: [{
             nodeId: "saved-0",
             moveIndex: 0,
@@ -2542,6 +2549,9 @@ async function assertReviewBestMoveBranchAction(page) {
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistake: document.querySelector('[data-testid="review-quality-mistake"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blunder: document.querySelector('[data-testid="review-quality-blunder"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    engine: document.querySelector('[data-testid="review-engine-summary"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    engineLabel: document.querySelector('[data-testid="review-engine-summary"]')?.getAttribute("aria-label") || "",
+    engineTitle: document.querySelector('[data-testid="review-engine-summary"]')?.getAttribute("title") || "",
     bestLabel: document.querySelector('[data-testid="review-quality-best"]')?.getAttribute("aria-label") || "",
     goodLabel: document.querySelector('[data-testid="review-quality-good"]')?.getAttribute("aria-label") || "",
     inaccuracyLabel: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.getAttribute("aria-label") || "",
@@ -2569,6 +2579,10 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.inaccuracy !== "Inaccuracy0" ||
     reviewReadout.mistake !== "Mistake1" ||
     reviewReadout.blunder !== "Blunder0" ||
+    !reviewReadout.engine.includes("D10/1.5s") ||
+    !reviewReadout.engine.includes("revisit D12/3s") ||
+    !reviewReadout.engineLabel.includes("Review engine: high tier engine") ||
+    !reviewReadout.engineTitle.includes("base depth 10 for 1.5s") ||
     reviewReadout.bestLabel !== "0 best moves" ||
     reviewReadout.goodLabel !== "1 good move" ||
     reviewReadout.inaccuracyLabel !== "0 inaccuracies" ||
@@ -2585,6 +2599,7 @@ async function assertReviewBestMoveBranchAction(page) {
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
     !reviewReadout.bottomSummaryLabel.includes("Review summary: 40% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
+    !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
     reviewReadout.bottomViewLabel !== "Open completed game review" ||
     reviewReadout.bottomViewTitle !== "Open completed game review" ||
     reviewReadout.bottomClearLabel !== "Clear completed game review" ||
@@ -4895,7 +4910,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

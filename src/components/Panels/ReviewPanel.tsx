@@ -1,7 +1,13 @@
 import { memo } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewSummary } from '../../utils/review';
-import { formatReviewQuality, formatReviewQualityCount, getMoveQualityClassName } from '../../utils/review';
+import {
+    describeReviewEngineSummary,
+    formatReviewEngineSummary,
+    formatReviewQuality,
+    formatReviewQualityCount,
+    getMoveQualityClassName,
+} from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
@@ -35,6 +41,8 @@ export const ReviewPanel = memo(function ReviewPanel({
 }: Props) {
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
     const focusMoment = summary?.keyMoments[0] ?? null;
+    const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
+    const reviewEngineDetail = `Review engine: ${describeReviewEngineSummary(summary?.engine)}`;
     const qualityBreakdown = summary ? [
         { key: 'best', label: 'Best', count: summary.bestCount },
         { key: 'good', label: 'Good', count: summary.goodCount },
@@ -140,6 +148,15 @@ export const ReviewPanel = memo(function ReviewPanel({
                         <div className="review-summary-card">
                             <span>Reviewed</span>
                             <strong>{new Date(summary.reviewedAt).toLocaleDateString()}</strong>
+                        </div>
+                        <div
+                            className="review-summary-card review-summary-card-wide"
+                            data-testid="review-engine-summary"
+                            aria-label={reviewEngineDetail}
+                            title={reviewEngineDetail}
+                        >
+                            <span>Engine</span>
+                            <strong>{reviewEngineLabel}</strong>
                         </div>
                     </div>
 

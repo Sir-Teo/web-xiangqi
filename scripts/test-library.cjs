@@ -174,6 +174,13 @@ try {
         totalMoves: 999,
         accuracy: 72,
         lineSignature: "s".repeat(9000),
+        engine: {
+          tier: "mid",
+          baseDepth: 99.8,
+          baseMoveTimeMs: 9999999,
+          revisitDepth: 11.9,
+          revisitMoveTimeMs: 2400.5,
+        },
         keyMoments: [{
           nodeId: "node".repeat(60),
           moveIndex: 0,
@@ -199,6 +206,11 @@ try {
   assert(boundedTextSave.opening.length === 160, "Saved openings should be trimmed and capped.");
   assert(boundedTextSave.review.summary.totalMoves === 1, "Review totalMoves should not exceed the saved line length.");
   assert(boundedTextSave.review.summary.lineSignature.length === 8192, "Review line signatures should be capped.");
+  assert(boundedTextSave.review.summary.engine.tier === "mid", "Review engine tiers should be preserved.");
+  assert(boundedTextSave.review.summary.engine.baseDepth === 99, "Review engine depths should be integer-normalized.");
+  assert(boundedTextSave.review.summary.engine.baseMoveTimeMs === 600000, "Review engine move times should be capped.");
+  assert(boundedTextSave.review.summary.engine.revisitDepth === 11, "Review revisit depths should be integer-normalized.");
+  assert(boundedTextSave.review.summary.engine.revisitMoveTimeMs === 2400, "Review revisit move times should be integer-normalized.");
   assert(boundedTextSave.review.summary.keyMoments[0].nodeId.length === 96, "Review node ids should be capped.");
   assert(boundedTextSave.review.summary.keyMoments[0].note.length === 500, "Review key-moment notes should be capped.");
   assert(boundedTextSave.review.annotations.length === 1, "Off-line review annotations should be dropped.");
@@ -234,6 +246,13 @@ try {
         mistakeCount: 1.2,
         blunderCount: 3.4,
         reviewedAt: 1e100,
+        engine: {
+          tier: "high",
+          baseDepth: 10.9,
+          baseMoveTimeMs: 1500.8,
+          revisitDepth: 12,
+          revisitMoveTimeMs: "slow",
+        },
         keyMoments: [{
           moveIndex: 1.8,
           jumpTarget: 1.1,
@@ -261,6 +280,10 @@ try {
   assert(corruptReviewedSave.review.summary.inaccuracyCount === 0, "Negative review counts should normalize to zero.");
   assert(corruptReviewedSave.review.summary.mistakeCount === 1, "Review mistake counts should normalize.");
   assert(corruptReviewedSave.review.summary.blunderCount === 2, "Review blunder counts should clamp to the saved line length.");
+  assert(corruptReviewedSave.review.summary.engine.tier === "high", "Shape-valid review engine metadata should normalize.");
+  assert(corruptReviewedSave.review.summary.engine.baseDepth === 10, "Review engine base depth should truncate to an integer.");
+  assert(corruptReviewedSave.review.summary.engine.baseMoveTimeMs === 1500, "Review engine base move time should truncate to an integer.");
+  assert(corruptReviewedSave.review.summary.engine.revisitDepth === undefined, "Partial revisit metadata should be dropped.");
   assert(
     Number.isFinite(new Date(corruptReviewedSave.review.summary.reviewedAt).getTime()) &&
       corruptReviewedSave.review.summary.reviewedAt !== 1e100,

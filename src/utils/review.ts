@@ -10,6 +10,7 @@ export const REVIEW_THRESHOLDS = {
 export type ReviewMoveQuality = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
 export type ReviewCriticalQuality = Extract<ReviewMoveQuality, 'inaccuracy' | 'mistake' | 'blunder'>;
 export type ReviewSide = 'red' | 'black';
+export type ReviewEngineTier = 'low' | 'mid' | 'high';
 
 export interface ReviewRecordLike {
     uci: string;
@@ -39,6 +40,14 @@ export interface ReviewKeyMoment {
     note: string;
 }
 
+export interface ReviewEngineSummary {
+    tier: ReviewEngineTier;
+    baseDepth: number;
+    baseMoveTimeMs: number;
+    revisitDepth?: number;
+    revisitMoveTimeMs?: number;
+}
+
 export interface ReviewSummary {
     totalMoves: number;
     accuracy: number;
@@ -49,6 +58,7 @@ export interface ReviewSummary {
     blunderCount: number;
     reviewedAt: number;
     lineSignature: string;
+    engine?: ReviewEngineSummary;
     keyMoments: ReviewKeyMoment[];
 }
 
@@ -150,6 +160,31 @@ export function formatReviewQualityCount(quality: ReviewMoveQuality, count: numb
     }
 }
 
+export function formatReviewEngineMoveTime(moveTimeMs: number): string {
+    if (!Number.isFinite(moveTimeMs) || moveTimeMs <= 0) return 'unknown time';
+    if (moveTimeMs < 1000) return `${Math.trunc(moveTimeMs)}ms`;
+    const seconds = moveTimeMs / 1000;
+    return `${Number(seconds.toFixed(Number.isInteger(seconds) ? 0 : 1))}s`;
+}
+
+export function formatReviewEngineSummary(engine?: ReviewEngineSummary): string {
+    if (!engine) return 'Previous review';
+    const base = `D${engine.baseDepth}/${formatReviewEngineMoveTime(engine.baseMoveTimeMs)}`;
+    const revisit = typeof engine.revisitDepth === 'number'
+        ? ` · revisit D${engine.revisitDepth}/${formatReviewEngineMoveTime(engine.revisitMoveTimeMs ?? 0)}`
+        : '';
+    return `${engine.tier} · ${base}${revisit}`;
+}
+
+export function describeReviewEngineSummary(engine?: ReviewEngineSummary): string {
+    if (!engine) return 'Review engine details unavailable for this saved review';
+    const base = `${engine.tier} tier engine, base depth ${engine.baseDepth} for ${formatReviewEngineMoveTime(engine.baseMoveTimeMs)}`;
+    if (typeof engine.revisitDepth === 'number') {
+        return `${base}, revisit depth ${engine.revisitDepth} for ${formatReviewEngineMoveTime(engine.revisitMoveTimeMs ?? 0)}`;
+    }
+    return base;
+}
+
 export function isCriticalReviewQuality(quality: ReviewMoveQuality): quality is ReviewCriticalQuality {
     return quality === 'inaccuracy' || quality === 'mistake' || quality === 'blunder';
 }
@@ -222,7 +257,8 @@ export function computeReviewArtifacts(
     activeLineNodeIds: string[],
     treeNodes: Record<string, ReviewTreeNodeLike>,
     evalOverrides?: EvalOverrides,
-    reviewedAt = Date.now()
+    reviewedAt = Date.now(),
+    engine?: ReviewEngineSummary
 ): { summary: ReviewSummary; annotations: ReviewAnnotation[] } {
     const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     const annotations: ReviewAnnotation[] = [];
@@ -308,6 +344,7 @@ export function computeReviewArtifacts(
             blunderCount: counts.blunder,
             reviewedAt,
             lineSignature: makeReviewLineSignature(activeLineNodeIds, treeNodes),
+            engine,
             keyMoments,
         },
         annotations,

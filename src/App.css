@@ -2951,6 +2951,15 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+.review-summary-card-wide {
+  grid-column: 1 / -1;
+}
+
+.review-summary-card-wide strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .review-quality-breakdown {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7.2rem, 1fr));

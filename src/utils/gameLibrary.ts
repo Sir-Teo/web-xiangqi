@@ -2,6 +2,7 @@ import type { GameMode } from '../App';
 import { findKing, inPalace, isInCheck, kingsFacing, otherSide, parseFenBoard } from './xiangqi';
 import type {
     ReviewCriticalQuality,
+    ReviewEngineSummary,
     ReviewKeyMoment,
     ReviewMoveQuality,
     ReviewSummary,
@@ -14,6 +15,7 @@ export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi-game-library';
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
+const REVIEW_ENGINE_TIERS: ReviewEngineSummary['tier'][] = ['low', 'mid', 'high'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
 const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
 const MAX_SAVED_GAMES = 500;
@@ -26,6 +28,8 @@ const MAX_REVIEW_LINE_SIGNATURE_LENGTH = 8192;
 const MAX_REVIEW_NODE_ID_LENGTH = 96;
 const MAX_REVIEW_KEY_MOMENTS = 128;
 const MAX_REVIEW_ANNOTATIONS = 1024;
+const MAX_REVIEW_ENGINE_DEPTH = 128;
+const MAX_REVIEW_ENGINE_MOVE_TIME_MS = 600_000;
 type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode {
@@ -163,6 +167,27 @@ function asCriticalQuality(value: unknown): ReviewCriticalQuality | undefined {
         : undefined;
 }
 
+function normalizeReviewEngineSummary(raw: unknown): ReviewEngineSummary | undefined {
+    if (!isRecord(raw)) return undefined;
+    const tier = typeof raw.tier === 'string' && REVIEW_ENGINE_TIERS.includes(raw.tier as ReviewEngineSummary['tier'])
+        ? raw.tier as ReviewEngineSummary['tier']
+        : undefined;
+    const baseDepth = asClampedInteger(raw.baseDepth, 1, MAX_REVIEW_ENGINE_DEPTH);
+    const baseMoveTimeMs = asClampedInteger(raw.baseMoveTimeMs, 1, MAX_REVIEW_ENGINE_MOVE_TIME_MS);
+    if (!tier || typeof baseDepth !== 'number' || typeof baseMoveTimeMs !== 'number') return undefined;
+
+    const revisitDepth = asClampedInteger(raw.revisitDepth, 1, MAX_REVIEW_ENGINE_DEPTH);
+    const revisitMoveTimeMs = asClampedInteger(raw.revisitMoveTimeMs, 1, MAX_REVIEW_ENGINE_MOVE_TIME_MS);
+    return {
+        tier,
+        baseDepth,
+        baseMoveTimeMs,
+        ...(typeof revisitDepth === 'number' && typeof revisitMoveTimeMs === 'number'
+            ? { revisitDepth, revisitMoveTimeMs }
+            : {}),
+    };
+}
+
 function normalizeSavedReviewAnnotation(raw: unknown, moveCount: number): SavedReviewAnnotation | null {
     if (!isRecord(raw)) return null;
     const moveIndex = asNonNegativeInteger(raw.moveIndex);
@@ -245,6 +270,7 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
         blunderCount: asClampedInteger(raw.blunderCount, 0, moves.length) ?? 0,
         reviewedAt: asValidTimestamp(raw.reviewedAt) ?? Date.now(),
         lineSignature: asBoundedString(raw.lineSignature, MAX_REVIEW_LINE_SIGNATURE_LENGTH) || makeReviewLineSignatureFromMoves(moves),
+        engine: normalizeReviewEngineSummary(raw.engine),
         keyMoments,
     };
 }
