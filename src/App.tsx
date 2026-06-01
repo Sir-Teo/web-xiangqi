@@ -1893,6 +1893,13 @@ function App() {
     return inCheck ? 'checkmate' : 'stalemate';
   }, [board, inCheck, sideToMove, visibleGameResult]);
   const aiMoveSearchActive = isAiTurn && (isSearching || isSearchQueued);
+  const bottomEngineStatus = !isReady
+    ? 'Loading engine'
+    : isSearchQueued
+      ? 'Queued'
+      : isSearching
+        ? 'Analyzing'
+        : 'Idle';
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const reviewStartTitle = !engineEnabled
     ? 'Switch to Analysis to review this line'
@@ -4094,7 +4101,7 @@ function App() {
           <div className="bottom-status-row">
             {engineEnabled ? (
               <div className="bottom-engine-info">
-                {isSearchQueued ? 'Queued' : isSearching ? 'Analyzing' : 'Idle'}
+                {bottomEngineStatus}
                 {inCheck ? <span className="check-badge">CHECK</span> : null}
               </div>
             ) : (
