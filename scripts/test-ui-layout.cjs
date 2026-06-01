@@ -4880,13 +4880,22 @@ async function assertLargeLibraryRendersProgressively(page) {
   await page.getByTestId("library-show-more-saved").waitFor({ timeout: 10000 });
 
   const initial = await page.evaluate(() => ({
+    searchPlaceholder: document.querySelector('[aria-label="Search library"]')?.getAttribute("placeholder") || "",
     savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
     historicalCards: document.querySelectorAll('[data-testid="historical-game-list"] .lib-card').length,
     showMoreText: document.querySelector('[data-testid="library-show-more-saved"]')?.textContent?.trim() || "",
     needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
-  if (initial.savedCards !== 100 || initial.historicalCards !== 10 || !initial.showMoreText.includes("50 more") || initial.needleVisible || initial.overflowX > 2) {
+  if (
+    initial.savedCards !== 100 ||
+    initial.historicalCards !== 10 ||
+    !initial.searchPlaceholder.includes("moves") ||
+    !initial.searchPlaceholder.includes("reviews") ||
+    !initial.showMoreText.includes("50 more") ||
+    initial.needleVisible ||
+    initial.overflowX > 2
+  ) {
     throw new Error(`Large library did not render progressively: ${JSON.stringify(initial)}`);
   }
 
