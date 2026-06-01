@@ -123,5 +123,5 @@ Artifacts are written to `dist/`:
 ## Future improvements
 
 - Add minified production bundle variants and optional WASM compression
-- Add benchmark/regression CI for threaded, SIMD, and single-thread engine flavors
+- Add historical benchmark baselines and threshold alerts for threaded, SIMD, and single-thread engine flavors
 - Add a larger curated master-game/opening corpus for deeper book coverage

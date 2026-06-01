@@ -55,6 +55,7 @@ jobs:
           npm run test:parity
           npm run test:review:parity
           npm run test:smoke:all
+          npm run test:bench:quick
 
       - name: Rebuild React app with fresh WASM
         run: |
