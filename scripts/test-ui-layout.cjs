@@ -381,6 +381,59 @@ async function assertDesktopBoardLayout(page, viewport) {
   rectWithinDesktopLayout(layout);
 }
 
+async function assertOpeningBookArrowsGuideBoard(page) {
+  await page.setViewportSize({ width: 1024, height: 720 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector(".top-mode-pills button[aria-pressed='true']")?.textContent?.trim() === "Play",
+    null,
+    { timeout: 5000 }
+  );
+
+  const initial = await page.evaluate(() => {
+    const bookArrows = Array.from(document.querySelectorAll(".board-arrow-book"));
+    const firstBookPath = document.querySelector(".board-arrow-book path");
+    return {
+      bookArrowCount: bookArrows.length,
+      engineArrowCount: document.querySelectorAll(".board-arrow-engine").length,
+      centralCannonArrow: Boolean(document.querySelector('.board-arrow-book[data-from="7:2"][data-to="4:2"]')),
+      firstBookDash: firstBookPath ? getComputedStyle(firstBookPath).strokeDasharray : "",
+      centralCannonCandidate: document.querySelector('[data-testid="book-candidate-h2e2"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    initial.bookArrowCount < 2 ||
+    initial.engineArrowCount !== 0 ||
+    !initial.centralCannonArrow ||
+    !initial.centralCannonCandidate.includes("Central Cannon") ||
+    initial.firstBookDash === "none" ||
+    initial.overflowX > 2
+  ) {
+    throw new Error(`Opening book arrows did not guide the start position: ${JSON.stringify(initial)}`);
+  }
+
+  await page.getByTestId("book-candidate-h2e2").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const reply = await page.evaluate(() => ({
+    lastMoveArrow: Boolean(document.querySelector('.board-arrow-last[data-from="7:2"][data-to="4:2"]')),
+    bookReplyCount: document.querySelectorAll(".board-arrow-book").length,
+    screenHorseReply: Boolean(document.querySelector('.board-arrow-book[data-from="7:9"][data-to="6:7"]')),
+    variationRows: Array.from(document.querySelectorAll(".mtree-row"))
+      .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+      .join(" "),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (!reply.lastMoveArrow || reply.bookReplyCount < 2 || !reply.screenHorseReply || !reply.variationRows.includes("h2e2") || reply.overflowX > 2) {
+    throw new Error(`Opening book arrows did not update after playing a candidate: ${JSON.stringify(reply)}`);
+  }
+}
+
 async function assertBoardKeyboardNavigation(page) {
   await page.setViewportSize({ width: 1024, height: 720 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -4278,6 +4331,7 @@ async function main() {
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
+    await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
     await assertBoardKeyboardNavigationFlipped(page);
     await assertDesktopResizeFeedback(page);
@@ -4351,7 +4405,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

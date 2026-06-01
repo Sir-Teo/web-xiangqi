@@ -386,6 +386,15 @@
     animation: board-arrow-fade-in 180ms ease both;
 }
 
+.board-arrow-book path {
+    stroke-dasharray: 18 10;
+}
+
+.board-arrow-book circle,
+.board-arrow-book polygon {
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.34));
+}
+
 @keyframes board-arrow-fade-in {
     from { opacity: 0; }
     to   { opacity: var(--arrow-opacity, 0.82); }

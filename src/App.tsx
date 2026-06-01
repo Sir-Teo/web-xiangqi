@@ -77,6 +77,7 @@ type BoardArrow = {
   from: BoardSquare;
   to: BoardSquare;
   color: string;
+  kind?: 'last' | 'engine' | 'book' | 'user';
   opacity?: number;
   strokeWidth?: number;
 };
@@ -1702,9 +1703,10 @@ function App() {
       const exists = prev.some(isSameArrow);
       const withoutExisting = prev.filter((arrow) => !isSameArrow(arrow));
       if (exists) return withoutExisting;
+      const nextArrow: BoardArrow = { from, to, color: '#60a5fa', kind: 'user', opacity: 0.72, strokeWidth: 4 };
       return [
         ...withoutExisting,
-        { from, to, color: '#60a5fa', opacity: 0.72, strokeWidth: 4 },
+        nextArrow,
       ].slice(-12);
     });
   }, []);
@@ -2689,7 +2691,26 @@ function App() {
 
     // Last played move — color encodes quality (green=good … red=blunder)
     if (lastMoveFrom && lastMoveTo) {
-      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, opacity: 0.82, strokeWidth: 5 });
+      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, kind: 'last', opacity: 0.82, strokeWidth: 5 });
+    }
+
+    const hasEngineMoveArrows = engineEnabled && Boolean(currentAnalysisPvLines.some((pv) => pv.moves[0]));
+    if (!hasEngineMoveArrows && openingCandidates.length > 0) {
+      const bookArrowLimit = assistMode === 'pro' ? 3 : 2;
+      openingCandidates.slice(0, bookArrowLimit).forEach((candidate, index) => {
+        const from = uciToSquare(candidate.move.substring(0, 2));
+        const to = uciToSquare(candidate.move.substring(2, 4));
+        if (from && to) {
+          result.push({
+            from,
+            to,
+            color: index === 0 ? '#f59e0b' : '#fbbf24',
+            kind: 'book',
+            opacity: index === 0 ? 0.72 : 0.48,
+            strokeWidth: index === 0 ? 4.5 : 3.25,
+          });
+        }
+      });
     }
 
     // Engine best move (green)
@@ -2697,7 +2718,7 @@ function App() {
       const uci = currentAnalysisPvLines[0].moves[0];
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#10b981', opacity: 0.88, strokeWidth: 6 });
+      if (from && to) result.push({ from, to, color: '#10b981', kind: 'engine', opacity: 0.88, strokeWidth: 6 });
     }
 
     // Alternative engine lines (muted green)
@@ -2706,11 +2727,11 @@ function App() {
       if (!uci) continue;
       const from = uciToSquare(uci.substring(0, 2));
       const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#6ee7b7', opacity: 0.55, strokeWidth: 3.5 });
+      if (from && to) result.push({ from, to, color: '#6ee7b7', kind: 'engine', opacity: 0.55, strokeWidth: 3.5 });
     }
 
     return [...result, ...userArrows];
-  }, [lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, showArrows, userArrows]);
+  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, userArrows]);
 
   return (
     <main

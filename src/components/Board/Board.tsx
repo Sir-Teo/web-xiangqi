@@ -94,6 +94,7 @@ interface BoardProps {
         from: { file: number; rank: number };
         to: { file: number; rank: number };
         color: string;
+        kind?: 'last' | 'engine' | 'book' | 'user';
         opacity?: number;
         strokeWidth?: number;
     }>;

@@ -4,6 +4,7 @@ interface ArrowDef {
     from: { file: number; rank: number };
     to: { file: number; rank: number };
     color: string;
+    kind?: 'last' | 'engine' | 'book' | 'user';
     opacity?: number;
     strokeWidth?: number;
 }
@@ -52,6 +53,7 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 const opacity = arrow.opacity ?? 0.82;
                 const strokeWidth = arrow.strokeWidth ?? 5;
                 const key = `${index}-${arrow.from.file},${arrow.from.rank}-${arrow.to.file},${arrow.to.rank}-${arrow.color}`;
+                const kindClass = arrow.kind ? ` board-arrow-${arrow.kind}` : '';
 
                 const x1 = xCoord(arrow.from.file, orientation);
                 const y1 = yCoord(arrow.from.rank, orientation);
@@ -94,7 +96,14 @@ export function BoardArrows({ arrows, orientation }: BoardArrowsProps) {
                 const groupStyle = { '--arrow-opacity': opacity } as CSSProperties;
 
                 return (
-                    <g key={key} className="board-arrow-group" style={groupStyle}>
+                    <g
+                        key={key}
+                        className={`board-arrow-group${kindClass}`}
+                        data-testid={arrow.kind ? `board-arrow-${arrow.kind}-${index}` : undefined}
+                        data-from={`${arrow.from.file}:${arrow.from.rank}`}
+                        data-to={`${arrow.to.file}:${arrow.to.rank}`}
+                        style={groupStyle}
+                    >
                         <circle cx={x1} cy={y1} r={strokeWidth * 0.9} fill={arrow.color} />
                         <path
                             d={shaftPath}
