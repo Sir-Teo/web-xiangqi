@@ -3629,14 +3629,45 @@ async function assertLibraryDeleteConfirmation(page) {
 
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByText("Delete confirmation QA").waitFor({ timeout: 10000 });
+  const initialDeleteLabels = await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="delete-saved-qa-delete-game"]');
+    return {
+      label: button?.getAttribute("aria-label") || "",
+      title: button?.getAttribute("title") || "",
+    };
+  });
+  if (
+    initialDeleteLabels.label !== "Delete Delete confirmation QA" ||
+    initialDeleteLabels.title !== "Delete Delete confirmation QA"
+  ) {
+    throw new Error(`Saved game delete action was not game-specific: ${JSON.stringify(initialDeleteLabels)}`);
+  }
 
   await page.getByTestId("delete-saved-qa-delete-game").click();
   await page.getByTestId("confirm-delete-saved-qa-delete-game").waitFor({ timeout: 5000 });
+  const pendingDeleteLabels = await page.evaluate(() => {
+    const confirm = document.querySelector('[data-testid="confirm-delete-saved-qa-delete-game"]');
+    const cancel = document.querySelector('[data-testid="cancel-delete-saved-qa-delete-game"]');
+    return {
+      confirmLabel: confirm?.getAttribute("aria-label") || "",
+      confirmTitle: confirm?.getAttribute("title") || "",
+      cancelLabel: cancel?.getAttribute("aria-label") || "",
+      cancelTitle: cancel?.getAttribute("title") || "",
+    };
+  });
+  if (
+    pendingDeleteLabels.confirmLabel !== "Confirm delete Delete confirmation QA" ||
+    pendingDeleteLabels.confirmTitle !== "Confirm delete Delete confirmation QA" ||
+    pendingDeleteLabels.cancelLabel !== "Cancel delete Delete confirmation QA" ||
+    pendingDeleteLabels.cancelTitle !== "Cancel delete Delete confirmation QA"
+  ) {
+    throw new Error(`Saved game delete confirmation controls were not game-specific: ${JSON.stringify(pendingDeleteLabels)}`);
+  }
   if (await page.getByText("Delete confirmation QA").count() !== 1) {
     throw new Error("Saved game disappeared before delete confirmation.");
   }
 
-  await page.getByRole("button", { name: "Cancel delete saved game" }).click();
+  await page.getByRole("button", { name: "Cancel delete Delete confirmation QA" }).click();
   if (await page.getByTestId("confirm-delete-saved-qa-delete-game").count() !== 0) {
     throw new Error("Delete confirmation remained visible after cancel.");
   }

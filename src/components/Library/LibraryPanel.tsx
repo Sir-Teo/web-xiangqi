@@ -405,6 +405,7 @@ export function LibraryPanel({
                         onClick={() => confirmDelete(game.id)}
                         data-testid={`confirm-delete-saved-${game.id}`}
                         aria-label={`Confirm delete ${savedGameLabel}`}
+                        title={`Confirm delete ${savedGameLabel}`}
                       >
                         Delete?
                       </button>
@@ -412,7 +413,9 @@ export function LibraryPanel({
                         type="button"
                         className="chip-btn"
                         onClick={() => { setActionError(null); setFailedActionId(null); setPendingDeleteId(null); }}
-                        aria-label="Cancel delete saved game"
+                        aria-label={`Cancel delete ${savedGameLabel}`}
+                        title={`Cancel delete ${savedGameLabel}`}
+                        data-testid={`cancel-delete-saved-${game.id}`}
                       >
                         Cancel
                       </button>
@@ -427,7 +430,7 @@ export function LibraryPanel({
                         setFailedActionId(null);
                         setPendingDeleteId(game.id);
                       }}
-                      title="Delete"
+                      title={`Delete ${savedGameLabel}`}
                       aria-label={`Delete ${savedGameLabel}`}
                       data-testid={`delete-saved-${game.id}`}
                     >
