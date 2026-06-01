@@ -32,9 +32,11 @@ jobs:
 
       - name: React app checks
         run: |
+          npm audit --audit-level=moderate
           npm run lint
           npm run test:openings
           npm run test:library
+          npm run test:serve-demo
           npm run build:react
 
       - name: Cache emsdk
@@ -68,5 +70,6 @@ jobs:
 
       - name: Browser worker parity (quick)
         run: |
+          npm run test:review:fixtures
           npm run test:ui:layout
           npm run test:worker-parity:browser
