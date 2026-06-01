@@ -173,8 +173,11 @@ try {
       summary: {
         totalMoves: 999,
         accuracy: 72,
+        averageCentipawnLoss: 9999999,
         redAccuracy: 105,
         blackAccuracy: -4,
+        redAverageCentipawnLoss: 120.6,
+        blackAverageCentipawnLoss: -4,
         lineSignature: "s".repeat(9000),
         engine: {
           tier: "mid",
@@ -207,8 +210,11 @@ try {
   assert(boundedTextSave.label.length === 120, "Saved labels should be trimmed and capped.");
   assert(boundedTextSave.opening.length === 160, "Saved openings should be trimmed and capped.");
   assert(boundedTextSave.review.summary.totalMoves === 1, "Review totalMoves should not exceed the saved line length.");
+  assert(boundedTextSave.review.summary.averageCentipawnLoss === 100000, "Review average centipawn loss should be capped.");
   assert(boundedTextSave.review.summary.redAccuracy === 100, "Review red accuracy should be clamped.");
   assert(boundedTextSave.review.summary.blackAccuracy === 0, "Review black accuracy should be clamped.");
+  assert(boundedTextSave.review.summary.redAverageCentipawnLoss === 120, "Review red average centipawn loss should be integer-normalized.");
+  assert(boundedTextSave.review.summary.blackAverageCentipawnLoss === 0, "Review black average centipawn loss should be clamped.");
   assert(boundedTextSave.review.summary.lineSignature.length === 8192, "Review line signatures should be capped.");
   assert(boundedTextSave.review.summary.engine.tier === "mid", "Review engine tiers should be preserved.");
   assert(boundedTextSave.review.summary.engine.baseDepth === 99, "Review engine depths should be integer-normalized.");

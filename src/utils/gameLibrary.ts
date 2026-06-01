@@ -30,6 +30,7 @@ const MAX_REVIEW_KEY_MOMENTS = 128;
 const MAX_REVIEW_ANNOTATIONS = 1024;
 const MAX_REVIEW_ENGINE_DEPTH = 128;
 const MAX_REVIEW_ENGINE_MOVE_TIME_MS = 600_000;
+const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = 100_000;
 type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode {
@@ -272,8 +273,11 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
     return {
         totalMoves: typeof totalMoves === 'number' && totalMoves <= moves.length ? totalMoves : moves.length,
         accuracy: asClampedInteger(raw.accuracy, 0, 100) ?? 0,
+        averageCentipawnLoss: asClampedInteger(raw.averageCentipawnLoss, 0, MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS),
         redAccuracy: asClampedInteger(raw.redAccuracy, 0, 100),
         blackAccuracy: asClampedInteger(raw.blackAccuracy, 0, 100),
+        redAverageCentipawnLoss: asClampedInteger(raw.redAverageCentipawnLoss, 0, MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS),
+        blackAverageCentipawnLoss: asClampedInteger(raw.blackAverageCentipawnLoss, 0, MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS),
         bestCount: asClampedInteger(raw.bestCount, 0, moves.length) ?? 0,
         goodCount: asClampedInteger(raw.goodCount, 0, moves.length) ?? 0,
         inaccuracyCount: asClampedInteger(raw.inaccuracyCount, 0, moves.length) ?? 0,

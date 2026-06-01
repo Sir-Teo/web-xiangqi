@@ -290,6 +290,12 @@
   color: #cbd5e1;
 }
 
+.lib-review-pill-average-loss {
+  border-color: rgba(34, 211, 238, 0.24);
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+}
+
 .lib-review-pill-blunder {
   border-color: rgba(239, 68, 68, 0.24);
   background: rgba(239, 68, 68, 0.12);

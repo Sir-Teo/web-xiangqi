@@ -44,6 +44,7 @@ import {
 import {
   computeReviewArtifacts,
   describeReviewEngineSummary,
+  formatAverageCentipawnLoss,
   getEvalLossForMove,
   formatReviewCount,
   getReviewSideForRecord,
@@ -870,6 +871,7 @@ function App() {
     if (!reviewSummary) return '';
     return [
       `Review summary: ${reviewSummary.accuracy}% accuracy`,
+      typeof reviewSummary.averageCentipawnLoss === 'number' ? `average centipawn loss ${formatAverageCentipawnLoss(reviewSummary.averageCentipawnLoss)}` : '',
       typeof reviewSummary.redAccuracy === 'number' ? `Red ${reviewSummary.redAccuracy}% accuracy` : '',
       typeof reviewSummary.blackAccuracy === 'number' ? `Black ${reviewSummary.blackAccuracy}% accuracy` : '',
       formatReviewCount(reviewSummary.blunderCount, 'blunder'),
@@ -4381,6 +4383,16 @@ function App() {
                   data-testid="bottom-review-summary"
                 >
                   <strong>{reviewSummary.accuracy}%</strong> accuracy
+                  {typeof reviewSummary.averageCentipawnLoss === 'number' ? (
+                    <span
+                      className="review-summary-loss"
+                      aria-label={`Average centipawn loss ${formatAverageCentipawnLoss(reviewSummary.averageCentipawnLoss)}`}
+                      title={`Average centipawn loss ${formatAverageCentipawnLoss(reviewSummary.averageCentipawnLoss)}`}
+                      data-testid="bottom-review-average-loss"
+                    >
+                      Avg loss {formatAverageCentipawnLoss(reviewSummary.averageCentipawnLoss)}
+                    </span>
+                  ) : null}
                   {typeof reviewSummary.redAccuracy === 'number' ? (
                     <span
                       className="review-summary-side review-summary-side-red"

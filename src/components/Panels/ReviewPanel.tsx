@@ -8,6 +8,7 @@ import {
     formatReviewEngineSummary,
     formatReviewQuality,
     formatReviewQualityCount,
+    formatAverageCentipawnLoss,
     getWinPercentLossForMove,
     getMoveQualityClassName,
 } from '../../utils/review';
@@ -56,6 +57,9 @@ export const ReviewPanel = memo(function ReviewPanel({
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
     const reviewEngineDetail = `Review engine: ${describeReviewEngineSummary(summary?.engine)}`;
+    const averageLossLabel = typeof summary?.averageCentipawnLoss === 'number'
+        ? `Average centipawn loss ${formatAverageCentipawnLoss(summary.averageCentipawnLoss)}`
+        : '';
     const sideAccuracyBreakdown = summary ? [
         { key: 'red', label: 'Red', value: summary.redAccuracy },
         { key: 'black', label: 'Black', value: summary.blackAccuracy },
@@ -163,6 +167,17 @@ export const ReviewPanel = memo(function ReviewPanel({
                             <span>Accuracy</span>
                             <strong>{summary.accuracy}%</strong>
                         </div>
+                        {typeof summary.averageCentipawnLoss === 'number' ? (
+                            <div
+                                className="review-summary-card"
+                                data-testid="review-average-loss"
+                                aria-label={averageLossLabel}
+                                title={averageLossLabel}
+                            >
+                                <span>Avg loss</span>
+                                <strong>{formatAverageCentipawnLoss(summary.averageCentipawnLoss)}</strong>
+                            </div>
+                        ) : null}
                         {sideAccuracyBreakdown.map((item) => (
                             <div
                                 key={item.key}

@@ -191,6 +191,17 @@ async function main() {
       if (summary.accuracy !== 55) {
         throw new Error(`Unexpected chance-loss accuracy: ${summary.accuracy}`);
       }
+      if (
+        summary.averageCentipawnLoss !== 182 ||
+        summary.redAverageCentipawnLoss !== 112 ||
+        summary.blackAverageCentipawnLoss !== 251
+      ) {
+        throw new Error(`Unexpected average loss metrics: ${JSON.stringify({
+          averageCentipawnLoss: summary.averageCentipawnLoss,
+          redAverageCentipawnLoss: summary.redAverageCentipawnLoss,
+          blackAverageCentipawnLoss: summary.blackAverageCentipawnLoss,
+        })}`);
+      }
       if (summary.redAccuracy !== 70 || summary.blackAccuracy !== 41) {
         throw new Error(`Unexpected side accuracy: ${JSON.stringify({ redAccuracy: summary.redAccuracy, blackAccuracy: summary.blackAccuracy })}`);
       }
@@ -225,8 +236,11 @@ async function main() {
         decisiveReview.summary.mistakeCount !== 0 ||
         decisiveReview.summary.inaccuracyCount !== 1 ||
         decisiveReview.summary.accuracy !== 77 ||
+        decisiveReview.summary.averageCentipawnLoss !== 350 ||
         decisiveReview.summary.redAccuracy !== 77 ||
+        decisiveReview.summary.redAverageCentipawnLoss !== 350 ||
         decisiveReview.summary.blackAccuracy !== undefined ||
+        decisiveReview.summary.blackAverageCentipawnLoss !== undefined ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss < 5 ||
         decisiveReview.summary.keyMoments[0]?.winPercentLoss > 7 ||
         !decisiveAnnotation.reviewNote.includes("Still winning")

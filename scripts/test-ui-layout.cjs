@@ -2563,6 +2563,7 @@ async function assertReviewBestMoveBranchAction(page) {
         summary: {
           totalMoves: 2,
           accuracy: 66,
+          averageCentipawnLoss: 130,
           redAccuracy: 39,
           blackAccuracy: 93,
           bestCount: 0,
@@ -2614,6 +2615,8 @@ async function assertReviewBestMoveBranchAction(page) {
     redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
     blackAccuracyText: document.querySelector('[data-testid="review-black-accuracy-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blackAccuracyLabel: document.querySelector('[data-testid="review-black-accuracy-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
+    averageLossText: document.querySelector('[data-testid="review-average-loss-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    averageLossLabel: document.querySelector('[data-testid="review-average-loss-saved-review-best-branch"]')?.getAttribute("aria-label") || "",
     blunderText: document.querySelector('[data-testid="review-blunders-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistakeText: document.querySelector('[data-testid="review-mistakes-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracyText: document.querySelector('[data-testid="review-inaccuracies-saved-review-best-branch"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2628,14 +2631,18 @@ async function assertReviewBestMoveBranchAction(page) {
   }));
   if (
     !libraryReviewMeta.metaText.includes("66% accuracy") ||
+    !libraryReviewMeta.metaText.includes("Avg loss 130cp") ||
     !libraryReviewMeta.metaText.includes("Red 39%") ||
     !libraryReviewMeta.metaText.includes("Black 93%") ||
     !libraryReviewMeta.metaLabel.includes("Red 39%") ||
     !libraryReviewMeta.metaLabel.includes("Black 93%") ||
+    !libraryReviewMeta.metaLabel.includes("Avg loss 130cp") ||
     libraryReviewMeta.redAccuracyText !== "Red 39%" ||
     libraryReviewMeta.redAccuracyLabel !== "Red review accuracy 39%" ||
     libraryReviewMeta.blackAccuracyText !== "Black 93%" ||
     libraryReviewMeta.blackAccuracyLabel !== "Black review accuracy 93%" ||
+    libraryReviewMeta.averageLossText !== "Avg loss 130cp" ||
+    libraryReviewMeta.averageLossLabel !== "Average centipawn loss 130cp" ||
     libraryReviewMeta.blunderText !== "0 blunders" ||
     libraryReviewMeta.mistakeText !== "1 mistake" ||
     libraryReviewMeta.inaccuracyText !== "0 inaccuracies" ||
@@ -2667,6 +2674,8 @@ async function assertReviewBestMoveBranchAction(page) {
     redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy"]')?.getAttribute("aria-label") || "",
     blackAccuracy: document.querySelector('[data-testid="review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blackAccuracyLabel: document.querySelector('[data-testid="review-black-accuracy"]')?.getAttribute("aria-label") || "",
+    averageLoss: document.querySelector('[data-testid="review-average-loss"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    averageLossLabel: document.querySelector('[data-testid="review-average-loss"]')?.getAttribute("aria-label") || "",
     momentCount: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentSideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
     momentQualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
@@ -2699,6 +2708,8 @@ async function assertReviewBestMoveBranchAction(page) {
     bottomRedAccuracyLabel: document.querySelector('[data-testid="bottom-review-red-accuracy"]')?.getAttribute("aria-label") || "",
     bottomBlackAccuracy: document.querySelector('[data-testid="bottom-review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     bottomBlackAccuracyLabel: document.querySelector('[data-testid="bottom-review-black-accuracy"]')?.getAttribute("aria-label") || "",
+    bottomAverageLoss: document.querySelector('[data-testid="bottom-review-average-loss"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bottomAverageLossLabel: document.querySelector('[data-testid="bottom-review-average-loss"]')?.getAttribute("aria-label") || "",
     bottomViewLabel: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("aria-label") || "",
     bottomViewTitle: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("title") || "",
     bottomClearLabel: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("aria-label") || "",
@@ -2721,6 +2732,8 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.redAccuracyLabel !== "Red accuracy 39%" ||
     reviewReadout.blackAccuracy !== "Black93%" ||
     reviewReadout.blackAccuracyLabel !== "Black accuracy 93%" ||
+    reviewReadout.averageLoss !== "Avg loss130cp" ||
+    reviewReadout.averageLossLabel !== "Average centipawn loss 130cp" ||
     reviewReadout.momentCount !== "1/1" ||
     reviewReadout.momentSideFilter !== "all" ||
     reviewReadout.momentQualityFilter !== "all" ||
@@ -2751,18 +2764,22 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.clearReviewLabel !== "Clear completed game review" ||
     reviewReadout.clearReviewTitle !== "Clear completed game review" ||
     !reviewReadout.bottomSummaryText.includes("66% accuracy") ||
+    !reviewReadout.bottomSummaryText.includes("Avg loss 130cp") ||
     !reviewReadout.bottomSummaryText.includes("Red 39%") ||
     !reviewReadout.bottomSummaryText.includes("Black 93%") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
     !reviewReadout.bottomSummaryLabel.includes("Review summary: 66% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("average centipawn loss 130cp") ||
     !reviewReadout.bottomSummaryLabel.includes("Red 39% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("Black 93% accuracy") ||
     reviewReadout.bottomRedAccuracy !== "Red 39%" ||
     reviewReadout.bottomRedAccuracyLabel !== "Red accuracy 39%" ||
     reviewReadout.bottomBlackAccuracy !== "Black 93%" ||
     reviewReadout.bottomBlackAccuracyLabel !== "Black accuracy 93%" ||
+    reviewReadout.bottomAverageLoss !== "Avg loss 130cp" ||
+    reviewReadout.bottomAverageLossLabel !== "Average centipawn loss 130cp" ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
     reviewReadout.bottomViewLabel !== "Open completed game review" ||

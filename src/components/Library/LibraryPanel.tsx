@@ -3,6 +3,7 @@ import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import {
   describeReviewEngineSummary,
+  formatAverageCentipawnLoss,
   formatReviewCount,
   formatReviewEngineSummary,
   type ReviewSummary,
@@ -86,6 +87,7 @@ function formatSavedStudyLines(game: SavedGame) {
 function formatLibraryReviewSummary(summary: ReviewSummary) {
   return [
     `${summary.accuracy}% accuracy`,
+    typeof summary.averageCentipawnLoss === 'number' ? `Avg loss ${formatAverageCentipawnLoss(summary.averageCentipawnLoss)}` : '',
     typeof summary.redAccuracy === 'number' ? `Red ${summary.redAccuracy}%` : '',
     typeof summary.blackAccuracy === 'number' ? `Black ${summary.blackAccuracy}%` : '',
     formatReviewCount(summary.blunderCount, 'blunder'),
@@ -405,6 +407,9 @@ export function LibraryPanel({
             const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
             const mistakeLabel = game.review ? formatReviewCount(game.review.summary.mistakeCount, 'mistake') : '';
             const inaccuracyLabel = game.review ? formatReviewCount(game.review.summary.inaccuracyCount, 'inaccuracy', 'inaccuracies') : '';
+            const averageLossLabel = typeof game.review?.summary.averageCentipawnLoss === 'number'
+              ? `Average centipawn loss ${formatAverageCentipawnLoss(game.review.summary.averageCentipawnLoss)}`
+              : '';
             const reviewEngineLabel = game.review ? formatReviewEngineSummary(game.review.summary.engine) : '';
             const reviewEngineDetail = game.review ? describeReviewEngineSummary(game.review.summary.engine) : '';
             const reviewSideAccuracy = game.review ? [
@@ -571,6 +576,16 @@ export function LibraryPanel({
                   <span className="lib-review-pill" aria-label={`${game.review.summary.accuracy}% review accuracy`}>
                     {game.review.summary.accuracy}% accuracy
                   </span>
+                  {typeof game.review.summary.averageCentipawnLoss === 'number' ? (
+                    <span
+                      className="lib-review-pill lib-review-pill-average-loss"
+                      aria-label={averageLossLabel}
+                      title={averageLossLabel}
+                      data-testid={`review-average-loss-saved-${game.id}`}
+                    >
+                      Avg loss {formatAverageCentipawnLoss(game.review.summary.averageCentipawnLoss)}
+                    </span>
+                  ) : null}
                   {reviewSideAccuracy.map((item) => (
                     <span
                       key={item.key}

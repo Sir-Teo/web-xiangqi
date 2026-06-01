@@ -59,8 +59,11 @@ export interface ReviewEngineSummary {
 export interface ReviewSummary {
     totalMoves: number;
     accuracy: number;
+    averageCentipawnLoss?: number;
     redAccuracy?: number;
     blackAccuracy?: number;
+    redAverageCentipawnLoss?: number;
+    blackAverageCentipawnLoss?: number;
     bestCount: number;
     goodCount: number;
     inaccuracyCount: number;
@@ -252,6 +255,11 @@ export function formatReviewQualityCount(quality: ReviewMoveQuality, count: numb
     }
 }
 
+export function formatAverageCentipawnLoss(value: number): string {
+    if (!Number.isFinite(value)) return 'n/a';
+    return `${Math.max(0, Math.round(value))}cp`;
+}
+
 export function formatReviewEngineMoveTime(moveTimeMs: number): string {
     if (!Number.isFinite(moveTimeMs) || moveTimeMs <= 0) return 'unknown time';
     if (moveTimeMs < 1000) return `${Math.trunc(moveTimeMs)}ms`;
@@ -354,9 +362,10 @@ export function computeReviewArtifacts(
     const keyMoments: ReviewKeyMoment[] = [];
     let evaluated = 0;
     let accuracySum = 0;
+    let centipawnLossSum = 0;
     const sideAccuracy = {
-        red: { sum: 0, count: 0 },
-        black: { sum: 0, count: 0 },
+        red: { sum: 0, lossSum: 0, count: 0 },
+        black: { sum: 0, lossSum: 0, count: 0 },
     };
 
     for (const [moveIndex, nodeId] of activeLineNodeIds.entries()) {
@@ -381,7 +390,9 @@ export function computeReviewArtifacts(
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const moveAccuracy = getMoveAccuracyForWinPercentLoss(winPercentLoss);
         accuracySum += moveAccuracy;
+        centipawnLossSum += swing;
         sideAccuracy[side].sum += moveAccuracy;
+        sideAccuracy[side].lossSum += swing;
         sideAccuracy[side].count += 1;
         const note = buildReviewNote({
             quality,
@@ -423,11 +434,20 @@ export function computeReviewArtifacts(
     }
 
     const accuracy = evaluated > 0 ? Math.round(accuracySum / evaluated) : 0;
+    const averageCentipawnLoss = evaluated > 0
+        ? Math.round(centipawnLossSum / evaluated)
+        : undefined;
     const redAccuracy = sideAccuracy.red.count > 0
         ? Math.round(sideAccuracy.red.sum / sideAccuracy.red.count)
         : undefined;
     const blackAccuracy = sideAccuracy.black.count > 0
         ? Math.round(sideAccuracy.black.sum / sideAccuracy.black.count)
+        : undefined;
+    const redAverageCentipawnLoss = sideAccuracy.red.count > 0
+        ? Math.round(sideAccuracy.red.lossSum / sideAccuracy.red.count)
+        : undefined;
+    const blackAverageCentipawnLoss = sideAccuracy.black.count > 0
+        ? Math.round(sideAccuracy.black.lossSum / sideAccuracy.black.count)
         : undefined;
 
     keyMoments.sort((left, right) =>
@@ -440,8 +460,11 @@ export function computeReviewArtifacts(
         summary: {
             totalMoves: evaluated,
             accuracy,
+            averageCentipawnLoss,
             redAccuracy,
             blackAccuracy,
+            redAverageCentipawnLoss,
+            blackAverageCentipawnLoss,
             bestCount: counts.best,
             goodCount: counts.good,
             inaccuracyCount: counts.inaccuracy,
