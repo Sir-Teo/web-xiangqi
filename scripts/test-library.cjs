@@ -268,6 +268,24 @@ try {
   assert(savedStudyTree.moveTree?.[0]?.uci === "b2e2", "Saved study tree root move should normalize uppercase moves.");
   assert(savedStudyTree.moveTree?.[0]?.children?.[0]?.uci === "h9g7", "Saved study tree child move should normalize uppercase moves.");
 
+  const maxSizedStudyTree = library.normalizeSavedGame({
+    id: "max-sized-study-tree",
+    savedAt: 1710000000010,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    moveTree: Array.from({ length: 1024 }, () => ({ uci: "b2e2" })),
+  });
+  assert(maxSizedStudyTree?.moveTree?.length === 1024, "Saved study trees should preserve the full 1024-node import cap.");
+
+  const oversizedSavedStudyTree = library.normalizeSavedGame({
+    id: "oversized-study-tree",
+    savedAt: 1710000000011,
+    gameMode: "PvP",
+    moves: ["b2e2"],
+    moveTree: Array.from({ length: 1025 }, () => ({ uci: "b2e2" })),
+  });
+  assert(oversizedSavedStudyTree === null, "Saved study trees beyond the 1024-node cap should still be rejected.");
+
   const malformedSavedStudyTree = library.normalizeSavedGame({
     id: "bad-study-tree",
     savedAt: 1710000000007,
