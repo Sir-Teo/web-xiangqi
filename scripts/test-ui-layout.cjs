@@ -1088,10 +1088,14 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
       const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
       return /Recovering engine|Engine paused after crashes/i.test(text);
     }, null, { timeout: 5000 });
+    await page.getByTestId("analysis-tab-review").click();
 
     const state = await page.evaluate(() => ({
       engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
       bottomEngineText: document.querySelector(".bottom-engine-info")?.textContent?.trim() || "",
+      reviewStartText: document.querySelector('[data-testid="start-review-btn"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      reviewStartTitle: document.querySelector('[data-testid="start-review-btn"]')?.getAttribute("title") || "",
+      reviewStartLabel: document.querySelector('[data-testid="start-review-btn"]')?.getAttribute("aria-label") || "",
       commands: window.__engineCommands || [],
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
@@ -1100,6 +1104,13 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
     }
     if (!/Recovering engine|Engine paused after crashes/i.test(state.bottomEngineText)) {
       throw new Error(`Stalled engine handshake left the bottom status stale: ${JSON.stringify(state)}`);
+    }
+    if (
+      state.reviewStartText !== "No Moves Yet" ||
+      state.reviewStartTitle !== "Play or import moves before running review" ||
+      state.reviewStartLabel !== "Game review unavailable: Play or import moves before running review"
+    ) {
+      throw new Error(`Empty review did not prioritize the actionable no-moves reason: ${JSON.stringify(state)}`);
     }
     if (!state.commands.includes("uci") || !state.commands.includes("isready")) {
       throw new Error(`Stalled engine handshake did not reach the UCI readiness phase: ${JSON.stringify(state.commands)}`);

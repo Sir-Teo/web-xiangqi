@@ -2086,24 +2086,32 @@ function App() {
         ? 'Analyzing'
         : 'Idle';
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
+  const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';
+  const engineUnavailableReviewLabel = engineNotice?.text === 'Engine paused after crashes'
+    ? 'Engine Paused'
+    : engineNotice?.text === 'Recovering engine'
+      ? 'Recovering Engine'
+      : 'Engine Loading';
   const reviewStartTitle = !engineEnabled
     ? 'Switch to Analysis to review this line'
-    : !isReady
-      ? 'Engine is still loading'
-      : aiMoveSearchActive
-        ? 'AI is finishing its move'
-        : moveHistory.length === 0
-        ? 'Play or import moves before running review'
-        : 'Analyze all moves in the current line';
+    : moveHistory.length === 0
+      ? 'Play or import moves before running review'
+      : !isReady
+        ? engineUnavailableReviewTitle
+        : aiMoveSearchActive
+          ? 'AI is finishing its move'
+          : 'Analyze all moves in the current line';
   const reviewStartLabel = canStartReview
     ? 'Run Review'
     : !engineEnabled
       ? 'Analysis Off'
-      : !isReady
-        ? 'Engine Loading'
-        : aiMoveSearchActive
-          ? 'AI Thinking'
-        : 'No Moves Yet';
+      : moveHistory.length === 0
+        ? 'No Moves Yet'
+        : !isReady
+          ? engineUnavailableReviewLabel
+          : aiMoveSearchActive
+            ? 'AI Thinking'
+            : 'No Moves Yet';
 
   useEffect(() => {
     if (!gameResult) {
