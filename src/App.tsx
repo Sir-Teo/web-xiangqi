@@ -497,6 +497,11 @@ function formatEngineTelemetry(
   return parts.length > 0 ? parts.slice(0, 2).join(' · ') : `${fallbackMoveTimeMs}ms primary`;
 }
 
+function formatEvalGap(centipawns: number) {
+  const normalized = Math.max(0, Math.round(centipawns));
+  return `${(normalized / 100).toFixed(1)} behind`;
+}
+
 function isPieceCode(value: string): value is PieceCode {
   return value in PIECE_SYMBOLS;
 }
@@ -3888,14 +3893,26 @@ function App() {
                     {currentAnalysisPvLines.length === 0 ? (
                       <div className="text-muted small">No PV available yet.</div>
                     ) : currentAnalysisPvLines.map((pv, i) => {
+                      const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
+                      const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
                       const firstMove = pv.moves[0];
                       return (
-                        <div key={i} className="pv-line premium-card">
+                        <div
+                          key={i}
+                          className="pv-line premium-card"
+                          aria-label={`Engine line ${i + 1}, ${lineStanding}, score ${formatEvalScore(normalizedScore, 1)}`}
+                        >
                           <div className={`pv-score ${normalizedScore > 0 ? 'positive' : 'negative'}`}>
                             {formatEvalScore(normalizedScore, 0)}
                           </div>
                           <div className="pv-moves">
+                            <div className="pv-line-heading">
+                              <span className="pv-line-rank">Line {i + 1}</span>
+                              <span className={`pv-line-standing ${i === 0 ? 'pv-line-standing-best' : ''}`}>
+                                {lineStanding}
+                              </span>
+                            </div>
                             <span className="turnNum">Depth {pv.depth}</span>
                             <span className="move">{formatUciLine(pv.moves, 7)}</span>
                           </div>

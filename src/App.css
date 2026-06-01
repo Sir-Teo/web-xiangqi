@@ -4130,6 +4130,35 @@ summary:active {
   flex: 1 1 160px;
 }
 
+.pv-line-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.pv-line-rank,
+.pv-line-standing {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pv-line-rank {
+  color: var(--text-tertiary);
+}
+
+.pv-line-standing {
+  color: var(--text-muted);
+}
+
+.pv-line-standing-best {
+  color: var(--accent);
+}
+
 .pv-moves .turnNum {
   color: var(--text-tertiary);
   font-size: 0.68rem;

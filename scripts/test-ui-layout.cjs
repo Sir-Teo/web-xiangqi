@@ -947,6 +947,7 @@ async function assertEngineTelemetryDashboard(browser) {
       return searchCard.includes("D8/S12") &&
         searchCard.includes("789k nps") &&
         searchCard.includes("hash 2%") &&
+        /Line 1\s*Best/.test(pvText) &&
         pvText.includes("B2→E2");
     }, null, { timeout: 15000 });
 
@@ -956,6 +957,7 @@ async function assertEngineTelemetryDashboard(browser) {
         .find((text) => text.includes("Search")) || "";
       return {
         searchCard,
+        firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
         pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
         overflowX: document.body.scrollWidth - document.body.clientWidth,
       };
@@ -965,6 +967,8 @@ async function assertEngineTelemetryDashboard(browser) {
       !telemetry.searchCard.includes("D8/S12") ||
       !telemetry.searchCard.includes("789k nps") ||
       !telemetry.searchCard.includes("hash 2%") ||
+      !/Engine line 1, Best/.test(telemetry.firstLineLabel) ||
+      !/Line 1\s*Best/.test(telemetry.pvText) ||
       !telemetry.pvText.includes("B2→E2") ||
       telemetry.overflowX > 2
     ) {
