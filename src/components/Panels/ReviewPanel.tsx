@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewSummary } from '../../utils/review';
-import { formatReviewQuality, getMoveQualityClassName } from '../../utils/review';
+import { formatReviewQuality, formatReviewQualityCount, getMoveQualityClassName } from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
@@ -128,16 +128,21 @@ export const ReviewPanel = memo(function ReviewPanel({
                     </div>
 
                     <div className="review-quality-breakdown" aria-label="Review quality breakdown">
-                        {qualityBreakdown.map((item) => (
-                            <div
-                                key={item.key}
-                                className={`review-quality-chip ${getMoveQualityClassName(item.key)}`}
-                                data-testid={`review-quality-${item.key}`}
-                            >
-                                <span>{item.label}</span>
-                                <strong>{item.count}</strong>
-                            </div>
-                        ))}
+                        {qualityBreakdown.map((item) => {
+                            const countLabel = formatReviewQualityCount(item.key, item.count);
+                            return (
+                                <div
+                                    key={item.key}
+                                    className={`review-quality-chip ${getMoveQualityClassName(item.key)}`}
+                                    data-testid={`review-quality-${item.key}`}
+                                    aria-label={countLabel}
+                                    title={countLabel}
+                                >
+                                    <span>{item.label}</span>
+                                    <strong>{item.count}</strong>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     <div className="review-focus-card" data-testid="review-focus-card">

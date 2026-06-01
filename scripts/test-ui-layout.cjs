@@ -2292,6 +2292,12 @@ async function assertReviewBestMoveBranchAction(page) {
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     mistake: document.querySelector('[data-testid="review-quality-mistake"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blunder: document.querySelector('[data-testid="review-quality-blunder"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bestLabel: document.querySelector('[data-testid="review-quality-best"]')?.getAttribute("aria-label") || "",
+    goodLabel: document.querySelector('[data-testid="review-quality-good"]')?.getAttribute("aria-label") || "",
+    inaccuracyLabel: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.getAttribute("aria-label") || "",
+    mistakeLabel: document.querySelector('[data-testid="review-quality-mistake"]')?.getAttribute("aria-label") || "",
+    blunderLabel: document.querySelector('[data-testid="review-quality-blunder"]')?.getAttribute("aria-label") || "",
+    mistakeTitle: document.querySelector('[data-testid="review-quality-mistake"]')?.getAttribute("title") || "",
     bottomSummaryText: document.querySelector('[data-testid="bottom-review-summary"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     bottomSummaryLabel: document.querySelector('[data-testid="bottom-review-summary"]')?.getAttribute("aria-label") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
@@ -2305,6 +2311,12 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.inaccuracy !== "Inaccuracy0" ||
     reviewReadout.mistake !== "Mistake1" ||
     reviewReadout.blunder !== "Blunder0" ||
+    reviewReadout.bestLabel !== "0 best moves" ||
+    reviewReadout.goodLabel !== "1 good move" ||
+    reviewReadout.inaccuracyLabel !== "0 inaccuracies" ||
+    reviewReadout.mistakeLabel !== "1 mistake" ||
+    reviewReadout.blunderLabel !== "0 blunders" ||
+    reviewReadout.mistakeTitle !== "1 mistake" ||
     !reviewReadout.bottomSummaryText.includes("40% accuracy") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||

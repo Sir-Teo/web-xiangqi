@@ -135,6 +135,21 @@ export function formatReviewCount(count: number, singular: string, plural = `${s
     return `${normalized} ${normalized === 1 ? singular : plural}`;
 }
 
+export function formatReviewQualityCount(quality: ReviewMoveQuality, count: number): string {
+    switch (quality) {
+        case 'best':
+            return formatReviewCount(count, 'best move');
+        case 'good':
+            return formatReviewCount(count, 'good move');
+        case 'inaccuracy':
+            return formatReviewCount(count, 'inaccuracy', 'inaccuracies');
+        case 'mistake':
+            return formatReviewCount(count, 'mistake');
+        case 'blunder':
+            return formatReviewCount(count, 'blunder');
+    }
+}
+
 export function isCriticalReviewQuality(quality: ReviewMoveQuality): quality is ReviewCriticalQuality {
     return quality === 'inaccuracy' || quality === 'mistake' || quality === 'blunder';
 }
