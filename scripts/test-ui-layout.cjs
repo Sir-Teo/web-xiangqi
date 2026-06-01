@@ -1515,12 +1515,17 @@ async function assertMobileNewGameStartButtonVisible(page) {
       start: startRect ? { top: startRect.top, bottom: startRect.bottom, height: startRect.height } : null,
       footerPosition: footerStyle?.position || "",
       menuScrollTop: menu?.scrollTop ?? -1,
+      modeButtonLabels: Array.from(document.querySelectorAll(".new-game-mode-btn"))
+        .map((button) => button.getAttribute("aria-label") || ""),
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
 
   if (!layout.menu || !layout.start || layout.footerPosition !== "sticky") {
     throw new Error(`Mobile New Game footer was not sticky: ${JSON.stringify(layout)}`);
+  }
+  if (!layout.modeButtonLabels.every((label) => /^[^.]+\. .+/.test(label))) {
+    throw new Error(`New Game mode buttons need readable accessible labels: ${JSON.stringify(layout)}`);
   }
   if (layout.start.bottom > layout.innerHeight - 6 || layout.start.top < 0) {
     throw new Error(`Mobile New Game start button was not immediately reachable: ${JSON.stringify(layout)}`);

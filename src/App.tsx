@@ -2952,6 +2952,7 @@ function App() {
                   className={`new-game-mode-btn ${pendingGameMode === mode ? 'new-game-mode-btn-active' : ''}`}
                   onClick={() => setPendingGameMode(mode)}
                   aria-pressed={pendingGameMode === mode}
+                  aria-label={`${label}. ${description}`}
                 >
                   <span>{label}</span>
                   <small>{description}</small>
