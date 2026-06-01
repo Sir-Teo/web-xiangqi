@@ -1876,6 +1876,28 @@ async function assertReviewBestMoveBranchAction(page) {
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByTestId("load-saved-review-best-branch").click();
   await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
+  const reviewReadout = await page.evaluate(() => ({
+    focus: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    mistake: document.querySelector('[data-testid="review-quality-mistake"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    blunder: document.querySelector('[data-testid="review-quality-blunder"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    !reviewReadout.focus.includes("Study focus") ||
+    !reviewReadout.focus.includes("Mistake at ply 1") ||
+    !reviewReadout.focus.includes("B0→C2") ||
+    reviewReadout.best !== "Best0" ||
+    reviewReadout.good !== "Good1" ||
+    reviewReadout.inaccuracy !== "Inaccuracy0" ||
+    reviewReadout.mistake !== "Mistake1" ||
+    reviewReadout.blunder !== "Blunder0" ||
+    reviewReadout.overflowX > 2
+  ) {
+    throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);
+  }
   await page.getByTestId("review-try-best-0").click();
   await page.getByTestId("move-tree-active").waitFor({ timeout: 5000 });
   const state = await page.evaluate(() => ({

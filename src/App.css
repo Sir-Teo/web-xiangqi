@@ -3785,6 +3785,78 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+.review-quality-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.6rem, 1fr));
+  gap: 0.4rem;
+}
+
+.review-quality-chip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.review-quality-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.review-quality-chip strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.review-focus-card {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.66rem 0.76rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(255, 255, 255, 0.03));
+}
+
+.review-focus-card span {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.review-focus-card strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.review-focus-card em {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.review-focus-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .review-moment-header {
   display: flex;
   justify-content: space-between;

@@ -34,6 +34,14 @@ export const ReviewPanel = memo(function ReviewPanel({
     onPlayBestMove,
 }: Props) {
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
+    const focusMoment = summary?.keyMoments[0] ?? null;
+    const qualityBreakdown = summary ? [
+        { key: 'best', label: 'Best', count: summary.bestCount },
+        { key: 'good', label: 'Good', count: summary.goodCount },
+        { key: 'inaccuracy', label: 'Inaccuracy', count: summary.inaccuracyCount },
+        { key: 'mistake', label: 'Mistake', count: summary.mistakeCount },
+        { key: 'blunder', label: 'Blunder', count: summary.blunderCount },
+    ] as const : [];
 
     return (
         <div className="review-panel">
@@ -117,6 +125,37 @@ export const ReviewPanel = memo(function ReviewPanel({
                             <span>Reviewed</span>
                             <strong>{new Date(summary.reviewedAt).toLocaleDateString()}</strong>
                         </div>
+                    </div>
+
+                    <div className="review-quality-breakdown" aria-label="Review quality breakdown">
+                        {qualityBreakdown.map((item) => (
+                            <div
+                                key={item.key}
+                                className={`review-quality-chip ${getMoveQualityClassName(item.key)}`}
+                                data-testid={`review-quality-${item.key}`}
+                            >
+                                <span>{item.label}</span>
+                                <strong>{item.count}</strong>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="review-focus-card" data-testid="review-focus-card">
+                        <span>Study focus</span>
+                        {focusMoment ? (
+                            <>
+                                <strong>{formatReviewQuality(focusMoment.quality)} at ply {focusMoment.ply}</strong>
+                                {focusMoment.bestMove ? (
+                                    <em>Try {formatUciMove(focusMoment.bestMove)}</em>
+                                ) : null}
+                                <p>{focusMoment.note}</p>
+                            </>
+                        ) : (
+                            <>
+                                <strong>Clean main line</strong>
+                                <p>No critical swings found in this review.</p>
+                            </>
+                        )}
                     </div>
 
                     <div className="review-moment-header">
