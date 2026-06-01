@@ -2185,8 +2185,10 @@ body.resizing * {
    Move List Tree
    ═══════════════════════════════════════════════════ */
 .mtree-scroll {
-  height: 260px;
+  flex: 1 1 260px;
+  min-height: 14rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   outline: none;
   padding: 0.1rem 0;
 }
@@ -2589,15 +2591,21 @@ summary:active {
 /* Additional tree navigation breadcrumb not present in web-chess */
 .tree-breadcrumb {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 0.24rem;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0.32rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
+  scrollbar-width: thin;
 }
 
 .tree-breadcrumb-chip {
+  flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   background: transparent;
@@ -2605,6 +2613,7 @@ summary:active {
   padding: 0.18rem 0.35rem;
   font-size: 0.64rem;
   font-family: var(--font-mono);
+  white-space: nowrap;
   cursor: pointer;
 }
 

@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
     classifyMoveQualityForEval,
@@ -41,10 +41,34 @@ export const MoveListTree = memo(function MoveListTree({
     activeLineNodeIds,
     onNavigateNode,
 }: Props) {
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+
     useEffect(() => {
-        const el = document.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
-        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-        el?.scrollIntoView({ block: 'nearest', behavior });
+        const container = scrollRef.current;
+        const el = container?.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
+        if (!container || !el) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const activeRect = el.getBoundingClientRect();
+        const rawTargetTop = container.scrollTop
+            + activeRect.top
+            - containerRect.top
+            - (containerRect.height - activeRect.height) / 2;
+        const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        const targetTop = Math.max(0, Math.min(maxTop, rawTargetTop));
+        const distance = Math.abs(targetTop - container.scrollTop);
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const activeFullyVisible = activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom;
+        const behavior: ScrollBehavior = prefersReducedMotion || !activeFullyVisible || distance > container.clientHeight * 1.5
+            ? 'auto'
+            : 'smooth';
+
+        if (prefersReducedMotion) {
+            el.scrollIntoView({ block: 'nearest', behavior });
+        }
+        if (distance > 1) {
+            container.scrollTo({ top: targetTop, behavior });
+        }
     }, [currentNodeId]);
 
     if (activeLineNodeIds.length === 0) {
@@ -166,7 +190,7 @@ export const MoveListTree = memo(function MoveListTree({
     }
 
     return (
-        <div className="mtree-scroll">
+        <div className="mtree-scroll" ref={scrollRef}>
             {rows}
             {hasMoveQualityLegend ? <div className="mtree-quality-legend">
                     <span className="legend-title">Move loss</span>
