@@ -15,7 +15,7 @@ import {
 } from './components/icons';
 import { useEngine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
-import { START_FEN, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
+import { START_FEN, hasAnyLegalMove, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
@@ -1798,6 +1798,11 @@ function App() {
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
+  const visibleGameOverReason = useMemo(() => {
+    if (!visibleGameResult || visibleGameResult === 'draw') return undefined;
+    if (hasAnyLegalMove(board, sideToMove)) return 'result';
+    return inCheck ? 'checkmate' : 'stalemate';
+  }, [board, inCheck, sideToMove, visibleGameResult]);
   const aiMoveSearchActive = isAiTurn && isSearching;
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const reviewStartTitle = !engineEnabled
@@ -3996,6 +4001,7 @@ function App() {
       {visibleGameResult && (
         <GameOverModal
           result={visibleGameResult}
+          reason={visibleGameOverReason}
           onNewGame={() => { setGameResult(null); resetGame(); }}
           onReview={dismissGameOverForReview}
         />

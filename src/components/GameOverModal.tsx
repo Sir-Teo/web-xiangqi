@@ -3,17 +3,25 @@ import type { GameResult } from '../hooks/useXiangqi';
 
 interface GameOverModalProps {
   result: GameResult;
+  reason?: 'checkmate' | 'stalemate' | 'result';
   onNewGame: () => void;
   onReview: () => void;
 }
 
-const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; subtitle: string; color: string }> = {
-  'red-wins':   { title: 'Red Wins',   subtitle: 'Checkmate',    color: '#c0392b' },
-  'black-wins': { title: 'Black Wins', subtitle: 'Checkmate',    color: '#1a1a2e' },
-  'draw':       { title: 'Draw',       subtitle: 'Game drawn',    color: '#6b7280' },
+const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; color: string }> = {
+  'red-wins':   { title: 'Red Wins',   color: '#c0392b' },
+  'black-wins': { title: 'Black Wins', color: '#1a1a2e' },
+  'draw':       { title: 'Draw',       color: '#6b7280' },
 };
 
-export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProps) {
+function resultSubtitle(result: NonNullable<GameResult>, reason?: GameOverModalProps['reason']) {
+  if (result === 'draw') return 'Game drawn';
+  if (reason === 'checkmate') return 'Checkmate';
+  if (reason === 'stalemate') return 'Stalemate - no legal moves';
+  return 'Game result';
+}
+
+export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverModalProps) {
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,6 +80,7 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
 
   if (!result) return null;
   const cfg = RESULT_CONFIG[result];
+  const subtitle = resultSubtitle(result, reason);
 
   return (
     <div className="game-over-backdrop">
@@ -87,7 +96,7 @@ export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProp
           {result === 'red-wins' ? '將' : result === 'black-wins' ? '帥' : '＝'}
         </div>
         <h2 className="game-over-title" id="game-over-title">{cfg.title}</h2>
-        <p className="game-over-subtitle" id="game-over-subtitle">{cfg.subtitle}</p>
+        <p className="game-over-subtitle" id="game-over-subtitle">{subtitle}</p>
         <div className="game-over-actions">
           <button
             className="game-over-btn game-over-btn-primary"
