@@ -3021,8 +3021,14 @@ function App() {
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
                   onChange={(e) => {
-                    setMoveLineInput(e.target.value);
+                    const nextValue = e.target.value;
                     setMoveLineFileName('');
+                    if (isMoveImportTextTooLarge(nextValue)) {
+                      setMoveLineInput('');
+                      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+                      return;
+                    }
+                    setMoveLineInput(nextValue);
                     setMoveLineError(null);
                   }}
                   placeholder="1. b2e2 h9g7 b0c2"
