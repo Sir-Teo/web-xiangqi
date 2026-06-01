@@ -2596,6 +2596,7 @@ async function assertReviewBestMoveBranchAction(page) {
     focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
     momentEval: document.querySelector('[data-testid="review-moment-eval-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
+    momentLabel: document.querySelector('[data-testid="review-moment-0"]')?.getAttribute("aria-label") || "",
     best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2633,6 +2634,7 @@ async function assertReviewBestMoveBranchAction(page) {
     !reviewReadout.momentEval.includes("0.00") ||
     !reviewReadout.momentEval.includes("-2.40") ||
     reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
+    !reviewReadout.momentLabel.includes("red evaluation changed from 0.00 to -2.40") ||
     reviewReadout.best !== "Best0" ||
     reviewReadout.good !== "Good1" ||
     reviewReadout.inaccuracy !== "Inaccuracy0" ||

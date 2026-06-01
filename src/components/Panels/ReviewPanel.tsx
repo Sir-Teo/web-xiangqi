@@ -226,7 +226,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         onClick={() => onNavigateNode(moment.nodeId)}
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
+                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
                                     >
                                         <div className="review-moment-topline">
                                             <span>{formatReviewQuality(moment.quality)}</span>
