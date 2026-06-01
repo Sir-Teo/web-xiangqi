@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewKeyMoment, ReviewSummary } from '../../utils/review';
 import {
@@ -28,6 +28,9 @@ type Props = {
     onPlayBestMove?: (nodeId: string, bestMove: string) => void;
 };
 
+type ReviewMomentSideFilter = 'all' | 'red' | 'black';
+type ReviewMomentQualityFilter = 'all' | 'inaccuracy' | 'mistake' | 'blunder';
+
 export const ReviewPanel = memo(function ReviewPanel({
     status,
     progress,
@@ -42,6 +45,8 @@ export const ReviewPanel = memo(function ReviewPanel({
     onNavigateNode,
     onPlayBestMove,
 }: Props) {
+    const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
+    const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
@@ -57,6 +62,15 @@ export const ReviewPanel = memo(function ReviewPanel({
         { key: 'mistake', label: 'Mistake', count: summary.mistakeCount },
         { key: 'blunder', label: 'Blunder', count: summary.blunderCount },
     ] as const : [];
+    const filteredKeyMoments = useMemo(() => {
+        if (!summary) return [];
+        return summary.keyMoments.filter((moment) => {
+            if (momentSideFilter !== 'all' && moment.side !== momentSideFilter) return false;
+            if (momentQualityFilter !== 'all' && moment.quality !== momentQualityFilter) return false;
+            return true;
+        });
+    }, [momentQualityFilter, momentSideFilter, summary]);
+    const totalKeyMoments = summary?.keyMoments.length ?? 0;
 
     return (
         <div className="review-panel">
@@ -236,13 +250,42 @@ export const ReviewPanel = memo(function ReviewPanel({
                     </div>
 
                     <div className="review-moment-header">
-                        <span>Key moments</span>
-                        <strong>{summary.keyMoments.length}</strong>
+                        <div className="review-moment-heading">
+                            <span>Key moments</span>
+                            <strong data-testid="review-moment-count">{filteredKeyMoments.length}/{totalKeyMoments}</strong>
+                        </div>
+                        {totalKeyMoments > 0 ? (
+                            <div className="review-moment-filters" aria-label="Filter review key moments">
+                                <select
+                                    className="review-moment-filter"
+                                    value={momentSideFilter}
+                                    onChange={(event) => setMomentSideFilter(event.target.value as ReviewMomentSideFilter)}
+                                    aria-label="Filter review moments by side"
+                                    data-testid="review-moment-side-filter"
+                                >
+                                    <option value="all">All sides</option>
+                                    <option value="red">Red</option>
+                                    <option value="black">Black</option>
+                                </select>
+                                <select
+                                    className="review-moment-filter"
+                                    value={momentQualityFilter}
+                                    onChange={(event) => setMomentQualityFilter(event.target.value as ReviewMomentQualityFilter)}
+                                    aria-label="Filter review moments by severity"
+                                    data-testid="review-moment-quality-filter"
+                                >
+                                    <option value="all">All issues</option>
+                                    <option value="blunder">Blunders</option>
+                                    <option value="mistake">Mistakes</option>
+                                    <option value="inaccuracy">Inaccuracies</option>
+                                </select>
+                            </div>
+                        ) : null}
                     </div>
 
-                    {summary.keyMoments.length > 0 ? (
+                    {filteredKeyMoments.length > 0 ? (
                         <div className="review-moment-list">
-                            {summary.keyMoments.map((moment) => (
+                            {filteredKeyMoments.map((moment) => (
                                 <div key={`${moment.moveIndex}-${moment.nodeId}`} className="review-moment-entry">
                                     <button
                                         type="button"
@@ -305,7 +348,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         </div>
                     ) : (
                         <div className="empty-state">
-                            <p>No critical moments in this line. That review came back clean.</p>
+                            <p>{totalKeyMoments > 0 ? 'No moments match these filters.' : 'No critical moments in this line. That review came back clean.'}</p>
                         </div>
                     )}
                 </>

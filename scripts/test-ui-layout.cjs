@@ -2615,6 +2615,9 @@ async function assertReviewBestMoveBranchAction(page) {
     redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy"]')?.getAttribute("aria-label") || "",
     blackAccuracy: document.querySelector('[data-testid="review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     blackAccuracyLabel: document.querySelector('[data-testid="review-black-accuracy"]')?.getAttribute("aria-label") || "",
+    momentCount: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    momentSideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
+    momentQualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
     momentEval: document.querySelector('[data-testid="review-moment-eval-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
     momentChance: document.querySelector('[data-testid="review-moment-chance-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2662,6 +2665,9 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.redAccuracyLabel !== "Red accuracy 39%" ||
     reviewReadout.blackAccuracy !== "Black93%" ||
     reviewReadout.blackAccuracyLabel !== "Black accuracy 93%" ||
+    reviewReadout.momentCount !== "1/1" ||
+    reviewReadout.momentSideFilter !== "all" ||
+    reviewReadout.momentQualityFilter !== "all" ||
     !reviewReadout.momentEval.includes("0.00") ||
     !reviewReadout.momentEval.includes("-2.40") ||
     reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
@@ -2707,6 +2713,66 @@ async function assertReviewBestMoveBranchAction(page) {
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);
   }
+  await page.getByTestId("review-moment-side-filter").selectOption("black");
+  await page.waitForFunction(() => document.querySelector('[data-testid="review-moment-count"]')?.textContent?.trim() === "0/1", null, { timeout: 5000 });
+  const blackFilteredMoments = await page.evaluate(() => ({
+    count: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    cardCount: document.querySelectorAll(".review-moment-card").length,
+    emptyText: document.querySelector(".review-panel .empty-state")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    sideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    blackFilteredMoments.count !== "0/1" ||
+    blackFilteredMoments.cardCount !== 0 ||
+    !blackFilteredMoments.emptyText.includes("No moments match these filters.") ||
+    blackFilteredMoments.sideFilter !== "black" ||
+    blackFilteredMoments.overflowX > 2
+  ) {
+    throw new Error(`Review side filter did not narrow key moments: ${JSON.stringify(blackFilteredMoments)}`);
+  }
+
+  await page.getByTestId("review-moment-side-filter").selectOption("all");
+  await page.getByTestId("review-moment-quality-filter").selectOption("mistake");
+  await page.waitForFunction(() => document.querySelector('[data-testid="review-moment-count"]')?.textContent?.trim() === "1/1", null, { timeout: 5000 });
+  const mistakeFilteredMoments = await page.evaluate(() => ({
+    count: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    cardCount: document.querySelectorAll(".review-moment-card").length,
+    qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
+    firstMoment: document.querySelector('[data-testid="review-moment-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    mistakeFilteredMoments.count !== "1/1" ||
+    mistakeFilteredMoments.cardCount !== 1 ||
+    mistakeFilteredMoments.qualityFilter !== "mistake" ||
+    !mistakeFilteredMoments.firstMoment.includes("Mistake") ||
+    mistakeFilteredMoments.overflowX > 2
+  ) {
+    throw new Error(`Review severity filter did not keep the matching key moment: ${JSON.stringify(mistakeFilteredMoments)}`);
+  }
+
+  await page.getByTestId("review-moment-quality-filter").selectOption("blunder");
+  await page.waitForFunction(() => document.querySelector('[data-testid="review-moment-count"]')?.textContent?.trim() === "0/1", null, { timeout: 5000 });
+  const blunderFilteredMoments = await page.evaluate(() => ({
+    count: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    cardCount: document.querySelectorAll(".review-moment-card").length,
+    emptyText: document.querySelector(".review-panel .empty-state")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    blunderFilteredMoments.count !== "0/1" ||
+    blunderFilteredMoments.cardCount !== 0 ||
+    !blunderFilteredMoments.emptyText.includes("No moments match these filters.") ||
+    blunderFilteredMoments.qualityFilter !== "blunder" ||
+    blunderFilteredMoments.overflowX > 2
+  ) {
+    throw new Error(`Review severity filter did not empty unmatched key moments: ${JSON.stringify(blunderFilteredMoments)}`);
+  }
+
+  await page.getByTestId("review-moment-quality-filter").selectOption("all");
+  await page.waitForSelector('[data-testid="review-try-best-0"]', { timeout: 5000 });
   await page.getByTestId("save-game-btn").click();
   await page.getByTestId("save-game-btn").getByText("Saved").waitFor({ timeout: 5000 });
   const resavedReview = await page.evaluate(() => {

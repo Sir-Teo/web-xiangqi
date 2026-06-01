@@ -3093,11 +3093,43 @@ summary:active {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   color: var(--text-secondary);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.review-moment-heading,
+.review-moment-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.review-moment-filters {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.review-moment-filter {
+  min-width: 6.8rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.28rem 0.45rem;
+  outline: none;
+}
+
+.review-moment-filter:focus {
+  border-color: var(--border-accent);
 }
 
 .review-moment-list {
@@ -3127,6 +3159,15 @@ summary:active {
   cursor: pointer;
 }
 
+.panel button.review-moment-card {
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0.28rem;
+  line-height: 1.35;
+  overflow: visible;
+}
+
 .review-moment-card:hover {
   border-color: var(--border-strong);
 }
@@ -3142,6 +3183,7 @@ summary:active {
   justify-content: space-between;
   gap: 0.7rem;
   align-items: center;
+  min-width: 0;
 }
 
 .review-moment-topline {
@@ -3169,6 +3211,7 @@ summary:active {
   margin: 0;
   line-height: 1.45;
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 
 .review-moment-card em {
