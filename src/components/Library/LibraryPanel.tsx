@@ -13,6 +13,16 @@ import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons'
 import './LibraryPanel.css';
 
 const SAVED_PAGE_SIZE = 100;
+type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'red-accuracy-high' | 'black-accuracy-high';
+
+const SAVED_SORT_LABELS: Record<SavedSort, string> = {
+  recent: 'Newest first',
+  oldest: 'Oldest first',
+  'accuracy-high': 'Highest accuracy',
+  'accuracy-low': 'Lowest accuracy',
+  'red-accuracy-high': 'Red accuracy',
+  'black-accuracy-high': 'Black accuracy',
+};
 
 interface LibraryPanelProps {
   savedGames: SavedGame[];
@@ -86,6 +96,38 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
+function compareDefinedNumbers(
+  left: number | undefined,
+  right: number | undefined,
+  direction: 'asc' | 'desc'
+) {
+  const leftMissing = typeof left !== 'number';
+  const rightMissing = typeof right !== 'number';
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+  return direction === 'asc' ? left - right : right - left;
+}
+
+function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
+  const recentTieBreak = right.savedAt - left.savedAt;
+  switch (sort) {
+    case 'oldest':
+      return left.savedAt - right.savedAt;
+    case 'accuracy-high':
+      return compareDefinedNumbers(left.review?.summary.accuracy, right.review?.summary.accuracy, 'desc') || recentTieBreak;
+    case 'accuracy-low':
+      return compareDefinedNumbers(left.review?.summary.accuracy, right.review?.summary.accuracy, 'asc') || recentTieBreak;
+    case 'red-accuracy-high':
+      return compareDefinedNumbers(left.review?.summary.redAccuracy, right.review?.summary.redAccuracy, 'desc') || recentTieBreak;
+    case 'black-accuracy-high':
+      return compareDefinedNumbers(left.review?.summary.blackAccuracy, right.review?.summary.blackAccuracy, 'desc') || recentTieBreak;
+    case 'recent':
+    default:
+      return recentTieBreak;
+  }
+}
+
 function buildSavedGamePgn(game: SavedGame) {
   if (game.moveTree?.length) {
     const pgn = exportPgnFromMoveTree(game.moveTree, {
@@ -128,6 +170,7 @@ export function LibraryPanel({
   const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
   const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
+  const [savedSort, setSavedSort] = useState<SavedSort>('recent');
 
   useEffect(() => {
     return () => {
@@ -144,7 +187,7 @@ export function LibraryPanel({
 
   useEffect(() => {
     setSavedVisibleLimit(SAVED_PAGE_SIZE);
-  }, [q, reviewFilter, resultFilter, savedGames.length]);
+  }, [q, reviewFilter, resultFilter, savedGames.length, savedSort]);
 
   const filteredHistorical = useMemo(() => HISTORICAL_GAMES.filter((g) => {
     if (reviewFilter === 'reviewed') return false;
@@ -159,21 +202,24 @@ export function LibraryPanel({
     );
   }), [q, resultFilter, reviewFilter]);
 
-  const filteredSaved = useMemo(() => savedGames.filter((g) => {
-    const isReviewed = Boolean(g.review);
-    if (reviewFilter === 'reviewed' && !isReviewed) return false;
-    if (reviewFilter === 'unreviewed' && isReviewed) return false;
-    if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
-    if (!q) return true;
-    return (
-      (g.label ?? '').toLowerCase().includes(q) ||
-      (g.opening ?? '').toLowerCase().includes(q) ||
-      g.gameMode.toLowerCase().includes(q)
-    );
-  }), [q, resultFilter, reviewFilter, savedGames]);
+  const filteredSaved = useMemo(() => savedGames
+    .filter((g) => {
+      const isReviewed = Boolean(g.review);
+      if (reviewFilter === 'reviewed' && !isReviewed) return false;
+      if (reviewFilter === 'unreviewed' && isReviewed) return false;
+      if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
+      if (!q) return true;
+      return (
+        (g.label ?? '').toLowerCase().includes(q) ||
+        (g.opening ?? '').toLowerCase().includes(q) ||
+        g.gameMode.toLowerCase().includes(q)
+      );
+    })
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [q, resultFilter, reviewFilter, savedGames, savedSort]);
   const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
   const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
+  const savedSortLabel = SAVED_SORT_LABELS[savedSort];
 
   const startEdit = (game: SavedGame) => {
     setPendingDeleteId(null);
@@ -297,10 +343,23 @@ export function LibraryPanel({
           <option value="draw">Draw</option>
           <option value="ongoing">Ongoing</option>
         </select>
+        <select
+          className="lib-filter-select"
+          value={savedSort}
+          onChange={(e) => setSavedSort(e.target.value as SavedSort)}
+          aria-label="Sort saved games"
+        >
+          <option value="recent">{SAVED_SORT_LABELS.recent}</option>
+          <option value="oldest">{SAVED_SORT_LABELS.oldest}</option>
+          <option value="accuracy-high">{SAVED_SORT_LABELS['accuracy-high']}</option>
+          <option value="accuracy-low">{SAVED_SORT_LABELS['accuracy-low']}</option>
+          <option value="red-accuracy-high">{SAVED_SORT_LABELS['red-accuracy-high']}</option>
+          <option value="black-accuracy-high">{SAVED_SORT_LABELS['black-accuracy-high']}</option>
+        </select>
       </div>
       <div
         className="lib-summary-row"
-        aria-label={`${filteredSaved.length} ${savedGameSummaryLabel}. ${filteredHistorical.length} ${classicGameSummaryLabel}.`}
+        aria-label={`${filteredSaved.length} ${savedGameSummaryLabel}. ${filteredHistorical.length} ${classicGameSummaryLabel}. Sorted by ${savedSortLabel}.`}
       >
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
@@ -308,7 +367,7 @@ export function LibraryPanel({
         <span className="lib-summary-pill">
           <strong>{filteredHistorical.length}</strong> classics
         </span>
-        {(q || reviewFilter !== 'all' || resultFilter !== 'all') ? (
+        {(q || reviewFilter !== 'all' || resultFilter !== 'all' || savedSort !== 'recent') ? (
           <button
             type="button"
             className="lib-clear-filters"
@@ -316,9 +375,10 @@ export function LibraryPanel({
               setSearch('');
               setReviewFilter('all');
               setResultFilter('all');
+              setSavedSort('recent');
             }}
           >
-            Clear filters
+            Reset
           </button>
         ) : null}
       </div>

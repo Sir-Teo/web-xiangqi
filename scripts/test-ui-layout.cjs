@@ -4156,6 +4156,135 @@ async function assertLibraryRespondsToStorageChanges(page) {
   }
 }
 
+async function assertLibrarySavedGameSorting(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const makeReview = (accuracy, redAccuracy, blackAccuracy) => ({
+      summary: {
+        totalMoves: 1,
+        accuracy,
+        redAccuracy,
+        blackAccuracy,
+        bestCount: 0,
+        goodCount: 1,
+        inaccuracyCount: 0,
+        mistakeCount: 0,
+        blunderCount: 0,
+        reviewedAt: 1710000000000,
+        lineSignature: "b2e2",
+        keyMoments: [],
+      },
+      annotations: [{ moveIndex: 0, evalScore: 20, quality: "good", swing: 20, reviewNote: "Solid choice." }],
+    });
+    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+      {
+        id: "qa-sort-strong-red",
+        savedAt: 1710000000500,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "Red Accuracy Peak QA",
+        review: makeReview(70, 90, 99),
+      },
+      {
+        id: "qa-sort-high",
+        savedAt: 1710000001000,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "High Accuracy QA",
+        review: makeReview(92, 88, 95),
+      },
+      {
+        id: "qa-sort-low",
+        savedAt: 1710000002000,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "Low Accuracy QA",
+        review: makeReview(42, 35, 70),
+      },
+      {
+        id: "qa-sort-recent-unreviewed",
+        savedAt: 1710000003000,
+        gameMode: "PvP",
+        moves: ["b2e2"],
+        result: "ongoing",
+        label: "Recent Unreviewed QA",
+      },
+    ]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByLabel("Sort saved games").waitFor({ timeout: 5000 });
+
+  const readOrder = async () => page.evaluate(() => ({
+    labels: Array.from(document.querySelectorAll('[data-testid="saved-game-list"] .lib-game-name-button'))
+      .map((node) => node.textContent?.trim() || ""),
+    summaryLabel: document.querySelector(".lib-summary-row")?.getAttribute("aria-label") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  const assertOrder = async (sortValue, expectedPrefix, expectedSummary) => {
+    await page.getByLabel("Sort saved games").selectOption(sortValue);
+    await page.waitForFunction((expected) => {
+      const labels = Array.from(document.querySelectorAll('[data-testid="saved-game-list"] .lib-game-name-button'))
+        .map((node) => node.textContent?.trim() || "");
+      return expected.every((label, index) => labels[index] === label);
+    }, expectedPrefix, { timeout: 5000 });
+    const state = await readOrder();
+    if (
+      expectedPrefix.some((label, index) => state.labels[index] !== label) ||
+      !state.summaryLabel.includes(expectedSummary) ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Saved-game sort ${sortValue} produced the wrong order: ${JSON.stringify(state)}`);
+    }
+  };
+
+  await assertOrder("recent", [
+    "Recent Unreviewed QA",
+    "Low Accuracy QA",
+    "High Accuracy QA",
+    "Red Accuracy Peak QA",
+  ], "Sorted by Newest first.");
+  await assertOrder("accuracy-high", [
+    "High Accuracy QA",
+    "Red Accuracy Peak QA",
+    "Low Accuracy QA",
+    "Recent Unreviewed QA",
+  ], "Sorted by Highest accuracy.");
+  await assertOrder("accuracy-low", [
+    "Low Accuracy QA",
+    "Red Accuracy Peak QA",
+    "High Accuracy QA",
+    "Recent Unreviewed QA",
+  ], "Sorted by Lowest accuracy.");
+  await assertOrder("red-accuracy-high", [
+    "Red Accuracy Peak QA",
+    "High Accuracy QA",
+    "Low Accuracy QA",
+    "Recent Unreviewed QA",
+  ], "Sorted by Red accuracy.");
+  await assertOrder("black-accuracy-high", [
+    "Red Accuracy Peak QA",
+    "High Accuracy QA",
+    "Low Accuracy QA",
+    "Recent Unreviewed QA",
+  ], "Sorted by Black accuracy.");
+
+  await page.getByRole("button", { name: "Reset" }).click();
+  await page.waitForFunction(() => {
+    const labels = Array.from(document.querySelectorAll('[data-testid="saved-game-list"] .lib-game-name-button'))
+      .map((node) => node.textContent?.trim() || "");
+    return labels[0] === "Recent Unreviewed QA";
+  }, null, { timeout: 5000 });
+}
+
 async function assertLargeLibraryRendersProgressively(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -5112,6 +5241,7 @@ async function main() {
     await assertLibraryMutationFailureFeedback(page);
     await assertLibraryDeleteConfirmation(page);
     await assertLibraryRespondsToStorageChanges(page);
+    await assertLibrarySavedGameSorting(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertStalemateLossIsLabeled(page);
@@ -5122,7 +5252,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
