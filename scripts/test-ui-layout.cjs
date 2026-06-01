@@ -170,7 +170,7 @@ async function installFakePikafish(page, fakeConfig) {
             } else if (config.variant === "fake-telemetry") {
               window.__goCount += 1;
               const finishTelemetrySearch = () => {
-                emit("info depth 8 seldepth 12 multipv 1 score cp 42 nodes 123456 nps 789000 hashfull 23 time 156 pv b2e2 h9g7");
+                emit("info depth 8 seldepth 12 multipv 1 score cp 42 wdl 410 230 360 nodes 123456 nps 789000 hashfull 23 time 156 pv b2e2 h9g7");
                 emit("bestmove b2e2");
               };
               if (window.__goCount === 1) {
@@ -1190,6 +1190,9 @@ async function assertEngineTelemetryDashboard(browser) {
           .find((text) => text.includes("Search D8/S12")) || "",
         firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
         pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        wdlLabel: document.querySelector(".wdl-bar")?.getAttribute("aria-label") || "",
+        wdlTitle: document.querySelector(".wdl-bar")?.getAttribute("title") || "",
+        wdlText: document.querySelector(".wdl-labels")?.textContent?.replace(/\s+/g, " ").trim() || "",
         overflowX: document.body.scrollWidth - document.body.clientWidth,
       };
     });
@@ -1203,6 +1206,9 @@ async function assertEngineTelemetryDashboard(browser) {
       !/Engine line 1, Best/.test(telemetry.firstLineLabel) ||
       !/Line 1\s*Best/.test(telemetry.pvText) ||
       !telemetry.pvText.includes("B2→E2") ||
+      telemetry.wdlLabel !== "Win/draw/loss estimate: Red 41.0%, Draw 23.0%, Black 36.0%" ||
+      telemetry.wdlTitle !== telemetry.wdlLabel ||
+      telemetry.wdlText !== "Red 41.0%Draw 23.0%Black 36.0%" ||
       telemetry.overflowX > 2
     ) {
       throw new Error(`Engine telemetry dashboard did not render UCI search stats: ${JSON.stringify(telemetry)}`);

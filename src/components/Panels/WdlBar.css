@@ -35,8 +35,9 @@
 }
 
 .wdl-labels {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
     font-size: 0.68rem;
     color: var(--text-tertiary, #888);
     letter-spacing: 0.04em;
@@ -44,6 +45,18 @@
 
 .wdl-label {
     font-variant-numeric: tabular-nums;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wdl-label:nth-child(2) {
+    text-align: center;
+}
+
+.wdl-label:nth-child(3) {
+    text-align: right;
 }
 
 .wdl-label.wdl-win {
