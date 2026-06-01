@@ -133,6 +133,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [evalScore, setEvalScore] = useState<number>(0);
     const [wdl, setWdl] = useState<WdlStats | null>(null);
     const [searchStats, setSearchStats] = useState<EngineSearchStats | null>(null);
+    const [isSearchQueued, setIsSearchQueued] = useState(false);
     const enabled = options.enabled ?? true;
 
     const engineRef = useRef<any>(null);
@@ -354,6 +355,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const clearQueuedSearch = useCallback(() => {
         pendingSearchRef.current = null;
+        setIsSearchQueued(false);
         if (queuedSearchTimerRef.current !== null) {
             window.clearTimeout(queuedSearchTimerRef.current);
             queuedSearchTimerRef.current = null;
@@ -370,6 +372,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         const nextRequest = pendingSearchRef.current;
         pendingSearchRef.current = null;
+        setIsSearchQueued(false);
         flushPendingOptions();
         activeSearchSignatureRef.current = nextRequest.signature;
         activeSearchTagRef.current = nextRequest.tag ?? null;
@@ -401,6 +404,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
 
         pendingSearchRef.current = { positionCmd, goCmd, signature, tag };
+        setIsSearchQueued(true);
 
         if (queuedSearchTimerRef.current !== null) {
             window.clearTimeout(queuedSearchTimerRef.current);
@@ -788,6 +792,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     return {
         isReady,
         isSearching,
+        isSearchQueued,
         variant,
         startSearch,
         stopSearch,

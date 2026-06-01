@@ -450,10 +450,12 @@ function formatCompactCount(value: number) {
 function formatEngineDepthLabel(
   stats: EngineSearchStats | null,
   fallbackDepth: number,
+  isSearchQueued: boolean,
   isSearching: boolean,
   isReady: boolean,
 ) {
   if (!stats) {
+    if (isSearchQueued) return 'Queued';
     if (isSearching) return 'Pending';
     return isReady ? 'Idle' : 'Booting';
   }
@@ -470,10 +472,12 @@ function formatEngineTelemetry(
   stats: EngineSearchStats | null,
   fallbackDepth: number,
   fallbackMoveTimeMs: number,
+  isSearchQueued: boolean,
   isSearching: boolean,
 ) {
   if (!stats) {
     const target = `target D${fallbackDepth}`;
+    if (isSearchQueued) return `${target} · queued`;
     return isSearching ? `${target} · ${fallbackMoveTimeMs}ms` : target;
   }
 
@@ -966,6 +970,7 @@ function App() {
   const {
     isReady,
     isSearching,
+    isSearchQueued,
     variant: engineVariant,
     stopSearch,
     queueSearch,
@@ -3818,8 +3823,8 @@ function App() {
                     </div>
                     <div className="engine-stat">
                       <span>Search</span>
-                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearching, isReady)}</strong>
-                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearching)}</em>
+                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
+                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>
@@ -3932,7 +3937,7 @@ function App() {
                       </div>
                       <div className="engine-coach-item">
                         <span>Depth</span>
-                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
+                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearchQueued ? 'Queued' : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
                       </div>
                       <div className="engine-coach-item engine-coach-line">
                         <span>Line</span>
