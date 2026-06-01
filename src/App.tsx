@@ -497,6 +497,34 @@ function formatEngineTelemetry(
   return parts.length > 0 ? parts.slice(0, 2).join(' · ') : `${fallbackMoveTimeMs}ms primary`;
 }
 
+function formatEngineTelemetryDetail(
+  stats: EngineSearchStats | null,
+  fallbackDepth: number,
+  fallbackMoveTimeMs: number,
+  isSearchQueued: boolean,
+  isSearching: boolean,
+  isReady: boolean,
+) {
+  if (!stats) {
+    return `Search ${formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)}; ${formatEngineTelemetry(stats, fallbackDepth, fallbackMoveTimeMs, isSearchQueued, isSearching)}`;
+  }
+
+  const parts = [formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)];
+  if (typeof stats.nodes === 'number') {
+    parts.push(`${formatCompactCount(stats.nodes)} nodes`);
+  }
+  if (typeof stats.nps === 'number') {
+    parts.push(`${formatCompactCount(stats.nps)} nps`);
+  }
+  if (typeof stats.hashfull === 'number') {
+    parts.push(`hash ${Math.round(stats.hashfull / 10)}%`);
+  }
+  if (typeof stats.timeMs === 'number') {
+    parts.push(`${stats.timeMs}ms`);
+  }
+  return `Search ${parts.join(' · ')}`;
+}
+
 function formatEvalGap(centipawns: number) {
   const normalized = Math.max(0, Math.round(centipawns));
   return `${(normalized / 100).toFixed(1)} behind`;
@@ -1802,6 +1830,17 @@ function App() {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
   }, [analysisRequestKey, engineEnabled, pvLines]);
+  const engineSearchDetail = useMemo(
+    () => formatEngineTelemetryDetail(
+      searchStats,
+      liveAnalysisPolicy.primary.depth,
+      liveAnalysisPolicy.primary.moveTimeMs,
+      isSearchQueued,
+      isSearching,
+      isReady,
+    ),
+    [isReady, isSearchQueued, isSearching, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, searchStats]
+  );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const liveEvalScore = currentAnalysisPvLines[0]?.score ?? null;
   const displayEvalScore = useMemo(
@@ -3833,7 +3872,7 @@ function App() {
                       <strong>{analysisEngineMode}</strong>
                       <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
                     </div>
-                    <div className="engine-stat">
+                    <div className="engine-stat" title={engineSearchDetail} aria-label={engineSearchDetail}>
                       <span>Search</span>
                       <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
                       <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>

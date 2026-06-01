@@ -943,10 +943,15 @@ async function assertEngineTelemetryDashboard(browser) {
       const searchCard = [...document.querySelectorAll(".engine-stat")]
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
         .find((text) => text.includes("Search")) || "";
+      const searchDetail = [...document.querySelectorAll(".engine-stat")]
+        .map((el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`)
+        .find((text) => text.includes("Search D8/S12")) || "";
       const pvText = document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "";
       return searchCard.includes("D8/S12") &&
         searchCard.includes("789k nps") &&
         searchCard.includes("hash 2%") &&
+        searchDetail.includes("123k nodes") &&
+        searchDetail.includes("156ms") &&
         /Line 1\s*Best/.test(pvText) &&
         pvText.includes("B2→E2");
     }, null, { timeout: 15000 });
@@ -957,6 +962,9 @@ async function assertEngineTelemetryDashboard(browser) {
         .find((text) => text.includes("Search")) || "";
       return {
         searchCard,
+        searchDetail: [...document.querySelectorAll(".engine-stat")]
+          .map((el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`)
+          .find((text) => text.includes("Search D8/S12")) || "",
         firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
         pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
         overflowX: document.body.scrollWidth - document.body.clientWidth,
@@ -967,6 +975,8 @@ async function assertEngineTelemetryDashboard(browser) {
       !telemetry.searchCard.includes("D8/S12") ||
       !telemetry.searchCard.includes("789k nps") ||
       !telemetry.searchCard.includes("hash 2%") ||
+      !telemetry.searchDetail.includes("123k nodes") ||
+      !telemetry.searchDetail.includes("156ms") ||
       !/Engine line 1, Best/.test(telemetry.firstLineLabel) ||
       !/Line 1\s*Best/.test(telemetry.pvText) ||
       !telemetry.pvText.includes("B2→E2") ||
