@@ -1893,46 +1893,52 @@ function App() {
     }
   }, [adjustRightPanelWidth]);
 
-  const startLeftResize = useCallback((event: React.MouseEvent) => {
+  const startLeftResize = useCallback((event: React.PointerEvent<HTMLElement>) => {
     event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     document.body.classList.add('resizing');
     const startX = event.clientX;
     const startW = leftWidth;
     let last = startW;
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const next = startW + e.clientX - startX;
       last = clampPanelWidth(next);
       document.documentElement.style.setProperty('--left-panel-w', last + 'px');
     };
     const onUp = () => {
       document.body.classList.remove('resizing');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
       setLeftWidth(last);
     };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }, [leftWidth]);
 
-  const startRightResize = useCallback((event: React.MouseEvent) => {
+  const startRightResize = useCallback((event: React.PointerEvent<HTMLElement>) => {
     event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     document.body.classList.add('resizing');
     const startX = event.clientX;
     const startW = rightWidth;
     let last = startW;
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const next = startW - (e.clientX - startX);
       last = clampPanelWidth(next);
       document.documentElement.style.setProperty('--right-panel-w', last + 'px');
     };
     const onUp = () => {
       document.body.classList.remove('resizing');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
       setRightWidth(last);
     };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }, [rightWidth]);
 
   const currentModeMeta = GAME_MODES.find((candidate) => candidate.mode === gameMode) ?? GAME_MODES[0];
@@ -3440,7 +3446,7 @@ function App() {
             className="resize-handle resize-handle-right"
             role="separator"
             tabIndex={0}
-            onMouseDown={startLeftResize}
+            onPointerDown={startLeftResize}
             onClick={() => { if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH); }}
             onKeyDown={handleLeftResizeKeyDown}
             aria-label={leftPanelOpen ? `Resize left graph and library panel, ${Math.round(leftWidth)} pixels wide` : 'Expand left graph and library panel'}
@@ -3956,7 +3962,7 @@ function App() {
             className="resize-handle resize-handle-left"
             role="separator"
             tabIndex={0}
-            onMouseDown={startRightResize}
+            onPointerDown={startRightResize}
             onClick={() => { if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH); }}
             onKeyDown={handleRightResizeKeyDown}
             aria-label={rightPanelOpen ? `Resize right analysis panel, ${Math.round(rightWidth)} pixels wide` : 'Expand right analysis panel'}

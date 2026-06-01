@@ -183,6 +183,17 @@ export const ReviewPanel = memo(function ReviewPanel({
                         {focusMoment ? (
                             <>
                                 <strong>{formatReviewQuality(focusMoment.quality)} at ply {focusMoment.ply}</strong>
+                                <div
+                                    className="review-eval-transition"
+                                    data-testid="review-focus-eval"
+                                    aria-label={`Red evaluation changed from ${formatReviewEvalScore(focusMoment.evalBefore)} to ${formatReviewEvalScore(focusMoment.evalAfter)}`}
+                                    title={`Red POV: ${formatReviewEvalTransition(focusMoment.evalBefore, focusMoment.evalAfter)}`}
+                                >
+                                    <span>Eval</span>
+                                    <strong>{formatReviewEvalScore(focusMoment.evalBefore)}</strong>
+                                    <em aria-hidden="true">→</em>
+                                    <strong>{formatReviewEvalScore(focusMoment.evalAfter)}</strong>
+                                </div>
                                 {focusMoment.bestMove ? (
                                     <em>Try {formatUciMove(focusMoment.bestMove)}</em>
                                 ) : null}
@@ -225,6 +236,17 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             <span>{formatUciMove(moment.playedMove)}</span>
                                             <strong>{formatSwing(moment.swing)}</strong>
                                         </div>
+                                        <div
+                                            className="review-moment-eval"
+                                            data-testid={`review-moment-eval-${moment.moveIndex}`}
+                                            aria-label={`Red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}`}
+                                            title={`Red POV: ${formatReviewEvalTransition(moment.evalBefore, moment.evalAfter)}`}
+                                        >
+                                            <span>Eval</span>
+                                            <strong>{formatReviewEvalScore(moment.evalBefore)}</strong>
+                                            <em aria-hidden="true">→</em>
+                                            <strong>{formatReviewEvalScore(moment.evalAfter)}</strong>
+                                        </div>
                                         <p>{moment.note}</p>
                                         {moment.bestMove ? (
                                             <em>Best: {formatUciMove(moment.bestMove)}</em>
@@ -265,4 +287,13 @@ ReviewPanel.displayName = 'ReviewPanel';
 
 function formatSwing(swing: number) {
     return `${Math.round(swing)}cp`;
+}
+
+function formatReviewEvalScore(score: number) {
+    if (!Number.isFinite(score)) return 'n/a';
+    return `${score > 0 ? '+' : ''}${(score / 100).toFixed(2)}`;
+}
+
+function formatReviewEvalTransition(evalBefore: number, evalAfter: number) {
+    return `${formatReviewEvalScore(evalBefore)} → ${formatReviewEvalScore(evalAfter)}`;
 }

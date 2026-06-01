@@ -2591,6 +2591,11 @@ async function assertReviewBestMoveBranchAction(page) {
   await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
   const reviewReadout = await page.evaluate(() => ({
     focus: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    focusEval: document.querySelector('[data-testid="review-focus-eval"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    focusEvalLabel: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("aria-label") || "",
+    focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
+    momentEval: document.querySelector('[data-testid="review-moment-eval-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
     best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2621,6 +2626,13 @@ async function assertReviewBestMoveBranchAction(page) {
     !reviewReadout.focus.includes("Study focus") ||
     !reviewReadout.focus.includes("Mistake at ply 1") ||
     !reviewReadout.focus.includes("B0→C2") ||
+    !reviewReadout.focusEval.includes("0.00") ||
+    !reviewReadout.focusEval.includes("-2.40") ||
+    reviewReadout.focusEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
+    reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
+    !reviewReadout.momentEval.includes("0.00") ||
+    !reviewReadout.momentEval.includes("-2.40") ||
+    reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
     reviewReadout.best !== "Best0" ||
     reviewReadout.good !== "Good1" ||
     reviewReadout.inaccuracy !== "Inaccuracy0" ||

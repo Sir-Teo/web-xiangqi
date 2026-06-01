@@ -3032,6 +3032,44 @@ summary:active {
   line-height: 1.45;
 }
 
+.review-eval-transition,
+.review-moment-eval {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  white-space: normal;
+}
+
+.review-eval-transition span,
+.review-moment-eval span {
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-eval-transition strong,
+.review-moment-eval strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.review-eval-transition em,
+.review-moment-eval em {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .review-moment-header {
   display: flex;
   justify-content: space-between;
