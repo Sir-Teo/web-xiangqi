@@ -2,7 +2,7 @@
 
 let ctx: AudioContext | null = null;
 
-function getCtx(): AudioContext | null {
+function createCtx(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     if (!ctx) {
         try {
@@ -11,10 +11,19 @@ function getCtx(): AudioContext | null {
             return null;
         }
     }
-    // Resume if suspended (browsers require user gesture)
-    if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
+    return ctx;
+}
+
+export function unlockSoundEffects() {
+    const ac = createCtx();
+    if (!ac) return;
+    if (ac.state === 'suspended') {
+        ac.resume().catch(() => {});
     }
+}
+
+function getUnlockedCtx(): AudioContext | null {
+    if (!ctx || ctx.state !== 'running') return null;
     return ctx;
 }
 
@@ -25,7 +34,7 @@ function playTone(
     gain: number,
     decay?: number
 ) {
-    const ac = getCtx();
+    const ac = getUnlockedCtx();
     if (!ac) return;
 
     const osc = ac.createOscillator();
@@ -45,7 +54,7 @@ function playTone(
 }
 
 function playNoise(duration: number, gainValue: number, filterFreq: number) {
-    const ac = getCtx();
+    const ac = getUnlockedCtx();
     if (!ac) return;
 
     const bufferSize = ac.sampleRate * duration;

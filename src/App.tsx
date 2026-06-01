@@ -17,7 +17,7 @@ import { useEngine, type EngineSearchStats, type WdlStats } from './hooks/useEng
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
-import { playMoveSound, playCaptureSound, playCheckSound } from './utils/sounds';
+import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
@@ -728,10 +728,25 @@ function App() {
 
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const soundEnabledRef = useRef(initialSoundEnabled);
-  const handleSoundToggle = useCallback((enabled: boolean) => {
+  const updateSoundEnabled = useCallback((enabled: boolean) => {
     soundEnabledRef.current = enabled;
     setSoundEnabled(enabled);
   }, []);
+  const handleSoundToggle = useCallback((enabled: boolean) => {
+    if (enabled) unlockSoundEffects();
+    updateSoundEnabled(enabled);
+  }, [updateSoundEnabled]);
+
+  useEffect(() => {
+    if (!soundEnabled || typeof window === 'undefined') return;
+    const unlock = () => unlockSoundEffects();
+    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [soundEnabled]);
 
   const [searchDepth, setSearchDepth] = useState(storedPreferences.searchDepth ?? defaultSearchDepth);
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>(storedPreferences.analysisEngineMode ?? 'optimized');
@@ -752,13 +767,13 @@ function App() {
     setAssistMode(preferences.assistMode ?? 'coach');
     setOrientation(preferences.orientation ?? 'red');
     setShowArrows(preferences.showArrows ?? true);
-    handleSoundToggle(preferences.soundEnabled ?? true);
+    updateSoundEnabled(preferences.soundEnabled ?? true);
     setSearchDepth(preferences.searchDepth ?? defaultSearchDepth);
     setAnalysisEngineMode(preferences.analysisEngineMode ?? 'optimized');
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
     handleSpeedChange(preferences.aiSpeed ?? 'normal');
-  }, [defaultSearchDepth, handleSoundToggle, handleSpeedChange]);
+  }, [defaultSearchDepth, handleSpeedChange, updateSoundEnabled]);
 
   const resetPreferences = useCallback(() => {
     clearStoredPreferences();
