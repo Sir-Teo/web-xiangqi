@@ -172,15 +172,17 @@ async function main() {
       await invalidMovePage.getByRole("button", { name: /You play Black/i }).click();
       await invalidMovePage.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
       await invalidMovePage.waitForFunction(() => {
-        return Boolean(document.querySelector(".board-ai-status"));
+        return document.querySelector(".board-ai-status")?.textContent?.includes("AI move rejected");
       }, null, { timeout: 5000 });
       await invalidMovePage.waitForTimeout(800);
       const invalidMoveState = await invalidMovePage.evaluate(() => ({
         fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+        aiStatus: document.querySelector(".board-ai-status")?.textContent?.replace(/\s+/g, " ").trim() || "",
         moveRows: document.querySelectorAll(".mtree-row").length,
         overflowX: document.body.scrollWidth - document.body.clientWidth,
       }));
       assert.match(invalidMoveState.fen, /\sw\s/);
+      assert.match(invalidMoveState.aiStatus, /AI move rejected/);
       assert.equal(invalidMoveState.moveRows, 0);
       assert.equal(invalidMoveState.overflowX <= 2, true, "Rejected AI move should not introduce horizontal overflow.");
       assert.deepEqual(invalidMoveConsoleIssues, []);

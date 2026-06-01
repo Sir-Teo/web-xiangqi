@@ -823,6 +823,7 @@ function App() {
 
   // AI pause/resume state
   const [paused, setPaused] = useState(false);
+  const [aiMoveError, setAiMoveError] = useState<string | null>(null);
   const pausedRef = useRef(false);
   const stepPendingRef = useRef(false);
 
@@ -834,6 +835,7 @@ function App() {
   const resume = useCallback(() => {
     pausedRef.current = false;
     setPaused(false);
+    setAiMoveError(null);
     stepPendingRef.current = false;
   }, []);
 
@@ -842,6 +844,7 @@ function App() {
     stepPendingRef.current = true;
     pausedRef.current = false;
     setPaused(false);
+    setAiMoveError(null);
   }, []);
 
   const {
@@ -1206,7 +1209,15 @@ function App() {
             searchTag,
             strength: aiTag.strength,
           });
-          applyUciMove(choice.move);
+          const moved = applyUciMove(choice.move);
+          if (moved) {
+            setAiMoveError(null);
+          } else {
+            stepPendingRef.current = false;
+            pausedRef.current = true;
+            setPaused(true);
+            setAiMoveError('AI move rejected');
+          }
         }
 
         if (shouldApplyAiMove && (aiSpeedRef.current === 'step' || stepPendingRef.current)) {
@@ -1380,6 +1391,7 @@ function App() {
     handleCancelReview();
     pausedRef.current = false;
     setPaused(false);
+    setAiMoveError(null);
     resetReview();
     resetBoard();
   }, [handleCancelReview, resetBoard, resetReview, stopAnalysis]);
@@ -2640,6 +2652,7 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setAiMoveError(null);
     if (isAiGameModeValue(nextGameMode)) {
       setWorkspaceMode('play');
     }
@@ -2691,6 +2704,7 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setAiMoveError(null);
     if (isAiGameModeValue(nextGameMode)) {
       setWorkspaceMode('play');
     }
@@ -2763,6 +2777,7 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setAiMoveError(null);
     setGameMode(mode);
     if (sharedMoveTree?.length && canLoadSharedTree) {
       loadMoveTree(sharedMoveTree, moves, rawFen);
@@ -2855,6 +2870,7 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setAiMoveError(null);
     setGameMode(game.gameMode);
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
@@ -2899,6 +2915,7 @@ function App() {
     stopAnalysis();
     handleCancelReview();
     resetReview();
+    setAiMoveError(null);
     setGameMode('PvP');
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
@@ -3897,7 +3914,9 @@ function App() {
                 {aiPlayActive && (
                   <div className="board-ai-status">
                     <IconBot />
-                    {paused ? (
+                    {aiMoveError ? (
+                      <span className="ai-status-paused"><IconPause /> {aiMoveError}</span>
+                    ) : paused ? (
                       <span className="ai-status-paused"><IconPause /> AI Paused</span>
                     ) : (isSearching || isSearchQueued) && applyBestMoveRef.current ? (
                       <span className="ai-status-thinking">
