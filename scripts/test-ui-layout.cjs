@@ -298,6 +298,16 @@ async function assertDesktopBoardLayout(page, viewport) {
         .filter((el) => el.tabIndex >= 0 && (el.getAttribute("aria-label") || "").includes("empty"))
         .map((el) => el.getAttribute("aria-label") || ""),
       graphDescribedBy: document.querySelector(".winrate-graph")?.getAttribute("aria-describedby") || "",
+      graphRole: document.querySelector(".winrate-graph")?.getAttribute("role") || "",
+      graphLabel: document.querySelector(".winrate-graph")?.getAttribute("aria-label") || "",
+      graphValueMin: document.querySelector(".winrate-graph")?.getAttribute("aria-valuemin") || "",
+      graphValueMax: document.querySelector(".winrate-graph")?.getAttribute("aria-valuemax") || "",
+      graphValueNow: document.querySelector(".winrate-graph")?.getAttribute("aria-valuenow") || "",
+      graphValueText: document.querySelector(".winrate-graph")?.getAttribute("aria-valuetext") || "",
+      graphOrientation: document.querySelector(".winrate-graph")?.getAttribute("aria-orientation") || "",
+      graphKeyshortcuts: document.querySelector(".winrate-graph")?.getAttribute("aria-keyshortcuts") || "",
+      graphVisualsHidden: document.querySelector(".winrate-graph > g")?.getAttribute("aria-hidden") || "",
+      graphVisualsFocusable: document.querySelector(".winrate-graph > g")?.getAttribute("focusable") || "",
       graphDescriptionText: (() => {
         const id = document.querySelector(".winrate-graph")?.getAttribute("aria-describedby");
         return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
@@ -374,6 +384,17 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (
     layout.graphDescribedBy !== "evaluation-graph-instructions" ||
+    layout.graphRole !== "slider" ||
+    layout.graphLabel !== "Evaluation graph move navigator" ||
+    layout.graphValueMin !== "0" ||
+    layout.graphValueMax !== "0" ||
+    layout.graphValueNow !== "0" ||
+    !layout.graphValueText.includes("Start position") ||
+    !layout.graphValueText.includes("evaluation 0.00") ||
+    layout.graphOrientation !== "horizontal" ||
+    !layout.graphKeyshortcuts.includes("Home") ||
+    layout.graphVisualsHidden !== "true" ||
+    layout.graphVisualsFocusable !== "false" ||
     !layout.graphDescriptionText.includes("Use left and right arrows") ||
     layout.graphLegacyDescription
   ) {

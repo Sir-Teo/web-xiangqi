@@ -132,6 +132,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
     const currentPoint = points[currentPointIndex];
     const currentDisplay = formatEval(currentPoint?.eval ?? 0);
+    const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
     const xTickStep = Math.max(1, Math.ceil(56 / Math.max(1, pixelsPerPoint)));
     const xTickIndexes = useMemo(() => {
@@ -322,7 +323,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 <div className="graph-scroll-inner">
                     <div className={`graph-svg-stage ${isSweepingLoad ? 'graph-svg-stage-sweeping' : ''}`}>
                         <p id="evaluation-graph-instructions" className="sr-only">
-                            Use left and right arrows to move across the line. Press Enter to jump to the hovered point.
+                            Use left and right arrows to move across the line. Press Home or End to jump to the edge of the line.
                         </p>
                         <svg
                             className="winrate-graph"
@@ -337,133 +338,141 @@ export const EvalGraph = React.memo(function EvalGraph({
                             onTouchStart={onTouchStart}
                             onTouchEnd={onTouchEnd}
                             style={{ cursor: onNavigate ? 'pointer' : 'default' }}
-                            aria-label="Evaluation graph"
+                            aria-label="Evaluation graph move navigator"
                             aria-describedby="evaluation-graph-instructions"
-                            role="img"
+                            role="slider"
+                            aria-orientation="horizontal"
+                            aria-valuemin={0}
+                            aria-valuemax={Math.max(0, points.length - 1)}
+                            aria-valuenow={currentPointIndex}
+                            aria-valuetext={currentValueText}
+                            aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End Enter Space"
                             tabIndex={0}
                         >
-                            <rect
-                                className="graph-zone graph-zone-positive"
-                                x={PADDING.left}
-                                y={PADDING.top}
-                                width={plotWidth}
-                                height={baselineY - PADDING.top}
-                            />
-                            <rect
-                                className="graph-zone graph-zone-negative"
-                                x={PADDING.left}
-                                y={baselineY}
-                                width={plotWidth}
-                                height={chartHeight - PADDING.bottom - baselineY}
-                            />
-                            {[1000, 500, 0, -500, -1000].map((score) => {
-                                const y = yFor(score);
-                                return (
-                                    <g key={`grid-${score}`}>
-                                        <line
-                                            className={`graph-grid-line ${score === 0 ? 'graph-grid-line-zero' : ''}`}
-                                            x1={PADDING.left}
-                                            x2={chartWidth - PADDING.right}
-                                            y1={y}
-                                            y2={y}
-                                        />
-                                        <text className="graph-grid-text" x={PADDING.left - 8} y={y + 4} textAnchor="end">
-                                            {score === 0 ? '=' : score > 0 ? `R+${score / 100}` : `B+${Math.abs(score) / 100}`}
-                                        </text>
-                                    </g>
-                                );
-                            })}
-                            {xTickIndexes.map((pointIndex) => {
-                                const pt = computedPoints[pointIndex];
-                                return (
-                                    <g key={`tick-${pointIndex}`}>
-                                        <line
-                                            className="graph-axis-tick"
-                                            x1={pt.x}
-                                            x2={pt.x}
-                                            y1={chartHeight - PADDING.bottom}
-                                            y2={chartHeight - PADDING.bottom + 6}
-                                        />
-                                        <text className="graph-axis-text" x={pt.x} y={chartHeight - PADDING.bottom + 18} textAnchor="middle">
-                                            {pt.moveIndex === -1 ? 'Start' : pt.ply}
-                                        </text>
-                                    </g>
-                                );
-                            })}
                             <defs>
                                 <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor="rgba(16, 185, 129, 0.35)" />
                                     <stop offset="100%" stopColor="rgba(16, 185, 129, 0.03)" />
                                 </linearGradient>
                             </defs>
-                            <path className="graph-area" d={fillPath} fill="url(#graph-gradient)" />
-                            <path className="graph-line" d={linePath} />
-                            <line
-                                x1={computedPoints[currentPointIndex]?.x ?? 0}
-                                x2={computedPoints[currentPointIndex]?.x ?? 0}
-                                y1={PADDING.top}
-                                y2={chartHeight - PADDING.bottom}
-                                className="graph-current-line"
-                                strokeWidth="1.5"
-                                strokeDasharray="4 4"
-                            />
-                            {hoverPointIndex != null ? (
+                            <g aria-hidden="true" focusable="false">
+                                <rect
+                                    className="graph-zone graph-zone-positive"
+                                    x={PADDING.left}
+                                    y={PADDING.top}
+                                    width={plotWidth}
+                                    height={baselineY - PADDING.top}
+                                />
+                                <rect
+                                    className="graph-zone graph-zone-negative"
+                                    x={PADDING.left}
+                                    y={baselineY}
+                                    width={plotWidth}
+                                    height={chartHeight - PADDING.bottom - baselineY}
+                                />
+                                {[1000, 500, 0, -500, -1000].map((score) => {
+                                    const y = yFor(score);
+                                    return (
+                                        <g key={`grid-${score}`}>
+                                            <line
+                                                className={`graph-grid-line ${score === 0 ? 'graph-grid-line-zero' : ''}`}
+                                                x1={PADDING.left}
+                                                x2={chartWidth - PADDING.right}
+                                                y1={y}
+                                                y2={y}
+                                            />
+                                            <text className="graph-grid-text" x={PADDING.left - 8} y={y + 4} textAnchor="end">
+                                                {score === 0 ? '=' : score > 0 ? `R+${score / 100}` : `B+${Math.abs(score) / 100}`}
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                                {xTickIndexes.map((pointIndex) => {
+                                    const pt = computedPoints[pointIndex];
+                                    return (
+                                        <g key={`tick-${pointIndex}`}>
+                                            <line
+                                                className="graph-axis-tick"
+                                                x1={pt.x}
+                                                x2={pt.x}
+                                                y1={chartHeight - PADDING.bottom}
+                                                y2={chartHeight - PADDING.bottom + 6}
+                                            />
+                                            <text className="graph-axis-text" x={pt.x} y={chartHeight - PADDING.bottom + 18} textAnchor="middle">
+                                                {pt.moveIndex === -1 ? 'Start' : pt.ply}
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                                <path className="graph-area" d={fillPath} fill="url(#graph-gradient)" />
+                                <path className="graph-line" d={linePath} />
                                 <line
-                                    x1={computedPoints[hoverPointIndex]?.x ?? 0}
-                                    x2={computedPoints[hoverPointIndex]?.x ?? 0}
+                                    x1={computedPoints[currentPointIndex]?.x ?? 0}
+                                    x2={computedPoints[currentPointIndex]?.x ?? 0}
                                     y1={PADDING.top}
                                     y2={chartHeight - PADDING.bottom}
-                                    className="graph-hover-line"
-                                    strokeWidth="1"
-                                    strokeDasharray="3 4"
+                                    className="graph-current-line"
+                                    strokeWidth="1.5"
+                                    strokeDasharray="4 4"
                                 />
-                            ) : null}
-                            {computedPoints.map((pt, pointIndex) => (
-                                <g key={`point-${pt.ply}`}>
-                                    {pt.quality && isCriticalReviewQuality(pt.quality) ? (
+                                {hoverPointIndex != null ? (
+                                    <line
+                                        x1={computedPoints[hoverPointIndex]?.x ?? 0}
+                                        x2={computedPoints[hoverPointIndex]?.x ?? 0}
+                                        y1={PADDING.top}
+                                        y2={chartHeight - PADDING.bottom}
+                                        className="graph-hover-line"
+                                        strokeWidth="1"
+                                        strokeDasharray="3 4"
+                                    />
+                                ) : null}
+                                {computedPoints.map((pt, pointIndex) => (
+                                    <g key={`point-${pt.ply}`}>
+                                        {pt.quality && isCriticalReviewQuality(pt.quality) ? (
+                                            <circle
+                                                className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
+                                                cx={pt.x}
+                                                cy={pt.y}
+                                                r={6.4}
+                                            />
+                                        ) : null}
                                         <circle
-                                            className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
+                                            className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
                                             cx={pt.x}
                                             cy={pt.y}
-                                            r={6.4}
-                                        />
-                                    ) : null}
-                                    <circle
-                                        className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
-                                        cx={pt.x}
-                                        cy={pt.y}
-                                        r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
-                                        onClick={(event) => {
-                                            event.stopPropagation();
-                                            onNavigate?.(pt.moveIndex);
-                                        }}
-                                    />
-                                    {pt.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
-                                        <g
-                                            className="graph-branch-badge"
+                                            r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 onNavigate?.(pt.moveIndex);
                                             }}
-                                        >
-                                            <rect
-                                                x={pt.x + 6}
-                                                y={pt.y - 19}
-                                                width={18}
-                                                height={12}
-                                                rx={6}
-                                            />
-                                            <text
-                                                x={pt.x + 15}
-                                                y={pt.y - 10}
-                                                textAnchor="middle"
+                                        />
+                                        {pt.branchCount > 1 && (!shouldCompressBadges || pointIndex === currentPointIndex || pointIndex === hoverPointIndex) ? (
+                                            <g
+                                                className="graph-branch-badge"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    onNavigate?.(pt.moveIndex);
+                                                }}
                                             >
-                                                {pt.branchCount}
-                                            </text>
-                                        </g>
-                                    ) : null}
-                                </g>
-                            ))}
+                                                <rect
+                                                    x={pt.x + 6}
+                                                    y={pt.y - 19}
+                                                    width={18}
+                                                    height={12}
+                                                    rx={6}
+                                                />
+                                                <text
+                                                    x={pt.x + 15}
+                                                    y={pt.y - 10}
+                                                    textAnchor="middle"
+                                                >
+                                                    {pt.branchCount}
+                                                </text>
+                                            </g>
+                                        ) : null}
+                                    </g>
+                                ))}
+                            </g>
                         </svg>
                         {isSweepingLoad ? <div className="graph-load-sweep-overlay" aria-hidden="true" data-testid="graph-load-sweep" /> : null}
                     </div>
@@ -515,4 +524,15 @@ function formatPointLabel(point: EvalPoint): string {
     if (point.moveIndex === -1) return 'Start';
     const side = point.mover === 'red' ? 'Red' : 'Black';
     return `${side} ${point.uci ? formatUciMove(point.uci) : ''}`.trim();
+}
+
+function formatGraphValueText(point: EvalPoint): string {
+    const parts = [
+        point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
+        `evaluation ${formatEval(point.eval)}`,
+        point.quality ? formatReviewQuality(point.quality) : '',
+        point.bestMove && point.bestMove !== point.uci ? `engine suggests ${formatUciMove(point.bestMove)}` : '',
+        point.branchCount > 1 ? `${point.branchCount} branches` : '',
+    ].filter(Boolean);
+    return parts.join(', ');
 }
