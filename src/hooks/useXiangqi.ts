@@ -480,13 +480,14 @@ export function useXiangqi() {
             }
         }
 
-        const activeNodeId = activeLine[activeLine.length - 1] ?? ROOT_NODE_ID;
+        const shouldKeepRootSelected = mainLineMoves.length === 0;
+        const activeNodeId = shouldKeepRootSelected ? ROOT_NODE_ID : activeLine[activeLine.length - 1] ?? ROOT_NODE_ID;
         const position = getPositionFromNode(tree, activeNodeId, root);
         nodeCounterRef.current = counter;
         setRootPosition(root);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
-        setCurrentMoveIndex(activeLine.length - 1);
+        setCurrentMoveIndex(shouldKeepRootSelected ? -1 : activeLine.length - 1);
         setBoard(position.board);
         setSideToMove(position.sideToMove);
         setInCheck(position.inCheck);

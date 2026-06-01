@@ -66,6 +66,21 @@ try {
   });
   assert(emptyLegacySave === null, "Empty saves without a startFen should still be rejected.");
 
+  const rootStudySave = library.normalizeSavedGame({
+    id: "root-study",
+    savedAt: 1710000000001,
+    gameMode: "PvP",
+    moves: [],
+    moveTree: [
+      { uci: "B2E2", children: [{ uci: "H9G7" }] },
+      { uci: "B0C2" },
+    ],
+    result: "ongoing",
+  });
+  assert(rootStudySave, "Root-position study trees should be accepted without forcing a mainline move.");
+  assert(rootStudySave.moves.length === 0, "Root-position study saves should keep an empty current line.");
+  assert(rootStudySave.moveTree?.[0]?.uci === "b2e2", "Root-position study tree moves should normalize.");
+
   const uppercaseMoveSave = library.normalizeSavedGame({
     id: "uppercase-move",
     savedAt: 1710000000002,

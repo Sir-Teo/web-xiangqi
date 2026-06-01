@@ -799,6 +799,12 @@ function App() {
       .map((nodeId) => treeNodes[nodeId]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
   }, [activeLineNodeIds, currentMoveIndex, treeNodes]);
+  const hasMoveTreeMoves = useMemo(() => (
+    Boolean(treeNodes[rootNodeId]?.childrenIds.some((childId) => treeNodes[childId]?.record))
+  ), [rootNodeId, treeNodes]);
+  const hasStudyBranches = useMemo(() => (
+    Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+  ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
   }, [currentLineMoves, rootFen]);
@@ -1926,8 +1932,8 @@ function App() {
     : materialSummary.deltaTenths < 0
       ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
       : 'Material even';
-  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN;
-  const canExportCurrentLine = currentMoveIndex >= 0 && moveHistory.length > 0;
+  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves;
+  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves;
   const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
@@ -2145,8 +2151,7 @@ function App() {
   }, [applyMode, closeNewGameMenu, pendingGameMode]);
 
   const buildCurrentPgn = useCallback(() => {
-    const hasStudyBranches = Object.values(treeNodes).some((node) => node.childrenIds.length > 1);
-    if (hasStudyBranches) {
+    if (hasMoveTreeMoves && (hasStudyBranches || currentMoveIndex < 0)) {
       return exportPgnTree(treeNodes, rootNodeId, {
         mainLineNodeIds: activeLineNodeIds,
         gameMode,
@@ -2167,7 +2172,7 @@ function App() {
       result: gameResult,
       startFen: rootFen,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMode, detectedOpening, gameResult, rootFen]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMode, detectedOpening, gameResult, rootFen, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -2213,7 +2218,7 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, detectedOpening, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
-    const moveTree = Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     const share = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
@@ -2237,7 +2242,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -2560,7 +2565,7 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-    const moveTree = Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || moves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     const saved = saveGameToLibrary(gameMode, moves, {
@@ -2590,7 +2595,7 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, 1800);
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);

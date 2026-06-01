@@ -280,7 +280,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     if (!moves || moveTree === null || startFen === null) {
         return null;
     }
-    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen)) {
+    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length)) {
         return null;
     }
 

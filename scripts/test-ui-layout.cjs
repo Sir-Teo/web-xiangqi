@@ -2703,6 +2703,141 @@ async function assertShareTreeRoundTrip(page) {
   }
 }
 
+async function assertRootStudyTreeShareExportSave(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate(() => {
+    localStorage.removeItem("xiangqi-game-library");
+    window.__rootStudyWrites = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__rootStudyWrites.push(String(text));
+        },
+      },
+    });
+  });
+
+  await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await page.locator('.hitbox[data-file="7"][data-rank="9"]').click();
+  await page.locator('.hitbox[data-file="6"][data-rank="7"]').click();
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Start"),
+    null,
+    { timeout: 5000 }
+  );
+
+  const rootActionState = await page.evaluate(() => ({
+    shareDisabled: Boolean(document.querySelector('[data-testid="copy-share-link-btn"]')?.disabled),
+    copyPgnDisabled: Boolean(document.querySelector('[data-testid="copy-pgn-btn"]')?.disabled),
+    saveDisabled: Boolean(document.querySelector('[data-testid="save-game-btn"]')?.disabled),
+    activeMove: Boolean(document.querySelector('[data-testid="move-tree-active"]')),
+    currentPoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    rootActionState.shareDisabled ||
+    rootActionState.copyPgnDisabled ||
+    rootActionState.saveDisabled ||
+    rootActionState.activeMove ||
+    !rootActionState.currentPoint.includes("Start") ||
+    rootActionState.overflowX > 2
+  ) {
+    throw new Error(`Root study actions were not available while staying at Start: ${JSON.stringify(rootActionState)}`);
+  }
+
+  await page.getByTestId("copy-share-link-btn").click();
+  await page.getByTestId("copy-share-link-btn").getByText("Copied").waitFor({ timeout: 5000 });
+  await page.getByTestId("copy-pgn-btn").click();
+  await page.getByTestId("copy-pgn-btn").getByText("Copied").waitFor({ timeout: 5000 });
+  await page.getByTestId("save-game-btn").click();
+  await page.getByTestId("save-game-btn").getByText("Saved").waitFor({ timeout: 5000 });
+
+  const exported = await page.evaluate(() => {
+    const copiedUrl = window.__rootStudyWrites?.[0] ?? "";
+    const copiedPgn = window.__rootStudyWrites?.[1] ?? "";
+    const saved = JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]")[0] || null;
+    const parsed = new URL(copiedUrl);
+    return {
+      copiedUrl,
+      copiedPgn,
+      moves: parsed.searchParams.get("moves"),
+      hasTree: parsed.searchParams.has("tree"),
+      saved,
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    exported.moves !== null ||
+    !exported.hasTree ||
+    !exported.copiedPgn.includes("1. b0c2 (1. b2e2 h9g7) *") ||
+    exported.saved?.moves?.length !== 0 ||
+    exported.saved?.moveTree?.length !== 2 ||
+    exported.saved?.startFen ||
+    exported.overflowX > 2
+  ) {
+    throw new Error(`Root study share/export/save did not preserve a root-position tree: ${JSON.stringify(exported)}`);
+  }
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId(`load-saved-${exported.saved.id}`).click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="graph-current-point"]')?.textContent?.includes("Start"),
+    null,
+    { timeout: 5000 }
+  );
+  const loadedSaved = await page.evaluate(() => ({
+    activeMove: Boolean(document.querySelector('[data-testid="move-tree-active"]')),
+    rowText: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.trim() || "").join(" "),
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    loadedSaved.activeMove ||
+    !loadedSaved.rowText.includes("b2e2") ||
+    !loadedSaved.rowText.includes("h9g7") ||
+    !loadedSaved.variations.includes("b0c2") ||
+    !loadedSaved.fen.includes("RNBAKABNR w - - 0 1") ||
+    loadedSaved.overflowX > 2
+  ) {
+    throw new Error(`Saved root study did not reload at Start with visible branches: ${JSON.stringify(loadedSaved)}`);
+  }
+
+  await page.goto(exported.copiedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const loadedShare = await page.evaluate(() => ({
+    activeMove: Boolean(document.querySelector('[data-testid="move-tree-active"]')),
+    currentPoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    rowText: [...document.querySelectorAll(".mtree-row")].map((el) => el.textContent?.trim() || "").join(" "),
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    loadedShare.activeMove ||
+    !loadedShare.currentPoint.includes("Start") ||
+    !loadedShare.rowText.includes("b2e2") ||
+    !loadedShare.rowText.includes("h9g7") ||
+    !loadedShare.variations.includes("b0c2") ||
+    !loadedShare.fen.includes("RNBAKABNR w - - 0 1") ||
+    loadedShare.overflowX > 2
+  ) {
+    throw new Error(`Root study share link did not preserve the Start view and branches: ${JSON.stringify(loadedShare)}`);
+  }
+}
+
 async function assertOversizedShareTreeWarning(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -4168,6 +4303,7 @@ async function main() {
     await assertMainExportFailureFeedback(page);
     await assertShareLinkRoundTrip(page);
     await assertShareTreeRoundTrip(page);
+    await assertRootStudyTreeShareExportSave(page);
     await assertOversizedShareTreeWarning(page);
     await assertLongShareVariationVisible(page);
     await assertInvalidShareTreeFallsBackToMainline(page);
@@ -4200,7 +4336,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
