@@ -55,6 +55,18 @@ export type SerializableMoveTreeNode = {
     children?: SerializableMoveTreeNode[];
 };
 
+function logMoveDiagnosticWarning(message: string, ...details: unknown[]) {
+    if (import.meta.env.DEV) {
+        console.warn(message, ...details);
+    }
+}
+
+function logMoveDiagnosticError(message: string, ...details: unknown[]) {
+    if (import.meta.env.DEV) {
+        console.error(message, ...details);
+    }
+}
+
 interface RootPosition {
     board: BoardState;
     sideToMove: Side;
@@ -527,7 +539,7 @@ export function useXiangqi() {
 
         const normalizedUci = String(uci || '').trim().toLowerCase();
         if (!/^[a-i][0-9][a-i][0-9]$/.test(normalizedUci)) {
-            console.error('Invalid UCI move format:', uci);
+            logMoveDiagnosticError('Invalid UCI move format:', uci);
             return false;
         }
 
@@ -538,7 +550,7 @@ export function useXiangqi() {
         const to = uciToSquare(toSquare);
 
         if (!from || !to) {
-            console.error('Invalid UCI move format:', uci);
+            logMoveDiagnosticError('Invalid UCI move format:', uci);
             return false;
         }
 
@@ -555,7 +567,7 @@ export function useXiangqi() {
 
         const result = validatePieceMove(parentBoard, mv, parentSide);
         if (!result.ok) {
-            console.warn('Invalid programmatic move (engine move rejected):', result.reason, uci, 'Side:', parentSide, 'Piece:', parentBoard[mv.fromRank][mv.fromFile]);
+            logMoveDiagnosticWarning('Invalid programmatic move (engine move rejected):', result.reason, uci, 'Side:', parentSide, 'Piece:', parentBoard[mv.fromRank][mv.fromFile]);
             return false;
         }
 

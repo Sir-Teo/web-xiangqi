@@ -114,6 +114,76 @@ async function main() {
       assert.match(state.engineText, /Recovering engine|Engine paused after crashes/i);
       assert.equal(state.overflowX <= 2, true, "Engine failure notice should not introduce horizontal overflow.");
       assert.deepEqual(consoleIssues, []);
+
+      const invalidMovePage = await browser.newPage();
+      const invalidMoveConsoleIssues = [];
+      invalidMovePage.on("console", (msg) => {
+        if (msg.type() === "warning" || msg.type() === "error") {
+          invalidMoveConsoleIssues.push(`${msg.type()}: ${msg.text()}`);
+        }
+      });
+      invalidMovePage.on("pageerror", (err) => {
+        invalidMoveConsoleIssues.push(err && err.stack ? err.stack : String(err));
+      });
+      await invalidMovePage.route("**/pikafish.js", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: `
+          window.Pikafish = function Pikafish() {};
+          window.Pikafish.createWorkerEngine = async () => {
+            const listeners = [];
+            const emit = (line) => listeners.forEach((listener) => listener(line));
+            return {
+              variant: "fake-invalid-ai-move",
+              addMessageListener(listener) { listeners.push(listener); },
+              removeMessageListener(listener) {
+                const index = listeners.indexOf(listener);
+                if (index >= 0) listeners.splice(index, 1);
+              },
+              postMessage(command) {
+                if (command === "uci") {
+                  setTimeout(() => {
+                    emit("id name Fake Invalid Move");
+                    emit("option name MultiPV type spin default 1 min 1 max 128");
+                    emit("option name UCI_ShowWDL type check default false");
+                    emit("uciok");
+                  }, 0);
+                } else if (command === "isready") {
+                  setTimeout(() => emit("readyok"), 0);
+                } else if (/^go\\b/.test(command)) {
+                  setTimeout(() => {
+                    emit("info depth 2 multipv 1 score cp 0 pv a0a9");
+                    emit("bestmove a0a9");
+                  }, 20);
+                }
+              },
+              terminate() { return Promise.resolve(); },
+            };
+          };
+        `,
+      }));
+      await invalidMovePage.goto(`${baseUrl}/web-xiangqi/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await invalidMovePage.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await invalidMovePage.getByRole("button", { name: "Play", exact: true }).click();
+      await invalidMovePage.getByRole("button", { name: "Start new game" }).click();
+      await invalidMovePage.getByRole("button", { name: /You play Black/i }).click();
+      await invalidMovePage.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+      await invalidMovePage.waitForFunction(() => {
+        return Boolean(document.querySelector(".board-ai-status"));
+      }, null, { timeout: 5000 });
+      await invalidMovePage.waitForTimeout(800);
+      const invalidMoveState = await invalidMovePage.evaluate(() => ({
+        fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+        moveRows: document.querySelectorAll(".mtree-row").length,
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      }));
+      assert.match(invalidMoveState.fen, /\sw\s/);
+      assert.equal(invalidMoveState.moveRows, 0);
+      assert.equal(invalidMoveState.overflowX <= 2, true, "Rejected AI move should not introduce horizontal overflow.");
+      assert.deepEqual(invalidMoveConsoleIssues, []);
     } finally {
       await browser.close();
     }
