@@ -311,6 +311,12 @@ async function assertDesktopBoardLayout(page, viewport) {
         arrowsFocusable: document.querySelector(".board-arrows-layer")?.getAttribute("focusable") || "",
         piecesHidden: document.querySelector(".pieces-layer")?.getAttribute("aria-hidden") || "",
       },
+      decorativeButtonIcons: {
+        count: document.querySelectorAll("button svg").length,
+        exposed: Array.from(document.querySelectorAll("button svg"))
+          .filter((svg) => svg.getAttribute("aria-hidden") !== "true" || svg.getAttribute("focusable") !== "false")
+          .map((svg) => svg.closest("button")?.getAttribute("aria-label") || svg.closest("button")?.textContent?.replace(/\s+/g, " ").trim() || ""),
+      },
       visibleGraphShortcutPrompts: Array.from(document.querySelectorAll(".panel-copy.small"))
         .filter((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
         .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
@@ -356,6 +362,9 @@ async function assertDesktopBoardLayout(page, viewport) {
     layout.decorativeBoardLayers.piecesHidden !== "true"
   ) {
     throw new Error(`Decorative board layers should stay out of the accessibility tree: ${JSON.stringify(layout.decorativeBoardLayers)}`);
+  }
+  if (layout.decorativeButtonIcons.count === 0 || layout.decorativeButtonIcons.exposed.length > 0) {
+    throw new Error(`Button icons should be decorative because the buttons already carry text or labels: ${JSON.stringify(layout.decorativeButtonIcons)}`);
   }
   if (layout.tabbableHitboxCount !== 32 || layout.emptyHitboxTabStops.length > 0) {
     throw new Error(`Board tab order should include only actionable pieces at the start: ${JSON.stringify(layout)}`);
