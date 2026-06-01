@@ -118,6 +118,15 @@ async function main() {
       if (engineHook.shouldSuppressEngineRuntimeRejection(appRejection)) {
         throw new Error("Non-engine rejection memory error was incorrectly suppressed.");
       }
+      if (engineHook.parseBestMoveUci("bestmove B2E2 ponder h9g7") !== "b2e2") {
+        throw new Error("Engine bestmove parser should normalize strict Xiangqi UCI moves.");
+      }
+      if (engineHook.parseBestMoveUci("bestmove b2e2q") !== "") {
+        throw new Error("Engine bestmove parser should reject suffixed non-Xiangqi moves.");
+      }
+      if (engineHook.parseBestMoveUci("bestmove (none)") !== "") {
+        throw new Error("Engine bestmove parser should ignore missing best moves.");
+      }
 
       const treeNodes = {
         root: { parentId: null },

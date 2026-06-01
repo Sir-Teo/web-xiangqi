@@ -100,6 +100,11 @@ export function shouldSuppressEngineRuntimeRejection(reason: unknown) {
     return hasMemoryAccessOutOfBounds(diagnostic) && hasPikafishRuntimeHint(diagnostic);
 }
 
+export function parseBestMoveUci(message: string) {
+    const match = String(message).trim().match(/^bestmove\s+([a-i][0-9][a-i][0-9])(?:\s|$)/i);
+    return match?.[1].toLowerCase() ?? '';
+}
+
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
@@ -597,8 +602,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             stopRequestedRef.current = false;
             const completedSearchTag = activeSearchTagRef.current;
             activeSearchTagRef.current = null;
-            const moveMatch = msg.match(/bestmove\s+([a-i]\d[a-i]\d[a-z]?)/i);
-            const uciMove = moveMatch?.[1] ?? '';
+            const uciMove = parseBestMoveUci(msg);
             onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice());
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
