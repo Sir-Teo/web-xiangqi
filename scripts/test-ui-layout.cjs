@@ -35,6 +35,10 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource }) {
   try {
     window.localStorage?.removeItem("xiangqi-app-preferences");
   } catch (_) {}
+  try {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  } catch (_) {}
   window.__engineCommands = [];
   ${setupSource}
   window.Pikafish = function Pikafish() {};
@@ -82,6 +86,12 @@ async function installFakePikafish(page, fakeConfig) {
     contentType: "application/javascript",
     body: source,
   }));
+}
+
+async function newIsolatedPage(browser, viewport = { width: 1280, height: 820 }) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  return { context, page };
 }
 
 function rectWithinLayout(rects) {
@@ -450,7 +460,7 @@ async function assertAiNewGameSwitchesToPlayWorkspace(page) {
 }
 
 async function assertBeginnerAiUsesCandidatePv(browser) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  const { context, page } = await newIsolatedPage(browser);
   try {
     await installFakePikafish(page, {
       variant: "fake-pv",
@@ -539,12 +549,12 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
       throw new Error(`Beginner AI did not pick the tested candidate move cleanly: ${JSON.stringify(state)}`);
     }
   } finally {
-    await page.close();
+    await context.close();
   }
 }
 
 async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  const { context, page } = await newIsolatedPage(browser);
   try {
     await installFakePikafish(page, {
       variant: "fake-analysis-ai-guard",
@@ -640,12 +650,12 @@ async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
       throw new Error(`Analysis workspace auto-played or exposed AI controls: ${JSON.stringify(state)}`);
     }
   } finally {
-    await page.close();
+    await context.close();
   }
 }
 
 async function assertEngineLoaderFailureShowsNotice(browser) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  const { context, page } = await newIsolatedPage(browser);
   try {
     await page.route("**/pikafish.js", (route) => route.abort("failed"));
     await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -669,7 +679,7 @@ async function assertEngineLoaderFailureShowsNotice(browser) {
       throw new Error(`Engine loader failure notice introduced horizontal overflow: ${state.overflowX}`);
     }
   } finally {
-    await page.close();
+    await context.close();
   }
 }
 
@@ -848,7 +858,7 @@ async function assertEnginePvLineControl(page) {
 }
 
 async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  const { context, page } = await newIsolatedPage(browser);
   try {
     await installFakePikafish(page, {
       variant: "fake-pv-play",
@@ -946,7 +956,7 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
       throw new Error(`Playing an engine PV stored the root eval on the child move: ${JSON.stringify(state)}`);
     }
   } finally {
-    await page.close();
+    await context.close();
   }
 }
 

@@ -2934,7 +2934,6 @@ function App() {
             <div className="new-game-menu-header">
               <div className="new-game-menu-copy">
                 <h2>New Game</h2>
-                <p>Choose a mode, set the AI before you start, or drop straight into a custom FEN.</p>
               </div>
               <button
                 className="settings-close-btn"

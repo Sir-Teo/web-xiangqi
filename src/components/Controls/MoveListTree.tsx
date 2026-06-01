@@ -49,7 +49,7 @@ export const MoveListTree = memo(function MoveListTree({
     if (activeLineNodeIds.length === 0) {
         return (
             <div className="empty-state">
-                <p>Play some moves - branches will appear here.</p>
+                <p>No moves yet.</p>
             </div>
         );
     }
