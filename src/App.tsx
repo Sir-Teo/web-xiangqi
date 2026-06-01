@@ -2191,6 +2191,12 @@ function App() {
     return inCheck ? 'checkmate' : 'stalemate';
   }, [board, inCheck, sideToMove, visibleGameResult]);
   const aiMoveSearchActive = isAiTurn && (isSearching || isSearchQueued);
+  const boardAiStatusText = aiMoveError
+    ?? (paused
+      ? 'AI paused'
+      : aiMoveSearchActive && applyBestMoveRef.current
+        ? 'AI thinking'
+        : '');
   const bottomEngineStatus = !isReady
     ? engineNotice?.text ?? 'Loading engine'
     : isSearchQueued
@@ -3917,13 +3923,18 @@ function App() {
             <div className="board-workspace">
               <div className="board-wrap">
                 {aiPlayActive && (
-                  <div className="board-ai-status">
+                  <div
+                    className="board-ai-status"
+                    role={boardAiStatusText ? 'status' : undefined}
+                    aria-live={boardAiStatusText ? 'polite' : undefined}
+                    aria-label={boardAiStatusText || undefined}
+                  >
                     <IconBot />
                     {aiMoveError ? (
                       <span className="ai-status-paused"><IconPause /> {aiMoveError}</span>
                     ) : paused ? (
                       <span className="ai-status-paused"><IconPause /> AI Paused</span>
-                    ) : (isSearching || isSearchQueued) && applyBestMoveRef.current ? (
+                    ) : boardAiStatusText === 'AI thinking' ? (
                       <span className="ai-status-thinking">
                         <span className="thinking-dots">
                           <span /><span /><span />

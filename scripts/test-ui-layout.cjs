@@ -960,6 +960,32 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   ) {
     throw new Error(`AI playback controls are not fully accessible: ${JSON.stringify(speedA11y)}`);
   }
+
+  const pauseAiButton = page.getByRole("button", { name: "Pause AI game", exact: true });
+  const pauseAiButtonCount = await pauseAiButton.count();
+  if (pauseAiButtonCount !== 1) {
+    throw new Error(`Expected one AI pause button, found ${pauseAiButtonCount}`);
+  }
+  await pauseAiButton.click();
+  const pausedA11y = await page.evaluate(() => {
+    const status = document.querySelector(".board-ai-status");
+    return {
+      role: status?.getAttribute("role") || "",
+      live: status?.getAttribute("aria-live") || "",
+      label: status?.getAttribute("aria-label") || "",
+      text: status?.textContent?.replace(/\s+/g, " ").trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (
+    pausedA11y.role !== "status" ||
+    pausedA11y.live !== "polite" ||
+    pausedA11y.label !== "AI paused" ||
+    !/AI Paused/.test(pausedA11y.text) ||
+    pausedA11y.overflowX > 2
+  ) {
+    throw new Error(`Paused AI board status is not announced cleanly: ${JSON.stringify(pausedA11y)}`);
+  }
 }
 
 async function assertAiNewGameSwitchesToPlayWorkspace(page) {
