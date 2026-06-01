@@ -140,7 +140,7 @@ export const EvalGraph = React.memo(function EvalGraph({
 
     const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
     const currentPoint = points[currentPointIndex];
-    const currentDisplay = formatEval(currentPoint?.eval ?? 0);
+    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? 0);
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
     const pointRenderStep = pixelsPerPoint >= MIN_POINT_MARKER_GAP_PX
@@ -335,7 +335,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 </div>
                 <div className="graph-summary-card">
                     <span>Current</span>
-                    <strong>{currentDisplay}</strong>
+                    <strong>{currentPerspectiveDisplay}</strong>
                 </div>
                 <div className="graph-summary-card">
                     <span>Swing</span>
@@ -517,7 +517,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             }}
                         >
                             <strong>{formatPointLabel(tooltipPoint)}</strong>
-                            <span>{formatEval(tooltipPoint.eval)}</span>
+                            <span>{formatRedPovEval(tooltipPoint.eval)}</span>
                             {tooltipPoint?.quality ? (
                                 <em className={`graph-tooltip-quality ${tooltipQualityClass}`}>
                                     {formatReviewQuality(tooltipPoint.quality)}
@@ -543,11 +543,11 @@ export const EvalGraph = React.memo(function EvalGraph({
             </div>
             <div className="graph-legend">
                 <span data-testid="graph-current-point">{currentPoint?.moveIndex === -1 ? 'Start Position' : `${formatPointLabel(currentPoint)} · Ply ${currentPoint?.ply ?? 0}`}</span>
-                <strong>{currentDisplay}</strong>
+                <strong>{currentPerspectiveDisplay}</strong>
             </div>
             <div className="graph-extrema">
                 <span>Peak Red {formatEval(highestEval)}</span>
-                <span>Peak Black {formatEval(lowestEval)}</span>
+                <span>Peak Black {formatEval(-lowestEval)}</span>
             </div>
         </div>
     );
@@ -560,6 +560,10 @@ function formatEval(score: number): string {
     return `${sign}${(score / 100).toFixed(2)}`;
 }
 
+function formatRedPovEval(score: number): string {
+    return `Red POV ${formatEval(score)}`;
+}
+
 function formatPointLabel(point: EvalPoint): string {
     if (point.moveIndex === -1) return 'Start';
     const side = point.mover === 'red' ? 'Red' : 'Black';
@@ -569,7 +573,7 @@ function formatPointLabel(point: EvalPoint): string {
 function formatGraphValueText(point: EvalPoint): string {
     const parts = [
         point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
-        `evaluation ${formatEval(point.eval)}`,
+        `Red POV evaluation ${formatEval(point.eval)}`,
         point.quality ? formatReviewQuality(point.quality) : '',
         typeof point.winPercentLoss === 'number' && point.mover !== 'start'
             ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)

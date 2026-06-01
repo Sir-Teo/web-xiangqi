@@ -464,7 +464,7 @@ async function assertDesktopBoardLayout(page, viewport) {
     layout.graphValueMax !== "0" ||
     layout.graphValueNow !== "0" ||
     !layout.graphValueText.includes("Start position") ||
-    !layout.graphValueText.includes("evaluation 0.00") ||
+    !layout.graphValueText.includes("Red POV evaluation 0.00") ||
     layout.graphOrientation !== "horizontal" ||
     !layout.graphKeyshortcuts.includes("Home") ||
     layout.graphVisualsHidden !== "true" ||
@@ -1727,7 +1727,7 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
     if (
       !state.rows.includes("b0c2") ||
       !state.graphPoint.includes("Red B0") ||
-      state.graphEval !== "0.00" ||
+      state.graphEval !== "Red POV 0.00" ||
       state.goCount < 1 ||
       state.overflowX > 2
     ) {
