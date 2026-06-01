@@ -520,6 +520,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
                 threads,
                 hashMB,
+                initTimeoutMs: readyTimeoutMs,
             }));
         } catch (err: any) {
             clearEngineBootTimer();

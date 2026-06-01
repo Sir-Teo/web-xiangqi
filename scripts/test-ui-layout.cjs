@@ -128,7 +128,11 @@ async function installFakePikafish(page, fakeConfig) {
       window.__engineCommandsByInstance = [];
     }
     window.Pikafish = function Pikafish() {};
-    window.Pikafish.createWorkerEngine = async () => {
+    window.Pikafish.createWorkerEngine = async (engineOptions = {}) => {
+      window.__createWorkerEngineOptions = [
+        ...(window.__createWorkerEngineOptions || []),
+        engineOptions,
+      ];
       if (config.variant === "fake-create-hangs") {
         return new Promise(() => {});
       }
@@ -1239,6 +1243,7 @@ async function assertEngineCreateTimeoutShowsNotice(browser) {
     const state = await page.evaluate(() => ({
       engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
       commands: window.__engineCommands || [],
+      options: window.__createWorkerEngineOptions || [],
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
     if (!/Recovering engine|Engine paused after crashes/i.test(state.engineText)) {
@@ -1246,6 +1251,9 @@ async function assertEngineCreateTimeoutShowsNotice(browser) {
     }
     if (state.commands.length !== 0) {
       throw new Error(`Hanging engine constructor should not have reached UCI commands: ${JSON.stringify(state.commands)}`);
+    }
+    if (!state.options.some((option) => option.initTimeoutMs === 120)) {
+      throw new Error(`Hanging engine constructor did not receive the app boot timeout: ${JSON.stringify(state.options)}`);
     }
     if (state.overflowX > 2) {
       throw new Error(`Hanging engine constructor notice introduced horizontal overflow: ${state.overflowX}`);
