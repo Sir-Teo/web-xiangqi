@@ -35,6 +35,7 @@ try {
   compileTsModule("src/utils/shareTree.ts");
   compileTsModule("src/utils/gameExport.ts");
   compileTsModule("src/utils/moveImport.ts");
+  compileTsModule("src/utils/aiOpponent.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
   const shareTree = require(path.join(tempDir, "shareTree.js"));
@@ -42,6 +43,7 @@ try {
   const moveImport = require(path.join(tempDir, "moveImport.js"));
   const moveNotation = require(path.join(tempDir, "moveNotation.js"));
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
+  const aiOpponent = require(path.join(tempDir, "aiOpponent.js"));
   const customFen = "4k4/9/9/9/4p4/9/9/9/9/4K4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -516,6 +518,32 @@ try {
     moveNotation.formatUciLine(["b2e2", "h9g7", "b0c2"], 2) === "B2→E2 H9→G7 +1",
     "Move line formatter should mark hidden continuation moves."
   );
+
+  const beginnerChoice = aiOpponent.chooseAiMoveFromPv({
+    fallbackMove: "h0g2",
+    fallbackScore: 50,
+    pvLines: [
+      { score: 50, moves: ["h0g2"], multipv: 0, searchTag: "ai-test" },
+      { score: 10, moves: ["b0c2"], multipv: 1, searchTag: "ai-test" },
+    ],
+    searchTag: "ai-test",
+    strength: 1,
+    random: () => 0.99,
+  });
+  assert(beginnerChoice.move === "b0c2", "Beginner AI should still be able to choose a legal lower-ranked PV candidate.");
+
+  const suffixedCandidateChoice = aiOpponent.chooseAiMoveFromPv({
+    fallbackMove: "h0g2",
+    fallbackScore: 50,
+    pvLines: [
+      { score: 50, moves: ["h0g2"], multipv: 0, searchTag: "ai-test" },
+      { score: 10, moves: ["b0c2q"], multipv: 1, searchTag: "ai-test" },
+    ],
+    searchTag: "ai-test",
+    strength: 1,
+    random: () => 0.99,
+  });
+  assert(suffixedCandidateChoice.move === "h0g2", "AI candidate selection should ignore suffixed non-Xiangqi moves.");
 
   const startBoard = xiangqi.parseFenBoard(xiangqi.START_FEN);
   const strictMove = xiangqi.validateMoveStr("b2e2junk", startBoard, "w");

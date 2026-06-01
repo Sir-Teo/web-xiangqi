@@ -74,7 +74,7 @@ export function describeAiStrength(strength: AiStrength) {
 }
 
 function isUciMove(move: string) {
-  return /^[a-i][0-9][a-i][0-9][a-z]?$/i.test(move);
+  return /^[a-i][0-9][a-i][0-9]$/i.test(move);
 }
 
 export function chooseAiMoveFromPv({

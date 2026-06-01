@@ -548,8 +548,14 @@ export function useXiangqi() {
         const parentNode = treeNodes[parentNodeId];
         if (!parentNode) return false;
 
-        const fromSquare = uci.substring(0, 2);
-        const toSquare = uci.substring(2, 4);
+        const normalizedUci = String(uci || '').trim().toLowerCase();
+        if (!/^[a-i][0-9][a-i][0-9]$/.test(normalizedUci)) {
+            console.error('Invalid UCI move format:', uci);
+            return false;
+        }
+
+        const fromSquare = normalizedUci.substring(0, 2);
+        const toSquare = normalizedUci.substring(2, 4);
 
         const from = uciToSquare(fromSquare);
         const to = uciToSquare(toSquare);
@@ -567,7 +573,7 @@ export function useXiangqi() {
             fromRank: from.rank,
             toFile: to.file,
             toRank: to.rank,
-            raw: uci
+            raw: normalizedUci
         };
 
         const result = validatePieceMove(parentBoard, mv, parentSide);
