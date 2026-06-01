@@ -2274,6 +2274,28 @@ async function assertInvalidShareLinkFeedback(page) {
   if (state.overflowX > 2 || state.hitboxCount !== 90) {
     throw new Error(`Invalid share link warning broke layout: ${JSON.stringify(state)}`);
   }
+
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=not-a-xiangqi-move", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("share-link-warning").waitFor({ timeout: 5000 });
+
+  const malformedState = await page.evaluate(() => ({
+    warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.trim() || "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    !malformedState.warning.includes("Shared link not loaded") ||
+    !malformedState.activePoint.includes("Start") ||
+    !malformedState.fen.includes(" w - - 0 1") ||
+    malformedState.overflowX > 2
+  ) {
+    throw new Error(`Malformed share move parameter did not show feedback: ${JSON.stringify(malformedState)}`);
+  }
 }
 
 async function assertMoveLineFileImport(page) {

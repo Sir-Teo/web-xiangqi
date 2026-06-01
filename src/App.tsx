@@ -2295,6 +2295,11 @@ function App() {
     const rawTree = params.get('tree');
     const sharedMoveTree = decodeSavedMoveTreeParam(rawTree);
     const rawMode = params.get('mode');
+    if (isMoveImportTextTooLarge(rawMoves)) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      console.warn('Ignored oversized shared Xiangqi line.');
+      return;
+    }
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
     if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
@@ -2303,7 +2308,7 @@ function App() {
       return;
     }
     if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
-      if (rawTree) {
+      if (rawTree || rawMoves.trim()) {
         setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
       }
       return;
