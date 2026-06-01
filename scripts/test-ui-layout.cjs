@@ -616,11 +616,41 @@ async function assertBoardKeyboardNavigation(page) {
   const moveState = await page.evaluate(() => ({
     fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
     movedPiece: document.querySelector('.hitbox[data-file="2"][data-rank="2"]')?.getAttribute("aria-label") || "",
+    timelineText: document.querySelector(".wc-meta strong")?.textContent?.trim() || "",
+    scrubberValue: document.querySelector(".wc-scrubber")?.value || "",
+    scrubberLabel: document.querySelector(".wc-scrubber")?.getAttribute("aria-label") || "",
+    scrubberValueText: document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
 
-  if (moveState.fen === beforeFen || !moveState.movedPiece.includes("red horse") || moveState.overflowX > 2) {
+  if (
+    moveState.fen === beforeFen ||
+    !moveState.movedPiece.includes("red horse") ||
+    moveState.timelineText !== "1 / 1" ||
+    moveState.scrubberValue !== "1" ||
+    moveState.scrubberValueText !== "Move 1 of 1 move" ||
+    !moveState.scrubberLabel.includes("Move 1 of 1 move") ||
+    moveState.overflowX > 2
+  ) {
     throw new Error(`Board keyboard activation did not play the focused move: ${JSON.stringify(moveState)}`);
+  }
+
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  const startTimelineState = await page.evaluate(() => ({
+    timelineText: document.querySelector(".wc-meta strong")?.textContent?.trim() || "",
+    scrubberValue: document.querySelector(".wc-scrubber")?.value || "",
+    scrubberLabel: document.querySelector(".wc-scrubber")?.getAttribute("aria-label") || "",
+    scrubberValueText: document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext") || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    startTimelineState.timelineText !== "Start / 1" ||
+    startTimelineState.scrubberValue !== "0" ||
+    startTimelineState.scrubberValueText !== "Start position, 0 of 1 move" ||
+    !startTimelineState.scrubberLabel.includes("Start position, 0 of 1 move") ||
+    startTimelineState.overflowX > 2
+  ) {
+    throw new Error(`Move timeline did not describe the start position: ${JSON.stringify(startTimelineState)}`);
   }
 
   const qualityLegendCount = await page.locator(".mtree-quality-legend").count();
@@ -4762,6 +4792,9 @@ async function assertMobileBoardLayout(page, viewport) {
       boardSurface: toRect(".xiangqi-board"),
       mobileHeader: toRect(".mobile-board-header"),
       mobileNav: toRect(".mobile-board-nav"),
+      mobileFirstLabel: document.querySelector(".mobile-board-nav .mobile-nav-btn")?.getAttribute("aria-label") || "",
+      mobilePositionText: document.querySelector(".mobile-nav-label")?.textContent?.trim() || "",
+      mobilePositionLabel: document.querySelector(".mobile-nav-label")?.getAttribute("aria-label") || "",
       bottomTab: toRect(".mobile-tab-bar"),
       hitboxCount: document.querySelectorAll(".hitbox").length,
     };
@@ -4774,6 +4807,13 @@ async function assertMobileBoardLayout(page, viewport) {
   }
   if (layout.hitboxCount !== 90) {
     throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
+  }
+  if (
+    layout.mobileFirstLabel !== "Go to first position" ||
+    layout.mobilePositionText !== "No moves" ||
+    layout.mobilePositionLabel !== "No moves"
+  ) {
+    throw new Error(`Mobile move navigation labels were unclear: ${JSON.stringify(layout)}`);
   }
   rectWithinLayout(layout);
 }

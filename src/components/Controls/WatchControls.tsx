@@ -59,13 +59,21 @@ export const WatchControls = memo(function WatchControls({
 }: Props) {
     const aiActive = gameMode !== 'PvP';
     const stepMode = aiSpeed === 'step';
-    const scrubberValue = currentMoveIndex + 1;
-    const scrubberMax = Math.max(totalMoves, 1);
-    const scrubberValueText = totalMoves === 0
+    const totalMoveCount = Math.max(0, totalMoves);
+    const currentPly = Math.max(0, Math.min(currentMoveIndex + 1, totalMoveCount));
+    const scrubberValue = currentPly;
+    const scrubberMax = Math.max(totalMoveCount, 1);
+    const moveCountNoun = totalMoveCount === 1 ? 'move' : 'moves';
+    const scrubberValueText = totalMoveCount === 0
         ? 'No moves'
-        : scrubberValue <= 0
-            ? `Start position, 0 of ${totalMoves} moves`
-            : `Move ${Math.min(scrubberValue, totalMoves)} of ${totalMoves}`;
+        : currentPly <= 0
+            ? `Start position, 0 of ${totalMoveCount} ${moveCountNoun}`
+            : `Move ${currentPly} of ${totalMoveCount} ${moveCountNoun}`;
+    const timelineText = totalMoveCount === 0
+        ? 'No moves'
+        : currentPly <= 0
+            ? `Start / ${totalMoveCount}`
+            : `${currentPly} / ${totalMoveCount}`;
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -206,7 +214,7 @@ export const WatchControls = memo(function WatchControls({
             <div className="wc-timeline">
                 <div className="wc-meta">
                     <span>Move</span>
-                    <strong>{Math.max(0, currentMoveIndex + 1)} / {totalMoves}</strong>
+                    <strong aria-live="polite">{timelineText}</strong>
                 </div>
                 <input
                     type="range"
@@ -214,9 +222,9 @@ export const WatchControls = memo(function WatchControls({
                     min={0}
                     max={scrubberMax}
                     value={scrubberValue}
-                    onChange={(e) => onScrub(Number(e.target.value) - 1)}
-                    disabled={totalMoves === 0}
-                    aria-label="Jump to move"
+                    onChange={(e) => onScrub(Math.max(0, Number(e.target.value)) - 1)}
+                    disabled={totalMoveCount === 0}
+                    aria-label={`Jump to move: ${scrubberValueText}`}
                     aria-valuetext={scrubberValueText}
                 />
             </div>

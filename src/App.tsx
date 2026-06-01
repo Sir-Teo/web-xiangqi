@@ -1327,6 +1327,18 @@ function App() {
     jumpToMove(moveHistory.length - 1);
   }, [jumpToMove, moveHistory.length]);
   const viewedPly = Math.max(0, currentMoveIndex + 1);
+  const timelinePly = Math.min(viewedPly, moveHistory.length);
+  const timelineMoveNoun = moveHistory.length === 1 ? 'move' : 'moves';
+  const timelineA11yText = moveHistory.length === 0
+    ? 'No moves'
+    : timelinePly <= 0
+      ? `Start position, 0 of ${moveHistory.length} ${timelineMoveNoun}`
+      : `Move ${timelinePly} of ${moveHistory.length} ${timelineMoveNoun}`;
+  const timelineCompactText = moveHistory.length === 0
+    ? 'No moves'
+    : timelinePly <= 0
+      ? `Start / ${moveHistory.length}`
+      : `${timelinePly} / ${moveHistory.length}`;
   const currentLineSignature = useMemo(
     () => makeReviewLineSignature(activeLineNodeIds, treeNodes),
     [activeLineNodeIds, treeNodes]
@@ -4060,10 +4072,10 @@ function App() {
           </div>
           {isMobile && (
             <div className="mobile-board-nav">
-              <button className="mobile-nav-btn" type="button" onClick={goToFirstMove} disabled={!canGoBack} aria-label="Go to first move"><IconSkipBack /></button>
+              <button className="mobile-nav-btn" type="button" onClick={goToFirstMove} disabled={!canGoBack} aria-label="Go to first position"><IconSkipBack /></button>
               <button className="mobile-nav-btn" type="button" onClick={goToPreviousMove} disabled={!canGoBack} aria-label="Go to previous move"><IconChevronLeft /></button>
-              <span className="mobile-nav-label">
-                {currentMoveIndex < 0 ? 'Start' : `${currentMoveIndex + 1} / ${moveHistory.length}`}
+              <span className="mobile-nav-label" aria-label={timelineA11yText}>
+                {timelineCompactText}
               </span>
               <button className="mobile-nav-btn" type="button" onClick={goToNextMove} disabled={!canGoForward} aria-label="Go to next move"><IconChevronRight /></button>
               <button className="mobile-nav-btn" type="button" onClick={goToLatestMove} disabled={!canGoForward} aria-label="Go to latest move"><IconSkipForward /></button>
