@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("assert");
+const playwright = require("playwright");
 
 process.env.SERVE_DEMO_TEST = "1";
 
@@ -76,6 +77,46 @@ async function main() {
     assert.equal(nnueHead.status, 200);
     assert.equal(nnueHead.headers.get("cache-control"), "public, max-age=0, must-revalidate");
     assert(Number(nnueHead.headers.get("content-length")) > 50_000_000);
+
+    const browser = await playwright.chromium.launch({
+      headless: true,
+      args: ["--no-sandbox"],
+    });
+    try {
+      const page = await browser.newPage();
+      const consoleIssues = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "warning" || msg.type() === "error") {
+          consoleIssues.push(`${msg.type()}: ${msg.text()}`);
+        }
+      });
+      page.on("pageerror", (err) => {
+        consoleIssues.push(err && err.stack ? err.stack : String(err));
+      });
+      await page.route("**/pikafish.js", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: "window.Pikafish = function Pikafish() {};",
+      }));
+      await page.goto(`${baseUrl}/web-xiangqi/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForFunction(() => {
+        const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
+        return text && !/Loading engine/i.test(text);
+      }, null, { timeout: 10000 });
+      const state = await page.evaluate(() => ({
+        engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      }));
+      assert.match(state.engineText, /Recovering engine|Engine paused after crashes/i);
+      assert.equal(state.overflowX <= 2, true, "Engine failure notice should not introduce horizontal overflow.");
+      assert.deepEqual(consoleIssues, []);
+    } finally {
+      await browser.close();
+    }
   } finally {
     await new Promise((resolve, reject) => {
       server.close((err) => err ? reject(err) : resolve());

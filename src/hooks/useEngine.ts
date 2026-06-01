@@ -84,6 +84,18 @@ function getEngineReadyTimeoutMs() {
     return ENGINE_READY_TIMEOUT_MS;
 }
 
+function logEngineDiagnosticWarning(message: string, ...details: unknown[]) {
+    if (import.meta.env.DEV) {
+        console.warn(message, ...details);
+    }
+}
+
+function logEngineDiagnosticError(message: string, ...details: unknown[]) {
+    if (import.meta.env.DEV) {
+        console.error(message, ...details);
+    }
+}
+
 function hasPikafishRuntimeHint(value: string) {
     const normalized = value.toLowerCase();
     return normalized.includes('pikafish.js') ||
@@ -322,7 +334,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             engineRef.current.postMessage(cmd);
             appendOutputLine(`> ${cmd}`);
         } else {
-            console.warn("Engine not ready, ignoring command:", cmd);
+            logEngineDiagnosticWarning("Engine not ready, ignoring command:", cmd);
         }
     }, [appendOutputLine]);
 
@@ -449,7 +461,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             activeSearchSignatureRef.current = '';
             clearQueuedSearch();
             onWorkerErrorRef.current?.('[boot-error] Pikafish loader finished without the engine API.');
-            console.warn('Pikafish loader finished without the engine API.');
+            logEngineDiagnosticWarning('Pikafish loader finished without the engine API.');
             return;
         }
 
@@ -526,7 +538,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 activeSearchSignatureRef.current = '';
                 clearQueuedSearch();
                 onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
-                console.error("Failed to boot Pikafish engine", err);
+                logEngineDiagnosticError("Failed to boot Pikafish engine", err);
             });
     }, [clearBufferedInfoState, clearEngineReadyTimer, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
 
@@ -600,7 +612,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             clearQueuedSearch();
             const message = `[boot-error] Pikafish loader failed: ${reason}.`;
             onWorkerErrorRef.current?.(message);
-            console.warn(message);
+            logEngineDiagnosticWarning(message);
         };
 
         const start = () => {

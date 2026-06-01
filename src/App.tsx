@@ -422,6 +422,12 @@ function logDiagnosticWarning(message: string, ...details: unknown[]) {
   }
 }
 
+function logDiagnosticError(message: string, ...details: unknown[]) {
+  if (import.meta.env.DEV) {
+    console.error(message, ...details);
+  }
+}
+
 function makeAnalysisTag(phase: 'primary' | 'deepen', requestKey: string) {
   return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
 }
@@ -1101,7 +1107,7 @@ function App() {
     }
 
     if (engineRecoveryTimestampsRef.current.length > 3) {
-      console.error('Pikafish worker crashed repeatedly; automatic restart suppressed.', message);
+      logDiagnosticError('Pikafish worker crashed repeatedly; automatic restart suppressed.', message);
       setEngineNotice({ tone: 'danger', text: 'Engine paused after crashes' });
       return;
     }
