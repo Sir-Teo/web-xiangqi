@@ -345,6 +345,7 @@ export function LibraryPanel({
                     className="lib-rename-form"
                     onSubmit={(e) => { e.preventDefault(); commitEdit(game.id); }}
                     data-testid={`rename-form-saved-${game.id}`}
+                    aria-label={`Rename ${savedGameLabel}`}
                   >
                     <input
                       autoFocus
@@ -354,8 +355,25 @@ export function LibraryPanel({
                       placeholder="Game name…"
                       aria-label={`Rename ${savedGameLabel}`}
                     />
-                    <button type="submit" className="chip-btn">Save</button>
-                    <button type="button" className="chip-btn" onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}>Cancel</button>
+                    <button
+                      type="submit"
+                      className="chip-btn"
+                      aria-label={`Save rename for ${savedGameLabel}`}
+                      title={`Save rename for ${savedGameLabel}`}
+                      data-testid={`save-rename-saved-${game.id}`}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="chip-btn"
+                      onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}
+                      aria-label={`Cancel rename for ${savedGameLabel}`}
+                      title={`Cancel rename for ${savedGameLabel}`}
+                      data-testid={`cancel-rename-saved-${game.id}`}
+                    >
+                      Cancel
+                    </button>
                   </form>
                 ) : (
                   <button

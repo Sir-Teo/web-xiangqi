@@ -4186,8 +4186,29 @@ async function assertLibraryMutationFailureFeedback(page) {
 
   await page.getByRole("button", { name: "Mutation failure QA", exact: true }).click();
   const renameForm = page.getByTestId("rename-form-saved-qa-library-failure");
+  const renameLabels = await page.evaluate(() => {
+    const form = document.querySelector('[data-testid="rename-form-saved-qa-library-failure"]');
+    const save = document.querySelector('[data-testid="save-rename-saved-qa-library-failure"]');
+    const cancel = document.querySelector('[data-testid="cancel-rename-saved-qa-library-failure"]');
+    return {
+      formLabel: form?.getAttribute("aria-label") || "",
+      saveLabel: save?.getAttribute("aria-label") || "",
+      saveTitle: save?.getAttribute("title") || "",
+      cancelLabel: cancel?.getAttribute("aria-label") || "",
+      cancelTitle: cancel?.getAttribute("title") || "",
+    };
+  });
+  if (
+    renameLabels.formLabel !== "Rename Mutation failure QA" ||
+    renameLabels.saveLabel !== "Save rename for Mutation failure QA" ||
+    renameLabels.saveTitle !== "Save rename for Mutation failure QA" ||
+    renameLabels.cancelLabel !== "Cancel rename for Mutation failure QA" ||
+    renameLabels.cancelTitle !== "Cancel rename for Mutation failure QA"
+  ) {
+    throw new Error(`Saved game rename controls were not game-specific: ${JSON.stringify(renameLabels)}`);
+  }
   await renameForm.locator("input").fill("Renamed failure");
-  await renameForm.getByRole("button", { name: "Save" }).click();
+  await renameForm.getByRole("button", { name: "Save rename for Mutation failure QA" }).click();
   await page.getByTestId("library-action-error").getByText("Could not rename").waitFor({ timeout: 5000 });
 
   const afterRename = await page.evaluate(() => ({
@@ -4199,7 +4220,7 @@ async function assertLibraryMutationFailureFeedback(page) {
     throw new Error(`Rename failure did not preserve data and editing state: ${JSON.stringify(afterRename)}`);
   }
 
-  await renameForm.getByRole("button", { name: "Cancel" }).click();
+  await renameForm.getByRole("button", { name: "Cancel rename for Mutation failure QA" }).click();
   await page.getByTestId("delete-saved-qa-library-failure").click();
   await page.getByTestId("confirm-delete-saved-qa-library-failure").click();
   await page.getByTestId("library-action-error").getByText("Could not delete").waitFor({ timeout: 5000 });
