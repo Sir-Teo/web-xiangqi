@@ -447,8 +447,18 @@ function formatCompactCount(value: number) {
   return `${normalized}`;
 }
 
-function formatEngineDepthLabel(stats: EngineSearchStats | null, fallbackDepth: number) {
-  const depth = stats?.depth ?? fallbackDepth;
+function formatEngineDepthLabel(
+  stats: EngineSearchStats | null,
+  fallbackDepth: number,
+  isSearching: boolean,
+  isReady: boolean,
+) {
+  if (!stats) {
+    if (isSearching) return 'Pending';
+    return isReady ? 'Idle' : 'Booting';
+  }
+
+  const depth = stats.depth ?? fallbackDepth;
   const seldepth = stats?.seldepth;
   if (seldepth && seldepth > depth) {
     return `D${depth}/S${seldepth}`;
@@ -456,8 +466,16 @@ function formatEngineDepthLabel(stats: EngineSearchStats | null, fallbackDepth: 
   return `D${depth}`;
 }
 
-function formatEngineTelemetry(stats: EngineSearchStats | null, fallbackMoveTimeMs: number) {
-  if (!stats) return `${fallbackMoveTimeMs}ms primary`;
+function formatEngineTelemetry(
+  stats: EngineSearchStats | null,
+  fallbackDepth: number,
+  fallbackMoveTimeMs: number,
+  isSearching: boolean,
+) {
+  if (!stats) {
+    const target = `target D${fallbackDepth}`;
+    return isSearching ? `${target} · ${fallbackMoveTimeMs}ms` : target;
+  }
 
   const parts: string[] = [];
   if (typeof stats.nps === 'number') {
@@ -3800,8 +3818,8 @@ function App() {
                     </div>
                     <div className="engine-stat">
                       <span>Search</span>
-                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth)}</strong>
-                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.moveTimeMs)}</em>
+                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearching, isReady)}</strong>
+                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearching)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>
@@ -3914,7 +3932,7 @@ function App() {
                       </div>
                       <div className="engine-coach-item">
                         <span>Depth</span>
-                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : `D${liveAnalysisPolicy.primary.depth}`}</strong>
+                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
                       </div>
                       <div className="engine-coach-item engine-coach-line">
                         <span>Line</span>

@@ -982,6 +982,8 @@ async function assertEngineTelemetryDashboard(browser) {
       return fen.includes(" b ") &&
         !fen.includes("1C5C1/9/RNBAKABNR w ") &&
         pvText.includes("No PV available yet") &&
+        searchCard.includes("Pending") &&
+        searchCard.includes("target D8") &&
         !searchCard.includes("789k nps") &&
         !searchCard.includes("hash 2%");
     }, null, { timeout: 1200 });
@@ -1002,6 +1004,8 @@ async function assertEngineTelemetryDashboard(browser) {
       !cleared.fen.includes(" b ") ||
       cleared.fen.includes("1C5C1/9/RNBAKABNR w ") ||
       !cleared.pvText.includes("No PV available yet") ||
+      !cleared.searchCard.includes("Pending") ||
+      !cleared.searchCard.includes("target D8") ||
       /789k nps|hash 2%/.test(cleared.searchCard) ||
       cleared.overflowX > 2
     ) {
