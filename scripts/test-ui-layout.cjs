@@ -313,6 +313,7 @@ async function assertDesktopBoardLayout(page, viewport) {
         return id ? document.getElementById(id)?.textContent?.replace(/\s+/g, " ").trim() || "" : "";
       })(),
       graphLegacyDescription: document.querySelector(".winrate-graph")?.getAttribute("aria-description") || "",
+      compactWdlBarCount: document.querySelectorAll(".wdl-bar").length,
       decorativeBoardLayers: {
         gridHidden: document.querySelector(".board-svg-grid")?.getAttribute("aria-hidden") || "",
         gridFocusable: document.querySelector(".board-svg-grid")?.getAttribute("focusable") || "",
@@ -381,6 +382,9 @@ async function assertDesktopBoardLayout(page, viewport) {
   }
   if (layout.clippedGraphSummaryLabels.length > 0) {
     throw new Error(`Desktop graph summary labels are clipped: ${layout.clippedGraphSummaryLabels.join(", ")}`);
+  }
+  if (layout.compactWdlBarCount !== 0) {
+    throw new Error(`Compact analysis should not show an unavailable WDL bar: ${JSON.stringify(layout)}`);
   }
   if (
     layout.graphDescribedBy !== "evaluation-graph-instructions" ||

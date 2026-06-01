@@ -1860,6 +1860,7 @@ function App() {
     () => normalizeWdlForSide(wdl, sideToMove),
     [sideToMove, wdl]
   );
+  const shouldShowWdlBar = engineEnabled && (engineDetailEnabled || displayWdl !== null);
   const currentEvalText = typeof displayEvalScore === 'number'
     ? formatEvalScore(displayEvalScore)
     : null;
@@ -3339,7 +3340,7 @@ function App() {
             >
               {leftPanelTab === 'graph' ? (
                 <>
-                  {engineEnabled && <WdlBar wdl={displayWdl} isSearching={isSearching} />}
+                  {shouldShowWdlBar && <WdlBar wdl={displayWdl} isSearching={isSearching} />}
                   <EvalGraph
                     history={moveHistory}
                     currentMoveIndex={currentMoveIndex}
