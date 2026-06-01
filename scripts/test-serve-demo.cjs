@@ -12,6 +12,17 @@ const {
   relativePathForRequest,
 } = require("./serve-demo.cjs");
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertMetaTag(html, attributeName, attributeValue, content) {
+  assert.match(
+    html,
+    new RegExp(`<meta ${attributeName}="${escapeRegExp(attributeValue)}" content="${escapeRegExp(content)}"\\s*/?>`)
+  );
+}
+
 async function main() {
   assert.equal(appBasePath, "/web-xiangqi/");
   assert.equal(normalizeRequestPath("/"), "/index.html");
@@ -34,6 +45,13 @@ async function main() {
     assert.equal(indexResponse.headers.get("cross-origin-opener-policy"), "same-origin");
     assert.equal(indexResponse.headers.get("x-content-type-options"), "nosniff");
     const html = await indexResponse.text();
+    assert.match(html, /<title>Web Xiangqi \| Pikafish Analysis Board<\/title>/);
+    assertMetaTag(html, "name", "description", "A fast Xiangqi analysis board with Pikafish engine lines, game review, openings, saved studies, PGN/FEN import, and shareable variations.");
+    assertMetaTag(html, "name", "application-name", "Web Xiangqi");
+    assertMetaTag(html, "name", "color-scheme", "dark");
+    assertMetaTag(html, "name", "theme-color", "#050505");
+    assertMetaTag(html, "property", "og:title", "Web Xiangqi");
+    assertMetaTag(html, "name", "twitter:card", "summary");
     const assetPath = html.match(/src="([^"]+\/assets\/[^"]+\.js)"/)?.[1];
     assert(assetPath, "React build should reference a hashed JS asset.");
 

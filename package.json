@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "description": "WASM/JS wrapper build for Pikafish (Xiangqi engine)",
+  "description": "Fast browser Xiangqi analysis board powered by Pikafish WASM",
   "main": "dist/pikafish.js",
   "scripts": {
     "dev": "vite",
