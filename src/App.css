@@ -2986,6 +2986,14 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+.review-summary-card em {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .review-summary-card-wide {
   grid-column: 1 / -1;
 }

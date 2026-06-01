@@ -2566,6 +2566,8 @@ async function assertReviewBestMoveBranchAction(page) {
           averageCentipawnLoss: 130,
           redAccuracy: 39,
           blackAccuracy: 93,
+          redAverageCentipawnLoss: 240,
+          blackAverageCentipawnLoss: 20,
           bestCount: 0,
           goodCount: 1,
           inaccuracyCount: 0,
@@ -2728,10 +2730,10 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
     reviewReadout.focusChance !== "Chance-21%" ||
     reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
-    reviewReadout.redAccuracy !== "Red39%" ||
-    reviewReadout.redAccuracyLabel !== "Red accuracy 39%" ||
-    reviewReadout.blackAccuracy !== "Black93%" ||
-    reviewReadout.blackAccuracyLabel !== "Black accuracy 93%" ||
+    reviewReadout.redAccuracy !== "Red39%240cp loss" ||
+    reviewReadout.redAccuracyLabel !== "Red accuracy 39%, average centipawn loss 240cp" ||
+    reviewReadout.blackAccuracy !== "Black93%20cp loss" ||
+    reviewReadout.blackAccuracyLabel !== "Black accuracy 93%, average centipawn loss 20cp" ||
     reviewReadout.averageLoss !== "Avg loss130cp" ||
     reviewReadout.averageLossLabel !== "Average centipawn loss 130cp" ||
     reviewReadout.momentCount !== "1/1" ||

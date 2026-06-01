@@ -61,9 +61,9 @@ export const ReviewPanel = memo(function ReviewPanel({
         ? `Average centipawn loss ${formatAverageCentipawnLoss(summary.averageCentipawnLoss)}`
         : '';
     const sideAccuracyBreakdown = summary ? [
-        { key: 'red', label: 'Red', value: summary.redAccuracy },
-        { key: 'black', label: 'Black', value: summary.blackAccuracy },
-    ].filter((item): item is { key: 'red' | 'black'; label: string; value: number } => typeof item.value === 'number') : [];
+        { key: 'red', label: 'Red', value: summary.redAccuracy, loss: summary.redAverageCentipawnLoss },
+        { key: 'black', label: 'Black', value: summary.blackAccuracy, loss: summary.blackAverageCentipawnLoss },
+    ].filter((item): item is { key: 'red' | 'black'; label: string; value: number; loss: number | undefined } => typeof item.value === 'number') : [];
     const qualityBreakdown = summary ? [
         { key: 'best', label: 'Best', count: summary.bestCount },
         { key: 'good', label: 'Good', count: summary.goodCount },
@@ -183,11 +183,14 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 key={item.key}
                                 className="review-summary-card"
                                 data-testid={`review-${item.key}-accuracy`}
-                                aria-label={`${item.label} accuracy ${item.value}%`}
-                                title={`${item.label} accuracy ${item.value}%`}
+                                aria-label={`${item.label} accuracy ${item.value}%${typeof item.loss === 'number' ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
+                                title={`${item.label} accuracy ${item.value}%${typeof item.loss === 'number' ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
                             >
                                 <span>{item.label}</span>
                                 <strong>{item.value}%</strong>
+                                {typeof item.loss === 'number' ? (
+                                    <em>{formatAverageCentipawnLoss(item.loss)} loss</em>
+                                ) : null}
                             </div>
                         ))}
                         <div className="review-summary-card">
