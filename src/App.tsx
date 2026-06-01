@@ -323,25 +323,35 @@ function isPvLineCount(value: unknown): value is PvLineCount {
   return value === 1 || value === 3 || value === 5;
 }
 
+function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences {
+  if (!raw) return {};
+  try {
+    if (raw.length > MAX_PREFERENCES_JSON_LENGTH) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const record = parsed as Record<string, unknown>;
+    const searchDepth = Number(record.searchDepth);
+    return {
+      assistMode: isAssistMode(record.assistMode) ? record.assistMode : undefined,
+      orientation: isBoardOrientation(record.orientation) ? record.orientation : undefined,
+      showArrows: typeof record.showArrows === 'boolean' ? record.showArrows : undefined,
+      soundEnabled: typeof record.soundEnabled === 'boolean' ? record.soundEnabled : undefined,
+      searchDepth: Number.isFinite(searchDepth) ? Math.max(1, Math.min(24, Math.trunc(searchDepth))) : undefined,
+      analysisEngineMode: isAnalysisEngineMode(record.analysisEngineMode) ? record.analysisEngineMode : undefined,
+      enginePvLineCount: isPvLineCount(record.enginePvLineCount) ? record.enginePvLineCount : undefined,
+      aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
+      aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function readStoredPreferences(): StoredPreferences {
   if (typeof window === 'undefined') return {};
   try {
     const raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
-    if (!raw) return {};
-    if (raw.length > MAX_PREFERENCES_JSON_LENGTH) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const searchDepth = Number(parsed.searchDepth);
-    return {
-      assistMode: isAssistMode(parsed.assistMode) ? parsed.assistMode : undefined,
-      orientation: isBoardOrientation(parsed.orientation) ? parsed.orientation : undefined,
-      showArrows: typeof parsed.showArrows === 'boolean' ? parsed.showArrows : undefined,
-      soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : undefined,
-      searchDepth: Number.isFinite(searchDepth) ? Math.max(1, Math.min(24, Math.trunc(searchDepth))) : undefined,
-      analysisEngineMode: isAnalysisEngineMode(parsed.analysisEngineMode) ? parsed.analysisEngineMode : undefined,
-      enginePvLineCount: isPvLineCount(parsed.enginePvLineCount) ? parsed.enginePvLineCount : undefined,
-      aiStrength: isAiStrength(parsed.aiStrength) ? parsed.aiStrength : undefined,
-      aiSpeed: isAiSpeed(parsed.aiSpeed) ? parsed.aiSpeed : undefined,
-    };
+    return normalizeStoredPreferencesValue(raw);
   } catch {
     return {};
   }
@@ -574,18 +584,22 @@ function App() {
     aiSpeedRef.current = s;
   }, []);
 
+  const applyPreferences = useCallback((preferences: StoredPreferences) => {
+    setAssistMode(preferences.assistMode ?? 'coach');
+    setOrientation(preferences.orientation ?? 'red');
+    setShowArrows(preferences.showArrows ?? true);
+    handleSoundToggle(preferences.soundEnabled ?? true);
+    setSearchDepth(preferences.searchDepth ?? defaultSearchDepth);
+    setAnalysisEngineMode(preferences.analysisEngineMode ?? 'optimized');
+    setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
+    setAiStrength(preferences.aiStrength ?? 5);
+    handleSpeedChange(preferences.aiSpeed ?? 'normal');
+  }, [defaultSearchDepth, handleSoundToggle, handleSpeedChange]);
+
   const resetPreferences = useCallback(() => {
     clearStoredPreferences();
-    setAssistMode('coach');
-    setOrientation('red');
-    setShowArrows(true);
-    handleSoundToggle(true);
-    setSearchDepth(defaultSearchDepth);
-    setAnalysisEngineMode('optimized');
-    setEnginePvLineCount(3);
-    setAiStrength(5);
-    handleSpeedChange('normal');
-  }, [defaultSearchDepth, handleSoundToggle, handleSpeedChange]);
+    applyPreferences({});
+  }, [applyPreferences]);
 
   useEffect(() => {
     writeStoredPreferences({
@@ -610,6 +624,17 @@ function App() {
     showArrows,
     soundEnabled,
   ]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (event.key !== PREFERENCES_STORAGE_KEY && event.key !== null) return;
+      applyPreferences(normalizeStoredPreferencesValue(event.newValue));
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [applyPreferences]);
 
   // AI pause/resume state
   const [paused, setPaused] = useState(false);

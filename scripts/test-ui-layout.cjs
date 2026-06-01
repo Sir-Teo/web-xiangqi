@@ -1089,6 +1089,59 @@ async function assertPreferencePersistence(page) {
       throw new Error(`Restored preferences introduced horizontal overflow: ${restored.overflowX}`);
     }
 
+    await page.evaluate(() => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "xiangqi-app-preferences",
+        newValue: JSON.stringify({
+          assistMode: "coach",
+          analysisEngineMode: "optimized",
+          enginePvLineCount: 1,
+          soundEnabled: true,
+          orientation: "black",
+          showArrows: false,
+          searchDepth: 3,
+          aiStrength: 2,
+          aiSpeed: "fast",
+        }),
+        storageArea: localStorage,
+      }));
+    });
+    await page.waitForFunction(() => {
+      const stored = JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}");
+      return document.querySelector(".app-shell")?.getAttribute("data-assist-mode") === "coach" &&
+        document.querySelector('[data-testid="engine-pv-lines-1"]')?.getAttribute("aria-pressed") === "true" &&
+        stored.assistMode === "coach" &&
+        stored.analysisEngineMode === "optimized" &&
+        stored.enginePvLineCount === 1 &&
+        stored.orientation === "black" &&
+        stored.showArrows === false &&
+        stored.searchDepth === 3 &&
+        stored.aiStrength === 2 &&
+        stored.aiSpeed === "fast";
+    }, null, { timeout: 5000 });
+    const synced = await page.evaluate(() => ({
+      assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
+      pv1Active: document.querySelector('[data-testid="engine-pv-lines-1"]')?.getAttribute("aria-pressed") || "",
+      profile: [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent || "")
+        .find((text) => text.includes("Profile")) || "",
+      stored: JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"),
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (
+      synced.assistMode !== "coach" ||
+      synced.pv1Active !== "true" ||
+      !synced.profile.includes("optimized") ||
+      synced.stored.orientation !== "black" ||
+      synced.stored.showArrows !== false ||
+      synced.stored.searchDepth !== 3 ||
+      synced.stored.aiStrength !== 2 ||
+      synced.stored.aiSpeed !== "fast" ||
+      synced.overflowX > 2
+    ) {
+      throw new Error(`Cross-tab preference sync did not update the UI cleanly: ${JSON.stringify(synced)}`);
+    }
+
     await page.getByRole("button", { name: "Open settings" }).click();
     await page.getByTestId("reset-preferences-btn").click();
     const resetState = await page.evaluate(() => ({
