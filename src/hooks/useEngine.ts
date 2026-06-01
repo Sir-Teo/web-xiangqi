@@ -174,6 +174,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const captureInfoLinesRef = useRef(options.captureInfoLines ?? false);
     const infoFlushTimerRef = useRef<number | null>(null);
     const queuedSearchTimerRef = useRef<number | null>(null);
+    const engineBootTimerRef = useRef<number | null>(null);
     const engineReadyTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
     const initTokenRef = useRef(0);
@@ -302,6 +303,13 @@ export function useEngine(options: EngineInitOptions = {}) {
         if (engineReadyTimerRef.current !== null) {
             window.clearTimeout(engineReadyTimerRef.current);
             engineReadyTimerRef.current = null;
+        }
+    }, []);
+
+    const clearEngineBootTimer = useCallback(() => {
+        if (engineBootTimerRef.current !== null) {
+            window.clearTimeout(engineBootTimerRef.current);
+            engineBootTimerRef.current = null;
         }
     }, []);
 
@@ -469,6 +477,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
         }
+        clearEngineBootTimer();
         clearEngineReadyTimer();
         clearQueuedSearch();
         clearBufferedInfoState();
@@ -488,13 +497,47 @@ export function useEngine(options: EngineInitOptions = {}) {
         setVariant('unknown');
 
         // Boot engine using the wrapper component
-        pikafishFactory.createWorkerEngine({
-            variant: options.variant || 'auto',
-            allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
-            threads,
-            hashMB,
-        })
+        const readyTimeoutMs = getEngineReadyTimeoutMs();
+        engineBootTimerRef.current = window.setTimeout(() => {
+            if (initToken !== initTokenRef.current || engineRef.current) return;
+            engineBootTimerRef.current = null;
+            initTokenRef.current += 1;
+            setIsReady(false);
+            setIsSearching(false);
+            isSearchingRef.current = false;
+            activeSearchSignatureRef.current = '';
+            activeSearchTagRef.current = null;
+            clearQueuedSearch();
+            setSearchStats(null);
+            stopRequestedRef.current = false;
+            onWorkerErrorRef.current?.(`[boot-error] Pikafish did not finish booting within ${Math.ceil(readyTimeoutMs / 1000)}s.`);
+        }, readyTimeoutMs);
+
+        let createEnginePromise: Promise<any>;
+        try {
+            createEnginePromise = Promise.resolve(pikafishFactory.createWorkerEngine({
+                variant: options.variant || 'auto',
+                allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
+                threads,
+                hashMB,
+            }));
+        } catch (err: any) {
+            clearEngineBootTimer();
+            clearEngineReadyTimer();
+            setIsReady(false);
+            setIsSearching(false);
+            isSearchingRef.current = false;
+            engineRef.current = null;
+            activeSearchSignatureRef.current = '';
+            clearQueuedSearch();
+            onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
+            logEngineDiagnosticError("Failed to boot Pikafish engine", err);
+            return;
+        }
+
+        createEnginePromise
             .then((engineInstance: any) => {
+                clearEngineBootTimer();
                 if (initToken !== initTokenRef.current) {
                     terminateEngineInstance(engineInstance);
                     return;
@@ -510,7 +553,6 @@ export function useEngine(options: EngineInitOptions = {}) {
                 });
 
                 // Send initialization commands
-                const readyTimeoutMs = getEngineReadyTimeoutMs();
                 engineReadyTimerRef.current = window.setTimeout(() => {
                     if (initToken !== initTokenRef.current || engineRef.current !== engineInstance) return;
                     engineReadyTimerRef.current = null;
@@ -530,6 +572,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             })
             .catch((err: any) => {
                 if (initToken !== initTokenRef.current) return;
+                clearEngineBootTimer();
                 clearEngineReadyTimer();
                 setIsReady(false);
                 setIsSearching(false);
@@ -540,7 +583,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
                 logEngineDiagnosticError("Failed to boot Pikafish engine", err);
             });
-    }, [clearBufferedInfoState, clearEngineReadyTimer, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
+    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
 
     useEffect(() => {
         const resetInactiveEngineState = () => {
@@ -570,6 +613,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             initTokenRef.current += 1;
             terminateEngineInstance(engineRef.current);
             engineRef.current = null;
+            clearEngineBootTimer();
             clearEngineReadyTimer();
             resetInactiveEngineState();
             return;
@@ -660,6 +704,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         return () => {
             initTokenRef.current += 1;
             clearScriptLoadWatch();
+            clearEngineBootTimer();
             clearEngineReadyTimer();
             clearQueuedSearch();
             clearBufferedInfoState();
@@ -670,7 +715,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             engineRef.current = null;
             activeSearchTagRef.current = null;
         };
-    }, [clearBufferedInfoState, clearEngineReadyTimer, clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
+    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -835,13 +880,14 @@ export function useEngine(options: EngineInitOptions = {}) {
     useEffect(() => {
         return () => {
             clearBufferedInfoState();
+            clearEngineBootTimer();
             if (queuedSearchTimerRef.current !== null) {
                 window.clearTimeout(queuedSearchTimerRef.current);
                 queuedSearchTimerRef.current = null;
             }
             clearEngineReadyTimer();
         };
-    }, [clearBufferedInfoState, clearEngineReadyTimer]);
+    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer]);
 
     return {
         isReady,

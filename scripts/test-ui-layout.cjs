@@ -119,7 +119,7 @@ async function installFakePikafish(page, fakeConfig) {
         Object.defineProperty(navigator, "deviceMemory", { configurable: true, get: () => 8 });
       } catch (_) {}
     }
-    if (config.variant === "fake-stall-ready") {
+    if (config.variant === "fake-stall-ready" || config.variant === "fake-create-hangs") {
       window.__WEB_XIANGQI_ENGINE_READY_TIMEOUT_MS = 120;
     }
     if (config.variant === "fake-restart-buffer" || config.variant === "fake-restart-options") {
@@ -129,6 +129,9 @@ async function installFakePikafish(page, fakeConfig) {
     }
     window.Pikafish = function Pikafish() {};
     window.Pikafish.createWorkerEngine = async () => {
+      if (config.variant === "fake-create-hangs") {
+        return new Promise(() => {});
+      }
       const instanceId = config.variant === "fake-restart-buffer" || config.variant === "fake-restart-options"
         ? ++window.__engineInstanceCount
         : 0;
@@ -1213,6 +1216,39 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
       bottomState.overflowX > 2
     ) {
       throw new Error(`Bottom review action did not explain stalled engine state: ${JSON.stringify(bottomState)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+async function assertEngineCreateTimeoutShowsNotice(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-create-hangs" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForFunction(() => {
+      const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
+      return /Recovering engine|Engine paused after crashes/i.test(text);
+    }, null, { timeout: 5000 });
+
+    const state = await page.evaluate(() => ({
+      engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
+      commands: window.__engineCommands || [],
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (!/Recovering engine|Engine paused after crashes/i.test(state.engineText)) {
+      throw new Error(`Hanging engine constructor did not surface a recovery notice: ${JSON.stringify(state)}`);
+    }
+    if (state.commands.length !== 0) {
+      throw new Error(`Hanging engine constructor should not have reached UCI commands: ${JSON.stringify(state.commands)}`);
+    }
+    if (state.overflowX > 2) {
+      throw new Error(`Hanging engine constructor notice introduced horizontal overflow: ${state.overflowX}`);
     }
   } finally {
     await context.close();
@@ -6043,6 +6079,7 @@ async function main() {
     await assertBeginnerAiUsesCandidatePv(browser);
     await assertAnalysisWorkspaceDoesNotAutoPlayAi(browser);
     await assertEngineLoaderFailureShowsNotice(browser);
+    await assertEngineCreateTimeoutShowsNotice(browser);
     await assertEngineReadyTimeoutShowsNotice(browser);
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
@@ -6117,7 +6154,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
