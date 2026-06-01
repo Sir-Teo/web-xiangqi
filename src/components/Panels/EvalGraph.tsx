@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
-import { formatReviewQuality, getMoveQualityClassName, isCriticalReviewQuality } from '../../utils/review';
+import {
+    formatReviewQuality,
+    formatWinPercentLoss,
+    formatWinPercentLossLabel,
+    getMoveQualityClassName,
+    isCriticalReviewQuality,
+} from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
 
 interface EvalGraphProps {
@@ -25,6 +31,7 @@ type EvalPoint = {
     branchCount: number;
     quality?: MoveRecord['quality'];
     swing?: MoveRecord['swing'];
+    winPercentLoss?: MoveRecord['winPercentLoss'];
     reviewNote?: MoveRecord['reviewNote'];
     bestMove?: MoveRecord['bestMove'];
 };
@@ -75,6 +82,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 branchCount: branchCounts[index] ?? 0,
                 quality: move.quality,
                 swing: move.swing,
+                winPercentLoss: move.winPercentLoss,
                 reviewNote: move.reviewNote,
                 bestMove: move.bestMove,
             });
@@ -492,6 +500,14 @@ export const EvalGraph = React.memo(function EvalGraph({
                                     {typeof tooltipPoint.swing === 'number' ? ` · ${Math.round(tooltipPoint.swing)}cp` : ''}
                                 </em>
                             ) : null}
+                            {typeof tooltipPoint?.winPercentLoss === 'number' && tooltipPoint.mover !== 'start' ? (
+                                <em
+                                    className="graph-tooltip-chance"
+                                    aria-label={formatWinPercentLossLabel(tooltipPoint.winPercentLoss, tooltipPoint.mover)}
+                                >
+                                    Chance {formatWinPercentLoss(tooltipPoint.winPercentLoss)}
+                                </em>
+                            ) : null}
                             {tooltipPoint?.reviewNote ? <span>{tooltipPoint.reviewNote}</span> : null}
                             {tooltipPoint?.bestMove && tooltipPoint.bestMove !== tooltipPoint.uci ? (
                                 <em>Engine: {formatUciMove(tooltipPoint.bestMove)}</em>
@@ -531,6 +547,9 @@ function formatGraphValueText(point: EvalPoint): string {
         point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
         `evaluation ${formatEval(point.eval)}`,
         point.quality ? formatReviewQuality(point.quality) : '',
+        typeof point.winPercentLoss === 'number' && point.mover !== 'start'
+            ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)
+            : '',
         point.bestMove && point.bestMove !== point.uci ? `engine suggests ${formatUciMove(point.bestMove)}` : '',
         point.branchCount > 1 ? `${point.branchCount} branches` : '',
     ].filter(Boolean);

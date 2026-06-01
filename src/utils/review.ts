@@ -150,6 +150,25 @@ export function getWinPercentLossForMove(evalBefore: number, evalAfter: number, 
     return Math.max(0, loss);
 }
 
+export function clampWinPercentLoss(loss: number): number {
+    if (!Number.isFinite(loss)) return 0;
+    return Math.max(0, Math.min(100, loss));
+}
+
+export function formatWinPercentLoss(loss: number): string {
+    const normalized = clampWinPercentLoss(loss);
+    if (normalized < 0.05) return '0%';
+    const precision = normalized < 10 ? 1 : 0;
+    return `-${Number(normalized.toFixed(precision))}%`;
+}
+
+export function formatWinPercentLossLabel(loss: number, side: ReviewSide): string {
+    const normalized = clampWinPercentLoss(loss);
+    const precision = normalized < 10 ? 1 : 0;
+    const formattedLoss = `${Number(normalized.toFixed(precision))} percentage points`;
+    return `${side === 'red' ? 'Red' : 'Black'} practical winning chance dropped by ${formattedLoss}`;
+}
+
 function getLessSevereReviewQuality(left: ReviewMoveQuality, right: ReviewMoveQuality): ReviewMoveQuality {
     return REVIEW_QUALITY_PRIORITY[left] <= REVIEW_QUALITY_PRIORITY[right] ? left : right;
 }

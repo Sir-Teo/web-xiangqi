@@ -2687,6 +2687,11 @@ summary:active {
   font-weight: 700;
 }
 
+.graph-tooltip-chance {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .graph-tooltip-quality.quality-inaccuracy {
   color: var(--quality-inaccuracy);
 }

@@ -3,6 +3,8 @@ import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewKeyMoment, ReviewSummary } from '../../utils/review';
 import {
     describeReviewEngineSummary,
+    formatWinPercentLoss,
+    formatWinPercentLossLabel,
     formatReviewEngineSummary,
     formatReviewQuality,
     formatReviewQualityCount,
@@ -324,19 +326,9 @@ function getMomentWinPercentLoss(moment: ReviewKeyMoment) {
 }
 
 function formatReviewChanceLoss(moment: ReviewKeyMoment) {
-    const loss = getMomentWinPercentLoss(moment);
-    if (loss < 0.05) return '0%';
-    const precision = loss < 10 ? 1 : 0;
-    return `-${Number(loss.toFixed(precision))}%`;
+    return formatWinPercentLoss(getMomentWinPercentLoss(moment));
 }
 
 function formatReviewChanceLossLabel(moment: ReviewKeyMoment) {
-    const loss = getMomentWinPercentLoss(moment);
-    const precision = loss < 10 ? 1 : 0;
-    const formattedLoss = `${Number(loss.toFixed(precision))} percentage points`;
-    return `${capitalizeReviewSide(moment.side)} practical winning chance dropped by ${formattedLoss}`;
-}
-
-function capitalizeReviewSide(side: ReviewKeyMoment['side']) {
-    return side === 'red' ? 'Red' : 'Black';
+    return formatWinPercentLossLabel(getMomentWinPercentLoss(moment), moment.side);
 }

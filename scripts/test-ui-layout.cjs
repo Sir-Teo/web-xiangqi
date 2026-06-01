@@ -2626,6 +2626,8 @@ async function assertReviewBestMoveBranchAction(page) {
     bottomViewTitle: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("title") || "",
     bottomClearLabel: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("aria-label") || "",
     bottomClearTitle: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("title") || "",
+    graphTooltip: document.querySelector(".graph-tooltip")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    graphValueText: document.querySelector(".winrate-graph")?.getAttribute("aria-valuetext") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
@@ -2675,6 +2677,8 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.bottomViewTitle !== "Open completed game review" ||
     reviewReadout.bottomClearLabel !== "Clear completed game review" ||
     reviewReadout.bottomClearTitle !== "Clear completed game review" ||
+    !reviewReadout.graphTooltip.includes("Chance -1.5%") ||
+    !reviewReadout.graphValueText.includes("Black practical winning chance dropped by 1.5 percentage points") ||
     reviewReadout.overflowX > 2
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);

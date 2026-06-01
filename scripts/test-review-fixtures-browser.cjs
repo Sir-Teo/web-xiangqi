@@ -107,6 +107,12 @@ async function main() {
       if (winLoss < 5 || winLoss > 7) {
         throw new Error(`Expected decisive-position win loss near 6%, got ${winLoss}`);
       }
+      if (review.formatWinPercentLoss(winLoss) !== "-5.9%") {
+        throw new Error(`Unexpected formatted win loss: ${review.formatWinPercentLoss(winLoss)}`);
+      }
+      if (review.formatWinPercentLossLabel(winLoss, "red") !== "Red practical winning chance dropped by 5.9 percentage points") {
+        throw new Error(`Unexpected formatted win loss label: ${review.formatWinPercentLossLabel(winLoss, "red")}`);
+      }
 
       const lossCases = [
         [0, 200, "red", 0],
