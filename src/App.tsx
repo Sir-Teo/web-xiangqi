@@ -447,18 +447,30 @@ function formatMoveRuleHint(reason?: string) {
       return 'Elephant eye is blocked.';
     case 'cannon capture needs one screen':
       return 'Cannon captures need exactly one screen.';
+    case 'cannon moves orthogonally':
+      return 'Cannon moves in straight lines.';
     case 'cannon path blocked':
       return 'Cannon path is blocked.';
+    case 'rook moves orthogonally':
+      return 'Chariot moves in straight lines.';
     case 'rook path blocked':
       return 'Chariot path is blocked.';
+    case 'advisor moves 1 diagonally':
+      return 'Advisor moves one point diagonally inside the palace.';
     case 'advisor must stay in palace':
       return 'Advisor must stay inside the palace.';
+    case 'general moves 1 orthogonally':
+      return 'General moves one point orthogonally inside the palace.';
     case 'general must stay in palace':
       return 'General must stay inside the palace.';
     case 'generals cannot face each other':
       return 'Generals cannot face each other.';
+    case 'move must change square':
+      return 'Choose a different destination square.';
     case 'move leaves general in check':
       return 'That leaves your general in check.';
+    case 'elephant moves 2 diagonally':
+      return 'Elephant moves two points diagonally.';
     case 'elephant cannot cross river':
       return 'Elephant cannot cross the river.';
     case 'pawn move is illegal':

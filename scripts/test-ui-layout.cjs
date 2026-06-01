@@ -231,13 +231,30 @@ async function assertIllegalMoveShowsRuleHint(page) {
     throw new Error(`Illegal move hint failed: ${JSON.stringify(illegalState)}`);
   }
 
+  await page.locator('.hitbox[data-file="0"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="1"][data-rank="1"]').click();
+  await page.waitForFunction(() => {
+    const hint = document.querySelector(".position-stat-selection em")?.textContent?.trim() || "";
+    return /Chariot moves in straight lines/i.test(hint);
+  }, null, { timeout: 5000 });
+
+  const chariotHintState = await page.evaluate(() => ({
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    hint: document.querySelector(".position-stat-selection em")?.textContent?.trim() || "",
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (chariotHintState.fen !== beforeFen || /rook/i.test(chariotHintState.hint) || chariotHintState.overflowX > 2) {
+    throw new Error(`Chariot rule hint leaked chess wording: ${JSON.stringify(chariotHintState)}`);
+  }
+
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
   await page.locator('.hitbox[data-file="2"][data-rank="2"]').click();
   await page.waitForFunction((fen) => {
     return document.querySelector(".bottombar-fen")?.getAttribute("title") !== fen;
   }, beforeFen, { timeout: 5000 });
 
   const clearedHint = await page.locator(".position-stat-selection em").textContent();
-  if (/Horse moves in an L/i.test(clearedHint || "")) {
+  if (/Horse moves in an L|Chariot moves in straight lines/i.test(clearedHint || "")) {
     throw new Error("Illegal move hint did not clear after a legal move.");
   }
 }
