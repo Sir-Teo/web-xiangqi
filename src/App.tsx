@@ -4373,6 +4373,26 @@ function App() {
                   data-testid="bottom-review-summary"
                 >
                   <strong>{reviewSummary.accuracy}%</strong> accuracy
+                  {typeof reviewSummary.redAccuracy === 'number' ? (
+                    <span
+                      className="review-summary-side review-summary-side-red"
+                      aria-label={`Red accuracy ${reviewSummary.redAccuracy}%`}
+                      title={`Red accuracy ${reviewSummary.redAccuracy}%`}
+                      data-testid="bottom-review-red-accuracy"
+                    >
+                      Red {reviewSummary.redAccuracy}%
+                    </span>
+                  ) : null}
+                  {typeof reviewSummary.blackAccuracy === 'number' ? (
+                    <span
+                      className="review-summary-side review-summary-side-black"
+                      aria-label={`Black accuracy ${reviewSummary.blackAccuracy}%`}
+                      title={`Black accuracy ${reviewSummary.blackAccuracy}%`}
+                      data-testid="bottom-review-black-accuracy"
+                    >
+                      Black {reviewSummary.blackAccuracy}%
+                    </span>
+                  ) : null}
                   <span className="review-summary-issue quality-blunder">
                     {formatReviewCount(reviewSummary.blunderCount, 'blunder')}
                   </span>

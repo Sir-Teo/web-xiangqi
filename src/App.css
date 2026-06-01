@@ -1854,6 +1854,21 @@ body.resizing * {
   white-space: nowrap;
 }
 
+.review-summary-side {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.review-summary-side-red {
+  color: #fca5a5;
+}
+
+.review-summary-side-black {
+  color: #cbd5e1;
+}
+
 .review-summary strong {
   color: var(--accent, #10b981);
 }

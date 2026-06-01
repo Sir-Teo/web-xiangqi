@@ -2643,6 +2643,10 @@ async function assertReviewBestMoveBranchAction(page) {
     clearReviewTitle: document.querySelector('[data-testid="clear-review-btn"]')?.getAttribute("title") || "",
     bottomSummaryText: document.querySelector('[data-testid="bottom-review-summary"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     bottomSummaryLabel: document.querySelector('[data-testid="bottom-review-summary"]')?.getAttribute("aria-label") || "",
+    bottomRedAccuracy: document.querySelector('[data-testid="bottom-review-red-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bottomRedAccuracyLabel: document.querySelector('[data-testid="bottom-review-red-accuracy"]')?.getAttribute("aria-label") || "",
+    bottomBlackAccuracy: document.querySelector('[data-testid="bottom-review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    bottomBlackAccuracyLabel: document.querySelector('[data-testid="bottom-review-black-accuracy"]')?.getAttribute("aria-label") || "",
     bottomViewLabel: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("aria-label") || "",
     bottomViewTitle: document.querySelector('[data-testid="view-completed-review-btn"]')?.getAttribute("title") || "",
     bottomClearLabel: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("aria-label") || "",
@@ -2695,12 +2699,18 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.clearReviewLabel !== "Clear completed game review" ||
     reviewReadout.clearReviewTitle !== "Clear completed game review" ||
     !reviewReadout.bottomSummaryText.includes("66% accuracy") ||
+    !reviewReadout.bottomSummaryText.includes("Red 39%") ||
+    !reviewReadout.bottomSummaryText.includes("Black 93%") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
     !reviewReadout.bottomSummaryLabel.includes("Review summary: 66% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("Red 39% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("Black 93% accuracy") ||
+    reviewReadout.bottomRedAccuracy !== "Red 39%" ||
+    reviewReadout.bottomRedAccuracyLabel !== "Red accuracy 39%" ||
+    reviewReadout.bottomBlackAccuracy !== "Black 93%" ||
+    reviewReadout.bottomBlackAccuracyLabel !== "Black accuracy 93%" ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
     reviewReadout.bottomViewLabel !== "Open completed game review" ||
