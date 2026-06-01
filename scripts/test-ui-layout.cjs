@@ -98,6 +98,9 @@ async function installFakePikafish(page, fakeConfig) {
     if (config.variant === "fake-pv-play") {
       window.__goCount = 0;
     }
+    if (config.variant === "fake-telemetry") {
+      window.__goCount = 0;
+    }
     if (config.variant === "fake-restart-buffer") {
       window.__engineInstanceCount = 0;
       window.__goCount = 0;
@@ -165,10 +168,12 @@ async function installFakePikafish(page, fakeConfig) {
                 emit("bestmove h9g7");
               }, 20);
             } else if (config.variant === "fake-telemetry") {
+              window.__goCount += 1;
+              const delay = window.__goCount === 1 ? 20 : 2200;
               setTimeout(() => {
                 emit("info depth 8 seldepth 12 multipv 1 score cp 42 nodes 123456 nps 789000 hashfull 23 time 156 pv b2e2 h9g7");
                 emit("bestmove b2e2");
-              }, 20);
+              }, delay);
             }
           }
         },
@@ -964,6 +969,43 @@ async function assertEngineTelemetryDashboard(browser) {
       telemetry.overflowX > 2
     ) {
       throw new Error(`Engine telemetry dashboard did not render UCI search stats: ${JSON.stringify(telemetry)}`);
+    }
+
+    await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
+    await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+    await page.waitForFunction(() => {
+      const fen = document.querySelector(".bottombar-fen")?.getAttribute("title") || "";
+      const pvText = document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "";
+      const searchCard = [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+        .find((text) => text.includes("Search")) || "";
+      return fen.includes(" b ") &&
+        !fen.includes("1C5C1/9/RNBAKABNR w ") &&
+        pvText.includes("No PV available yet") &&
+        !searchCard.includes("789k nps") &&
+        !searchCard.includes("hash 2%");
+    }, null, { timeout: 1200 });
+
+    const cleared = await page.evaluate(() => {
+      const searchCard = [...document.querySelectorAll(".engine-stat")]
+        .map((el) => el.textContent?.replace(/\s+/g, " ").trim() || "")
+        .find((text) => text.includes("Search")) || "";
+      return {
+        fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+        searchCard,
+        pvText: document.querySelector(".pv-lines-container")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+
+    if (
+      !cleared.fen.includes(" b ") ||
+      cleared.fen.includes("1C5C1/9/RNBAKABNR w ") ||
+      !cleared.pvText.includes("No PV available yet") ||
+      /789k nps|hash 2%/.test(cleared.searchCard) ||
+      cleared.overflowX > 2
+    ) {
+      throw new Error(`Engine telemetry leaked after the position changed: ${JSON.stringify(cleared)}`);
     }
   } finally {
     await context.close();

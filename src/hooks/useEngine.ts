@@ -268,12 +268,18 @@ export function useEngine(options: EngineInitOptions = {}) {
         }, INFO_FLUSH_MS);
     }, [flushBufferedInfo]);
 
+    const clearSearchStats = useCallback(() => {
+        pendingSearchStatsRef.current = null;
+        setSearchStats(null);
+    }, []);
+
     const clearPvLines = useCallback(() => {
         pvSlotRef.current = {};
         pvLinesRef.current = [];
         pvDirtyRef.current = false;
         setPvLines([]);
-    }, []);
+        clearSearchStats();
+    }, [clearSearchStats]);
 
     const trimPvLines = useCallback((maxLines = 1) => {
         const limit = Math.max(0, Math.trunc(maxLines));
@@ -283,7 +289,8 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvLinesRef.current = trimmed;
         pvDirtyRef.current = false;
         setPvLines(trimmed);
-    }, []);
+        clearSearchStats();
+    }, [clearSearchStats]);
 
     const clearWdl = useCallback(() => {
         pendingWdlRef.current = null;
@@ -376,10 +383,10 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvDirtyRef.current = false;
         setPvLines([]);
         setWdl(null);
-        setSearchStats(null);
+        clearSearchStats();
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
-    }, [flushPendingOptions, startSearch, stopSearch]);
+    }, [clearSearchStats, flushPendingOptions, startSearch, stopSearch]);
 
     const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0, tag?: string) => {
         const signature = `${positionCmd}\n${goCmd}\n${tag ?? ''}`;
