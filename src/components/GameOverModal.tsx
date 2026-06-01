@@ -10,7 +10,7 @@ interface GameOverModalProps {
 const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; subtitle: string; color: string }> = {
   'red-wins':   { title: 'Red Wins',   subtitle: 'Checkmate',    color: '#c0392b' },
   'black-wins': { title: 'Black Wins', subtitle: 'Checkmate',    color: '#1a1a2e' },
-  'draw':       { title: 'Draw',       subtitle: 'By Repetition', color: '#6b7280' },
+  'draw':       { title: 'Draw',       subtitle: 'Game drawn',    color: '#6b7280' },
 };
 
 export function GameOverModal({ result, onNewGame, onReview }: GameOverModalProps) {

@@ -3117,6 +3117,48 @@ async function assertMobileSaveLibraryActions(page) {
   }
 }
 
+async function assertSimpleRepetitionDoesNotAutoDraw(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  const repeatedLine = [
+    "b0c2", "b9c7", "c2b0", "c7b9",
+    "b0c2", "b9c7", "c2b0", "c7b9",
+  ].join(" ");
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${encodeURIComponent(repeatedLine)}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelectorAll(".mtree-chip").length >= 8, null, { timeout: 5000 });
+
+  const repetitionState = await page.evaluate(() => ({
+    modalTitle: document.querySelector(".game-over-title")?.textContent?.trim() || "",
+    modalSubtitle: document.querySelector(".game-over-subtitle")?.textContent?.trim() || "",
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    moveChips: document.querySelectorAll(".mtree-chip").length,
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (repetitionState.modalTitle || repetitionState.modalSubtitle || repetitionState.moveChips < 8 || repetitionState.overflowX > 2) {
+    throw new Error(`Simple repeated position was prematurely adjudicated: ${JSON.stringify(repetitionState)}`);
+  }
+
+  const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+  await page.locator('.hitbox[data-file="0"][data-rank="0"]').click();
+  await page.locator('.hitbox[data-file="0"][data-rank="1"]').click();
+  await page.waitForFunction((fen) => {
+    return document.querySelector(".bottombar-fen")?.getAttribute("title") !== fen;
+  }, beforeFen, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelectorAll(".mtree-chip").length >= 9, null, { timeout: 5000 });
+
+  const continuedState = await page.evaluate(() => ({
+    modalTitle: document.querySelector(".game-over-title")?.textContent?.trim() || "",
+    activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    moveChips: document.querySelectorAll(".mtree-chip").length,
+  }));
+  if (continuedState.modalTitle || continuedState.moveChips < 9 || !continuedState.activePoint.includes("Red A0")) {
+    throw new Error(`Repeated position did not remain playable: ${JSON.stringify(continuedState)}`);
+  }
+}
+
 async function assertGameOverReviewPreservesResult(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -3305,6 +3347,7 @@ async function main() {
     await assertLibraryDeleteConfirmation(page);
     await assertLibraryRespondsToStorageChanges(page);
     await assertLargeLibraryRendersProgressively(page);
+    await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
 
@@ -3312,7 +3355,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, game-over review state, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure notice, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation preservation, oversized import guard, and accessible errors, actionable review suggestions and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, storage-synced library refresh, progressive large-library rendering, simple repetition playability, game-over review state, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
