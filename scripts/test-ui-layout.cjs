@@ -108,6 +108,9 @@ async function assertDesktopBoardLayout(page, viewport) {
       positionDock: toRect(".position-dock"),
       topPanel: toRect(".panel.top"),
       bottomPanel: toRect(".panel.bottom"),
+      appHeading: document.querySelector("h1.sr-only")?.textContent?.trim() || "",
+      workspaceGroupRole: document.querySelector(".top-mode-pills")?.getAttribute("role") || "",
+      workspaceGroupLabel: document.querySelector(".top-mode-pills")?.getAttribute("aria-label") || "",
       hitboxCount: document.querySelectorAll(".hitbox").length,
       tabbableHitboxCount: Array.from(document.querySelectorAll(".hitbox"))
         .filter((el) => el.tabIndex >= 0).length,
@@ -130,6 +133,12 @@ async function assertDesktopBoardLayout(page, viewport) {
     throw new Error(
       `Horizontal overflow at ${viewport.width}x${viewport.height}: ${layout.body.scrollWidth} > ${layout.body.clientWidth}`
     );
+  }
+  if (layout.appHeading !== "Web Xiangqi") {
+    throw new Error(`App heading was not exposed to assistive technology: ${JSON.stringify(layout)}`);
+  }
+  if (layout.workspaceGroupRole !== "group" || layout.workspaceGroupLabel !== "Workspace mode") {
+    throw new Error(`Workspace mode controls were not exposed as a named group: ${JSON.stringify(layout)}`);
   }
   if (layout.hitboxCount !== 90) {
     throw new Error(`Expected 90 board hitboxes, found ${layout.hitboxCount}.`);
@@ -1270,6 +1279,12 @@ async function assertMobileNewGameStartButtonVisible(page) {
 
   await page.getByRole("button", { name: "Open new game menu" }).click();
   await page.locator(".new-game-menu").waitFor({ timeout: 5000 });
+  const newGameExpanded = await page.evaluate(() => (
+    document.querySelector('.mobile-board-actions [aria-label="Open new game menu"]')?.getAttribute("aria-expanded") || ""
+  ));
+  if (newGameExpanded !== "true") {
+    throw new Error(`Mobile New Game trigger did not expose expanded state: ${newGameExpanded}`);
+  }
   await page.waitForFunction(() => {
     const menu = document.querySelector(".new-game-menu");
     return Boolean(menu && menu.contains(document.activeElement));
@@ -2981,6 +2996,30 @@ async function assertMobileSaveLibraryActions(page) {
   await saveButton.waitFor({ timeout: 10000 });
   await libraryButton.waitFor({ timeout: 10000 });
   await moreButton.waitFor({ timeout: 10000 });
+
+  const mobileTriggerA11y = await page.evaluate(() => {
+    const actions = document.querySelector(".mobile-board-actions");
+    const newGame = actions?.querySelector('[aria-label="Open new game menu"]');
+    const settings = actions?.querySelector('[aria-label="Open settings"]');
+    return {
+      newGamePopup: newGame?.getAttribute("aria-haspopup") || "",
+      newGameExpanded: newGame?.getAttribute("aria-expanded") || "",
+      newGameControls: newGame?.getAttribute("aria-controls") || "",
+      settingsPopup: settings?.getAttribute("aria-haspopup") || "",
+      settingsExpanded: settings?.getAttribute("aria-expanded") || "",
+      settingsControls: settings?.getAttribute("aria-controls") || "",
+    };
+  });
+  if (
+    mobileTriggerA11y.newGamePopup !== "dialog" ||
+    mobileTriggerA11y.newGameExpanded !== "false" ||
+    mobileTriggerA11y.newGameControls !== "new-game-menu-dialog" ||
+    mobileTriggerA11y.settingsPopup !== "dialog" ||
+    mobileTriggerA11y.settingsExpanded !== "false" ||
+    mobileTriggerA11y.settingsControls !== "settings-dialog"
+  ) {
+    throw new Error(`Mobile dialog triggers were not exposed accessibly: ${JSON.stringify(mobileTriggerA11y)}`);
+  }
 
   if (!(await saveButton.isDisabled())) {
     throw new Error("Mobile save action should be disabled before any move or custom position.");

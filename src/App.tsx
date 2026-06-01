@@ -2519,6 +2519,8 @@ function App() {
       data-mobile-view={isMobile ? mobileView : undefined}
       data-assist-mode={assistMode}
     >
+      <h1 className="sr-only">Web Xiangqi</h1>
+
       {/* ── Top bar ── */}
       <section className={`panel top ${topPanelOpen ? '' : 'hidden'}`}>
         <div className="panel-inner">
@@ -2532,7 +2534,7 @@ function App() {
             <span className="toolbar-divider desktop-only" />
 
             {/* Workspace mode pills */}
-            <div className="top-mode-pills" aria-label="Workspace mode">
+            <div className="top-mode-pills" role="group" aria-label="Workspace mode">
               <button
                 type="button"
                 className={`gc-pill ${workspaceMode === 'play' ? 'gc-pill-active' : ''}`}
@@ -2606,6 +2608,7 @@ function App() {
                 aria-label="Start new game"
                 aria-haspopup="dialog"
                 aria-expanded={showNewGameMenu}
+                aria-controls="new-game-menu-dialog"
               >
                 <IconRefresh />
                 <span className="btn-label-desktop">New</span>
@@ -2630,6 +2633,7 @@ function App() {
                 aria-label="Open settings"
                 aria-haspopup="dialog"
                 aria-expanded={showSettings}
+                aria-controls="settings-dialog"
               >
                 <IconSettings />
                 <span className="btn-label-desktop">Settings</span>
@@ -2679,6 +2683,7 @@ function App() {
             role="dialog"
             aria-modal="true"
             aria-label="Settings"
+            id="settings-dialog"
             ref={settingsDialogRef}
             tabIndex={-1}
           >
@@ -2904,6 +2909,7 @@ function App() {
             role="dialog"
             aria-modal="true"
             aria-label="New game"
+            id="new-game-menu-dialog"
             ref={newGameDialogRef}
             tabIndex={-1}
           >
@@ -3231,7 +3237,18 @@ function App() {
                 )}
               </div>
               <div className="mobile-board-actions" role="group" aria-label="Board actions">
-                <button className="mobile-action-btn" type="button" onClick={toggleNewGameMenu} title="New game" aria-label="Open new game menu"><IconRefresh /></button>
+                <button
+                  className="mobile-action-btn"
+                  type="button"
+                  onClick={toggleNewGameMenu}
+                  title="New game"
+                  aria-label="Open new game menu"
+                  aria-haspopup="dialog"
+                  aria-expanded={showNewGameMenu}
+                  aria-controls="new-game-menu-dialog"
+                >
+                  <IconRefresh />
+                </button>
                 <button
                   className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''} ${saveFailedToast ? 'mobile-action-btn-warn' : ''}`}
                   type="button"
@@ -3271,7 +3288,18 @@ function App() {
                 >
                   <IconMore />
                 </button>
-                <button className="mobile-action-btn" type="button" onClick={toggleSettings} title="Settings" aria-label="Open settings"><IconSettings /></button>
+                <button
+                  className="mobile-action-btn"
+                  type="button"
+                  onClick={toggleSettings}
+                  title="Settings"
+                  aria-label="Open settings"
+                  aria-haspopup="dialog"
+                  aria-expanded={showSettings}
+                  aria-controls="settings-dialog"
+                >
+                  <IconSettings />
+                </button>
               </div>
             </div>
           )}
@@ -3787,7 +3815,14 @@ function App() {
           {engineEnabled ? <div className={`analyzing-bar ${isSearching ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
             <div className="game-controls">
-              <button className="gc-btn" onClick={toggleNewGameMenu}>
+              <button
+                className="gc-btn"
+                type="button"
+                onClick={toggleNewGameMenu}
+                aria-haspopup="dialog"
+                aria-expanded={showNewGameMenu}
+                aria-controls="new-game-menu-dialog"
+              >
                 <IconRefresh /> New Game
               </button>
               <button
