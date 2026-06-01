@@ -183,6 +183,14 @@ async function main() {
       if (rankedMoments !== "3:blunder,2:mistake,1:inaccuracy") {
         throw new Error(`Unexpected key-moment order: ${rankedMoments}`);
       }
+      if (
+        typeof annotations[1]?.winPercentLoss !== "number" ||
+        annotations[1].winPercentLoss < 10 ||
+        annotations[1].winPercentLoss > 12 ||
+        typeof summary.keyMoments[2]?.winPercentLoss !== "number"
+      ) {
+        throw new Error(`Review win-chance loss metadata was not computed: ${JSON.stringify({ annotations, keyMoments: summary.keyMoments })}`);
+      }
 
       const decisiveTreeNodes = {
         root: { parentId: null },
@@ -200,6 +208,8 @@ async function main() {
         decisiveReview.summary.blunderCount !== 0 ||
         decisiveReview.summary.mistakeCount !== 0 ||
         decisiveReview.summary.inaccuracyCount !== 1 ||
+        decisiveReview.summary.keyMoments[0]?.winPercentLoss < 5 ||
+        decisiveReview.summary.keyMoments[0]?.winPercentLoss > 7 ||
         !decisiveAnnotation.reviewNote.includes("Still winning")
       ) {
         throw new Error(`Decisive advantage review was over-punished: ${JSON.stringify(decisiveReview)}`);

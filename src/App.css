@@ -3040,7 +3040,8 @@ summary:active {
 }
 
 .review-eval-transition,
-.review-moment-eval {
+.review-moment-eval,
+.review-chance-loss {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
@@ -3052,7 +3053,8 @@ summary:active {
 }
 
 .review-eval-transition span,
-.review-moment-eval span {
+.review-moment-eval span,
+.review-chance-loss span {
   color: var(--text-tertiary);
   font-family: var(--font-sans);
   font-size: 0.58rem;
@@ -3062,10 +3064,15 @@ summary:active {
 }
 
 .review-eval-transition strong,
-.review-moment-eval strong {
+.review-moment-eval strong,
+.review-chance-loss strong {
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.68rem;
+}
+
+.review-chance-loss strong {
+  color: var(--accent);
 }
 
 .review-eval-transition em,

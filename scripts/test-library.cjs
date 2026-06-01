@@ -213,6 +213,11 @@ try {
   assert(boundedTextSave.review.summary.engine.revisitMoveTimeMs === 2400, "Review revisit move times should be integer-normalized.");
   assert(boundedTextSave.review.summary.keyMoments[0].nodeId.length === 96, "Review node ids should be capped.");
   assert(boundedTextSave.review.summary.keyMoments[0].note.length === 500, "Review key-moment notes should be capped.");
+  assert(
+    boundedTextSave.review.summary.keyMoments[0].winPercentLoss > 18 &&
+      boundedTextSave.review.summary.keyMoments[0].winPercentLoss < 20,
+    "Review key-moment chance loss should be derived when older saves do not provide it."
+  );
   assert(boundedTextSave.review.annotations.length === 1, "Off-line review annotations should be dropped.");
   assert(boundedTextSave.review.annotations[0].reviewNote.length === 500, "Review annotation notes should be capped.");
 
@@ -260,6 +265,7 @@ try {
           side: "black",
           quality: "blunder",
           swing: 420.6,
+          winPercentLoss: 101.5,
           evalBefore: 20,
           evalAfter: -401,
           bestMove: "B9C7",
@@ -268,7 +274,7 @@ try {
         }],
       },
       annotations: [
-        { moveIndex: 0.8, evalScore: 20, bestMove: "B9C7", quality: "best", reviewNote: "ok" },
+        { moveIndex: 0.8, evalScore: 20, bestMove: "B9C7", quality: "best", winPercentLoss: 101.5, reviewNote: "ok" },
       ],
     },
   });
@@ -290,10 +296,12 @@ try {
     "Invalid review timestamps should be replaced with a valid timestamp."
   );
   assert(corruptReviewedSave.review.summary.keyMoments[0]?.moveIndex === 1, "Review key moments should use integer move indexes.");
+  assert(corruptReviewedSave.review.summary.keyMoments[0]?.winPercentLoss === 100, "Review key-moment chance loss should be clamped.");
   assert(corruptReviewedSave.review.summary.keyMoments[0]?.bestMove === "b9c7", "Review key-moment best moves should normalize.");
   assert(corruptReviewedSave.review.summary.keyMoments[0]?.playedMove === "h9g7", "Review key-moment played moves should normalize.");
   assert(corruptReviewedSave.review.annotations[0]?.moveIndex === 0, "Review annotation move indexes should normalize.");
   assert(corruptReviewedSave.review.annotations[0]?.bestMove === "b9c7", "Review annotation best moves should normalize.");
+  assert(corruptReviewedSave.review.annotations[0]?.winPercentLoss === 100, "Review annotation chance loss should be clamped.");
 
   const savedStudyTree = library.normalizeSavedGame({
     id: "saved-study-tree",

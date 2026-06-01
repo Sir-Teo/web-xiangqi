@@ -2594,8 +2594,12 @@ async function assertReviewBestMoveBranchAction(page) {
     focusEval: document.querySelector('[data-testid="review-focus-eval"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     focusEvalLabel: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("aria-label") || "",
     focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
+    focusChance: document.querySelector('[data-testid="review-focus-chance"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    focusChanceLabel: document.querySelector('[data-testid="review-focus-chance"]')?.getAttribute("aria-label") || "",
     momentEval: document.querySelector('[data-testid="review-moment-eval-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
+    momentChance: document.querySelector('[data-testid="review-moment-chance-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+    momentChanceLabel: document.querySelector('[data-testid="review-moment-chance-0"]')?.getAttribute("aria-label") || "",
     momentLabel: document.querySelector('[data-testid="review-moment-0"]')?.getAttribute("aria-label") || "",
     best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -2631,9 +2635,14 @@ async function assertReviewBestMoveBranchAction(page) {
     !reviewReadout.focusEval.includes("-2.40") ||
     reviewReadout.focusEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
     reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
+    reviewReadout.focusChance !== "Chance-21%" ||
+    reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
     !reviewReadout.momentEval.includes("0.00") ||
     !reviewReadout.momentEval.includes("-2.40") ||
     reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
+    reviewReadout.momentChance !== "Chance-21%" ||
+    reviewReadout.momentChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
+    !reviewReadout.momentLabel.includes("Red practical winning chance dropped by 21 percentage points") ||
     !reviewReadout.momentLabel.includes("red evaluation changed from 0.00 to -2.40") ||
     reviewReadout.best !== "Best0" ||
     reviewReadout.good !== "Good1" ||

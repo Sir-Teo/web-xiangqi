@@ -40,6 +40,7 @@ export interface ReviewKeyMoment {
     side: ReviewSide;
     quality: ReviewCriticalQuality;
     swing: number;
+    winPercentLoss?: number;
     evalBefore: number;
     evalAfter: number;
     bestMove?: string;
@@ -76,6 +77,7 @@ export interface ReviewAnnotation {
     bestMove?: string;
     quality: ReviewMoveQuality;
     swing: number;
+    winPercentLoss?: number;
     reviewNote: string;
 }
 
@@ -85,6 +87,7 @@ export interface SavedReviewAnnotation {
     bestMove?: string;
     quality?: ReviewMoveQuality;
     swing?: number;
+    winPercentLoss?: number;
     reviewNote?: string;
 }
 
@@ -338,6 +341,7 @@ export function computeReviewArtifacts(
         evaluated += 1;
         const side = getReviewSideForRecord(record, moveIndex);
         const swing = getEvalLossForMove(parentEval, currentEval, side);
+        const winPercentLoss = getWinPercentLossForMove(parentEval, currentEval, side);
         const retainedDecisiveAdvantage = hasDecisiveAdvantageAfterMove(currentEval, side);
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const note = buildReviewNote({
@@ -356,6 +360,7 @@ export function computeReviewArtifacts(
             bestMove: record.bestMove,
             quality,
             swing,
+            winPercentLoss,
             reviewNote: note,
         });
 
@@ -368,6 +373,7 @@ export function computeReviewArtifacts(
                 side,
                 quality,
                 swing,
+                winPercentLoss,
                 evalBefore: parentEval,
                 evalAfter: currentEval,
                 bestMove: record.bestMove,

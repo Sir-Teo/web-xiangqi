@@ -1,11 +1,12 @@
 import { memo } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
-import type { ReviewSummary } from '../../utils/review';
+import type { ReviewKeyMoment, ReviewSummary } from '../../utils/review';
 import {
     describeReviewEngineSummary,
     formatReviewEngineSummary,
     formatReviewQuality,
     formatReviewQualityCount,
+    getWinPercentLossForMove,
     getMoveQualityClassName,
 } from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
@@ -194,6 +195,15 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     <em aria-hidden="true">→</em>
                                     <strong>{formatReviewEvalScore(focusMoment.evalAfter)}</strong>
                                 </div>
+                                <div
+                                    className="review-chance-loss"
+                                    data-testid="review-focus-chance"
+                                    aria-label={formatReviewChanceLossLabel(focusMoment)}
+                                    title={formatReviewChanceLossLabel(focusMoment)}
+                                >
+                                    <span>Chance</span>
+                                    <strong>{formatReviewChanceLoss(focusMoment)}</strong>
+                                </div>
                                 {focusMoment.bestMove ? (
                                     <em>Try {formatUciMove(focusMoment.bestMove)}</em>
                                 ) : null}
@@ -226,7 +236,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         onClick={() => onNavigateNode(moment.nodeId)}
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
+                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
                                     >
                                         <div className="review-moment-topline">
                                             <span>{formatReviewQuality(moment.quality)}</span>
@@ -246,6 +256,15 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             <strong>{formatReviewEvalScore(moment.evalBefore)}</strong>
                                             <em aria-hidden="true">→</em>
                                             <strong>{formatReviewEvalScore(moment.evalAfter)}</strong>
+                                        </div>
+                                        <div
+                                            className="review-chance-loss"
+                                            data-testid={`review-moment-chance-${moment.moveIndex}`}
+                                            aria-label={formatReviewChanceLossLabel(moment)}
+                                            title={formatReviewChanceLossLabel(moment)}
+                                        >
+                                            <span>Chance</span>
+                                            <strong>{formatReviewChanceLoss(moment)}</strong>
                                         </div>
                                         <p>{moment.note}</p>
                                         {moment.bestMove ? (
@@ -296,4 +315,28 @@ function formatReviewEvalScore(score: number) {
 
 function formatReviewEvalTransition(evalBefore: number, evalAfter: number) {
     return `${formatReviewEvalScore(evalBefore)} → ${formatReviewEvalScore(evalAfter)}`;
+}
+
+function getMomentWinPercentLoss(moment: ReviewKeyMoment) {
+    return typeof moment.winPercentLoss === 'number'
+        ? Math.max(0, Math.min(100, moment.winPercentLoss))
+        : getWinPercentLossForMove(moment.evalBefore, moment.evalAfter, moment.side);
+}
+
+function formatReviewChanceLoss(moment: ReviewKeyMoment) {
+    const loss = getMomentWinPercentLoss(moment);
+    if (loss < 0.05) return '0%';
+    const precision = loss < 10 ? 1 : 0;
+    return `-${Number(loss.toFixed(precision))}%`;
+}
+
+function formatReviewChanceLossLabel(moment: ReviewKeyMoment) {
+    const loss = getMomentWinPercentLoss(moment);
+    const precision = loss < 10 ? 1 : 0;
+    const formattedLoss = `${Number(loss.toFixed(precision))} percentage points`;
+    return `${capitalizeReviewSide(moment.side)} practical winning chance dropped by ${formattedLoss}`;
+}
+
+function capitalizeReviewSide(side: ReviewKeyMoment['side']) {
+    return side === 'red' ? 'Red' : 'Black';
 }

@@ -9,7 +9,7 @@ import type {
     SavedReviewAnnotation,
     SavedReviewSnapshot,
 } from './review';
-import { makeReviewLineSignatureFromMoves } from './review';
+import { getWinPercentLossForMove, makeReviewLineSignatureFromMoves } from './review';
 
 export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi-game-library';
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
@@ -74,6 +74,12 @@ function asClampedInteger(value: unknown, min: number, max: number) {
     const number = asFiniteNumber(value);
     if (typeof number !== 'number') return undefined;
     return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function asWinPercentLoss(value: unknown) {
+    const number = asFiniteNumber(value);
+    if (typeof number !== 'number') return undefined;
+    return Math.max(0, Math.min(100, number));
 }
 
 function asString(value: unknown) {
@@ -199,6 +205,7 @@ function normalizeSavedReviewAnnotation(raw: unknown, moveCount: number): SavedR
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         quality: asMoveQuality(raw.quality),
         swing: asFiniteNumber(raw.swing),
+        winPercentLoss: asWinPercentLoss(raw.winPercentLoss),
         reviewNote: asBoundedString(raw.reviewNote, MAX_REVIEW_TEXT_LENGTH) || undefined,
     };
 }
@@ -215,6 +222,7 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string, moveCoun
     const side = raw.side === 'black' ? 'black' : raw.side === 'red' ? 'red' : undefined;
     const playedMove = normalizeSavedMove(raw.playedMove);
     const note = asBoundedString(raw.note, MAX_REVIEW_TEXT_LENGTH);
+    const rawWinPercentLoss = asWinPercentLoss(raw.winPercentLoss);
 
     if (
         typeof moveIndex !== 'number' ||
@@ -241,6 +249,7 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string, moveCoun
         side,
         quality,
         swing,
+        winPercentLoss: rawWinPercentLoss ?? getWinPercentLossForMove(evalBefore, evalAfter, side),
         evalBefore,
         evalAfter,
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
