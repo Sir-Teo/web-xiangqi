@@ -32,6 +32,7 @@ async function main() {
     const indexResponse = await fetch(`${baseUrl}/web-xiangqi/`);
     assert.equal(indexResponse.status, 200);
     assert.equal(indexResponse.headers.get("cross-origin-opener-policy"), "same-origin");
+    assert.equal(indexResponse.headers.get("x-content-type-options"), "nosniff");
     const html = await indexResponse.text();
     const assetPath = html.match(/src="([^"]+\/assets\/[^"]+\.js)"/)?.[1];
     assert(assetPath, "React build should reference a hashed JS asset.");
@@ -39,6 +40,7 @@ async function main() {
     const assetResponse = await fetch(`${baseUrl}${assetPath}`);
     assert.equal(assetResponse.status, 200);
     assert.equal(assetResponse.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    assert.equal(assetResponse.headers.get("x-content-type-options"), "nosniff");
     const etag = assetResponse.headers.get("etag");
     assert(etag, "Static assets should include an ETag.");
 
