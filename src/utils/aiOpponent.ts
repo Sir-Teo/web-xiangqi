@@ -98,7 +98,9 @@ export function chooseAiMoveFromPv({
     source: 'bestmove' as const,
   };
 
-  if (!isUciMove(fallbackMove) || AI_MULTI_PV_LIMIT[strength] <= 1) {
+  const fallbackIsValid = isUciMove(fallbackMove);
+  const candidateLimit = AI_MULTI_PV_LIMIT[strength];
+  if (fallbackIsValid && candidateLimit <= 1) {
     return fallback;
   }
 
@@ -124,7 +126,7 @@ export function chooseAiMoveFromPv({
       source: 'pv',
       multipv: line.multipv,
     });
-    if (candidates.length >= AI_MULTI_PV_LIMIT[strength]) break;
+    if (candidates.length >= candidateLimit) break;
   }
 
   if (candidates.length <= 1) return candidates[0] ?? fallback;

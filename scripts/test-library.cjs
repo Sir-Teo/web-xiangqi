@@ -666,6 +666,21 @@ try {
   });
   assert(suffixedCandidateChoice.move === "h0g2", "AI candidate selection should ignore suffixed non-Xiangqi moves.");
 
+  const pvOnlyChoice = aiOpponent.chooseAiMoveFromPv({
+    fallbackMove: "",
+    fallbackScore: 0,
+    pvLines: [
+      { score: 35, moves: ["h0g2"], multipv: 0, searchTag: "ai-test" },
+    ],
+    searchTag: "ai-test",
+    strength: 5,
+    random: () => 0.5,
+  });
+  assert(
+    pvOnlyChoice.move === "h0g2" && pvOnlyChoice.source === "pv",
+    "AI selection should recover from a missing bestmove by using the first valid PV move."
+  );
+
   const startBoard = xiangqi.parseFenBoard(xiangqi.START_FEN);
   const strictMove = xiangqi.validateMoveStr("b2e2junk", startBoard, "w");
   assert(!strictMove.ok && strictMove.reason === "invalid move format", "validateMoveStr should reject suffixed UCI moves.");

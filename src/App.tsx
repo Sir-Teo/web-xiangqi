@@ -847,6 +847,13 @@ function App() {
     setAiMoveError(null);
   }, []);
 
+  const pauseAiWithMoveError = useCallback((message: string) => {
+    stepPendingRef.current = false;
+    pausedRef.current = true;
+    setPaused(true);
+    setAiMoveError(message);
+  }, []);
+
   const {
     board,
     selected,
@@ -1201,22 +1208,20 @@ function App() {
           aiTag.positionCommand === currentPositionCommand;
         applyBestMoveRef.current = false;
 
-        if (shouldApplyAiMove && uci) {
+        if (shouldApplyAiMove) {
           const choice = chooseAiMoveFromPv({
-            fallbackMove: uci,
+            fallbackMove: uci || '',
             fallbackScore: score,
             pvLines: completedPvLines,
             searchTag,
             strength: aiTag.strength,
           });
-          const moved = applyUciMove(choice.move);
-          if (moved) {
+          if (!choice.move) {
+            pauseAiWithMoveError('AI move unavailable');
+          } else if (applyUciMove(choice.move)) {
             setAiMoveError(null);
           } else {
-            stepPendingRef.current = false;
-            pausedRef.current = true;
-            setPaused(true);
-            setAiMoveError('AI move rejected');
+            pauseAiWithMoveError('AI move rejected');
           }
         }
 

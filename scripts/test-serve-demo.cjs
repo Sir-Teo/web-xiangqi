@@ -24,6 +24,44 @@ function assertMetaTag(html, attributeName, attributeValue, content) {
   );
 }
 
+function buildFakeAiEngineScript({ variant, infoLines, bestmove }) {
+  return `
+    window.Pikafish = function Pikafish() {};
+    window.Pikafish.createWorkerEngine = async () => {
+      const listeners = [];
+      const infoLines = ${JSON.stringify(infoLines)};
+      const bestmove = ${JSON.stringify(bestmove)};
+      const emit = (line) => listeners.forEach((listener) => listener(line));
+      return {
+        variant: ${JSON.stringify(variant)},
+        addMessageListener(listener) { listeners.push(listener); },
+        removeMessageListener(listener) {
+          const index = listeners.indexOf(listener);
+          if (index >= 0) listeners.splice(index, 1);
+        },
+        postMessage(command) {
+          if (command === "uci") {
+            setTimeout(() => {
+              emit("id name Fake AI QA");
+              emit("option name MultiPV type spin default 1 min 1 max 128");
+              emit("option name UCI_ShowWDL type check default false");
+              emit("uciok");
+            }, 0);
+          } else if (command === "isready") {
+            setTimeout(() => emit("readyok"), 0);
+          } else if (/^go\\b/.test(command)) {
+            setTimeout(() => {
+              infoLines.forEach(emit);
+              emit("bestmove " + bestmove);
+            }, 20);
+          }
+        },
+        terminate() { return Promise.resolve(); },
+      };
+    };
+  `;
+}
+
 async function main() {
   assert.equal(appBasePath, "/web-xiangqi/");
   assert.equal(normalizeRequestPath("/"), "/index.html");
@@ -128,39 +166,11 @@ async function main() {
       await invalidMovePage.route("**/pikafish.js", (route) => route.fulfill({
         status: 200,
         contentType: "application/javascript",
-        body: `
-          window.Pikafish = function Pikafish() {};
-          window.Pikafish.createWorkerEngine = async () => {
-            const listeners = [];
-            const emit = (line) => listeners.forEach((listener) => listener(line));
-            return {
-              variant: "fake-invalid-ai-move",
-              addMessageListener(listener) { listeners.push(listener); },
-              removeMessageListener(listener) {
-                const index = listeners.indexOf(listener);
-                if (index >= 0) listeners.splice(index, 1);
-              },
-              postMessage(command) {
-                if (command === "uci") {
-                  setTimeout(() => {
-                    emit("id name Fake Invalid Move");
-                    emit("option name MultiPV type spin default 1 min 1 max 128");
-                    emit("option name UCI_ShowWDL type check default false");
-                    emit("uciok");
-                  }, 0);
-                } else if (command === "isready") {
-                  setTimeout(() => emit("readyok"), 0);
-                } else if (/^go\\b/.test(command)) {
-                  setTimeout(() => {
-                    emit("info depth 2 multipv 1 score cp 0 pv a0a9");
-                    emit("bestmove a0a9");
-                  }, 20);
-                }
-              },
-              terminate() { return Promise.resolve(); },
-            };
-          };
-        `,
+        body: buildFakeAiEngineScript({
+          variant: "fake-invalid-ai-move",
+          infoLines: ["info depth 2 multipv 1 score cp 0 pv a0a9"],
+          bestmove: "a0a9",
+        }),
       }));
       await invalidMovePage.goto(`${baseUrl}/web-xiangqi/`, {
         waitUntil: "domcontentloaded",
@@ -186,6 +196,50 @@ async function main() {
       assert.equal(invalidMoveState.moveRows, 0);
       assert.equal(invalidMoveState.overflowX <= 2, true, "Rejected AI move should not introduce horizontal overflow.");
       assert.deepEqual(invalidMoveConsoleIssues, []);
+
+      const pvFallbackPage = await browser.newPage();
+      const pvFallbackConsoleIssues = [];
+      pvFallbackPage.on("console", (msg) => {
+        if (msg.type() === "warning" || msg.type() === "error") {
+          pvFallbackConsoleIssues.push(`${msg.type()}: ${msg.text()}`);
+        }
+      });
+      pvFallbackPage.on("pageerror", (err) => {
+        pvFallbackConsoleIssues.push(err && err.stack ? err.stack : String(err));
+      });
+      await pvFallbackPage.route("**/pikafish.js", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: buildFakeAiEngineScript({
+          variant: "fake-pv-only-ai-move",
+          infoLines: ["info depth 2 multipv 1 score cp 35 pv h0g2"],
+          bestmove: "(none)",
+        }),
+      }));
+      await pvFallbackPage.goto(`${baseUrl}/web-xiangqi/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await pvFallbackPage.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await pvFallbackPage.getByRole("button", { name: "Play", exact: true }).click();
+      await pvFallbackPage.getByRole("button", { name: "Start new game" }).click();
+      await pvFallbackPage.getByRole("button", { name: /You play Black/i }).click();
+      await pvFallbackPage.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+      await pvFallbackPage.waitForFunction(() => {
+        return document.querySelectorAll(".mtree-row").length === 1 &&
+          /\sb\s/.test(document.querySelector(".bottombar-fen")?.getAttribute("title") || "");
+      }, null, { timeout: 5000 });
+      const pvFallbackState = await pvFallbackPage.evaluate(() => ({
+        fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+        aiStatus: document.querySelector(".board-ai-status")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        moveRows: document.querySelectorAll(".mtree-row").length,
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      }));
+      assert.match(pvFallbackState.fen, /\sb\s/);
+      assert.equal(pvFallbackState.moveRows, 1);
+      assert.doesNotMatch(pvFallbackState.aiStatus, /AI move (rejected|unavailable)/);
+      assert.equal(pvFallbackState.overflowX <= 2, true, "PV fallback AI move should not introduce horizontal overflow.");
+      assert.deepEqual(pvFallbackConsoleIssues, []);
     } finally {
       await browser.close();
     }
