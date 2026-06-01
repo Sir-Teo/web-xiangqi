@@ -603,7 +603,68 @@ async function assertDesktopResizeFeedback(page) {
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
-  const handle = page.locator(".panel.left .resize-handle-right");
+  const handle = page.getByTestId("left-panel-resize-handle");
+  const controlMeta = await page.evaluate(() => {
+    const left = document.querySelector('[data-testid="left-panel-resize-handle"]');
+    const right = document.querySelector('[data-testid="right-panel-resize-handle"]');
+    const top = document.querySelector('[data-testid="top-bar-toggle-handle"]');
+    const bottom = document.querySelector('[data-testid="bottom-bar-toggle-handle"]');
+    return {
+      leftRole: left?.getAttribute("role") || "",
+      leftTabIndex: left?.getAttribute("tabindex") || "",
+      leftLabel: left?.getAttribute("aria-label") || "",
+      leftOrientation: left?.getAttribute("aria-orientation") || "",
+      leftControls: left?.getAttribute("aria-controls") || "",
+      leftValueNow: left?.getAttribute("aria-valuenow") || "",
+      leftValueMax: left?.getAttribute("aria-valuemax") || "",
+      leftTitle: left?.getAttribute("title") || "",
+      rightRole: right?.getAttribute("role") || "",
+      rightControls: right?.getAttribute("aria-controls") || "",
+      topTag: top?.tagName || "",
+      topLabel: top?.getAttribute("aria-label") || "",
+      topExpanded: top?.getAttribute("aria-expanded") || "",
+      bottomTag: bottom?.tagName || "",
+      bottomLabel: bottom?.getAttribute("aria-label") || "",
+      bottomExpanded: bottom?.getAttribute("aria-expanded") || "",
+    };
+  });
+  if (
+    controlMeta.leftRole !== "separator" ||
+    controlMeta.leftTabIndex !== "0" ||
+    !controlMeta.leftLabel.includes("Resize left graph and library panel") ||
+    controlMeta.leftOrientation !== "vertical" ||
+    controlMeta.leftControls !== "left-panel-content" ||
+    controlMeta.leftValueNow !== "320" ||
+    controlMeta.leftValueMax !== "600" ||
+    !controlMeta.leftTitle.includes("Press arrow keys") ||
+    controlMeta.rightRole !== "separator" ||
+    controlMeta.rightControls !== "right-analysis-content" ||
+    controlMeta.topTag !== "BUTTON" ||
+    controlMeta.topLabel !== "Collapse top toolbar" ||
+    controlMeta.topExpanded !== "true" ||
+    controlMeta.bottomTag !== "BUTTON" ||
+    controlMeta.bottomLabel !== "Collapse bottom command bar" ||
+    controlMeta.bottomExpanded !== "true"
+  ) {
+    throw new Error(`Panel resize handles are not exposed as accessible controls: ${JSON.stringify(controlMeta)}`);
+  }
+
+  await handle.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForFunction(() => {
+    return Number(document.querySelector('[data-testid="left-panel-resize-handle"]')?.getAttribute("aria-valuenow") || 0) < 320;
+  }, null, { timeout: 5000 });
+  await page.keyboard.press("Home");
+  await page.waitForFunction(() => {
+    const handle = document.querySelector('[data-testid="left-panel-resize-handle"]');
+    return handle?.getAttribute("aria-valuenow") === "0" && (handle.getAttribute("aria-label") || "").includes("Expand left graph and library panel");
+  }, null, { timeout: 5000 });
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => {
+    const handle = document.querySelector('[data-testid="left-panel-resize-handle"]');
+    return handle?.getAttribute("aria-valuenow") === "320" && (handle.getAttribute("aria-label") || "").includes("Resize left graph and library panel");
+  }, null, { timeout: 5000 });
+
   const box = await handle.boundingBox();
   if (!box) {
     throw new Error("Desktop resize handle is not visible.");

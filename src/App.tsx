@@ -126,6 +126,8 @@ const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const PANEL_MIN_WIDTH = 60;
+const PANEL_MAX_WIDTH = 600;
+const PANEL_KEYBOARD_STEP = 40;
 const DEFAULT_LEFT_PANEL_WIDTH = 320;
 const DEFAULT_RIGHT_PANEL_WIDTH = 320;
 const INITIAL_PIECE_COUNTS: Record<PieceCode, number> = {
@@ -646,6 +648,12 @@ function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
       const style = window.getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
+}
+
+function clampPanelWidth(width: number) {
+  const nextWidth = Math.round(width);
+  if (nextWidth < PANEL_MIN_WIDTH) return 0;
+  return Math.min(nextWidth, PANEL_MAX_WIDTH);
 }
 
 function App() {
@@ -1822,6 +1830,46 @@ function App() {
     setMobileView('analysis');
   }, []);
 
+  const adjustLeftPanelWidth = useCallback((delta: number) => {
+    setLeftWidth((width) => clampPanelWidth((width > 0 ? width : DEFAULT_LEFT_PANEL_WIDTH) + delta));
+  }, []);
+
+  const adjustRightPanelWidth = useCallback((delta: number) => {
+    setRightWidth((width) => clampPanelWidth((width > 0 ? width : DEFAULT_RIGHT_PANEL_WIDTH) + delta));
+  }, []);
+
+  const handleLeftResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      adjustLeftPanelWidth(-PANEL_KEYBOARD_STEP);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      adjustLeftPanelWidth(PANEL_KEYBOARD_STEP);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setLeftWidth(0);
+    } else if (event.key === 'End' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH);
+    }
+  }, [adjustLeftPanelWidth]);
+
+  const handleRightResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      adjustRightPanelWidth(PANEL_KEYBOARD_STEP);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      adjustRightPanelWidth(-PANEL_KEYBOARD_STEP);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setRightWidth(0);
+    } else if (event.key === 'End' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH);
+    }
+  }, [adjustRightPanelWidth]);
+
   const startLeftResize = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     document.body.classList.add('resizing');
@@ -1830,7 +1878,7 @@ function App() {
     let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW + e.clientX - startX;
-      last = next < PANEL_MIN_WIDTH ? 0 : Math.min(next, 600);
+      last = clampPanelWidth(next);
       document.documentElement.style.setProperty('--left-panel-w', last + 'px');
     };
     const onUp = () => {
@@ -1851,7 +1899,7 @@ function App() {
     let last = startW;
     const onMove = (e: MouseEvent) => {
       const next = startW - (e.clientX - startX);
-      last = next < PANEL_MIN_WIDTH ? 0 : Math.min(next, 600);
+      last = clampPanelWidth(next);
       document.documentElement.style.setProperty('--right-panel-w', last + 'px');
     };
     const onUp = () => {
@@ -2930,13 +2978,17 @@ function App() {
             </div>
           </div>
         </div>
-        <div
+        <button
+          type="button"
           className="resize-handle resize-handle-bottom"
           onClick={() => setTopPanelOpen(o => !o)}
-          title="Toggle top bar"
+          title={topPanelOpen ? 'Collapse top toolbar' : 'Expand top toolbar'}
+          aria-label={topPanelOpen ? 'Collapse top toolbar' : 'Expand top toolbar'}
+          aria-expanded={topPanelOpen}
+          data-testid="top-bar-toggle-handle"
         >
           <span className="resize-pill horizontal" />
-        </div>
+        </button>
       </section>
 
       {/* ── Settings modal ── */}
@@ -3349,9 +3401,19 @@ function App() {
         <section className="panel left">
           <div
             className="resize-handle resize-handle-right"
+            role="separator"
+            tabIndex={0}
             onMouseDown={startLeftResize}
             onClick={() => { if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH); }}
-            title="Drag to resize · click to expand"
+            onKeyDown={handleLeftResizeKeyDown}
+            aria-label={leftPanelOpen ? `Resize left graph and library panel, ${Math.round(leftWidth)} pixels wide` : 'Expand left graph and library panel'}
+            aria-orientation="vertical"
+            aria-controls="left-panel-content"
+            aria-valuemin={0}
+            aria-valuemax={PANEL_MAX_WIDTH}
+            aria-valuenow={Math.round(leftWidth)}
+            title={leftPanelOpen ? 'Drag to resize. Press arrow keys to adjust, Home to collapse, End to restore.' : 'Click, press Enter, or press End to expand the left panel.'}
+            data-testid="left-panel-resize-handle"
           >
             <span className="resize-pill" />
           </div>
@@ -3855,9 +3917,19 @@ function App() {
         <aside className="panel right">
           <div
             className="resize-handle resize-handle-left"
+            role="separator"
+            tabIndex={0}
             onMouseDown={startRightResize}
             onClick={() => { if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH); }}
-            title="Drag to resize · click to expand"
+            onKeyDown={handleRightResizeKeyDown}
+            aria-label={rightPanelOpen ? `Resize right analysis panel, ${Math.round(rightWidth)} pixels wide` : 'Expand right analysis panel'}
+            aria-orientation="vertical"
+            aria-controls="right-analysis-content"
+            aria-valuemin={0}
+            aria-valuemax={PANEL_MAX_WIDTH}
+            aria-valuenow={Math.round(rightWidth)}
+            title={rightPanelOpen ? 'Drag to resize. Press arrow keys to adjust, Home to collapse, End to restore.' : 'Click, press Enter, or press End to expand the right panel.'}
+            data-testid="right-panel-resize-handle"
           >
             <span className="resize-pill" />
           </div>
@@ -4142,13 +4214,17 @@ function App() {
 
       {/* ── Bottom bar ── */}
       <section className={`panel bottom ${bottomPanelOpen ? '' : 'hidden'}`}>
-        <div
+        <button
+          type="button"
           className="resize-handle resize-handle-top"
           onClick={() => setBottomPanelOpen(o => !o)}
-          title="Toggle bottom bar"
+          title={bottomPanelOpen ? 'Collapse bottom command bar' : 'Expand bottom command bar'}
+          aria-label={bottomPanelOpen ? 'Collapse bottom command bar' : 'Expand bottom command bar'}
+          aria-expanded={bottomPanelOpen}
+          data-testid="bottom-bar-toggle-handle"
         >
           <span className="resize-pill horizontal" />
-        </div>
+        </button>
         <div className="panel-inner">
           {engineEnabled ? <div className={`analyzing-bar ${isSearching || isSearchQueued ? 'active' : ''}`} /> : null}
           <div className="panel-content bottom-main">
