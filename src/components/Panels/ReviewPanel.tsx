@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewKeyMoment, ReviewSummary } from '../../utils/review';
 import {
@@ -47,6 +47,11 @@ export const ReviewPanel = memo(function ReviewPanel({
 }: Props) {
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
     const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
+    useEffect(() => {
+        setMomentSideFilter('all');
+        setMomentQualityFilter('all');
+    }, [status, summary?.lineSignature, summary?.reviewedAt]);
+
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);

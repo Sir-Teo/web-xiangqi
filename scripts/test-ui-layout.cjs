@@ -2818,6 +2818,146 @@ async function assertReviewBestMoveBranchAction(page) {
   }
 }
 
+async function assertReviewMomentFiltersResetOnLoad(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.evaluate(() => {
+      const moves = ["b2e2", "h9g7"];
+      localStorage.setItem("xiangqi-game-library", JSON.stringify([
+        {
+          id: "qa-review-filter-a",
+          savedAt: 1710000001000,
+          gameMode: "PvP",
+          moves,
+          result: "ongoing",
+          label: "Filter Reset Mistake QA",
+          review: {
+            summary: {
+              totalMoves: 2,
+              accuracy: 66,
+              redAccuracy: 39,
+              blackAccuracy: 93,
+              bestCount: 0,
+              goodCount: 1,
+              inaccuracyCount: 0,
+              mistakeCount: 1,
+              blunderCount: 0,
+              reviewedAt: 1710000001000,
+              lineSignature: "b2e2 h9g7",
+              keyMoments: [{
+                nodeId: "saved-0",
+                moveIndex: 0,
+                jumpTarget: 0,
+                ply: 1,
+                side: "red",
+                quality: "mistake",
+                swing: 240,
+                winPercentLoss: 20.75881993130915,
+                evalBefore: 0,
+                evalAfter: -240,
+                bestMove: "b0c2",
+                playedMove: "b2e2",
+                note: "Red missed a stronger continuation. B0->C2 was stronger by 240cp.",
+              }],
+            },
+            annotations: [
+              { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, winPercentLoss: 20.75881993130915, reviewNote: "Red missed a stronger continuation. B0->C2 was stronger by 240cp." },
+              { moveIndex: 1, evalScore: -220, quality: "good", swing: 20, winPercentLoss: 1.5, reviewNote: "Solid choice." },
+            ],
+          },
+        },
+        {
+          id: "qa-review-filter-b",
+          savedAt: 1710000002000,
+          gameMode: "PvP",
+          moves,
+          result: "ongoing",
+          label: "Filter Reset Blunder QA",
+          review: {
+            summary: {
+              totalMoves: 2,
+              accuracy: 51,
+              redAccuracy: 81,
+              blackAccuracy: 22,
+              bestCount: 0,
+              goodCount: 1,
+              inaccuracyCount: 0,
+              mistakeCount: 0,
+              blunderCount: 1,
+              reviewedAt: 1710000002000,
+              lineSignature: "b2e2 h9g7",
+              keyMoments: [{
+                nodeId: "saved-1",
+                moveIndex: 1,
+                jumpTarget: 1,
+                ply: 2,
+                side: "black",
+                quality: "blunder",
+                swing: 520,
+                winPercentLoss: 35,
+                evalBefore: -240,
+                evalAfter: 260,
+                bestMove: "b9c7",
+                playedMove: "h9g7",
+                note: "Black missed a defensive resource. B9->C7 was stronger by 520cp.",
+              }],
+            },
+            annotations: [
+              { moveIndex: 0, evalScore: -240, quality: "good", swing: 20, winPercentLoss: 1.5, reviewNote: "Solid choice." },
+              { moveIndex: 1, evalScore: 260, bestMove: "b9c7", quality: "blunder", swing: 520, winPercentLoss: 35, reviewNote: "Black missed a defensive resource. B9->C7 was stronger by 520cp." },
+            ],
+          },
+        },
+      ]));
+    });
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    await page.locator('button[aria-label="Open game library"]').click();
+    await page.getByTestId("load-saved-qa-review-filter-a").click();
+    await page.getByTestId("review-moment-quality-filter").selectOption("mistake");
+    await page.waitForFunction(() => {
+      return document.querySelector('[data-testid="review-moment-quality-filter"]')?.value === "mistake" &&
+        document.querySelector('[data-testid="review-moment-count"]')?.textContent?.trim() === "1/1";
+    }, null, { timeout: 5000 });
+
+    await page.locator('button[aria-label="Open game library"]').click();
+    await page.getByTestId("load-saved-qa-review-filter-b").click();
+    await page.waitForFunction(() => {
+      return document.querySelector('[data-testid="review-moment-side-filter"]')?.value === "all" &&
+        document.querySelector('[data-testid="review-moment-quality-filter"]')?.value === "all" &&
+        document.querySelector('[data-testid="review-moment-count"]')?.textContent?.trim() === "1/1";
+    }, null, { timeout: 5000 });
+
+    const state = await page.evaluate(() => ({
+      count: document.querySelector('[data-testid="review-moment-count"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      sideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
+      qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
+      momentText: document.querySelector('[data-testid="review-moment-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      focusText: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    if (
+      state.count !== "1/1" ||
+      state.sideFilter !== "all" ||
+      state.qualityFilter !== "all" ||
+      !state.momentText.includes("Blunder") ||
+      !state.momentText.includes("H9→G7") ||
+      !state.focusText.includes("Blunder at ply 2") ||
+      state.overflowX > 2
+    ) {
+      throw new Error(`Review filters did not reset after loading another review: ${JSON.stringify(state)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertReviewRevisitRefreshesDecisionBestMove(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -5281,6 +5421,7 @@ async function main() {
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
+    await assertReviewMomentFiltersResetOnLoad(browser);
     await assertReviewRevisitRefreshesDecisionBestMove(browser);
     await assertReviewRevisitIgnoresGoodScoreSwings(browser);
     await assertCompletedReviewRerunRespectsEngineState(page);
