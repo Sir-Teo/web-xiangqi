@@ -52,7 +52,7 @@ async function main() {
     assertMetaTag(html, "name", "theme-color", "#050505");
     assertMetaTag(html, "property", "og:title", "Web Xiangqi");
     assertMetaTag(html, "name", "twitter:card", "summary");
-    assert.match(html, /<link rel="preload" href="\/web-xiangqi\/pikafish\.js" as="script"\s*\/?>/);
+    assert.match(html, /<link rel="preload" href="\.\/pikafish\.js" as="script"\s*\/?>/);
     const assetPath = html.match(/src="([^"]+\/assets\/[^"]+\.js)"/)?.[1];
     assert(assetPath, "React build should reference a hashed JS asset.");
 
@@ -67,6 +67,10 @@ async function main() {
       headers: { "If-None-Match": etag },
     });
     assert.equal(cachedResponse.status, 304);
+
+    const wrapperHead = await fetch(`${baseUrl}/web-xiangqi/pikafish.js`, { method: "HEAD" });
+    assert.equal(wrapperHead.status, 200);
+    assert.match(wrapperHead.headers.get("content-type") || "", /javascript/);
 
     const nnueHead = await fetch(`${baseUrl}/web-xiangqi/pikafish.nnue`, { method: "HEAD" });
     assert.equal(nnueHead.status, 200);
