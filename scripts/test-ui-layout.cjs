@@ -2745,7 +2745,7 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.momentChance !== "Chance-21%" ||
     reviewReadout.momentChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
     !reviewReadout.momentLabel.includes("Red practical winning chance dropped by 21 percentage points") ||
-    !reviewReadout.momentLabel.includes("red evaluation changed from 0.00 to -2.40") ||
+    !reviewReadout.momentLabel.includes("Red evaluation changed from 0.00 to -2.40") ||
     reviewReadout.best !== "Best0" ||
     reviewReadout.good !== "Good1" ||
     reviewReadout.inaccuracy !== "Inaccuracy0" ||
@@ -3087,7 +3087,14 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       sideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
       qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
       momentText: document.querySelector('[data-testid="review-moment-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      momentLabel: document.querySelector('[data-testid="review-moment-1"]')?.getAttribute("aria-label") || "",
+      momentEvalText: document.querySelector('[data-testid="review-moment-eval-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("aria-label") || "",
+      momentEvalTitle: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("title") || "",
       focusText: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      focusEvalText: document.querySelector('[data-testid="review-focus-eval"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      focusEvalLabel: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("aria-label") || "",
+      focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
     if (
@@ -3096,7 +3103,17 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       state.qualityFilter !== "all" ||
       !state.momentText.includes("Blunder") ||
       !state.momentText.includes("H9→G7") ||
+      !state.momentText.includes("Black POV") ||
+      !state.momentEvalText.includes("Black POV") ||
+      !state.momentEvalText.includes("+2.40") ||
+      !state.momentEvalText.includes("-2.60") ||
+      state.momentEvalLabel !== "Black evaluation changed from +2.40 to -2.60" ||
+      state.momentEvalTitle !== "Black POV: +2.40 → -2.60" ||
+      !state.momentLabel.includes("Black evaluation changed from +2.40 to -2.60") ||
       !state.focusText.includes("Blunder at ply 2") ||
+      !state.focusEvalText.includes("Black POV") ||
+      state.focusEvalLabel !== "Black evaluation changed from +2.40 to -2.60" ||
+      state.focusEvalTitle !== "Black POV: +2.40 → -2.60" ||
       state.overflowX > 2
     ) {
       throw new Error(`Review filters did not reset after loading another review: ${JSON.stringify(state)}`);

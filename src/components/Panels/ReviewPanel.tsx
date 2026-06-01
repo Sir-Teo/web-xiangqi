@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
-import type { ReviewKeyMoment, ReviewSummary } from '../../utils/review';
+import type { ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
 import {
     describeReviewEngineSummary,
     formatWinPercentLoss,
@@ -242,13 +242,13 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 <div
                                     className="review-eval-transition"
                                     data-testid="review-focus-eval"
-                                    aria-label={`Red evaluation changed from ${formatReviewEvalScore(focusMoment.evalBefore)} to ${formatReviewEvalScore(focusMoment.evalAfter)}`}
-                                    title={`Red POV: ${formatReviewEvalTransition(focusMoment.evalBefore, focusMoment.evalAfter)}`}
+                                    aria-label={formatReviewEvalChangeLabel(focusMoment)}
+                                    title={formatReviewEvalTitle(focusMoment)}
                                 >
-                                    <span>Eval</span>
-                                    <strong>{formatReviewEvalScore(focusMoment.evalBefore)}</strong>
+                                    <span>{formatReviewSide(focusMoment.side)} POV</span>
+                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalBefore, focusMoment.side)}</strong>
                                     <em aria-hidden="true">→</em>
-                                    <strong>{formatReviewEvalScore(focusMoment.evalAfter)}</strong>
+                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalAfter, focusMoment.side)}</strong>
                                 </div>
                                 <div
                                     className="review-chance-loss"
@@ -320,7 +320,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         onClick={() => onNavigateNode(moment.nodeId)}
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
+                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, ${formatReviewEvalChangeLabel(moment)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
                                     >
                                         <div className="review-moment-topline">
                                             <span>{formatReviewQuality(moment.quality)}</span>
@@ -333,13 +333,13 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         <div
                                             className="review-moment-eval"
                                             data-testid={`review-moment-eval-${moment.moveIndex}`}
-                                            aria-label={`Red evaluation changed from ${formatReviewEvalScore(moment.evalBefore)} to ${formatReviewEvalScore(moment.evalAfter)}`}
-                                            title={`Red POV: ${formatReviewEvalTransition(moment.evalBefore, moment.evalAfter)}`}
+                                            aria-label={formatReviewEvalChangeLabel(moment)}
+                                            title={formatReviewEvalTitle(moment)}
                                         >
-                                            <span>Eval</span>
-                                            <strong>{formatReviewEvalScore(moment.evalBefore)}</strong>
+                                            <span>{formatReviewSide(moment.side)} POV</span>
+                                            <strong>{formatReviewEvalScoreForSide(moment.evalBefore, moment.side)}</strong>
                                             <em aria-hidden="true">→</em>
-                                            <strong>{formatReviewEvalScore(moment.evalAfter)}</strong>
+                                            <strong>{formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}</strong>
                                         </div>
                                         <div
                                             className="review-chance-loss"
@@ -397,8 +397,28 @@ function formatReviewEvalScore(score: number) {
     return `${score > 0 ? '+' : ''}${(score / 100).toFixed(2)}`;
 }
 
-function formatReviewEvalTransition(evalBefore: number, evalAfter: number) {
-    return `${formatReviewEvalScore(evalBefore)} → ${formatReviewEvalScore(evalAfter)}`;
+function formatReviewSide(side: ReviewSide) {
+    return side === 'red' ? 'Red' : 'Black';
+}
+
+function getSidePerspectiveEval(score: number, side: ReviewSide) {
+    return side === 'red' ? score : -score;
+}
+
+function formatReviewEvalScoreForSide(score: number, side: ReviewSide) {
+    return formatReviewEvalScore(getSidePerspectiveEval(score, side));
+}
+
+function formatReviewEvalTransition(moment: ReviewKeyMoment) {
+    return `${formatReviewEvalScoreForSide(moment.evalBefore, moment.side)} → ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}`;
+}
+
+function formatReviewEvalChangeLabel(moment: ReviewKeyMoment) {
+    return `${formatReviewSide(moment.side)} evaluation changed from ${formatReviewEvalScoreForSide(moment.evalBefore, moment.side)} to ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}`;
+}
+
+function formatReviewEvalTitle(moment: ReviewKeyMoment) {
+    return `${formatReviewSide(moment.side)} POV: ${formatReviewEvalTransition(moment)}`;
 }
 
 function getMomentWinPercentLoss(moment: ReviewKeyMoment) {
