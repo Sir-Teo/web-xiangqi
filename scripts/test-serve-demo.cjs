@@ -27,7 +27,15 @@ function assertMetaTag(html, attributeName, attributeValue, content) {
 function buildFakeAiEngineScript({ variant, infoLines, bestmove }) {
   return `
     window.Pikafish = function Pikafish() {};
-    window.Pikafish.createWorkerEngine = async () => {
+    window.__pikafishCreateWorkerEngineOptions = null;
+    window.Pikafish.createWorkerEngine = async (opts = {}) => {
+      window.__pikafishCreateWorkerEngineOptions = {
+        basePath: opts.basePath || "",
+        workerScript: opts.workerScript || "",
+        nnuePath: opts.nnuePath || "",
+        variant: opts.variant || "",
+        initTimeoutMs: opts.initTimeoutMs || 0
+      };
       const listeners = [];
       const infoLines = ${JSON.stringify(infoLines)};
       const bestmove = ${JSON.stringify(bestmove)};
@@ -163,6 +171,23 @@ async function main() {
       }));
       assert.match(state.engineText, /Recovering engine|Engine paused after crashes/i);
       assert.equal(state.overflowX <= 2, true, "Engine failure notice should not introduce horizontal overflow.");
+
+      await page.getByRole("button", { name: "a3, red soldier", exact: true }).click();
+      await page.getByRole("button", { name: "a4, empty, legal move", exact: true }).click();
+      await page.waitForFunction(() => {
+        return document.querySelector("[data-file='0'][data-rank='4']")?.getAttribute("aria-label") === "a4, red soldier" &&
+          document.querySelectorAll(".mtree-row").length === 1;
+      }, null, { timeout: 5000 });
+      const playableState = await page.evaluate(() => ({
+        fromLabel: document.querySelector("[data-file='0'][data-rank='3']")?.getAttribute("aria-label") || "",
+        toLabel: document.querySelector("[data-file='0'][data-rank='4']")?.getAttribute("aria-label") || "",
+        fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+        moveRows: document.querySelectorAll(".mtree-row").length,
+      }));
+      assert.equal(playableState.fromLabel, "a3, empty");
+      assert.equal(playableState.toLabel, "a4, red soldier");
+      assert.match(playableState.fen, /\sb\s/);
+      assert.equal(playableState.moveRows, 1);
       assert.deepEqual(consoleIssues, []);
 
       const invalidMovePage = await browser.newPage();
@@ -189,6 +214,14 @@ async function main() {
         timeout: 60000,
       });
       await invalidMovePage.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await invalidMovePage.waitForFunction(() => {
+        return Boolean(window.__pikafishCreateWorkerEngineOptions);
+      }, null, { timeout: 5000 });
+      const engineAssetOptions = await invalidMovePage.evaluate(() => window.__pikafishCreateWorkerEngineOptions);
+      assert.match(engineAssetOptions.basePath, /\/web-xiangqi\/$/);
+      assert.match(engineAssetOptions.workerScript, /\/web-xiangqi\/pikafish\.js$/);
+      assert.match(engineAssetOptions.nnuePath, /\/web-xiangqi\/pikafish\.nnue$/);
+      assert.equal(engineAssetOptions.initTimeoutMs >= 90000, true);
       await invalidMovePage.getByRole("button", { name: "Play", exact: true }).click();
       await invalidMovePage.getByRole("button", { name: "Start new game" }).click();
       await invalidMovePage.getByRole("button", { name: /You play Black/i }).click();

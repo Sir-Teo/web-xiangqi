@@ -5,7 +5,7 @@ import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 const OUTPUT_LINE_LIMIT = 100;
 const INFO_FLUSH_MS = 200;
 const ENGINE_SCRIPT_LOAD_TIMEOUT_MS = 12000;
-const ENGINE_READY_TIMEOUT_MS = 45000;
+const ENGINE_READY_TIMEOUT_MS = 90000;
 const MATE_SCORE_BASE = 30000;
 
 export type PvLine = {
@@ -83,6 +83,11 @@ function getEngineReadyTimeoutMs() {
         return Math.max(50, Math.trunc(override));
     }
     return ENGINE_READY_TIMEOUT_MS;
+}
+
+function getEngineAssetUrl(fileName = '') {
+    if (typeof window === 'undefined') return `${import.meta.env.BASE_URL}${fileName}`;
+    return new URL(fileName, new URL(import.meta.env.BASE_URL, window.location.href)).href;
 }
 
 function logEngineDiagnosticWarning(message: string, ...details: unknown[]) {
@@ -516,7 +521,11 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         let createEnginePromise: Promise<any>;
         try {
+            const engineBasePath = getEngineAssetUrl();
             createEnginePromise = Promise.resolve(pikafishFactory.createWorkerEngine({
+                basePath: engineBasePath,
+                workerScript: getEngineAssetUrl('pikafish.js'),
+                nnuePath: getEngineAssetUrl('pikafish.nnue'),
                 variant: options.variant || 'auto',
                 allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
                 threads,
