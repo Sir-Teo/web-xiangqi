@@ -488,8 +488,10 @@ export function LibraryPanel({
           <button
             type="button"
             className="lib-clear-filters"
+            /* No aria-label: it would replace the accessible name, and WCAG 2.5.3
+               wants a control's name to contain its visible text. The title
+               becomes the description instead. */
             title="Clear the search and filters"
-            aria-label="Clear the search and filters"
             onClick={() => {
               setSearch('');
               setReviewFilter('all');
