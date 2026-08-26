@@ -4187,6 +4187,15 @@ summary:active {
     display: none;
   }
 
+  /* A landscape phone hands the analysis panel the full 900px, but its content
+     is a single column: at that width an engine stat card stretched to 432px
+     for a label and two short values, and the PV / runtime rows ran 872px with
+     their controls stranded at the far edge. Cap the measure and centre it —
+     padding rather than max-width so the scrollbar stays on the panel edge. */
+  [data-mobile-view="analysis"] .panel-content {
+    padding-inline: max(var(--space-md), calc((100% - 620px) / 2));
+  }
+
   .mobile-tab-btn {
     flex: 1;
     min-width: 0;
