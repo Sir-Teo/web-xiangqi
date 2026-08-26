@@ -5764,13 +5764,17 @@ summary:active {
 }
 
 @media (max-width: 1200px) {
+  /* This band was the last place still stacking a full-width Selection card
+     above Turn and Material. That read in a different order from every other
+     breakpoint and made the dock 129px at 1024 wide and 168px at 1180 — enough
+     to push the board out of its row and under the top toolbar. */
   .position-dock {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.3fr) minmax(0, 0.92fr);
   }
 
   .position-stat-selection {
-    grid-column: 1 / -1;
-    order: -1;
+    grid-column: auto;
+    order: 0;
   }
 
   .capture-trays {
