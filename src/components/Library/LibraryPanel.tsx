@@ -488,6 +488,8 @@ export function LibraryPanel({
           <button
             type="button"
             className="lib-clear-filters"
+            title="Clear the search and filters"
+            aria-label="Clear the search and filters"
             onClick={() => {
               setSearch('');
               setReviewFilter('all');

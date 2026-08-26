@@ -54,6 +54,7 @@
 
 .lib-clear-filters {
   margin-left: auto;
+  min-height: 24px;
   border: 1px solid var(--border-default);
   border-radius: 999px;
   background: transparent;
