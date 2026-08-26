@@ -2736,7 +2736,7 @@ function App() {
       return;
     }
     if (moves.length === 0) {
-      setMoveLineError('No UCI moves found');
+      setMoveLineError('No UCI moves found. Use coordinates like b2e2 h9g7.');
       return;
     }
 
