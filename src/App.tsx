@@ -3374,9 +3374,19 @@ function App() {
             </div>
 
             <div className="settings-group">
-              <label htmlFor="settings-search-depth">
-                Search Depth (AI / Live Analysis Cap) — {searchDepth}
-                {searchDepth > safeSearchDepth ? ` (worker cap ${safeSearchDepth})` : ''}
+              {/* Every other group here is a one- or two-word label. Spelling the
+                  scope out inline pushed this one onto a second line and orphaned
+                  its value; it lives in the tooltip instead. */}
+              <label
+                htmlFor="settings-search-depth"
+                className="settings-label-value"
+                title="Applies to the AI opponent and caps live analysis"
+              >
+                <span>Search Depth</span>
+                <strong>
+                  {searchDepth}
+                  {searchDepth > safeSearchDepth ? ` · cap ${safeSearchDepth}` : ''}
+                </strong>
               </label>
               <input
                 id="settings-search-depth"
