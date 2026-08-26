@@ -4010,6 +4010,12 @@ summary:active {
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* The menu holds 3 to 5 items depending on state, so an odd count always left
+   a hole in the two-column grid. Let the trailing item span the row. */
+.mobile-board-action-menu > :nth-child(odd):last-child {
+  grid-column: 1 / -1;
+}
+
 .mobile-action-menu-btn {
   min-width: 0;
   min-height: 36px;
