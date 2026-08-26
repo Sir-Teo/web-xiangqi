@@ -4148,6 +4148,26 @@ summary:active {
     padding: 4px 10px 6px;
   }
 
+  /* Landscape phones are wide and short. Stacking the status row under the
+     board squeezed it from both directions — on an 844x390 handset the board
+     came out 154px wide with ~690px of empty width beside it. Put the status
+     column next to the board instead, so the board is sized by height. */
+  [data-mobile-view="board"] .board-workspace {
+    max-width: none;
+    grid-template-columns: minmax(0, auto) minmax(116px, 232px);
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: center;
+    column-gap: 12px;
+  }
+
+  [data-mobile-view="board"] .board-workspace .position-dock {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 6px;
+  }
+
   .mobile-board-header {
     height: 34px;
     padding: 0 8px;
