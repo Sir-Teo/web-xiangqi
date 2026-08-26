@@ -4018,6 +4018,10 @@ summary:active {
 
 .mobile-action-btn {
   --tap-bleed: 4px;
+  /* The bleed below is absolutely positioned, so the button must be its
+     containing block — otherwise it anchors to a positioned ancestor and the
+     last button in the row blankets the ones before it. */
+  position: relative;
   width: 36px; height: 36px; border-radius: 6px;
   background: var(--bg-elevated); border: 1px solid var(--border-default);
   color: var(--text-secondary);
@@ -4123,6 +4127,7 @@ summary:active {
   }
 
   .mobile-nav-btn {
+    position: relative;
     width: 44px; height: 36px;
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
