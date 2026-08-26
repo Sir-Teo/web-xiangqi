@@ -164,10 +164,12 @@ body.resizing * {
   outline: none;
 }
 
-/* Primary button */
+/* Primary button.
+   --accent on --accent-muted measures 3.83:1, under the AA floor for button
+   text; --accent-hover on the same ground is 5.05:1 and stays in family. */
 .btn-primary {
   background: var(--accent-muted) !important;
-  color: var(--accent) !important;
+  color: var(--accent-hover) !important;
   border-color: var(--accent-subtle) !important;
   font-weight: 600 !important;
 }
@@ -4392,7 +4394,7 @@ summary:active {
 .pill-btn:hover {
   background: var(--accent-muted);
   border-color: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .premium-select {
@@ -4585,7 +4587,7 @@ summary:active {
 
 .wc-btn-resume {
   background: var(--accent-muted) !important;
-  color: var(--accent) !important;
+  color: var(--accent-hover) !important;
   border-color: var(--accent-subtle) !important;
   font-weight: 600 !important;
 }
@@ -5332,7 +5334,7 @@ summary:active {
 
 .game-over-btn-primary {
   background: var(--accent-muted);
-  color: var(--accent);
+  color: var(--accent-hover);
   border-color: var(--accent-subtle);
 }
 
