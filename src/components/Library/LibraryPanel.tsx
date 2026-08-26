@@ -772,7 +772,7 @@ export function LibraryPanel({
           <p className="lib-empty">No games match your search.</p>
         ) : (
           filteredHistorical.map((game) => (
-            <div key={game.id} className="lib-card">
+            <div key={game.id} className="lib-card lib-card-aside-action">
               <div className="lib-card-title">
                 <span className="lib-matchup">
                   {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}

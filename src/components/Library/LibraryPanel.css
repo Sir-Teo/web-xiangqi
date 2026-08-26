@@ -254,6 +254,28 @@
   margin-top: 0.15rem;
 }
 
+/* Classic-game cards carry a single trailing action. Sitting it beside the meta
+   line instead of on a row of its own saves a whole row per card. */
+.lib-card-aside-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.lib-card-aside-action > .lib-card-title {
+  grid-area: 1 / 1 / 2 / 3;
+}
+
+.lib-card-aside-action > .lib-card-meta {
+  grid-area: 2 / 1 / 3 / 2;
+}
+
+.lib-card-aside-action > .lib-card-actions {
+  grid-area: 2 / 2 / 3 / 3;
+  margin-top: 0;
+}
+
 .lib-card-actions--inline {
   width: 100%;
   justify-content: flex-start;
