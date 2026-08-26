@@ -2901,6 +2901,13 @@ summary:active {
 }
 
 .chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Contexts that tighten the padding — the bottom bar's review summary drops
+     it to 0.18rem — pulled these under the 24px floor (View 43x19, Clear
+     27x19). Hold the floor here so every chip clears it wherever it lands. */
+  min-height: 24px;
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-secondary);
