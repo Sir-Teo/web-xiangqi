@@ -4523,6 +4523,9 @@ summary:active {
   position: relative;
 }
 
+/* Sits in the gap above the board. On mobile that gap is 12px and the board
+   header occupies the space, so the pill is surfaced in the Turn card instead
+   (see the media query below). */
 .board-ai-status {
   position: absolute;
   top: -2.2rem;
@@ -5706,6 +5709,13 @@ summary:active {
 }
 
 @media (max-width: 900px) {
+  /* Measured at 375x812: the pill renders 25px-51px while the board header
+     occupies 8px-48px — a 23px overlap. The Turn card carries this text on
+     mobile instead. */
+  .board-ai-status {
+    display: none;
+  }
+
   .mobile-board-center {
     display: flex;
     align-items: stretch;
@@ -5845,5 +5855,12 @@ summary:active {
 
   .position-stat em {
     display: none;
+  }
+
+  /* Short viewports drop the secondary line, but the Turn card is the only
+     place AI state is surfaced on mobile — keep it when it has something
+     live to say. */
+  .position-stat em[data-live-state] {
+    display: block;
   }
 }

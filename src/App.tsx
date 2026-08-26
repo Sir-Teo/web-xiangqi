@@ -3990,7 +3990,11 @@ function App() {
                     aria-live={boardAiStatusText ? 'polite' : undefined}
                     aria-label={boardAiStatusText || undefined}
                   >
-                    <IconBot />
+                    {/* Without a status to announce, this was just an unlabelled bot
+                        icon hovering over the board. Keep the live region mounted
+                        so announcements stay stable, but show nothing until there
+                        is something to say. */}
+                    {boardAiStatusText ? <IconBot /> : null}
                     {aiMoveError ? (
                       <span className="ai-status-paused"><IconPause /> {aiMoveError}</span>
                     ) : paused ? (
@@ -4027,7 +4031,12 @@ function App() {
                 <div className="position-stat position-stat-turn">
                   <span>Turn</span>
                   <strong>{sideToMoveLabel}</strong>
-                  <em>{inCheck ? 'Check' : currentModeMeta.shortLabel}</em>
+                  {/* On a phone the floating board pill would land on top of the
+                      mobile header, so the AI's state rides in this line instead
+                      of the static mode label it would otherwise repeat. */}
+                  <em data-live-state={isMobile && aiPlayActive && !inCheck && boardAiStatusText ? 'ai' : undefined}>
+                    {inCheck ? 'Check' : (isMobile && aiPlayActive && boardAiStatusText) || currentModeMeta.shortLabel}
+                  </em>
                 </div>
                 <div className="position-stat position-stat-selection">
                   <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
