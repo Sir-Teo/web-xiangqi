@@ -104,7 +104,11 @@ export const EvalGraph = React.memo(function EvalGraph({
 
     const maxEvalClamp = 1200;
     const chartHeight = 248;
-    const chartWidth = Math.max(320, viewportWidth);
+    // Floor low enough that the SVG viewBox matches the rendered width for any
+    // realistic panel size. A 320 floor letterboxed the chart (default panel is
+    // 277px of stage) and put the overlay tooltip in a different coordinate
+    // space than the points it labels.
+    const chartWidth = Math.max(200, viewportWidth);
     const plotWidth = chartWidth - PADDING.left - PADDING.right;
     const plotHeight = chartHeight - PADDING.top - PADDING.bottom;
     const pixelsPerPoint = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
@@ -206,7 +210,7 @@ export const EvalGraph = React.memo(function EvalGraph({
         if (!element) return;
 
         const updateWidth = () => {
-            setViewportWidth(Math.max(320, Math.floor(element.clientWidth)));
+            setViewportWidth(Math.max(200, Math.floor(element.clientWidth)));
         };
 
         updateWidth();
@@ -322,7 +326,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const tooltipPoint = hoveredPoint ?? currentPoint;
     const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
-    const tooltipX = Math.max(PADDING.left + 54, Math.min(chartWidth - PADDING.right - 54, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
+    const tooltipX = Math.max(PADDING.left + 78, Math.min(chartWidth - PADDING.right - 78, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
     const tooltipY = Math.max(54, (computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0)) - 18);
     const tooltipQualityClass = tooltipPoint?.quality ? getMoveQualityClassName(tooltipPoint.quality) : '';
 

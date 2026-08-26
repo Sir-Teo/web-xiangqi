@@ -379,7 +379,7 @@ export const ReviewPanel = memo(function ReviewPanel({
 
             {status === 'idle' ? (
                 <div className="empty-state">
-                    <p>Run a review to rank the line, capture the engine alternatives, and jump through the biggest swings.</p>
+                    <p>Run Review analyses every move in the current line.</p>
                 </div>
             ) : null}
         </div>
