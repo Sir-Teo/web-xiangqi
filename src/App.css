@@ -1901,9 +1901,12 @@ body.resizing * {
   padding: 0.18rem 0.42rem;
 }
 
+/* The command bar's actions measured 21px tall, the move nav 22px and the
+   scrubber 16px — all under the WCAG 2.2 AA 24px floor. */
 .gc-btn {
   display: inline-flex;
   align-items: center;
+  min-height: 24px;
   gap: 0.3rem;
   padding: 0.22rem 0.65rem;
   border-radius: var(--radius-pill);
@@ -2068,6 +2071,7 @@ body.resizing * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 24px;
   min-width: 1.9rem;
   padding: 0.22rem 0.5rem;
   border-radius: var(--radius-pill);
@@ -3715,6 +3719,7 @@ summary:active {
 
 .wc-scrubber {
   width: 100%;
+  min-height: 24px;
   accent-color: var(--accent);
 }
 
