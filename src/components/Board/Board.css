@@ -1,7 +1,10 @@
-/* --board-pad lives on the container so container queries can override it
-   without relying on viewport-width media queries. All child elements that
-   reference var(--board-pad) will automatically pick up the right value. */
-.xiangqi-board-container { --board-pad: 28px; }
+/* --board-pad lives on .xiangqi-board, not on the container: an element cannot
+   be matched by its own container query, so declaring it on the container made
+   every override below inert and pinned the gutter at 28px for every board size.
+   Pieces are sized off the playing grid, so a fixed gutter meant edge pieces
+   overhung the coordinate strip on large boards. Scale it with the board
+   instead — `cqi` here resolves against the parent container. */
+.xiangqi-board { --board-pad: clamp(16px, calc(5.6cqi + 10px), 46px); }
 
 /* Board container scaling */
 .xiangqi-board-container {
@@ -146,15 +149,17 @@
     z-index: 4;
 }
 
+/* Light warm ink: the labels sit in the board's inset vignette, where the old
+   dark ink went almost invisible. */
 .coord-label {
     position: absolute;
-    color: rgba(45, 22, 5, 0.58);
+    color: rgba(255, 228, 168, 0.62);
     font-family: var(--font-mono);
     font-size: 0.62rem;
     font-size: clamp(0.48rem, 2.1cqi, 0.68rem);
     font-weight: 800;
     line-height: 1;
-    text-shadow: 0 1px 0 rgba(255, 220, 120, 0.34);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
     user-select: none;
 }
 
@@ -162,12 +167,15 @@
     transform: translateX(-50%);
 }
 
+/* Edge pieces are centred on the outermost lines, so half a stone hangs into
+   the padding. Park the labels against the outer edge of that padding instead
+   of halfway across it, or the a-file and rank-0/9 labels sit under a piece. */
 .coord-file-top {
-    top: calc(-0.55 * var(--board-pad));
+    top: calc(2px - var(--board-pad));
 }
 
 .coord-file-bottom {
-    bottom: calc(-0.55 * var(--board-pad));
+    bottom: calc(2px - var(--board-pad));
 }
 
 .coord-rank {
@@ -175,11 +183,11 @@
 }
 
 .coord-rank-left {
-    left: calc(-0.58 * var(--board-pad));
+    left: calc(2px - var(--board-pad));
 }
 
 .coord-rank-right {
-    right: calc(-0.58 * var(--board-pad));
+    right: calc(2px - var(--board-pad));
 }
 
 /* ─── Hitboxes ───────────────────────────────────────────────────────────── */
@@ -408,10 +416,6 @@
 
 /* Medium boards: phones in portrait, or analysis-view constrained layout     */
 @container board (max-width: 440px) {
-    /* Update --board-pad on the container so every child using var(--board-pad)
-       picks up the new value automatically — no need to override each inset. */
-    .xiangqi-board-container { --board-pad: 22px; }
-
     .xiangqi-board {
         box-shadow:
             inset 0 0 0 2px rgba(255, 215, 110, 0.18),
@@ -443,8 +447,6 @@
 
 /* Small boards: very small phones or landscape analysis-view                  */
 @container board (max-width: 320px) {
-    .xiangqi-board-container { --board-pad: 16px; }
-
     .xiangqi-board {
         box-shadow:
             inset 0 0 0 2px rgba(255, 215, 110, 0.18),
