@@ -2239,6 +2239,8 @@ body.resizing * {
 .mtree-chip {
   display: inline-flex;
   align-items: center;
+  /* Measured 21px; these rows are the primary way to move through a game. */
+  min-height: 24px;
   gap: 0.25rem;
   width: 100%;
   padding: 0.22rem 0.4rem;
@@ -4486,6 +4488,8 @@ summary:active {
 
 .premium-slider {
   width: 100%;
+  /* A range input's UA height is 20px, under the WCAG 2.2 AA 24px floor. */
+  min-height: 24px;
   accent-color: var(--accent);
   cursor: pointer;
 }
