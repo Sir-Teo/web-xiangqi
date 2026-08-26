@@ -4037,6 +4037,17 @@ summary:active {
   position: absolute;
   inset: calc(-1 * var(--tap-bleed));
 }
+
+/* The row is width-constrained, and the outermost bleed has no neighbour to
+   meet — it only pushes the row's scrollWidth past its client width. Clamp it
+   at both ends; those two buttons keep a 44px-tall, 40px-wide target. */
+.mobile-board-actions > .mobile-action-btn:first-child::after {
+  left: 0;
+}
+
+.mobile-board-actions > .mobile-action-btn:last-child::after {
+  right: 0;
+}
 .mobile-action-btn svg { width: 16px; height: 16px; }
 .mobile-action-btn-active { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.4); color: var(--accent); }
 .mobile-action-btn-warn   { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.45); color: #f87171; }
