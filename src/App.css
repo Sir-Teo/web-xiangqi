@@ -682,6 +682,11 @@ body.resizing * {
 .bottom.hidden .panel-inner {
   opacity: 0;
   pointer-events: none;
+  /* opacity alone left 10 toolbar buttons and 3 command-bar buttons in the tab
+     order while parked off-screen. visibility takes them out of the tab order
+     and the accessibility tree; the delay lets the fade finish first. */
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -772,6 +777,19 @@ body.resizing * {
 .resize-handle:focus-visible .resize-pill {
   background: rgba(214, 179, 95, 0.72);
   box-shadow: 0 0 0 3px rgba(214, 179, 95, 0.18);
+}
+
+/* A collapsed bar's handle is the only way to get it back, so it cannot rest at
+   the same 1.2:1 as the side resizers, whose panels are visible either way. */
+.resize-handle[aria-expanded="false"] .resize-pill {
+  width: 46px;
+  background: rgba(214, 179, 95, 0.7);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .resize-handle[aria-expanded="false"]:hover .resize-pill {
+    background: rgba(230, 198, 120, 0.9);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
