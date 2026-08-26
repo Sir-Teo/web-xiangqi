@@ -193,18 +193,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 ) : null}
                             </div>
                         ))}
-                        <div className="review-summary-card">
-                            <span>Blunders</span>
-                            <strong>{summary.blunderCount}</strong>
-                        </div>
-                        <div className="review-summary-card">
-                            <span>Mistakes</span>
-                            <strong>{summary.mistakeCount}</strong>
-                        </div>
-                        <div className="review-summary-card">
-                            <span>Reviewed</span>
-                            <strong>{new Date(summary.reviewedAt).toLocaleDateString()}</strong>
-                        </div>
+                        {/* Blunder and mistake counts live in the quality breakdown a few
+                            pixels below; repeating them here said the same thing twice.
+                            The run date belongs with the engine settings it describes. */}
                         <div
                             className="review-summary-card review-summary-card-wide"
                             data-testid="review-engine-summary"
@@ -213,6 +204,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         >
                             <span>Engine</span>
                             <strong>{reviewEngineLabel}</strong>
+                            <em>Reviewed {new Date(summary.reviewedAt).toLocaleDateString()}</em>
                         </div>
                     </div>
 
