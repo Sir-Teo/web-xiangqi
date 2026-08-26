@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
 import {
     formatReviewQuality,
@@ -323,12 +323,40 @@ export const EvalGraph = React.memo(function EvalGraph({
         onNavigate(target);
     };
 
+    const tooltipRef = useRef<HTMLDivElement>(null);
+    const [tooltipSize, setTooltipSize] = useState({ width: 150, height: 52 });
     const tooltipPoint = hoveredPoint ?? currentPoint;
     const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
-    const tooltipX = Math.max(PADDING.left + 78, Math.min(chartWidth - PADDING.right - 78, computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex)));
-    const tooltipY = Math.max(54, (computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0)) - 18);
     const tooltipQualityClass = tooltipPoint?.quality ? getMoveQualityClassName(tooltipPoint.quality) : '';
+
+    // A review note can make the tooltip several times taller than a bare
+    // eval readout, so clamp against its measured box rather than a guessed
+    // half-width, and flip it under the point when it will not fit above.
+    const anchorX = computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex);
+    const anchorY = computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0);
+    const halfTooltipWidth = tooltipSize.width / 2;
+    const tooltipX = Math.max(
+        Math.min(halfTooltipWidth + 4, chartWidth / 2),
+        Math.min(chartWidth - halfTooltipWidth - 4, anchorX)
+    );
+    const tooltipBelow = anchorY - tooltipSize.height - 14 < 4;
+    const tooltipY = tooltipBelow
+        ? Math.min(anchorY + 14, Math.max(4, chartHeight - tooltipSize.height - 4))
+        : Math.max(tooltipSize.height + 4, anchorY - 14);
+
+    useLayoutEffect(() => {
+        const element = tooltipRef.current;
+        if (!element) return;
+        const { width, height } = element.getBoundingClientRect();
+        setTooltipSize(previous => (
+            Math.abs(previous.width - width) < 1 && Math.abs(previous.height - height) < 1
+                ? previous
+                : { width, height }
+        ));
+        // Re-measure only when the content or the available width changes; the
+        // equality guard above keeps a same-size render from looping.
+    }, [tooltipPoint, chartWidth]);
 
     return (
         <div className="graph-wrap">
@@ -514,7 +542,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                     </div>
                     {tooltipPoint ? (
                         <div
-                            className="graph-tooltip"
+                            ref={tooltipRef}
+                            className={`graph-tooltip${tooltipBelow ? ' graph-tooltip-below' : ''}`}
                             style={{
                                 left: `${tooltipX}px`,
                                 top: `${tooltipY}px`,
