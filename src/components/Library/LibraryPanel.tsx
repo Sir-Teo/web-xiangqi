@@ -613,13 +613,13 @@ export function LibraryPanel({
                     <>
                       <button
                         type="button"
-                        className="chip-btn chip-btn-danger"
+                        className="chip-btn chip-btn-danger chip-btn-danger-armed"
                         onClick={() => confirmDelete(game.id)}
                         data-testid={`confirm-delete-saved-${game.id}`}
                         aria-label={`Confirm delete ${savedGameLabel}`}
                         title={`Confirm delete ${savedGameLabel}`}
                       >
-                        Delete?
+                        Delete
                       </button>
                       <button
                         type="button"

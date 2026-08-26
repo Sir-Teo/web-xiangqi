@@ -114,7 +114,10 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Buttons
    ═══════════════════════════════════════════════════ */
-.panel button {
+/* Base look for panel buttons. `:where()` keeps this at class-only specificity so
+   component styles that follow (chip variants, wc-btn, fen copy, tree chips) can
+   override it without having to out-specify a bare element selector. */
+.panel :where(button) {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
@@ -924,7 +927,7 @@ body.resizing * {
 
 .analysis-tab-btn.active {
   border-color: var(--accent-muted);
-  background: rgba(88, 166, 255, 0.12);
+  background: var(--accent-subtle);
   color: var(--accent);
 }
 
@@ -2879,6 +2882,46 @@ summary:active {
   cursor: not-allowed;
 }
 
+/* Variant hovers, so a coloured chip stays coloured under the cursor instead of
+   falling back to the neutral `.chip-btn:hover` treatment. */
+.chip-btn-primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: rgba(16, 185, 129, 0.24);
+  color: var(--accent-hover);
+}
+
+.chip-btn-warning:hover:not(:disabled) {
+  border-color: rgba(239, 68, 68, 0.62);
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+}
+
+/* Destructive chips: muted red at rest, solid red once the confirm step is armed
+   so the irreversible tap never looks like the neutral actions beside it. */
+.chip-btn-danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f27272;
+}
+
+.chip-btn-danger:hover:not(:disabled) {
+  border-color: rgba(239, 68, 68, 0.58);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.chip-btn-danger-armed {
+  border-color: rgba(239, 68, 68, 0.85);
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff1f1;
+  font-weight: 700;
+}
+
+.chip-btn-danger-armed:hover:not(:disabled) {
+  border-color: #f87171;
+  background: #dc2626;
+  color: #fff;
+}
+
 .graph-extrema {
   margin-top: 0.38rem;
   display: flex;
@@ -3399,6 +3442,16 @@ summary:active {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.pv-empty {
+  padding: 0.55rem 0.58rem;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .premium-card {
@@ -4051,6 +4104,7 @@ summary:active {
     flex: 0 0 48px;
     order: 0;
     width: 100%;
+    padding: 0 6px;
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -4061,11 +4115,12 @@ summary:active {
 
   .mobile-tab-btn {
     flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
+    gap: 0.32rem;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--text-secondary);
     background: none;
@@ -5665,8 +5720,33 @@ summary:active {
 }
 
 @media (max-width: 520px) {
+  /* One row instead of three stacked cards: the reclaimed height goes to the
+     board, which is what people actually read on a phone. */
   .position-dock {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.3fr) minmax(0, 0.92fr);
+    gap: 0.32rem;
+  }
+
+  .position-stat-selection {
+    grid-column: auto;
+    order: 0;
+  }
+
+  .position-stat {
+    padding: 0.34rem 0.4rem;
+  }
+
+  .position-stat span {
+    font-size: 0.54rem;
+    letter-spacing: 0.07em;
+  }
+
+  .position-stat strong {
+    font-size: 0.68rem;
+  }
+
+  .position-stat em {
+    font-size: 0.58rem;
   }
 
   [data-assist-mode="pro"] .position-dock {
@@ -5689,6 +5769,7 @@ summary:active {
 
   .position-stat-selection {
     grid-column: auto;
+    order: 0;
   }
 
   .position-stat {

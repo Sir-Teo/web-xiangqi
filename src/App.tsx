@@ -4365,7 +4365,7 @@ function App() {
                   </div>
                   <div className="pv-lines-container">
                     {currentAnalysisPvLines.length === 0 ? (
-                      <div className="text-muted small">No PV available yet.</div>
+                      <div className="pv-empty">No PV available yet.</div>
                     ) : currentAnalysisPvLines.map((pv, i) => {
                       const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
                       const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
