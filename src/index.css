@@ -14,12 +14,17 @@
   --border-strong: rgba(255, 255, 255, 0.16);
   --border-accent: rgba(52, 211, 153, 0.35);
 
-  /* ── Text ──────────────────────────────────────── */
+  /* ── Text ──────────────────────────────────────────
+     Four steps, all at or above WCAG AA 4.5:1 on both --bg-base and the
+     --bg-elevated cards. Tertiary and muted were #71717a / #52525b, which
+     measured 4.22:1 and 2.64:1 against the panels they actually render on —
+     and they carry real content (move numbers, engine detail, dates), not
+     just decoration. */
   --text-primary: #ededed;
   --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  --text-tertiary: #8a8a93;
   --text-heading: #ffffff;
-  --text-muted: #52525b;
+  --text-muted: #7d7d86;
 
   /* ── Accent (emerald glow) ─────────────────────── */
   --accent: #10b981;
