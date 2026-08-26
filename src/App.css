@@ -1663,14 +1663,14 @@ body.resizing * {
     font-weight: 600;
   }
 
+  /* The pill padding here was written for a text "Close" label, but the button
+     renders an icon inside a fixed 2rem box — 0.85rem of side padding left the
+     X 2.8px wide and effectively invisible on every mobile dialog. */
   .settings-close-btn {
     background: var(--bg-elevated);
     border: 1px solid var(--border-default);
     color: var(--text-primary);
-    padding: 0.35rem 0.85rem;
-    border-radius: var(--radius-pill);
-    font-size: 0.85rem;
-    font-weight: 600;
+    padding: 0;
     cursor: pointer;
     transition: all 140ms ease;
   }
@@ -4330,6 +4330,12 @@ summary:active {
   transition: all 150ms ease;
 }
 
+.settings-close-btn svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
 .settings-close-btn:hover {
   background: var(--bg-card-hover) !important;
   color: var(--text-primary);
@@ -4764,6 +4770,12 @@ summary:active {
 .new-game-fen-form {
   display: flex;
   gap: 0.4rem;
+}
+
+/* The strength pills share a row equally, but here the field holds a 60-odd
+   character FEN and the button holds one word. Let the field have the space. */
+.new-game-fen-form .new-game-strength-btn {
+  flex: 0 0 auto;
 }
 
 .new-game-fen-input {
@@ -5614,13 +5626,6 @@ summary:active {
   color: #9af0cc;
 }
 
-.new-game-selection em {
-  color: var(--text-tertiary);
-  font-size: 0.7rem;
-  font-style: normal;
-  line-height: 1.35;
-}
-
 .mobile-nav-btn {
   display: inline-flex;
   align-items: center;
@@ -5752,8 +5757,7 @@ summary:active {
     grid-column: auto;
   }
 
-  .new-game-mode-btn small,
-  .new-game-selection em {
+  .new-game-mode-btn small {
     font-size: 0.68rem;
   }
 }

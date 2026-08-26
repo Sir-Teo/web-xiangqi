@@ -3620,7 +3620,6 @@ function App() {
               <div className="new-game-selection" aria-label={`Selected ${pendingModeLabel}. ${pendingModeMeta.description}`}>
                 <span className="new-game-selection-label">Selected</span>
                 <strong>{pendingModeLabel}</strong>
-                <em>{pendingModeMeta.description}</em>
               </div>
               <button
                 type="button"
