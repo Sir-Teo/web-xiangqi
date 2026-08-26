@@ -363,7 +363,10 @@
   cursor: pointer;
   border: none;
   background: transparent;
-  padding: 0;
+  /* Negative margin cancels the padding, so the rename target clears the 24px
+     minimum without moving the title. */
+  padding: 4px 0;
+  margin: -4px 0;
   text-align: left;
   flex: 1 1 12rem;
   min-width: 0;
