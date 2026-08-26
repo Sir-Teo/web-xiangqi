@@ -5781,9 +5781,11 @@ summary:active {
     justify-content: center;
   }
 
+  /* The board frame's outermost decorative ring reaches 13px past its border
+     box, so a 7px gap let it sit on top of the status cards below. */
   .board-workspace {
     width: 100%;
-    gap: 0.45rem;
+    gap: 1rem;
   }
 
   [data-mobile-view="board"] .board-workspace .board-wrap {
@@ -5801,9 +5803,13 @@ summary:active {
     max-width: none;
   }
 
+  /* One row of three across the whole mobile range. The 521-900px band used to
+     stack a full-width Selection card above Turn and Material, which both cost
+     a row of height and put the cards in a different order than every other
+     breakpoint. */
   .position-dock {
     width: 100%;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.3fr) minmax(0, 0.92fr);
     gap: 0.38rem;
   }
 
@@ -5812,7 +5818,8 @@ summary:active {
   }
 
   .position-stat-selection {
-    grid-column: 1 / -1;
+    grid-column: auto;
+    order: 0;
   }
 
   .position-stat strong {
@@ -5841,16 +5848,10 @@ summary:active {
 }
 
 @media (max-width: 520px) {
-  /* One row instead of three stacked cards: the reclaimed height goes to the
-     board, which is what people actually read on a phone. */
+  /* The single row is set for the whole mobile range above; a phone just needs
+     it tighter. */
   .position-dock {
-    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.3fr) minmax(0, 0.92fr);
     gap: 0.32rem;
-  }
-
-  .position-stat-selection {
-    grid-column: auto;
-    order: 0;
   }
 
   .position-stat {
