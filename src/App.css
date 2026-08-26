@@ -5968,6 +5968,14 @@ summary:active {
    Let the wrap fill the cell and be the measuring context instead, so the
    board is the largest 9:10 box that fits. */
 @media (max-width: 900px) and (min-height: 501px) {
+  /* `height: 100%` + `max-width: 100%` cannot both be honoured by an
+     aspect-ratio box: on a tall phone the row is taller than 9:10 allows, so
+     the board filled the height, clamped the width, and the grid SVG
+     (preserveAspectRatio="none") stretched with it — cells measured 57% taller
+     than wide at 375x812. Let the wrap fill the cell and act as the measuring
+     context, then take the largest 9:10 box that fits, centred so the leftover
+     height sits evenly above and below rather than all of it between the board
+     and its own status readout. */
   [data-mobile-view="board"] .board-workspace .board-wrap {
     width: 100% !important;
     height: 100%;
@@ -5976,6 +5984,8 @@ summary:active {
     aspect-ratio: auto;
     min-width: 0;
     container-type: size;
+    display: grid;
+    place-items: center;
   }
 
   [data-mobile-view="board"] .board-workspace .xiangqi-board-container {
@@ -5983,6 +5993,6 @@ summary:active {
     height: auto;
     max-width: none;
     aspect-ratio: 9 / 10;
-    margin: auto;
+    margin: 0;
   }
 }
