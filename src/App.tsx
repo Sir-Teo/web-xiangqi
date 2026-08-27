@@ -2189,6 +2189,20 @@ function App() {
     ? `${assistMode === 'coach' ? `${PIECE_MOVE_HINTS[selectedPiece]} · ` : ''}${legalMoveCountText}`
     : `${sideToMoveLabel} to move`;
 
+  // A screen reader needs one thing from the board: what just happened. The
+  // dock used to be the live region, so a move announced the selection being
+  // cleared ("No piece selected") and never the move itself. Announce the
+  // selection while a piece is held, and otherwise the move now in view.
+  const boardAnnouncement = useMemo(() => {
+    if (selectedPiece) return `${selectedPieceText}. ${legalMoveText}.`;
+    const record = currentMoveIndex >= 0 ? moveHistory[currentMoveIndex] : null;
+    if (!record) return `Start position. ${sideToMoveLabel} to move.`;
+    return `${formatMoveRecordTitle(record)}.${inCheck ? ' Check.' : ''} ${sideToMoveLabel} to move.`;
+  }, [
+    selectedPiece, selectedPieceText, legalMoveText,
+    currentMoveIndex, moveHistory, inCheck, sideToMoveLabel,
+  ]);
+
   const materialSummary = useMemo(() => {
     const currentCounts = Object.keys(INITIAL_PIECE_COUNTS).reduce((acc, key) => {
       acc[key as PieceCode] = 0;
@@ -4061,7 +4075,7 @@ function App() {
                 />
               </div>
 
-              <div className="position-dock" aria-live="polite">
+              <div className="position-dock">
                 <div className="position-stat position-stat-turn">
                   <span>Turn</span>
                   <strong>{sideToMoveLabel}</strong>
@@ -4110,6 +4124,8 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              <div className="sr-only" role="status" aria-live="polite">{boardAnnouncement}</div>
             </div>
           </div>
           {isMobile && (
