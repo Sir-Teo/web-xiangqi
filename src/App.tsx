@@ -2023,12 +2023,21 @@ function App() {
     setMobileView('analysis');
   }, []);
 
+  // Growing from collapsed resumes at the default width, because stepping 0 ->
+  // 40 lands under PANEL_MIN_WIDTH and clamps straight back to 0. Shrinking must
+  // not borrow that default: it made the decrease key reopen a closed panel to
+  // 280, so a keyboard user could never come to rest on collapsed.
+  const stepPanelWidth = (width: number, delta: number, fallback: number) => {
+    if (width <= 0 && delta < 0) return 0;
+    return clampPanelWidth((width > 0 ? width : fallback) + delta);
+  };
+
   const adjustLeftPanelWidth = useCallback((delta: number) => {
-    setLeftWidth((width) => clampPanelWidth((width > 0 ? width : DEFAULT_LEFT_PANEL_WIDTH) + delta));
+    setLeftWidth((width) => stepPanelWidth(width, delta, DEFAULT_LEFT_PANEL_WIDTH));
   }, []);
 
   const adjustRightPanelWidth = useCallback((delta: number) => {
-    setRightWidth((width) => clampPanelWidth((width > 0 ? width : DEFAULT_RIGHT_PANEL_WIDTH) + delta));
+    setRightWidth((width) => stepPanelWidth(width, delta, DEFAULT_RIGHT_PANEL_WIDTH));
   }, []);
 
   const handleLeftResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
