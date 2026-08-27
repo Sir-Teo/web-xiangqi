@@ -797,10 +797,23 @@ body.resizing * {
    Move list
    ═══════════════════════════════════════════════════ */
 
+/* This carried opacity: 0.5, which is an unmeasured way to say "dimmer": it
+   halved the text against whatever sat behind it and put the UCI notation at
+   about 2.66:1, under the 4.5 it needs as content rather than decoration. The
+   palette's fourth step already means "dimmest readable text" and is measured
+   against the surfaces it renders on, so say it that way instead. */
 .move-uci {
   font-family: var(--font-mono);
-  opacity: 0.5;
+  color: var(--text-muted);
   font-size: 0.66rem !important;
+}
+
+/* The current move's chip is tinted with the accent, which composites to
+   rgb(10,35,27) and lifts the background out from under muted -- 4.41:1 there
+   against 5.32:1 on a plain row. A step brighter both clears the bar at 4.79
+   and is the right emphasis anyway: this is the move the reader is on. */
+.mtree-chip-active .move-uci {
+  color: var(--text-tertiary);
 }
 
 /* Quality-colored left borders */
