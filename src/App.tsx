@@ -4140,7 +4140,10 @@ function App() {
                   onClick={() => setShowArrows(v => !v)}
                   role="menuitem"
                   title="Toggle arrows and markers"
-                  aria-label="Toggle board arrows and markers"
+                  // No aria-label: the visible text already names the action and
+                  // carries the state. "Toggle board arrows and markers" replaced
+                  // both, so this item announced no state at all -- unlike the
+                  // toolbar button, which is icon-led and says so via aria-pressed.
                 >
                   <IconArrow />
                   <span>{showArrows ? 'Hide arrows' : 'Show arrows'}</span>
