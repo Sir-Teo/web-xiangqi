@@ -3645,7 +3645,10 @@ function App() {
 
       <div className="main-container" data-mobile-tab={isMobile ? mobileAnalysisTab : undefined}>
         {/* ── Left panel: Eval Graph ── */}
-        <section className="panel left">
+        {/* Named so it becomes a region landmark. Its twin on the right is an
+            <aside> (complementary) carrying an <h2>, so without a name here the
+            graph/library panel was reachable by neither landmark nor heading. */}
+        <section className="panel left" aria-label="Graph and library">
           <div
             className="resize-handle resize-handle-right"
             role="separator"
@@ -4181,7 +4184,7 @@ function App() {
         )}
 
         {/* ── Right panel: Move tree / Engine ── */}
-        <aside className="panel right">
+        <aside className="panel right" aria-labelledby="right-panel-heading">
           <div
             className="resize-handle resize-handle-left"
             role="separator"
@@ -4202,7 +4205,7 @@ function App() {
           </div>
           <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
-              <h2>Analysis</h2>
+              <h2 id="right-panel-heading">Analysis</h2>
               <div className="analysis-tab-strip" role="tablist" aria-label="Analysis panels">
                 <button
                   type="button"
