@@ -3838,6 +3838,29 @@ summary:active {
   }
 }
 
+/* Narrow portrait phones are cramped horizontally in the same way landscape
+   phones are, but they are not short, so the block above never matches them.
+   Measured at 320x568: the action row reserves 212px of a 292px header and the
+   status row is left 46px for the 86px it needs, clipping the eval chip to a
+   single painted pixel -- the engine's evaluation, invisible. Borrow just the
+   compact button sizing (not the landscape re-stacking) so the row fits. */
+@media (max-width: 360px) {
+  .mobile-board-actions {
+    gap: 2px;
+  }
+
+  .mobile-action-btn {
+    --tap-bleed: 1px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .mobile-action-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+}
+
 @media (max-width: 768px) {
   .graph-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
