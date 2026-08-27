@@ -222,9 +222,11 @@
   }
 }
 
+/* Only the tint is set here. The app-wide focus ring (.app-shell :is(...)) is
+   the more specific selector, so an outline declared on this rule never won —
+   and blue is the better ring on the board anyway, where --accent already
+   means "selected" and "legal move". */
 .hitbox:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
     background: rgba(255, 235, 160, 0.22);
 }
 
