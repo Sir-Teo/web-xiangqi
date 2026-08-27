@@ -58,11 +58,15 @@ function formatSquareAriaLabel(
     rank: number,
     piece: string,
     isSelected: boolean,
-    target?: { capture: boolean }
+    target?: { capture: boolean },
+    isHighlighted = false
 ) {
     const parts = [formatSquareName(file, rank)];
     parts.push(piece ? PIECE_NAMES[piece] ?? piece : 'empty');
     if (isSelected) parts.push('selected');
+    // A marker is drawn on the square but was announced nowhere, so a reader
+    // could place one with Shift+Enter and never hear that it landed.
+    if (isHighlighted) parts.push('highlighted');
     if (target) parts.push(target.capture ? 'legal capture' : 'legal move');
     return parts.join(', ');
 }
@@ -136,6 +140,12 @@ export const Board = React.memo(function Board({
         }
         return map;
     }, [validTargets]);
+
+    const highlightedSquares = useMemo(() => {
+        const set = new Set<string>();
+        for (const highlight of highlights) set.add(`${highlight.file}:${highlight.rank}`);
+        return set;
+    }, [highlights]);
 
     const clearTouchMarkerTimer = useCallback(() => {
         if (touchMarkerTimerRef.current !== null) {
@@ -365,7 +375,7 @@ export const Board = React.memo(function Board({
                                     style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
                                     data-file={file}
                                     data-rank={rank}
-                                    aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target)}
+                                    aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target, highlightedSquares.has(`${file}:${rank}`))}
                                     aria-keyshortcuts={squareKeyshortcuts}
                                     tabIndex={piece || isSelected || target ? 0 : -1}
                                     onKeyDown={(event) => handleHitboxKeyDown(event, file, rank)}
