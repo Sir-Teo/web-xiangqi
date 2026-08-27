@@ -3616,6 +3616,7 @@ function App() {
                       onClick={() => setAiStrength(lvl)}
                       title={describeAiStrength(lvl)}
                       aria-label={describeAiStrength(lvl)}
+                      aria-pressed={aiStrength === lvl}
                     >
                       {AI_STRENGTH_LABELS[lvl]}
                     </button>
