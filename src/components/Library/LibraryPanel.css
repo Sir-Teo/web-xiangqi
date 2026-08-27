@@ -224,7 +224,14 @@
   color: var(--text-tertiary);
 }
 
-.lib-dot {
+/* The separator used to be its own flex item, so a wrapping meta line could
+   strand a dot at the end of a row or open the next row with one. Generated on
+   the item it belongs to, it can no longer be separated from that text.
+   .lib-date is excluded: it is pushed right with margin-left:auto and has
+   never taken a leading dot. */
+.lib-card-meta > * + *:not(.lib-date)::before {
+  content: '·';
+  margin-right: 0.25rem;
   opacity: 0.4;
 }
 

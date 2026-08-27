@@ -657,27 +657,22 @@ export function LibraryPanel({
               </div>
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
-                <span className="lib-dot">·</span>
                 <span className={`lib-result lib-result--${game.result ?? 'ongoing'}`}>
                   {resultLabel(game.result ?? 'ongoing')}
                 </span>
-                <span className="lib-dot">·</span>
                 <span>{formatSavedGameMoveCount(game)}</span>
                 {studyLineLabel ? (
                   <>
-                    <span className="lib-dot">·</span>
                     <span>{studyLineLabel}</span>
                   </>
                 ) : null}
                 {game.opening && (
                   <>
-                    <span className="lib-dot">·</span>
                     <span className="lib-opening">{game.opening}</span>
                   </>
                 )}
                 {typeof game.finalEval === 'number' && (
                   <>
-                    <span className="lib-dot">·</span>
                     <span className={`lib-eval ${game.finalEval > 0 ? 'lib-eval--pos' : 'lib-eval--neg'}`}>
                       {game.finalEval > 0 ? '+' : ''}{(game.finalEval / 100).toFixed(2)}
                     </span>
@@ -787,13 +782,10 @@ export function LibraryPanel({
               </div>
               <div className="lib-card-meta">
                 <span>{game.event}</span>
-                <span className="lib-dot">·</span>
                 <span>{game.date}</span>
-                <span className="lib-dot">·</span>
                 <span>{game.moves.length} moves</span>
                 {game.opening && (
                   <>
-                    <span className="lib-dot">·</span>
                     <span className="lib-opening">{game.opening}</span>
                   </>
                 )}
