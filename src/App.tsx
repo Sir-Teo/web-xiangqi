@@ -938,6 +938,26 @@ function App() {
   const viewportWidth = viewportSize.width;
   const viewportHeight = viewportSize.height;
   const isMobile = viewportWidth <= 900;
+
+  // initialPanelWidth scales the starting width to the window, but it only ran
+  // at mount: a window opened narrow and then widened kept 26%-of-narrow panels
+  // for the rest of the session, leaving the graph too thin to read. Recompute
+  // while the width is still the one this scaling picked, and leave alone any
+  // width the reader has since dragged, stepped or collapsed.
+  const autoLeftWidthRef = useRef(leftWidth);
+  const autoRightWidthRef = useRef(rightWidth);
+  useEffect(() => {
+    const nextLeft = initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH);
+    const nextRight = initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH);
+    if (leftWidth === autoLeftWidthRef.current && leftWidth !== nextLeft) {
+      autoLeftWidthRef.current = nextLeft;
+      setLeftWidth(nextLeft);
+    }
+    if (rightWidth === autoRightWidthRef.current && rightWidth !== nextRight) {
+      autoRightWidthRef.current = nextRight;
+      setRightWidth(nextRight);
+    }
+  }, [viewportWidth, leftWidth, rightWidth]);
   const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
   const currentLineMoves = useMemo(() => {
     return activeLineNodeIds
