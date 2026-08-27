@@ -137,7 +137,11 @@ body.resizing * {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .panel button:hover {
+  /* This outranks the accent styling on a selected tab or a pressed toggle
+     (0,2,1 against 0,2,0), so hovering one repainted it exactly like a hovered
+     unselected button and the selection disappeared under the cursor. Skip the
+     controls that report themselves as chosen. */
+  .panel button:hover:not([aria-selected="true"]):not([aria-pressed="true"]) {
     background: var(--bg-card-hover);
     border-color: var(--border-strong);
     color: var(--text-heading);
@@ -4237,7 +4241,9 @@ summary:active {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .top-action-btn:hover {
+  /* Same as the panel rule above: this outranks .top-action-btn-active, so a
+     toggle that is on lost its accent while the pointer sat on it. */
+  .top-action-btn:hover:not([aria-pressed="true"]) {
     background: var(--bg-card-hover);
     border-color: var(--border-strong);
     color: var(--text-primary);
