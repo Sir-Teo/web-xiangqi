@@ -2774,7 +2774,7 @@ summary:active {
 .review-moment-eval span,
 .review-chance-loss span {
   color: var(--text-tertiary);
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: 0.58rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -3104,7 +3104,7 @@ summary:active {
   gap: 0.48rem;
   flex-wrap: wrap;
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
 .pv-line-spotlight,
@@ -3130,7 +3130,7 @@ summary:active {
 
 .pv-score span {
   color: var(--text-tertiary);
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: 0.56rem;
   font-weight: 700;
   text-transform: uppercase;
