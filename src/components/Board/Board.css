@@ -479,3 +479,47 @@
         transform: translate(-50%, calc(-50% - 5px)) scale(1.08);
     }
 }
+
+/* ─── Forced colours (Windows High Contrast and similar) ─────────────────── */
+/* The mode drops the piece gradients and repaints every glyph in one system
+   foreground, so both sides come out as identical outlined discs. On a xiangqi
+   board that is most of the information gone: the pairs differ by a stroke or
+   two — 仕/士, 相/象, 傌/馬, 俥/車, 炮/砲 — so telling whose piece is whose means
+   reading all 32 glyphs.
+
+   Inverting one side does not work. Chrome paints a backplate in the Canvas
+   colour behind text in this mode, so a light disc gets a dark rectangle laid
+   over it and a Canvas-coloured glyph disappears into that rectangle. Both
+   sides therefore keep the arrangement that renders correctly — Canvas disc,
+   CanvasText glyph — and the distinction is carried by the ring instead, which
+   forced colours leaves the author to shape even though it dictates the hue.
+
+   The grid needs help for a different reason: forced colours leave an SVG
+   stroke set in CSS alone, so the lines kept their authored #3a2006 brown and
+   all but vanished against the forced canvas. */
+@media (forced-colors: active) {
+    .piece.red,
+    .piece.black {
+        background: Canvas;
+        color: CanvasText;
+        /* Lit for a dark glyph on light wood; the white top highlight only
+           smears the character once the palette is forced. */
+        text-shadow: none;
+    }
+
+    /* Red reads as a double ring, black as a single one. */
+    .piece.red {
+        outline-style: double;
+        outline-width: 4px;
+    }
+
+    .piece.black {
+        outline-style: solid;
+        outline-width: 2px;
+    }
+
+    .grid-line,
+    .palace-line {
+        stroke: CanvasText;
+    }
+}
