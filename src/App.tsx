@@ -4385,6 +4385,7 @@ function App() {
                           onClick={() => jumpToNode(nodeId)}
                           title={title}
                           aria-label={title}
+                          aria-current={nodeId === currentNodeId ? 'true' : undefined}
                         >
                           {label}
                           {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
