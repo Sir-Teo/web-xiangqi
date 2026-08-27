@@ -1965,6 +1965,14 @@ body.resizing * {
   color: var(--text-secondary);
 }
 
+/* The dot carries margin-left:auto so it parks at the right edge of a move
+   chip. The legend reuses the same class, where that auto margin shoved each
+   row's content flush right and left the swatches at five different x
+   positions — a legend you cannot scan down. Park them in a column here. */
+.mtree-quality-legend .mtree-quality-dot {
+  margin-left: 0;
+}
+
 .mtree-quality-legend .legend-item em {
   font-style: normal;
   color: var(--text-tertiary);
