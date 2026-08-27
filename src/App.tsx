@@ -2073,6 +2073,28 @@ function App() {
     setRightWidth((width) => stepPanelWidth(width, delta, DEFAULT_RIGHT_PANEL_WIDTH));
   }, []);
 
+  // The tab strips announce role="tablist"; arrow, Home and End keys are part of
+  // that contract. Activating on focus is fine here — switching a panel is cheap
+  // and reversible. Claiming the key also keeps it from reaching the global move
+  // shortcuts while a tab has focus.
+  const handleTablistKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const { key } = event;
+    if (key !== 'ArrowRight' && key !== 'ArrowLeft' && key !== 'Home' && key !== 'End') return;
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')
+    );
+    const from = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (from === -1) return;
+    const next = key === 'Home'
+      ? 0
+      : key === 'End'
+        ? tabs.length - 1
+        : (from + (key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[next].focus();
+    tabs[next].click();
+  }, []);
+
   const handleLeftResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
@@ -3760,7 +3782,7 @@ function App() {
           </div>
           <div className="panel-inner" style={{ opacity: (!isMobile && leftWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
-              <div className="analysis-tab-strip" role="tablist" aria-label="Graph and library panels">
+              <div className="analysis-tab-strip" role="tablist" aria-label="Graph and library panels" onKeyDown={handleTablistKeyDown}>
                 <button
                   type="button"
                   role="tab"
@@ -4209,7 +4231,7 @@ function App() {
 
         {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
         {isMobile && (
-          <div className="mobile-analysis-tabs" role="tablist" aria-label="Mobile analysis panels">
+          <div className="mobile-analysis-tabs" role="tablist" aria-label="Mobile analysis panels" onKeyDown={handleTablistKeyDown}>
             <button
               type="button"
               role="tab"
@@ -4313,7 +4335,7 @@ function App() {
           <div className="panel-inner" style={{ opacity: (!isMobile && rightWidth === 0) ? 0 : 1 }}>
             <header className="panel-header panel-header-tabs">
               <h2 id="right-panel-heading">Analysis</h2>
-              <div className="analysis-tab-strip" role="tablist" aria-label="Analysis panels">
+              <div className="analysis-tab-strip" role="tablist" aria-label="Analysis panels" onKeyDown={handleTablistKeyDown}>
                 <button
                   type="button"
                   role="tab"
