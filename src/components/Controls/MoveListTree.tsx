@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
+    REVIEW_THRESHOLDS,
+    REVIEW_WIN_PERCENT_LOSS_THRESHOLDS,
     classifyMoveQualityForEval,
     formatReviewQuality,
     getEvalLossForMove,
@@ -216,11 +218,15 @@ export const MoveListTree = memo(function MoveListTree({
             {hasMoveQualityLegend ? <div className="mtree-quality-legend">
                     <span className="legend-title">Move loss</span>
                     <div className="legend-items">
-                        <span className="legend-item quality-best"><span className="mtree-quality-dot" /> Best <em>≤40cp</em></span>
-                        <span className="legend-item quality-good"><span className="mtree-quality-dot" /> Good <em>≤90cp / 5%</em></span>
-                        <span className="legend-item quality-inaccuracy"><span className="mtree-quality-dot" /> Inaccuracy <em>≤180cp / 20%</em></span>
-                        <span className="legend-item quality-mistake"><span className="mtree-quality-dot" /> Mistake <em>≤320cp / 30%</em></span>
-                        <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> Blunder <em>larger</em></span>
+                        {/* Read the bounds off the thresholds the classifier uses, so the
+                            legend cannot drift from what the dots actually mean. */}
+                        {(['best', 'good', 'inaccuracy', 'mistake'] as const).map((quality) => (
+                            <span key={quality} className={`legend-item quality-${quality}`}>
+                                <span className="mtree-quality-dot" /> {formatReviewQuality(quality)}{' '}
+                                <em>≤{REVIEW_THRESHOLDS[quality]}cp / {REVIEW_WIN_PERCENT_LOSS_THRESHOLDS[quality]}%</em>
+                            </span>
+                        ))}
+                        <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> {formatReviewQuality('blunder')} <em>larger</em></span>
                     </div>
                     <p>Severity is capped by practical win-chance loss so lopsided positions are not over-punished.</p>
                 </div> : null}
