@@ -206,7 +206,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                         >
                             <span>Engine</span>
                             <strong>{reviewEngineLabel}</strong>
-                            <em>Reviewed {new Date(summary.reviewedAt).toLocaleDateString()}</em>
+                            <em>Reviewed {new Date(summary.reviewedAt).toLocaleDateString(undefined, {
+                                year: 'numeric', month: 'short', day: 'numeric',
+                            })}</em>
                         </div>
                     </div>
 
