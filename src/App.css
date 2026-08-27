@@ -3490,15 +3490,20 @@ summary:active {
 }
 
 /* ── Board view strip controls ── */
+/* A floor rather than a fixed height, and allowed to wrap. At the user's normal
+   text size the content fits one 40px row and nothing changes; when text is
+   scaled up the status row keeps its intrinsic width and moves to its own line
+   instead of the eval chip being sliced in half by the overflow below. */
 .mobile-board-header {
-  height: 40px; flex-shrink: 0;
+  min-height: 40px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; align-content: center;
   padding: 0 10px; gap: 8px; overflow: hidden;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
 }
 .mobile-board-turn-info {
-  display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden;
+  display: flex; align-items: center; gap: 6px; min-width: min-content; flex: 1; overflow: hidden;
 }
 .turn-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .turn-dot-red   { background: #c0392b; box-shadow: 0 0 4px rgba(192,57,43,0.6); }
@@ -3796,7 +3801,7 @@ summary:active {
   }
 
   .mobile-board-header {
-    height: 34px;
+    min-height: 34px;
     padding: 0 8px;
     gap: 6px;
   }
