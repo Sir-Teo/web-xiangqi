@@ -678,7 +678,10 @@ export function LibraryPanel({
                     </span>
                   </>
                 )}
-                <span className="lib-date">{formatDate(game.savedAt)}</span>
+                {/* An unnamed game is titled by its date, so repeating it here
+                    said the same thing twice on one card. A renamed game still
+                    needs it: its title no longer carries the date. */}
+                {game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
               </div>
               {game.review ? (
                 <div
