@@ -820,8 +820,7 @@ body.resizing * {
   background: var(--bg-card);
 }
 
-.settings-menu>summary,
-.advanced-settings>summary {
+.settings-menu>summary {
   cursor: pointer;
   padding: 0.5rem 0.65rem;
   font-family: inherit;
@@ -831,8 +830,7 @@ body.resizing * {
   list-style: none;
 }
 
-.settings-menu>summary::-webkit-details-marker,
-.advanced-settings>summary::-webkit-details-marker {
+.settings-menu>summary::-webkit-details-marker {
   display: none;
 }
 
@@ -854,17 +852,6 @@ body.resizing * {
 
 .settings-header {
   display: none;
-}
-
-.advanced-settings {
-  border: 1px dashed var(--border-default);
-  border-radius: 9px;
-  background: rgba(13, 17, 23, 0.4);
-}
-
-.advanced-section {
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--border-subtle);
 }
 
 /* Range sliders */
@@ -900,22 +887,6 @@ body.resizing * {
 
 .compact-grid button {
   padding: 0.5rem 0.5rem;
-}
-
-/* Checkbox toggles */
-.switch-control {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.76rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.switch-control input {
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -954,62 +925,6 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Move list
    ═══════════════════════════════════════════════════ */
-.moves-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  max-height: 220px;
-  overflow: auto;
-}
-
-.moves-list li {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  gap: 0.32rem;
-  align-items: center;
-  padding: 0.32rem 0.48rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  border-left: 3px solid transparent;
-  background: var(--bg-card);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease;
-  animation: move-fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes move-fade-in {
-  from {
-    opacity: 0;
-    transform: translateX(-3px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .moves-list li:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--border-default);
-  }
-}
-
-.moves-list li span {
-  font-size: 0.71rem;
-  color: var(--text-secondary);
-}
-
-.moves-list li strong {
-  font-size: 0.76rem;
-  color: var(--text-primary);
-  font-weight: 600;
-}
 
 .move-index {
   min-width: 1.5rem;
@@ -1023,52 +938,25 @@ body.resizing * {
   font-size: 0.66rem !important;
 }
 
-.move-quality {
-  text-transform: capitalize;
-  justify-self: end;
-  font-weight: 600 !important;
-  font-size: 0.66rem !important;
-}
-
 /* Quality-colored left borders */
 .quality-best {
   border-left-color: var(--quality-best) !important;
-}
-
-.quality-best .move-quality {
-  color: var(--quality-best);
 }
 
 .quality-good {
   border-left-color: var(--quality-good) !important;
 }
 
-.quality-good .move-quality {
-  color: var(--quality-good);
-}
-
 .quality-inaccuracy {
   border-left-color: var(--quality-inaccuracy) !important;
-}
-
-.quality-inaccuracy .move-quality {
-  color: var(--quality-inaccuracy);
 }
 
 .quality-mistake {
   border-left-color: var(--quality-mistake) !important;
 }
 
-.quality-mistake .move-quality {
-  color: var(--quality-mistake);
-}
-
 .quality-blunder {
   border-left-color: var(--quality-blunder) !important;
-}
-
-.quality-blunder .move-quality {
-  color: var(--quality-blunder);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1497,24 +1385,6 @@ body.resizing * {
 }
 
 /* ═══════════════════════════════════════════════════
-   NewGameDialog overrides (dark)
-   ═══════════════════════════════════════════════════ */
-.dialog-overlay {
-  background: rgba(0, 0, 0, 0.72) !important;
-  backdrop-filter: blur(6px) !important;
-}
-
-.dialog-box {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-default) !important;
-  box-shadow: var(--shadow-lg) !important;
-}
-
-.dialog-box h2 {
-  color: var(--text-heading) !important;
-}
-
-/* ═══════════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════════ */
 @media (max-width: 900px) {
@@ -1623,8 +1493,6 @@ body.resizing * {
   .top .panel-content {
     padding: 0.35rem 0.5rem;
   }
-
-
 
   /* Mobile settings backdrop */
   .top .settings-menu[open] .settings-backdrop {
@@ -1790,11 +1658,6 @@ body.resizing * {
     display: none !important;
   }
 
-  .preset-grid,
-  .inline-actions {
-    grid-template-columns: 1fr;
-  }
-
   /* Typography & fat-fingers adjustments */
   .bottom-engine-info {
     font-size: 0.85rem;
@@ -1817,14 +1680,6 @@ body.resizing * {
 
   .control strong {
     font-size: 0.95rem;
-  }
-
-  .switch-control {
-    margin-bottom: 1rem;
-  }
-
-  .switch-control span {
-    font-size: 0.9rem;
   }
 
   input[type="range"] {
@@ -2603,13 +2458,6 @@ summary:active {
   color: var(--warning);
   border-color: rgba(210, 153, 34, 0.32);
   background: var(--warning-subtle);
-}
-
-.setting-value {
-  color: var(--text-tertiary);
-  font-size: 0.72rem;
-  text-align: center;
-  font-family: var(--font-mono);
 }
 
 .settings-inline-toggles {
