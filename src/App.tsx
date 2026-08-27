@@ -757,6 +757,20 @@ function clampPanelWidth(width: number) {
   return Math.min(nextWidth, PANEL_MAX_WIDTH);
 }
 
+function formatCapturedTrayLabel(
+  side: 'Red' | 'Black',
+  captured: Array<{ piece: PieceCode; count: number }>
+) {
+  // The tray shows glyphs, and the per-piece title is a mouse-only tooltip on a
+  // generic span, so the names never reached the accessibility tree. Spell the
+  // haul out in the label the tray already carries.
+  if (captured.length === 0) return `Pieces captured by ${side}: none`;
+  const pieces = captured.map(({ piece, count }) => (
+    count > 1 ? `${count} ${PIECE_NAMES[piece]}s` : PIECE_NAMES[piece]
+  ));
+  return `Pieces captured by ${side}: ${pieces.join(', ')}`;
+}
+
 function App() {
   const storedPreferences = useMemo(() => readStoredPreferences(), []);
   // A narrow window is not a weaker machine. This read innerWidth, so opening
@@ -4236,7 +4250,7 @@ function App() {
                 <div className="capture-trays">
                   <div className="capture-tray">
                     <span>Red took</span>
-                    <div className="captured-pieces" aria-label="Pieces captured by Red">
+                    <div className="captured-pieces" aria-label={formatCapturedTrayLabel('Red', materialSummary.redCaptured)}>
                       {materialSummary.redCaptured.length > 0 ? materialSummary.redCaptured.map(({ piece, count }) => (
                         <span key={piece} className="captured-piece captured-piece-black" title={PIECE_NAMES[piece]}>
                           {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
@@ -4246,7 +4260,7 @@ function App() {
                   </div>
                   <div className="capture-tray">
                     <span>Black took</span>
-                    <div className="captured-pieces" aria-label="Pieces captured by Black">
+                    <div className="captured-pieces" aria-label={formatCapturedTrayLabel('Black', materialSummary.blackCaptured)}>
                       {materialSummary.blackCaptured.length > 0 ? materialSummary.blackCaptured.map(({ piece, count }) => (
                         <span key={piece} className="captured-piece captured-piece-red" title={PIECE_NAMES[piece]}>
                           {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
