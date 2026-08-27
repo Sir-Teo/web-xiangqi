@@ -131,7 +131,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                             onClick={onStart}
                             disabled={!canStart}
                             title={startTitle}
-                            aria-label={canStart ? 'Run game review' : `Game review unavailable: ${startTitle ?? 'not ready'}`}
+                            // Enabled, the visible text is the name; see the bottom
+                            // bar's matching button in App.tsx.
+                            aria-label={canStart ? undefined : `Game review unavailable: ${startTitle ?? 'not ready'}`}
                             data-testid="start-review-btn"
                         >
                             {startLabel ?? (canStart ? 'Run Review' : 'Engine Loading')}

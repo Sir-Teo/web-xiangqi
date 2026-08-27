@@ -4751,7 +4751,9 @@ function App() {
                   className="gc-btn"
                   onClick={startGameReview}
                   title={reviewStartTitle}
-                  aria-label={canStartReview ? 'Start game review' : `Game review unavailable: ${reviewStartTitle}`}
+                  // Enabled, the visible text is the name; overriding it would stop
+                  // "Review Game" matching by voice. Disabled, say why instead.
+                  aria-label={canStartReview ? undefined : `Game review unavailable: ${reviewStartTitle}`}
                   disabled={!canStartReview}
                   data-testid="start-review-bottom-btn"
                 >
