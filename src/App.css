@@ -5672,3 +5672,38 @@ summary:active {
     stroke: CanvasText;
   }
 }
+
+/* Printing a dark theme: browsers leave backgrounds out of the page unless the
+   reader turns them on, so every light-on-dark surface arrives as pale ink on
+   white paper. Measured under print media, 26 of 30 distinct text colours fell
+   under 4.5:1 against paper, the body text at 1.08 and 1.17 -- a page that
+   looks blank rather than one that looks wrong.
+
+   This only makes the existing page legible; it is not a designed print
+   layout. Nothing is rearranged, nothing is hidden, no page breaks are set. */
+@media print {
+  /* Most of the colours that resist a plain reset are var()-based and carry
+     !important, so redefining the tokens is cleaner than out-specifying every
+     rule that uses them. The [class] selector covers the handful written as
+     literals; it matches the single-class specificity those rules use and wins
+     by sitting at the end of the file. */
+  :root {
+    --text-primary: #000;
+    --text-secondary: #000;
+    --text-tertiary: #000;
+    --text-muted: #000;
+    --text-heading: #000;
+    --accent: #000;
+    --accent-hover: #000;
+    --info: #000;
+    --warning: #000;
+    --danger: #000;
+  }
+
+  *,
+  [class],
+  [class]::before,
+  [class]::after {
+    color: #000 !important;
+  }
+}

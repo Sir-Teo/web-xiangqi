@@ -548,3 +548,23 @@
         filter: none;
     }
 }
+
+/* ─── Print ──────────────────────────────────────────────────────────────── */
+/* Same two problems as forced colours, for the same reason: the grid stroke and
+   the piece gradients are not part of what a printer puts on paper, so the
+   lines keep an unprintable brown and both sides arrive as identical rings.
+   Carry the side on the ring, exactly as the forced-colours block does. */
+@media print {
+    .grid-line,
+    .palace-line {
+        stroke: #000;
+    }
+
+    .piece.red {
+        outline: 4px double #000;
+    }
+
+    .piece.black {
+        outline: 2px solid #000;
+    }
+}
