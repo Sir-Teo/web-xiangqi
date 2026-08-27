@@ -187,19 +187,6 @@ body.resizing * {
   background: rgba(63, 185, 80, 0.14) !important;
 }
 
-.btn-icon {
-  font-size: 1rem;
-  line-height: 1;
-  opacity: 0.7;
-  transition: opacity 150ms ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .panel button:hover .btn-icon {
-    opacity: 1;
-  }
-}
-
 /* ═══════════════════════════════════════════════════
    Top bar
    ═══════════════════════════════════════════════════ */
@@ -296,10 +283,6 @@ body.resizing * {
   display: none;
 }
 
-.mobile-modes-wrapper {
-  display: contents;
-}
-
 .top-mode-pills {
   display: flex;
   flex-shrink: 0;
@@ -312,15 +295,7 @@ body.resizing * {
   min-height: unset;
 }
 
-.gc-mode-pills {
-  background: rgba(13, 17, 23, 0.5);
-  padding: 0.2rem;
-  border-radius: 24px;
-  border: 1px solid var(--border-subtle);
-}
-
-.top .compact-grid button:not(.btn-icon-only),
-.top .settings-menu>summary {
+.top .compact-grid button:not(.btn-icon-only) {
   min-height: unset;
   height: 2.2rem;
   padding: 0 0.8rem;
@@ -330,18 +305,6 @@ body.resizing * {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-}
-
-.top .settings-menu {
-  flex-shrink: 0;
-  margin: 0;
-}
-
-.top .settings-menu>summary {
-  background: rgba(13, 17, 23, 0.6);
-  border: 1px solid var(--border-subtle);
-  max-width: max-content;
-  white-space: nowrap;
 }
 
 /* App branding */
@@ -381,45 +344,6 @@ body.resizing * {
 }
 
 /* Settings dropdown */
-.top .settings-menu {
-  margin-bottom: 0;
-  margin-left: 0.2rem;
-  border: none;
-  background: none;
-  position: relative;
-}
-
-.top .settings-menu>summary {
-  padding: 0.38rem 0.65rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  transition: all 150ms ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.top .settings-menu>summary::-webkit-details-marker {
-  display: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .top .settings-menu>summary:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--border-strong);
-    color: var(--text-heading);
-  }
-}
-
-.top .settings-menu[open] {
-  position: relative;
-}
 
 .top .settings-body {
   position: absolute;
@@ -483,64 +407,7 @@ body.resizing * {
 }
 
 /* Eval bar + score label wrapper */
-.eval-bar-wrap {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.eval-bar-label {
-  position: absolute;
-  /* Sit just below the WdlBar */
-  bottom: -22px;
-  left: -20px;
-  /* Aligned with desktop WdlBar left edge */
-  width: 34px;
-  font-size: 0.62rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-  background: rgba(13, 17, 23, 0.88);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 2px 3px;
-  line-height: 1;
-  pointer-events: none;
-  white-space: nowrap;
-  text-align: center;
-  writing-mode: initial;
-  transform: none;
-}
-
 /* AI thinking overlay */
-.ai-thinking-overlay {
-  position: absolute;
-  inset: 0;
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.18);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 12px;
-  pointer-events: none;
-}
-
-.ai-thinking-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  background: rgba(22, 27, 34, 0.9);
-  border: 1px solid var(--border-default);
-  backdrop-filter: blur(12px);
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  box-shadow: var(--shadow-md);
-}
-
 .thinking-dots {
   display: flex;
   gap: 3px;
@@ -813,37 +680,8 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Settings & controls (dropdown content)
    ═══════════════════════════════════════════════════ */
-.settings-menu {
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-}
-
-.settings-menu>summary {
-  cursor: pointer;
-  padding: 0.5rem 0.65rem;
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  list-style: none;
-}
-
-.settings-menu>summary::-webkit-details-marker {
-  display: none;
-}
-
 .settings-backdrop {
   display: none;
-}
-
-.settings-menu[open] .settings-backdrop {
-  display: block;
-  position: fixed;
-  inset: 0;
-  z-index: 990;
-  cursor: default;
 }
 
 .settings-body {
@@ -925,12 +763,6 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Move list
    ═══════════════════════════════════════════════════ */
-
-.move-index {
-  min-width: 1.5rem;
-  color: var(--text-muted) !important;
-  font-variant-numeric: tabular-nums;
-}
 
 .move-uci {
   font-family: var(--font-mono);
@@ -1154,38 +986,10 @@ body.resizing * {
   filter: drop-shadow(0 0 4px var(--accent-glow));
 }
 
-.graph-line-white {
-  stroke: #f0f6fc;
-  filter: drop-shadow(0 0 3px rgba(240, 246, 252, 0.3));
-}
-
-.graph-line-draw {
-  stroke: #ffb86c;
-  stroke-dasharray: 4 3;
-  filter: drop-shadow(0 0 3px rgba(255, 184, 108, 0.3));
-}
-
-.graph-line-black {
-  stroke: #58a6ff;
-  filter: drop-shadow(0 0 3px rgba(88, 166, 255, 0.35));
-}
-
 .graph-point {
   fill: var(--accent);
   stroke: var(--bg-base);
   stroke-width: 1.3;
-}
-
-.graph-point-white {
-  fill: #f0f6fc;
-}
-
-.graph-point-draw {
-  fill: #ffb86c;
-}
-
-.graph-point-black {
-  fill: #58a6ff;
 }
 
 .graph-legend {
@@ -1234,18 +1038,6 @@ body.resizing * {
   height: 3px;
 }
 
-.graph-legend .wdl-white-label::before {
-  background: #f0f6fc;
-}
-
-.graph-legend .wdl-draw-label::before {
-  background: #ffb86c;
-}
-
-.graph-legend .wdl-black-label::before {
-  background: #58a6ff;
-}
-
 /* ═══════════════════════════════════════════════════
    Empty state
    ═══════════════════════════════════════════════════ */
@@ -1257,12 +1049,6 @@ body.resizing * {
   padding: var(--space-xl) var(--space-md);
   text-align: center;
   gap: var(--space-sm);
-}
-
-.empty-state-icon {
-  font-size: 1.6rem;
-  opacity: 0.18;
-  line-height: 1;
 }
 
 .empty-state p {
@@ -1349,29 +1135,6 @@ body.resizing * {
   font-family: var(--font-body);
 }
 
-.game-over-badge {
-  font-size: 0.73rem;
-  font-weight: 700;
-  padding: 0.18rem 0.5rem;
-  border-radius: var(--radius-pill);
-  animation: badge-pop 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  background: var(--danger-subtle);
-  color: var(--danger);
-  border: 1px solid rgba(248, 81, 73, 0.22);
-}
-
-.game-over-badge.draw {
-  background: rgba(110, 118, 129, 0.12);
-  color: var(--text-secondary);
-  border-color: var(--border-default);
-}
-
-.game-over-badge.check {
-  background: var(--warning-subtle);
-  color: var(--warning);
-  border-color: rgba(210, 153, 34, 0.25);
-}
-
 @keyframes badge-pop {
   from {
     transform: scale(0.75);
@@ -1409,11 +1172,7 @@ body.resizing * {
     order: 0;
   }
 
-  .eval-bar-label {
-    left: -12px;
-  }
-
-  .board-stage {
+    .board-stage {
     position: relative;
     width: 100%;
     max-width: 100%;
@@ -1495,13 +1254,7 @@ body.resizing * {
   }
 
   /* Mobile settings backdrop */
-  .top .settings-menu[open] .settings-backdrop {
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-  }
-
-  /* Make sure the text on the summary tag stays above if we don't hide it, 
+    /* Make sure the text on the summary tag stays above if we don't hide it, 
      but the modal body needs to be above the backdrop. */
   .top .settings-body {
     position: fixed;
@@ -1587,22 +1340,19 @@ body.resizing * {
   }
 
   .top-mode-pills,
-  .gc-mode-pills,
   .wc-nav,
   .wc-speed {
     min-height: 2.5rem;
     padding: 0.18rem;
   }
 
-  .top-mode-pills,
-  .gc-mode-pills {
+  .top-mode-pills {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
 
-  .top-mode-pills::-webkit-scrollbar,
-  .gc-mode-pills::-webkit-scrollbar {
+  .top-mode-pills::-webkit-scrollbar {
     display: none;
   }
 
@@ -1804,43 +1554,7 @@ body.resizing * {
   color: #f87171;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .gc-btn-pause:hover:not(:disabled) {
-    border-color: rgba(210, 153, 34, 0.4);
-    color: var(--warning);
-    background: var(--warning-subtle);
-  }
-}
-
-.gc-btn-resume {
-  border-color: var(--border-accent);
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .gc-btn-resume:hover {
-    background: rgba(63, 185, 80, 0.2);
-    box-shadow: 0 0 10px var(--accent-glow);
-  }
-}
-
-.gc-icon {
-  font-size: 0.78rem;
-  line-height: 1;
-}
-
 /* Mode pills */
-.gc-mode-pills {
-  display: flex;
-  gap: 0.2rem;
-  align-items: center;
-  padding: 0.15rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-card);
-}
-
 .gc-pill {
   display: inline-flex;
   align-items: center;
@@ -1869,12 +1583,6 @@ body.resizing * {
   background: var(--accent-subtle) !important;
   border-color: var(--border-accent) !important;
   color: var(--accent) !important;
-}
-
-.gc-pill-icon {
-  width: 0.75rem;
-  height: 0.75rem;
-  opacity: 0.8;
 }
 
 /* Bottom status row */
@@ -2430,34 +2138,6 @@ summary:active {
 .premium-slider:focus {
   border-color: var(--accent-muted);
   box-shadow: 0 0 0 2px var(--accent-subtle);
-}
-
-.premium-primary-btn {
-  border: 1px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 0.52rem 0.65rem;
-  cursor: pointer;
-  transition: all 150ms ease;
-}
-
-.premium-primary-btn:hover:not(:disabled) {
-  background: rgba(63, 185, 80, 0.22);
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.premium-primary-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.premium-primary-btn.active {
-  color: var(--warning);
-  border-color: rgba(210, 153, 34, 0.32);
-  background: var(--warning-subtle);
 }
 
 .settings-inline-toggles {
@@ -3542,24 +3222,6 @@ summary:active {
 }
 
 /* Xiangqi watch controls extras not in web-chess */
-.wc-variation {
-  display: flex;
-  align-items: center;
-  gap: 0.18rem;
-  padding: 0.12rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-card);
-}
-
-.wc-variation-label {
-  color: var(--text-tertiary);
-  font-size: 0.64rem;
-  font-family: var(--font-mono);
-  min-width: 44px;
-  text-align: center;
-}
-
 .wc-timeline {
   display: flex;
   flex-direction: column;
@@ -3680,23 +3342,6 @@ summary:active {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-}
-
-.top-action-active {
-  color: var(--warning) !important;
-  border-color: rgba(210, 153, 34, 0.35) !important;
-  background: var(--warning-subtle) !important;
-}
-
-.top .settings-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.top .settings-trigger svg {
-  width: 16px;
-  height: 16px;
 }
 
 /* Safety: keep mobile labels visible for Xiangqi text buttons */
