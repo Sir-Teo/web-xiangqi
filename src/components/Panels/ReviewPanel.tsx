@@ -212,7 +212,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         </div>
                     </div>
 
-                    <div className="review-quality-breakdown" aria-label="Review quality breakdown">
+                    <div className="review-quality-breakdown" role="group" aria-label="Review quality breakdown">
                         {qualityBreakdown.map((item) => {
                             const countLabel = formatReviewQualityCount(item.key, item.count);
                             return (
@@ -274,7 +274,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                             <strong data-testid="review-moment-count">{filteredKeyMoments.length}/{totalKeyMoments}</strong>
                         </div>
                         {totalKeyMoments > 0 ? (
-                            <div className="review-moment-filters" aria-label="Filter review key moments">
+                            <div className="review-moment-filters" role="group" aria-label="Filter review key moments">
                                 <select
                                     className="review-moment-filter"
                                     value={momentSideFilter}

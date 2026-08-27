@@ -4500,7 +4500,7 @@ function App() {
                 />
               ) : (
                 <>
-                  <div className="engine-dashboard" aria-label="Engine diagnostics">
+                  <div className="engine-dashboard" role="group" aria-label="Engine diagnostics">
                     <div className="engine-stat">
                       <span>Core</span>
                       <strong>{engineVariant}</strong>
@@ -4522,7 +4522,7 @@ function App() {
                       <em>{analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
                     </div>
                   </div>
-                  <div className="engine-pv-controls" aria-label="Engine principal variation lines">
+                  <div className="engine-pv-controls" role="group" aria-label="Engine principal variation lines">
                     <span>PV Lines</span>
                     <div className="engine-pv-buttons">
                       {PV_LINE_OPTIONS.map((count) => (
@@ -4541,7 +4541,7 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  <div className="engine-pv-controls engine-runtime-controls" aria-label="Engine runtime controls">
+                  <div className="engine-pv-controls engine-runtime-controls" role="group" aria-label="Engine runtime controls">
                     <span>Runtime</span>
                     <div className="engine-runtime-buttons">
                       <button
@@ -4629,7 +4629,7 @@ function App() {
                             <span className="turnNum">Depth {pv.depth}</span>
                             <span className="move">{formatUciLine(pv.moves, 7)}</span>
                           </div>
-                          <div className="pv-line-actions" aria-label={`Actions for ${lineActionContext}`}>
+                          <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
                             <button
                               type="button"
                               className="pv-action-btn"
