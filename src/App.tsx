@@ -4250,7 +4250,7 @@ function App() {
                 <div className="capture-trays">
                   <div className="capture-tray">
                     <span>Red took</span>
-                    <div className="captured-pieces" aria-label={formatCapturedTrayLabel('Red', materialSummary.redCaptured)}>
+                    <div className="captured-pieces" role="group" aria-label={formatCapturedTrayLabel('Red', materialSummary.redCaptured)}>
                       {materialSummary.redCaptured.length > 0 ? materialSummary.redCaptured.map(({ piece, count }) => (
                         <span key={piece} className="captured-piece captured-piece-black" title={PIECE_NAMES[piece]}>
                           {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
@@ -4260,7 +4260,7 @@ function App() {
                   </div>
                   <div className="capture-tray">
                     <span>Black took</span>
-                    <div className="captured-pieces" aria-label={formatCapturedTrayLabel('Black', materialSummary.blackCaptured)}>
+                    <div className="captured-pieces" role="group" aria-label={formatCapturedTrayLabel('Black', materialSummary.blackCaptured)}>
                       {materialSummary.blackCaptured.length > 0 ? materialSummary.blackCaptured.map(({ piece, count }) => (
                         <span key={piece} className="captured-piece captured-piece-red" title={PIECE_NAMES[piece]}>
                           {PIECE_SYMBOLS[piece]}{count > 1 ? <sup>{count}</sup> : null}
