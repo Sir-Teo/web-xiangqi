@@ -803,6 +803,13 @@ body.resizing * {
   background: var(--bg-card);
   padding: 0.5rem;
   overflow: hidden;
+  /* The overflow above clips the chart to the rounded corners, but it also
+     zeroes this flex item's automatic minimum size, so the column could shrink
+     the box below its own content and the hidden overflow silently ate the
+     legend and the peak readouts -- both painted at zero height at 1440x900,
+     with no ancestor able to scroll to them. Restore the minimum so the panel
+     scrolls instead of swallowing rows. */
+  min-height: min-content;
 }
 
 .graph-summary {
