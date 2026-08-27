@@ -76,10 +76,12 @@
   cursor: pointer;
 }
 
-.lib-load-more:hover {
+@media (hover: hover) and (pointer: fine) {
+  .lib-load-more:hover {
   border-color: rgba(16, 185, 129, 0.45);
   color: var(--accent, #10b981);
   background: rgba(16, 185, 129, 0.08);
+  }
 }
 
 .lib-search {
@@ -145,10 +147,12 @@
   transition: border-color 0.15s, transform 0.15s ease, background 0.15s ease;
 }
 
-.lib-card:hover {
+@media (hover: hover) and (pointer: fine) {
+  .lib-card:hover {
   border-color: rgba(255,255,255,0.15);
   background: var(--bg-card-hover);
   transform: translateY(-1px);
+  }
 }
 
 .lib-card-title {
@@ -376,9 +380,11 @@
   white-space: normal;
 }
 
-.lib-panel .lib-game-name-button:hover {
+@media (hover: hover) and (pointer: fine) {
+  .lib-panel .lib-game-name-button:hover {
   color: var(--accent, #10b981);
   text-decoration: underline;
+  }
 }
 
 .lib-panel .lib-game-name-button:focus-visible,

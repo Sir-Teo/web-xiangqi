@@ -216,8 +216,10 @@
     cursor: pointer;
 }
 
-.hitbox:hover {
+@media (hover: hover) and (pointer: fine) {
+  .hitbox:hover {
     background: rgba(255, 235, 160, 0.18);
+  }
 }
 
 .hitbox:focus-visible {

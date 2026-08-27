@@ -2016,8 +2016,10 @@ body.resizing * {
   flex-shrink: 0;
 }
 
-.mtree-coach-hint:hover {
+@media (hover: hover) and (pointer: fine) {
+  .mtree-coach-hint:hover {
   opacity: 1;
+  }
 }
 
 .mtree-review-note {
@@ -2508,10 +2510,12 @@ summary:active {
   color: #f87171;
 }
 
-.chip-btn:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text-primary);
   background: var(--bg-card-hover);
+  }
 }
 
 .chip-btn:disabled {
@@ -2521,16 +2525,20 @@ summary:active {
 
 /* Variant hovers, so a coloured chip stays coloured under the cursor instead of
    falling back to the neutral `.chip-btn:hover` treatment. */
-.chip-btn-primary:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn-primary:hover:not(:disabled) {
   border-color: var(--accent-hover);
   background: rgba(16, 185, 129, 0.24);
   color: var(--accent-hover);
+  }
 }
 
-.chip-btn-warning:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn-warning:hover:not(:disabled) {
   border-color: rgba(239, 68, 68, 0.62);
   background: rgba(239, 68, 68, 0.22);
   color: #fca5a5;
+  }
 }
 
 /* Destructive chips: muted red at rest, solid red once the confirm step is armed
@@ -2540,10 +2548,12 @@ summary:active {
   color: #f27272;
 }
 
-.chip-btn-danger:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn-danger:hover:not(:disabled) {
   border-color: rgba(239, 68, 68, 0.58);
   background: rgba(239, 68, 68, 0.12);
   color: #fca5a5;
+  }
 }
 
 .chip-btn-danger-armed {
@@ -2553,10 +2563,12 @@ summary:active {
   font-weight: 700;
 }
 
-.chip-btn-danger-armed:hover:not(:disabled) {
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn-danger-armed:hover:not(:disabled) {
   border-color: #f87171;
   background: #dc2626;
   color: #fff;
+  }
 }
 
 .graph-extrema {
@@ -2881,8 +2893,10 @@ summary:active {
   overflow: visible;
 }
 
-.review-moment-card:hover {
+@media (hover: hover) and (pointer: fine) {
+  .review-moment-card:hover {
   border-color: var(--border-strong);
+  }
 }
 
 .review-moment-card-active {
@@ -3355,10 +3369,12 @@ summary:active {
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.bottombar-fen-copy:hover {
+@media (hover: hover) and (pointer: fine) {
+  .bottombar-fen-copy:hover {
   color: var(--text-primary);
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.07);
+  }
 }
 
 .bottombar-fen-copy-warning {
@@ -4033,9 +4049,11 @@ summary:active {
   flex: 0 0 auto;
 }
 
-.settings-close-btn:hover {
+@media (hover: hover) and (pointer: fine) {
+  .settings-close-btn:hover {
   background: var(--bg-card-hover) !important;
   color: var(--text-primary);
+  }
 }
 
 .settings-group {
@@ -4070,11 +4088,18 @@ summary:active {
   transition: all 150ms ease;
 }
 
-.pill-btn-active,
-.pill-btn:hover {
+.pill-btn-active {
   background: var(--accent-muted);
   border-color: var(--accent-subtle);
   color: var(--accent-hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pill-btn:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent-subtle);
+  color: var(--accent-hover);
+  }
 }
 
 .premium-select {
@@ -4117,9 +4142,11 @@ summary:active {
   gap: 0.4rem;
 }
 
-.gc-btn-danger:hover {
+@media (hover: hover) and (pointer: fine) {
+  .gc-btn-danger:hover {
   background: rgba(220, 38, 38, 0.2) !important;
   border-color: rgba(220, 38, 38, 0.5) !important;
+  }
 }
 
 .settings-reset-btn {
@@ -4139,10 +4166,16 @@ summary:active {
   text-decoration: none;
 }
 
-.settings-link:hover,
 .settings-link:focus-visible {
   color: var(--accent);
   text-decoration: underline;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -5041,9 +5074,11 @@ summary:active {
   border-color: var(--accent-subtle);
 }
 
-.game-over-btn-primary:hover {
+@media (hover: hover) and (pointer: fine) {
+  .game-over-btn-primary:hover {
   background: rgba(16, 185, 129, 0.22);
   border-color: var(--border-accent);
+  }
 }
 
 .game-over-btn-secondary {
@@ -5051,9 +5086,11 @@ summary:active {
   color: var(--text-secondary);
 }
 
-.game-over-btn-secondary:hover {
+@media (hover: hover) and (pointer: fine) {
+  .game-over-btn-secondary:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
+  }
 }
 
 /* ═══════════════════════════════════════════════════
