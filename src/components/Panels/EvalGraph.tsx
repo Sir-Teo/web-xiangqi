@@ -143,7 +143,9 @@ export const EvalGraph = React.memo(function EvalGraph({
         return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${computedPoints[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
     }, [computedPoints, linePath, baselineY]);
 
-    const currentPointIndex = Math.max(0, Math.min(points.length - 1, currentMoveIndex + 1));
+    // points[0] is the start position, so a move index maps one slot to its right.
+    const pointIndexForMove = (moveIndex: number) => Math.max(0, Math.min(points.length - 1, moveIndex + 1));
+    const currentPointIndex = pointIndexForMove(currentMoveIndex);
     const currentPoint = points[currentPointIndex];
     const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? 0);
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
@@ -317,6 +319,7 @@ export const EvalGraph = React.memo(function EvalGraph({
         if (targetIndex == null) return;
         event.preventDefault();
         event.stopPropagation();
+        setHoverPointIndex(pointIndexForMove(targetIndex));
         onNavigate(targetIndex);
     };
 
