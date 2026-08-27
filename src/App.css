@@ -3049,6 +3049,10 @@ summary:active {
   justify-content: space-between;
   gap: 0.55rem;
   min-height: 2.25rem;
+  /* The panel column would otherwise squeeze these control rows back to their
+     min-height, so a wrapped button pair spilled outside the card border. The
+     panel scrolls, so these small rows can keep their content height. */
+  flex-shrink: 0;
   margin-bottom: 0.55rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -3073,8 +3077,13 @@ summary:active {
 }
 
 .engine-runtime-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, auto));
+  /* minmax(0, auto) let these shrink under their own labels, so between 901 and
+     1100px "Clear Hash" was cut mid-word with text-overflow: clip and no
+     ellipsis to show it. Let the pair wrap instead: they keep their labels and
+     only take a second line where one row genuinely does not fit. */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.32rem;
   min-width: 0;
 }
