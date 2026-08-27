@@ -4657,11 +4657,17 @@ summary:active {
   font-weight: 600;
 }
 
+/* Lives inside .xiangqi-board so it anchors to the board itself. It used to
+   sit in .board-wrap, which since the portrait sizing change is the whole grid
+   cell — the badge rendered 116% down (below the board) on a phone and, where
+   the wrap does hug the board, landed on the red general at bottom-centre.
+   The right gutter beside the river is the one strip of the board that is
+   empty in any normal position, so the badge covers no piece. */
 .check-overlay {
   position: absolute;
-  bottom: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
   pointer-events: none;
   z-index: 10;
 }

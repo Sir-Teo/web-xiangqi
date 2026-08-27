@@ -4029,12 +4029,8 @@ function App() {
                   onToggleHighlight={showArrows ? handleToggleHighlight : undefined}
                   onAddArrow={showArrows ? handleAddUserArrow : undefined}
                   arrows={boardArrows}
+                  inCheck={inCheck}
                 />
-                {inCheck && (
-                  <div className="check-overlay">
-                    <span className="check-badge">CHECK</span>
-                  </div>
-                )}
               </div>
 
               <div className="position-dock" aria-live="polite">

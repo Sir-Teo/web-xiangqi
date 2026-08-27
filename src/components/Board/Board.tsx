@@ -86,6 +86,7 @@ interface BoardProps {
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
     orientation?: BoardOrientation;
+    inCheck?: boolean;
     highlights?: Array<{ file: number; rank: number }>;
     onToggleHighlight?: (square: { file: number; rank: number }) => void;
     onAddArrow?: (
@@ -108,6 +109,7 @@ export const Board = React.memo(function Board({
     validTargets,
     onSquareClick,
     orientation = 'red',
+    inCheck = false,
     highlights = [],
     onToggleHighlight,
     onAddArrow,
@@ -376,6 +378,12 @@ export const Board = React.memo(function Board({
                         })
                     ))}
                 </div>
+
+                {inCheck && (
+                    <div className="check-overlay">
+                        <span className="check-badge">CHECK</span>
+                    </div>
+                )}
 
                 {/* Arrow overlay */}
                 {arrows.length > 0 && (
