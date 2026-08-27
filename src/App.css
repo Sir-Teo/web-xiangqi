@@ -2000,12 +2000,12 @@ summary:active {
 
 @media (prefers-reduced-motion: reduce) {
 
+  /* The global reset in index.css already zeroes animation and transition
+     timing for every element, so only scroll-behavior needs restating: that
+     reset sets it on html/body alone, and this app scrolls inner panels. */
   .app-shell *,
   .app-shell *::before,
   .app-shell *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 
@@ -4831,14 +4831,10 @@ summary:active {
    Reduced-motion overrides
    ═══════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
-  .thinking-dots span,
   .mobile-tab-bar-btn.active::after,
   .game-over-backdrop,
   .game-over-modal {
     animation: none !important;
-  }
-  * {
-    transition-duration: 0.01ms !important;
   }
 }
 
