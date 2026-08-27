@@ -2337,7 +2337,11 @@ summary:active {
   font-family: var(--font-mono);
   pointer-events: none;
   white-space: normal;
-  max-width: min(15rem, calc(100% - 12px));
+  /* The 12px inset ignored the y-axis gutter, so a review note (which caps at
+     15rem = 240px) could not fit the 239px track right of the labels. Reserve
+     the gutter -- PADDING.left - 8 = 34px -- plus the same 12px breathing room
+     so the tooltip always fits where the clamp can place it. */
+  max-width: min(15rem, calc(100% - 46px));
   max-height: calc(100% - 8px);
   overflow: hidden;
   z-index: 4;

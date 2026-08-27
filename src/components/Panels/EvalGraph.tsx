@@ -357,9 +357,12 @@ export const EvalGraph = React.memo(function EvalGraph({
     const gutterRight = PADDING.left - 8;
     const minTooltipX = gutterRight + halfTooltipWidth;
     const maxTooltipX = chartWidth - halfTooltipWidth - 4;
+    // If the box still cannot fit the track, park it against the gutter rather
+    // than centring it: centring pushed it back over the very labels this
+    // clamp exists to keep clear.
     const tooltipX = minTooltipX <= maxTooltipX
         ? Math.min(Math.max(anchorX, minTooltipX), maxTooltipX)
-        : chartWidth / 2;
+        : minTooltipX;
     const tooltipBelow = anchorY - tooltipSize.height - 14 < 4;
     const tooltipY = tooltipBelow
         ? Math.min(anchorY + 14, Math.max(4, chartHeight - tooltipSize.height - 4))
