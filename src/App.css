@@ -5638,6 +5638,18 @@ summary:active {
   .position-stat em[data-live-state] {
     display: block;
   }
+
+  /* The rule hint is the only explanation an illegal move gets. Hiding the
+     secondary line took it away here, so a rejected move in landscape said
+     nothing at all. Pro mode already carves it back out when it hides the
+     same line; short viewports need the identical exception. */
+  .position-stat-selection .position-warning {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }
 
 /* Portrait phones and tablets only — landscape sizes the board from the row
