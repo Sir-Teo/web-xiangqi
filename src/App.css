@@ -1168,8 +1168,14 @@ body.resizing * {
   animation: graph-load-sweep 650ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The global focus rule matches button/summary/input/select/textarea/a and
+   [role="button"]; this SVG is a keyboard control (arrow keys step through the
+   game) that matches none of them, so it fell outside the ring system and
+   showed focus only as a 20%-alpha glow. Use the same ring as everything else,
+   inset because .graph-svg-stage clips overflow. */
 .winrate-graph:focus-visible {
-  filter: drop-shadow(0 0 0.4rem rgba(63, 185, 80, 0.2));
+  outline: 2px solid var(--info);
+  outline-offset: -2px;
 }
 
 @keyframes graph-load-reveal {
