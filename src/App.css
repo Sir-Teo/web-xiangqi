@@ -4488,7 +4488,9 @@ summary:active {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .new-game-mode-btn:hover {
+  /* Outranks .new-game-mode-btn-active (0,2,0 against 0,1,0), so the mode you
+     have chosen turned grey while the pointer was on it. */
+  .new-game-mode-btn:hover:not([aria-pressed="true"]) {
     background: var(--bg-card-hover);
     border-color: var(--border-strong);
   }
