@@ -522,4 +522,29 @@
     .palace-line {
         stroke: CanvasText;
     }
+
+    /* Arrow colour comes from an inline attribute, so forced colours leave it
+       alone: the book arrows stayed accent green, which measures 8.3:1 on a
+       dark high-contrast palette and 2.5:1 on a light one -- under the 3:1 a
+       graphical object needs. Shape still tells the arrow from the grid. */
+    .board-arrow-group path {
+        stroke: CanvasText;
+    }
+
+    .board-arrow-group circle,
+    .board-arrow-group polygon {
+        fill: CanvasText;
+        stroke: CanvasText;
+    }
+
+    /* The halo exists to lift an arrow off bright amber wood. There is no wood
+       here, and a near-black glow does nothing on a dark canvas anyway. */
+    .board-arrow-group {
+        filter: none;
+    }
+
+    .board-arrow-book circle,
+    .board-arrow-book polygon {
+        filter: none;
+    }
 }

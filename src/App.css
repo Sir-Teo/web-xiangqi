@@ -5634,3 +5634,41 @@ summary:active {
     margin: 0;
   }
 }
+
+/* Forced colours never reach an SVG fill or stroke set in CSS, so the eval
+   graph kept its authored palette while everything around it was repainted.
+   That reads acceptably on a dark high-contrast theme and fails on a light
+   one, where the same values land on a white canvas: the axis labels measure
+   2.6:1 and 3.4:1, and the current-position marker is a white disc on white --
+   1.0:1, gone. Hand the marks to the system palette.
+
+   Placed at the end of the file on purpose: these selectors match the base
+   graph rules exactly, so the override only wins by coming after them.
+
+   The zone tints are left out deliberately; at 4-5% alpha they carry nothing
+   the R+10/B+10 labels do not already say, and forcing them to a system colour
+   would paint two solid blocks across the plot. */
+@media (forced-colors: active) {
+  .graph-grid-text,
+  .graph-axis-text {
+    fill: CanvasText;
+  }
+
+  .graph-line {
+    stroke: CanvasText;
+  }
+
+  .graph-point,
+  .graph-point-hover,
+  .graph-point-active {
+    fill: CanvasText;
+    stroke: Canvas;
+  }
+
+  .graph-grid-line,
+  .graph-grid-line-zero,
+  .graph-current-line,
+  .graph-hover-line {
+    stroke: CanvasText;
+  }
+}
