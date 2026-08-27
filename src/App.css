@@ -714,10 +714,6 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Settings & controls (dropdown content)
    ═══════════════════════════════════════════════════ */
-.settings-backdrop {
-  display: none;
-}
-
 .settings-body {
   padding: 0 0.65rem 0.65rem;
 }
