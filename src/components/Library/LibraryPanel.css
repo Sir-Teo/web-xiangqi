@@ -397,6 +397,9 @@
 }
 
 .lib-rename-input {
+  /* Measured 23px — the rename field only exists while renaming, so no
+     earlier sweep reached it. */
+  min-height: 24px;
   flex: 1;
   background: var(--bg-subtle, rgba(255,255,255,0.06));
   border: 1px solid var(--border-subtle);
