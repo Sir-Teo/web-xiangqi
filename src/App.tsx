@@ -2196,11 +2196,23 @@ function App() {
   const boardAnnouncement = useMemo(() => {
     if (selectedPiece) return `${selectedPieceText}. ${legalMoveText}.`;
     const record = currentMoveIndex >= 0 ? moveHistory[currentMoveIndex] : null;
-    if (!record) return `Start position. ${sideToMoveLabel} to move.`;
-    return `${formatMoveRecordTitle(record)}.${inCheck ? ' Check.' : ''} ${sideToMoveLabel} to move.`;
+    const move = record ? `${formatMoveRecordTitle(record)}.` : 'Start position.';
+    // Once the game is over there is no side to move, and saying "Check. Black
+    // to move." after a mate contradicts the result the modal is showing.
+    // Read the outcome the same way the modal derives its subtitle.
+    if (gameResult) {
+      if (gameResult === 'draw') return `${move} Draw.`;
+      const winner = gameResult === 'red-wins' ? 'Red' : 'Black';
+      const how = hasAnyLegalMove(board, sideToMove)
+        ? ''
+        : inCheck ? ' Checkmate.' : ' No legal moves.';
+      return `${move}${how} ${winner} wins.`;
+    }
+    return `${move}${inCheck ? ' Check.' : ''} ${sideToMoveLabel} to move.`;
   }, [
     selectedPiece, selectedPieceText, legalMoveText,
     currentMoveIndex, moveHistory, inCheck, sideToMoveLabel,
+    gameResult, board, sideToMove,
   ]);
 
   const materialSummary = useMemo(() => {
