@@ -1722,7 +1722,11 @@ body.resizing * {
 
 .wc-btn:disabled {
   opacity: 0.28;
-  cursor: default;
+  /* Every other disabled control in the app says not-allowed -- gc-btn,
+     chip-btn, opening-candidate-btn, mobile-action-btn, mobile-action-menu-btn
+     and new-game-strength-btn. These navigation buttons disable at the ends of
+     a line, which is exactly when a reader is pressing them. */
+  cursor: not-allowed;
 }
 
 /* Play cluster */
