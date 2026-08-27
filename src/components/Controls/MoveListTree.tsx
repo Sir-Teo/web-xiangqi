@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
     classifyMoveQualityForEval,
@@ -43,7 +43,7 @@ export const MoveListTree = memo(function MoveListTree({
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
 
-    useEffect(() => {
+    const centreActiveMove = useCallback(() => {
         const container = scrollRef.current;
         const el = container?.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
         if (!container || !el) return;
@@ -70,6 +70,27 @@ export const MoveListTree = memo(function MoveListTree({
             container.scrollTo({ top: targetTop, behavior });
         }
     }, [currentNodeId]);
+
+    useEffect(() => { centreActiveMove(); }, [centreActiveMove]);
+
+    // The panel holding this list is display:none while the board view is up, so
+    // the moves that arrive during play centre against a 0x0 box: maxTop is 0,
+    // the distance is 0, and the effect completes having done nothing. Coming
+    // back to the tab changes no dependency, so the list stayed pinned at the
+    // top with the current move below the fold. Re-centre when the box goes from
+    // collapsed to laid out.
+    useEffect(() => {
+        const container = scrollRef.current;
+        if (!container || typeof ResizeObserver === 'undefined') return;
+        let wasCollapsed = container.clientHeight === 0;
+        const observer = new ResizeObserver(() => {
+            const collapsed = container.clientHeight === 0;
+            if (wasCollapsed && !collapsed) centreActiveMove();
+            wasCollapsed = collapsed;
+        });
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, [centreActiveMove]);
 
     if (activeLineNodeIds.length === 0) {
         return (
