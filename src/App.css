@@ -589,6 +589,29 @@ body.resizing * {
   }
 }
 
+/* The visible grip is a 3px pill inside a 14px strip, which is fiddly to catch
+   with a pointer and under the 24px target minimum. Bleed the hit area out on
+   the constrained axis only -- same trick as .mobile-action-btn -- so the strip
+   grabs at 24px while looking exactly as light as before. The handle is already
+   position:absolute, so it is its own containing block for the pseudo-element. */
+.resize-handle {
+  --grip-bleed: 5px;
+}
+
+.resize-handle-left::after,
+.resize-handle-right::after {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--grip-bleed));
+}
+
+.resize-handle-top::after,
+.resize-handle-bottom::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--grip-bleed)) 0;
+}
+
 .resize-handle-left,
 .resize-handle-right {
   top: 0;
