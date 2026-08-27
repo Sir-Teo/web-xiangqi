@@ -15,16 +15,23 @@
   --border-accent: rgba(52, 211, 153, 0.35);
 
   /* ── Text ──────────────────────────────────────────
-     Four steps, all at or above WCAG AA 4.5:1 on both --bg-base and the
-     --bg-elevated cards. Tertiary and muted were #71717a / #52525b, which
-     measured 4.22:1 and 2.64:1 against the panels they actually render on —
-     and they carry real content (move numbers, engine detail, dates), not
-     just decoration. */
+     Four steps, all at or above WCAG AA 4.5:1 on --bg-base, the --bg-elevated
+     cards, and --bg-card-hover. Tertiary and muted were #71717a / #52525b,
+     which measured 4.22:1 and 2.64:1 against the panels they actually render
+     on — and they carry real content (move numbers, engine detail, dates), not
+     just decoration.
+
+     Muted was #7d7d86, which cleared 4.5 on a resting card by 0.09 and so
+     failed the moment the card lifted: hovering a library card composites
+     --bg-card-hover down to rgb(25,25,25) and took the saved-game date to
+     4.31:1. The hover surface was simply never in the set these were checked
+     against. Darkening it instead would have meant a two-level lift over the
+     resting card, which is no lift at all. */
   --text-primary: #ededed;
   --text-secondary: #a1a1aa;
   --text-tertiary: #8a8a93;
   --text-heading: #ffffff;
-  --text-muted: #7d7d86;
+  --text-muted: #83838c;
 
   /* ── Accent (emerald glow) ─────────────────────── */
   --accent: #10b981;
