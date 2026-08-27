@@ -1392,7 +1392,13 @@ function App() {
     if (distance > 1) {
       container.scrollTo({ left: targetLeft, behavior });
     }
-  }, [breadcrumbNodeIds.length, currentNodeId]);
+    // The panel holding this strip is not always mounted. On a phone the moves
+    // are played on the board view, where the breadcrumb does not exist, so the
+    // ref is null and this returns early; switching to the moves tab mounts it
+    // but changes neither dependency, leaving the strip parked at scrollLeft 0
+    // with the current node a thousand pixels off the right edge. Re-run when
+    // the view that carries it comes back.
+  }, [breadcrumbNodeIds.length, currentNodeId, mobileView, mobileAnalysisTab, analysisTab]);
 
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
