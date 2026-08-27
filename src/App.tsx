@@ -764,6 +764,7 @@ function App() {
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
+  const engineOutputRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -1399,6 +1400,32 @@ function App() {
     // with the current node a thousand pixels off the right edge. Re-run when
     // the view that carries it comes back.
   }, [breadcrumbNodeIds.length, currentNodeId, mobileView, mobileAnalysisTab, analysisTab]);
+
+  // A role="log" that does not follow its tail shows stale lines while the
+  // newest sit below the fold -- measured 42px out of view on desktop. The
+  // panel is display:none off-tab, so pinning while hidden writes scrollTop on
+  // a 0-height box and achieves nothing; re-pin when it is laid out, the same
+  // way the move list does.
+  const pinEngineOutput = useCallback(() => {
+    const el = engineOutputRef.current;
+    if (!el || el.clientHeight === 0) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  useEffect(() => { pinEngineOutput(); }, [pinEngineOutput, outputLines]);
+
+  useEffect(() => {
+    const el = engineOutputRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let wasCollapsed = el.clientHeight === 0;
+    const observer = new ResizeObserver(() => {
+      const collapsed = el.clientHeight === 0;
+      if (wasCollapsed && !collapsed) pinEngineOutput();
+      wasCollapsed = collapsed;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pinEngineOutput, assistMode]);
 
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -4553,6 +4580,7 @@ function App() {
                   {assistMode === 'pro' ? (
                     <div
                       className="engine-output-terminal mt-4"
+                      ref={engineOutputRef}
                       role="log"
                       aria-label={engineOutputTerminalLabel}
                       aria-live="off"
