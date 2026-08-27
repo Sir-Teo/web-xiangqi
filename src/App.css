@@ -222,9 +222,16 @@ body.resizing * {
   overflow: visible;
 }
 
+/* Wraps rather than running off the page. The bar holds the brand, the mode
+   pills, the engine status and the action buttons, none of which shrink; with
+   the reader's text scaled up it needs more room than the window has, and a
+   nowrap row simply pushed past the right edge -- 143px at 920px wide and a
+   24px default font, 484px at 32px. The row still fits on one line at every
+   width once the text is normal, so nothing moves in the common case.
+   .top .panel-inner is min-height, so the bar grows to hold a second row. */
 .top .compact-grid {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
   width: 100%;
@@ -232,6 +239,9 @@ body.resizing * {
 
 @media (max-width: 900px) {
   .top .compact-grid {
+    /* Mobile keeps the single scrolling strip it already had -- wrapping there
+       would spend vertical space the phone layout has less of than the page. */
+    flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
