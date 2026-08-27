@@ -389,7 +389,7 @@ export const EvalGraph = React.memo(function EvalGraph({
             <div className="graph-summary">
                 <div className="graph-summary-card">
                     <span>State</span>
-                    <strong>{isSearching ? 'Live Search' : 'Pinned Node'}</strong>
+                    <strong>{isSearching ? 'Analyzing' : 'Idle'}</strong>
                 </div>
                 <div className="graph-summary-card">
                     <span>Current</span>
