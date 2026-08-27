@@ -3447,10 +3447,9 @@ function App() {
                   setShowSettings(false);
                 }}
               >
-                <option value="PvP">Local Multiplayer</option>
-                <option value="PvAI-Black">Play Red vs AI</option>
-                <option value="PvAI-Red">Play Black vs AI</option>
-                <option value="AIvAI">Watch AI vs AI</option>
+                {GAME_MODES.map(({ mode, label }) => (
+                  <option key={mode} value={mode}>{label}</option>
+                ))}
               </select>
             </div>
 
