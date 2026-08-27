@@ -5136,19 +5136,23 @@ summary:active {
   justify-content: center;
 }
 
-/* 53vh is a guess at the free height; when the toolbars and status dock leave
-   less than that, the board used to overflow its row and slide up behind the
-   top toolbar (measured at 1440x600: board top -38px into the toolbar). Give it
-   the aspect ratio so `max-height` can shrink the width instead. */
+/* The board is sized from the height its row actually has: the toolbars, status
+   dock, gaps and the board's own 13px decorative frame come to a roughly fixed
+   ~301px, so the row is (100vh - 301px) and a 9:10 board takes 0.9 of that.
+   Sizing by height rather than width is what keeps the board from overflowing
+   its row and sliding up behind the top toolbar, which it did by 38px at
+   1440x600 before this term existed. */
 .board-workspace .board-wrap {
-  /* 53vh alone assumed the surrounding chrome scales with the viewport, but the
-     toolbars, status dock and gaps are a roughly fixed ~281px. On a short
-     desktop window that left the board taller than its row, so it overflowed
-     upward and hid behind the top toolbar — 38px of it at 1440x600. The extra
-     term is the height the row actually has; it only binds when the viewport is
-     short, so 1440x900 still resolves to 53vh. The constant covers the bars,
-     the dock, the gaps and the board's 13px decorative frame. */
-  width: min(100%, 53vh, calc(0.9 * (100vh - 301px)), 620px);
+  /* This used to carry a 53vh term as well, described in its own comment as "a
+     guess at the free height". The computed term above superseded it -- it
+     models the same quantity from the chrome that is actually there -- but the
+     guess stayed, and being the tighter of the two it went on binding at every
+     viewport taller than 820px, holding the board below the space it had. At
+     1440x900 that cost 62px of board, 477 against 539, with the stage around it
+     already wide enough. Dropping it changes nothing where the computed term
+     binds: 1440x600 and 1440x700 measure identical, and the board still clears
+     the toolbar and the dock at every height. */
+  width: min(100%, calc(0.9 * (100vh - 301px)), 620px);
   min-width: min(100%, 280px);
   align-self: end;
 }
