@@ -355,6 +355,23 @@ function detectCoarsePointer() {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+// The device tier decides how many engine threads and how much hash to boot
+// with, so it has to describe the machine rather than the window. Reading
+// innerWidth/innerHeight made min(width, height) cross the 700 threshold
+// whenever a desktop window was made short -- dragging it smaller, or just
+// opening devtools -- which rebooted the WASM engine single-threaded on
+// hardware that had not changed. screen describes the device, and min() of its
+// two sides is the same in either orientation.
+function detectDeviceScreen() {
+  if (typeof window === 'undefined' || typeof window.screen === 'undefined') {
+    return { width: 1280, height: 800 };
+  }
+  return {
+    width: Number(window.screen.width) || window.innerWidth,
+    height: Number(window.screen.height) || window.innerHeight,
+  };
+}
+
 function detectSimdSupport() {
   try {
     return WebAssembly.validate(new Uint8Array([
@@ -936,7 +953,6 @@ function App() {
   } = useXiangqi();
 
   const viewportWidth = viewportSize.width;
-  const viewportHeight = viewportSize.height;
   const isMobile = viewportWidth <= 900;
 
   // initialPanelWidth scales the starting width to the window, but it only ran
@@ -1025,13 +1041,16 @@ function App() {
     setEngineRestartToken((value) => value + 1);
   }, []);
 
-  const deviceProfile = useMemo(() => detectDeviceTier({
-    viewportWidth,
-    viewportHeight,
-    hardwareConcurrency: typeof navigator === 'undefined' ? undefined : Number(navigator.hardwareConcurrency),
-    deviceMemoryGB: typeof navigator === 'undefined' ? undefined : Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0),
-    coarsePointer: detectCoarsePointer(),
-  }), [viewportWidth, viewportHeight]);
+  const deviceProfile = useMemo(() => {
+    const screenSize = detectDeviceScreen();
+    return detectDeviceTier({
+      viewportWidth: screenSize.width,
+      viewportHeight: screenSize.height,
+      hardwareConcurrency: typeof navigator === 'undefined' ? undefined : Number(navigator.hardwareConcurrency),
+      deviceMemoryGB: typeof navigator === 'undefined' ? undefined : Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0),
+      coarsePointer: detectCoarsePointer(),
+    });
+  }, []);
 
   const baseEngineBootConfig = useMemo(
     () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport() }),
