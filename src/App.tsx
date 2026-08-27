@@ -146,6 +146,17 @@ const PANEL_MAX_WIDTH = 600;
 const PANEL_KEYBOARD_STEP = 40;
 const DEFAULT_LEFT_PANEL_WIDTH = 320;
 const DEFAULT_RIGHT_PANEL_WIDTH = 320;
+
+// 320px each is right on a wide screen and much too much on a narrow one: at
+// 920px the two panels take 640px and leave the board 248px, smaller than
+// either of them. The CSS already claws back what it can in that band -- it
+// drops the stage padding and hides the capture trays -- but the panel widths
+// live here. Scale the starting width to the window instead; dragging a panel
+// is untouched and still reaches PANEL_MAX_WIDTH.
+function initialPanelWidth(fallback: number) {
+    if (typeof window === 'undefined') return fallback;
+    return Math.max(PANEL_MIN_WIDTH, Math.min(fallback, Math.round(window.innerWidth * 0.26)));
+}
 const INITIAL_PIECE_COUNTS: Record<PieceCode, number> = {
   K: 1, A: 2, B: 2, N: 2, R: 2, C: 2, P: 5,
   k: 1, a: 2, b: 2, n: 2, r: 2, c: 2, p: 5,
@@ -737,8 +748,8 @@ function App() {
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
   const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
-  const [leftWidth, setLeftWidth] = useState(320);
-  const [rightWidth, setRightWidth] = useState(320);
+  const [leftWidth, setLeftWidth] = useState(() => initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH));
+  const [rightWidth, setRightWidth] = useState(() => initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH));
   const [topPanelOpen, setTopPanelOpen] = useState(true);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
