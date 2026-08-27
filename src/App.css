@@ -871,7 +871,8 @@ body.resizing * {
 .winrate-graph {
   width: 100%;
   min-width: 0;
-  height: 248px;
+  /* Height comes from the component, which also writes the viewBox, so the
+     rendered box and the coordinate space cannot drift apart. */
   display: block;
   outline: none;
 }

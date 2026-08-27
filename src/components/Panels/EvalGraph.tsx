@@ -56,6 +56,7 @@ export const EvalGraph = React.memo(function EvalGraph({
 }: EvalGraphProps) {
     const [hoverPointIndex, setHoverPointIndex] = useState<number | null>(null);
     const [viewportWidth, setViewportWidth] = useState(420);
+    const [shortViewport, setShortViewport] = useState(false);
     const [isSweepingLoad, setIsSweepingLoad] = useState(false);
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const sweepTimerRef = useRef<number | null>(null);
@@ -103,7 +104,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     }, [history, currentMoveIndex, currentEval, isSearching, branchCounts, rootBranchCount]);
 
     const maxEvalClamp = 1200;
-    const chartHeight = 248;
+    const chartHeight = shortViewport ? 184 : 248;
     // Floor low enough that the SVG viewBox matches the rendered width for any
     // realistic panel size. A 320 floor letterboxed the chart (default panel is
     // 277px of stage) and put the overlay tooltip in a different coordinate
@@ -204,6 +205,19 @@ export const EvalGraph = React.memo(function EvalGraph({
         }
         return lo;
     }, [computedPoints, chartWidth]);
+
+    // The eval column stacks summary cards, the chart, a legend and the peak row
+    // above the opening book. Below roughly 820px of viewport height it stops
+    // fitting and the book continuations are pushed under the fold; give the
+    // chart back that height instead of the book losing rows.
+    useEffect(() => {
+        if (typeof window.matchMedia !== 'function') return;
+        const mq = window.matchMedia('(max-height: 820px)');
+        const apply = () => setShortViewport(mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        return () => mq.removeEventListener('change', apply);
+    }, []);
 
     useEffect(() => {
         const element = viewportRef.current;
@@ -393,6 +407,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                         <svg
                             className="winrate-graph"
                             width={chartWidth}
+                            height={chartHeight}
                             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                             onClick={onChartClick}
                             onMouseMove={(event) => setHoverPointIndex(nearestPointForEvent(event))}
