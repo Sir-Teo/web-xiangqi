@@ -214,7 +214,13 @@ function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
 }
 
 function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
-    return formatMoveRecordTitle(record);
+    // Move quality reaches the eye only as the colour of a 5px dot, and forced
+    // colours repaint that dot to its own background -- so the annotation was
+    // there with no way at all to read it. The aria-label already carries the
+    // quality; give the tooltip the same, which also spares a mouse user from
+    // matching a colour against the legend.
+    const title = formatMoveRecordTitle(record);
+    return record.quality ? `${title} - ${formatReviewQuality(record.quality)}` : title;
 }
 
 function formatMoveAriaLabel(
