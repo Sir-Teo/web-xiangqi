@@ -1630,7 +1630,7 @@ function App() {
       if (event.shiftKey && (current === first || !activeDialog.contains(current))) {
         event.preventDefault();
         last.focus({ preventScroll: true });
-      } else if (!event.shiftKey && current === last) {
+      } else if (!event.shiftKey && (current === last || !activeDialog.contains(current))) {
         event.preventDefault();
         first.focus({ preventScroll: true });
       }
