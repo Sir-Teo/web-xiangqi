@@ -796,6 +796,7 @@ export function LibraryPanel({
                   className="chip-btn chip-btn-primary"
                   onClick={() => onLoadHistorical(game)}
                   data-testid={`load-historical-${game.id}`}
+                  aria-label={`Load ${game.redPlayer} vs ${game.blackPlayer}`}
                 >
                   <IconRefresh /> Load
                 </button>
