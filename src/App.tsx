@@ -3878,6 +3878,7 @@ function App() {
                     currentMoveIndex={currentMoveIndex}
                     currentEval={displayEvalScore}
                     isSearching={isSearching}
+                    engineEnabled={engineEnabled}
                     branchCounts={graphBranchCounts}
                     rootBranchCount={rootGraphBranchCount}
                     loadSweepToken={graphLoadSweepToken}

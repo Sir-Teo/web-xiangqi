@@ -14,6 +14,7 @@ interface EvalGraphProps {
     currentMoveIndex: number;
     currentEval: number | null;
     isSearching?: boolean;
+    engineEnabled?: boolean;
     branchCounts?: Record<number, number>;
     rootBranchCount?: number;
     loadSweepToken?: number;
@@ -49,6 +50,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     currentMoveIndex,
     currentEval,
     isSearching = false,
+    engineEnabled = true,
     branchCounts = {},
     rootBranchCount = 0,
     loadSweepToken = 0,
@@ -389,7 +391,10 @@ export const EvalGraph = React.memo(function EvalGraph({
             <div className="graph-summary">
                 <div className="graph-summary-card">
                     <span>State</span>
-                    <strong>{isSearching ? 'Analyzing' : 'Idle'}</strong>
+                    {/* Play mode runs without the engine, so "Idle" would read as a
+                        ready engine reporting an even position rather than no
+                        evaluation at all. */}
+                    <strong>{!engineEnabled ? 'Engine off' : isSearching ? 'Analyzing' : 'Idle'}</strong>
                 </div>
                 <div className="graph-summary-card">
                     <span>Current</span>
