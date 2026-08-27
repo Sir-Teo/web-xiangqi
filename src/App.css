@@ -5746,6 +5746,21 @@ summary:active {
   .graph-hover-line {
     stroke: CanvasText;
   }
+
+  /* The pill is the only mark that a panel edge can be dragged, and on a
+     collapsed bar it is the only way to get that bar back. Every one of its
+     states is painted with an alpha over the surface behind it. Forced colours
+     substitute the system colour but keep the alpha -- and substitute it to the
+     same colour as that surface, so the alpha rescues nothing: rest (0.15) and
+     collapsed (0.7) both composited to zero difference from their background,
+     in the light and the dark palette alike, with no border or outline left to
+     carry them. Paint every state solid. */
+  .resize-pill,
+  .resize-handle:hover .resize-pill,
+  .resize-handle:focus-visible .resize-pill,
+  .resize-handle[aria-expanded="false"] .resize-pill {
+    background: CanvasText;
+  }
 }
 
 /* Printing a dark theme: browsers leave backgrounds out of the page unless the
