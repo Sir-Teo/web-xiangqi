@@ -2843,6 +2843,17 @@ function App() {
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
     }
+    // extractUciMoveLine is lenient because the import box takes pasted PGN,
+    // where numbering and annotations must be skipped. A share link's moves are
+    // machine-written bare UCI, so a token that is not a move means the link was
+    // damaged in transit -- and silently dropping it handed the recipient a
+    // shorter game than was sent, with nothing said.
+    const sharedMoveTokens = rawMoves.trim().split(/\s+/).filter(Boolean);
+    if (sharedMoveTokens.some((token) => !/^[a-i][0-9][a-i][0-9]$/i.test(token))) {
+      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      logDiagnosticWarning('Ignored shared Xiangqi link with unreadable moves:', rawMoves.slice(0, 80));
+      return;
+    }
     if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
       if (rawTree || rawMoves.trim()) {
         setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
