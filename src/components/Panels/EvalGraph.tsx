@@ -336,10 +336,16 @@ export const EvalGraph = React.memo(function EvalGraph({
     const anchorX = computedPoints[tooltipIndex]?.x ?? xFor(tooltipIndex);
     const anchorY = computedPoints[tooltipIndex]?.y ?? yFor(tooltipPoint?.eval ?? 0);
     const halfTooltipWidth = tooltipSize.width / 2;
-    const tooltipX = Math.max(
-        Math.min(halfTooltipWidth + 4, chartWidth / 2),
-        Math.min(chartWidth - halfTooltipWidth - 4, anchorX)
-    );
+    // The y-axis labels are drawn with textAnchor="end" at PADDING.left - 8, so
+    // that x is their right edge. Clamping the tooltip to the chart edge instead
+    // parked it on top of them whenever the anchor was the first point -- which
+    // is the default state, before a single move is played.
+    const gutterRight = PADDING.left - 8;
+    const minTooltipX = gutterRight + halfTooltipWidth;
+    const maxTooltipX = chartWidth - halfTooltipWidth - 4;
+    const tooltipX = minTooltipX <= maxTooltipX
+        ? Math.min(Math.max(anchorX, minTooltipX), maxTooltipX)
+        : chartWidth / 2;
     const tooltipBelow = anchorY - tooltipSize.height - 14 < 4;
     const tooltipY = tooltipBelow
         ? Math.min(anchorY + 14, Math.max(4, chartHeight - tooltipSize.height - 4))
