@@ -3809,12 +3809,31 @@ summary:active {
 }
 
 /* The rules above compact a short viewport and hold for any shape. These two
-   restack the board beside its status column, and that only makes sense when
-   the viewport is wide as well as short. Keyed on height alone they also caught
-   narrow-and-short — a 375x500 window, which is roughly what a phone becomes
-   with its keyboard open — and handed a 375px stage a 230px dock, leaving the
-   board 114px wide at a 0.34 ratio against the 0.9 it should hold. */
-@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+   restack the board beside its status column, which only pays when the viewport
+   is wide as well as short: the dock column claims up to 232px, so a stage
+   narrower than about 560px has nothing left to give the board. Measured at
+   height 460 — 480px wide leaves the board 216px at a 0.725 ratio and 520px
+   leaves 0.859, against the 0.9 a xiangqi board holds; from 560px it sits at
+   0.9 and stops growing, so the board is height-bound from there on.
+
+   A width bound alone is too blunt, because whether the board is starved
+   depends on its height as well: 480x460 comes out distorted, but 480x320 sits
+   at 0.9 with a 142px board, and a min-width that excludes the first also
+   throws away the second. Aspect ratio is the measure the comment above is
+   really reaching for -- wide relative to tall. Measured at height 460:
+   480 wide is 1.04 and distorts, 520 is 1.13 and distorts, 560 is 1.22 and
+   holds; 480x320 is 1.50 and holds. 6/5 sits in that gap.
+
+   It also subsumes the orientation test this rule used to carry, since any
+   viewport at 1.2 or wider is landscape by definition. A 375x500 window --
+   roughly a phone with its keyboard up, at 0.75 -- stays excluded.
+
+   Range syntax rather than min-/max-aspect-ratio because those both include
+   the endpoint: at exactly 6/5, a 600x500 window matched this block and the
+   stacked one together, drew the dock from one and the grid from the other,
+   and collapsed the board to 36x36. `>=` here and `<` there partition the
+   range with no overlap and no gap. */
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
   /* Landscape phones are wide and short. Stacking the status row under the
      board squeezed it from both directions — on an 844x390 handset the board
      came out 154px wide with ~690px of empty width beside it. Put the status
@@ -5575,11 +5594,14 @@ summary:active {
    "none") stretched with it — cells measured 57% taller than wide at 375x812.
    Let the wrap fill the cell and be the measuring context instead, so the
    board is the largest 9:10 box that fits. */
-/* Also matched for any portrait viewport, not just tall ones: the 501px floor
-   left a short portrait window with neither this sizing nor the landscape
-   stacking above. */
+/* Also matched for any portrait viewport, not just tall ones, and for anything
+   narrower than the side-by-side stacking needs: the 501px floor left a short
+   portrait window matching neither this sizing nor the landscape block, and the
+   560px bound above leaves narrow landscape windows in the same position. Both
+   want the stacked treatment -- the dock as a compact row under the board
+   rather than a 232px column beside it. */
 @media (max-width: 900px) and (min-height: 501px),
-       (max-width: 900px) and (orientation: portrait) {
+       (max-width: 900px) and (aspect-ratio < 6/5) {
   /* `height: 100%` + `max-width: 100%` cannot both be honoured by an
      aspect-ratio box: on a tall phone the row is taller than 9:10 allows, so
      the board filled the height, clamped the width, and the grid SVG
