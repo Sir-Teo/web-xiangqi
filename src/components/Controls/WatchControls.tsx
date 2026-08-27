@@ -140,8 +140,8 @@ export const WatchControls = memo(function WatchControls({
                     className="wc-btn"
                     onClick={onLast}
                     disabled={!canGoForward}
-                    title="Last position (↓)"
-                    aria-label="Go to last position"
+                    title="Latest move (↓)"
+                    aria-label="Go to latest move"
                 >
                     <IconSkipForward />
                 </button>
