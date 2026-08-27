@@ -4160,8 +4160,15 @@ summary:active {
 /* Measured with a share notice present: below 1360px the toolbar is
    over-subscribed and the status pills — which shrink — get clipped to
    stubs like "E…" and "Share…". The action buttons keep their icons,
-   tooltips and aria-labels without their text, so they yield first. */
-@media (min-width: 1360px) {
+   tooltips and aria-labels without their text, so they yield first.
+
+   The same crowding happens at a wide viewport when the reader has turned
+   their text size up, and a px-only query cannot see it: at a 24px default
+   font on a 1440px viewport the engine pill is already down to a 35px stub,
+   and by 32px the bar overflows the page by 357px. The em half adds that
+   axis. 64em keeps today's behaviour at a 16px or 20px default, where the
+   bar measures clean, and yields the labels from 24px up. */
+@media (min-width: 1360px) and (min-width: 64em) {
   .btn-label-desktop {
     display: inline;
   }
