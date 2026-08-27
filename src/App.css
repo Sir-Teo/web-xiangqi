@@ -2161,6 +2161,9 @@ body.resizing * {
 }
 
 .wc-speed-pill {
+  /* Only rendered during an AI game in the Play workspace, so no earlier
+     sweep reached them; they measured 44x18 / 57x18 / 41x18. */
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   padding: 0.18rem 0.5rem;
