@@ -759,7 +759,10 @@ function clampPanelWidth(width: number) {
 
 function App() {
   const storedPreferences = useMemo(() => readStoredPreferences(), []);
-  const defaultSearchDepth = typeof window !== 'undefined' && window.innerWidth <= 900 ? 6 : 8;
+  // A narrow window is not a weaker machine. This read innerWidth, so opening
+  // the app small on a large display picked the lower depth and saved it, and
+  // it stayed after the window grew. Ask the screen, as the engine tier does.
+  const defaultSearchDepth = detectDeviceScreen().width <= 900 ? 6 : 8;
   const initialSoundEnabled = storedPreferences.soundEnabled ?? true;
   const initialAiSpeed = storedPreferences.aiSpeed ?? 'normal';
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
