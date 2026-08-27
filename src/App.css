@@ -140,8 +140,9 @@ body.resizing * {
   /* This outranks the accent styling on a selected tab or a pressed toggle
      (0,2,1 against 0,2,0), so hovering one repainted it exactly like a hovered
      unselected button and the selection disappeared under the cursor. Skip the
-     controls that report themselves as chosen. */
-  .panel button:hover:not(:disabled):not([aria-selected="true"]):not([aria-pressed="true"]) {
+     controls that report themselves as chosen -- selected tabs, pressed
+     toggles, and the breadcrumb chip marking where you are. */
+  .panel button:hover:not(:disabled):not([aria-selected="true"]):not([aria-pressed="true"]):not([aria-current="true"]) {
     background: var(--bg-card-hover);
     border-color: var(--border-strong);
     color: var(--text-heading);
