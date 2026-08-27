@@ -3840,6 +3840,20 @@ function App() {
                     {currentEvalText}
                   </span>
                 )}
+                {/* The desktop engine status lives in .panel.top and is repeated in
+                    .panel.bottom; both panels are display:none on a phone, so a failed
+                    engine was completely silent there -- in every mobile view, forever.
+                    This slot is free exactly when it matters: a dead engine produces no
+                    eval, so the chip above is absent. */}
+                {engineNotice && (
+                  <span
+                    className={`mobile-engine-notice mobile-engine-notice-${engineNotice.tone}`}
+                    role="status"
+                    title={engineNotice.text}
+                  >
+                    {engineNotice.text}
+                  </span>
+                )}
                 {detectedOpening && (
                   <span className="mobile-opening-pill" title={detectedOpening.name}>
                     {detectedOpening.name}
