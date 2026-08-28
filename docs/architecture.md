@@ -173,6 +173,11 @@ centipawn ones, so the two meet exactly at equality and the milder-of-two is a
 no-op safety net rather than a silent re-grading. See its
 `WIN_PERCENT_LOSS_THRESHOLDS` and `qualityAgreement.test.ts`.
 
+`gradingLadders.test.ts` records all of the above without changing any grade, so
+editing either ladder now reports which grades moved and whether the two came
+closer together or further apart — which is the information the decision below
+actually needs.
+
 Not changed here, for the reason recorded when the win-percent work was done:
 altering either ladder changes grades users have already seen, and the right
 ladder for xiangqi is a judgement about the game rather than something to copy
