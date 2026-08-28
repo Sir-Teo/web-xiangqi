@@ -6,6 +6,7 @@ import {
     attackingPieceValue,
     getMovePhaseForRecord,
     getPhaseLabel,
+    plyOffsetFromRootFen,
 } from './gamePhase';
 
 const START = parseFenBoard(START_FEN);
@@ -91,5 +92,34 @@ describe('deciding which phase a move belongs to', () => {
         expect(getPhaseLabel('opening')).toBe('Opening');
         expect(getPhaseLabel('middleGame')).toBe('Middlegame');
         expect(getPhaseLabel('endgame')).toBe('Endgame');
+    });
+});
+
+describe('reading how far in a line already starts', () => {
+    it('is nothing for a game from the very beginning', () => {
+        expect(plyOffsetFromRootFen(`${START_FEN} w - - 0 1`)).toBe(0);
+    });
+
+    it('counts two plies per completed move', () => {
+        expect(plyOffsetFromRootFen(`${START_FEN} w - - 0 20`)).toBe(38);
+    });
+
+    it('adds the extra ply when black is to move', () => {
+        expect(plyOffsetFromRootFen(`${START_FEN} b - - 0 20`)).toBe(39);
+    });
+
+    it('reads nothing into a fen it cannot make sense of', () => {
+        expect(plyOffsetFromRootFen('')).toBe(0);
+        expect(plyOffsetFromRootFen('nonsense')).toBe(0);
+        expect(plyOffsetFromRootFen(`${START_FEN} w - - 0 0`)).toBe(0);
+    });
+
+    it('keeps a mid-game analysis out of the opening', () => {
+        // Everything still on the board, but the line starts at move 20: the
+        // first record has ply 1, and without the offset that is an opening.
+        const record = { board: parseFenBoard(START_FEN), captured: '' };
+        expect(getMovePhaseForRecord(record, 1)).toBe('opening');
+        expect(getMovePhaseForRecord(record, 1 + plyOffsetFromRootFen(`${START_FEN} w - - 0 20`)))
+            .toBe('middleGame');
     });
 });

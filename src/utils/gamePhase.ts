@@ -84,3 +84,19 @@ export function getMovePhaseForRecord(
     if (ply <= OPENING_MAX_PLY && material >= OPENING_MIN_MATERIAL) return 'opening';
     return 'middleGame';
 }
+
+/**
+ * How many plies were already played before the first move of the line.
+ *
+ * A move record's `ply` counts from the root of the move tree, which is one
+ * whether the game starts from the initial position or from a FEN taken at
+ * move 20. Reading the root's own move number keeps a mid-game analysis from
+ * restarting the phase clock and calling move 20 an opening.
+ */
+export function plyOffsetFromRootFen(rootFen: string): number {
+    const parts = String(rootFen ?? '').trim().split(/\s+/);
+    const sideToMove = parts[1];
+    const fullmove = Number(parts[parts.length - 1]);
+    if (!Number.isFinite(fullmove) || fullmove < 1) return 0;
+    return (Math.trunc(fullmove) - 1) * 2 + (sideToMove === 'b' ? 1 : 0);
+}

@@ -36,6 +36,7 @@ import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
+import { plyOffsetFromRootFen } from './utils/gamePhase';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -3232,8 +3233,10 @@ function App() {
    * the tree always carries the boards, so this reads the same either way.
    */
   const reviewPhaseAccuracy = useMemo(
-    () => (reviewStatus === 'done' ? summarizeAccuracyByPhase(moveHistory) : []),
-    [reviewStatus, moveHistory],
+    () => (reviewStatus === 'done'
+      ? summarizeAccuracyByPhase(moveHistory, plyOffsetFromRootFen(rootFen))
+      : []),
+    [reviewStatus, moveHistory, rootFen],
   );
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {

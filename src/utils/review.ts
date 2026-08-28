@@ -379,13 +379,15 @@ export interface PhaseAccuracyRecordLike extends ReviewRecordLike {
  * altogether — an empty phase would otherwise read as a score of zero.
  */
 export function summarizeAccuracyByPhase(
-    records: PhaseAccuracyRecordLike[]
+    records: PhaseAccuracyRecordLike[],
+    /** Plies played before the line began; see plyOffsetFromRootFen. */
+    plyOffset = 0
 ): PhaseAccuracySummary[] {
     const totals = new Map<GamePhase, { sum: number; count: number; red: { sum: number; count: number }; black: { sum: number; count: number } }>();
 
     for (const [moveIndex, record] of records.entries()) {
         if (!record?.board || typeof record.winPercentLoss !== 'number') continue;
-        const phase = getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply);
+        const phase = getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply + plyOffset);
         const accuracy = getMoveAccuracyForWinPercentLoss(record.winPercentLoss);
         const side = getReviewSideForRecord(record, moveIndex);
         const bucket = totals.get(phase)
