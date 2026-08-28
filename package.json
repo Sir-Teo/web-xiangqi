@@ -13,6 +13,7 @@
     "build:react": "node scripts/clean-react-dist.cjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
     "build": "bash scripts/build-pikafish.sh",
     "test:smoke": "node scripts/test-smoke.cjs threaded",
     "test:smoke:single": "node scripts/test-smoke.cjs single",
@@ -49,6 +50,7 @@
     "playwright": "^1.60.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.7.0",
-    "vite": "^8.0.14"
+    "vite": "^8.0.14",
+    "vitest": "^4.1.11"
   }
 }
