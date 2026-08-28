@@ -2401,7 +2401,13 @@ function App() {
       ? 'AI paused'
       : aiMoveSearchActive && applyBestMoveRef.current
         ? 'AI thinking'
-        : '');
+        // The AI cannot search until the engine is ready. Without this the board
+        // said nothing at all on its turn -- while booting, while recovering
+        // after a crash, and for as long as an engine that never loads keeps
+        // the turn -- so the game simply appeared to stop.
+        : isAiTurn && !isReady
+          ? 'Waiting for engine'
+          : '');
   const bottomEngineStatus = !isReady
     ? engineNotice?.text ?? 'Loading engine'
     : isSearchQueued
@@ -4207,6 +4213,8 @@ function App() {
                         </span>
                         Thinking…
                       </span>
+                    ) : boardAiStatusText ? (
+                      <span className="ai-status-waiting">{boardAiStatusText}</span>
                     ) : null}
                   </div>
                 )}
