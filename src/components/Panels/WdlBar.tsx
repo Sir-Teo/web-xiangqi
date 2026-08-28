@@ -10,8 +10,21 @@ function formatPercent(value: number, total: number) {
     return `${((value / total) * 100).toFixed(1)}%`;
 }
 
+/**
+ * A malformed reading renders as "Red NaN%" and a bar with two full segments,
+ * so it is treated as no reading at all. Matches web-chess's
+ * normalizeWhitePovWdl, which rejects the same three cases: anything
+ * non-finite, anything negative, and an all-zero triple that says nothing.
+ */
+function isUsableWdl(wdl: WdlStats | null): wdl is WdlStats {
+    if (!wdl) return false;
+    const parts = [wdl.win, wdl.draw, wdl.loss];
+    if (parts.some((part) => !Number.isFinite(part) || part < 0)) return false;
+    return parts.some((part) => part > 0);
+}
+
 export function WdlBar({ wdl, isSearching = false }: WdlBarProps) {
-    if (!wdl) {
+    if (!isUsableWdl(wdl)) {
         return (
             <div className="wdl-bar-wrap">
                 <div
