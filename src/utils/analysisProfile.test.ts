@@ -5,9 +5,10 @@ import {
     resolveLiveAnalysisPolicy,
 } from './analysisProfile';
 
-// deviceMemoryGB values are what a browser can actually report: the Device
-// Memory API clamps to at most 8, so a fixture above that describes hardware
-// no browser describes.
+// 8 is the low end of what a roomy machine reports. Browsers disagree about
+// the top of this range — the spec describes clamping to 8, and Chromium 148
+// was seen reporting 32 — so the fixtures use 8, the value that used to be
+// sorted as constrained, and a test below pins that 8 and 32 agree.
 const DESKTOP = { viewportWidth: 1680, viewportHeight: 1050, hardwareConcurrency: 16, deviceMemoryGB: 8 };
 const LAPTOP = { viewportWidth: 1440, viewportHeight: 900, hardwareConcurrency: 8, deviceMemoryGB: 8 };
 const PHONE = { viewportWidth: 390, viewportHeight: 844, hardwareConcurrency: 6, deviceMemoryGB: 4, coarsePointer: true };
@@ -32,12 +33,13 @@ describe('device tiering', () => {
         expect(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 4 }).tier).toBe('low');
     });
 
-    it('does not read the reporting ceiling as a constraint', () => {
-        // Every roomy machine reports exactly 8, so treating that as low
-        // memory put the high tier out of reach in Chrome while Firefox,
-        // which does not implement the API at all, reached it on the same
-        // hardware.
+    it('sorts the same machine the same way whatever the browser reports', () => {
+        // Browsers disagree about the top of navigator.deviceMemory's range,
+        // so 8 and 32 can be the same hardware seen twice. Both must land on
+        // the same tier, or the engine is sized by browser rather than by
+        // machine. Nothing reported at all has to agree with them too.
         expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 8 }).tier).toBe('high');
+        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 32 }).tier).toBe('high');
         expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 0 }).tier).toBe('high');
         expect(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 32, deviceMemoryGB: 8 }).tier).toBe('high');
     });

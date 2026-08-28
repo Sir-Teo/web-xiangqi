@@ -89,11 +89,12 @@ Which core is loaded, how many threads, and how much hash come from
 are the fallback where COOP/COEP are unavailable — which includes GitHub
 Pages.
 
-`navigator.deviceMemory` is clamped by spec to at most 8, so `8` means "8 or
-more" and cannot be read as a constraint. The tiering compares strictly below
-it; reading `<= 8` as low memory previously put the high tier out of reach in
-Chrome while Firefox, which does not implement the API, reached it on the same
-hardware.
+The tiering compares memory at 4, not 8, because **browsers disagree about the
+top of `navigator.deviceMemory`'s range**. The spec describes clamping the
+value to limit fingerprinting, and Chromium 148 was observed here reporting
+`32`. The old `<= 8` test therefore put the same machine in the mid tier under
+one browser and the high tier under another — sizing the engine by browser
+rather than by machine. Every browser agrees that 4GB is constrained.
 
 Engine crashes are classified rather than surfaced raw:
 `shouldSuppressEngineRuntimeError` and `hasMemoryAccessOutOfBounds` keep a
