@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
-import type { ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
+import type { PhaseAccuracySummary, ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
 import { type NarrativeTag, narrativeTagToneClass } from '../../utils/narrativeTags';
 import {
     describeReviewEngineSummary,
@@ -21,6 +21,8 @@ type Props = {
     summary: ReviewSummary | null;
     /** Describes the shape of the game; empty when there is nothing to say. */
     narrativeTags?: NarrativeTag[];
+    /** Accuracy per phase; empty when the game never left one. */
+    phaseAccuracy?: PhaseAccuracySummary[];
     currentNodeId: string;
     canStart: boolean;
     startLabel?: string;
@@ -39,6 +41,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     status,
     progress,
     narrativeTags = [],
+    phaseAccuracy = [],
     summary,
     currentNodeId,
     canStart,
@@ -199,6 +202,32 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 ) : null}
                             </div>
                         ))}
+                    </div>
+                    {phaseAccuracy.length > 1 ? (
+                        <div className="review-phase-accuracy" aria-label="Accuracy by phase">
+                            {phaseAccuracy.map((phase) => (
+                                <div key={phase.phase} className="review-phase-row">
+                                    <span className="review-phase-label">{phase.label}</span>
+                                    <span className="review-phase-scores">
+                                        {typeof phase.redAccuracy === 'number' ? (
+                                            <span aria-label={`Red accuracy in the ${phase.label.toLowerCase()} ${phase.redAccuracy}%`}>
+                                                <i aria-hidden="true">R</i> <strong>{phase.redAccuracy}%</strong>
+                                            </span>
+                                        ) : null}
+                                        {typeof phase.blackAccuracy === 'number' ? (
+                                            <span aria-label={`Black accuracy in the ${phase.label.toLowerCase()} ${phase.blackAccuracy}%`}>
+                                                <i aria-hidden="true">B</i> <strong>{phase.blackAccuracy}%</strong>
+                                            </span>
+                                        ) : null}
+                                    </span>
+                                    <span className="review-phase-count">
+                                        {phase.moves} {phase.moves === 1 ? 'move' : 'moves'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+                    <div className="review-summary-grid">
                         {/* Blunder and mistake counts live in the quality breakdown a few
                             pixels below; repeating them here said the same thing twice.
                             The run date belongs with the engine settings it describes. */}

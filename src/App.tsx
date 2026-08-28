@@ -52,6 +52,7 @@ import {
 } from './utils/analysisProfile';
 import {
   classifyMoveQualityForEval,
+  summarizeAccuracyByPhase,
   computeReviewArtifacts,
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
@@ -3225,6 +3226,16 @@ function App() {
     [reviewStatus, moveHistory, gameResult],
   );
 
+  /**
+   * Where the game was played well, not just how well. Derived rather than
+   * stored: a review restored from the library carries the per-move losses, and
+   * the tree always carries the boards, so this reads the same either way.
+   */
+  const reviewPhaseAccuracy = useMemo(
+    () => (reviewStatus === 'done' ? summarizeAccuracyByPhase(moveHistory) : []),
+    [reviewStatus, moveHistory],
+  );
+
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
     handleCancelReview();
@@ -4577,6 +4588,7 @@ function App() {
                   progress={reviewProgress}
                   summary={reviewSummary}
                   narrativeTags={reviewNarrativeTags}
+                  phaseAccuracy={reviewPhaseAccuracy}
                   currentNodeId={currentNodeId}
                   canStart={canStartReview}
                   startLabel={reviewStartLabel}

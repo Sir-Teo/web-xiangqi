@@ -2778,6 +2778,56 @@ summary:active {
   overflow-wrap: anywhere;
 }
 
+/* Accuracy per phase, between the summary cards and the quality counts. */
+.review-phase-accuracy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0.45rem 0;
+}
+
+.review-phase-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.review-phase-label {
+  color: var(--text-tertiary);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-phase-scores {
+  display: flex;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.review-phase-scores i {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.review-phase-scores strong {
+  color: var(--text-primary);
+}
+
+.review-phase-count {
+  color: var(--text-tertiary);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
 /* Narrative tags describing the shape of a game, above the quality counts. */
 .review-narratives {
   display: flex;
