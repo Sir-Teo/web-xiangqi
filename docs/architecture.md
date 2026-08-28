@@ -154,9 +154,18 @@ with a narrowed or split-screen window:
 
 So a wide-enough machine gets the engine cut to a single thread because its
 *window* is narrow. Window width is not a device property: it changes when the
-user drags a corner, and it says nothing about cores or memory. web-chess reads
-`hardwareConcurrency`, `deviceMemory` and a mobile user-agent test for the same
-decision, and never consults the viewport.
+user drags a corner, and it says nothing about cores or memory.
+
+Both siblings decide this the other way, and neither looks at the viewport at
+all:
+
+- **web-chess** reads `hardwareConcurrency`, `deviceMemory` and a mobile
+  user-agent test.
+- **web-katrain** takes `Math.min(8, hardwareConcurrency)` in its worker,
+  computed fresh at init and never stored.
+
+This repo is the only one of the three that lets a window dimension decide how
+much of the machine the search gets.
 
 `detectDeviceTier` is a pure function, already tested, and already computed at
 startup for exactly this purpose — so the fix is to ask it rather than to invent
