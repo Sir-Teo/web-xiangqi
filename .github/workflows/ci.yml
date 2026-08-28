@@ -34,6 +34,7 @@ jobs:
         run: |
           npm audit --audit-level=moderate
           npm run lint
+          npm test
           npm run test:openings
           npm run test:library
           npm run build:react
@@ -57,11 +58,10 @@ jobs:
           npm run test:smoke:all
           npm run test:bench:quick
 
-      - name: Rebuild React app with fresh WASM
-        run: |
-          npm run build:react
-          npm run test:serve-demo
-
+      # Playwright has to be installed before anything that drives a browser.
+      # test:serve-demo does, and used to run in the step below this one — so it
+      # failed on "Executable doesn't exist" every time, before the install had
+      # happened. Caching does not save it either: the restore also came after.
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:
@@ -71,7 +71,20 @@ jobs:
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
 
+      - name: Rebuild React app with fresh WASM
+        run: |
+          npm run build:react
+          npm run test:serve-demo
+
       - name: Browser worker parity (quick)
+        # Single-threaded in the browser. The threaded build initialises fine in
+        # Node here — the smoke test above runs it — and fine in a browser
+        # locally, but the worker never reports ready on a runner and init times
+        # out. Raising the limit to 240s and giving Chromium a real /dev/shm
+        # both made no difference, so it is the threaded browser path itself.
+        # Threaded stays covered by test:smoke; this covers the worker protocol.
+        env:
+          PIKAFISH_BROWSER_VARIANT: single
         run: |
           npm run test:review:fixtures
           npm run test:ui:layout

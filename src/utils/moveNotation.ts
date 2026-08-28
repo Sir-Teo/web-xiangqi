@@ -68,8 +68,17 @@ export function formatMoveRecordLabel(record: MoveNotationRecord): string {
 
 export function formatMoveRecordTitle(record: MoveNotationRecord): string {
     const piece = PIECE_NAMES[record.piece] ?? record.piece.toUpperCase();
-    const action = record.captured ? 'captures on' : 'moves to';
     const parts = splitUciMove(record.uci);
     if (!parts) return `${piece} ${record.uci.toUpperCase()}`;
-    return `${piece} from ${parts.from.toUpperCase()} ${action} ${parts.to.toUpperCase()}`;
+
+    const from = parts.from.toUpperCase();
+    const to = parts.to.toUpperCase();
+    if (!record.captured) return `${piece} from ${from} moves to ${to}`;
+
+    // The captured letter is already here; naming it is the difference between
+    // "captures on E2" and knowing what was traded.
+    const captured = PIECE_NAMES[record.captured];
+    return captured
+        ? `${piece} from ${from} captures ${captured} on ${to}`
+        : `${piece} from ${from} captures on ${to}`;
 }

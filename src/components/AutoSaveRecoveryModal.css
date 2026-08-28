@@ -1,0 +1,103 @@
+/* Deliberately quieter than the game-over modal: this one interrupts a reader
+   who did not ask for it, so it stays a plain prompt with no icon. */
+
+.auto-save-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9400;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.auto-save-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.6rem 1.8rem 1.4rem;
+    border-radius: var(--radius-xl, 16px);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-subtle);
+    min-width: 260px;
+    max-width: min(30rem, calc(100vw - 2rem));
+    text-align: left;
+}
+
+.auto-save-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-heading);
+}
+
+.auto-save-subtitle {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.auto-save-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 0.3rem;
+}
+
+.auto-save-btn {
+    min-height: 36px;
+    padding: 0.5rem 1.1rem;
+    border-radius: var(--radius-md, 9px);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.auto-save-btn-primary {
+    border: 1px solid var(--border-accent, var(--border-default));
+    background: var(--accent);
+    color: var(--bg-surface);
+}
+
+.auto-save-btn-primary:hover {
+    filter: brightness(1.08);
+}
+
+.auto-save-btn-secondary {
+    border: 1px solid var(--border-default);
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.auto-save-btn-secondary:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.auto-save-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auto-save-btn {
+        transition: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .auto-save-actions {
+        flex-direction: column-reverse;
+    }
+
+    .auto-save-btn {
+        width: 100%;
+    }
+}

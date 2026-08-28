@@ -6,9 +6,44 @@ const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-xiangqi-library-"));
 
+const compiled = new Set();
+
+/**
+ * Relative imports that survive transpiling, so the ones this file will actually
+ * require at runtime. Type-only imports are erased, and are skipped here so a
+ * `import type { GameMode } from "../App"` does not drag a component tree in.
+ */
+function runtimeRelativeImports(source) {
+  const found = new Set();
+  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?!type\s)[^;]*?from\s*["'](\.[^"']+)["']/g;
+  for (const match of source.matchAll(pattern)) found.add(match[1]);
+  return [...found];
+}
+
+/**
+ * Compiles a module and everything it imports, rather than a list kept by hand.
+ * The hand-kept list went stale the moment a new import was added — the failure
+ * was a bare MODULE_NOT_FOUND from the temp directory, and it only showed up in
+ * CI. Everything lands flat in tempDir under its basename, which is how the
+ * emitted relative requires resolve.
+ */
 function compileTsModule(relativePath) {
+  if (compiled.has(relativePath)) return;
+  compiled.add(relativePath);
+
   const sourcePath = path.join(root, relativePath);
   const source = fs.readFileSync(sourcePath, "utf8");
+
+  for (const specifier of runtimeRelativeImports(source)) {
+    const resolved = path.resolve(path.dirname(sourcePath), specifier);
+    for (const candidate of [`${resolved}.ts`, path.join(resolved, "index.ts")]) {
+      if (fs.existsSync(candidate)) {
+        compileTsModule(path.relative(root, candidate));
+        break;
+      }
+    }
+  }
+
   const output = ts.transpileModule(source, {
     compilerOptions: {
       esModuleInterop: true,
@@ -212,7 +247,9 @@ try {
   assert(boundedTextSave.label.length === 120, "Saved labels should be trimmed and capped.");
   assert(boundedTextSave.opening.length === 160, "Saved openings should be trimmed and capped.");
   assert(boundedTextSave.review.summary.totalMoves === 1, "Review totalMoves should not exceed the saved line length.");
-  assert(boundedTextSave.review.summary.averageCentipawnLoss === 100000, "Review average centipawn loss should be capped.");
+  // Bounded to the same figure a review can now produce per move, so a record
+  // saved before that bound cannot outrank a fresh one. Was 100000.
+  assert(boundedTextSave.review.summary.averageCentipawnLoss === 1000, "Review average centipawn loss should be capped at the reported bound.");
   assert(boundedTextSave.review.summary.redAccuracy === 100, "Review red accuracy should be clamped.");
   assert(boundedTextSave.review.summary.blackAccuracy === 0, "Review black accuracy should be clamped.");
   assert(boundedTextSave.review.summary.redAverageCentipawnLoss === 120, "Review red average centipawn loss should be integer-normalized.");
@@ -562,8 +599,20 @@ try {
     Array.from({ length: moveImport.MAX_MOVE_IMPORT_UCI_MOVES + 2 }, () => "b2e2").join(" ")
   );
   assert(
-    oversizedImportedLine.length === moveImport.MAX_MOVE_IMPORT_UCI_MOVES + 1,
-    "UCI line extraction should stop once it has enough moves to report an oversized import."
+    oversizedImportedLine.length === moveImport.MAX_MOVE_IMPORT_UCI_MOVES,
+    "UCI line extraction should stop at the cap, so what it returns can always be saved."
+  );
+  assert(
+    moveImport.hasTooManyUciMoves(
+      Array.from({ length: moveImport.MAX_MOVE_IMPORT_UCI_MOVES + 2 }, () => "b2e2").join(" ")
+    ),
+    "Oversized sources must still be reportable now the line itself is capped."
+  );
+  assert(
+    !moveImport.hasTooManyUciMoves(
+      Array.from({ length: moveImport.MAX_MOVE_IMPORT_UCI_MOVES }, () => "b2e2").join(" ")
+    ),
+    "A line exactly at the cap is importable, not oversized."
   );
   const oversizedImportedTree = moveImport.extractUciMoveTree(
     Array.from({ length: moveImport.MAX_MOVE_IMPORT_TREE_NODES + 2 }, () => "b2e2").join(" ")

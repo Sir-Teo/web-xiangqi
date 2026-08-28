@@ -9,7 +9,7 @@ import type {
     SavedReviewAnnotation,
     SavedReviewSnapshot,
 } from './review';
-import { getWinPercentLossForMove, makeReviewLineSignatureFromMoves } from './review';
+import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves } from './review';
 
 export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi-game-library';
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
@@ -30,7 +30,16 @@ const MAX_REVIEW_KEY_MOMENTS = 128;
 const MAX_REVIEW_ANNOTATIONS = 1024;
 const MAX_REVIEW_ENGINE_DEPTH = 128;
 const MAX_REVIEW_ENGINE_MOVE_TIME_MS = 600_000;
-const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = 100_000;
+/**
+ * A stored average can only be as large as the per-move bound the review now
+ * applies, so reading is clamped to the same figure. Without this, a review
+ * saved before that bound existed keeps an inflated average — the same game
+ * re-reviewed scores 525 where the old record says 5017 — and the library both
+ * sorts by this value and averages it across games, so the two scales would be
+ * silently compared. Clamping does not recover the true figure for an old
+ * record; it keeps every record on one scale, which is what sorting needs.
+ */
+const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = MAX_REPORTED_CENTIPAWN_LOSS;
 type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode {

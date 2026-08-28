@@ -27,11 +27,34 @@ function stripParentheticalVariations(text: string): string {
     return result;
 }
 
+/**
+ * Replaces each `open...close` run with a space, in one pass.
+ *
+ * The obvious regex — `/\{[^}]*}/g` — backtracks from every opening character
+ * that has no closing one, which is quadratic. Pasting something that is not
+ * really a game record but is full of brackets (a minified script, a JSON
+ * dump) took seconds rather than being rejected. Semantics are unchanged: a
+ * run ends at the first closing character, and an unterminated opener is left
+ * in place exactly as the regex left it.
+ */
+function stripDelimited(text: string, open: string, close: string): string {
+    if (!text.includes(open)) return text;
+
+    let out = '';
+    let index = 0;
+    for (;;) {
+        const start = text.indexOf(open, index);
+        if (start < 0) return out + text.slice(index);
+        const end = text.indexOf(close, start + 1);
+        if (end < 0) return out + text.slice(index);
+        out += `${text.slice(index, start)} `;
+        index = end + 1;
+    }
+}
+
 function stripPgnMetadata(text: string): string {
-    return String(text)
-        .replace(/\[[^\]]*]/g, ' ')
-        .replace(/\{[^}]*}/g, ' ')
-        .replace(/;.*$/gm, ' ');
+    const withoutTags = stripDelimited(String(text), '[', ']');
+    return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
 }
 
 const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
@@ -54,14 +77,37 @@ export function isMoveImportTextTooLarge(text: string): boolean {
     return String(text).length > MAX_MOVE_IMPORT_TEXT_LENGTH;
 }
 
+/**
+ * Whether the text holds more moves than a line may carry.
+ *
+ * `extractUciMoveLine` stops at the cap so what it returns is always short
+ * enough to save, which means its length can no longer signal an oversized
+ * source — a caller checking `length > MAX` would never fire. Callers that
+ * must *reject* rather than truncate ask here instead. Mirrors the `tooLarge`
+ * flag `extractUciMoveTree` already returns.
+ */
+export function hasTooManyUciMoves(text: string): boolean {
+    const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
+    let seen = 0;
+    for (const _ of cleaned.matchAll(UCI_MOVE_PATTERN)) {
+        seen += 1;
+        if (seen > MAX_MOVE_IMPORT_UCI_MOVES) return true;
+    }
+    return false;
+}
+
 export function extractUciMoveLine(text: string): string[] {
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     const moves: string[] = [];
     for (const match of cleaned.matchAll(UCI_MOVE_PATTERN)) {
+        // Checked before the push, the way extractUciMoveTree does it. Testing
+        // after meant returning one move past the cap, and the library refuses
+        // a line longer than the cap — so the longest importable game could not
+        // then be saved.
+        if (moves.length >= MAX_MOVE_IMPORT_UCI_MOVES) break;
         const from = match[1] ?? match[3];
         const to = match[2] ?? match[4];
         moves.push(`${from}${to}`.toLowerCase());
-        if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) break;
     }
     return moves;
 }

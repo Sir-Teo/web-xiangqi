@@ -15,6 +15,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - wrapper auto-selects threaded vs single-thread in browser (`variant: "auto"`)
 - smoke tests pass for both flavors (`threaded` and `single`)
 - React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, historical games, and opening-book continuations
+- React app auto-saves the game in progress, so a reload offers to pick it up where you left off
 
 ## What this repo contains
 
@@ -66,16 +67,27 @@ Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild 
 
 ## React app QA
 
-The Vite/React analysis app can be checked without rebuilding Pikafish:
+The app can be checked without rebuilding Pikafish — the shipped `.wasm` lives
+in `public/`, so even the engine scripts run:
 
 ```bash
 npm install
-npm run build:react
-npm run test:library
-npm run test:openings
+npm run verify            # ~6s: typecheck, lint, tests, openings, library,
+                          # engine smoke + parity, and the React build
+```
+
+`verify` chains everything so the first failure stops it. Run it rather than the
+parts: chaining by hand is how a real failure gets reported as success, and
+`npm test` typechecks nothing on its own — Vitest transpiles without checking.
+
+Not in `verify`:
+
+```bash
+npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
-npm run test:ui:install   # once per machine
-npm run test:ui:layout
+npm run test:ui:install            # once per machine
+npm run test:ui:layout             # drives a real browser
+npm run build                      # rebuilds the WASM; needs emsdk
 ```
 
 `npm run build:react` cleans only the React HTML/assets/favicon and any legacy demo `sw.js` from `dist/` before building, preserving the checked-in Pikafish JS/WASM/NNUE artifacts.
@@ -88,6 +100,20 @@ Artifacts are written to `dist/`:
 - `dist/pikafish-core.worker.js` (pthread worker; if generated)
 - `dist/pikafish.nnue`
 - `dist/index.html` (React analysis app after `npm run build:react`; browser demo after `npm run build`)
+
+## Docs
+
+- [Architecture](docs/architecture.md): how the React app is put together, the
+  board conventions that are easy to get backwards, and where new logic belongs.
+
+Two sibling apps share this one's shape — an engine in a worker, a move tree, a
+review pass, a saved-game library — for Go and chess:
+
+- [web-katrain](https://github.com/Sir-Teo/web-katrain) — Go, KataGo in the browser
+- [web-chess](https://github.com/Sir-Teo/web-chess) — chess, Stockfish in the browser
+
+[web-chess's cross-app learning plan](https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-learning-plan.md)
+compares the three and tracks what is worth moving between them.
 
 ## Notes
 

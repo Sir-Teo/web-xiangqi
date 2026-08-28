@@ -1,4 +1,6 @@
 import { formatUciMove } from './moveNotation';
+import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
+import type { BoardState } from './xiangqi';
 
 export const REVIEW_THRESHOLDS = {
     best: 40,
@@ -209,6 +211,25 @@ export function getReviewSideForRecord(record: ReviewRecordLike, moveIndex: numb
     return moveIndex % 2 === 0 ? 'red' : 'black';
 }
 
+/**
+ * A mate is encoded as a sentinel score (`MATE_SCORE_BASE - mateIn`, 30000) and
+ * not as an evaluation, so subtracting it from an ordinary score gives a delta
+ * of hundreds of pawns — two different kinds of statement in the same units.
+ * One such move took a six-move review to an average loss of 5017.
+ *
+ * Bounding what gets reported keeps a forced mate at the top of the scale
+ * without letting it stand in for the rest of the game. web-chess uses the same
+ * bound, from Lichess. Deliberately not applied to the swing itself: move
+ * quality reads winning chances, which are bounded already, and the raw swing
+ * stays raw for anything that wants it.
+ */
+export const MAX_REPORTED_CENTIPAWN_LOSS = 1000;
+
+export function reportedCentipawnLoss(swing: number): number {
+    if (!Number.isFinite(swing)) return 0;
+    return Math.min(MAX_REPORTED_CENTIPAWN_LOSS, Math.max(0, swing));
+}
+
 export function getEvalLossForMove(evalBefore: number, evalAfter: number, side: ReviewSide): number {
     const loss = side === 'red'
         ? evalBefore - evalAfter
@@ -320,7 +341,10 @@ export function buildReviewNote({
     swing: number;
     retainedDecisiveAdvantage?: boolean;
 }): string {
-    const cpSwing = `${Math.round(swing)}cp`;
+    // Bounded like the averages, with a "+" rather than a bound presented as a
+    // measurement — a forced mate is genuinely off this scale.
+    const bounded = reportedCentipawnLoss(swing);
+    const cpSwing = `${Math.round(bounded)}${bounded < swing ? '+' : ''}cp`;
     if (quality === 'best') {
         return 'Engine-approved move.';
     }
@@ -348,6 +372,94 @@ export function buildReviewNote({
         return `Noticeable drop of ${cpSwing}.`;
     }
     return `Evaluation slipped by ${cpSwing}.`;
+}
+
+/** One phase's share of a review, in the same terms as the overall summary. */
+export interface PhaseAccuracySummary {
+    phase: GamePhase;
+    label: string;
+    accuracy: number;
+    redAccuracy?: number;
+    blackAccuracy?: number;
+    moves: number;
+}
+
+/** A record carrying enough to place a move in a phase and score it. */
+export interface PhaseAccuracyRecordLike extends ReviewRecordLike {
+    board?: BoardState;
+    captured?: string;
+    winPercentLoss?: number;
+}
+
+/**
+ * Accuracy split by phase, so a report can say *where* a game was lost rather
+ * than only by how much.
+ *
+ * Scored with the same curve as the overall summary, so the phase figures
+ * bracket the overall one instead of telling a different story. Moves with no
+ * evaluation are skipped, and a phase with nothing scored is left out
+ * altogether — an empty phase would otherwise read as a score of zero.
+ */
+export function summarizeAccuracyByPhase(
+    records: PhaseAccuracyRecordLike[],
+    /** Plies played before the line began; see plyOffsetFromRootFen. */
+    plyOffset = 0
+): PhaseAccuracySummary[] {
+    const totals = new Map<GamePhase, { sum: number; count: number; red: { sum: number; count: number }; black: { sum: number; count: number } }>();
+
+    for (const [moveIndex, record] of records.entries()) {
+        if (!record?.board || typeof record.winPercentLoss !== 'number') continue;
+        const phase = getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply + plyOffset);
+        const accuracy = getMoveAccuracyForWinPercentLoss(record.winPercentLoss);
+        const side = getReviewSideForRecord(record, moveIndex);
+        const bucket = totals.get(phase)
+            ?? { sum: 0, count: 0, red: { sum: 0, count: 0 }, black: { sum: 0, count: 0 } };
+        bucket.sum += accuracy;
+        bucket.count += 1;
+        bucket[side].sum += accuracy;
+        bucket[side].count += 1;
+        totals.set(phase, bucket);
+    }
+
+    return GAME_PHASES.flatMap(({ key, label }) => {
+        const bucket = totals.get(key);
+        if (!bucket || bucket.count === 0) return [];
+        return [{
+            phase: key,
+            label,
+            accuracy: Math.round(bucket.sum / bucket.count),
+            redAccuracy: bucket.red.count > 0 ? Math.round(bucket.red.sum / bucket.red.count) : undefined,
+            blackAccuracy: bucket.black.count > 0 ? Math.round(bucket.black.sum / bucket.black.count) : undefined,
+            moves: bucket.count,
+        }];
+    });
+}
+
+/** How the key-moment list is narrowed. 'all' for each dimension leaves it alone. */
+export interface KeyMomentFilters {
+    side: ReviewSide | 'all';
+    quality: ReviewCriticalQuality | 'all';
+    phase: GamePhase | 'all';
+}
+
+/**
+ * The key moments left after the panel's filters.
+ *
+ * Phase is looked up per move rather than stored on the moment, so a review
+ * restored from the library filters the same way a fresh one does without
+ * anything new having to be persisted.
+ */
+export function filterKeyMoments(
+    moments: ReviewKeyMoment[],
+    filters: KeyMomentFilters,
+    phaseByMoveIndex: Array<GamePhase | null> = []
+): ReviewKeyMoment[] {
+    return moments.filter((moment) => {
+        if (filters.side !== 'all' && moment.side !== filters.side) return false;
+        if (filters.quality !== 'all' && moment.quality !== filters.quality) return false;
+        if (filters.phase !== 'all' && phaseByMoveIndex[moment.moveIndex] !== filters.phase) return false;
+        return true;
+    });
 }
 
 export function computeReviewArtifacts(
@@ -390,9 +502,10 @@ export function computeReviewArtifacts(
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const moveAccuracy = getMoveAccuracyForWinPercentLoss(winPercentLoss);
         accuracySum += moveAccuracy;
-        centipawnLossSum += swing;
+        const reportedLoss = reportedCentipawnLoss(swing);
+        centipawnLossSum += reportedLoss;
         sideAccuracy[side].sum += moveAccuracy;
-        sideAccuracy[side].lossSum += swing;
+        sideAccuracy[side].lossSum += reportedLoss;
         sideAccuracy[side].count += 1;
         const note = buildReviewNote({
             quality,

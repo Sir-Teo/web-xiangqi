@@ -343,7 +343,14 @@
     try {
       engine = await window.Pikafish.createWorkerEngine({
         basePath: ".",
-        variant: variantEl.value
+        variant: variantEl.value,
+        // The loader defaults to 60s, which is generous in a browser on a warm
+        // cache and not enough on a CI runner: a cold fetch of the 53MB NNUE
+        // plus instantiating threaded WASM ran past it and the parity run
+        // failed with "Timed out initializing Pikafish worker". This is a test
+        // harness, so it can afford to wait; the app's own default is the right
+        // bound for someone sitting in front of it.
+        initTimeoutMs: 240000
       });
       if (runId !== activeRunId) throw new Error("Run canceled");
       activeEngine = engine;

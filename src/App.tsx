@@ -21,15 +21,28 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
+import { narrativeTags } from './utils/narrativeTags';
+import {
+  type AutoSavedGame,
+  clearAutoSavedGame,
+  isWorthAutoSaving,
+  readAutoSavedGame,
+  writeAutoSavedGame,
+} from './utils/autoSave';
 import { decodeSavedMoveTreeParam, encodeSavedMoveTreeParam } from './utils/shareTree';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
+import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
+import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
+import { LazyPanelBoundary } from './components/LazyPanelBoundary';
+import { QaForcedRenderError } from './components/QaForcedRenderError';
 import {
   extractFenTag,
   extractUciMoveLine,
+  hasTooManyUciMoves,
   extractUciMoveTree,
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
@@ -43,6 +56,7 @@ import {
 } from './utils/analysisProfile';
 import {
   classifyMoveQualityForEval,
+  summarizeAccuracyByPhase,
   computeReviewArtifacts,
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
@@ -197,6 +211,17 @@ const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
   c: 'Cannon: straight; capture over 1 screen',
   p: 'Soldier: forward; sideways after crossing river',
 };
+/**
+ * An error boundary you cannot trigger is one you cannot verify. `main.tsx`
+ * already exposes `?qa-error-boundary` for the app-level one; this is the same
+ * switch for the lazy panel boundary, so the containment can be seen rather
+ * than assumed — the board should survive while only the panel goes quiet.
+ * DEV only.
+ */
+const qaForcePanelError = import.meta.env.DEV
+  && typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).has('qa-panel-boundary');
+
 const PREFERENCES_STORAGE_KEY = 'xiangqi-app-preferences';
 const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
@@ -726,6 +751,9 @@ function makeEnginePositionCommand(rootFen: string, moves: string[]) {
   const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
   return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
 }
+
+/** Long enough that a fast sequence of moves writes once, not per move. */
+const AUTO_SAVE_DEBOUNCE_MS = 600;
 
 function savedResultToGameResult(result: SavedGame['result']): GameResult {
   if (result === 'red') return 'red-wins';
@@ -2966,7 +2994,10 @@ function App() {
     }
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
-    if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
+    // Asked of the source text, not of the extracted line: extraction stops at
+    // the cap so the line it returns can always be saved, which means its own
+    // length can no longer tell us the link was too long.
+    if (hasTooManyUciMoves(rawMoves)) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
@@ -3046,7 +3077,11 @@ function App() {
     };
   }, [moveHistory, reviewStatus, reviewSummary]);
 
-  const handleSaveGame = useCallback(() => {
+  /**
+   * The game as it stands, in the shape both the library and the auto-save
+   * store. Built in one place so a recovered game matches a saved one.
+   */
+  const currentGameSnapshot = useMemo(() => {
     const saveNodeIds = reviewStatus === 'done' && reviewSummary
       ? activeLineNodeIds
       : activeLineNodeIds.slice(0, currentMoveIndex + 1);
@@ -3056,11 +3091,13 @@ function App() {
     const moveTree = hasMoveTreeMoves && (hasStudyBranches || moves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const saved = saveGameToLibrary(gameMode, moves, {
+    return {
+      gameMode,
+      moves,
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
-      result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
+      result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
       review: reviewStatus === 'done' && reviewSummary
         ? {
@@ -3071,7 +3108,12 @@ function App() {
             },
           }
         : undefined,
-    });
+    };
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+
+  const handleSaveGame = useCallback(() => {
+    const { gameMode: mode, moves, ...rest } = currentGameSnapshot;
+    const saved = saveGameToLibrary(mode, moves, rest);
 
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
@@ -3083,7 +3125,7 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, 1800);
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [currentGameSnapshot, saveGameToLibrary]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
@@ -3147,6 +3189,81 @@ function App() {
     setGraphLoadSweepToken((token) => token + 1);
     return true;
   }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+
+  // ── Auto-save ────────────────────────────────────────
+  // Offer whatever was in progress when the tab last closed, then keep the
+  // slot current. The check runs once, before the first write, so a fresh
+  // board cannot clear the snapshot it is about to offer.
+  const autoSaveCheckedRef = useRef(false);
+  const [autoSaveRecovery, setAutoSaveRecovery] = useState<AutoSavedGame | null>(null);
+  const [autoSaveChecked, setAutoSaveChecked] = useState(false);
+
+  useEffect(() => {
+    if (autoSaveCheckedRef.current) return;
+    autoSaveCheckedRef.current = true;
+    const snapshot = readAutoSavedGame();
+    if (snapshot && !isWorthAutoSaving(currentGameSnapshot)) {
+      setAutoSaveRecovery(snapshot);
+    } else if (snapshot) {
+      // Something is already on the board, so the snapshot is stale.
+      clearAutoSavedGame();
+    }
+    setAutoSaveChecked(true);
+    // Deliberately mount-only: this is a one-shot check against the board as
+    // it was before any move was played.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // currentGameSnapshot is a dependency on purpose: it carries the live
+  // evaluation and the detected opening, so as those settle the stored
+  // snapshot is rewritten and a recovered game carries them.
+  useEffect(() => {
+    if (!autoSaveChecked || autoSaveRecovery) return;
+    const timeout = window.setTimeout(() => {
+      writeAutoSavedGame(currentGameSnapshot);
+    }, AUTO_SAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot]);
+
+  const dismissAutoSaveRecovery = useCallback(() => {
+    clearAutoSavedGame();
+    setAutoSaveRecovery(null);
+  }, []);
+
+  const restoreAutoSavedGame = useCallback(() => {
+    if (!autoSaveRecovery) return;
+    const restored = handleLoadGame(autoSaveRecovery.game);
+    if (!restored) clearAutoSavedGame();
+    setAutoSaveRecovery(null);
+  }, [autoSaveRecovery, handleLoadGame]);
+
+  const reviewNarrativeTags = useMemo(
+    () => (reviewStatus === 'done'
+      ? narrativeTags(moveHistory.map(record => record.evalScore), gameResult ?? null)
+      : []),
+    [reviewStatus, moveHistory, gameResult],
+  );
+
+  /**
+   * Where the game was played well, not just how well. Derived rather than
+   * stored: a review restored from the library carries the per-move losses, and
+   * the tree always carries the boards, so this reads the same either way.
+   */
+  /** The phase each move belongs to, so key moments can be filtered by one. */
+  const reviewPhaseByMoveIndex = useMemo(() => {
+    if (reviewStatus !== 'done') return [];
+    const offset = plyOffsetFromRootFen(rootFen);
+    return moveHistory.map(record => (record.board
+      ? getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply + offset)
+      : null));
+  }, [reviewStatus, moveHistory, rootFen]);
+
+  const reviewPhaseAccuracy = useMemo(
+    () => (reviewStatus === 'done'
+      ? summarizeAccuracyByPhase(moveHistory, plyOffsetFromRootFen(rootFen))
+      : []),
+    [reviewStatus, moveHistory, rootFen],
+  );
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
@@ -3940,6 +4057,8 @@ function App() {
                   </p>
                 </>
               ) : (
+                <LazyPanelBoundary>
+                {qaForcePanelError ? <QaForcedRenderError /> : (
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
                     savedGames={savedGames}
@@ -3949,6 +4068,8 @@ function App() {
                     onLoadHistorical={handleLoadHistoricalGame}
                   />
                 </React.Suspense>
+                )}
+                </LazyPanelBoundary>
               )}
             </div>
           </div>
@@ -4499,6 +4620,9 @@ function App() {
                   status={reviewStatus}
                   progress={reviewProgress}
                   summary={reviewSummary}
+                  narrativeTags={reviewNarrativeTags}
+                  phaseAccuracy={reviewPhaseAccuracy}
+                  phaseByMoveIndex={reviewPhaseByMoveIndex}
                   currentNodeId={currentNodeId}
                   canStart={canStartReview}
                   startLabel={reviewStartLabel}
@@ -4968,6 +5092,15 @@ function App() {
           reason={visibleGameOverReason}
           onNewGame={() => { setGameResult(null); resetGame(); }}
           onReview={dismissGameOverForReview}
+        />
+      )}
+
+      {autoSaveRecovery && (
+        <AutoSaveRecoveryModal
+          savedAt={autoSaveRecovery.savedAt}
+          moveCount={autoSaveRecovery.game.moves.length}
+          onRestore={restoreAutoSavedGame}
+          onDismiss={dismissAutoSaveRecovery}
         />
       )}
     </main>

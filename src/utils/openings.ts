@@ -99,14 +99,17 @@ export const OPENINGS: OpeningEntry[] = [
  */
 export function matchOpening(moveHistory: string[]): OpeningEntry | null {
     if (moveHistory.length === 0) return null;
+    // Lowercased for the same reason getOpeningCandidates does it: the book is
+    // written in lowercase UCI and the two should not disagree about a match.
+    const normalizedHistory = moveHistory.map((move) => String(move).toLowerCase());
 
     let best: OpeningEntry | null = null;
 
     for (const entry of OPENINGS) {
-        if (entry.moves.length > moveHistory.length) continue;
+        if (entry.moves.length > normalizedHistory.length) continue;
         let match = true;
         for (let i = 0; i < entry.moves.length; i++) {
-            if (entry.moves[i] !== moveHistory[i]) {
+            if (entry.moves[i] !== normalizedHistory[i]) {
                 match = false;
                 break;
             }
@@ -148,7 +151,10 @@ export function getOpeningCandidates(moveHistory: string[], limit = 6): OpeningC
     return Array.from(byMove.entries())
         .map(([move, { entries, longestLine }]) => ({
             move,
-            count: entries.length,
+            // Distinct lines, not entries. The book carries a few lines under
+            // more than one name, and counting entries let those sort above
+            // genuinely more-branched moves.
+            count: new Set(entries.map((entry) => entry.moves.join(' '))).size,
             names: Array.from(new Set(entries.map((entry) => entry.name))).slice(0, 3),
             chinese: Array.from(new Set(entries.map((entry) => entry.chinese))).slice(0, 3),
             longestLine,

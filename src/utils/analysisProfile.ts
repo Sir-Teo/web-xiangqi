@@ -92,7 +92,14 @@ export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile 
     let tier: DeviceTier;
     if (mobileLike || hardwareConcurrency <= 4 || hasLowMemory(deviceMemoryGB, 4)) {
         tier = 'low';
-    } else if (hardwareConcurrency <= 8 || hasLowMemory(deviceMemoryGB, 8)) {
+    } else if (hardwareConcurrency <= 8) {
+        // No memory clause here. It used to be `|| hasLowMemory(memory, 8)`,
+        // and browsers disagree about the top of navigator.deviceMemory's
+        // range — the spec describes clamping it to limit fingerprinting, and
+        // Chromium 148 was observed reporting 32 — so that clause put the same
+        // machine in the mid tier under one browser and the high tier under
+        // another. Anything genuinely short of memory has already gone to the
+        // low tier above, on the 4GB test, where every browser agrees.
         tier = 'mid';
     } else {
         tier = 'high';
@@ -125,19 +132,15 @@ export function resolveEngineBootConfig(
         threads = 1;
         hashMB = hasLowMemory(profile.deviceMemoryGB, 4) ? 16 : 24;
     } else if (profile.tier === 'mid') {
-        if (profile.mobileLike) {
-            variant = resolveSingleVariant(allowSIMD);
-            threads = 1;
-            hashMB = hasLowMemory(profile.deviceMemoryGB, 4) ? 16 : 24;
-        } else {
-            variant = resolveThreadedVariant(allowSIMD);
-            threads = 2;
-            hashMB = 32;
-        }
+        // Only the low tier is ever mobile-like, so the mid and high tiers are
+        // always a pointer-and-keyboard machine with room for threads.
+        variant = resolveThreadedVariant(allowSIMD);
+        threads = 2;
+        hashMB = 32;
     } else {
-        variant = profile.mobileLike ? resolveSingleVariant(allowSIMD) : resolveThreadedVariant(allowSIMD);
-        threads = profile.mobileLike ? 1 : 3;
-        hashMB = profile.mobileLike ? 24 : 64;
+        variant = resolveThreadedVariant(allowSIMD);
+        threads = 3;
+        hashMB = 64;
     }
 
     if (options.saferBoot) {

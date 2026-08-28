@@ -3328,7 +3328,11 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
       !state.lastMoveArrow ||
       state.cancelExists ||
       !state.restartExists ||
-      !state.reviewPanelText.includes("Run a review") ||
+      // The panel offers the run affordance again once the review is cancelled.
+      // Was "Run a review", which the copy stopped saying on 2026-08-26; the
+      // assertion was not updated and the Playwright ordering bug above failed
+      // first, so this never got a chance to be seen.
+      !state.reviewPanelText.includes("Run Review") ||
       !state.stopSent ||
       state.overflowX > 2
     ) {
@@ -6067,7 +6071,10 @@ async function assertStalemateLossIsLabeled(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
 
   const stalemateState = await page.evaluate(() => ({
     title: document.querySelector(".game-over-title")?.textContent?.trim() || "",
@@ -6100,7 +6107,10 @@ async function assertGameOverReviewPreservesResult(page) {
   await page.getByLabel("FEN string").fill(terminalFen);
   await page.getByRole("button", { name: "Load" }).click();
 
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
   await page.waitForFunction(() => document.activeElement?.classList.contains("game-over-btn-primary"), null, { timeout: 5000 });
   const dialogState = await page.evaluate(() => {
     const modal = document.querySelector(".game-over-modal");
@@ -6162,7 +6172,10 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
 
@@ -6184,8 +6197,30 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
   }
 }
 
+/**
+ * The app auto-saves a game in progress and offers to restore it on the next
+ * load. These assertions share one page across dozens of navigations, so a game
+ * left on the board by an earlier assertion brought the recovery modal up in a
+ * later one, and its backdrop swallowed the clicks — which is how
+ * assertBoardKeyboardNavigationFlipped started failing on "auto-save-backdrop
+ * intercepts pointer events".
+ *
+ * Clear the slot before every navigation. These tests are about layout; the
+ * recovery flow has its own coverage.
+ */
+async function clearAutoSaveBetweenNavigations(page) {
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.removeItem("xiangqi-auto-saved-game");
+    } catch {
+      // Storage unavailable in this context; nothing to clear.
+    }
+  });
+}
+
 async function assertAppErrorBoundaryFallback(browser) {
   const page = await browser.newPage();
+  await clearAutoSaveBetweenNavigations(page);
   try {
     await page.setViewportSize({ width: 390, height: 720 });
     await page.goto("http://127.0.0.1:8192/web-xiangqi/?qa-error-boundary=1", {
@@ -6251,6 +6286,7 @@ async function main() {
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
+    await clearAutoSaveBetweenNavigations(page);
     const pageConsole = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") pageConsole.push(msg.text());

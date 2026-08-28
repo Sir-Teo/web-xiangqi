@@ -59,16 +59,31 @@ function detectSIMDSupport(): boolean {
     } catch (_) { return false; }
 }
 
+/**
+ * The width below which the app runs its compact layout, and below which the
+ * engine is given less of the machine so the UI stays responsive.
+ *
+ * This number is also written into the CSS as `@media (max-width: 900px)` in a
+ * dozen places, and a media query cannot read a variable — so the two halves
+ * cannot be derived from one another and must be changed together. Naming it
+ * here at least means the TypeScript side says it once, which is what
+ * web-katrain does with DESKTOP_LAYOUT_MIN_WIDTH.
+ */
+const COMPACT_LAYOUT_MAX_WIDTH = 900;
+
+function isCompactViewport() {
+    return typeof window !== 'undefined' && window.innerWidth <= COMPACT_LAYOUT_MAX_WIDTH;
+}
+
 function detectUiSafeThreads() {
     if (typeof navigator === 'undefined') return 1;
     const hw = Number(navigator.hardwareConcurrency) || 2;
-    const isCompact = typeof window !== 'undefined' && window.innerWidth <= 900;
-    if (isCompact) return 1;
+    if (isCompactViewport()) return 1;
     return Math.max(1, Math.min(4, hw - 2));
 }
 
 function detectUiSafeHashMB() {
-    const isCompact = typeof window !== 'undefined' && window.innerWidth <= 900;
+    const isCompact = isCompactViewport();
     const memGB = Number((navigator as NavigatorWithDeviceMemory).deviceMemory ?? 0);
     if (isCompact) return memGB >= 4 ? 32 : 16;
     if (memGB >= 8) return 128;
