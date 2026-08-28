@@ -320,15 +320,20 @@ annotation for anything that wants it.
 `test:library` and `build:react` — everything in CI's "React app checks" step
 except `npm audit`, which is left out so the command works offline.
 
-It is **not** the whole of CI. CI also installs emsdk, builds the Pikafish WASM
-(`npm run build`), runs the Node parity and smoke tests against it, rebuilds the
-React app on the fresh WASM, and runs a Playwright worker-parity check. None of
-that runs here without the emscripten toolchain, so a green `verify` says the
-React app is sound and says nothing about the engine.
+It is **not** the whole of CI, but the gap is narrower than it looks. CI also
+installs emsdk, rebuilds the Pikafish WASM (`npm run build`), and runs a
+Playwright worker-parity check. Only the *rebuild* needs the emscripten
+toolchain: the shipped `.wasm` files are checked into `public/`, so the engine
+scripts run here against them without emsdk —
 
-Two of those excluded steps are the ones that would catch an engine regression,
-so a change to `scripts/`, the WASM build, or the worker protocol needs CI or a
-local emsdk — `verify` will happily pass through it.
+    npm run test:smoke     # loads Pikafish, searches, returns a bestmove
+    npm run test:parity    # 337,764 nodes, ~321k nodes/second
+
+Both pass locally. So a change to the worker protocol or the engine wrapper *can*
+be caught before CI; what cannot is a change to the build itself — the patch,
+the emscripten templates or `build-pikafish.sh` — since that rebuild is the step
+requiring the toolchain. `verify` leaves the engine scripts out to stay fast, so
+run them by hand when touching anything the engine talks through.
 
 This distinction is worth stating because the failure it prevents already
 happened twice in one night: `npm test` does not run `test:openings` or
