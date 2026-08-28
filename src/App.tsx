@@ -38,6 +38,7 @@ import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './u
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
+import { QaForcedRenderError } from './components/QaForcedRenderError';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -210,6 +211,17 @@ const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
   c: 'Cannon: straight; capture over 1 screen',
   p: 'Soldier: forward; sideways after crossing river',
 };
+/**
+ * An error boundary you cannot trigger is one you cannot verify. `main.tsx`
+ * already exposes `?qa-error-boundary` for the app-level one; this is the same
+ * switch for the lazy panel boundary, so the containment can be seen rather
+ * than assumed — the board should survive while only the panel goes quiet.
+ * DEV only.
+ */
+const qaForcePanelError = import.meta.env.DEV
+  && typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).has('qa-panel-boundary');
+
 const PREFERENCES_STORAGE_KEY = 'xiangqi-app-preferences';
 const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
@@ -4046,6 +4058,7 @@ function App() {
                 </>
               ) : (
                 <LazyPanelBoundary>
+                {qaForcePanelError ? <QaForcedRenderError /> : (
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
                     savedGames={savedGames}
@@ -4055,6 +4068,7 @@ function App() {
                     onLoadHistorical={handleLoadHistoricalGame}
                   />
                 </React.Suspense>
+                )}
                 </LazyPanelBoundary>
               )}
             </div>
