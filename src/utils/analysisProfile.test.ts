@@ -5,8 +5,11 @@ import {
     resolveLiveAnalysisPolicy,
 } from './analysisProfile';
 
-const DESKTOP = { viewportWidth: 1680, viewportHeight: 1050, hardwareConcurrency: 16, deviceMemoryGB: 32 };
-const LAPTOP = { viewportWidth: 1440, viewportHeight: 900, hardwareConcurrency: 8, deviceMemoryGB: 16 };
+// deviceMemoryGB values are what a browser can actually report: the Device
+// Memory API clamps to at most 8, so a fixture above that describes hardware
+// no browser describes.
+const DESKTOP = { viewportWidth: 1680, viewportHeight: 1050, hardwareConcurrency: 16, deviceMemoryGB: 8 };
+const LAPTOP = { viewportWidth: 1440, viewportHeight: 900, hardwareConcurrency: 8, deviceMemoryGB: 8 };
 const PHONE = { viewportWidth: 390, viewportHeight: 844, hardwareConcurrency: 6, deviceMemoryGB: 4, coarsePointer: true };
 
 describe('device tiering', () => {
@@ -25,8 +28,18 @@ describe('device tiering', () => {
 
     it('drops to the low tier on little memory however many cores there are', () => {
         expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 4 }).tier).toBe('low');
-        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 8 }).tier).toBe('mid');
+        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 2 }).tier).toBe('low');
         expect(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 4 }).tier).toBe('low');
+    });
+
+    it('does not read the reporting ceiling as a constraint', () => {
+        // Every roomy machine reports exactly 8, so treating that as low
+        // memory put the high tier out of reach in Chrome while Firefox,
+        // which does not implement the API at all, reached it on the same
+        // hardware.
+        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 8 }).tier).toBe('high');
+        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 0 }).tier).toBe('high');
+        expect(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 32, deviceMemoryGB: 8 }).tier).toBe('high');
     });
 
     it('falls back to a mid-range desktop when the browser tells us nothing', () => {

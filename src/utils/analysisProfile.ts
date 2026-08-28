@@ -92,7 +92,12 @@ export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile 
     let tier: DeviceTier;
     if (mobileLike || hardwareConcurrency <= 4 || hasLowMemory(deviceMemoryGB, 4)) {
         tier = 'low';
-    } else if (hardwareConcurrency <= 8 || hasLowMemory(deviceMemoryGB, 8)) {
+    } else if (hardwareConcurrency <= 8) {
+        // No memory clause here: navigator.deviceMemory is clamped by spec to
+        // at most 8, so `<= 8` matched every device that reports at all and
+        // put the high tier out of reach in Chrome while Firefox, which does
+        // not implement the API, reached it on the same machine. Anything
+        // genuinely short of memory has already gone to the low tier above.
         tier = 'mid';
     } else {
         tier = 'high';
