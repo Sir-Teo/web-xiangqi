@@ -67,18 +67,27 @@ Note: `npm run serve:demo` serves files already in `dist/` and does not rebuild 
 
 ## React app QA
 
-The Vite/React analysis app can be checked without rebuilding Pikafish:
+The app can be checked without rebuilding Pikafish — the shipped `.wasm` lives
+in `public/`, so even the engine scripts run:
 
 ```bash
 npm install
-npm test                  # unit tests (Vitest)
-npm run lint
-npm run build:react
-npm run test:library
-npm run test:openings
+npm run verify            # ~6s: typecheck, lint, tests, openings, library,
+                          # engine smoke + parity, and the React build
+```
+
+`verify` chains everything so the first failure stops it. Run it rather than the
+parts: chaining by hand is how a real failure gets reported as success, and
+`npm test` typechecks nothing on its own — Vitest transpiles without checking.
+
+Not in `verify`:
+
+```bash
+npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
-npm run test:ui:install   # once per machine
-npm run test:ui:layout
+npm run test:ui:install            # once per machine
+npm run test:ui:layout             # drives a real browser
+npm run build                      # rebuilds the WASM; needs emsdk
 ```
 
 `npm run build:react` cleans only the React HTML/assets/favicon and any legacy demo `sw.js` from `dist/` before building, preserving the checked-in Pikafish JS/WASM/NNUE artifacts.
