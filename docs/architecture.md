@@ -137,6 +137,49 @@ engine assets.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
 
+## The two grading ladders disagree, and the looser one wins
+
+`classifyMoveQualityForEval` grades a move twice — once on centipawns, once on
+winning chances — and keeps `getLessSevereReviewQuality` of the two. That is a
+sound design *if* the two ladders are calibrated against each other. Here they
+are independent constants, and measuring them shows they are not.
+
+Taking each `REVIEW_THRESHOLDS` boundary and converting it to a winning-chance
+loss at equality:
+
+| boundary | centipawns | win% loss it really costs | `REVIEW_WIN_PERCENT_LOSS_THRESHOLDS` |
+| --- | --- | --- | --- |
+| best | 40 | 3.68 | 2 |
+| good | 90 | 8.21 | 5 |
+| inaccuracy | 180 | 15.99 | 20 |
+| mistake | 320 | 26.46 | 30 |
+
+The win-percent ladder is stricter at the top and looser in the middle, so they
+cross. Because the milder grade wins, the looser ladder decides wherever they
+disagree, and at the top the stricter one never bites at all. Measured at
+equality, red to move:
+
+- 30–90cp: the centipawn ladder is milder and wins. Harmless.
+- **190–200cp: centipawns say mistake, winning chances say inaccuracy, and the
+  move is graded an inaccuracy.**
+
+That second case is the one that matters, because it happens *at equality* —
+the position-aware argument for preferring winning chances does not apply when
+the game is level. The centipawn ladder's own stated boundary is being
+overridden by a number nobody calibrated against it.
+
+web-chess does not have this: its win-percent thresholds are *derived* from its
+centipawn ones, so the two meet exactly at equality and the milder-of-two is a
+no-op safety net rather than a silent re-grading. See its
+`WIN_PERCENT_LOSS_THRESHOLDS` and `qualityAgreement.test.ts`.
+
+Not changed here, for the reason recorded when the win-percent work was done:
+altering either ladder changes grades users have already seen, and the right
+ladder for xiangqi is a judgement about the game rather than something to copy
+from chess. But the disagreement is now measured rather than assumed, and the
+choice is between deriving one ladder from the other (chess's answer) or setting
+both deliberately so they agree at equality.
+
 ## A mate wrecks the centipawn average here too
 
 The same defect web-chess has, found by checking after it turned up there, and
