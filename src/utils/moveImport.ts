@@ -27,11 +27,34 @@ function stripParentheticalVariations(text: string): string {
     return result;
 }
 
+/**
+ * Replaces each `open...close` run with a space, in one pass.
+ *
+ * The obvious regex — `/\{[^}]*}/g` — backtracks from every opening character
+ * that has no closing one, which is quadratic. Pasting something that is not
+ * really a game record but is full of brackets (a minified script, a JSON
+ * dump) took seconds rather than being rejected. Semantics are unchanged: a
+ * run ends at the first closing character, and an unterminated opener is left
+ * in place exactly as the regex left it.
+ */
+function stripDelimited(text: string, open: string, close: string): string {
+    if (!text.includes(open)) return text;
+
+    let out = '';
+    let index = 0;
+    for (;;) {
+        const start = text.indexOf(open, index);
+        if (start < 0) return out + text.slice(index);
+        const end = text.indexOf(close, start + 1);
+        if (end < 0) return out + text.slice(index);
+        out += `${text.slice(index, start)} `;
+        index = end + 1;
+    }
+}
+
 function stripPgnMetadata(text: string): string {
-    return String(text)
-        .replace(/\[[^\]]*]/g, ' ')
-        .replace(/\{[^}]*}/g, ' ')
-        .replace(/;.*$/gm, ' ');
+    const withoutTags = stripDelimited(String(text), '[', ']');
+    return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
 }
 
 const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;

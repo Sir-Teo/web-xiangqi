@@ -103,6 +103,44 @@ describe('reading a start position', () => {
     });
 });
 
+describe('a paste that is not really a game record', () => {
+    // Stripping tags and comments with a regex backtracked from every unclosed
+    // bracket, which is quadratic: 80k of them took nearly two seconds, and the
+    // importer accepts 200k.
+    const brackets = (n: number) => '{'.repeat(n);
+
+    it('scans the largest accepted paste quickly', () => {
+        const text = brackets(MAX_MOVE_IMPORT_TEXT_LENGTH);
+        const started = performance.now();
+        extractUciMoveLine(text);
+        extractUciMoveTree(text);
+        expect(performance.now() - started).toBeLessThan(1000);
+    });
+
+    it('grows about linearly rather than quadratically', () => {
+        const measure = (n: number) => {
+            const text = brackets(n);
+            const started = performance.now();
+            extractUciMoveLine(text);
+            extractUciMoveTree(text);
+            return performance.now() - started;
+        };
+        measure(20_000);
+        const small = Math.max(measure(20_000), 0.5);
+        const large = measure(160_000);
+        // Eight times the input. Linear would be ~8x; quadratic would be ~64x.
+        expect(large / small).toBeLessThan(24);
+    });
+
+    it('still strips the tags and comments it is supposed to', () => {
+        expect(extractUciMoveLine('[Event "h2e2"]\n1. h9g7 {h2e2} b0c2')).toEqual(['h9g7', 'b0c2']);
+        expect(extractUciMoveLine('{h2e2} h9g7')).toEqual(['h9g7']);
+        // An unterminated comment is left in place and what follows still
+        // reads as moves, which is what the regex did too.
+        expect(extractUciMoveLine('h9g7 {unterminated b0c2')).toEqual(['h9g7', 'b0c2']);
+    });
+});
+
 describe('guarding against a huge paste', () => {
     it('flags text past the limit and passes text under it', () => {
         expect(isMoveImportTextTooLarge('h2e2')).toBe(false);
