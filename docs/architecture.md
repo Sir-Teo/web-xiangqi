@@ -317,8 +317,9 @@ annotation for anything that wants it.
 ## What `npm run verify` covers, and what it does not
 
 `npm run verify` runs typecheck, lint, the vitest suite, `test:openings`,
-`test:library` and `build:react` — everything in CI's "React app checks" step
-except `npm audit`, which is left out so the command works offline.
+`test:library`, `test:smoke`, `test:parity` and `build:react` — everything in
+CI's "React app checks" step except `npm audit`, which is left out so the
+command works offline, plus the two engine scripts that need no toolchain.
 
 It is **not** the whole of CI, but the gap is narrower than it looks. CI also
 installs emsdk, rebuilds the Pikafish WASM (`npm run build`), and runs a
@@ -332,8 +333,8 @@ scripts run here against them without emsdk —
 Both pass locally. So a change to the worker protocol or the engine wrapper *can*
 be caught before CI; what cannot is a change to the build itself — the patch,
 the emscripten templates or `build-pikafish.sh` — since that rebuild is the step
-requiring the toolchain. `verify` leaves the engine scripts out to stay fast, so
-run them by hand when touching anything the engine talks through.
+requiring the toolchain. `verify` runs both, because they are cheap: smoke is 0.5s and parity 1.5s
+against a 4.3s command, so the engine is covered for the price of rounding.
 
 This distinction is worth stating because the failure it prevents already
 happened twice in one night: `npm test` does not run `test:openings` or
