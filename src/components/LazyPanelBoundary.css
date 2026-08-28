@@ -1,0 +1,10 @@
+.lazy-panel-error {
+    margin: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--danger, #d64545);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}

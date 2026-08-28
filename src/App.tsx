@@ -37,6 +37,7 @@ import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
+import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -4044,6 +4045,7 @@ function App() {
                   </p>
                 </>
               ) : (
+                <LazyPanelBoundary>
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
                     savedGames={savedGames}
@@ -4053,6 +4055,7 @@ function App() {
                     onLoadHistorical={handleLoadHistoricalGame}
                   />
                 </React.Suspense>
+                </LazyPanelBoundary>
               )}
             </div>
           </div>
