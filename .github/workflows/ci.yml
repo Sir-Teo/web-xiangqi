@@ -77,6 +77,14 @@ jobs:
           npm run test:serve-demo
 
       - name: Browser worker parity (quick)
+        # Single-threaded in the browser. The threaded build initialises fine in
+        # Node here — the smoke test above runs it — and fine in a browser
+        # locally, but the worker never reports ready on a runner and init times
+        # out. Raising the limit to 240s and giving Chromium a real /dev/shm
+        # both made no difference, so it is the threaded browser path itself.
+        # Threaded stays covered by test:smoke; this covers the worker protocol.
+        env:
+          PIKAFISH_BROWSER_VARIANT: single
         run: |
           npm run test:review:fixtures
           npm run test:ui:layout
