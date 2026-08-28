@@ -72,7 +72,7 @@ export function AutoSaveRecoveryModal({ savedAt, moveCount, onRestore, onDismiss
                 <h2 className="auto-save-title" id="auto-save-title">Unfinished game</h2>
                 <p className="auto-save-subtitle" id="auto-save-subtitle">
                     {moveCount > 0
-                        ? `${moveCount} move${moveCount === 1 ? '' : 's'} were in progress ${describeWhen(savedAt)}.`
+                        ? `${moveCount} ${moveCount === 1 ? 'move was' : 'moves were'} in progress ${describeWhen(savedAt)}.`
                         : `A position was in progress ${describeWhen(savedAt)}.`}
                     {' '}Pick it up where you left off?
                 </p>
