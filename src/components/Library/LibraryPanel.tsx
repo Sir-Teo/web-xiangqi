@@ -9,6 +9,7 @@ import {
   type ReviewSummary,
 } from '../../utils/review';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
+import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/searchTerms';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
@@ -242,7 +243,8 @@ export function LibraryPanel({
     };
   }, []);
 
-  const q = search.trim().toLowerCase();
+  const searchTerms = useMemo(() => toSearchTerms(search), [search]);
+  const q = searchTerms.join(' ');
 
   useEffect(() => {
     setSavedVisibleLimit(SAVED_PAGE_SIZE);
@@ -251,15 +253,11 @@ export function LibraryPanel({
   const filteredHistorical = useMemo(() => HISTORICAL_GAMES.filter((g) => {
     if (reviewFilter === 'reviewed') return false;
     if (resultFilter !== 'all' && g.result !== resultFilter) return false;
-    if (!q) return true;
-    return (
-      g.redPlayer.toLowerCase().includes(q) ||
-      g.blackPlayer.toLowerCase().includes(q) ||
-      g.event.toLowerCase().includes(q) ||
-      g.date.includes(q) ||
-      (g.opening ?? '').toLowerCase().includes(q)
+    return matchesSearchTerms(
+      toSearchText([g.redPlayer, g.blackPlayer, g.event, g.date, g.opening]),
+      searchTerms,
     );
-  }), [q, resultFilter, reviewFilter]);
+  }), [searchTerms, resultFilter, reviewFilter]);
 
   const filteredSaved = useMemo(() => savedGames
     .filter((g) => {
@@ -267,10 +265,9 @@ export function LibraryPanel({
       if (reviewFilter === 'reviewed' && !isReviewed) return false;
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
       if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
-      if (!q) return true;
-      return getSavedGameSearchText(g).includes(q);
+      return matchesSearchTerms(getSavedGameSearchText(g), searchTerms);
     })
-    .sort((left, right) => compareSavedGames(left, right, savedSort)), [q, resultFilter, reviewFilter, savedGames, savedSort]);
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort]);
   const reviewInsight = useMemo(() => {
     const reviewed = filteredSaved
       .map((game) => game.review?.summary)
