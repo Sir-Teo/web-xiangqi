@@ -27,6 +27,7 @@ function render(phaseAccuracy: PhaseAccuracySummary[]) {
             progress={1}
             summary={SUMMARY}
             phaseAccuracy={phaseAccuracy}
+            phaseByMoveIndex={[]}
             currentNodeId="root"
             canStart={false}
             onStart={noop}
@@ -83,6 +84,16 @@ describe('the phase breakdown in the review panel', () => {
         ]);
         expect(html).not.toContain('Black accuracy in the endgame');
         expect(html).toContain('Red accuracy in the endgame');
+    });
+
+    it('offers each phase as a control that narrows the key moments', () => {
+        const html = render([
+            phase({}),
+            phase({ phase: 'endgame', label: 'Endgame', moves: 4 }),
+        ]);
+        expect(html).toContain('aria-pressed="false"');
+        expect(html).toContain('Show only key moments from the opening');
+        expect(html).toContain('Show only key moments from the endgame');
     });
 
     it('counts the moves, with the singular spelt out', () => {

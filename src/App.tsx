@@ -36,7 +36,7 @@ import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
-import { plyOffsetFromRootFen } from './utils/gamePhase';
+import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -3232,6 +3232,15 @@ function App() {
    * stored: a review restored from the library carries the per-move losses, and
    * the tree always carries the boards, so this reads the same either way.
    */
+  /** The phase each move belongs to, so key moments can be filtered by one. */
+  const reviewPhaseByMoveIndex = useMemo(() => {
+    if (reviewStatus !== 'done') return [];
+    const offset = plyOffsetFromRootFen(rootFen);
+    return moveHistory.map(record => (record.board
+      ? getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply + offset)
+      : null));
+  }, [reviewStatus, moveHistory, rootFen]);
+
   const reviewPhaseAccuracy = useMemo(
     () => (reviewStatus === 'done'
       ? summarizeAccuracyByPhase(moveHistory, plyOffsetFromRootFen(rootFen))
@@ -4592,6 +4601,7 @@ function App() {
                   summary={reviewSummary}
                   narrativeTags={reviewNarrativeTags}
                   phaseAccuracy={reviewPhaseAccuracy}
+                  phaseByMoveIndex={reviewPhaseByMoveIndex}
                   currentNodeId={currentNodeId}
                   canStart={canStartReview}
                   startLabel={reviewStartLabel}

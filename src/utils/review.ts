@@ -413,6 +413,33 @@ export function summarizeAccuracyByPhase(
     });
 }
 
+/** How the key-moment list is narrowed. 'all' for each dimension leaves it alone. */
+export interface KeyMomentFilters {
+    side: ReviewSide | 'all';
+    quality: ReviewCriticalQuality | 'all';
+    phase: GamePhase | 'all';
+}
+
+/**
+ * The key moments left after the panel's filters.
+ *
+ * Phase is looked up per move rather than stored on the moment, so a review
+ * restored from the library filters the same way a fresh one does without
+ * anything new having to be persisted.
+ */
+export function filterKeyMoments(
+    moments: ReviewKeyMoment[],
+    filters: KeyMomentFilters,
+    phaseByMoveIndex: Array<GamePhase | null> = []
+): ReviewKeyMoment[] {
+    return moments.filter((moment) => {
+        if (filters.side !== 'all' && moment.side !== filters.side) return false;
+        if (filters.quality !== 'all' && moment.quality !== filters.quality) return false;
+        if (filters.phase !== 'all' && phaseByMoveIndex[moment.moveIndex] !== filters.phase) return false;
+        return true;
+    });
+}
+
 export function computeReviewArtifacts(
     activeLineNodeIds: string[],
     treeNodes: Record<string, ReviewTreeNodeLike>,

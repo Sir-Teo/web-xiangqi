@@ -2791,10 +2791,25 @@ summary:active {
   grid-template-columns: 1fr auto auto;
   align-items: baseline;
   gap: 0.55rem;
+  width: 100%;
   padding: 0.34rem 0.55rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.review-phase-row:hover {
+  border-color: var(--border-strong);
+}
+
+.review-phase-row.selected {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
 }
 
 .review-phase-label {

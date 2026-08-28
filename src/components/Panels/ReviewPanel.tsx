@@ -1,12 +1,14 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { PhaseAccuracySummary, ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
+import type { GamePhase } from '../../utils/gamePhase';
 import { type NarrativeTag, narrativeTagToneClass } from '../../utils/narrativeTags';
 import {
     describeReviewEngineSummary,
     formatWinPercentLoss,
     formatWinPercentLossLabel,
     formatReviewEngineSummary,
+    filterKeyMoments,
     formatReviewQuality,
     formatReviewQualityCount,
     formatAverageCentipawnLoss,
@@ -23,6 +25,8 @@ type Props = {
     narrativeTags?: NarrativeTag[];
     /** Accuracy per phase; empty when the game never left one. */
     phaseAccuracy?: PhaseAccuracySummary[];
+    /** The phase each move belongs to, by move index. Empty before a review. */
+    phaseByMoveIndex?: Array<GamePhase | null>;
     currentNodeId: string;
     canStart: boolean;
     startLabel?: string;
@@ -42,6 +46,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     progress,
     narrativeTags = [],
     phaseAccuracy = [],
+    phaseByMoveIndex = [],
     summary,
     currentNodeId,
     canStart,
@@ -55,9 +60,11 @@ export const ReviewPanel = memo(function ReviewPanel({
 }: Props) {
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
     const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
+    const [momentPhaseFilter, setMomentPhaseFilter] = useState<GamePhase | 'all'>('all');
     useEffect(() => {
         setMomentSideFilter('all');
         setMomentQualityFilter('all');
+        setMomentPhaseFilter('all');
     }, [status, summary?.lineSignature, summary?.reviewedAt]);
 
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
@@ -80,12 +87,12 @@ export const ReviewPanel = memo(function ReviewPanel({
     ] as const : [];
     const filteredKeyMoments = useMemo(() => {
         if (!summary) return [];
-        return summary.keyMoments.filter((moment) => {
-            if (momentSideFilter !== 'all' && moment.side !== momentSideFilter) return false;
-            if (momentQualityFilter !== 'all' && moment.quality !== momentQualityFilter) return false;
-            return true;
-        });
-    }, [momentQualityFilter, momentSideFilter, summary]);
+        return filterKeyMoments(
+            summary.keyMoments,
+            { side: momentSideFilter, quality: momentQualityFilter, phase: momentPhaseFilter },
+            phaseByMoveIndex,
+        );
+    }, [momentQualityFilter, momentSideFilter, momentPhaseFilter, phaseByMoveIndex, summary]);
     const totalKeyMoments = summary?.keyMoments.length ?? 0;
 
     return (
@@ -222,7 +229,18 @@ export const ReviewPanel = memo(function ReviewPanel({
                     {phaseAccuracy.length > 1 ? (
                         <div className="review-phase-accuracy" aria-label="Accuracy by phase">
                             {phaseAccuracy.map((phase) => (
-                                <div key={phase.phase} className="review-phase-row">
+                                <button
+                                    key={phase.phase}
+                                    type="button"
+                                    className={`review-phase-row${momentPhaseFilter === phase.phase ? ' selected' : ''}`}
+                                    aria-pressed={momentPhaseFilter === phase.phase}
+                                    title={momentPhaseFilter === phase.phase
+                                        ? 'Show key moments from the whole game again'
+                                        : `Show only key moments from the ${phase.label.toLowerCase()}`}
+                                    onClick={() => setMomentPhaseFilter(
+                                        momentPhaseFilter === phase.phase ? 'all' : phase.phase
+                                    )}
+                                >
                                     <span className="review-phase-label">{phase.label}</span>
                                     <span className="review-phase-scores">
                                         {typeof phase.redAccuracy === 'number' ? (
@@ -239,7 +257,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     <span className="review-phase-count">
                                         {phase.moves} {phase.moves === 1 ? 'move' : 'moves'}
                                     </span>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     ) : null}
