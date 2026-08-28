@@ -21,10 +21,18 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
+import {
+  type AutoSavedGame,
+  clearAutoSavedGame,
+  isWorthAutoSaving,
+  readAutoSavedGame,
+  writeAutoSavedGame,
+} from './utils/autoSave';
 import { decodeSavedMoveTreeParam, encodeSavedMoveTreeParam } from './utils/shareTree';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
+import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
 import {
@@ -726,6 +734,9 @@ function makeEnginePositionCommand(rootFen: string, moves: string[]) {
   const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
   return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
 }
+
+/** Long enough that a fast sequence of moves writes once, not per move. */
+const AUTO_SAVE_DEBOUNCE_MS = 600;
 
 function savedResultToGameResult(result: SavedGame['result']): GameResult {
   if (result === 'red') return 'red-wins';
@@ -3046,7 +3057,11 @@ function App() {
     };
   }, [moveHistory, reviewStatus, reviewSummary]);
 
-  const handleSaveGame = useCallback(() => {
+  /**
+   * The game as it stands, in the shape both the library and the auto-save
+   * store. Built in one place so a recovered game matches a saved one.
+   */
+  const currentGameSnapshot = useMemo(() => {
     const saveNodeIds = reviewStatus === 'done' && reviewSummary
       ? activeLineNodeIds
       : activeLineNodeIds.slice(0, currentMoveIndex + 1);
@@ -3056,11 +3071,13 @@ function App() {
     const moveTree = hasMoveTreeMoves && (hasStudyBranches || moves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const saved = saveGameToLibrary(gameMode, moves, {
+    return {
+      gameMode,
+      moves,
       opening: detectedOpening?.name,
       finalEval: displayEvalScore ?? undefined,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
-      result: gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing',
+      result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
       review: reviewStatus === 'done' && reviewSummary
         ? {
@@ -3071,7 +3088,12 @@ function App() {
             },
           }
         : undefined,
-    });
+    };
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+
+  const handleSaveGame = useCallback(() => {
+    const { gameMode: mode, moves, ...rest } = currentGameSnapshot;
+    const saved = saveGameToLibrary(mode, moves, rest);
 
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
@@ -3083,7 +3105,7 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, 1800);
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, saveGameToLibrary, savedReviewSnapshot, treeNodes]);
+  }, [currentGameSnapshot, saveGameToLibrary]);
 
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
@@ -3147,6 +3169,50 @@ function App() {
     setGraphLoadSweepToken((token) => token + 1);
     return true;
   }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+
+  // ── Auto-save ────────────────────────────────────────
+  // Offer whatever was in progress when the tab last closed, then keep the
+  // slot current. The check runs once, before the first write, so a fresh
+  // board cannot clear the snapshot it is about to offer.
+  const autoSaveCheckedRef = useRef(false);
+  const [autoSaveRecovery, setAutoSaveRecovery] = useState<AutoSavedGame | null>(null);
+  const [autoSaveChecked, setAutoSaveChecked] = useState(false);
+
+  useEffect(() => {
+    if (autoSaveCheckedRef.current) return;
+    autoSaveCheckedRef.current = true;
+    const snapshot = readAutoSavedGame();
+    if (snapshot && !isWorthAutoSaving(currentGameSnapshot)) {
+      setAutoSaveRecovery(snapshot);
+    } else if (snapshot) {
+      // Something is already on the board, so the snapshot is stale.
+      clearAutoSavedGame();
+    }
+    setAutoSaveChecked(true);
+    // Deliberately mount-only: this is a one-shot check against the board as
+    // it was before any move was played.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!autoSaveChecked || autoSaveRecovery) return;
+    const timeout = window.setTimeout(() => {
+      writeAutoSavedGame(currentGameSnapshot);
+    }, AUTO_SAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot]);
+
+  const dismissAutoSaveRecovery = useCallback(() => {
+    clearAutoSavedGame();
+    setAutoSaveRecovery(null);
+  }, []);
+
+  const restoreAutoSavedGame = useCallback(() => {
+    if (!autoSaveRecovery) return;
+    const restored = handleLoadGame(autoSaveRecovery.game);
+    if (!restored) clearAutoSavedGame();
+    setAutoSaveRecovery(null);
+  }, [autoSaveRecovery, handleLoadGame]);
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
@@ -4968,6 +5034,15 @@ function App() {
           reason={visibleGameOverReason}
           onNewGame={() => { setGameResult(null); resetGame(); }}
           onReview={dismissGameOverForReview}
+        />
+      )}
+
+      {autoSaveRecovery && (
+        <AutoSaveRecoveryModal
+          savedAt={autoSaveRecovery.savedAt}
+          moveCount={autoSaveRecovery.game.moves.length}
+          onRestore={restoreAutoSavedGame}
+          onDismiss={dismissAutoSaveRecovery}
         />
       )}
     </main>
