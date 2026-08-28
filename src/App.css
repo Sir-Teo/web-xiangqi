@@ -5235,16 +5235,21 @@ summary:active {
    its row and sliding up behind the top toolbar, which it did by 38px at
    1440x600 before this term existed. */
 .board-workspace .board-wrap {
-  /* This used to carry a 53vh term as well, described in its own comment as "a
-     guess at the free height". The computed term above superseded it -- it
-     models the same quantity from the chrome that is actually there -- but the
-     guess stayed, and being the tighter of the two it went on binding at every
-     viewport taller than 820px, holding the board below the space it had. At
-     1440x900 that cost 62px of board, 477 against 539, with the stage around it
-     already wide enough. Dropping it changes nothing where the computed term
-     binds: 1440x600 and 1440x700 measure identical, and the board still clears
-     the toolbar and the dock at every height. */
-  width: min(100%, calc(0.9 * (100vh - 301px)), 620px);
+  /* Sizing from height is right, but 100vh minus a fixed 301px only models the
+     chrome at one text size. Raise the text and the toolbars and dock grow while
+     the 301 does not, so the board kept a height its row no longer had: because
+     .board-workspace is a size container its rows do not stretch to fit, and
+     align-self: end sent the excess upward, out through .board-stage's hidden
+     overflow and under the toolbar. At the 125% many readers use, both back
+     ranks were already unreachable; at 200% seven of the ten were.
+
+     The row knows its own height, so take it and derive the width from the 9x10
+     board instead of estimating. This measures identically at the default text
+     size -- 1440x900, 1440x700, 1440x600, 1920x1080, landscape, phone and 320
+     all match to the pixel -- and every rank stays reachable as the text grows. */
+  aspect-ratio: 9 / 10;
+  width: auto;
+  height: 100%;
   min-width: min(100%, 280px);
   align-self: end;
 }
