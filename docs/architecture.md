@@ -6,9 +6,13 @@ its own engine**: the repo carries the upstream patch set and Emscripten
 overrides, and `npm run build` produces the `.wasm` artifacts the app ships.
 
 Structured to mirror [web-katrain's `docs/architecture.md`][katrain], so the
-three sibling apps can be read against each other.
+three sibling apps can be read against each other. The third is
+[web-chess][chess], which also carries [the cross-app learning plan][plan]
+comparing all three and tracking what is worth moving between them.
 
 [katrain]: https://github.com/Sir-Teo/web-katrain/blob/main/docs/architecture.md
+[chess]: https://github.com/Sir-Teo/web-chess/blob/main/docs/architecture.md
+[plan]: https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-learning-plan.md
 
 ## Runtime Overview
 
