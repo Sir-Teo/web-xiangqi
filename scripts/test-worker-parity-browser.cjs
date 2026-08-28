@@ -63,10 +63,13 @@ async function main() {
     }
     await page.click("#run-quick");
 
+    // Covers worker init and every parity check after it. The page allows up
+    // to 240s for init alone on a cold CI runner, so 300s here left almost
+    // nothing for the checks themselves.
     await page.waitForFunction(() => {
       const el = document.querySelector("#status");
       return !!el && /worker parity passed/i.test(el.textContent || "");
-    }, null, { timeout: 300000 });
+    }, null, { timeout: 600000 });
 
     const status = await page.$eval("#status", (el) => el.textContent || "");
     const outputTail = await page.$eval("#out", (el) => {
