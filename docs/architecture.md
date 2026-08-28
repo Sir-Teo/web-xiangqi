@@ -178,6 +178,21 @@ editing either ladder now reports which grades moved and whether the two came
 closer together or further apart — which is the information the decision below
 actually needs.
 
+**Whoever takes this on should know it is not only a grading decision.** A
+review is persisted whole — `SavedReviewSnapshot` carries the accuracy, both
+per-side accuracies, every quality count and the key moments — so changing
+either ladder strands every saved review on the old scale. The library sorts on
+those values and averages them across games, so old and new records would be
+compared silently, exactly as happened when the per-move loss was bounded (see
+the read-path clamp in `gameLibrary.ts`).
+
+That gives three options rather than one: clamp or adjust on read as the
+centipawn bound now does, re-derive a saved review from its stored annotations
+when it is loaded, or version the snapshot and show old reviews as stale.
+web-chess is free of this — its auto-save holds only a PGN and a move count, and
+its library holds PGN — so it is worth checking there whether persisting the
+summary was ever a good idea here.
+
 Not changed here, for the reason recorded when the win-percent work was done:
 altering either ladder changes grades users have already seen, and the right
 ladder for xiangqi is a judgement about the game rather than something to copy
