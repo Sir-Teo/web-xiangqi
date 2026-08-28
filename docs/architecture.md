@@ -137,6 +137,28 @@ engine assets.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
 
+## A mate wrecks the centipawn average here too
+
+The same defect web-chess has, found by checking after it turned up there, and
+larger. Not reproduced on screen — Pikafish would not load in the browser used
+for this — so this is read from the code and the arithmetic, and should be
+confirmed against a real mated game before it is fixed.
+
+- `useEngine.ts` maps a mate to `MATE_SCORE_BASE = 30000` minus the distance.
+  web-chess uses 10000, so the same mistake costs three times as much here.
+- `getEvalLossForMove` subtracts raw and clamps only at zero, and
+  `computeReviewArtifacts` sums that straight into `averageCentipawnLoss`.
+- A side standing at -500 that plays into a forced mate therefore books a loss
+  near 29,500. In a 40-move game that single move adds about 737 to the average.
+- The *quality label* is unaffected, because `getWinningChancePercent` bounds
+  the evaluation with `WIN_PERCENT_EVAL_LIMIT` before taking a winning-chance
+  figure. So, exactly as in chess, the label stays sensible while the centipawn
+  figure beside it does not.
+
+Whatever cap is chosen should be chosen for both repos at once — this is one
+bug with two constants, and the reason to fix it is that the two numbers
+disagree in front of the user, which is equally true in either app.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
