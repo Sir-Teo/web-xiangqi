@@ -3332,6 +3332,10 @@ summary:active {
   font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  /* space-between alone lets the label and the value meet once the text is
+     large enough to fill the row: at 200% they rendered as "MOVENO MOVES".
+     Keep a floor between them; there is room for it, so nothing truncates. */
+  gap: 0.5rem;
 }
 
 .wc-meta strong {
