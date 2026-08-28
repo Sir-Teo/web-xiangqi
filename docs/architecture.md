@@ -152,6 +152,13 @@ engine assets.
   SVG path and invalidates the whole line rather than one point. Left as-is
   because the loose check is the house idiom here and nothing has been shown
   to produce a `NaN` score — but it is the first place to look.
+
+  The review path is worth contrasting, because it is safe for a reason worth
+  copying rather than by luck: `clampWinPercentLoss` returns 0 for anything
+  non-finite, and every accuracy figure — the summary, the per-side split, the
+  per-phase breakdown — is derived through it. One guard at the boundary makes
+  everything downstream safe without each display having to re-check. `EvalGraph`
+  has no such boundary, which is why it is the exposed one.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
