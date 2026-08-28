@@ -1,4 +1,6 @@
 import { formatUciMove } from './moveNotation';
+import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
+import type { BoardState } from './xiangqi';
 
 export const REVIEW_THRESHOLDS = {
     best: 40,
@@ -348,6 +350,65 @@ export function buildReviewNote({
         return `Noticeable drop of ${cpSwing}.`;
     }
     return `Evaluation slipped by ${cpSwing}.`;
+}
+
+/** One phase's share of a review, in the same terms as the overall summary. */
+export interface PhaseAccuracySummary {
+    phase: GamePhase;
+    label: string;
+    accuracy: number;
+    redAccuracy?: number;
+    blackAccuracy?: number;
+    moves: number;
+}
+
+/** A record carrying enough to place a move in a phase and score it. */
+export interface PhaseAccuracyRecordLike extends ReviewRecordLike {
+    board?: BoardState;
+    captured?: string;
+    winPercentLoss?: number;
+}
+
+/**
+ * Accuracy split by phase, so a report can say *where* a game was lost rather
+ * than only by how much.
+ *
+ * Scored with the same curve as the overall summary, so the phase figures
+ * bracket the overall one instead of telling a different story. Moves with no
+ * evaluation are skipped, and a phase with nothing scored is left out
+ * altogether — an empty phase would otherwise read as a score of zero.
+ */
+export function summarizeAccuracyByPhase(
+    records: PhaseAccuracyRecordLike[]
+): PhaseAccuracySummary[] {
+    const totals = new Map<GamePhase, { sum: number; count: number; red: { sum: number; count: number }; black: { sum: number; count: number } }>();
+
+    for (const [moveIndex, record] of records.entries()) {
+        if (!record?.board || typeof record.winPercentLoss !== 'number') continue;
+        const phase = getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply);
+        const accuracy = getMoveAccuracyForWinPercentLoss(record.winPercentLoss);
+        const side = getReviewSideForRecord(record, moveIndex);
+        const bucket = totals.get(phase)
+            ?? { sum: 0, count: 0, red: { sum: 0, count: 0 }, black: { sum: 0, count: 0 } };
+        bucket.sum += accuracy;
+        bucket.count += 1;
+        bucket[side].sum += accuracy;
+        bucket[side].count += 1;
+        totals.set(phase, bucket);
+    }
+
+    return GAME_PHASES.flatMap(({ key, label }) => {
+        const bucket = totals.get(key);
+        if (!bucket || bucket.count === 0) return [];
+        return [{
+            phase: key,
+            label,
+            accuracy: Math.round(bucket.sum / bucket.count),
+            redAccuracy: bucket.red.count > 0 ? Math.round(bucket.red.sum / bucket.red.count) : undefined,
+            blackAccuracy: bucket.black.count > 0 ? Math.round(bucket.black.sum / bucket.black.count) : undefined,
+            moves: bucket.count,
+        }];
+    });
 }
 
 export function computeReviewArtifacts(
