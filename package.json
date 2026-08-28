@@ -13,6 +13,7 @@
     "build:react": "node scripts/clean-react-dist.cjs && tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build:react",
     "preview": "vite preview",
     "test": "vitest run",
     "build": "bash scripts/build-pikafish.sh",
