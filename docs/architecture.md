@@ -141,6 +141,12 @@ engine assets.
 - A mobile-like device is always the `low` tier; `resolveEngineBootConfig`
   depends on that and a test pins it.
 - Storage readers must never throw on bad data; drop the record and move on.
+- If the eval graph ever goes blank rather than wrong, suspect a non-finite
+  `evalScore`. `EvalGraph` carries the last seen value forward with
+  `typeof x === 'number'`, which admits `NaN`, and a single `NaN` reaches the
+  SVG path and invalidates the whole line rather than one point. Left as-is
+  because the loose check is the house idiom here and nothing has been shown
+  to produce a `NaN` score — but it is the first place to look.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
