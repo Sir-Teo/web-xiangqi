@@ -58,10 +58,14 @@ export function extractUciMoveLine(text: string): string[] {
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     const moves: string[] = [];
     for (const match of cleaned.matchAll(UCI_MOVE_PATTERN)) {
+        // Checked before the push, the way extractUciMoveTree does it. Testing
+        // after meant returning one move past the cap, and the library refuses
+        // a line longer than the cap — so the longest importable game could not
+        // then be saved.
+        if (moves.length >= MAX_MOVE_IMPORT_UCI_MOVES) break;
         const from = match[1] ?? match[3];
         const to = match[2] ?? match[4];
         moves.push(`${from}${to}`.toLowerCase());
-        if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) break;
     }
     return moves;
 }
