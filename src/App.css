@@ -766,8 +766,14 @@ body.resizing * {
    Analysis inline actions
    ═══════════════════════════════════════════════════ */
 .analysis-tab-strip {
+  /* Three fixed columns for a strip that sometimes holds two tabs: the left
+     panel reserved a third of its width for a tab that is not there, and gave
+     its two tabs a third each instead of a half. That was enough to clip
+     "Library" once the text was scaled up. Let the column count follow the tabs
+     actually present. */
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 0.32rem;
 }
 
