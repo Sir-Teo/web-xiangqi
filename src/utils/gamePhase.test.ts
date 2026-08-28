@@ -112,6 +112,8 @@ describe('reading how far in a line already starts', () => {
         expect(plyOffsetFromRootFen('')).toBe(0);
         expect(plyOffsetFromRootFen('nonsense')).toBe(0);
         expect(plyOffsetFromRootFen(`${START_FEN} w - - 0 0`)).toBe(0);
+        // Short of the fullmove field: the halfmove clock must not stand in for it.
+        expect(plyOffsetFromRootFen(`${START_FEN} w - - 40`)).toBe(0);
     });
 
     it('keeps a mid-game analysis out of the opening', () => {

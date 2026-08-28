@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseFenBoard, START_FEN } from './xiangqi';
+import { plyOffsetFromRootFen } from './gamePhase';
 import {
     computeReviewArtifacts,
     summarizeAccuracyByPhase,
@@ -116,5 +117,25 @@ describe('from a computed review to a phase breakdown', () => {
             .map((node) => node.record)
             .filter((record): record is PhaseAccuracyRecordLike => Boolean(record));
         expect(summarizeAccuracyByPhase(records)).toEqual([]);
+    });
+});
+
+describe('a line that starts part-way through a game', () => {
+    it('does not call move 20 an opening just because the line starts there', () => {
+        // Everything still on the board, but the root FEN says move 20.
+        const { nodes, ids } = buildLine([
+            { board: OPENING, evalScore: 0 },
+            { board: OPENING, evalScore: -40 },
+        ]);
+        const { annotations } = computeReviewArtifacts(ids, nodes, undefined, 1);
+        const records = applyAnnotations(nodes, annotations);
+
+        const fromTheStart = summarizeAccuracyByPhase(records, plyOffsetFromRootFen(`${START_FEN} w - - 0 1`));
+        const fromMove20 = summarizeAccuracyByPhase(records, plyOffsetFromRootFen(`${START_FEN} w - - 0 20`));
+
+        expect(fromTheStart.map((entry) => entry.phase)).toEqual(['opening']);
+        expect(fromMove20.map((entry) => entry.phase)).toEqual(['middleGame']);
+        // The moves themselves are the same either way; only the grouping moves.
+        expect(fromMove20[0].moves).toBe(fromTheStart[0].moves);
     });
 });

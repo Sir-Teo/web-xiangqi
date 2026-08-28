@@ -96,7 +96,10 @@ export function getMovePhaseForRecord(
 export function plyOffsetFromRootFen(rootFen: string): number {
     const parts = String(rootFen ?? '').trim().split(/\s+/);
     const sideToMove = parts[1];
-    const fullmove = Number(parts[parts.length - 1]);
+    // Field 5 is the fullmove counter, which is where parseRootPositionFromFen
+    // reads it too. Taking the last field instead would pick up whatever a
+    // short or malformed FEN happened to end with.
+    const fullmove = Number(parts[5]);
     if (!Number.isFinite(fullmove) || fullmove < 1) return 0;
     return (Math.trunc(fullmove) - 1) * 2 + (sideToMove === 'b' ? 1 : 0);
 }
