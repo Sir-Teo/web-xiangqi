@@ -21,6 +21,7 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
+import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
   clearAutoSavedGame,
@@ -3217,6 +3218,13 @@ function App() {
     setAutoSaveRecovery(null);
   }, [autoSaveRecovery, handleLoadGame]);
 
+  const reviewNarrativeTags = useMemo(
+    () => (reviewStatus === 'done'
+      ? narrativeTags(moveHistory.map(record => record.evalScore), gameResult ?? null)
+      : []),
+    [reviewStatus, moveHistory, gameResult],
+  );
+
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
     stopAnalysis();
     handleCancelReview();
@@ -4568,6 +4576,7 @@ function App() {
                   status={reviewStatus}
                   progress={reviewProgress}
                   summary={reviewSummary}
+                  narrativeTags={reviewNarrativeTags}
                   currentNodeId={currentNodeId}
                   canStart={canStartReview}
                   startLabel={reviewStartLabel}

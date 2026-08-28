@@ -2778,6 +2778,35 @@ summary:active {
   overflow-wrap: anywhere;
 }
 
+/* Narrative tags describing the shape of a game, above the quality counts. */
+.review-narratives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.review-narrative {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill, 999px);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.review-narrative--good {
+  border-color: rgba(63, 185, 80, 0.35);
+  background: rgba(63, 185, 80, 0.12);
+  color: var(--quality-best, #3fb950);
+}
+
+.review-narrative--bad {
+  border-color: rgba(248, 81, 73, 0.35);
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--quality-blunder, #f85149);
+}
+
 .review-quality-breakdown {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7.2rem, 1fr));

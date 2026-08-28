@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
+import { type NarrativeTag, narrativeTagToneClass } from '../../utils/narrativeTags';
 import {
     describeReviewEngineSummary,
     formatWinPercentLoss,
@@ -18,6 +19,8 @@ type Props = {
     status: ReviewStatus;
     progress: number;
     summary: ReviewSummary | null;
+    /** Describes the shape of the game; empty when there is nothing to say. */
+    narrativeTags?: NarrativeTag[];
     currentNodeId: string;
     canStart: boolean;
     startLabel?: string;
@@ -35,6 +38,7 @@ type ReviewMomentQualityFilter = 'all' | 'inaccuracy' | 'mistake' | 'blunder';
 export const ReviewPanel = memo(function ReviewPanel({
     status,
     progress,
+    narrativeTags = [],
     summary,
     currentNodeId,
     canStart,
@@ -211,6 +215,16 @@ export const ReviewPanel = memo(function ReviewPanel({
                             })}</em>
                         </div>
                     </div>
+
+                    {narrativeTags.length > 0 ? (
+                        <div className="review-narratives" role="group" aria-label="Game summary">
+                            {narrativeTags.map(tag => (
+                                <span key={tag.id} className={narrativeTagToneClass(tag.tone)} title={tag.title}>
+                                    {tag.label}
+                                </span>
+                            ))}
+                        </div>
+                    ) : null}
 
                     <div className="review-quality-breakdown" role="group" aria-label="Review quality breakdown">
                         {qualityBreakdown.map((item) => {
