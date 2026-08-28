@@ -83,9 +83,10 @@ describe('rebuilding a review summary from its annotations', () => {
         // conclusions drawn from the moves. Storing those is correct.
         const { nodes, ids } = line([0, -30, -10]);
         const { summary } = computeReviewArtifacts(ids, nodes, undefined, 1, {
-            name: 'Pikafish', depth: 12, movetimeMs: 200, tier: 'mid',
+            tier: 'mid', baseDepth: 12, baseMoveTimeMs: 200,
         });
         expect(summary.reviewedAt).toBe(1);
-        expect(summary.engine?.name).toBe('Pikafish');
+        expect(summary.engine?.tier).toBe('mid');
+        expect(summary.engine?.baseDepth).toBe(12);
     });
 });
