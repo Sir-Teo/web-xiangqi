@@ -4240,6 +4240,10 @@ summary:active {
   align-items: center;
   gap: 0.4rem;
   width: fit-content;
+  /* A standalone control, not a link inside a sentence: it sits in the same
+     grid as the Reset Preferences button, so it gets that button's height,
+     which is also the 24px minimum target size. */
+  min-height: 24px;
   color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 650;
