@@ -2381,7 +2381,9 @@ function App() {
     ? `Red +${formatMaterialValue(materialSummary.deltaTenths)}`
     : materialSummary.deltaTenths < 0
       ? `Black +${formatMaterialValue(Math.abs(materialSummary.deltaTenths))}`
-      : 'Material even';
+      // The card is already labelled Material; repeating the word here made the
+      // level case read differently from "Red +1.4" for no reason.
+      : 'Even';
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves;
   const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves;
   const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
