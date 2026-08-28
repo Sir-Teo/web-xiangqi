@@ -137,6 +137,36 @@ engine assets.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
 
+## Two answers to "is this a constrained device?"
+
+The engine's thread count and hash size are chosen in `useEngine.ts` from
+`window.innerWidth <= COMPACT_LAYOUT_MAX_WIDTH` — the width of the *window*.
+Meanwhile `detectDeviceTier` in `analysisProfile.ts` answers the same question
+from the smaller viewport dimension, the pointer type, the core count and the
+device memory, and `App.tsx` already calls it with all of those.
+
+Neither knows about the other, and they disagree on an ordinary case — a desktop
+with a narrowed or split-screen window:
+
+    desktop, 800x900 window, 8 cores, 8GB, mouse
+      useEngine    -> compact: true    => 1 thread, 32MB hash
+      device tier  -> mobileLike: false, tier: mid
+
+So a wide-enough machine gets the engine cut to a single thread because its
+*window* is narrow. Window width is not a device property: it changes when the
+user drags a corner, and it says nothing about cores or memory. web-chess reads
+`hardwareConcurrency`, `deviceMemory` and a mobile user-agent test for the same
+decision, and never consults the viewport.
+
+`detectDeviceTier` is a pure function, already tested, and already computed at
+startup for exactly this purpose — so the fix is to ask it rather than to invent
+a better width rule.
+
+Not changed here, deliberately. This is engine resource policy: it decides how
+much of the machine the search gets, the effect is a runtime one, and Pikafish
+would not load in the browser available here, so the change could be written but
+not observed. It wants someone who can watch an analysis run before and after.
+
 ## The two grading ladders disagree, and the looser one wins
 
 `classifyMoveQualityForEval` grades a move twice — once on centipawns, once on
