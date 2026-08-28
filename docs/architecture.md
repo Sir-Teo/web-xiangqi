@@ -189,9 +189,25 @@ the read-path clamp in `gameLibrary.ts`).
 That gives three options rather than one: clamp or adjust on read as the
 centipawn bound now does, re-derive a saved review from its stored annotations
 when it is loaded, or version the snapshot and show old reviews as stale.
-web-chess is free of this — its auto-save holds only a PGN and a move count, and
-its library holds PGN — so it is worth checking there whether persisting the
-summary was ever a good idea here.
+
+The second is what katrain does, and it is worth copying rather than inventing.
+Its SGF carries only **raw** engine output — `scoreLead`, `winrate`, `visits`,
+`prior` — and `katrainSgfAnalysis.ts` initialises every derived field to zero on
+read and recomputes it:
+
+    m.pointsLost = sign * (rootScoreLead - m.scoreLead);
+
+So a change to how points-lost is derived reaches every stored game for free.
+There is no migration because there is nothing stored to migrate. web-chess
+lands in the same place from the other direction: its auto-save holds a PGN and
+a move count, its library holds PGN, and a review is rebuilt from evaluations
+every time.
+
+This repo is the only one of the three that stores a conclusion rather than the
+evidence for it, which is why it is the only one that needed a read-path clamp
+and the only one where a grading change carries a migration. The annotations are
+already saved per move; a summary rebuilt from them on load would remove the
+whole class of problem instead of patching each instance.
 
 Not changed here, for the reason recorded when the win-percent work was done:
 altering either ladder changes grades users have already seen, and the right
