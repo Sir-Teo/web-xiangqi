@@ -58,11 +58,10 @@ jobs:
           npm run test:smoke:all
           npm run test:bench:quick
 
-      - name: Rebuild React app with fresh WASM
-        run: |
-          npm run build:react
-          npm run test:serve-demo
-
+      # Playwright has to be installed before anything that drives a browser.
+      # test:serve-demo does, and used to run in the step below this one — so it
+      # failed on "Executable doesn't exist" every time, before the install had
+      # happened. Caching does not save it either: the restore also came after.
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:
@@ -71,6 +70,11 @@ jobs:
 
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
+
+      - name: Rebuild React app with fresh WASM
+        run: |
+          npm run build:react
+          npm run test:serve-demo
 
       - name: Browser worker parity (quick)
         run: |
