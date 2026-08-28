@@ -77,6 +77,25 @@ export function isMoveImportTextTooLarge(text: string): boolean {
     return String(text).length > MAX_MOVE_IMPORT_TEXT_LENGTH;
 }
 
+/**
+ * Whether the text holds more moves than a line may carry.
+ *
+ * `extractUciMoveLine` stops at the cap so what it returns is always short
+ * enough to save, which means its length can no longer signal an oversized
+ * source — a caller checking `length > MAX` would never fire. Callers that
+ * must *reject* rather than truncate ask here instead. Mirrors the `tooLarge`
+ * flag `extractUciMoveTree` already returns.
+ */
+export function hasTooManyUciMoves(text: string): boolean {
+    const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
+    let seen = 0;
+    for (const _ of cleaned.matchAll(UCI_MOVE_PATTERN)) {
+        seen += 1;
+        if (seen > MAX_MOVE_IMPORT_UCI_MOVES) return true;
+    }
+    return false;
+}
+
 export function extractUciMoveLine(text: string): string[] {
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     const moves: string[] = [];

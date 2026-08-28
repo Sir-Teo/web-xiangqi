@@ -40,6 +40,7 @@ import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import {
   extractFenTag,
   extractUciMoveLine,
+  hasTooManyUciMoves,
   extractUciMoveTree,
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
@@ -2980,7 +2981,10 @@ function App() {
     }
     const moves = extractUciMoveLine(rawMoves);
     const mode = isGameMode(rawMode) ? rawMode : 'PvP';
-    if (moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
+    // Asked of the source text, not of the extracted line: extraction stops at
+    // the cap so the line it returns can always be saved, which means its own
+    // length can no longer tell us the link was too long.
+    if (hasTooManyUciMoves(rawMoves)) {
       setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;

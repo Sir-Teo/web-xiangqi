@@ -7,6 +7,7 @@ import {
     extractUciMoveLine,
     extractUciMoveTree,
     isMoveImportTextTooLarge,
+    hasTooManyUciMoves,
 } from './moveImport';
 import { normalizeSavedGame } from './gameLibrary';
 
@@ -146,5 +147,29 @@ describe('guarding against a huge paste', () => {
         expect(isMoveImportTextTooLarge('h2e2')).toBe(false);
         expect(isMoveImportTextTooLarge('x'.repeat(MAX_MOVE_IMPORT_TEXT_LENGTH))).toBe(false);
         expect(isMoveImportTextTooLarge('x'.repeat(MAX_MOVE_IMPORT_TEXT_LENGTH + 1))).toBe(true);
+    });
+});
+
+describe('telling an oversized source from a full one', () => {
+    const line = (n: number) => Array.from({ length: n }, () => 'b2e2').join(' ');
+
+    it('caps what it extracts so the result can always be saved', () => {
+        expect(extractUciMoveLine(line(MAX_MOVE_IMPORT_UCI_MOVES + 2)))
+            .toHaveLength(MAX_MOVE_IMPORT_UCI_MOVES);
+    });
+
+    it('still reports a source that carried more than the cap', () => {
+        // The extracted length can no longer say this, so a caller that must
+        // reject rather than truncate has to ask separately.
+        expect(hasTooManyUciMoves(line(MAX_MOVE_IMPORT_UCI_MOVES + 1))).toBe(true);
+    });
+
+    it('treats a line exactly at the cap as importable', () => {
+        expect(hasTooManyUciMoves(line(MAX_MOVE_IMPORT_UCI_MOVES))).toBe(false);
+    });
+
+    it('says nothing is oversized about ordinary input', () => {
+        expect(hasTooManyUciMoves('h2e2 h9g7')).toBe(false);
+        expect(hasTooManyUciMoves('')).toBe(false);
     });
 });
