@@ -147,6 +147,20 @@ The auto-save stores a `SavedGame`, so restoring reuses that same validation.
 demo build and clears its caches, so a stale shell cannot keep serving old
 engine assets.
 
+`utils/storage.ts` is the boundary where storage is allowed to *fail*, as
+distinct from the normalizers that handle data which is present but wrong.
+`readStorage`/`writeStorage`/`removeStorage` return `null`/`false` rather than
+throwing, so private mode, blocked cookies and quota stop being conditions each
+reader has to remember. Ported from web-katrain, which guards once at the
+boundary rather than once per reader; web-chess took the same boundary.
+
+`autoSave.ts` uses it; the library and preferences readers still carry their own
+`try`/`catch`. The wrapper is for anything new and for whichever is next
+touched. `autoSave` had a private `getDefaultStorage` that duplicated
+`getLocalStorage` down to the `globalThis` fallback — and web-chess's `autoSave`
+had independently grown the same eight lines, which is what a missing
+abstraction does.
+
 ## Data Formats
 
 - Moves are lowercase UCI (`h2e2`) everywhere, including the opening book.
