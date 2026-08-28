@@ -406,7 +406,11 @@ export const EvalGraph = React.memo(function EvalGraph({
                 </div>
                 <div className="graph-summary-card">
                     <span>Branches</span>
-                    <strong>{currentBranchCount > 1 ? `${currentBranchCount} lines` : 'Main line'}</strong>
+                    {/* This counts the continuations leaving the current move. Saying
+                        "Main line" for one of them answered a different question from
+                        the one the label asks, and read as a claim about where you
+                        are -- it said main line while you stood on a variation. */}
+                    <strong>{currentBranchCount > 1 ? `${currentBranchCount} lines` : 'None'}</strong>
                 </div>
             </div>
             <div className="graph-scroll" ref={viewportRef}>
