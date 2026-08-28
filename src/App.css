@@ -990,6 +990,20 @@ body.resizing * {
   outline-offset: -2px;
 }
 
+/* Same reasoning, different clipper: these three sit flush against the
+   viewport edge -- the FEN copy button in the bottom-right corner, and both
+   end buttons of the mobile tab bar -- so the window itself cuts an outward
+   ring on two sides. Drawing it inside keeps the whole ring visible without
+   spending layout on a margin the design does not otherwise want. */
+.app-shell .bottombar-fen-copy:focus-visible,
+.app-shell .mobile-tab-bar-btn:focus-visible {
+  /* .app-shell is carried here to match the specificity of the global ring
+     rule above, which is .app-shell :is(button, ...):focus-visible. Without it
+     this rule is a class short and never applies -- unlike .winrate-graph,
+     which is not a button and so never met that rule at all. */
+  outline-offset: -2px;
+}
+
 @keyframes graph-load-reveal {
   from {
     clip-path: inset(0 100% 0 0);
