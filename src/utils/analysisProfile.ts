@@ -125,19 +125,15 @@ export function resolveEngineBootConfig(
         threads = 1;
         hashMB = hasLowMemory(profile.deviceMemoryGB, 4) ? 16 : 24;
     } else if (profile.tier === 'mid') {
-        if (profile.mobileLike) {
-            variant = resolveSingleVariant(allowSIMD);
-            threads = 1;
-            hashMB = hasLowMemory(profile.deviceMemoryGB, 4) ? 16 : 24;
-        } else {
-            variant = resolveThreadedVariant(allowSIMD);
-            threads = 2;
-            hashMB = 32;
-        }
+        // Only the low tier is ever mobile-like, so the mid and high tiers are
+        // always a pointer-and-keyboard machine with room for threads.
+        variant = resolveThreadedVariant(allowSIMD);
+        threads = 2;
+        hashMB = 32;
     } else {
-        variant = profile.mobileLike ? resolveSingleVariant(allowSIMD) : resolveThreadedVariant(allowSIMD);
-        threads = profile.mobileLike ? 1 : 3;
-        hashMB = profile.mobileLike ? 24 : 64;
+        variant = resolveThreadedVariant(allowSIMD);
+        threads = 3;
+        hashMB = 64;
     }
 
     if (options.saferBoot) {
