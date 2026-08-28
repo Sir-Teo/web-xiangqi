@@ -48,7 +48,11 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    /* The percentage is the whole point of the label, so it wraps onto a
+       second line rather than being cut. At the default text size all three
+       still fit on one line, so this changes nothing there; it only engages
+       where "Draw 87.7%" would otherwise render as "Draw 8...". */
+    white-space: normal;
 }
 
 .wdl-label:nth-child(2) {
