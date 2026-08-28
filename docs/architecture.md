@@ -159,6 +159,14 @@ engine assets.
   per-phase breakdown — is derived through it. One guard at the boundary makes
   everything downstream safe without each display having to re-check. `EvalGraph`
   has no such boundary, which is why it is the exposed one.
+
+  web-chess solves the graph case a third way worth stealing if this is ever
+  touched: `buildWinrateSeries` drops a point whose evaluation is not finite
+  (`if (!isFiniteNumber(cp)) continue`) instead of carrying the last value
+  forward. A missing point leaves a gap in the line; a carried-forward `NaN`
+  destroys the whole line. Same hazard, and the sibling already has the better
+  answer — so the choice here is between three positions, not two, and the
+  cheapest fix is not a new idiom but a copy.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
