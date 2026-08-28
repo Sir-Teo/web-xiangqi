@@ -202,7 +202,23 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 ) : null}
                             </div>
                         ))}
+                        {/* Blunder and mistake counts live in the quality breakdown a few
+                            pixels below; repeating them here said the same thing twice.
+                            The run date belongs with the engine settings it describes. */}
+                        <div
+                            className="review-summary-card review-summary-card-wide"
+                            data-testid="review-engine-summary"
+                            aria-label={reviewEngineDetail}
+                            title={reviewEngineDetail}
+                        >
+                            <span>Engine</span>
+                            <strong>{reviewEngineLabel}</strong>
+                            <em>Reviewed {new Date(summary.reviewedAt).toLocaleDateString(undefined, {
+                                year: 'numeric', month: 'short', day: 'numeric',
+                            })}</em>
+                        </div>
                     </div>
+
                     {phaseAccuracy.length > 1 ? (
                         <div className="review-phase-accuracy" aria-label="Accuracy by phase">
                             {phaseAccuracy.map((phase) => (
@@ -227,23 +243,6 @@ export const ReviewPanel = memo(function ReviewPanel({
                             ))}
                         </div>
                     ) : null}
-                    <div className="review-summary-grid">
-                        {/* Blunder and mistake counts live in the quality breakdown a few
-                            pixels below; repeating them here said the same thing twice.
-                            The run date belongs with the engine settings it describes. */}
-                        <div
-                            className="review-summary-card review-summary-card-wide"
-                            data-testid="review-engine-summary"
-                            aria-label={reviewEngineDetail}
-                            title={reviewEngineDetail}
-                        >
-                            <span>Engine</span>
-                            <strong>{reviewEngineLabel}</strong>
-                            <em>Reviewed {new Date(summary.reviewedAt).toLocaleDateString(undefined, {
-                                year: 'numeric', month: 'short', day: 'numeric',
-                            })}</em>
-                        </div>
-                    </div>
 
                     {narrativeTags.length > 0 ? (
                         <div className="review-narratives" role="group" aria-label="Game summary">
