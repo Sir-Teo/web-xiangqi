@@ -5290,7 +5290,13 @@ summary:active {
   aspect-ratio: 9 / 10;
   width: auto;
   height: 100%;
-  min-width: min(100%, 280px);
+  /* No width floor here. A floor is a width the height has not agreed to: the
+     row derives width from height via the aspect ratio, so anything wider makes
+     the board taller than its row, and .board-stage hides the difference. At
+     1024x600 with 150% text that cost the bottom 65px -- Red's back rank, the
+     pieces you move first. Fitting the row is the whole point of sizing this
+     way, so the board takes the room it actually has. */
+  min-width: 0;
   align-self: end;
 }
 
