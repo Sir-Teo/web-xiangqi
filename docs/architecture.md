@@ -175,7 +175,16 @@ engine assets.
 
   katrain's is the one to copy. It is the only one of the three that keeps a
   missing evaluation *legible* rather than merely non-fatal, and it guards the
-  scale as well as the stroke — a second failure this repo would also have.
+  scale as well as the stroke.
+
+  That second failure is real here, not hypothetical — checked in
+  `EvalGraph.tsx`. The clamp does not strip a bad value, because
+  `Math.max(-limit, Math.min(limit, NaN))` is `NaN`; and the extent is taken
+  with `points.reduce((best, p) => Math.max(best, p.eval), -Infinity)` and its
+  minimum counterpart, so one `NaN` makes the whole extent `NaN` and the axis
+  with it. So a single bad evaluation would take out the scale as well as the
+  line, and fixing only the stroke would leave the graph broken. Both halves are
+  one change or neither.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
