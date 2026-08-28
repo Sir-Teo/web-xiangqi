@@ -49,7 +49,12 @@ async function main() {
 
     browser = await playwright.chromium.launch({
       headless: true,
-      args: ["--no-sandbox"]
+      // --disable-dev-shm-usage: a CI container gives Chromium a 64MB /dev/shm,
+      // and threaded WASM allocating its shared heap there fails quietly — the
+      // worker then never reports ready and init times out, which is what CI
+      // saw even after the timeout was raised to 240s. Pointing shared memory
+      // at /tmp instead is the standard fix and costs nothing locally.
+      args: ["--no-sandbox", "--disable-dev-shm-usage"]
     });
     const page = await browser.newPage();
     const pageConsole = [];
