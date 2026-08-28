@@ -107,7 +107,25 @@ can be retried with `saferBoot`, which drops to one thread and half the hash.
 Lichess's published constants — the sigmoid `0.00368208` and the accuracy
 curve `103.1668 · e^(−0.04354·loss) − 3.1669`. A quality label takes the
 milder of the raw centipawn reading and the practical one, so an imprecision
-in a decided game is not called a blunder.
+in a decided game is not called a blunder. (The two ladders that feeds on are
+*not* calibrated against each other, and the consequences are measured below.)
+
+Phases sit alongside that, in `utils/gamePhase.ts`:
+
+- The phase is read from **material** rather than the move number — only the
+  chariots, horses and cannons, since advisors and elephants never leave their
+  own half and pawns are worth little before the river.
+- It is taken from the position *before* the move, which needs no replay: a
+  record already stores the board after the move and what it captured, so the
+  position it was played in is the two added back together.
+- Plies count from the start of the **game**. A record's `ply` counts from the
+  root of the move tree, which is 1 whether the game began at move one or from
+  a FEN taken at move 20, so `plyOffsetFromRootFen` reads the real offset off
+  the root FEN — the same number `fullmoveForPly` already uses for display.
+- `summarizeAccuracyByPhase` splits accuracy by phase and `filterKeyMoments`
+  narrows the key-moment list to one. Neither is persisted: the phase is looked
+  up per move, so a review restored from the library filters exactly as a fresh
+  one does.
 
 ## Storage
 
