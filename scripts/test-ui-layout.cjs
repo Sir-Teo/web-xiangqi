@@ -6071,7 +6071,10 @@ async function assertStalemateLossIsLabeled(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
 
   const stalemateState = await page.evaluate(() => ({
     title: document.querySelector(".game-over-title")?.textContent?.trim() || "",
@@ -6104,7 +6107,10 @@ async function assertGameOverReviewPreservesResult(page) {
   await page.getByLabel("FEN string").fill(terminalFen);
   await page.getByRole("button", { name: "Load" }).click();
 
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
   await page.waitForFunction(() => document.activeElement?.classList.contains("game-over-btn-primary"), null, { timeout: 5000 });
   const dialogState = await page.evaluate(() => {
     const modal = document.querySelector(".game-over-modal");
@@ -6166,7 +6172,10 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByText("Red Wins").waitFor({ timeout: 5000 });
+  // The heading, not any text saying it: a screen-reader live region also
+  // announces "Red wins.", and getByText matches it case-insensitively, so a
+  // bare text locator hits two elements and Playwright refuses in strict mode.
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
 
