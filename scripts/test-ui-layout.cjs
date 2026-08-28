@@ -3328,7 +3328,11 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
       !state.lastMoveArrow ||
       state.cancelExists ||
       !state.restartExists ||
-      !state.reviewPanelText.includes("Run a review") ||
+      // The panel offers the run affordance again once the review is cancelled.
+      // Was "Run a review", which the copy stopped saying on 2026-08-26; the
+      // assertion was not updated and the Playwright ordering bug above failed
+      // first, so this never got a chance to be seen.
+      !state.reviewPanelText.includes("Run Review") ||
       !state.stopSent ||
       state.overflowX > 2
     ) {
