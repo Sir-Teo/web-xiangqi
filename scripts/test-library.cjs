@@ -6,9 +6,44 @@ const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "web-xiangqi-library-"));
 
+const compiled = new Set();
+
+/**
+ * Relative imports that survive transpiling, so the ones this file will actually
+ * require at runtime. Type-only imports are erased, and are skipped here so a
+ * `import type { GameMode } from "../App"` does not drag a component tree in.
+ */
+function runtimeRelativeImports(source) {
+  const found = new Set();
+  const pattern = /(?:^|\n)\s*(?:import|export)\s+(?!type\s)[^;]*?from\s*["'](\.[^"']+)["']/g;
+  for (const match of source.matchAll(pattern)) found.add(match[1]);
+  return [...found];
+}
+
+/**
+ * Compiles a module and everything it imports, rather than a list kept by hand.
+ * The hand-kept list went stale the moment a new import was added — the failure
+ * was a bare MODULE_NOT_FOUND from the temp directory, and it only showed up in
+ * CI. Everything lands flat in tempDir under its basename, which is how the
+ * emitted relative requires resolve.
+ */
 function compileTsModule(relativePath) {
+  if (compiled.has(relativePath)) return;
+  compiled.add(relativePath);
+
   const sourcePath = path.join(root, relativePath);
   const source = fs.readFileSync(sourcePath, "utf8");
+
+  for (const specifier of runtimeRelativeImports(source)) {
+    const resolved = path.resolve(path.dirname(sourcePath), specifier);
+    for (const candidate of [`${resolved}.ts`, path.join(resolved, "index.ts")]) {
+      if (fs.existsSync(candidate)) {
+        compileTsModule(path.relative(root, candidate));
+        break;
+      }
+    }
+  }
+
   const output = ts.transpileModule(source, {
     compilerOptions: {
       esModuleInterop: true,
@@ -30,7 +65,6 @@ function assert(condition, message) {
 try {
   compileTsModule("src/utils/moveNotation.ts");
   compileTsModule("src/utils/xiangqi.ts");
-  compileTsModule("src/utils/gamePhase.ts");
   compileTsModule("src/utils/review.ts");
   compileTsModule("src/utils/gameLibrary.ts");
   compileTsModule("src/utils/shareTree.ts");
