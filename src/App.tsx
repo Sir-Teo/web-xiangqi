@@ -3194,13 +3194,31 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // What the auto-save actually cares about, as a value rather than an object.
+  // currentGameSnapshot carries the live evaluation, which the engine replaces
+  // several times a second while it searches; depending on the object here
+  // reset the debounce on every one of those, so the auto-save never fired
+  // during analysis. This changes only when the game itself does.
+  const autoSaveSignature = useMemo(() => [
+    currentGameSnapshot.gameMode,
+    currentGameSnapshot.startFen ?? '',
+    currentGameSnapshot.result,
+    currentGameSnapshot.moves.join(' '),
+    Object.keys(treeNodes).length,
+  ].join('|'), [currentGameSnapshot, treeNodes]);
+
+  const autoSaveSnapshotRef = useRef(currentGameSnapshot);
+  useEffect(() => {
+    autoSaveSnapshotRef.current = currentGameSnapshot;
+  }, [currentGameSnapshot]);
+
   useEffect(() => {
     if (!autoSaveChecked || autoSaveRecovery) return;
     const timeout = window.setTimeout(() => {
-      writeAutoSavedGame(currentGameSnapshot);
+      writeAutoSavedGame(autoSaveSnapshotRef.current);
     }, AUTO_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timeout);
-  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot]);
+  }, [autoSaveChecked, autoSaveRecovery, autoSaveSignature]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     clearAutoSavedGame();
