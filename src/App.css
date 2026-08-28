@@ -5343,7 +5343,11 @@ summary:active {
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  /* These are short values -- "Even", "Red cannon on b2" -- and none carries a
+     title tooltip, so a cut one is simply gone. They wrap instead. The em below
+     is left alone deliberately: it holds the move-rule hint, which is long by
+     nature and does have a tooltip. */
+  white-space: normal;
 }
 
 .position-stat em {
@@ -5372,6 +5376,11 @@ summary:active {
 
 .position-stat-turn {
   border-color: rgba(239, 68, 68, 0.16);
+}
+
+.position-stat-material em {
+  /* "Red 0 · Black 0" is a pair of counts; cutting it drops one of them. */
+  white-space: normal;
 }
 
 .position-stat-material strong {
