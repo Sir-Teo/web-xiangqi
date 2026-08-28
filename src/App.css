@@ -59,6 +59,36 @@ body.resizing * {
   display: flex;
   flex-direction: column;
   transition: opacity 180ms ease;
+  /* Lets the header below drop its heading once the panel is too narrow to
+     hold both the heading and a full row of tab labels. Named so it only
+     answers queries that ask for it. */
+  container-type: inline-size;
+  container-name: panel-col;
+}
+
+/* "Analysis" costs 68px of header width. Given room the panel affords both it
+   and three untruncated tabs; below that the tabs lose ~7px each and start
+   clipping ("Review", "Engine"). The tabs name the panel's contents on their
+   own -- the left panel ships with no heading at all -- so the heading gives
+   up the space it can no longer afford. It stays in the DOM because
+   .panel.right is aria-labelledby it.
+
+   The threshold is in rem, not px, because what matters is whether the labels
+   fit, and they grow with the user's text size. 18.75rem is the same 300px at
+   the default size, but at 150% text it also frees the heading's width on a
+   320px panel, where three labels would otherwise be cut by 21px each. */
+@container panel-col (max-width: 18.75rem) {
+  .panel-header-tabs > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 .panel-header {
