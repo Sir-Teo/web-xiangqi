@@ -211,6 +211,25 @@ export function getReviewSideForRecord(record: ReviewRecordLike, moveIndex: numb
     return moveIndex % 2 === 0 ? 'red' : 'black';
 }
 
+/**
+ * A mate is encoded as a sentinel score (`MATE_SCORE_BASE - mateIn`, 30000) and
+ * not as an evaluation, so subtracting it from an ordinary score gives a delta
+ * of hundreds of pawns — two different kinds of statement in the same units.
+ * One such move took a six-move review to an average loss of 5017.
+ *
+ * Bounding what gets reported keeps a forced mate at the top of the scale
+ * without letting it stand in for the rest of the game. web-chess uses the same
+ * bound, from Lichess. Deliberately not applied to the swing itself: move
+ * quality reads winning chances, which are bounded already, and the raw swing
+ * stays raw for anything that wants it.
+ */
+export const MAX_REPORTED_CENTIPAWN_LOSS = 1000;
+
+export function reportedCentipawnLoss(swing: number): number {
+    if (!Number.isFinite(swing)) return 0;
+    return Math.min(MAX_REPORTED_CENTIPAWN_LOSS, Math.max(0, swing));
+}
+
 export function getEvalLossForMove(evalBefore: number, evalAfter: number, side: ReviewSide): number {
     const loss = side === 'red'
         ? evalBefore - evalAfter
@@ -322,7 +341,10 @@ export function buildReviewNote({
     swing: number;
     retainedDecisiveAdvantage?: boolean;
 }): string {
-    const cpSwing = `${Math.round(swing)}cp`;
+    // Bounded like the averages, with a "+" rather than a bound presented as a
+    // measurement — a forced mate is genuinely off this scale.
+    const bounded = reportedCentipawnLoss(swing);
+    const cpSwing = `${Math.round(bounded)}${bounded < swing ? '+' : ''}cp`;
     if (quality === 'best') {
         return 'Engine-approved move.';
     }
@@ -480,9 +502,10 @@ export function computeReviewArtifacts(
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const moveAccuracy = getMoveAccuracyForWinPercentLoss(winPercentLoss);
         accuracySum += moveAccuracy;
-        centipawnLossSum += swing;
+        const reportedLoss = reportedCentipawnLoss(swing);
+        centipawnLossSum += reportedLoss;
         sideAccuracy[side].sum += moveAccuracy;
-        sideAccuracy[side].lossSum += swing;
+        sideAccuracy[side].lossSum += reportedLoss;
         sideAccuracy[side].count += 1;
         const note = buildReviewNote({
             quality,
