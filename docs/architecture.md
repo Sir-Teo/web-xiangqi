@@ -160,13 +160,22 @@ engine assets.
   everything downstream safe without each display having to re-check. `EvalGraph`
   has no such boundary, which is why it is the exposed one.
 
-  web-chess solves the graph case a third way worth stealing if this is ever
-  touched: `buildWinrateSeries` drops a point whose evaluation is not finite
-  (`if (!isFiniteNumber(cp)) continue`) instead of carrying the last value
-  forward. A missing point leaves a gap in the line; a carried-forward `NaN`
-  destroys the whole line. Same hazard, and the sibling already has the better
-  answer — so the choice here is between three positions, not two, and the
-  cheapest fix is not a new idiom but a copy.
+  Both siblings already handle this, and they do not handle it equally well —
+  worth knowing before copying the nearer one:
+
+  - **web-chess** drops the point (`if (!isFiniteNumber(cp)) continue` in
+    `buildWinrateSeries`). Safe, but the line then joins the surrounding points
+    as though nothing were missing, which reads as data rather than a gap.
+  - **web-katrain** breaks the path instead. `buildPath` sets `started = false`
+    on a non-finite value, so the stroke stops and restarts afterwards: the gap
+    is visible as a gap and the rest of the line survives. It also filters
+    non-finite values before taking min/max for the scale, since one `NaN`
+    would otherwise poison the axis, and walks backwards for the last finite
+    value rather than assuming the final one is usable.
+
+  katrain's is the one to copy. It is the only one of the three that keeps a
+  missing evaluation *legible* rather than merely non-fatal, and it guards the
+  scale as well as the stroke — a second failure this repo would also have.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
