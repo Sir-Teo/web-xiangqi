@@ -155,9 +155,14 @@ confirmed against a real mated game before it is fixed.
   figure. So, exactly as in chess, the label stays sensible while the centipawn
   figure beside it does not.
 
-Whatever cap is chosen should be chosen for both repos at once — this is one
-bug with two constants, and the reason to fix it is that the two numbers
-disagree in front of the user, which is equally true in either app.
+**Fixed**, with the same 1000cp bound web-chess uses — one bug with two
+constants, so one answer. Confirmed without the engine first: because
+`useEngine` encodes the mate itself, the sentinel values are known and
+everything after them is arithmetic. A six-move review whose ordinary moves cost
+tens of centipawns was averaging 5017; `reportedCentipawnLoss` now bounds what
+is summed, and the review note carries a "+" when it has been bounded rather
+than showing a bound as though measured. The raw swing is still on the
+annotation for anything that wants it.
 
 ## Project Invariants
 
