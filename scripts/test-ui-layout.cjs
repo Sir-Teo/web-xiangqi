@@ -6184,8 +6184,30 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
   }
 }
 
+/**
+ * The app auto-saves a game in progress and offers to restore it on the next
+ * load. These assertions share one page across dozens of navigations, so a game
+ * left on the board by an earlier assertion brought the recovery modal up in a
+ * later one, and its backdrop swallowed the clicks — which is how
+ * assertBoardKeyboardNavigationFlipped started failing on "auto-save-backdrop
+ * intercepts pointer events".
+ *
+ * Clear the slot before every navigation. These tests are about layout; the
+ * recovery flow has its own coverage.
+ */
+async function clearAutoSaveBetweenNavigations(page) {
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.removeItem("xiangqi-auto-saved-game");
+    } catch {
+      // Storage unavailable in this context; nothing to clear.
+    }
+  });
+}
+
 async function assertAppErrorBoundaryFallback(browser) {
   const page = await browser.newPage();
+  await clearAutoSaveBetweenNavigations(page);
   try {
     await page.setViewportSize({ width: 390, height: 720 });
     await page.goto("http://127.0.0.1:8192/web-xiangqi/?qa-error-boundary=1", {
@@ -6251,6 +6273,7 @@ async function main() {
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
+    await clearAutoSaveBetweenNavigations(page);
     const pageConsole = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") pageConsole.push(msg.text());
