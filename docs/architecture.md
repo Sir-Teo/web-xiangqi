@@ -243,6 +243,28 @@ is summed, and the review note carries a "+" when it has been bounded rather
 than showing a bound as though measured. The raw swing is still on the
 annotation for anything that wants it.
 
+## What `npm run verify` covers, and what it does not
+
+`npm run verify` runs typecheck, lint, the vitest suite, `test:openings`,
+`test:library` and `build:react` — everything in CI's "React app checks" step
+except `npm audit`, which is left out so the command works offline.
+
+It is **not** the whole of CI. CI also installs emsdk, builds the Pikafish WASM
+(`npm run build`), runs the Node parity and smoke tests against it, rebuilds the
+React app on the fresh WASM, and runs a Playwright worker-parity check. None of
+that runs here without the emscripten toolchain, so a green `verify` says the
+React app is sound and says nothing about the engine.
+
+Two of those excluded steps are the ones that would catch an engine regression,
+so a change to `scripts/`, the WASM build, or the worker protocol needs CI or a
+local emsdk — `verify` will happily pass through it.
+
+This distinction is worth stating because the failure it prevents already
+happened twice in one night: `npm test` does not run `test:openings` or
+`test:library` (they are standalone scripts, which is why `verify` now calls
+them), and a check that reports success is only telling you about the things it
+looked at.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
