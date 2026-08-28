@@ -327,9 +327,22 @@ looked at.
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
   the test first.
 - New pure logic goes in `src/utils/` with a colocated test, not into
-  `App.tsx`.
+  `App.tsx`. This governs *new* logic: `App.tsx` already holds 53 top-level
+  helpers that predate it, so it is "stop adding", not a description of the
+  current state. 27 are six lines or fewer; the ones carrying enough logic to
+  deserve a test if they are ever touched are `initialPanelWidth`,
+  `serializeSavedMoveTree` and `formatMoveRuleHint`.
+
+  The moment to extract one is when you are about to *edit* it. web-chess hit
+  exactly this: a pure label helper was changed in place while a bound was
+  added, altering the text under every review row with nothing asserting it.
 - A mobile-like device is always the `low` tier; `resolveEngineBootConfig`
-  depends on that and a test pins it.
+  depends on that and a test pins it. Note what this does *not* cover: the
+  engine's own thread count and hash size are chosen in `useEngine.ts` from
+  window width and never consult the tier at all, so the pinned relationship
+  holds inside `analysisProfile.ts` while the numbers that actually reach the
+  engine are decided elsewhere. See "Two answers to 'is this a constrained
+  device?'" above.
 - Storage readers must never throw on bad data; drop the record and move on.
 - If the eval graph ever goes blank rather than wrong, suspect a non-finite
   `evalScore`. `EvalGraph` carries the last seen value forward with
