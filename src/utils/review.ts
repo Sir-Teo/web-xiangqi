@@ -344,8 +344,16 @@ export function buildReviewNote({
 }): string {
     // Bounded like the averages, with a "+" rather than a bound presented as a
     // measurement — a forced mate is genuinely off this scale.
+    //
+    // The marker asks whether the cap was reached, not whether the bounded
+    // value came out below the input. Those differ for an input the guard
+    // rejects: `reportedCentipawnLoss` turns a non-finite swing into 0, and
+    // `0 < Infinity` is true, so an infinite swing read as "0+cp" — a bound of
+    // at least nothing. Not reachable today, since swings come from two bounded
+    // evaluations, but the marker should mean what it says.
     const bounded = reportedCentipawnLoss(swing);
-    const cpSwing = `${Math.round(bounded)}${bounded < swing ? '+' : ''}cp`;
+    const reachedTheCap = Number.isFinite(swing) && swing > MAX_REPORTED_CENTIPAWN_LOSS;
+    const cpSwing = `${Math.round(bounded)}${reachedTheCap ? '+' : ''}cp`;
     if (quality === 'best') {
         return 'Engine-approved move.';
     }
