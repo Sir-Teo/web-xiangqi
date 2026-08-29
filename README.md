@@ -16,6 +16,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - smoke tests pass for both flavors (`threaded` and `single`)
 - React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, historical games, and opening-book continuations
 - React app auto-saves the game in progress, so a reload offers to pick it up where you left off
+- Command palette on `Ctrl`/`Cmd`+`K`: a searchable list of the actions that matter, with recently used first and unavailable commands shown with the reason rather than hidden
 
 ## What this repo contains
 

@@ -40,6 +40,8 @@ import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
 import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
+import { CommandPaletteModal } from './components/CommandPaletteModal';
+import type { Command } from './utils/commandPalette';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -796,6 +798,7 @@ function App() {
   const [userArrows, setUserArrows] = useState<BoardArrow[]>([]);
   const [showMobileBoardActionMenu, setShowMobileBoardActionMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
@@ -1602,6 +1605,14 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Command/Control+K, the near-universal palette binding and the only
+      // chord this app claims. Handled before anything else so it works from a
+      // text field too, which is where a reader often is when they reach for it.
+      if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        setShowCommandPalette((open) => !open);
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         setShowSettings(false);
@@ -2387,6 +2398,8 @@ function App() {
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves;
   const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves;
   const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
+
+
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
@@ -3099,6 +3112,60 @@ function App() {
     }, 1800);
   }, [currentGameSnapshot, saveGameToLibrary]);
 
+
+  const paletteCommands = useMemo<Command[]>(() => [
+    { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { setGameResult(null); resetGame(); } },
+    { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
+    {
+      id: 'save-game',
+      label: 'Save game',
+      hint: canSaveCurrentPosition ? undefined : 'Play a move or set up a position first',
+      keywords: ['store', 'keep'],
+      disabled: !canSaveCurrentPosition,
+      run: handleSaveGame,
+    },
+    {
+      id: 'review-game',
+      label: 'Review game',
+      hint: canExportCurrentLine ? undefined : 'Play or import a line first',
+      keywords: ['accuracy', 'blunders', 'report'],
+      disabled: !canExportCurrentLine,
+      run: startGameReview,
+    },
+    {
+      id: 'copy-pgn',
+      label: 'Copy PGN',
+      hint: canExportCurrentLine ? undefined : 'Play or import a line first',
+      keywords: ['clipboard', 'export'],
+      disabled: !canExportCurrentLine,
+      run: () => { void handleCopyPgn(); },
+    },
+    {
+      id: 'download-pgn',
+      label: 'Export PGN',
+      hint: canExportCurrentLine ? undefined : 'Play or import a line first',
+      keywords: ['download', 'file', 'save'],
+      disabled: !canExportCurrentLine,
+      run: handleDownloadPgn,
+    },
+    {
+      id: 'copy-link',
+      label: 'Copy link',
+      hint: canShareCurrentPosition ? undefined : 'Play a move or set up a position first',
+      keywords: ['share', 'url'],
+      disabled: !canShareCurrentPosition,
+      run: () => { void handleCopyShareLink(); },
+    },
+    { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], run: () => setAnalysisTab('tree') },
+    { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], run: () => setAnalysisTab('review') },
+    { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], run: () => setAnalysisTab('engine') },
+    { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: () => setLeftPanelTab('graph') },
+    { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], run: goToFirstMove },
+    { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], run: goToLatestMove },
+    { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
+  ], [canExportCurrentLine, canSaveCurrentPosition, canShareCurrentPosition, goToFirstMove, goToLatestMove,
+      handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleSaveGame, openLibraryPanel, resetGame,
+      setGameResult, startGameReview])
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
@@ -5060,6 +5127,12 @@ function App() {
           </button>
         </nav>
       )}
+
+      <CommandPaletteModal
+        open={showCommandPalette}
+        commands={paletteCommands}
+        onClose={() => setShowCommandPalette(false)}
+      />
 
       {visibleGameResult && (
         <GameOverModal
