@@ -9,6 +9,33 @@ export type HistoricalGame = {
   moves: string[];
 };
 
+/**
+ * Opening excerpts, not complete games.
+ *
+ * Every entry here is the first eight to twelve moves a side of a real game.
+ * Competitive xiangqi runs 60 to 120 plies, so none of these reaches the
+ * result recorded next to it -- that result is how the full game finished, and
+ * the UI says so.
+ *
+ * This was worth writing down because the UI did not say so. The section was
+ * called "Classic Games", each card carried a decisive result badge, and
+ * Game Review scored the excerpt as a finished game: it reported Hu Ronghua
+ * at 25% accuracy with twelve blunders in his own 1977 National Championship
+ * opening. Nothing was wrong with the engine or the accuracy maths -- four
+ * separate hypotheses about them were tested and refuted. The data was being
+ * presented as something it is not.
+ *
+ * Two things to keep in mind before extending this list:
+ *
+ *  - An excerpt cannot carry an outcome of its own. If a `result` is added it
+ *    is a fact about the game it was taken from, and belongs in that framing.
+ *  - There is no provenance field here. Both sibling apps have one --
+ *    web-katrain records `source: 'go4go.com'` beside bundled SGFs, web-chess
+ *    stores a `lichessGameId` and fetches the moves -- and either approach
+ *    would make these records checkable rather than merely asserted. That is
+ *    the direction to go if this grows.
+ */
+
 // Moves are UCI strings (4 chars: fromFile+fromRank+toFile+toRank).
 // Files: a-i (left→right from Red's view). Ranks: 0 (Red back) → 9 (Black back).
 export const HISTORICAL_GAMES: HistoricalGame[] = [

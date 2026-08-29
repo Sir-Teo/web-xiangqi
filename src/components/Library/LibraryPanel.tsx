@@ -768,8 +768,18 @@ export function LibraryPanel({
         </button>
       ) : null}
 
-      {/* ── Classic Games ── */}
-      <div className="lib-section-header">Classic Games</div>
+      {/* ── Classic Openings ──
+          Called openings, not games, because that is what they are: each entry
+          is the first eight to twelve moves a side of a real game, not the
+          whole thing. Labelling them "Classic Games" next to a decisive result
+          badge claimed something twenty-odd plies cannot show, and Game Review
+          then scored the excerpt as if it were a finished game -- which is how
+          a Hu Ronghua opening came out at 25% accuracy with twelve blunders. */}
+      <div className="lib-section-header">Classic Openings</div>
+      <p className="lib-section-note">
+        Opening excerpts from famous games. The result shown is how the full
+        game finished, not the position these moves reach.
+      </p>
       <div className="lib-list" data-testid="historical-game-list">
         {filteredHistorical.length === 0 ? (
           <p className="lib-empty">No games match your search.</p>
@@ -780,14 +790,17 @@ export function LibraryPanel({
                 <span className="lib-matchup">
                   {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}
                 </span>
-                <span className={`lib-result lib-result--${game.result}`}>
+                <span
+                  className={`lib-result lib-result--${game.result}`}
+                  title={`${resultLabel(game.result)} — the full game's result. These moves are the opening only.`}
+                >
                   {resultLabel(game.result)}
                 </span>
               </div>
               <div className="lib-card-meta">
                 <span>{game.event}</span>
                 <span>{game.date}</span>
-                <span>{game.moves.length} moves</span>
+                <span>opening · {game.moves.length} plies</span>
                 {game.opening && (
                   <>
                     <span className="lib-opening">{game.opening}</span>
@@ -800,7 +813,7 @@ export function LibraryPanel({
                   className="chip-btn chip-btn-primary"
                   onClick={() => onLoadHistorical(game)}
                   data-testid={`load-historical-${game.id}`}
-                  aria-label={`Load ${game.redPlayer} vs ${game.blackPlayer}`}
+                  aria-label={`Load the opening of ${game.redPlayer} versus ${game.blackPlayer}, ${game.moves.length} plies`}
                 >
                   <IconRefresh /> Load
                 </button>
