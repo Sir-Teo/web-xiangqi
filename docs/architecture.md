@@ -280,6 +280,16 @@ and the only one where a grading change carries a migration. The annotations are
 already saved per move; a summary rebuilt from them on load would remove the
 whole class of problem instead of patching each instance.
 
+**Done.** `rebuildSummaryFromAnnotations` recomputes every derived field when a
+saved game is loaded, and `summaryRebuildable.test.ts` now exercises that
+function rather than a copy of its arithmetic. The four fields that are facts
+about the run rather than conclusions drawn from the moves -- `reviewedAt`,
+`lineSignature`, `engine`, and the key moments -- are carried over from what was
+stored, because nothing in the annotations can recover them. A summary written
+before a scoring change now reads on the current scale instead of sorting and
+averaging beside summaries that used a different one, which is what unblocks
+changing the grading ladders.
+
 Not changed here, for the reason recorded when the win-percent work was done:
 altering either ladder changes grades users have already seen, and the right
 ladder for xiangqi is a judgement about the game rather than something to copy

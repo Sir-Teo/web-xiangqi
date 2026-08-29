@@ -1,5 +1,6 @@
 import { formatUciMove } from './moveNotation';
 import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
+import { MIN_WEIGHT, aggregateAccuracy, volatilityWeights } from './accuracyAggregate';
 import type { BoardState } from './xiangqi';
 
 export const REVIEW_THRESHOLDS = {
@@ -479,6 +480,13 @@ export function computeReviewArtifacts(
         red: { sum: 0, lossSum: 0, count: 0 },
         black: { sum: 0, lossSum: 0, count: 0 },
     };
+    // Per-move accuracies kept in order, plus the winning-chance series they
+    // came from, so the game figure can be weighted by how volatile the game
+    // was rather than averaged flat. See utils/accuracyAggregate.
+    const moveAccuracies: number[] = [];
+    const sideMoveAccuracies: Record<ReviewSide, number[]> = { red: [], black: [] };
+    const sideWeightIndices: Record<ReviewSide, number[]> = { red: [], black: [] };
+    const winPercentSeries: number[] = [];
 
     for (const [moveIndex, nodeId] of activeLineNodeIds.entries()) {
         const node = treeNodes[nodeId];
@@ -502,6 +510,11 @@ export function computeReviewArtifacts(
         const quality = classifyMoveQualityForEval(swing, parentEval, currentEval, side);
         const moveAccuracy = getMoveAccuracyForWinPercentLoss(winPercentLoss);
         accuracySum += moveAccuracy;
+        if (winPercentSeries.length === 0) winPercentSeries.push(getWinningChancePercent(parentEval, 'red'));
+        winPercentSeries.push(getWinningChancePercent(currentEval, 'red'));
+        sideWeightIndices[side].push(moveAccuracies.length);
+        moveAccuracies.push(moveAccuracy);
+        sideMoveAccuracies[side].push(moveAccuracy);
         const reportedLoss = reportedCentipawnLoss(swing);
         centipawnLossSum += reportedLoss;
         sideAccuracy[side].sum += moveAccuracy;
@@ -546,15 +559,25 @@ export function computeReviewArtifacts(
         }
     }
 
-    const accuracy = evaluated > 0 ? Math.round(accuracySum / evaluated) : 0;
+    // Volatility-weighted, then averaged with the harmonic mean. The plain
+    // mean is what Lichess's own documentation -- the source of the per-move
+    // curve above -- says not to use: one blunder in an even game is diluted by
+    // fifty quiet moves, and fifty quiet moves in a decided game are scored as
+    // though the player had to find them. web-katrain weights by position
+    // difficulty for the same reason, from the other direction.
+    const weights = volatilityWeights(winPercentSeries);
+    const sideWeights = (side: ReviewSide) => sideWeightIndices[side].map((index) => weights[index] ?? MIN_WEIGHT);
+    const accuracy = evaluated > 0
+        ? Math.round(aggregateAccuracy(moveAccuracies, weights) ?? accuracySum / evaluated)
+        : 0;
     const averageCentipawnLoss = evaluated > 0
         ? Math.round(centipawnLossSum / evaluated)
         : undefined;
     const redAccuracy = sideAccuracy.red.count > 0
-        ? Math.round(sideAccuracy.red.sum / sideAccuracy.red.count)
+        ? Math.round(aggregateAccuracy(sideMoveAccuracies.red, sideWeights('red')) ?? sideAccuracy.red.sum / sideAccuracy.red.count)
         : undefined;
     const blackAccuracy = sideAccuracy.black.count > 0
-        ? Math.round(sideAccuracy.black.sum / sideAccuracy.black.count)
+        ? Math.round(aggregateAccuracy(sideMoveAccuracies.black, sideWeights('black')) ?? sideAccuracy.black.sum / sideAccuracy.black.count)
         : undefined;
     const redAverageCentipawnLoss = sideAccuracy.red.count > 0
         ? Math.round(sideAccuracy.red.lossSum / sideAccuracy.red.count)
@@ -605,5 +628,81 @@ export function remapReviewSummaryToLine(
                 return { ...moment, nodeId };
             })
             .filter((moment): moment is ReviewKeyMoment => Boolean(moment)),
+    };
+}
+
+/**
+ * Rebuilds the derived half of a summary from the per-move annotations saved
+ * beside it.
+ *
+ * This repo is the only one of the three that stores a conclusion rather than
+ * the evidence for it: web-katrain recomputes its report from the tree, and
+ * web-chess rebuilds a review from the evaluations in the PGN every time. That
+ * is why this is the only one that needed a read-path clamp when the centipawn
+ * bound landed, and the only one where changing the grading strands the records
+ * already saved. `docs/architecture.md` names the fix; this is it.
+ *
+ * Everything reported except `reviewedAt`, `lineSignature`, `engine` and the
+ * key moments is a function of the annotations, so those four are carried over
+ * from the stored summary and the rest is recomputed. A summary written before
+ * a scoring change therefore reads on the current scale instead of sorting and
+ * averaging beside summaries that used a different one.
+ */
+export function rebuildSummaryFromAnnotations(
+    annotations: SavedReviewAnnotation[],
+    stored: ReviewSummary
+): ReviewSummary {
+    const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    const side = {
+        red: { lossSum: 0, count: 0 },
+        black: { lossSum: 0, count: 0 },
+    };
+    const accuracies: number[] = [];
+    const sideAccuracies: Record<ReviewSide, number[]> = { red: [], black: [] };
+    const sideIndices: Record<ReviewSide, number[]> = { red: [], black: [] };
+    const series: number[] = [];
+
+    for (const annotation of annotations) {
+        if (typeof annotation.winPercentLoss !== 'number' || typeof annotation.evalScore !== 'number') {
+            // An annotation without the evidence cannot contribute to a figure
+            // derived from it; the stored summary stays authoritative below.
+            return stored;
+        }
+        if (annotation.quality) counts[annotation.quality] += 1;
+
+        const who = getReviewSideForRecord({ uci: '', ply: annotation.moveIndex + 1 }, annotation.moveIndex);
+        if (series.length === 0) series.push(getWinningChancePercent(0, 'red'));
+        series.push(getWinningChancePercent(annotation.evalScore, 'red'));
+
+        sideIndices[who].push(accuracies.length);
+        const accuracy = getMoveAccuracyForWinPercentLoss(annotation.winPercentLoss);
+        accuracies.push(accuracy);
+        sideAccuracies[who].push(accuracy);
+        side[who].lossSum += reportedCentipawnLoss(annotation.swing ?? 0);
+        side[who].count += 1;
+    }
+
+    const evaluated = side.red.count + side.black.count;
+    if (evaluated === 0) return stored;
+
+    const weights = volatilityWeights(series);
+    const weightsFor = (who: ReviewSide) => sideIndices[who].map((index) => weights[index] ?? MIN_WEIGHT);
+    const round = (value: number | null | undefined) =>
+        typeof value === 'number' ? Math.round(value) : undefined;
+
+    return {
+        ...stored,
+        totalMoves: evaluated,
+        accuracy: round(aggregateAccuracy(accuracies, weights)) ?? stored.accuracy,
+        averageCentipawnLoss: Math.round((side.red.lossSum + side.black.lossSum) / evaluated),
+        redAccuracy: side.red.count ? round(aggregateAccuracy(sideAccuracies.red, weightsFor('red'))) : undefined,
+        blackAccuracy: side.black.count ? round(aggregateAccuracy(sideAccuracies.black, weightsFor('black'))) : undefined,
+        redAverageCentipawnLoss: side.red.count ? Math.round(side.red.lossSum / side.red.count) : undefined,
+        blackAverageCentipawnLoss: side.black.count ? Math.round(side.black.lossSum / side.black.count) : undefined,
+        bestCount: counts.best,
+        goodCount: counts.good,
+        inaccuracyCount: counts.inaccuracy,
+        mistakeCount: counts.mistake,
+        blunderCount: counts.blunder,
     };
 }

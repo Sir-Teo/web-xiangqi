@@ -71,6 +71,7 @@ import {
   remapReviewSummaryToLine,
   type ReviewEngineSummary,
   type ReviewMoveQuality,
+  rebuildSummaryFromAnnotations,
 } from './utils/review';
 import {
   AI_STRENGTH_LABELS,
@@ -3139,8 +3140,11 @@ function App() {
           })
           .filter((annotation): annotation is NonNullable<typeof annotation> => Boolean(annotation))
       );
+      // Rebuilt from the annotations rather than trusted as stored. A summary
+      // saved before a scoring change would otherwise sort and average in the
+      // library beside summaries computed on the current scale.
       hydrateReview(remapReviewSummaryToLine({
-        ...game.review.summary,
+        ...rebuildSummaryFromAnnotations(game.review.annotations, game.review.summary),
         lineSignature: makeReviewLineSignatureFromMoves(game.moves),
       }, loadedNodeIds));
       setAnalysisTab('review');

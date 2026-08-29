@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-    computeReviewArtifacts,
-    getMoveAccuracyForWinPercentLoss,
-    getReviewSideForRecord,
-    reportedCentipawnLoss,
-} from './review';
-import type { ReviewAnnotation, ReviewTreeNodeLike } from './review';
+import { computeReviewArtifacts, rebuildSummaryFromAnnotations } from './review';
+import type { ReviewAnnotation, ReviewSummary, ReviewTreeNodeLike } from './review';
 
 /**
  * Checks the claim in docs/architecture.md: that a stored review summary could
@@ -30,28 +25,14 @@ function line(evals: number[]) {
     return { nodes, ids };
 }
 
-/** Everything the summary reports, recovered from annotations alone. */
-function rebuildFromAnnotations(annotations: ReviewAnnotation[]) {
-    const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
-    const side = { red: { acc: 0, loss: 0, n: 0 }, black: { acc: 0, loss: 0, n: 0 } };
-    for (const a of annotations) {
-        counts[a.quality] += 1;
-        // The side is recoverable from the move index alone, which is stored.
-        const who = getReviewSideForRecord({ uci: '', ply: a.moveIndex + 1 }, a.moveIndex);
-        side[who].acc += getMoveAccuracyForWinPercentLoss(a.winPercentLoss as number);
-        side[who].loss += reportedCentipawnLoss(a.swing);
-        side[who].n += 1;
-    }
-    const total = side.red.n + side.black.n;
-    return {
-        totalMoves: total,
-        accuracy: Math.round((side.red.acc + side.black.acc) / total),
-        averageCentipawnLoss: Math.round((side.red.loss + side.black.loss) / total),
-        redAccuracy: side.red.n ? Math.round(side.red.acc / side.red.n) : undefined,
-        blackAccuracy: side.black.n ? Math.round(side.black.acc / side.black.n) : undefined,
-        bestCount: counts.best,
-        blunderCount: counts.blunder,
-    };
+/**
+ * The rebuild is no longer a local copy of the summary math: it calls the
+ * function the app calls when it loads a saved game. The test therefore guards
+ * the shipped path rather than a parallel implementation of it, which is the
+ * only version of this test worth having.
+ */
+function rebuildFromAnnotations(annotations: ReviewAnnotation[], stored: ReviewSummary) {
+    return rebuildSummaryFromAnnotations(annotations, stored);
 }
 
 describe('rebuilding a review summary from its annotations', () => {
@@ -66,7 +47,7 @@ describe('rebuilding a review summary from its annotations', () => {
         it(`recovers the reported figures for ${name}`, () => {
             const { nodes, ids } = line(evals);
             const { summary, annotations } = computeReviewArtifacts(ids, nodes, undefined, 1);
-            const rebuilt = rebuildFromAnnotations(annotations);
+            const rebuilt = rebuildFromAnnotations(annotations, summary);
 
             expect(rebuilt.totalMoves).toBe(summary.totalMoves);
             expect(rebuilt.accuracy).toBe(summary.accuracy);
@@ -88,5 +69,45 @@ describe('rebuilding a review summary from its annotations', () => {
         expect(summary.reviewedAt).toBe(1);
         expect(summary.engine?.tier).toBe('mid');
         expect(summary.engine?.baseDepth).toBe(12);
+    });
+});
+
+describe('a stored summary computed on an older scale', () => {
+    /**
+     * The point of rebuilding on load. A record saved before a scoring change
+     * carries a number the current code would never produce; left alone it
+     * sorts and averages in the library beside records that used the new one.
+     */
+    it('is replaced by one the current code would produce', () => {
+        const { nodes, ids } = line([0, -30, -10, -45, -20, -60]);
+        const { summary, annotations } = computeReviewArtifacts(ids, nodes, undefined, 1);
+
+        const stale: ReviewSummary = { ...summary, accuracy: 42, redAccuracy: 41, blackAccuracy: 43 };
+        const rebuilt = rebuildSummaryFromAnnotations(annotations, stale);
+
+        expect(rebuilt.accuracy).toBe(summary.accuracy);
+        expect(rebuilt.redAccuracy).toBe(summary.redAccuracy);
+        expect(rebuilt.blackAccuracy).toBe(summary.blackAccuracy);
+    });
+
+    it('keeps the facts about the run, which are not derivable', () => {
+        const { nodes, ids } = line([0, -30, -10]);
+        const { summary, annotations } = computeReviewArtifacts(ids, nodes, undefined, 4242, {
+            tier: 'high', baseDepth: 16, baseMoveTimeMs: 500,
+        });
+
+        const rebuilt = rebuildSummaryFromAnnotations(annotations, summary);
+        expect(rebuilt.reviewedAt).toBe(4242);
+        expect(rebuilt.engine?.baseDepth).toBe(16);
+        expect(rebuilt.lineSignature).toBe(summary.lineSignature);
+    });
+
+    it('leaves a summary alone when an annotation is missing its evidence', () => {
+        const { nodes, ids } = line([0, -30, -10]);
+        const { summary, annotations } = computeReviewArtifacts(ids, nodes, undefined, 1);
+
+        const incomplete = annotations.map((annotation, index) =>
+            index === 1 ? { ...annotation, winPercentLoss: undefined } : annotation);
+        expect(rebuildSummaryFromAnnotations(incomplete, summary)).toBe(summary);
     });
 });
