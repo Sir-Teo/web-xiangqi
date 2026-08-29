@@ -57,3 +57,23 @@ describe('matching terms', () => {
         expect(matchesSearchTerms('', [])).toBe(true);
     });
 });
+
+describe('bounded query length', () => {
+    it('truncates a pasted record instead of scanning every term of it', () => {
+        const pastedRecord = Array.from({ length: 20_000 }, (_, i) => `${i}. h2e2 h9g7`).join(' ');
+        const haystack = toSearchText(['Hu Ronghua', 'Yang Guanlin', '1977', 'National Championship']);
+
+        const started = performance.now();
+        const terms = toSearchTerms(pastedRecord);
+        const matched = matchesSearchTerms(haystack, terms);
+        const elapsed = performance.now() - started;
+
+        expect(matched).toBe(false);
+        expect(terms.length).toBeLessThan(100);
+        expect(elapsed, `took ${elapsed.toFixed(0)}ms`).toBeLessThan(50);
+    });
+
+    it('leaves a real query untouched', () => {
+        expect(toSearchTerms('  Hu   1977 ')).toEqual(['hu', '1977']);
+    });
+});

@@ -7,8 +7,26 @@
  * nothing, because those fields never end up adjacent.
  */
 
+/**
+ * A search box reads text the app did not write, and the obvious slip is a
+ * paste into the wrong field -- a game record into the filter instead of the
+ * importer. Every term has to match, so the work is terms x haystack x games:
+ * 380KB pasted into the filter is 60,000 terms scanned against every saved
+ * game, which took 900ms for one game here and freezes the tab for a full
+ * library. Nothing narrows a search past a handful of terms anyway.
+ *
+ * Truncating rather than rejecting keeps a real query working and makes a
+ * pasted record return nothing, immediately, which is what it should do.
+ */
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
 export function toSearchTerms(query: string): string[] {
-    return String(query ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return String(query ?? '')
+        .slice(0, MAX_SEARCH_QUERY_LENGTH)
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
 }
 
 /** Builds the haystack once; skips empty parts and lowercases the result. */
