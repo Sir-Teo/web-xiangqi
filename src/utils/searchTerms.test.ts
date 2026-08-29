@@ -77,3 +77,16 @@ describe('bounded query length', () => {
         expect(toSearchTerms('  Hu   1977 ')).toEqual(['hu', '1977']);
     });
 });
+
+describe('case insensitivity', () => {
+    it('matches regardless of the case on either side', () => {
+        expect(matchesSearchTerms('Hu Ronghua vs Yang Guanlin', toSearchTerms('HU'))).toBe(true);
+        expect(matchesSearchTerms('HU RONGHUA', toSearchTerms('ronghua'))).toBe(true);
+        expect(matchesSearchTerms('Hu Ronghua', toSearchTerms('yang'))).toBe(false);
+    });
+
+    it('accepts a query that is not there at all, like its web-chess twin', () => {
+        expect(toSearchTerms(null)).toEqual([]);
+        expect(toSearchTerms(undefined)).toEqual([]);
+    });
+});

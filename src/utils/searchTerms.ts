@@ -20,7 +20,7 @@
  */
 export const MAX_SEARCH_QUERY_LENGTH = 200;
 
-export function toSearchTerms(query: string): string[] {
+export function toSearchTerms(query: string | null | undefined): string[] {
     return String(query ?? '')
         .slice(0, MAX_SEARCH_QUERY_LENGTH)
         .trim()
