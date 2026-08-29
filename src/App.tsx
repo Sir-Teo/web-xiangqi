@@ -74,6 +74,7 @@ import {
   type ReviewEngineSummary,
   type ReviewMoveQuality,
   rebuildSummaryFromAnnotations,
+  selectRevisitNodes,
 } from './utils/review';
 import {
   AI_STRENGTH_LABELS,
@@ -1936,10 +1937,10 @@ function App() {
 
     if (controller.phase === 'base' && controller.baseQueue.length === 0) {
       if (reviewPolicy.revisit && controller.revisitQueue.length === 0) {
-        controller.revisitQueue = Array.from(controller.criticalDecisionSwings.entries())
-          .sort((left, right) => right[1] - left[1])
-          .slice(0, reviewPolicy.revisitLimit)
-          .map(([nodeId]) => nodeId);
+        controller.revisitQueue = selectRevisitNodes(
+          controller.criticalDecisionSwings,
+          reviewPolicy.revisitLimit
+        );
 
         if (controller.revisitQueue.length > 0) {
           controller.phase = 'revisit';

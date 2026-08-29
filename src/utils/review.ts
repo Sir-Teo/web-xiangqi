@@ -463,6 +463,34 @@ export function filterKeyMoments(
     });
 }
 
+/**
+ * Which positions a review comes back to at greater depth.
+ *
+ * The base pass records, per decision point, how much the evaluation swung
+ * there. The revisit pass re-examines the worst of them -- the moments the game
+ * actually turned on -- because a deeper look at a handful of positions is worth
+ * more than a slightly deeper look at all of them.
+ *
+ * This lived inside the review controller, reading a mutable ref, so the rule
+ * could not be exercised without driving the whole component. It is three lines
+ * and two decisions: biggest swing first, and no more than the budget allows.
+ *
+ * Ties keep the order they were recorded in, because `Array.prototype.sort` is
+ * stable -- which means two equally bad moments are revisited in the order they
+ * were played, not in whatever order a Map happened to yield.
+ */
+export function selectRevisitNodes(swings: Map<string, number>, limit: number): string[] {
+    if (!Number.isFinite(limit) || limit <= 0) return [];
+
+    return Array.from(swings.entries())
+        // A non-finite swing has no place in an ordering; dropping it beats
+        // letting it sort arbitrarily against everything else.
+        .filter(([, swing]) => Number.isFinite(swing))
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, Math.floor(limit))
+        .map(([nodeId]) => nodeId);
+}
+
 export function computeReviewArtifacts(
     activeLineNodeIds: string[],
     treeNodes: Record<string, ReviewTreeNodeLike>,
