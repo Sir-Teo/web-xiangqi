@@ -448,6 +448,10 @@ try {
     `Library export fallback should preserve the saved mainline instead of exporting a wrong tree branch:\n${mismatchedSavedTreeFallbackPgn}`
   );
 
+  // The key the app writes under, read from the app rather than copied here.
+  // It was spelled out as a literal, so versioning the key broke this script
+  // and not the behaviour it checks.
+  const libraryStorageKey = library.GAME_LIBRARY_STORAGE_KEY;
   const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
   const originalConsoleWarn = console.warn;
@@ -476,13 +480,13 @@ try {
       /^game-[a-z0-9]+-[a-z0-9]+$/.test(fallbackIdSave.id),
       `Fallback saved-game id should be stable and nonempty, got: ${fallbackIdSave.id}`
     );
-    const storedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    const storedGames = JSON.parse(storedValues.get(libraryStorageKey) || "[]");
     assert(storedGames[0]?.id === fallbackIdSave.id, "Fallback id save should be persisted.");
     assert(library.renameGame(fallbackIdSave.id, ` ${"Renamed".repeat(30)} `), "Renaming should work with long labels.");
-    const renamedGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    const renamedGames = JSON.parse(storedValues.get(libraryStorageKey) || "[]");
     assert(renamedGames[0]?.label.length === 120, "Saved game rename labels should be capped before persistence.");
     assert(!renamedGames[0]?.label.startsWith(" "), "Saved game rename labels should be trimmed before persistence.");
-    storedValues.set("xiangqi-game-library", JSON.stringify(
+    storedValues.set(libraryStorageKey, JSON.stringify(
       Array.from({ length: 500 }, (_, index) => ({
         id: `stored-${index}`,
         savedAt: 1710001000000 + index,
@@ -497,25 +501,25 @@ try {
       result: "ongoing",
     });
     assert(cappedSave, "Saving should work when the library is at the saved-game cap.");
-    const cappedStoredGames = JSON.parse(storedValues.get("xiangqi-game-library") || "[]");
+    const cappedStoredGames = JSON.parse(storedValues.get(libraryStorageKey) || "[]");
     assert(cappedStoredGames.length === 500, "Saving past the game cap should not grow persisted storage.");
     assert(cappedStoredGames[0]?.id === "stored-1", "Saving past the cap should drop the oldest game.");
     assert(cappedStoredGames.at(-1)?.id === cappedSave.id, "The newest saved game should remain after capping.");
     const oversizedRawLibrary = "x".repeat(3_000_001);
-    storedValues.set("xiangqi-game-library", oversizedRawLibrary);
+    storedValues.set(libraryStorageKey, oversizedRawLibrary);
     assert(library.loadAllGames().length === 0, "Oversized raw saved-game storage should be ignored before JSON parsing.");
     assert(
       library.saveGame({ gameMode: "PvP", moves: ["b2e2"], result: "ongoing" }) === null,
       "Saving should fail instead of overwriting oversized raw saved-game storage."
     );
     assert(
-      storedValues.get("xiangqi-game-library") === oversizedRawLibrary,
+      storedValues.get(libraryStorageKey) === oversizedRawLibrary,
       "Oversized raw saved-game storage should remain untouched after a failed save."
     );
     assert(!library.renameGame("stored-1", "Keep me"), "Renaming should fail while raw storage is oversized.");
     assert(!library.deleteGame("stored-1"), "Deleting should fail while raw storage is oversized.");
     assert(
-      storedValues.get("xiangqi-game-library") === oversizedRawLibrary,
+      storedValues.get(libraryStorageKey) === oversizedRawLibrary,
       "Oversized raw saved-game storage should remain untouched after failed mutations."
     );
     Object.defineProperty(globalThis, "localStorage", {

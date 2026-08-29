@@ -39,6 +39,7 @@ import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './u
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
+import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -222,7 +223,7 @@ const qaForcePanelError = import.meta.env.DEV
   && typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).has('qa-panel-boundary');
 
-const PREFERENCES_STORAGE_KEY = 'xiangqi-app-preferences';
+
 const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
   K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
@@ -455,7 +456,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
 function readStoredPreferences(): StoredPreferences {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
+    const raw = readVersionedStorage(PREFERENCES_STORAGE_KEY);
     return normalizeStoredPreferencesValue(raw);
   } catch {
     return {};

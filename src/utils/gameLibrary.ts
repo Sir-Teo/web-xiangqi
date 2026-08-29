@@ -10,8 +10,9 @@ import type {
     SavedReviewSnapshot,
 } from './review';
 import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves } from './review';
+import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
 
-export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi-game-library';
+export { GAME_LIBRARY_STORAGE_KEY };
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
 const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
@@ -367,7 +368,7 @@ export function normalizeSavedGames(raw: unknown): SavedGame[] {
 
 function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {
     try {
-        const raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
+        const raw = readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
         if (!raw) return { games: [], mutationBlocked: false };
         if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
             return { games: [], mutationBlocked: true };

@@ -1,4 +1,4 @@
-import { type KeyValueStorage, getLocalStorage, readStorage, removeStorage, writeStorage } from './storage';
+import { type KeyValueStorage, getLocalStorage, removeStorage, writeStorage } from './storage';
 
 /**
  * Keeps the game in progress somewhere it survives a reload or a crash, so a
@@ -10,8 +10,9 @@ import { type KeyValueStorage, getLocalStorage, readStorage, removeStorage, writ
  */
 
 import { type SavedGame, normalizeSavedGame } from './gameLibrary';
+import { AUTO_SAVED_GAME_KEY, readVersionedStorage } from './storageKeys';
 
-export const AUTO_SAVED_GAME_KEY = 'xiangqi-auto-saved-game';
+export { AUTO_SAVED_GAME_KEY };
 export const AUTO_SAVE_MAX_BYTES = 2 * 1024 * 1024;
 export const AUTO_SAVE_MAX_LABEL = '2 MB';
 /** Fixed, because there is only ever one auto-save. */
@@ -44,7 +45,7 @@ export function readAutoSavedGame(
 ): AutoSavedGame | null {
     if (!storage) return null;
     try {
-        const raw = readStorage(AUTO_SAVED_GAME_KEY, storage);
+        const raw = readVersionedStorage(AUTO_SAVED_GAME_KEY, storage);
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Partial<AutoSavedGame> | null;
         if (!parsed || parsed.version !== 1) return null;
