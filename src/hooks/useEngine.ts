@@ -16,6 +16,8 @@ export type PvLine = {
     moves: string[];
     multipv?: number;
     searchTag: string | null;
+    /** The engine reported this score as a bound, not a value. */
+    bounded?: boolean;
 };
 
 export type WdlStats = { win: number; draw: number; loss: number };
@@ -148,6 +150,24 @@ export const BOUNDED_SCORE_PATTERN = /\b(?:upperbound|lowerbound)\b/;
 
 export function isBoundedScoreLine(line: string): boolean {
     return BOUNDED_SCORE_PATTERN.test(line);
+}
+
+/**
+ * Whether a freshly parsed line should replace the one already in its multipv
+ * slot.
+ *
+ * Almost always yes -- later lines are deeper or better informed. The exception
+ * is a bound arriving after the exact score at the same depth, which is what an
+ * aspiration re-search produces. web-chess had the same last-line-wins shape
+ * and put "at least +9" on its eval bar for a +3 position; the browser test
+ * there reproduced it. A deeper bound still wins, because depth is the stronger
+ * signal and it is the most the engine has said about the position.
+ */
+export function shouldReplacePvLine(previous: PvLine | undefined, next: PvLine): boolean {
+    if (!previous) return true;
+    if (!next.bounded) return true;
+    if (previous.bounded) return true;
+    return Number(next.depth) > Number(previous.depth);
 }
 
 export function parseBestMoveUci(message: string) {
@@ -909,11 +929,18 @@ export function useEngine(options: EngineInitOptions = {}) {
                     moves,
                     multipv: multipvIndex,
                     searchTag: activeSearchTagRef.current,
+                    bounded: BOUNDED_SCORE_PATTERN.test(msg),
                 };
 
-                // Direct slot assignment — no array manipulation in hot path
-                pvSlotRef.current[multipvIndex] = newPv;
-                pvDirtyRef.current = true;
+                // Direct slot assignment — no array manipulation in hot path.
+                // A bound may not displace the exact score for the same depth;
+                // see shouldReplacePvLine.
+                const heldPv = pvSlotRef.current[multipvIndex];
+                const heldThisSearch = heldPv?.searchTag === activeSearchTagRef.current;
+                if (!heldThisSearch || shouldReplacePvLine(heldPv, newPv)) {
+                    pvSlotRef.current[multipvIndex] = newPv;
+                    pvDirtyRef.current = true;
+                }
             }
 
             scheduleInfoFlush();

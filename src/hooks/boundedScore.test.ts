@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDED_SCORE_PATTERN, isBoundedScoreLine } from './useEngine';
+import { BOUNDED_SCORE_PATTERN, isBoundedScoreLine, shouldReplacePvLine, type PvLine } from './useEngine';
 
 /**
  * `score cp 150 lowerbound` means "at least 150", not "150". Both flags come
@@ -37,5 +37,33 @@ describe('bounded engine scores', () => {
         expect(BOUNDED_SCORE_PATTERN.test(line)).toBe(true);
         expect(BOUNDED_SCORE_PATTERN.test(line)).toBe(true);
         expect(BOUNDED_SCORE_PATTERN.test(line)).toBe(true);
+    });
+});
+
+describe('holding a PV line against a later bound', () => {
+    const line = (depth: number, score: number, bounded?: boolean): PvLine =>
+        ({ depth: String(depth), score, scoreStr: String(score), moves: ['h2e2'], multipv: 0, searchTag: 's1', bounded });
+
+    it('takes any line when the slot is empty', () => {
+        expect(shouldReplacePvLine(undefined, line(20, 30))).toBe(true);
+    });
+
+    it('takes an exact line over anything held', () => {
+        expect(shouldReplacePvLine(line(22, 30), line(22, 45))).toBe(true);
+        expect(shouldReplacePvLine(line(22, 30, true), line(22, 45))).toBe(true);
+    });
+
+    it('refuses a bound that would displace an exact score at the same depth', () => {
+        expect(shouldReplacePvLine(line(22, 300), line(22, 900, true))).toBe(false);
+        expect(shouldReplacePvLine(line(22, 300), line(18, 900, true))).toBe(false);
+    });
+
+    it('still takes a deeper bound, which is the most the engine has said', () => {
+        expect(shouldReplacePvLine(line(22, 300), line(24, 900, true))).toBe(true);
+    });
+
+    it('compares depth as a number, not as the string it arrives as', () => {
+        // depth comes off the wire as text; "9" must not beat "22".
+        expect(shouldReplacePvLine(line(22, 300), line(9, 900, true))).toBe(false);
     });
 });
