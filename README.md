@@ -112,6 +112,9 @@ review pass, a saved-game library — for Go and chess:
 - [web-katrain](https://github.com/Sir-Teo/web-katrain) — Go, KataGo in the browser
 - [web-chess](https://github.com/Sir-Teo/web-chess) — chess, Stockfish in the browser
 
+[`docs/parity.md`](docs/parity.md) is the feature matrix for the three, kept
+current as things land here.
+
 [web-chess's cross-app learning plan](https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-learning-plan.md)
 compares the three and tracks what is worth moving between them.
 
