@@ -479,6 +479,30 @@ export function filterKeyMoments(
  * stable -- which means two equally bad moments are revisited in the order they
  * were played, not in whatever order a Map happened to yield.
  */
+/**
+ * Whether a decision point's swing is worth remembering, and at what value.
+ *
+ * The base pass walks the line and notes, per decision point, how much the
+ * evaluation moved there — but only the swings big enough to be worth a second,
+ * deeper look, and only the worst one at each point. A decision point can be
+ * reached by more than one explored child; the one that cost most is the one
+ * that describes it.
+ *
+ * Returns the value to store, or null to leave what is already there. Both
+ * decisions lived inline in the review controller, including the `>=` on the
+ * threshold, which is the kind of boundary that is easy to change by accident
+ * and hard to notice: a swing exactly on the threshold is worth revisiting.
+ */
+export function nextCriticalSwing(
+    previous: number | undefined,
+    swing: number,
+    threshold: number
+): number | null {
+    if (!Number.isFinite(swing) || swing < threshold) return null;
+    if (typeof previous === 'number' && swing <= previous) return null;
+    return swing;
+}
+
 export function selectRevisitNodes(swings: Map<string, number>, limit: number): string[] {
     if (!Number.isFinite(limit) || limit <= 0) return [];
 

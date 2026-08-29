@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectRevisitNodes } from './review';
+import { nextCriticalSwing, selectRevisitNodes } from './review';
 
 const swings = (entries: Array<[string, number]>) => new Map(entries);
 
@@ -49,5 +49,47 @@ describe('choosing what a review revisits', () => {
 
     it('asks for more than it has without complaint', () => {
         expect(selectRevisitNodes(swings([['a', 300]]), 10)).toEqual(['a']);
+    });
+});
+
+describe('deciding which swings are worth revisiting', () => {
+    const THRESHOLD = 120;
+
+    it('remembers a swing past the threshold', () => {
+        expect(nextCriticalSwing(undefined, 300, THRESHOLD)).toBe(300);
+    });
+
+    /**
+     * The boundary is `>=`, so a swing exactly on the threshold counts. It is
+     * the kind of comparison that changes meaning under a one-character edit
+     * and produces no visible symptom, which is why it is pinned from both
+     * sides.
+     */
+    it('counts a swing exactly on the threshold, and not one just under', () => {
+        expect(nextCriticalSwing(undefined, THRESHOLD, THRESHOLD)).toBe(THRESHOLD);
+        expect(nextCriticalSwing(undefined, THRESHOLD - 1, THRESHOLD)).toBeNull();
+    });
+
+    it('keeps the worst swing at a decision point, not the latest', () => {
+        expect(nextCriticalSwing(300, 500, THRESHOLD)).toBe(500);
+        expect(nextCriticalSwing(500, 300, THRESHOLD)).toBeNull();
+        expect(nextCriticalSwing(500, 500, THRESHOLD)).toBeNull();
+    });
+
+    it('ignores a swing that is not a number', () => {
+        expect(nextCriticalSwing(undefined, Number.NaN, THRESHOLD)).toBeNull();
+        expect(nextCriticalSwing(300, Number.POSITIVE_INFINITY, THRESHOLD)).toBeNull();
+    });
+
+    it('feeds the revisit queue it exists to fill', () => {
+        // The two rules in sequence: record the worst swings, then take the
+        // biggest of what was recorded.
+        const swings = new Map<string, number>();
+        for (const [node, swing] of [['a', 90], ['b', 400], ['a', 250], ['c', 130], ['b', 200]] as const) {
+            const next = nextCriticalSwing(swings.get(node), swing, THRESHOLD);
+            if (next !== null) swings.set(node, next);
+        }
+        expect([...swings.entries()]).toEqual([['b', 400], ['a', 250], ['c', 130]]);
+        expect(selectRevisitNodes(swings, 2)).toEqual(['b', 'a']);
     });
 });

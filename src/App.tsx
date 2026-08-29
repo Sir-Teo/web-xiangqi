@@ -75,6 +75,7 @@ import {
   type ReviewMoveQuality,
   rebuildSummaryFromAnnotations,
   selectRevisitNodes,
+  nextCriticalSwing,
 } from './utils/review';
 import {
   AI_STRENGTH_LABELS,
@@ -1285,12 +1286,12 @@ function App() {
           if (record && parentId && typeof parentEval === 'number') {
             const side = getReviewSideForRecord(record, Math.max(0, record.ply - 1));
             const swing = getEvalLossForMove(parentEval, normalizedScore, side);
-            if (swing >= reviewPolicy.revisitThreshold) {
-              const previousSwing = controller.criticalDecisionSwings.get(parentId) ?? 0;
-              if (swing > previousSwing) {
-                controller.criticalDecisionSwings.set(parentId, swing);
-              }
-            }
+            const recorded = nextCriticalSwing(
+              controller.criticalDecisionSwings.get(parentId),
+              swing,
+              reviewPolicy.revisitThreshold
+            );
+            if (recorded !== null) controller.criticalDecisionSwings.set(parentId, recorded);
           }
         }
 
