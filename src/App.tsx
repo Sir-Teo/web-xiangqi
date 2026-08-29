@@ -50,7 +50,9 @@ import {
   MAX_MOVE_IMPORT_UCI_MOVES,
 } from './utils/moveImport';
 import {
-  detectDeviceTier,
+  detectDeviceProfile,
+  detectDeviceScreen,
+  detectSimdSupport,
   resolveEngineBootConfig,
   resolveLiveAnalysisPolicy,
   resolveReviewPolicy,
@@ -374,40 +376,10 @@ function nodeTitle(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typ
   return `Ply ${record.ply}: ${formatMoveRecordTitle(record)}`;
 }
 
-function detectCoarsePointer() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  return window.matchMedia('(pointer: coarse)').matches;
-}
-
-// The device tier decides how many engine threads and how much hash to boot
-// with, so it has to describe the machine rather than the window. Reading
-// innerWidth/innerHeight made min(width, height) cross the 700 threshold
-// whenever a desktop window was made short -- dragging it smaller, or just
-// opening devtools -- which rebooted the WASM engine single-threaded on
-// hardware that had not changed. screen describes the device, and min() of its
-// two sides is the same in either orientation.
-function detectDeviceScreen() {
-  if (typeof window === 'undefined' || typeof window.screen === 'undefined') {
-    return { width: 1280, height: 800 };
-  }
-  return {
-    width: Number(window.screen.width) || window.innerWidth,
-    height: Number(window.screen.height) || window.innerHeight,
-  };
-}
-
-function detectSimdSupport() {
-  try {
-    return WebAssembly.validate(new Uint8Array([
-      0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
-      10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
-    ]));
-  } catch (_) {
-    return false;
-  }
-}
+// detectCoarsePointer, detectDeviceScreen and detectSimdSupport now live in
+// utils/analysisProfile, beside the tier they feed. They were here while
+// useEngine kept a second copy of the same judgement that read the window
+// instead of the machine; one of the two had to be the only one.
 
 function isAssistMode(value: unknown): value is AssistMode {
   return value === 'coach' || value === 'pro';
@@ -1087,16 +1059,7 @@ function App() {
     setEngineRestartToken((value) => value + 1);
   }, []);
 
-  const deviceProfile = useMemo(() => {
-    const screenSize = detectDeviceScreen();
-    return detectDeviceTier({
-      viewportWidth: screenSize.width,
-      viewportHeight: screenSize.height,
-      hardwareConcurrency: typeof navigator === 'undefined' ? undefined : Number(navigator.hardwareConcurrency),
-      deviceMemoryGB: typeof navigator === 'undefined' ? undefined : Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0),
-      coarsePointer: detectCoarsePointer(),
-    });
-  }, []);
+  const deviceProfile = useMemo(() => detectDeviceProfile(), []);
 
   const baseEngineBootConfig = useMemo(
     () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport() }),

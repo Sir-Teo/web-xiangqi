@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
+import { detectEngineBootConfig } from '../utils/analysisProfile';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
@@ -35,7 +36,6 @@ type SearchRequest = {
     tag?: string;
 };
 
-type NavigatorWithDeviceMemory = Navigator & { deviceMemory?: number };
 type WindowWithEngineQa = Window & { __WEB_XIANGQI_ENGINE_READY_TIMEOUT_MS?: number };
 
 export interface EngineInitOptions {
@@ -60,35 +60,25 @@ function detectSIMDSupport(): boolean {
 }
 
 /**
- * The width below which the app runs its compact layout, and below which the
- * engine is given less of the machine so the UI stays responsive.
+ * How much of the machine the engine gets, when the caller has not said.
  *
- * This number is also written into the CSS as `@media (max-width: 900px)` in a
- * dozen places, and a media query cannot read a variable — so the two halves
- * cannot be derived from one another and must be changed together. Naming it
- * here at least means the TypeScript side says it once, which is what
- * web-katrain does with DESKTOP_LAYOUT_MIN_WIDTH.
+ * This used to be two functions here that read `window.innerWidth <= 900` and
+ * decided threads and hash from it. App.tsx already explains, next to
+ * `detectDeviceScreen`, why that is wrong: a window made short -- dragged
+ * smaller, or with devtools opened -- crosses the threshold and reboots the
+ * engine single-threaded on hardware that has not changed, and an off-screen
+ * tab reports 0 and looks like the weakest device there is. The repo had
+ * learned that lesson in one file and left the same mistake in the other,
+ * because the judgement was written down twice.
+ *
+ * The two disagreed by 3x on threads on the machine this was written on: 18
+ * cores and 32GB, where the device tier says 3 threads and 64MB and the window
+ * said 1 thread and 16MB. Nothing reached the wrong one -- App.tsx is the only
+ * caller and it always passes a config from `analysisProfile` -- so this was a
+ * default waiting for a second caller to find it.
  */
-const COMPACT_LAYOUT_MAX_WIDTH = 900;
-
-function isCompactViewport() {
-    return typeof window !== 'undefined' && window.innerWidth <= COMPACT_LAYOUT_MAX_WIDTH;
-}
-
-function detectUiSafeThreads() {
-    if (typeof navigator === 'undefined') return 1;
-    const hw = Number(navigator.hardwareConcurrency) || 2;
-    if (isCompactViewport()) return 1;
-    return Math.max(1, Math.min(4, hw - 2));
-}
-
-function detectUiSafeHashMB() {
-    const isCompact = isCompactViewport();
-    const memGB = Number((navigator as NavigatorWithDeviceMemory).deviceMemory ?? 0);
-    if (isCompact) return memGB >= 4 ? 32 : 16;
-    if (memGB >= 8) return 128;
-    if (memGB >= 4) return 64;
-    return 32;
+function defaultEngineBootConfig() {
+    return detectEngineBootConfig();
 }
 
 function getEngineReadyTimeoutMs() {
@@ -509,8 +499,11 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         // Wait for the constructor. We'll use "auto" variant as default.
         const pikafishFactory = (window as any).Pikafish;
-        const threads = options.threads ?? detectUiSafeThreads();
-        const hashMB = options.hashMB ?? detectUiSafeHashMB();
+        const fallbackBootConfig = options.threads === undefined || options.hashMB === undefined
+            ? defaultEngineBootConfig()
+            : null;
+        const threads = options.threads ?? fallbackBootConfig!.threads;
+        const hashMB = options.hashMB ?? fallbackBootConfig!.hashMB;
         didConfigureSessionRef.current = false;
         setIsReady(false);
         setIsSearching(false);

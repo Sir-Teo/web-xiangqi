@@ -155,3 +155,37 @@ describe('live analysis policy', () => {
         expect(policy.primary.depth).toBeGreaterThanOrEqual(1);
     });
 });
+
+describe('one sizing policy, read from the machine', () => {
+    /**
+     * `useEngine` used to keep its own copy of this judgement, deciding threads
+     * and hash from `window.innerWidth <= 900`. These pin the two properties
+     * that copy got wrong, so a future one cannot come back quietly.
+     */
+    it('does not shrink the engine because the window is short', () => {
+        const desktop = { hardwareConcurrency: 18, deviceMemoryGB: 32, coarsePointer: false };
+        const wide = detectDeviceTier({ ...desktop, viewportWidth: 1600, viewportHeight: 1000 });
+        const short = detectDeviceTier({ ...desktop, viewportWidth: 1600, viewportHeight: 720 });
+
+        expect(wide.tier).toBe('high');
+        expect(short.tier, 'a short desktop window is the same machine').toBe('high');
+        expect(resolveEngineBootConfig(short).threads).toBe(resolveEngineBootConfig(wide).threads);
+    });
+
+    it('does not read an unmeasured viewport as the weakest device there is', () => {
+        // An off-screen or not-yet-laid-out tab reports 0x0. The window-based
+        // policy read that as the smallest possible screen and booted one
+        // thread; this one falls back to a desktop-shaped default.
+        const unmeasured = detectDeviceTier({
+            viewportWidth: 0,
+            viewportHeight: 0,
+            hardwareConcurrency: 18,
+            deviceMemoryGB: 32,
+            coarsePointer: false,
+        });
+
+        expect(unmeasured.mobileLike).toBe(false);
+        expect(unmeasured.tier).toBe('high');
+        expect(resolveEngineBootConfig(unmeasured).threads).toBeGreaterThan(1);
+    });
+});

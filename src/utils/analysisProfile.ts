@@ -258,3 +258,68 @@ export function resolveReviewPolicy(profile: DeviceProfile): ReviewPolicy {
         signature: `${profile.signature}:review:${base.depth}:${base.moveTimeMs}:${revisit ? `${revisit.depth}:${revisit.moveTimeMs}` : 'norevisit'}`,
     };
 }
+
+/**
+ * Reading the machine, rather than the window, for every caller that needs it.
+ *
+ * These three lived in App.tsx while `useEngine` kept a second, contradictory
+ * copy of the same judgement: it sized the engine from `window.innerWidth <=
+ * 900`, which App.tsx's own comment explains is wrong -- min(width, height)
+ * crosses the mobile threshold whenever a desktop window is made short, or
+ * devtools is opened, and the engine reboots single-threaded on hardware that
+ * has not changed. An off-screen tab reports 0 and looks like the weakest
+ * device there is. The two policies disagreed by 3x on threads on the machine
+ * this was written on.
+ *
+ * `screen` describes the device, and min() of its two sides is the same in
+ * either orientation.
+ */
+export function detectCoarsePointer(): boolean {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(pointer: coarse)').matches;
+}
+
+export function detectDeviceScreen(): { width: number; height: number } {
+    if (typeof window === 'undefined' || typeof window.screen === 'undefined') {
+        return { width: 1280, height: 800 };
+    }
+    return {
+        width: Number(window.screen.width) || window.innerWidth,
+        height: Number(window.screen.height) || window.innerHeight,
+    };
+}
+
+export function detectSimdSupport(): boolean {
+    try {
+        return WebAssembly.validate(new Uint8Array([
+            0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
+            10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
+        ]));
+    } catch {
+        return false;
+    }
+}
+
+/** The device profile this machine gets, read from the device itself. */
+export function detectDeviceProfile(): DeviceProfile {
+    const screenSize = detectDeviceScreen();
+    const nav = typeof navigator === 'undefined' ? undefined : navigator;
+    return detectDeviceTier({
+        viewportWidth: screenSize.width,
+        viewportHeight: screenSize.height,
+        hardwareConcurrency: nav ? Number(nav.hardwareConcurrency) : undefined,
+        deviceMemoryGB: nav ? Number((nav as Navigator & { deviceMemory?: number }).deviceMemory ?? 0) : undefined,
+        coarsePointer: detectCoarsePointer(),
+    });
+}
+
+/**
+ * The boot config for this machine. The single place any caller should reach
+ * for when it has not been handed one.
+ */
+export function detectEngineBootConfig(options: { saferBoot?: boolean } = {}): EngineBootConfig {
+    return resolveEngineBootConfig(detectDeviceProfile(), {
+        allowSIMD: detectSimdSupport(),
+        saferBoot: options.saferBoot,
+    });
+}
