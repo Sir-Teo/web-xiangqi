@@ -44,7 +44,7 @@ Measured 2026-08-29.
 | Sound | yes | no | partial |
 | Haptics | yes | no | no |
 | Analysis queue with position cache | yes | no | no |
-| Real service worker + install banner | yes | `coi-serviceworker` only | unregisters legacy SWs |
+| Real service worker | yes (+ install banner) | yes — COI and offline in one worker | unregisters legacy SWs |
 | Position / FEN editor | no | yes | no |
 | Cloud eval, opening explorer, tablebase | no | yes | no |
 | Browser (Playwright) tests | one viewport script | boot, review, layout at two sizes | layout + parity + review |
@@ -70,8 +70,14 @@ mentions a board.
 ## What this repo is still missing
 
 A store (state is in a 5,110-line `App.tsx`), a command palette, themes,
-haptics, a real service worker, the analysis queue, a position editor, and the
-cloud-eval stack. Its library is a flat localStorage list where the siblings
+haptics, the analysis queue, a position editor, and the cloud-eval stack.
+
+A service worker is the interesting one. This repo *unregisters* them, to stop a
+stale demo shell serving old engine artifacts, so it has no offline support and
+no cross-origin isolation on GitHub Pages — which means threaded Pikafish is
+unreachable there. web-chess now does both jobs in one worker
+(`public/sw.js`), which is the pattern to copy; the prerequisite here is
+narrowing `serviceWorkerCleanup` to the old demo scope rather than every worker. Its library is a flat localStorage list where the siblings
 use IndexedDB. Its two grading ladders — centipawn and win-percent — are still
 independent constants that cross, so a 190–200cp loss at equality grades as an
 inaccuracy on one and a mistake on the other.
