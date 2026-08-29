@@ -143,6 +143,13 @@ export function shouldSuppressEngineRuntimeRejection(reason: unknown) {
     return hasMemoryAccessOutOfBounds(diagnostic) && hasPikafishRuntimeHint(diagnostic);
 }
 
+/** `upperbound` / `lowerbound` on a UCI info line: the score is not exact. */
+export const BOUNDED_SCORE_PATTERN = /\b(?:upperbound|lowerbound)\b/;
+
+export function isBoundedScoreLine(line: string): boolean {
+    return BOUNDED_SCORE_PATTERN.test(line);
+}
+
 export function parseBestMoveUci(message: string) {
     const match = String(message).trim().match(/^bestmove\s+([a-i][0-9][a-i][0-9])(?:\s|$)/i);
     return match?.[1].toLowerCase() ?? '';
@@ -179,6 +186,17 @@ export function useEngine(options: EngineInitOptions = {}) {
     const latestEvalRef = useRef(0);
     const pendingInfoLineRef = useRef<string | null>(null);
     const pendingEvalRef = useRef<number | null>(null);
+    /**
+     * Whether the evaluation now buffered came from an exact score rather than
+     * a bound. `score cp 150 lowerbound` means "at least 150" -- it falls out
+     * of an aspiration-window re-search, and the exact line normally follows a
+     * moment later. Every line used to overwrite the last, so a search stopped
+     * in between left an inequality standing in for a number, and in a review
+     * that number is a swing the player never caused. web-chess parsed these
+     * flags and then dropped them before they reached anything; this repo did
+     * not parse them at all.
+     */
+    const pendingEvalIsExactRef = useRef(false);
     const pendingWdlRef = useRef<WdlStats | null>(null);
     const pendingSearchStatsRef = useRef<EngineSearchStats | null>(null);
     const pvDirtyRef = useRef(false);
@@ -258,6 +276,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
         pendingInfoLineRef.current = null;
         pendingEvalRef.current = null;
+        pendingEvalIsExactRef.current = false;
         pendingWdlRef.current = null;
         pendingSearchStatsRef.current = null;
         pvDirtyRef.current = false;
@@ -849,7 +868,14 @@ export function useEngine(options: EngineInitOptions = {}) {
             // Only update eval and WDL from the primary PV line (multipv 1)
             if (multipvIndex === 0) {
                 if (scoreMatch || mateMatch) {
-                    pendingEvalRef.current = finalScore;
+                    // A bound is taken only while nothing exact has arrived for
+                    // this search -- better than no reading at all -- and never
+                    // in place of one that has.
+                    const isBounded = BOUNDED_SCORE_PATTERN.test(msg);
+                    if (!isBounded || !pendingEvalIsExactRef.current) {
+                        pendingEvalRef.current = finalScore;
+                        if (!isBounded) pendingEvalIsExactRef.current = true;
+                    }
                 }
                 if (wdlMatch) {
                     pendingWdlRef.current = {
