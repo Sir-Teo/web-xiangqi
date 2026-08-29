@@ -1,83 +1,80 @@
-# Parity with the sibling apps
+# Gates and parity
 
-web-xiangqi is one of three apps built to the same shape — an engine in a worker, a
-move tree, an eval graph, a review pass with accuracy, a saved-game library, a
-GitHub Pages deploy — for a different game each:
+What has to pass before a change lands here, where each check runs, and how
+that compares with the two sibling repos. Written because the checks drifted
+apart three times without anyone noticing -- a deploy that ran none of them, a
+CI job on a different Node major than the thing it shipped, and a browser suite
+wired into no workflow at all.
 
-- [web-katrain](https://github.com/Sir-Teo/web-katrain) — Go, KataGo in the browser
-- [web-chess](https://github.com/Sir-Teo/web-chess) — chess, Stockfish in the browser
-- [web-xiangqi](https://github.com/Sir-Teo/web-xiangqi) — xiangqi, Pikafish compiled to WASM
+## Running everything locally
 
-**Update the table below when a feature lands here.** That is the whole point of
-the file. The three drift at the speed they are worked on, and nothing else in
-these repos notices: the plan that proposed this file spent a night finding
-things that were only visible by comparison — a deploy that ran no checks, a
-search box none of the three bounded, a lesson learned in one file and left
-unfixed in the file beside it. A table that is kept current turns those into
-something a reader spots in a minute.
+```bash
+npm run verify          # typecheck, lint, test, openings, library, smoke, parity, build:react
+npm run audit           # dependency audit; not part of verify, runs in CI
+npm run test:ui:layout        # Playwright, desktop and mobile, fake Pikafish injected
+```
 
-The deeper comparison, and what is worth moving next, lives in web-chess's
-[`docs/cross-app-learning-plan.md`](https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-learning-plan.md)
-and [`docs/cross-app-second-pass.md`](https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-second-pass.md).
+**Check the exit code, not the output.** `npm run verify | grep -q ...` keys off
+grep's status, not the gate's; that mistake put a commit over a failing
+typecheck during this work. Run the gate, then read `$?`.
 
-## Where the three stand
+The engine is built from source with emsdk. `npm run build` needs
+`bash scripts/install-emsdk.sh` first, and CI caches both.
 
-Measured 2026-08-29.
+## Where each check runs
 
-| | web-katrain | web-chess | web-xiangqi |
+| check | `verify` | `ci.yml` (pull requests) | deploy (push to `main`) |
 | --- | --- | --- | --- |
-| Domain | Go (KataGo) | Chess (Stockfish) | Xiangqi (Pikafish) |
-| `src` files | 233 | 118 | 71 |
-| Test cases | 1,417 | 410 | 338 |
-| App state | Zustand store | `useState` in `App.tsx` | `useState` in `App.tsx` |
-| Deploy runs the checks | yes | yes | yes |
-| `npm run verify` | yes | yes | yes + engine smoke/parity |
-| Hostile-input parser sweep | yes | yes | yes |
-| Bounded search query | yes | yes | yes |
-| Namespaced, versioned storage keys | yes | yes | yes |
-| One device-tier sizing policy | threads only | capabilities + hash | full tier + live/review policy |
-| Saved-game library | IndexedDB, folders, zip | IndexedDB, JSON backup | localStorage, flat |
-| Auto-save + crash recovery | yes | yes | yes |
-| Error boundary | component + lazy-modal | inline + lazy-dialog | component + lazy-panel |
-| Command palette | yes | yes | yes |
-| Board / UI themes | yes | no | no |
-| Sound | yes | no | partial |
-| Haptics | yes | no | no |
-| Analysis queue with position cache | yes | no | no |
-| Real service worker | yes (+ install banner) | yes — COI and offline in one worker | unregisters legacy SWs |
-| Position / FEN editor | no | yes | no |
-| Cloud eval, opening explorer, tablebase | no | yes | no |
-| Browser (Playwright) tests | one viewport script | boot, review, layout at two sizes | layout + parity + review |
-| Engine built from source | no | no | yes (emsdk) |
+| typecheck / lint / unit tests | yes | via `verify` | yes |
+| `audit` | no | yes | yes |
+| browser suite (`test:ui:layout`) | no | **yes** | **no** |
 
-## What this repo is the reference for
+The last row is the one to remember: **a push to `main` does not run the browser
+suite.** It runs the deploy workflow, which does not include it. Trigger
+`ci.yml` on `main` via `workflow_dispatch` if you need that coverage after a
+direct push.
 
-**The engine toolchain.** Pikafish is built from source here — a pinned
-upstream ref, an Emscripten patch set, threaded/single/SIMD flavors, an NNUE
-loaded into the FS, and `THIRD_PARTY_NOTICES.md` tracing the licence. Neither
-sibling builds its engine.
+## How the three compare
 
-**Real-browser verification.** A Playwright layout harness, worker-parity and
-review-parity checks, and a serve-demo test — including a fake-engine injection
-that lets the whole UI be driven deterministically with no WASM. web-chess has
-no browser test at all and needs exactly that technique.
+The sibling repos are `web-chess`, `web-katrain` and `web-xiangqi`. They are
+independent apps with the same shape, so most divergence is fine and some is
+not. This section lists what actually differs, measured rather than remembered,
+and says which side of that line each item falls on.
 
-**Device-tier budgeting.** `analysisProfile` resolves a device profile and then
-an engine boot config, a live-analysis policy and a review policy from it. It
-is the most portable module in the three repos: 260 lines, one of which
-mentions a board.
+| | web-chess | web-katrain | web-xiangqi |
+| --- | --- | --- | --- |
+| `verify` steps | typecheck, lint, test, build | typecheck, test:typecheck, lint, test, build | typecheck, lint, test, openings, library, smoke, parity, build:react |
+| Browser suite | `test:ui:browser` (Playwright) | `test:viewport` (raw CDP, no dependency) | `test:ui:layout` (Playwright) |
+| Where the browser suite runs | `ci.yml` | `ci.yml` | `ci.yml` |
+| Node in CI / deploy | 20 / 20 | 24 / 24 | 20 / 20 |
+| Deploy gates | audit, lint, test, build | audit, lint, test:typecheck, test, build | audit, build (WASM), verify |
+| Hostile-input sweep | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` |
+| Where the ceilings sit | search query; library PGN 512KB; backup 8MB; auto-save 2MB | search query; auto-save 5MB; model upload 128MB; verdict scan 4000 nodes | search query; **import text 200KB, UCI moves 1024, tree nodes 1024** |
 
-## What this repo is still missing
+**Deliberate, leave alone.** The `verify` lists differ because the apps differ:
+only web-xiangqi has a WASM engine to smoke-test and an opening book to check.
+web-katrain drives Chrome over raw CDP instead of Playwright, which is why it
+carries no browser dependency at all. Node 24 in web-katrain against 20 in the
+other two is a per-repo pin, not drift -- what matters is that CI and deploy
+agree *within* a repo, and all three now do.
 
-A store (state is in a 5,110-line `App.tsx`), themes, haptics, the analysis
-queue, a position editor, and the cloud-eval stack.
+**Not deliberate, and worth fixing.**
 
-A service worker is the interesting one. This repo *unregisters* them, to stop a
-stale demo shell serving old engine artifacts, so it has no offline support and
-no cross-origin isolation on GitHub Pages — which means threaded Pikafish is
-unreachable there. web-chess now does both jobs in one worker
-(`public/sw.js`), which is the pattern to copy; the prerequisite here is
-narrowing `serviceWorkerCleanup` to the old demo scope rather than every worker. Its library is a flat localStorage list where the siblings
-use IndexedDB. Its two grading ladders — centipawn and win-percent — are still
-independent constants that cross, so a 190–200cp loss at equality grades as an
-inaccuracy on one and a mistake on the other.
+1. **A push to `main` runs no browser suite anywhere.** `ci.yml` is
+   pull-request-only in all three, and no deploy workflow runs a browser test.
+   Green CI on `main` therefore means less than it appears to. `ci.yml` accepts
+   `workflow_dispatch`, so it can be triggered on `main` by hand as a stopgap.
+2. **Only one repo caps input *before* it parses it.** All three have ceilings,
+   but they sit in different places: web-chess and web-katrain bound what they
+   *write* (auto-save, backups, uploads), while web-xiangqi also bounds what it
+   *reads* -- import text at 200KB, UCI moves and tree nodes at 1024 -- so
+   hostile input is rejected by a length check instead of being walked. The
+   hostile-input sweeps put numbers on it: the same class of input clears
+   web-xiangqi in 7ms and web-katrain in 30ms. Neither is a bug today; 30ms is
+   nowhere near a stutter. The read-side ceiling is the cheaper design and is
+   the thing to port.
+
+**The rule this file exists to enforce:** any check that a sibling has and this
+repo does not should be either adopted or explained here. The gaps found this
+way so far were a deploy that ran no checks at all, a CI/deploy Node split
+inside one repo, and a browser suite that ran in no workflow.
