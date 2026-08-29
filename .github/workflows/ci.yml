@@ -96,5 +96,6 @@ jobs:
           PIKAFISH_BROWSER_VARIANT: single
         run: |
           npm run test:review:fixtures
+          npm run test:review:browser
           npm run test:ui:layout
           npm run test:worker-parity:browser
