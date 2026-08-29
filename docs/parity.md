@@ -39,7 +39,7 @@ Measured 2026-08-29.
 | Saved-game library | IndexedDB, folders, zip | IndexedDB, JSON backup | localStorage, flat |
 | Auto-save + crash recovery | yes | yes | yes |
 | Error boundary | component + lazy-modal | inline + lazy-dialog | component + lazy-panel |
-| Command palette | yes | yes | no |
+| Command palette | yes | yes | yes |
 | Board / UI themes | yes | no | no |
 | Sound | yes | no | partial |
 | Haptics | yes | no | no |
@@ -69,8 +69,8 @@ mentions a board.
 
 ## What this repo is still missing
 
-A store (state is in a 5,110-line `App.tsx`), a command palette, themes,
-haptics, the analysis queue, a position editor, and the cloud-eval stack.
+A store (state is in a 5,110-line `App.tsx`), themes, haptics, the analysis
+queue, a position editor, and the cloud-eval stack.
 
 A service worker is the interesting one. This repo *unregisters* them, to stop a
 stale demo shell serving old engine artifacts, so it has no offline support and
