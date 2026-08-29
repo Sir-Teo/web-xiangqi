@@ -13,6 +13,7 @@ import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/sea
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
+import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
 
 const SAVED_PAGE_SIZE = 100;
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
@@ -402,6 +403,9 @@ export function LibraryPanel({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search library"
+          // Matching truncates past this anyway; stopping it at the input
+          // keeps a pasted record out of React state as well.
+          maxLength={MAX_SEARCH_QUERY_LENGTH}
         />
       </div>
       <div className="lib-filter-row">
