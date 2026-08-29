@@ -10,6 +10,7 @@
   "main": "dist/pikafish.js",
   "scripts": {
     "dev": "vite",
+    "audit": "npm audit --audit-level=moderate",
     "build:react": "node scripts/clean-react-dist.cjs && tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b",
