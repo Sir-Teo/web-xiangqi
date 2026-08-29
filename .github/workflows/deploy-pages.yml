@@ -46,14 +46,28 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm run audit
+
       - name: Install emsdk
         run: bash scripts/install-emsdk.sh
 
       - name: Build WASM engine
         run: npm run build
 
-      - name: Build React app
-        run: npm run build:react
+      # The gates, before publishing rather than beside it. This workflow used
+      # to go straight from the build to the upload: a red suite deployed, and
+      # CI turned red afterwards. ci.yml runs on pull requests and is not
+      # upstream of this job, so nothing here waited for it.
+      #
+      # verify is typecheck -> lint -> tests -> openings -> library -> engine
+      # smoke -> parity -> build:react, chained so the first failure stops it,
+      # and it ends with the React build this job uploads. The browser suites
+      # (Playwright layout, worker parity, bench) stay in ci.yml: they need a
+      # Chromium install and add minutes to every deploy for coverage a pull
+      # request has already exercised.
+      - name: Verify
+        run: npm run verify
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
