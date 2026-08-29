@@ -360,6 +360,49 @@ function rectWithinDesktopLayout(rects) {
   }
 }
 
+async function assertNoDanglingAriaControls(page) {
+  // Every aria-controls has to lead somewhere. The one accepted exception is a
+  // collapsed disclosure -- aria-expanded="false" -- whose content is rendered
+  // on demand and legitimately absent until opened. This app has six of those
+  // and they are correct: each resolves to a role="dialog" once expanded.
+  //
+  // Anything else pointing at a missing id promises a screen-reader user a
+  // destination that does not exist, which is worse than saying nothing.
+  // Written after web-katrain shipped exactly that -- a tab whose
+  // aria-controls named a panel React had not mounted -- and now checked in
+  // all three sibling harnesses.
+  //
+  // Checked with the menus open as well as closed: the closed sweep alone
+  // never evaluates a reference whose target is conditionally rendered, which
+  // is precisely the shape of the bug this exists to catch.
+  const sweep = () => page.evaluate(() => Array.from(document.querySelectorAll("[aria-controls]"))
+    .filter((el) => el.getAttribute("aria-expanded") !== "false")
+    .filter((el) => !document.getElementById(el.getAttribute("aria-controls")))
+    .map((el) => (el.getAttribute("aria-label") || el.tagName) + "->#" + el.getAttribute("aria-controls")));
+
+  const atRest = await sweep();
+  if (atRest.length > 0) {
+    throw new Error(`aria-controls pointing at nothing (at rest): ${atRest.join(", ")}`);
+  }
+
+  for (const label of ["Open settings", "Start new game"]) {
+    const trigger = page.locator(`[aria-controls][aria-expanded][aria-label="${label}"]:visible`).first();
+    if ((await trigger.count()) === 0) continue;
+    await trigger.click();
+    await page.waitForTimeout(400);
+    const expanded = await trigger.getAttribute("aria-expanded");
+    if (expanded !== "true") {
+      throw new Error(`"${label}" did not report aria-expanded=true after opening`);
+    }
+    const whileOpen = await sweep();
+    if (whileOpen.length > 0) {
+      throw new Error(`aria-controls pointing at nothing (${label} open): ${whileOpen.join(", ")}`);
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6380,6 +6423,7 @@ async function main() {
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
+    await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
     await assertBoardKeyboardNavigationFlipped(page);
@@ -6467,7 +6511,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
