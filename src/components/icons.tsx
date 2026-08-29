@@ -182,3 +182,9 @@ export const IconSpark = (props: React.SVGProps<SVGSVGElement>) => (
         <path d="M12 2c.4 3.8 2 7 10 10-8 3-9.6 6.2-10 10-.4-3.8-2-7-10-10 8-3 9.6-6.2 10-10z" />
     </svg>
 );
+
+export const IconSearch = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...decorativeIconProps(props)}>
+        <circle cx="11" cy="11" r="7" /><line x1="16.5" y1="16.5" x2="21" y2="21" />
+    </svg>
+);

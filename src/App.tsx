@@ -11,7 +11,7 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore
+  IconSkipForward, IconMore, IconSearch
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
@@ -42,6 +42,7 @@ import { QaForcedRenderError } from './components/QaForcedRenderError';
 import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import type { Command } from './utils/commandPalette';
+import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
 import {
   extractFenTag,
   extractUciMoveLine,
@@ -3505,6 +3506,23 @@ function App() {
                 <IconLibrary />
                 <span className="btn-label-desktop">Library</span>
               </button>
+              {/* The palette was keyboard-only until now, which on a phone means
+                  unreachable: there is no Cmd+K on a touch keyboard, and nothing
+                  anywhere in the UI said the chord existed. web-katrain surfaces
+                  its palette in three places and names the shortcut in each. */}
+              <button
+                type="button"
+                className="top-action-btn"
+                onClick={() => setShowCommandPalette(true)}
+                title={`Commands (${commandPaletteShortcutLabel()})`}
+                aria-label="Open command palette"
+                aria-keyshortcuts={COMMAND_PALETTE_ARIA_KEYSHORTCUTS}
+                aria-haspopup="dialog"
+                data-testid="command-palette-btn"
+              >
+                <IconSearch />
+                <span className="btn-label-desktop">Commands</span>
+              </button>
               <button
                 type="button"
                 className="top-action-btn"
@@ -4348,6 +4366,23 @@ function App() {
                 >
                   <IconFlip />
                   <span>Flip board</span>
+                </button>
+                {/* No shortcut in the label here: this menu only exists on
+                    touch, where there is no modifier key to press. */}
+                <button
+                  className="mobile-action-menu-btn"
+                  type="button"
+                  onClick={() => {
+                    setShowMobileBoardActionMenu(false);
+                    setShowCommandPalette(true);
+                  }}
+                  role="menuitem"
+                  title="Commands"
+                  aria-label="Open command palette"
+                  data-testid="mobile-command-palette-btn"
+                >
+                  <IconSearch />
+                  <span>Commands</span>
                 </button>
               </div>
             </>

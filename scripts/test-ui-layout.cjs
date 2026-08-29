@@ -5882,6 +5882,48 @@ async function assertMobileSaveLibraryActions(page) {
     throw new Error("Mobile board action menu reopened after switching away from the board view.");
   }
 
+  // The palette used to be reachable only through Cmd/Ctrl+K, which a phone
+  // does not have -- so every command in it was unreachable on touch, not
+  // merely undiscoverable. This asserts the menu route end to end, because it
+  // is the only route mobile has: the top-bar button is display:none here,
+  // which the last check below pins so this test cannot quietly stop covering
+  // the thing it was written for.
+  await moreButton.click();
+  const mobilePaletteButton = page.getByTestId("mobile-command-palette-btn");
+  await mobilePaletteButton.waitFor({ timeout: 5000 });
+  await mobilePaletteButton.click();
+  await page.getByRole("dialog", { name: "Commands" }).waitFor({ timeout: 5000 });
+  const paletteState = await page.evaluate(() => {
+    const dialog = document.querySelector('[role="dialog"][aria-label="Commands"]');
+    const input = dialog?.querySelector("input");
+    const rect = dialog?.getBoundingClientRect();
+    return {
+      menuStillOpen: Boolean(document.querySelector(".mobile-board-action-menu")),
+      optionCount: dialog?.querySelectorAll('[role="option"]').length ?? 0,
+      inputFocused: Boolean(input) && document.activeElement === input,
+      fits: Boolean(rect) && rect.width <= window.innerWidth && rect.height <= window.innerHeight,
+      topBarButtonWidth:
+        document.querySelector('[data-testid="command-palette-btn"]')?.getBoundingClientRect().width ?? 0,
+    };
+  });
+  if (paletteState.menuStillOpen) {
+    throw new Error("Mobile action menu stayed open behind the command palette.");
+  }
+  if (paletteState.optionCount === 0 || !paletteState.inputFocused || !paletteState.fits) {
+    throw new Error(`Command palette opened from the mobile menu in a bad state: ${JSON.stringify(paletteState)}`);
+  }
+  if (paletteState.topBarButtonWidth !== 0) {
+    throw new Error(
+      `Top-bar palette button is visible at mobile width, so this check no longer covers the only mobile route: ${JSON.stringify(paletteState)}`,
+    );
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => !document.querySelector('[role="dialog"][aria-label="Commands"]'),
+    null,
+    { timeout: 2000 },
+  );
+
   await saveButton.click();
   const savedGame = await page.waitForFunction(() => {
     const raw = localStorage.getItem("xiangqi:library:v1");
@@ -6425,7 +6467,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + pageConsole.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
