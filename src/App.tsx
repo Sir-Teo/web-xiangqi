@@ -967,6 +967,7 @@ function App() {
     setNodeReviewDataBulk,
     clearAllReviewData,
     getNodeFen,
+    getNodeMoves,
     jumpToMove,
     jumpToNode,
   } = useXiangqi();
@@ -1953,10 +1954,16 @@ function App() {
       return;
     }
     controller.currentNodeId = nodeId;
-    const fen = getNodeFen(nodeId);
     const goCmd = controller.phase === 'base' ? reviewPolicy.base.goCmd : (reviewRevisitGoCmd ?? reviewPolicy.base.goCmd);
-    queueSearch(`position fen ${fen}`, goCmd, 0, makeReviewTag(controller.phase, nodeId));
-  }, [finalizeReview, getNodeFen, isReady, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, updateReviewProgress]);
+    // The same command shape live analysis sends, rather than a bare FEN. The
+    // engine detects repetition from the move list, and in xiangqi a repetition
+    // is not a draw: perpetual check and perpetual chase lose for the side
+    // forcing them. Reviewing from a FEN alone asked the engine a different
+    // question from the one the board was asking, and gave the same node a
+    // different evaluation depending on whether it was reviewed or hovered.
+    const positionCommand = makeEnginePositionCommand(rootFen, getNodeMoves(nodeId));
+    queueSearch(positionCommand, goCmd, 0, makeReviewTag(controller.phase, nodeId));
+  }, [finalizeReview, getNodeMoves, isReady, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, rootFen, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;

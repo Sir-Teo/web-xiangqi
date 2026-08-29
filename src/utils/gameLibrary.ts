@@ -9,7 +9,7 @@ import type {
     SavedReviewAnnotation,
     SavedReviewSnapshot,
 } from './review';
-import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves } from './review';
+import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations } from './review';
 import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
 
 export { GAME_LIBRARY_STORAGE_KEY };
@@ -313,7 +313,32 @@ function normalizeSavedReview(raw: unknown, moves: string[]): SavedReviewSnapsho
             .filter((annotation): annotation is SavedReviewAnnotation => Boolean(annotation))
         : [];
 
-    return { summary, annotations };
+    // Rebuilt here rather than trusted as stored, so every reader sees the
+    // same number: the library card and the loaded game used to disagree,
+    // because only the load path recomputed. This is the read boundary, which
+    // is where the guard belongs -- the same argument as `storage.ts` guarding
+    // failure once instead of at each call site.
+    // Only the accuracy figures are recomputed here, and only because they are
+    // the ones this change moved: they used to be a flat mean and are now
+    // weighted by how volatile the game was around each move, so a summary
+    // written before that reports a number the current code cannot produce.
+    // The library card and the loaded game were disagreeing for exactly that
+    // reason -- only the load path recomputed.
+    //
+    // Everything else stays as normalization left it. The counts, the average
+    // centipawn loss and the move count are not scale-dependent, and this file
+    // has its own validation and fallbacks for them that a wholesale rebuild
+    // would quietly override.
+    const rebuilt = rebuildSummaryFromAnnotations(annotations, summary);
+    return {
+        summary: {
+            ...summary,
+            accuracy: rebuilt.accuracy,
+            redAccuracy: rebuilt.redAccuracy,
+            blackAccuracy: rebuilt.blackAccuracy,
+        },
+        annotations,
+    };
 }
 
 export function normalizeSavedGame(raw: unknown): SavedGame | null {

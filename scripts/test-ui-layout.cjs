@@ -1,3 +1,13 @@
+/**
+ * NOTE: the localStorage keys below mirror `src/utils/storageKeys.ts`. They are
+ * written as literals because they are used inside page.evaluate closures,
+ * which cannot capture Node values. When a key is renamed there it has to be
+ * renamed here too, and `storageKeys.test.ts` fails if a legacy name is left
+ * behind -- which is how the rename to `xiangqi:thing:v1` was caught: the app
+ * migrated fine, and this harness went on clearing a key nothing wrote any
+ * more, so preferences leaked between assertions and a Pro-mode check read
+ * "coach".
+ */
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -34,7 +44,7 @@ function buildFakePikafishScript({ variant, setupSource = "", goSource = "" }) {
   return `
 (() => {
   try {
-    window.localStorage?.removeItem("xiangqi-app-preferences");
+    window.localStorage?.removeItem("xiangqi:preferences:v1");
   } catch (_) {}
   try {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
@@ -101,7 +111,7 @@ async function installFakePikafish(page, fakeConfig) {
   const source = buildFakePikafishScript(fakeConfig);
   await page.addInitScript((config) => {
     try {
-      window.localStorage?.removeItem("xiangqi-app-preferences");
+      window.localStorage?.removeItem("xiangqi:preferences:v1");
     } catch (_) {}
     try {
       Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
@@ -242,9 +252,17 @@ async function installFakePikafish(page, fakeConfig) {
               const position = window.__lastPositionCommand || "";
               const count = (window.__reviewPositionCounts[position] || 0) + 1;
               window.__reviewPositionCounts[position] = count;
-              const isRoot = position.includes("1C5C1/9/RNBAKABNR w");
-              const isAfterRedCannon = position.includes("4C2C1") && position.includes(" b ");
-              const isAfterBlackHorse = position.includes("4C2C1") && position.includes("1c4nc1") && position.includes(" w ");
+              // Positions are identified by the move list, not by the FEN.
+              // The review used to send `position fen <fen>`; it now sends the
+              // same command live analysis does -- `position startpos moves
+              // ...` -- because the engine needs the history to see a
+              // repetition, and in xiangqi a repetition is not a draw.
+              const movesPart = position.includes(" moves ")
+                ? position.slice(position.indexOf(" moves ") + 7).trim()
+                : "";
+              const isRoot = movesPart === "";
+              const isAfterRedCannon = movesPart === "b2e2";
+              const isAfterBlackHorse = movesPart === "b2e2 h9g7";
               setTimeout(() => {
                 if (isRoot && count >= 2) {
                   emit("info depth 11 multipv 1 score cp 0 pv b0c2");
@@ -895,7 +913,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
   }
 
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-app-preferences", JSON.stringify({ assistMode: "pro" }));
+    localStorage.setItem("xiangqi:preferences:v1", JSON.stringify({ assistMode: "pro" }));
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
@@ -934,7 +952,7 @@ async function assertIllegalMoveShowsRuleHint(page) {
     throw new Error(`Pro illegal move hint failed: ${JSON.stringify(proIllegalState)}`);
   }
 
-  await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
+  await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1"));
 }
 
 async function assertAiPlayModeShowsEngineStatus(page) {
@@ -2030,12 +2048,12 @@ async function assertPreferencePersistence(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
   try {
-    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
+    await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1"));
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
     await page.evaluate(() => {
-      localStorage.setItem("xiangqi-app-preferences", JSON.stringify({
+      localStorage.setItem("xiangqi:preferences:v1", JSON.stringify({
         assistMode: "pro",
         analysisEngineMode: "stable",
         enginePvLineCount: 5,
@@ -2051,7 +2069,7 @@ async function assertPreferencePersistence(page) {
     if (oversizedPrefsState.assistMode !== "coach" || oversizedPrefsState.overflowX > 2) {
       throw new Error(`Oversized preferences were not ignored cleanly: ${JSON.stringify(oversizedPrefsState)}`);
     }
-    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences"));
+    await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1"));
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
@@ -2160,7 +2178,7 @@ async function assertPreferencePersistence(page) {
     await page.getByTestId("analysis-tab-engine").click();
     await page.getByTestId("engine-pv-lines-5").click();
 
-    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"));
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}"));
     if (
       stored.assistMode !== "pro" ||
       stored.analysisEngineMode !== "stable" ||
@@ -2215,7 +2233,7 @@ async function assertPreferencePersistence(page) {
 
     await page.evaluate(() => {
       window.dispatchEvent(new StorageEvent("storage", {
-        key: "xiangqi-app-preferences",
+        key: "xiangqi:preferences:v1",
         newValue: JSON.stringify({
           assistMode: "coach",
           analysisEngineMode: "optimized",
@@ -2231,7 +2249,7 @@ async function assertPreferencePersistence(page) {
       }));
     });
     await page.waitForFunction(() => {
-      const stored = JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}");
+      const stored = JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}");
       return document.querySelector(".app-shell")?.getAttribute("data-assist-mode") === "coach" &&
         document.querySelector('[data-testid="engine-pv-lines-1"]')?.getAttribute("aria-pressed") === "true" &&
         stored.assistMode === "coach" &&
@@ -2249,7 +2267,7 @@ async function assertPreferencePersistence(page) {
       profile: [...document.querySelectorAll(".engine-stat")]
         .map((el) => el.textContent || "")
         .find((text) => text.includes("Profile")) || "",
-      stored: JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"),
+      stored: JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}"),
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
     if (
@@ -2270,7 +2288,7 @@ async function assertPreferencePersistence(page) {
     await page.getByTestId("reset-preferences-btn").click();
     const resetState = await page.evaluate(() => ({
       assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
-      stored: JSON.parse(localStorage.getItem("xiangqi-app-preferences") || "{}"),
+      stored: JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}"),
       buttons: [...document.querySelectorAll(".settings-body .pill-btn-active")].map((el) => el.textContent?.trim() || ""),
     }));
 
@@ -2289,7 +2307,7 @@ async function assertPreferencePersistence(page) {
       throw new Error(`Reset preferences did not update settings controls: ${resetState.buttons.join(",")}`);
     }
   } finally {
-    await page.evaluate(() => localStorage.removeItem("xiangqi-app-preferences")).catch(() => {});
+    await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1")).catch(() => {});
   }
 }
 
@@ -2559,7 +2577,7 @@ async function assertLibraryLoadsAnalysisWorkspace(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "qa-load-analysis-workspace",
       savedAt: 1710000007000,
       gameMode: "PvAI-Black",
@@ -2875,7 +2893,7 @@ async function assertReviewBestMoveBranchAction(page) {
   });
   await page.evaluate(() => {
     const savedAt = 1710000005000;
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "review-best-branch",
       savedAt,
       gameMode: "PvP",
@@ -2955,7 +2973,7 @@ async function assertReviewBestMoveBranchAction(page) {
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
-    !libraryReviewMeta.metaText.includes("66% accuracy") ||
+    !libraryReviewMeta.metaText.includes("42% accuracy") ||
     !libraryReviewMeta.metaText.includes("Avg loss 130cp") ||
     !libraryReviewMeta.metaText.includes("Red 39%") ||
     !libraryReviewMeta.metaText.includes("Black 93%") ||
@@ -3088,14 +3106,19 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.rerunTitle !== "Engine is still loading" ||
     reviewReadout.clearReviewLabel !== "Clear completed game review" ||
     reviewReadout.clearReviewTitle !== "Clear completed game review" ||
-    !reviewReadout.bottomSummaryText.includes("66% accuracy") ||
+    // 42, not the 66 a plain mean of 39 and 93 gives. The game figure is
+    // weighted by how volatile the game was around each move: Red's mistake
+    // cost 21 points of winning chances and carries a weight of 10.4, Black's
+    // quiet reply 0.75. Per-side figures are unchanged -- a single move has the
+    // same mean either way. See utils/accuracyAggregate.
+    !reviewReadout.bottomSummaryText.includes("42% accuracy") ||
     !reviewReadout.bottomSummaryText.includes("Avg loss 130cp") ||
     !reviewReadout.bottomSummaryText.includes("Red 39%") ||
     !reviewReadout.bottomSummaryText.includes("Black 93%") ||
     !reviewReadout.bottomSummaryText.includes("0 blunders") ||
     !reviewReadout.bottomSummaryText.includes("1 mistake") ||
     !reviewReadout.bottomSummaryText.includes("0 inaccuracies") ||
-    !reviewReadout.bottomSummaryLabel.includes("Review summary: 66% accuracy") ||
+    !reviewReadout.bottomSummaryLabel.includes("Review summary: 42% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("average centipawn loss 130cp") ||
     !reviewReadout.bottomSummaryLabel.includes("Red 39% accuracy") ||
     !reviewReadout.bottomSummaryLabel.includes("Black 93% accuracy") ||
@@ -3180,7 +3203,7 @@ async function assertReviewBestMoveBranchAction(page) {
   await page.getByTestId("save-game-btn").click();
   await page.getByTestId("save-game-btn").getByText("Saved").waitFor({ timeout: 5000 });
   const resavedReview = await page.evaluate(() => {
-    const games = JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]");
+    const games = JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]");
     const copy = games.find((game) => game.id !== "review-best-branch" && game.review);
     return {
       count: games.length,
@@ -3219,7 +3242,7 @@ async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "decisive-arrow-quality",
       savedAt: 1710000006000,
       gameMode: "PvP",
@@ -3304,6 +3327,11 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
     await page.getByTestId("import-uci-line-btn").click();
     await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
     await page.getByTestId("analysis-tab-review").click();
+    // Live analysis and the review now send the same command for the same
+    // position -- that is the fix being checked elsewhere -- so the counter
+    // cannot tell them apart by string any more. Reset it here and everything
+    // counted from now on belongs to the review.
+    await page.evaluate(() => { window.__reviewPositionCounts = {}; });
     await page.getByTestId("start-review-btn").click();
     await page.getByTestId("cancel-review-bottom-btn").waitFor({ timeout: 5000 });
 
@@ -3353,7 +3381,7 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
     });
     await page.evaluate(() => {
       const moves = ["b2e2", "h9g7"];
-      localStorage.setItem("xiangqi-game-library", JSON.stringify([
+      localStorage.setItem("xiangqi:library:v1", JSON.stringify([
         {
           id: "qa-review-filter-a",
           savedAt: 1710000001000,
@@ -3515,12 +3543,21 @@ async function assertReviewRevisitRefreshesDecisionBestMove(browser) {
     await page.getByTestId("import-uci-line-btn").click();
     await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
     await page.getByTestId("analysis-tab-review").click();
+    // Live analysis and the review now send the same command for the same
+    // position -- that is the fix being checked elsewhere -- so the counter
+    // cannot tell them apart by string any more. Reset it here and everything
+    // counted from now on belongs to the review.
+    await page.evaluate(() => { window.__reviewPositionCounts = {}; });
     await page.getByTestId("start-review-btn").click();
     await page.getByTestId("review-try-best-0").waitFor({ timeout: 10000 });
 
     const state = await page.evaluate(() => {
+      // The root is the position command with no move list after it. It used
+      // to be recognised by its FEN; the review now sends `position startpos
+      // moves ...` like live analysis does, so the root is the one with
+      // nothing to append.
       const rootSearches = Object.entries(window.__reviewPositionCounts || {})
-        .filter(([position]) => position.includes("1C5C1/9/RNBAKABNR w"))
+        .filter(([position]) => !position.includes(" moves "))
         .reduce((sum, [, count]) => sum + Number(count || 0), 0);
       return {
         tryBestText: document.querySelector('[data-testid="review-try-best-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -3561,12 +3598,19 @@ async function assertReviewRevisitIgnoresGoodScoreSwings(browser) {
     await page.getByTestId("import-uci-line-btn").click();
     await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
     await page.getByTestId("analysis-tab-review").click();
+    // Live analysis and the review now send the same command for the same
+    // position -- that is the fix being checked elsewhere -- so the counter
+    // cannot tell them apart by string any more. Reset it here and everything
+    // counted from now on belongs to the review.
+    await page.evaluate(() => { window.__reviewPositionCounts = {}; });
     await page.getByTestId("start-review-btn").click();
     await page.getByTestId("rerun-review-btn").waitFor({ timeout: 10000 });
 
     const state = await page.evaluate(() => {
+      // See the note in the revisit check: the root is the position command
+      // with no move list after it.
       const rootSearches = Object.entries(window.__reviewPositionCounts || {})
-        .filter(([position]) => position.includes("1C5C1/9/RNBAKABNR w"))
+        .filter(([position]) => !position.includes(" moves "))
         .reduce((sum, [, count]) => sum + Number(count || 0), 0);
       return {
         focusText: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -3597,7 +3641,7 @@ async function assertCompletedReviewRerunRespectsEngineState(page) {
   });
   await page.evaluate(() => {
     const savedAt = 1710000006000;
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "review-rerun-state",
       savedAt,
       gameMode: "PvP",
@@ -4119,7 +4163,7 @@ async function assertRootStudyTreeShareExportSave(page) {
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.evaluate(() => {
-    localStorage.removeItem("xiangqi-game-library");
+    localStorage.removeItem("xiangqi:library:v1");
     window.__rootStudyWrites = [];
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -4175,7 +4219,7 @@ async function assertRootStudyTreeShareExportSave(page) {
   const exported = await page.evaluate(() => {
     const copiedUrl = window.__rootStudyWrites?.[0] ?? "";
     const copiedPgn = window.__rootStudyWrites?.[1] ?? "";
-    const saved = JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]")[0] || null;
+    const saved = JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]")[0] || null;
     const parsed = new URL(copiedUrl);
     return {
       copiedUrl,
@@ -4278,7 +4322,7 @@ async function assertOversizedShareTreeWarning(page) {
         }],
       }],
     };
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "qa-oversized-share-tree",
       savedAt: 1710000000000,
       gameMode: "PvP",
@@ -4829,7 +4873,7 @@ async function assertLibraryDeleteConfirmation(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "qa-delete-game",
       savedAt: 1710000000000,
       gameMode: "PvP",
@@ -4892,7 +4936,7 @@ async function assertLibraryDeleteConfirmation(page) {
   await page.getByTestId("confirm-delete-saved-qa-delete-game").click();
   await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 5000 });
   const remaining = await page.evaluate(() => {
-    const raw = localStorage.getItem("xiangqi-game-library");
+    const raw = localStorage.getItem("xiangqi:library:v1");
     return raw ? JSON.parse(raw).length : 0;
   });
   if (remaining !== 0) {
@@ -4907,7 +4951,7 @@ async function assertLibraryRespondsToStorageChanges(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", "[]");
+    localStorage.setItem("xiangqi:library:v1", "[]");
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
 
@@ -4915,7 +4959,7 @@ async function assertLibraryRespondsToStorageChanges(page) {
   await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 10000 });
 
   await page.evaluate(() => {
-    const key = "xiangqi-game-library";
+    const key = "xiangqi:library:v1";
     const nextValue = JSON.stringify([{
       id: "qa-storage-sync-game",
       savedAt: 1710000000000,
@@ -4974,7 +5018,7 @@ async function assertLibrarySavedGameSorting(page) {
       },
       annotations: [{ moveIndex: 0, evalScore: 20, quality: "good", swing: 20, reviewNote: "Solid choice." }],
     });
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([
       {
         id: "qa-sort-strong-red",
         savedAt: 1710000000500,
@@ -5160,7 +5204,7 @@ async function assertLargeLibraryRendersProgressively(page) {
       }
       return baseGame;
     });
-    localStorage.setItem("xiangqi-game-library", JSON.stringify(games));
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify(games));
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
 
@@ -5261,7 +5305,7 @@ async function assertLibraryPgnCopy(page) {
   });
   const blackToMoveFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 17";
   await page.evaluate((fen) => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([
       {
         id: "qa-copy-pgn-game",
         savedAt: 1710000000000,
@@ -5350,7 +5394,7 @@ async function assertSavedStudyTreeRoundTrip(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.removeItem("xiangqi-game-library");
+    localStorage.removeItem("xiangqi:library:v1");
     window.__savedStudyPgnWrites = [];
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -5374,7 +5418,7 @@ async function assertSavedStudyTreeRoundTrip(page) {
 
   await page.getByTestId("save-game-btn").click();
   const saved = await page.waitForFunction(() => {
-    const raw = localStorage.getItem("xiangqi-game-library");
+    const raw = localStorage.getItem("xiangqi:library:v1");
     if (!raw) return null;
     const games = JSON.parse(raw);
     return games.length === 1 ? games[0] : null;
@@ -5412,7 +5456,7 @@ async function assertVariationPreviewMatchesNavigation(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([
       {
         id: "qa-variation-preview",
         savedAt: 1710000000000,
@@ -5474,7 +5518,7 @@ async function assertLibraryPgnFailureFeedback(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "qa-library-export-failure",
       savedAt: 1710000000000,
       gameMode: "PvP",
@@ -5538,7 +5582,7 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([
       {
         id: "qa-long-label",
         savedAt: 1710000001000,
@@ -5625,7 +5669,7 @@ async function assertLibraryMutationFailureFeedback(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.setItem("xiangqi-game-library", JSON.stringify([{
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "qa-library-failure",
       savedAt: 1710000000000,
       gameMode: "PvP",
@@ -5640,7 +5684,7 @@ async function assertLibraryMutationFailureFeedback(page) {
   await page.evaluate(() => {
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function setItemWithLibraryFailure(key, value) {
-      if (key === "xiangqi-game-library") {
+      if (key === "xiangqi:library:v1") {
         throw new DOMException("Simulated full storage", "QuotaExceededError");
       }
       return originalSetItem.call(this, key, value);
@@ -5675,7 +5719,7 @@ async function assertLibraryMutationFailureFeedback(page) {
   await page.getByTestId("library-action-error").getByText("Could not rename").waitFor({ timeout: 5000 });
 
   const afterRename = await page.evaluate(() => ({
-    label: JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]")[0]?.label || "",
+    label: JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]")[0]?.label || "",
     editing: Boolean(document.querySelector('[data-testid="rename-form-saved-qa-library-failure"]')),
     alertRole: document.querySelector('[data-testid="library-action-error"]')?.getAttribute("role") || "",
   }));
@@ -5689,7 +5733,7 @@ async function assertLibraryMutationFailureFeedback(page) {
   await page.getByTestId("library-action-error").getByText("Could not delete").waitFor({ timeout: 5000 });
 
   const afterDelete = await page.evaluate(() => ({
-    gameCount: JSON.parse(localStorage.getItem("xiangqi-game-library") || "[]").length,
+    gameCount: JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]").length,
     stillVisible: document.body.textContent?.includes("Mutation failure QA") || false,
     confirmVisible: Boolean(document.querySelector('[data-testid="confirm-delete-saved-qa-library-failure"]')),
   }));
@@ -5705,7 +5749,7 @@ async function assertSaveFailureFeedback(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.removeItem("xiangqi-game-library");
+    localStorage.removeItem("xiangqi:library:v1");
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
@@ -5715,7 +5759,7 @@ async function assertSaveFailureFeedback(page) {
   await page.evaluate(() => {
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function setItemWithLibraryFailure(key, value) {
-      if (key === "xiangqi-game-library") {
+      if (key === "xiangqi:library:v1") {
         throw new DOMException("Simulated full storage", "QuotaExceededError");
       }
       return originalSetItem.call(this, key, value);
@@ -5725,7 +5769,7 @@ async function assertSaveFailureFeedback(page) {
   await page.getByTestId("save-game-btn").click();
   await page.getByTestId("save-game-btn").getByText("Save Failed").waitFor({ timeout: 5000 });
   const state = await page.evaluate(() => ({
-    stored: localStorage.getItem("xiangqi-game-library"),
+    stored: localStorage.getItem("xiangqi:library:v1"),
     title: document.querySelector('[data-testid="save-game-btn"]')?.getAttribute("title") || "",
     className: document.querySelector('[data-testid="save-game-btn"]')?.className || "",
   }));
@@ -5745,7 +5789,7 @@ async function assertMobileSaveLibraryActions(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.removeItem("xiangqi-game-library");
+    localStorage.removeItem("xiangqi:library:v1");
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
@@ -5840,7 +5884,7 @@ async function assertMobileSaveLibraryActions(page) {
 
   await saveButton.click();
   const savedGame = await page.waitForFunction(() => {
-    const raw = localStorage.getItem("xiangqi-game-library");
+    const raw = localStorage.getItem("xiangqi:library:v1");
     if (!raw) return null;
     const games = JSON.parse(raw);
     return games.length === 1 ? games[0] : null;
@@ -6099,7 +6143,7 @@ async function assertGameOverReviewPreservesResult(page) {
     timeout: 60000,
   });
   await page.evaluate(() => {
-    localStorage.removeItem("xiangqi-game-library");
+    localStorage.removeItem("xiangqi:library:v1");
   });
 
   const terminalFen = "4k4/3RRR3/9/9/9/9/9/9/9/4K4 b - - 0 1";
@@ -6153,7 +6197,7 @@ async function assertGameOverReviewPreservesResult(page) {
 
   await page.getByTestId("save-game-btn").click();
   const savedResult = await page.waitForFunction(() => {
-    const raw = localStorage.getItem("xiangqi-game-library");
+    const raw = localStorage.getItem("xiangqi:library:v1");
     if (!raw) return null;
     const games = JSON.parse(raw);
     return games.length === 1 ? games[0].result : null;
@@ -6211,7 +6255,7 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
 async function clearAutoSaveBetweenNavigations(page) {
   await page.addInitScript(() => {
     try {
-      window.localStorage.removeItem("xiangqi-auto-saved-game");
+      window.localStorage.removeItem("xiangqi:auto-saved-game:v1");
     } catch {
       // Storage unavailable in this context; nothing to clear.
     }

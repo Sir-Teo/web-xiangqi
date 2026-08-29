@@ -72,6 +72,7 @@ try {
   compileTsModule("src/utils/moveImport.ts");
   compileTsModule("src/utils/aiOpponent.ts");
   compileTsModule("src/utils/analysisProfile.ts");
+  compileTsModule("src/utils/storageKeys.ts");
 
   const library = require(path.join(tempDir, "gameLibrary.js"));
   const shareTree = require(path.join(tempDir, "shareTree.js"));
@@ -81,6 +82,7 @@ try {
   const xiangqi = require(path.join(tempDir, "xiangqi.js"));
   const aiOpponent = require(path.join(tempDir, "aiOpponent.js"));
   const analysisProfile = require(path.join(tempDir, "analysisProfile.js"));
+  const storageKeys = require(path.join(tempDir, "storageKeys.js"));
   const customFen = "4k4/9/9/9/4p4/9/9/9/9/4K4 w - - 0 1";
 
   const fenOnlySave = library.normalizeSavedGame({
@@ -329,7 +331,16 @@ try {
   });
   assert(corruptReviewedSave?.review, "Corrupt but shape-valid review snapshots should normalize.");
   assert(corruptReviewedSave.review.summary.totalMoves === 2, "Negative reviewed move counts should fall back to the saved line length.");
-  assert(corruptReviewedSave.review.summary.accuracy === 100, "Review accuracy should be clamped to 0-100.");
+  // The figure is now derived from the annotations on read rather than taken
+  // from the file and clamped, so a corrupt stored accuracy no longer survives
+  // as the clamp value -- it is replaced by one computed from the per-move
+  // records, garbage in and all. What has to hold either way is that nothing
+  // outside 0-100 reaches the screen, which is what this asserts.
+  const corruptAccuracy = corruptReviewedSave.review.summary.accuracy;
+  assert(
+    Number.isFinite(corruptAccuracy) && corruptAccuracy >= 0 && corruptAccuracy <= 100,
+    `Review accuracy should stay inside 0-100, got ${corruptAccuracy}.`
+  );
   assert(corruptReviewedSave.review.summary.bestCount === 1, "Review counts should be truncated to nonnegative integers.");
   assert(corruptReviewedSave.review.summary.goodCount === 2, "Review counts should preserve valid integer portions.");
   assert(corruptReviewedSave.review.summary.inaccuracyCount === 0, "Negative review counts should normalize to zero.");
@@ -451,6 +462,30 @@ try {
   // The key the app writes under, read from the app rather than copied here.
   // It was spelled out as a literal, so versioning the key broke this script
   // and not the behaviour it checks.
+  // The browser harness writes and clears these keys from inside page.evaluate
+  // closures, which cannot capture Node values, so it spells them out. That is
+  // a copy of a rule storageKeys.ts owns, and the rename to `xiangqi:thing:v1`
+  // left the harness clearing names nothing wrote any more: preferences leaked
+  // between assertions and a Pro-mode check read "coach". The suite that caught
+  // it is not in `verify`, so it caught it late. This check is.
+  {
+    const scriptsDir = __dirname;
+    const legacyNames = Object.values(storageKeys.LEGACY_STORAGE_KEYS);
+    const offenders = [];
+    for (const entry of fs.readdirSync(scriptsDir)) {
+      if (!/\.(cjs|js|mjs)$/.test(entry)) continue;
+      const source = fs.readFileSync(path.join(scriptsDir, entry), "utf8");
+      for (const legacy of legacyNames) {
+        const uses = source.split(`"${legacy}"`).length - 1;
+        if (uses > 0) offenders.push(`${entry}: ${legacy} x${uses}`);
+      }
+    }
+    assert(
+      offenders.length === 0,
+      `Scripts still use a storage key the app no longer writes: ${offenders.join(", ")}`
+    );
+  }
+
   const libraryStorageKey = library.GAME_LIBRARY_STORAGE_KEY;
   const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");

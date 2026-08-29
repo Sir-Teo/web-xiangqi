@@ -20,6 +20,7 @@ import {
     otherSide,
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
+import { getMovesToNode } from '../utils/moveTreePath';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
@@ -675,6 +676,10 @@ export function useXiangqi() {
         return boardToFen(pos.board, pos.sideToMove, fullmoveForPly(rootPosition, ply));
     }, [rootPosition, treeNodes]);
 
+    const getNodeMoves = useCallback((nodeId: string): string[] => (
+        getMovesToNode(treeNodes, nodeId, ROOT_NODE_ID)
+    ), [treeNodes]);
+
     const setNodeEval = useCallback((nodeId: string, evalScore: number) => {
         if (!Number.isFinite(evalScore) || nodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
@@ -875,6 +880,7 @@ export function useXiangqi() {
         setNodeReviewDataBulk,
         clearAllReviewData,
         getNodeFen,
+        getNodeMoves,
         loadMoves,
         loadMoveTree,
         validateMoveTree,
