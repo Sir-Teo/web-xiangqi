@@ -1,10 +1,25 @@
 name: CI
 
-# Pull requests only. Adding a `push` trigger as well fired both events for a
-# branch and ran this 90-minute job twice per change; a push to main is covered
-# by the deploy workflow, which now runs the same gates before publishing.
+# Pull requests, and pushes to main.
+#
+# `push` was unrestricted here once, which fired alongside `pull_request` for
+# the same branch and ran this job twice per change; scoping it to main fixes
+# that -- a pull request gets one run, and the merge gets a separate run on
+# different content.
+#
+# The comment this replaces said a push to main was "already covered by the
+# deploy workflow, which runs the same gates". That was false, and it is the
+# gap this trigger closes: the deploy runs audit, lint, unit tests and the
+# build, but no deploy in any of the three sibling repos runs a browser suite.
+# Those live only here, so without a push trigger nothing browser-level ever
+# ran against main.
+#
+# This workflow deploys nothing. If it goes red the site still publishes, which
+# is the reason the browser suites belong here rather than in the deploy.
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # A new push to the same pull request supersedes the run in flight. This is the
