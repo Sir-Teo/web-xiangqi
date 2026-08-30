@@ -1639,7 +1639,7 @@ async function assertEngineTelemetryDashboard(browser) {
         searchDetail.includes("123k nodes") &&
         searchDetail.includes("156ms") &&
         /Line 1\s*Best/.test(pvText) &&
-        pvText.includes("B2→E2");
+        pvText.includes("C8=5");
     }, null, { timeout: 15000 });
 
     const telemetry = await page.evaluate(() => {
@@ -1684,14 +1684,14 @@ async function assertEngineTelemetryDashboard(browser) {
       telemetry.stageEvalText !== "Red POV +0.4" ||
       telemetry.stageEvalLabel !== "Live engine evaluation, Red POV +0.4" ||
       !telemetry.firstLineLabel.includes("depth 8") ||
-      !telemetry.firstLineLabel.includes("moves B2→E2 H9→G7") ||
-      telemetry.firstLineActionsLabel !== "Actions for engine line 1, depth 8, moves B2→E2 H9→G7" ||
-      telemetry.playLineLabel !== "Play B2→E2 from engine line 1" ||
-      telemetry.playLineTitle !== "Play B2→E2 from this engine line" ||
-      telemetry.copyLineLabel !== "Copy engine line 1: B2→E2 H9→G7" ||
-      telemetry.copyLineTitle !== "Copy this engine line as raw UCI moves: B2→E2 H9→G7" ||
+      !telemetry.firstLineLabel.includes("moves C8=5 H8+7") ||
+      telemetry.firstLineActionsLabel !== "Actions for engine line 1, depth 8, moves C8=5 H8+7" ||
+      telemetry.playLineLabel !== "Play C8=5 from engine line 1" ||
+      telemetry.playLineTitle !== "Play C8=5 from this engine line" ||
+      telemetry.copyLineLabel !== "Copy engine line 1: C8=5 H8+7" ||
+      telemetry.copyLineTitle !== "Copy this engine line as raw UCI moves: b2e2 h9g7" ||
       !/Line 1\s*Best/.test(telemetry.pvText) ||
-      !telemetry.pvText.includes("B2→E2") ||
+      !telemetry.pvText.includes("C8=5") ||
       telemetry.wdlLabel !== "Win/draw/loss estimate: Red 41.0%, Draw 23.0%, Black 36.0%" ||
       telemetry.wdlTitle !== telemetry.wdlLabel ||
       telemetry.wdlText !== "Red 41.0%Draw 23.0%Black 36.0%" ||
@@ -2070,7 +2070,7 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
     }));
     if (
       !state.rows.includes("b0c2") ||
-      !state.graphPoint.includes("Red B0") ||
+      !state.graphPoint.includes("Red H8+7") ||
       state.graphEval !== "Red POV 0.00" ||
       state.goCount < 1 ||
       state.overflowX > 2
@@ -2794,7 +2794,7 @@ async function assertBlackToMoveTreeNumbering(page) {
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
   await page.getByTestId("graph-current-point").waitFor({ timeout: 5000 });
   const blackGraphPoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(blackGraphPoint || "").includes("Black A6")) {
+  if (!String(blackGraphPoint || "").includes("Black P1+1")) {
     throw new Error(`Custom black-to-move graph label used the wrong side: ${String(blackGraphPoint || "").trim()}`);
   }
 
@@ -2802,7 +2802,7 @@ async function assertBlackToMoveTreeNumbering(page) {
   await page.locator('.hitbox[data-file="0"][data-rank="4"]').click();
   await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
   const redGraphPoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(redGraphPoint || "").includes("Red A3")) {
+  if (!String(redGraphPoint || "").includes("Red P9+1")) {
     throw new Error(`Custom black-to-move reply graph label used the wrong side: ${String(redGraphPoint || "").trim()}`);
   }
 
@@ -2832,7 +2832,7 @@ async function assertMoveLineImport(page) {
   await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
 
   const activePoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(activePoint || "").includes("Red B0") || !String(activePoint || "").includes("C2")) {
+  if (!String(activePoint || "").includes("Red H8+7")) {
     throw new Error(`Imported line did not land on the final move: ${String(activePoint || "").trim()}`);
   }
 
@@ -2872,7 +2872,7 @@ async function assertMoveLineImportPreservesVariations(page) {
   }
 
   const activePoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+  if (!String(activePoint || "").includes("Black H8+7")) {
     throw new Error(`Variation import did not land on the mainline final move: ${String(activePoint || "").trim()}`);
   }
 }
@@ -2902,7 +2902,7 @@ async function assertMoveLineImportRecoversUnclosedVariation(page) {
   }
 
   const activePoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+  if (!String(activePoint || "").includes("Black H8+7")) {
     throw new Error(`Unclosed variation import did not recover the mainline final move: ${String(activePoint || "").trim()}`);
   }
 }
@@ -3107,7 +3107,7 @@ async function assertReviewBestMoveBranchAction(page) {
   if (
     !reviewReadout.focus.includes("Study focus") ||
     !reviewReadout.focus.includes("Mistake at ply 1") ||
-    !reviewReadout.focus.includes("B0→C2") ||
+    !reviewReadout.focus.includes("H8+7") ||
     !reviewReadout.focusEval.includes("0.00") ||
     !reviewReadout.focusEval.includes("-2.40") ||
     reviewReadout.focusEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
@@ -3550,7 +3550,7 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       state.sideFilter !== "all" ||
       state.qualityFilter !== "all" ||
       !state.momentText.includes("Blunder") ||
-      !state.momentText.includes("H9→G7") ||
+      !state.momentText.includes("H8+7") ||
       !state.momentText.includes("Black POV") ||
       !state.momentEvalText.includes("Black POV") ||
       !state.momentEvalText.includes("+2.40") ||
@@ -3612,10 +3612,10 @@ async function assertReviewRevisitRefreshesDecisionBestMove(browser) {
     });
 
     if (
-      !state.tryBestText.includes("B0→C2") ||
-      state.tryBestText.includes("H2→E2") ||
-      !state.tryBestLabel.includes("B0→C2") ||
-      !state.focusText.includes("B0→C2") ||
+      !state.tryBestText.includes("H8+7") ||
+      state.tryBestText.includes("C2=5") ||
+      !state.tryBestLabel.includes("H8+7") ||
+      !state.focusText.includes("H8+7") ||
       state.rootSearches < 2 ||
       state.overflowX > 2
     ) {
@@ -4140,7 +4140,7 @@ async function assertShareLinkRoundTrip(page) {
   await page.goto(copiedUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
   const activePoint = await page.getByTestId("graph-current-point").textContent();
-  if (!String(activePoint || "").includes("Black H9") || !String(activePoint || "").includes("G7")) {
+  if (!String(activePoint || "").includes("Black H8+7")) {
     throw new Error(`Share link did not restore the final move: ${String(activePoint || "").trim()}`);
   }
   const fen = await page.locator(".bottombar-fen").getAttribute("title");
@@ -4515,7 +4515,7 @@ async function assertInvalidShareTreeFallsBackToMainline(page) {
     !loaded.rows.includes("b2e2") ||
     !loaded.rows.includes("h9g7") ||
     loaded.variations.includes("a0a9") ||
-    !loaded.activePoint.includes("Black H9") ||
+    !loaded.activePoint.includes("Black H8+7") ||
     loaded.overflowX > 2
   ) {
     throw new Error(`Invalid share tree did not fall back cleanly to the mainline: ${JSON.stringify(loaded)}`);
@@ -4546,7 +4546,7 @@ async function assertMismatchedShareTreeFallsBackToMainline(page) {
     !loaded.rows.includes("b0c2") ||
     loaded.rows.includes("b2e2") ||
     loaded.variations.includes("h9g7") ||
-    !loaded.activePoint.includes("Red B0") ||
+    !loaded.activePoint.includes("Red H8+7") ||
     loaded.overflowX > 2
   ) {
     throw new Error(`Mismatched share tree did not fall back to the explicit mainline: ${JSON.stringify(loaded)}`);
@@ -4653,7 +4653,7 @@ async function assertMoveLineFileImport(page) {
     await page.getByTestId("import-uci-line-btn").click();
     await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
     const activePoint = await page.getByTestId("graph-current-point").textContent();
-    if (!String(activePoint || "").includes("Red B0") || !String(activePoint || "").includes("C2")) {
+    if (!String(activePoint || "").includes("Red H8+7")) {
       throw new Error(`File-imported line did not land on the final move: ${String(activePoint || "").trim()}`);
     }
   } finally {
@@ -6048,7 +6048,7 @@ async function assertSimpleRepetitionDoesNotAutoDraw(page) {
     activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     moveChips: document.querySelectorAll(".mtree-chip").length,
   }));
-  if (continuedState.modalTitle || continuedState.moveChips < 9 || !continuedState.activePoint.includes("Red A0")) {
+  if (continuedState.modalTitle || continuedState.moveChips < 9 || !continuedState.activePoint.includes("Red R9+1")) {
     throw new Error(`Repeated position did not remain playable: ${JSON.stringify(continuedState)}`);
   }
 }

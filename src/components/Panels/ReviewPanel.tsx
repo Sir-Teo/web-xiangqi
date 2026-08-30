@@ -36,6 +36,13 @@ type Props = {
     onClear: () => void;
     onNavigateNode: (nodeId: string) => void;
     onPlayBestMove?: (nodeId: string, bestMove: string) => void;
+    /**
+     * Writes one move of the reviewed line in the notation the reader chose.
+     * A key moment carries move ids, not boards, and WXF and Chinese both need
+     * the position the move was played in -- so the caller, which holds the
+     * tree, does the lookup. Defaults to coordinates.
+     */
+    formatMoveText?: (nodeId: string, uci: string) => string;
 };
 
 type ReviewMomentSideFilter = 'all' | 'red' | 'black';
@@ -57,6 +64,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     onClear,
     onNavigateNode,
     onPlayBestMove,
+    formatMoveText = (_nodeId, uci) => formatUciMove(uci),
 }: Props) {
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
     const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
@@ -316,7 +324,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     <strong>{formatReviewChanceLoss(focusMoment)}</strong>
                                 </div>
                                 {focusMoment.bestMove ? (
-                                    <em>Try {formatUciMove(focusMoment.bestMove)}</em>
+                                    <em>Try {formatMoveText(focusMoment.nodeId, focusMoment.bestMove)}</em>
                                 ) : null}
                                 <p>{focusMoment.note}</p>
                             </>
@@ -376,14 +384,14 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         onClick={() => onNavigateNode(moment.nodeId)}
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatUciMove(moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, ${formatReviewEvalChangeLabel(moment)}${moment.bestMove ? `, engine suggested ${formatUciMove(moment.bestMove)}` : ''}`}
+                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatMoveText(moment.nodeId, moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, ${formatReviewEvalChangeLabel(moment)}${moment.bestMove ? `, engine suggested ${formatMoveText(moment.nodeId, moment.bestMove)}` : ''}`}
                                     >
                                         <div className="review-moment-topline">
                                             <span>{formatReviewQuality(moment.quality)}</span>
                                             <strong>{moment.side} · ply {moment.ply}</strong>
                                         </div>
                                         <div className="review-moment-main">
-                                            <span>{formatUciMove(moment.playedMove)}</span>
+                                            <span>{formatMoveText(moment.nodeId, moment.playedMove)}</span>
                                             <strong>{formatSwing(moment.swing)}</strong>
                                         </div>
                                         <div
@@ -408,7 +416,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         </div>
                                         <p>{moment.note}</p>
                                         {moment.bestMove ? (
-                                            <em>Best: {formatUciMove(moment.bestMove)}</em>
+                                            <em>Best: {formatMoveText(moment.nodeId, moment.bestMove)}</em>
                                         ) : null}
                                     </button>
                                     {moment.bestMove && onPlayBestMove ? (
@@ -417,9 +425,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             className="review-best-move-btn"
                                             onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
                                             data-testid={`review-try-best-${moment.moveIndex}`}
-                                            aria-label={`Try engine suggestion ${formatUciMove(moment.bestMove)} instead of ${formatUciMove(moment.playedMove)}`}
+                                            aria-label={`Try engine suggestion ${formatMoveText(moment.nodeId, moment.bestMove)} instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
                                         >
-                                            Try best <strong>{formatUciMove(moment.bestMove)}</strong>
+                                            Try best <strong>{formatMoveText(moment.nodeId, moment.bestMove)}</strong>
                                         </button>
                                     ) : null}
                                 </div>

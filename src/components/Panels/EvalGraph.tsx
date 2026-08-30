@@ -8,6 +8,7 @@ import {
     isCriticalReviewQuality,
 } from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
+import { boardBeforeRecord, formatMoveInStyle, type XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import {
     describeAnalysisActivity,
     formatAnalysisActivity,
@@ -21,6 +22,7 @@ interface EvalGraphProps {
     currentEval: number | null;
     isSearching?: boolean;
     activity?: AnalysisActivity;
+    notationStyle?: XiangqiNotationStyle;
     branchCounts?: Record<number, number>;
     rootBranchCount?: number;
     loadSweepToken?: number;
@@ -35,6 +37,10 @@ type EvalPoint = {
     eval: number;
     ply: number;
     uci: string | null;
+    /** The move written the way the reader asked for it. */
+    notation: string | null;
+    /** The engine's preference, in the same notation. */
+    bestMoveNotation: string | null;
     mover: 'red' | 'black' | 'start';
     branchCount: number;
     quality?: MoveRecord['quality'];
@@ -57,6 +63,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     currentEval,
     isSearching = false,
     activity = 'idle',
+    notationStyle = 'uci',
     branchCounts = {},
     rootBranchCount = 0,
     loadSweepToken = 0,
@@ -78,16 +85,23 @@ export const EvalGraph = React.memo(function EvalGraph({
             eval: 0,
             ply: 0,
             uci: null,
+            notation: null,
+            bestMoveNotation: null,
             mover: 'start',
             branchCount: rootBranchCount,
         }];
         history.forEach((move, index) => {
             if (typeof move.evalScore === 'number') previous = move.evalScore;
+            const before = notationStyle === 'uci' ? null : boardBeforeRecord(move);
             next.push({
                 moveIndex: index,
                 eval: previous,
                 ply: index + 1,
                 uci: move.uci,
+                notation: before ? formatMoveInStyle(before, move.uci, notationStyle) : formatUciMove(move.uci),
+                bestMoveNotation: move.bestMove
+                    ? (before ? formatMoveInStyle(before, move.bestMove, notationStyle) : formatUciMove(move.bestMove))
+                    : null,
                 mover: getMoveRecordMover(move, index),
                 branchCount: branchCounts[index] ?? 0,
                 quality: move.quality,
@@ -109,7 +123,7 @@ export const EvalGraph = React.memo(function EvalGraph({
             };
         }
         return next;
-    }, [history, currentMoveIndex, currentEval, isSearching, branchCounts, rootBranchCount]);
+    }, [history, currentMoveIndex, currentEval, isSearching, branchCounts, rootBranchCount, notationStyle]);
 
     const maxEvalClamp = 1200;
     const chartHeight = shortViewport ? 184 : 248;
@@ -617,7 +631,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             ) : null}
                             {tooltipPoint?.reviewNote ? <span>{tooltipPoint.reviewNote}</span> : null}
                             {tooltipPoint?.bestMove && tooltipPoint.bestMove !== tooltipPoint.uci ? (
-                                <em>Engine: {formatUciMove(tooltipPoint.bestMove)}</em>
+                                <em>Engine: {tooltipPoint.bestMoveNotation ?? formatUciMove(tooltipPoint.bestMove)}</em>
                             ) : null}
                             {tooltipBranchCount > 1 ? <em>{tooltipBranchCount} branches</em> : null}
                         </div>
@@ -650,7 +664,8 @@ function formatRedPovEval(score: number): string {
 function formatPointLabel(point: EvalPoint): string {
     if (point.moveIndex === -1) return 'Start';
     const side = point.mover === 'red' ? 'Red' : 'Black';
-    return `${side} ${point.uci ? formatUciMove(point.uci) : ''}`.trim();
+    const move = point.notation ?? (point.uci ? formatUciMove(point.uci) : '');
+    return `${side} ${move}`.trim();
 }
 
 function formatGraphValueText(point: EvalPoint): string {
@@ -661,7 +676,9 @@ function formatGraphValueText(point: EvalPoint): string {
         typeof point.winPercentLoss === 'number' && point.mover !== 'start'
             ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)
             : '',
-        point.bestMove && point.bestMove !== point.uci ? `engine suggests ${formatUciMove(point.bestMove)}` : '',
+        point.bestMove && point.bestMove !== point.uci
+            ? `engine suggests ${point.bestMoveNotation ?? formatUciMove(point.bestMove)}`
+            : '',
         point.branchCount > 1 ? `${point.branchCount} branches` : '',
     ].filter(Boolean);
     return parts.join(', ');

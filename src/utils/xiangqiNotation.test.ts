@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+    boardBeforeRecord,
     fileNumberFor,
     formatChineseMove,
+    formatLineInStyle,
     formatMoveInStyle,
+    formatRecordInStyle,
     formatWxfMove,
     isNotationStyle,
 } from './xiangqiNotation';
@@ -211,5 +214,58 @@ describe('falling back rather than lying', () => {
         expect(isNotationStyle('uci')).toBe(true);
         expect(isNotationStyle('algebraic')).toBe(false);
         expect(isNotationStyle(null)).toBe(false);
+    });
+});
+
+describe('recovering the position a recorded move was played in', () => {
+    it('puts the piece and its capture back', () => {
+        const after = board('rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR');
+        const before = boardBeforeRecord({ uci: 'h2e2', piece: 'C', captured: '', board: after });
+        expect(before?.[2][7]).toBe('C');
+        expect(before?.[2][4]).toBe('');
+    });
+
+    it('restores a captured piece to the square it stood on', () => {
+        const after = board('4k4/9/9/9/9/9/9/9/9/4K3R');
+        const before = boardBeforeRecord({ uci: 'i1i0', piece: 'R', captured: 'r', board: after });
+        expect(before?.[0][8]).toBe('r');
+        expect(before?.[1][8]).toBe('R');
+    });
+
+    it('formats a record without being handed the board before it', () => {
+        const after = board('rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR');
+        const record = { uci: 'h2e2', piece: 'C', captured: '', board: after };
+        expect(formatRecordInStyle(record, 'wxf')).toBe('C2=5');
+        expect(formatRecordInStyle(record, 'chinese')).toBe('炮二平五');
+        expect(formatRecordInStyle(record, 'uci')).toBe('H2E2');
+    });
+});
+
+describe('a principal variation is replayed, not formatted move by move', () => {
+    it('follows the board as the line runs', () => {
+        // Formatting move two against the starting position would call the
+        // black horse H8+7 again; it has already moved.
+        expect(formatLineInStyle(start(), ['h2e2', 'h9g7', 'h0g2'], 'wxf')).toBe('C2=5 H8+7 H2+3');
+        expect(formatLineInStyle(start(), ['h2e2', 'h9g7'], 'chinese')).toBe('炮二平五 馬8進7');
+    });
+
+    it('re-reads which piece is in front as the line changes it', () => {
+        // Two red chariots on the a file, front at a2. After the front one
+        // advances the rear one is still the rear one, but the gap has moved.
+        const stacked = board('4k4/9/9/9/9/9/9/R8/9/R3K4');
+        expect(formatLineInStyle(stacked, ['a2a5', 'e9e8', 'a0a2'], 'wxf')).toBe('+R+3 K5+1 -R+2');
+    });
+
+    it('says how many moves it left out', () => {
+        const line = ['h2e2', 'h9g7', 'h0g2', 'i9h9', 'i0i1', 'b7c7', 'b2c2', 'a6a5'];
+        expect(formatLineInStyle(start(), line, 'wxf', 3)).toBe('C2=5 H8+7 H2+3 +5');
+    });
+
+    it('keeps what it could follow when a line goes off the board', () => {
+        expect(formatLineInStyle(start(), ['h2e2', 'e4e5'], 'wxf')).toBe('C2=5 E4E5');
+    });
+
+    it('leaves UCI alone', () => {
+        expect(formatLineInStyle(start(), ['h2e2', 'h9g7'], 'uci')).toBe('H2E2 H9G7');
     });
 });

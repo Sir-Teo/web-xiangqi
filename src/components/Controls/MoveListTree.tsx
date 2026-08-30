@@ -11,6 +11,12 @@ import {
     isCriticalReviewQuality,
 } from '../../utils/review';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
+import {
+    boardBeforeRecord,
+    formatMoveInStyle,
+    formatRecordInStyle,
+    type XiangqiNotationStyle,
+} from '../../utils/xiangqiNotation';
 import { IconSpark, IconCornerDownRight } from '../icons';
 
 type Props = {
@@ -20,6 +26,7 @@ type Props = {
     currentNodeId: string;
     currentMoveIndex: number;
     activeLineNodeIds: string[];
+    notationStyle?: XiangqiNotationStyle;
     onNavigateNode: (nodeId: string) => void;
 };
 
@@ -41,6 +48,7 @@ export const MoveListTree = memo(function MoveListTree({
     currentNodeId,
     currentMoveIndex: _currentMoveIndex,
     activeLineNodeIds,
+    notationStyle = 'uci',
     onNavigateNode,
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -138,15 +146,23 @@ export const MoveListTree = memo(function MoveListTree({
                     onClick={() => onNavigateNode(nodeId)}
                     title={formatMoveTitle(record)}
                     aria-current={isCurrent ? 'step' : undefined}
-                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove)}
+                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle)}
                 >
-                    {formatMoveLabel(record)}
-                    <span className="move-uci">{record.uci}</span>
+                    {/* One authoritative reading of the move, then the raw
+                        coordinates as the cross-reference -- raw, because that
+                        is the form you paste into an engine or a share link.
+                        In UCI mode the reading already *is* the coordinates, so
+                        the second line goes: it was printing `h2e2` under
+                        `H2→E2`, which is the same move written twice. */}
+                    {formatMoveLabel(record, notationStyle)}
+                    {notationStyle === 'uci'
+                        ? null
+                        : <span className="move-uci">{record.uci}</span>}
                     {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
                 </button>
                 {isBadMove && coachMove && (
                     <span className="mtree-coach-hint" title={`Engine suggested: ${formatUciMove(coachMove)}`}>
-                        <IconSpark /> {formatUciMove(coachMove)}
+                        <IconSpark /> {formatAlternative(record, coachMove, notationStyle)}
                     </span>
                 )}
                 {note ? (
@@ -236,7 +252,13 @@ export const MoveListTree = memo(function MoveListTree({
 
 MoveListTree.displayName = 'MoveListTree';
 
-function formatMoveLabel(record: NonNullable<MoveTreeNode['record']>) {
+function formatMoveLabel(
+    record: NonNullable<MoveTreeNode['record']>,
+    notationStyle: XiangqiNotationStyle
+) {
+    // WXF spells the piece out as a letter and Chinese as the same glyph the
+    // board draws, so neither needs the glyph repeated in front of it.
+    if (notationStyle !== 'uci') return formatMoveNotation(record, notationStyle);
     return formatMoveRecordLabel(record);
 }
 
@@ -250,17 +272,43 @@ function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
     return record.quality ? `${title} - ${formatReviewQuality(record.quality)}` : title;
 }
 
+function formatMoveNotation(
+    record: NonNullable<MoveTreeNode['record']>,
+    notationStyle: XiangqiNotationStyle
+) {
+    return formatRecordInStyle(record, notationStyle);
+}
+
+/**
+ * A move the engine preferred, written in the same notation as the move it
+ * replaces. It was played from the same position, so it reads off the same
+ * board -- and showing "C2=5" beside a coordinate pair would make the two look
+ * like different kinds of thing.
+ */
+function formatAlternative(
+    record: NonNullable<MoveTreeNode['record']>,
+    uci: string,
+    notationStyle: XiangqiNotationStyle
+) {
+    if (notationStyle === 'uci') return formatUciMove(uci);
+    const before = boardBeforeRecord(record);
+    return before ? formatMoveInStyle(before, uci, notationStyle) : formatUciMove(uci);
+}
+
 function formatMoveAriaLabel(
     record: NonNullable<MoveTreeNode['record']>,
     isCurrent: boolean,
-    coachMove: string | null
+    coachMove: string | null,
+    notationStyle: XiangqiNotationStyle
 ) {
+    const notation = formatMoveNotation(record, notationStyle);
     const parts = [
         isCurrent ? 'Current move' : '',
         formatMoveRecordTitle(record),
+        notationStyle === 'uci' ? '' : notation,
         `UCI ${formatUciMove(record.uci)}`,
         record.quality ? `Review quality ${formatReviewQuality(record.quality)}` : '',
-        coachMove ? `Engine suggestion ${formatUciMove(coachMove)}` : '',
+        coachMove ? `Engine suggestion ${formatAlternative(record, coachMove, notationStyle)}` : '',
     ].filter(Boolean);
     return parts.join(', ');
 }

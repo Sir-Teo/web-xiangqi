@@ -840,7 +840,10 @@ body.resizing * {
    about 2.66:1, under the 4.5 it needs as content rather than decoration. The
    palette's fourth step already means "dimmest readable text" and is measured
    against the surfaces it renders on, so say it that way instead. */
+/* The coordinates beside a move written in WXF or Chinese: a cross-reference,
+   not the reading, so it is pushed to the end of the row and kept quiet. */
 .move-uci {
+  margin-left: auto;
   font-family: var(--font-mono);
   color: var(--text-muted);
   font-size: 0.66rem !important;
@@ -2245,6 +2248,15 @@ summary:active {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* One line of plain English under a control whose options are three-letter
+   abbreviations. WXF and 中文 mean nothing until something says what they are. */
+.settings-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 /* Label on the left, live value on the right, so a long value never orphans. */

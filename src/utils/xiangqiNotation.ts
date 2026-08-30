@@ -241,3 +241,83 @@ export function formatMoveInStyle(
     if (style === 'chinese') return formatChineseMove(board, uci) ?? uci.toUpperCase();
     return uci.toUpperCase();
 }
+
+/**
+ * The position a recorded move was played in.
+ *
+ * A record stores the board *after* the move together with whatever it
+ * captured, so the position before it is the two put back -- the same trick
+ * `getMovePhaseForRecord` uses, and for the same reason: no replay is needed to
+ * answer a question about one move.
+ */
+export function boardBeforeRecord(record: {
+    uci: string;
+    piece: string;
+    captured?: string;
+    board: BoardState;
+}): BoardState | null {
+    const move = parseMove(record.uci);
+    if (!move) return null;
+    const before = record.board.map((row) => row.slice());
+    before[move.fromRank][move.fromFile] = record.piece;
+    before[move.toRank][move.toFile] = record.captured || '';
+    return before;
+}
+
+/** A recorded move, written in the requested style. */
+export function formatRecordInStyle(
+    record: { uci: string; piece: string; captured?: string; board: BoardState },
+    style: XiangqiNotationStyle
+): string {
+    if (style === 'uci') return record.uci.toUpperCase();
+    const before = boardBeforeRecord(record);
+    if (!before) return record.uci.toUpperCase();
+    return formatMoveInStyle(before, record.uci, style);
+}
+
+/** Move the piece and clear the source. The caller supplies legal moves. */
+function applyMoveUnchecked(state: BoardState, uci: string): BoardState | null {
+    const move = parseMove(uci);
+    if (!move) return null;
+    const piece = state[move.fromRank]?.[move.fromFile];
+    if (!piece) return null;
+    const next = state.map((row) => row.slice());
+    next[move.toRank][move.toFile] = piece;
+    next[move.fromRank][move.fromFile] = '';
+    return next;
+}
+
+/**
+ * A principal variation, written in the requested style.
+ *
+ * Every move after the first is played on a board the earlier ones have
+ * already changed, so a line has to be replayed rather than formatted move by
+ * move against the starting position: which chariot is the front one, and
+ * whether a file number needs disambiguating at all, both change as the line
+ * runs. Replay stops at the first move that will not apply, and what has been
+ * formatted so far is kept -- a line the app cannot follow is still worth
+ * showing as far as it goes.
+ */
+export function formatLineInStyle(
+    board: BoardState,
+    moves: string[],
+    style: XiangqiNotationStyle,
+    maxMoves = 7
+): string {
+    const visible = moves.slice(0, maxMoves);
+    const parts: string[] = [];
+    let state: BoardState | null = board;
+
+    for (const uci of visible) {
+        if (style === 'uci' || !state) {
+            parts.push(uci.toUpperCase());
+            continue;
+        }
+        parts.push(formatMoveInStyle(state, uci, style));
+        state = applyMoveUnchecked(state, uci);
+    }
+
+    const remaining = moves.length - visible.length;
+    const text = parts.join(' ');
+    return remaining > 0 ? `${text} +${remaining}` : text;
+}

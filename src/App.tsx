@@ -35,7 +35,17 @@ import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
-import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciLine } from './utils/moveNotation';
+import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
+import {
+  NOTATION_STYLES,
+  NOTATION_STYLE_DESCRIPTIONS,
+  NOTATION_STYLE_LABELS,
+  boardBeforeRecord,
+  formatLineInStyle,
+  formatMoveInStyle,
+  isNotationStyle,
+  type XiangqiNotationStyle,
+} from './utils/xiangqiNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
@@ -342,6 +352,7 @@ type StoredPreferences = {
   enginePvLineCount?: PvLineCount;
   aiStrength?: AiStrength;
   aiSpeed?: AiSpeed;
+  notationStyle?: XiangqiNotationStyle;
 };
 
 type ReviewController = {
@@ -431,6 +442,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       enginePvLineCount: isPvLineCount(record.enginePvLineCount) ? record.enginePvLineCount : undefined,
       aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
       aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
+      notationStyle: isNotationStyle(record.notationStyle) ? record.notationStyle : undefined,
     };
   } catch {
     return {};
@@ -818,6 +830,13 @@ function App() {
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
+  // WXF is the default because it is the notation both a Chinese record and an
+  // English one can be read against, and it needs no font the board does not
+  // already load. UCI stays available: it is what the engine says and what a
+  // share link carries.
+  const [notationStyle, setNotationStyle] = useState<XiangqiNotationStyle>(
+    storedPreferences.notationStyle ?? 'wxf'
+  );
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
     height: typeof window === 'undefined' ? 800 : window.innerHeight,
@@ -872,6 +891,7 @@ function App() {
     setAnalysisEngineMode(preferences.analysisEngineMode ?? 'optimized');
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
+    setNotationStyle(preferences.notationStyle ?? 'wxf');
     handleSpeedChange(preferences.aiSpeed ?? 'normal');
   }, [defaultSearchDepth, handleSpeedChange, updateSoundEnabled]);
 
@@ -891,6 +911,7 @@ function App() {
       enginePvLineCount,
       aiStrength,
       aiSpeed,
+      notationStyle,
     });
   }, [
     aiSpeed,
@@ -898,6 +919,7 @@ function App() {
     analysisEngineMode,
     assistMode,
     enginePvLineCount,
+    notationStyle,
     orientation,
     searchDepth,
     showArrows,
@@ -2281,12 +2303,12 @@ function App() {
     ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
     : 'Raw engine UCI output, waiting for engine output';
   const coachBestMoveText = topAnalysisPv?.moves[0]
-    ? formatUciLine([topAnalysisPv.moves[0]], 1)
+    ? formatLineInStyle(board, [topAnalysisPv.moves[0]], notationStyle, 1)
     : isSearchQueued || isSearching
       ? 'Waiting for engine'
       : 'No engine move yet';
   const coachLineText = topAnalysisPv?.moves.length
-    ? formatUciLine(topAnalysisPv.moves, 5)
+    ? formatLineInStyle(board, topAnalysisPv.moves, notationStyle, 5)
     : isSearchQueued || isSearching
       ? 'Waiting for engine line'
       : 'No engine line yet';
@@ -2447,6 +2469,20 @@ function App() {
   const topEngineStatusLabel = isReady
     ? `${topEngineStatusText}, runtime ${engineVariant}`
     : topEngineStatusText;
+  /**
+   * One move of the reviewed line, in the reader's notation.
+   *
+   * A key moment carries node ids rather than boards, and both real notations
+   * need the position the move was played in -- so the lookup happens here,
+   * where the tree is, rather than by handing every moment a board copy.
+   */
+  const formatReviewMoveText = useCallback((nodeId: string, uci: string) => {
+    if (notationStyle === 'uci') return formatUciMove(uci);
+    const record = treeNodes[nodeId]?.record;
+    const before = record ? boardBeforeRecord(record) : null;
+    return before ? formatMoveInStyle(before, uci, notationStyle) : formatUciMove(uci);
+  }, [notationStyle, treeNodes]);
+
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';
   const engineUnavailableReviewLabel = engineNotice?.text === 'Engine paused after crashes'
@@ -3653,6 +3689,27 @@ function App() {
             </div>
 
             <div className="settings-group">
+              <span id="settings-notation-label" className="settings-label">Move Notation</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-notation-label">
+                {NOTATION_STYLES.map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    className={`pill-btn ${notationStyle === style ? 'pill-btn-active' : ''}`}
+                    onClick={() => setNotationStyle(style)}
+                    aria-pressed={notationStyle === style}
+                    aria-label={`Write moves in ${NOTATION_STYLE_LABELS[style]} notation. ${NOTATION_STYLE_DESCRIPTIONS[style]}`}
+                    title={NOTATION_STYLE_DESCRIPTIONS[style]}
+                    data-testid={`notation-style-${style}`}
+                  >
+                    {NOTATION_STYLE_LABELS[style]}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-hint">{NOTATION_STYLE_DESCRIPTIONS[notationStyle]}</p>
+            </div>
+
+            <div className="settings-group">
               <label htmlFor="settings-game-mode">Game Mode</label>
               <select
                 id="settings-game-mode"
@@ -4078,6 +4135,7 @@ function App() {
                     currentEval={displayEvalScore}
                     isSearching={isSearching}
                     activity={analysisActivity}
+                    notationStyle={notationStyle}
                     branchCounts={graphBranchCounts}
                     rootBranchCount={rootGraphBranchCount}
                     loadSweepToken={graphLoadSweepToken}
@@ -4098,10 +4156,10 @@ function App() {
                             onClick={() => handlePlayBookMove(candidate.move)}
                             disabled={Boolean(gameResult) || isAiTurn}
                             title={isAiTurn ? 'Wait for the AI move to finish' : candidate.names.join(' · ')}
-                            aria-label={`Play book continuation ${formatUciLine([candidate.move], 1)}: ${candidate.names[0] ?? candidate.chinese[0]}`}
+                            aria-label={`Play book continuation ${formatLineInStyle(board, [candidate.move], notationStyle, 1)}: ${candidate.names[0] ?? candidate.chinese[0]}`}
                             data-testid={`book-candidate-${candidate.move}`}
                           >
-                            <strong>{formatUciLine([candidate.move], 1)}</strong>
+                            <strong>{formatLineInStyle(board, [candidate.move], notationStyle, 1)}</strong>
                             <span className="opening-candidate-main">
                               <span>{candidate.names[0] ?? candidate.chinese[0]}</span>
                               {candidate.names[0] && candidate.chinese[0] ? <small>{candidate.chinese[0]}</small> : null}
@@ -4703,6 +4761,7 @@ function App() {
                     currentNodeId={currentNodeId}
                     currentMoveIndex={currentMoveIndex}
                     activeLineNodeIds={activeLineNodeIds}
+                    notationStyle={notationStyle}
                     onNavigateNode={jumpToNode}
                   />
                 </>
@@ -4723,6 +4782,7 @@ function App() {
                   onClear={clearCompletedReview}
                   onNavigateNode={jumpToNode}
                   onPlayBestMove={handlePlayReviewBestMove}
+                  formatMoveText={formatReviewMoveText}
                 />
               ) : (
                 <>
@@ -4817,9 +4877,13 @@ function App() {
                       const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
-                      const pvLineText = pv.moves.length ? formatUciLine(pv.moves, 7) : 'No moves yet';
+                      const pvLineText = pv.moves.length ? formatLineInStyle(board, pv.moves, notationStyle, 7) : 'No moves yet';
                       const pvLineLabel = pv.moves.length ? `moves ${pvLineText}` : 'no moves yet';
-                      const firstMoveText = firstMove ? formatUciLine([firstMove], 1) : '';
+                      const firstMoveText = firstMove ? formatLineInStyle(board, [firstMove], notationStyle, 1) : '';
+                      // The clipboard gets the raw moves whatever the reader is
+                      // looking at, so the tooltip shows those rather than
+                      // promising "raw UCI" beside a line written in WXF.
+                      const pvRawLine = pv.moves.join(' ');
                       const lineActionContext = `engine line ${i + 1}, ${depthLabel}, ${pvLineLabel}`;
                       const playPvLabel = firstMove
                         ? `Play ${firstMoveText} from engine line ${i + 1}`
@@ -4864,7 +4928,7 @@ function App() {
                               </span>
                             </div>
                             <span className="turnNum">Depth {pv.depth}</span>
-                            <span className="move">{formatUciLine(pv.moves, 7)}</span>
+                            <span className="move">{formatLineInStyle(board, pv.moves, notationStyle, 7)}</span>
                           </div>
                           <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
                             <button
@@ -4884,7 +4948,7 @@ function App() {
                               className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''} ${exportFailureKey === `copy-pv-${i}` ? 'pv-action-btn-warning' : ''}`}
                               onClick={() => handleCopyPvLine(i, pv.moves)}
                               disabled={pv.moves.length === 0}
-                              title={exportFailureKey === `copy-pv-${i}` ? `Copy failed for ${pvLineText}` : `Copy this engine line as raw UCI moves: ${pvLineText}`}
+                              title={exportFailureKey === `copy-pv-${i}` ? `Copy failed for ${pvLineText}` : `Copy this engine line as raw UCI moves: ${pvRawLine}`}
                               aria-label={copyPvLabel}
                               data-testid={`copy-engine-pv-${i}`}
                             >
