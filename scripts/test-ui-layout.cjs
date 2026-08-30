@@ -6126,7 +6126,7 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     !(initial.breadcrumbHeight <= 60) ||
     !(initial.breadcrumbScrollWidth > initial.breadcrumbClientWidth) ||
     !(initial.breadcrumbScrollLeft > 0) ||
-    !initial.activeBreadcrumbText.includes("馬 C7→B9") ||
+    !initial.activeBreadcrumbText.includes("H3-2") ||
     !initial.activeBreadcrumbLabel.includes("Ply 256: Black horse from C7 moves to B9") ||
     !initial.activeBreadcrumbVisible ||
     initial.overflowX > 2
@@ -6182,7 +6182,7 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
     !navigated.activePoint.includes("Ply 256") ||
     navigated.activePoints !== 1 ||
     !navigated.activeMove.includes("c7b9") ||
-    !navigated.activeBreadcrumbText.includes("馬 C7→B9") ||
+    !navigated.activeBreadcrumbText.includes("H3-2") ||
     !navigated.activeBreadcrumbLabel.includes("Ply 256: Black horse from C7 moves to B9") ||
     !navigated.activeMoveVisible ||
     !navigated.activeBreadcrumbVisible ||

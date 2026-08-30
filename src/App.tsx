@@ -43,6 +43,7 @@ import {
   boardBeforeRecord,
   formatLineInStyle,
   formatMoveInStyle,
+  formatRecordInStyle,
   isNotationStyle,
   type XiangqiNotationStyle,
 } from './utils/xiangqiNotation';
@@ -391,10 +392,19 @@ function createReviewController(): ReviewController {
   };
 }
 
-function nodeLabel(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
+function nodeLabel(
+  nodeId: string,
+  rootNodeId: string,
+  treeNodes: ReturnType<typeof useXiangqi>['treeNodes'],
+  notationStyle: XiangqiNotationStyle
+) {
   if (nodeId === rootNodeId) return 'Start';
   const record = treeNodes[nodeId]?.record;
   if (!record) return 'Node';
+  // The breadcrumb sits directly above the move list on a phone. Writing the
+  // same move two ways six pixels apart -- "俥 E1→F1" over "R5=4" -- reads as
+  // two different moves.
+  if (notationStyle !== 'uci') return `${record.ply}. ${formatRecordInStyle(record, notationStyle)}`;
   return `${record.ply}. ${formatMoveRecordLabel(record)}`;
 }
 
@@ -4783,7 +4793,7 @@ function App() {
                 <>
                   <div className="tree-breadcrumb" ref={treeBreadcrumbRef}>
                     {breadcrumbNodeIds.map((nodeId, index) => {
-                      const label = nodeLabel(nodeId, rootNodeId, treeNodes);
+                      const label = nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle);
                       const title = nodeTitle(nodeId, rootNodeId, treeNodes);
                       return (
                         <button
