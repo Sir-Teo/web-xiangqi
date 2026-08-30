@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { BoardArrows } from './BoardArrows';
@@ -84,6 +84,26 @@ function clampSquare(value: number, max: number) {
     return Math.max(0, Math.min(max, value));
 }
 
+/**
+ * Where the board's single tab stop sits before anyone has moved focus.
+ *
+ * The first occupied square in render order, which is where Tab used to land
+ * on the way into the board -- so the entry point is unchanged, there is just
+ * one of it now.
+ */
+function firstOccupiedSquare(
+    board: BoardState,
+    ranks: readonly number[],
+    files: readonly number[]
+): { file: number; rank: number } | null {
+    for (const rank of ranks) {
+        for (const file of files) {
+            if (board[rank]?.[file]) return { file, rank };
+        }
+    }
+    return null;
+}
+
 interface BoardProps {
     board: BoardState;
     selected: { file: number, rank: number } | null;
@@ -122,6 +142,19 @@ export const Board = React.memo(function Board({
     const ranks = orientation === 'black' ? RANKS_BLACK : RANKS_RED;
     const files = orientation === 'black' ? FILES_BLACK : FILES_RED;
     const hitboxesRef = useRef<HTMLDivElement | null>(null);
+    /**
+     * The board is one composite widget with arrow keys inside it, so it gets
+     * one tab stop, not one per square.
+     *
+     * Every occupied square used to be `tabIndex={0}`, which made 32 of the
+     * page's 130 tab stops board squares -- a quarter of the tab order --
+     * even though the arrow keys already walk the grid. Reaching the move list
+     * from the toolbar meant Tab thirty-two times through pieces.
+     *
+     * The stop follows focus, so tabbing out and back returns you to the
+     * square you were on rather than to the corner.
+     */
+    const [rovingSquare, setRovingSquare] = useState<{ file: number; rank: number } | null>(null);
     const markerDragStartRef = useRef<{ file: number; rank: number } | null>(null);
     const touchMarkerTimerRef = useRef<number | null>(null);
     const touchMarkerPointerRef = useRef<{
@@ -160,6 +193,12 @@ export const Board = React.memo(function Board({
     }, [clearTouchMarkerTimer]);
 
     useEffect(() => cancelTouchMarker, [cancelTouchMarker]);
+
+    const handleHitboxFocus = useCallback((file: number, rank: number) => {
+        setRovingSquare((previous) => (
+            previous?.file === file && previous?.rank === rank ? previous : { file, rank }
+        ));
+    }, []);
 
     const handleHitboxClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         if (suppressNextClickRef.current) {
@@ -286,6 +325,12 @@ export const Board = React.memo(function Board({
         if (!onToggleHighlight && !onAddArrow) return;
         event.preventDefault();
     }, [onAddArrow, onToggleHighlight]);
+    // Preference order: wherever focus was last left, then the selected piece,
+    // then the default landing square. A board with no pieces at all has no tab
+    // stop, which is correct -- there is nothing on it to reach.
+    const fallbackRovingSquare = firstOccupiedSquare(board, ranks, files);
+    const tabStopSquare = rovingSquare ?? selected ?? fallbackRovingSquare;
+
     const squareKeyshortcuts = onToggleHighlight
         ? 'Enter Space Shift+Enter Shift+Space ArrowUp ArrowDown ArrowLeft ArrowRight'
         : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight';
@@ -377,7 +422,8 @@ export const Board = React.memo(function Board({
                                     data-rank={rank}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target, highlightedSquares.has(`${file}:${rank}`))}
                                     aria-keyshortcuts={squareKeyshortcuts}
-                                    tabIndex={piece || isSelected || target ? 0 : -1}
+                                    tabIndex={tabStopSquare?.file === file && tabStopSquare?.rank === rank ? 0 : -1}
+                                    onFocus={() => handleHitboxFocus(file, rank)}
                                     onKeyDown={(event) => handleHitboxKeyDown(event, file, rank)}
                                     onPointerDown={(event) => handleMarkerPointerDown(event, file, rank)}
                                     onPointerMove={handleMarkerPointerMove}

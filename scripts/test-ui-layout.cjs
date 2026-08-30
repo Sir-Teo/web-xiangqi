@@ -525,8 +525,13 @@ async function assertDesktopBoardLayout(page, viewport) {
   if (layout.decorativeButtonIcons.count === 0 || layout.decorativeButtonIcons.exposed.length > 0) {
     throw new Error(`Button icons should be decorative because the buttons already carry text or labels: ${JSON.stringify(layout.decorativeButtonIcons)}`);
   }
-  if (layout.tabbableHitboxCount !== 32 || layout.emptyHitboxTabStops.length > 0) {
-    throw new Error(`Board tab order should include only actionable pieces at the start: ${JSON.stringify(layout)}`);
+  // One roving stop, and it starts on a piece rather than on an empty square.
+  // This used to assert 32 -- one per occupied square -- which put the whole
+  // board between the toolbar and the panels for a keyboard user. See the
+  // comment in Board.tsx: arrow keys already walk the grid, so the grid is a
+  // composite widget and takes one stop.
+  if (layout.tabbableHitboxCount !== 1 || layout.emptyHitboxTabStops.length > 0) {
+    throw new Error(`Board tab order should be a single roving stop on a piece: ${JSON.stringify(layout)}`);
   }
   if (layout.clippedGraphSummaryLabels.length > 0) {
     throw new Error(`Desktop graph summary labels are clipped: ${layout.clippedGraphSummaryLabels.join(", ")}`);
@@ -642,6 +647,24 @@ async function assertBoardKeyboardNavigation(page) {
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
+  // The board is one composite widget with arrow keys inside it, so it takes
+  // one tab stop. It used to take one per occupied piece -- 32 of them, a
+  // quarter of the page's tab order -- which put the whole board between the
+  // toolbar and the move list for anyone navigating by keyboard.
+  const tabOrder = await page.evaluate(() => {
+    const focusable = [...document.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')]
+      .filter((el) => el.offsetParent !== null && el.tabIndex >= 0 && !el.disabled);
+    const boardStops = focusable.filter((el) => el.classList.contains("hitbox"));
+    return {
+      total: focusable.length,
+      boardStops: boardStops.length,
+      boardStopLabel: boardStops[0]?.getAttribute("aria-label") || "",
+    };
+  });
+  if (tabOrder.boardStops !== 1 || !tabOrder.boardStopLabel) {
+    throw new Error(`Board did not present a single roving tab stop: ${JSON.stringify(tabOrder)}`);
+  }
+
   const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
   await page.locator('.hitbox[data-file="1"][data-rank="0"]').focus();
   await page.keyboard.press("Enter");
@@ -656,6 +679,19 @@ async function assertBoardKeyboardNavigation(page) {
     shortcuts: document.activeElement?.getAttribute("aria-keyshortcuts") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
+
+  // The stop follows focus, so tabbing out of the board and back returns to the
+  // square you were on rather than to the corner.
+  const rovingStop = await page.evaluate(() => {
+    const stops = [...document.querySelectorAll(".hitbox")].filter((el) => el.tabIndex === 0);
+    return {
+      count: stops.length,
+      followsFocus: stops.length === 1 && stops[0] === document.activeElement,
+    };
+  });
+  if (rovingStop.count !== 1 || !rovingStop.followsFocus) {
+    throw new Error(`Board tab stop did not follow arrow-key focus: ${JSON.stringify(rovingStop)}`);
+  }
 
   if (
     focusState.file !== "2" ||
@@ -730,6 +766,24 @@ async function assertBoardKeyboardNavigationFlipped(page) {
 
   await page.getByRole("button", { name: "Flip board orientation" }).click();
 
+  // The board is one composite widget with arrow keys inside it, so it takes
+  // one tab stop. It used to take one per occupied piece -- 32 of them, a
+  // quarter of the page's tab order -- which put the whole board between the
+  // toolbar and the move list for anyone navigating by keyboard.
+  const tabOrder = await page.evaluate(() => {
+    const focusable = [...document.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')]
+      .filter((el) => el.offsetParent !== null && el.tabIndex >= 0 && !el.disabled);
+    const boardStops = focusable.filter((el) => el.classList.contains("hitbox"));
+    return {
+      total: focusable.length,
+      boardStops: boardStops.length,
+      boardStopLabel: boardStops[0]?.getAttribute("aria-label") || "",
+    };
+  });
+  if (tabOrder.boardStops !== 1 || !tabOrder.boardStopLabel) {
+    throw new Error(`Board did not present a single roving tab stop: ${JSON.stringify(tabOrder)}`);
+  }
+
   const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
   await page.locator('.hitbox[data-file="1"][data-rank="0"]').focus();
   await page.keyboard.press("Enter");
@@ -744,6 +798,19 @@ async function assertBoardKeyboardNavigationFlipped(page) {
     shortcuts: document.activeElement?.getAttribute("aria-keyshortcuts") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
+
+  // The stop follows focus, so tabbing out of the board and back returns to the
+  // square you were on rather than to the corner.
+  const rovingStop = await page.evaluate(() => {
+    const stops = [...document.querySelectorAll(".hitbox")].filter((el) => el.tabIndex === 0);
+    return {
+      count: stops.length,
+      followsFocus: stops.length === 1 && stops[0] === document.activeElement,
+    };
+  });
+  if (rovingStop.count !== 1 || !rovingStop.followsFocus) {
+    throw new Error(`Board tab stop did not follow arrow-key focus: ${JSON.stringify(rovingStop)}`);
+  }
 
   if (
     focusState.file !== "2" ||
