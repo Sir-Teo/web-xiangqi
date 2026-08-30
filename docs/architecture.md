@@ -136,6 +136,37 @@ guarantee that matters is in `xiangqiNotation.test.ts`: it walks every legal
 move in six positions and asserts no two produce the same string, because a
 record is only readable if each move in it names exactly one move.
 
+### Reading it back
+
+`parseMoveInNotation` is the formatter run backwards, literally: it generates
+the legal moves in the position and asks which one *writes* as the text it was
+given. A few dozen formats per token is nothing, and it buys two properties a
+hand-written parser cannot have. It can never accept an illegal move, because
+it only ever offers legal ones; and it can never disagree with the formatter
+about what a move is called, because it is asking the formatter. A test round
+trips every legal move in five positions through both notations.
+
+`canonicaliseNotationToken` folds the differences that are spelling rather
+than meaning -- simplified against traditional, the red/black glyph split that
+real records ignore, Chinese numerals against Arabic, `.` against `=`, case,
+full-width characters -- and then requires the result to match one of the five
+shapes a move can take. That last part is not optional: without it `2...`
+folds to `2===` and a move number starts reading as a move.
+
+Two things worth knowing before reading this code, both of which looked
+plausible the other way round and are wrong:
+
+- **The opening position is symmetric and files are numbered from each
+  player's own right, so the same token names a move for either side.** `C2=5`
+  is red's cannon to the middle *and* black's. That is the notation working.
+- **Black's 车9平8 is the chariot on i9, not a9.** Black's file 9 is the i
+  file.
+
+The import box falls back to this when the UCI extractor finds no coordinates,
+so a PGN carrying a Chinese comment is still read as a PGN. Variations are not
+followed on that path: the parenthetical form is a PGN convention that a
+notation record does not use.
+
 ## Engine Boundary
 
 `useEngine` loads the lightweight `pikafish.js` wrapper first, then lazily
