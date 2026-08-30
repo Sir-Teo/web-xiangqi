@@ -8,6 +8,9 @@ import {
     formatRecordInStyle,
     formatWxfMove,
     isNotationStyle,
+    canonicaliseNotationToken,
+    parseMoveInNotation,
+    parseMoveLineInNotation,
 } from './xiangqiNotation';
 import { START_FEN, legalMovesFrom, parseFenBoard, pieceSide, squareToUci, type BoardState, type Side } from './xiangqi';
 
@@ -267,5 +270,136 @@ describe('a principal variation is replayed, not formatted move by move', () => 
 
     it('leaves UCI alone', () => {
         expect(formatLineInStyle(start(), ['h2e2', 'h9g7'], 'uci')).toBe('H2E2 H9G7');
+    });
+});
+
+describe('reading a move back', () => {
+    const startBoard = start();
+
+    it('reads the opening in either notation, and in coordinates', () => {
+        expect(parseMoveInNotation(startBoard, 'w', 'C2=5')).toBe('h2e2');
+        expect(parseMoveInNotation(startBoard, 'w', '炮二平五')).toBe('h2e2');
+        expect(parseMoveInNotation(startBoard, 'w', 'h2e2')).toBe('h2e2');
+    });
+
+    it('does not mind which spelling a record uses', () => {
+        // Simplified, the red/black glyph split, and Arabic numerals for red --
+        // all of these turn up, and all of them mean the same move.
+        for (const text of ['炮二平五', '砲二平五', '包二平五', '炮2平5', 'c2=5', 'C2.5', 'C2＝5']) {
+            expect(parseMoveInNotation(startBoard, 'w', text), text).toBe('h2e2');
+        }
+    });
+
+    it('reads black-s reply in black-s own numbering', () => {
+        const afterRed = board('rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR');
+        expect(parseMoveInNotation(afterRed, 'b', 'H8+7')).toBe('h9g7');
+        expect(parseMoveInNotation(afterRed, 'b', '马8进7')).toBe('h9g7');
+    });
+
+    it('refuses a move that is legal notation but not legal here', () => {
+        // A cannon cannot reach file 5 from file 2 with a piece in the way --
+        // and nothing that is not a legal move may ever come back.
+        expect(parseMoveInNotation(startBoard, 'w', 'K5+1')).toBe('e0e1');
+        expect(parseMoveInNotation(startBoard, 'w', 'R9+9')).toBeNull();
+        expect(parseMoveInNotation(startBoard, 'w', '炮二平二')).toBeNull();
+    });
+
+    it('reads a token against the side to move, not against the board', () => {
+        // The opening position is symmetric and the notation is written from
+        // each player's own right, so the same token names a move for either
+        // side -- a different move. That is the notation working, not a
+        // collision: C2=5 is red's cannon to the middle and black's too.
+        expect(parseMoveInNotation(startBoard, 'w', 'C2=5')).toBe('h2e2');
+        expect(parseMoveInNotation(startBoard, 'b', 'C2=5')).toBe('b7e7');
+    });
+
+    it('refuses a token naming a piece this side has nowhere near', () => {
+        // Only red has a chariot here, and only on file 9. The black general
+        // stands off the e file so the two are not facing, which would make
+        // every red move illegal.
+        const lopsided = board('3k5/9/9/9/9/9/9/9/9/R3K4');
+        expect(parseMoveInNotation(lopsided, 'w', 'R9+1')).toBe('a0a1');
+        expect(parseMoveInNotation(lopsided, 'b', 'R9+1')).toBeNull();
+        expect(parseMoveInNotation(lopsided, 'w', 'H5+3')).toBeNull();
+    });
+
+    it('refuses coordinates that name no legal move', () => {
+        expect(parseMoveInNotation(startBoard, 'w', 'e4e5')).toBeNull();
+        expect(parseMoveInNotation(startBoard, 'w', 'zzzz')).toBeNull();
+    });
+
+    it('skips what cannot be a move at all', () => {
+        for (const text of ['1.', '2...', '1-0', '', '   ', '(comment)', '红先胜']) {
+            expect(canonicaliseNotationToken(text), text).toBeNull();
+        }
+    });
+});
+
+describe('every legal move survives a round trip', () => {
+    // The guarantee the generate-and-match design exists to give: whatever the
+    // formatter writes, the parser reads back as the same move, in both
+    // notations, in every position.
+    const positions: Array<[string, string, Side]> = [
+        ['the opening position, red', START_FEN, 'w'],
+        ['the opening position, black', START_FEN, 'b'],
+        ['stacked chariots and cannons', '3ak4/4a4/9/9/9/9/R3C4/R3C4/9/3AKA3', 'w'],
+        ['soldiers three deep on two files', '3ak4/4a4/9/P3P4/P3P4/P3P4/9/9/9/3AKA3', 'w'],
+        ['advisors and elephants both able to move', '3ak4/4a4/2b1b4/9/9/9/9/2B1B4/4A4/3AK4', 'w'],
+    ];
+
+    for (const [name, fen, side] of positions) {
+        it(`round trips every legal move in ${name}`, () => {
+            const state = board(fen);
+            const moves = everyLegalMove(state, side);
+            expect(moves.length).toBeGreaterThan(0);
+            for (const uci of moves) {
+                for (const style of ['wxf', 'chinese'] as const) {
+                    const text = formatMoveInStyle(state, uci, style);
+                    expect(parseMoveInNotation(state, side, text), `${style} ${text}`).toBe(uci);
+                }
+            }
+        });
+    }
+});
+
+describe('reading a whole record', () => {
+    it('replays a Chinese game record, move numbers and all', () => {
+        const record = '1. 炮二平五 马8进7 2. 马二进三 车9平8 3. 车一平二';
+        const parsed = parseMoveLineInNotation(start(), 'w', record);
+        // Black numbers its files from its own right, so 车9平8 is the chariot
+        // on i9 sliding onto the square the horse just left.
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7', 'h0g2', 'i9h9', 'i0h0']);
+        expect(parsed.rejected).toEqual([]);
+    });
+
+    it('replays the same game written in WXF', () => {
+        const record = '1. C2=5 H8+7 2. H2+3 R9=8 3. R1=2';
+        const parsed = parseMoveLineInNotation(start(), 'w', record);
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7', 'h0g2', 'i9h9', 'i0h0']);
+    });
+
+    it('parses each move against the position it was played in', () => {
+        // 车9平8 is only readable once the black chariot on a9 is the one meant;
+        // formatting the whole line against the start position would not do.
+        const parsed = parseMoveLineInNotation(start(), 'w', '炮二平五 马8进7 马二进三 车9平8');
+        expect(parsed.moves).toHaveLength(4);
+        expect(parsed.moves[3]).toBe('i9h9');
+    });
+
+    it('collects a move-shaped token that names no move', () => {
+        // 马5进3 is shaped like a move and there is no horse on file 5.
+        const parsed = parseMoveLineInNotation(start(), 'w', '1. 炮二平五 马5进3');
+        expect(parsed.moves).toEqual(['h2e2']);
+        expect(parsed.rejected).toEqual(['马5进3']);
+    });
+
+    it('stops at the cap rather than walking a hostile paste', () => {
+        const parsed = parseMoveLineInNotation(start(), 'w', '炮二平五 马8进7 马二进三', 2);
+        expect(parsed.moves).toHaveLength(2);
+    });
+
+    it('returns nothing for text that holds no moves', () => {
+        const parsed = parseMoveLineInNotation(start(), 'w', 'the quick brown fox 1-0');
+        expect(parsed.moves).toEqual([]);
     });
 });

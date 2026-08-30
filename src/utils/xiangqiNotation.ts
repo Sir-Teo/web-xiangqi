@@ -1,4 +1,4 @@
-import { parseMove, pieceSide, type BoardState, type Side } from './xiangqi';
+import { legalMovesFrom, parseMove, pieceSide, squareToUci, type BoardState, type Side } from './xiangqi';
 
 /**
  * Xiangqi moves in the two notations players actually read.
@@ -320,4 +320,205 @@ export function formatLineInStyle(
     const remaining = moves.length - visible.length;
     const text = parts.join(' ');
     return remaining > 0 ? `${text} +${remaining}` : text;
+}
+
+/**
+ * Reading a move back.
+ *
+ * The parser is the formatter run backwards, literally: it generates the legal
+ * moves in the position and asks which one *writes* as the text it was given.
+ * That is a few dozen formats per token, which is nothing, and it buys two
+ * things a hand-written parser cannot. It can never accept an illegal move,
+ * because it only ever offers legal ones. And it can never disagree with the
+ * formatter about what a move is called, because it is asking the formatter.
+ *
+ * `canonicaliseNotationToken` is what makes the comparison lenient enough to
+ * be useful on a real record. It folds the differences that are spelling
+ * rather than meaning:
+ *
+ * - **Simplified against traditional**, and the red/black glyph split. Records
+ *   write 车马炮 for both sides where this app draws 俥傌炮 and 車馬砲; all of
+ *   them mean the same piece, and the side to move already says which one.
+ * - **Chinese numerals against Arabic.** The convention is Chinese for red and
+ *   Arabic for black, but a record that mixes them is still readable.
+ * - **`.` against `=`** for a traverse, both of which WXF allows.
+ * - **Case**, and full-width digits, which paste in from Chinese sources.
+ *
+ * Both notations fold to the same shape for most moves -- `C2=5` and 炮二平五
+ * both become `C2=5` -- but not for soldiers stacked three deep, where WXF
+ * drops the letter and Chinese does not. So a candidate is compared against
+ * its own form in each notation rather than against one canonical form.
+ */
+
+/** Every spelling of a piece that means the same piece. */
+const PIECE_TOKEN_ALIASES: Record<string, string> = {
+    // General
+    K: 'K', G: 'K', 帥: 'K', 帅: 'K', 將: 'K', 将: 'K',
+    // Advisor
+    A: 'A', 仕: 'A', 士: 'A',
+    // Elephant -- B is the FEN letter, which a UCI-minded reader may reach for.
+    E: 'E', B: 'E', 相: 'E', 象: 'E',
+    // Horse -- N likewise.
+    H: 'H', N: 'H', 傌: 'H', 馬: 'H', 马: 'H',
+    // Chariot
+    R: 'R', 俥: 'R', 車: 'R', 车: 'R',
+    // Cannon -- 包 turns up in older records.
+    C: 'C', 炮: 'C', 砲: 'C', 包: 'C',
+    // Soldier
+    P: 'P', S: 'P', 兵: 'P', 卒: 'P',
+};
+
+const ACTION_TOKEN_ALIASES: Record<string, string> = {
+    '+': '+', '＋': '+', 進: '+', 进: '+',
+    '-': '-', '－': '-', '−': '-', 退: '-',
+    '=': '=', '＝': '=', '.': '=', '．': '=', 平: '=',
+};
+
+/** Front, middle and rear, which double as the stack markers. */
+const STACK_TOKEN_ALIASES: Record<string, string> = {
+    前: '+', 後: '-', 后: '-', 中: 'M',
+};
+
+const DIGIT_TOKEN_ALIASES: Record<string, string> = {
+    一: '1', 二: '2', 三: '3', 四: '4', 五: '5',
+    六: '6', 七: '7', 八: '8', 九: '9',
+    '１': '1', '２': '2', '３': '3', '４': '4', '５': '5',
+    '６': '6', '７': '7', '８': '8', '９': '9',
+};
+
+/**
+ * One move token reduced to the spelling-independent form used for comparison.
+ *
+ * Returns null for anything that cannot be a move -- a move number, a result,
+ * an annotation -- so a caller can walk a record's tokens and simply skip what
+ * does not read as a move.
+ */
+export function canonicaliseNotationToken(text: string): string | null {
+    const trimmed = String(text ?? '').trim();
+    if (!trimmed || trimmed.length > 12) return null;
+
+    let out = '';
+    for (const char of trimmed) {
+        if (char === ' ' || char === '　') continue;
+        const upper = char.toUpperCase();
+        const mapped =
+            DIGIT_TOKEN_ALIASES[char] ??
+            STACK_TOKEN_ALIASES[char] ??
+            ACTION_TOKEN_ALIASES[char] ??
+            PIECE_TOKEN_ALIASES[upper] ??
+            (/^[1-9]$/.test(char) ? char : null);
+        // `+` and `-` are both an action and a stack marker; the tables above
+        // agree on them, so order does not matter.
+        if (mapped === null) return null;
+        out += mapped;
+    }
+
+    // A token has to have the *shape* of a move, not merely be built from
+    // characters a move could contain. Without this, `2...` folds to `2===`
+    // -- three traverse markers -- and a move number starts reading as a move.
+    return MOVE_TOKEN_SHAPE.test(out) ? out : null;
+}
+
+/**
+ * The five shapes a move can canonicalise to.
+ *
+ * The last two exist because WXF and Chinese order a stack marker and its file
+ * differently: WXF writes `+P5+1`, Chinese writes 後九兵進一, which folds to
+ * `-9P+1`. Both are one soldier of a stacked pair on a named file.
+ */
+const MOVE_TOKEN_SHAPE = new RegExp(
+    '^(?:' + [
+        '[KAEHRCP][1-9][+\\-=][1-9]',        // C2=5
+        '[+\\-M][KAEHRCP][+\\-=][1-9]',      // +R+1
+        '[+\\-M][KAEHRCP][1-9][+\\-=][1-9]', // +P5+1
+        '[+\\-M][1-9][KAEHRCP][+\\-=][1-9]', // -9P+1
+        '[1-9][1-9][+\\-=][1-9]',            // 35+1
+    ].join('|') + ')$'
+);
+
+/**
+ * The UCI move that `text` names in this position, or null.
+ *
+ * Accepts WXF, Chinese, and plain coordinates, so a caller does not have to
+ * know which it was handed.
+ */
+export function parseMoveInNotation(
+    board: BoardState,
+    sideToMove: Side,
+    text: string
+): string | null {
+    const raw = String(text ?? '').trim().toLowerCase();
+    if (/^[a-i][0-9][a-i][0-9]$/.test(raw)) {
+        // Coordinates still have to name a legal move, like everything else.
+        return legalMovesInPosition(board, sideToMove).includes(raw) ? raw : null;
+    }
+
+    const wanted = canonicaliseNotationToken(text);
+    if (!wanted) return null;
+
+    for (const uci of legalMovesInPosition(board, sideToMove)) {
+        const wxf = formatWxfMove(board, uci);
+        if (wxf && canonicaliseNotationToken(wxf) === wanted) return uci;
+        const chinese = formatChineseMove(board, uci);
+        if (chinese && canonicaliseNotationToken(chinese) === wanted) return uci;
+    }
+    return null;
+}
+
+function legalMovesInPosition(board: BoardState, sideToMove: Side): string[] {
+    const moves: string[] = [];
+    for (let rank = 0; rank < 10; rank += 1) {
+        for (let file = 0; file < 9; file += 1) {
+            if (pieceSide(board[rank][file]) !== sideToMove) continue;
+            for (const target of legalMovesFrom(board, file, rank, sideToMove)) {
+                moves.push(squareToUci(file, rank) + squareToUci(target.file, target.rank));
+            }
+        }
+    }
+    return moves;
+}
+
+export interface ParsedNotationLine {
+    moves: string[];
+    /** Tokens that looked like moves but named none, in the order they appeared. */
+    rejected: string[];
+}
+
+/**
+ * Read a whole record, replaying as it goes.
+ *
+ * Each move has to be parsed against the position it was played in, so this
+ * walks the text one token at a time and applies what it recognises. Anything
+ * that is not a move in the position -- a move number, a result, a comment
+ * word -- is skipped silently; a token that *reads* as a move but names none
+ * is collected in `rejected`, because that is the case worth telling a user
+ * about.
+ */
+export function parseMoveLineInNotation(
+    board: BoardState,
+    sideToMove: Side,
+    text: string,
+    maxMoves = 1024
+): ParsedNotationLine {
+    const moves: string[] = [];
+    const rejected: string[] = [];
+    let state = board;
+    let side = sideToMove;
+
+    for (const token of String(text ?? '').split(/[\s,;]+/)) {
+        if (!token || moves.length >= maxMoves) break;
+        const uci = parseMoveInNotation(state, side, token);
+        if (!uci) {
+            // Only complain about something that was shaped like a move.
+            if (canonicaliseNotationToken(token)) rejected.push(token);
+            continue;
+        }
+        const next = applyMoveUnchecked(state, uci);
+        if (!next) break;
+        moves.push(uci);
+        state = next;
+        side = side === 'w' ? 'b' : 'w';
+    }
+
+    return { moves, rejected };
 }
