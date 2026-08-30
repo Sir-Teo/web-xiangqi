@@ -40,6 +40,12 @@ import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
 import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
+import {
+  describeAnalysisActivity,
+  formatAnalysisActivity,
+  isAnalysisActivityStalled,
+  resolveAnalysisActivity,
+} from './utils/analysisActivity';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
@@ -2424,13 +2430,19 @@ function App() {
         : isAiTurn && !isReady
           ? 'Waiting for engine'
           : '');
+  const analysisActivity = resolveAnalysisActivity({
+    engineEnabled,
+    isReady,
+    pageVisible: isPageVisible,
+    isSearchQueued,
+    isSearching,
+  });
+  const analysisIsStalled = isAnalysisActivityStalled(analysisActivity);
+  // A boot failure has a message of its own and it is more specific than
+  // "Loading engine", so it still wins that slot.
   const bottomEngineStatus = !isReady
-    ? engineNotice?.text ?? 'Loading engine'
-    : isSearchQueued
-      ? 'Queued'
-      : isSearching
-        ? 'Analyzing'
-        : 'Idle';
+    ? engineNotice?.text ?? formatAnalysisActivity(analysisActivity)
+    : formatAnalysisActivity(analysisActivity);
   const topEngineStatusText = engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine');
   const topEngineStatusLabel = isReady
     ? `${topEngineStatusText}, runtime ${engineVariant}`
@@ -4065,7 +4077,7 @@ function App() {
                     currentMoveIndex={currentMoveIndex}
                     currentEval={displayEvalScore}
                     isSearching={isSearching}
-                    engineEnabled={engineEnabled}
+                    activity={analysisActivity}
                     branchCounts={graphBranchCounts}
                     rootBranchCount={rootGraphBranchCount}
                     loadSweepToken={graphLoadSweepToken}
@@ -4725,10 +4737,21 @@ function App() {
                       <strong>{analysisEngineMode}</strong>
                       <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
                     </div>
-                    <div className="engine-stat" title={engineSearchDetail} aria-label={engineSearchDetail}>
+                    <div
+                      className={`engine-stat${analysisIsStalled ? ' engine-stat-stalled' : ''}`}
+                      title={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                      aria-label={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                    >
                       <span>Search</span>
-                      <strong>{formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
-                      <em>{formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
+                      {/* Depth from a search that has been stopped is stale, and
+                          reading it beside a board that is not moving is what
+                          made a backgrounded tab look broken. */}
+                      <strong>{analysisIsStalled
+                        ? formatAnalysisActivity(analysisActivity)
+                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
+                      <em>{analysisIsStalled
+                        ? 'tab in background'
+                        : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>

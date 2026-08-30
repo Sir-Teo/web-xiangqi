@@ -8,13 +8,19 @@ import {
     isCriticalReviewQuality,
 } from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
+import {
+    describeAnalysisActivity,
+    formatAnalysisActivity,
+    isAnalysisActivityStalled,
+    type AnalysisActivity,
+} from '../../utils/analysisActivity';
 
 interface EvalGraphProps {
     history: MoveRecord[];
     currentMoveIndex: number;
     currentEval: number | null;
     isSearching?: boolean;
-    engineEnabled?: boolean;
+    activity?: AnalysisActivity;
     branchCounts?: Record<number, number>;
     rootBranchCount?: number;
     loadSweepToken?: number;
@@ -50,7 +56,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     currentMoveIndex,
     currentEval,
     isSearching = false,
-    engineEnabled = true,
+    activity = 'idle',
     branchCounts = {},
     rootBranchCount = 0,
     loadSweepToken = 0,
@@ -389,12 +395,20 @@ export const EvalGraph = React.memo(function EvalGraph({
     return (
         <div className="graph-wrap">
             <div className="graph-summary">
-                <div className="graph-summary-card">
+                {/* Play mode runs without the engine, and a backgrounded tab
+                    stops searching -- "Idle" would read as a ready engine
+                    reporting an even position in both cases. The pause is the
+                    one that needs saying out loud, because nothing else on
+                    screen changes and it does not clear itself. */}
+                <div
+                    className={`graph-summary-card${isAnalysisActivityStalled(activity) ? ' graph-summary-card-stalled' : ''}`}
+                    title={describeAnalysisActivity(activity)}
+                >
                     <span>State</span>
-                    {/* Play mode runs without the engine, so "Idle" would read as a
-                        ready engine reporting an even position rather than no
-                        evaluation at all. */}
-                    <strong>{!engineEnabled ? 'Engine off' : isSearching ? 'Analyzing' : 'Idle'}</strong>
+                    <strong>{formatAnalysisActivity(activity)}</strong>
+                    {isAnalysisActivityStalled(activity) ? (
+                        <em className="graph-summary-hint">Tab in background</em>
+                    ) : null}
                 </div>
                 <div className="graph-summary-card">
                     <span>Current</span>

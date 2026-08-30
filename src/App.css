@@ -930,6 +930,27 @@ body.resizing * {
   font-variant-numeric: tabular-nums;
 }
 
+/* A paused analysis is the one state that does not clear itself, so it is the
+   one worth colouring. Amber rather than red: nothing is broken. */
+.graph-summary-card-stalled {
+  border-color: rgba(245, 158, 11, 0.32);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.02)),
+    var(--bg-elevated);
+}
+
+.graph-summary-card-stalled strong {
+  color: var(--warning);
+}
+
+.graph-summary-hint {
+  font-size: 0.58rem;
+  font-style: normal;
+  line-height: 1.25;
+  color: var(--warning);
+  opacity: 0.85;
+}
+
 @container (max-width: 420px) {
   .graph-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3194,6 +3215,16 @@ summary:active {
   font-size: 0.66rem;
   font-style: normal;
   font-family: var(--font-mono);
+}
+
+.engine-stat-stalled {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: var(--warning-subtle);
+}
+
+.engine-stat-stalled strong,
+.engine-stat-stalled em {
+  color: var(--warning);
 }
 
 .engine-pv-controls {
