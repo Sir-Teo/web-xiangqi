@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 import { detectEngineBootConfig } from '../utils/analysisProfile';
+import { emptyEvalReading, takeEvalReading } from '../utils/engineEvalReading';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
@@ -205,18 +206,13 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pvSlotRef = useRef<Record<number, PvLine>>({});
     const latestEvalRef = useRef(0);
     const pendingInfoLineRef = useRef<string | null>(null);
-    const pendingEvalRef = useRef<number | null>(null);
     /**
-     * Whether the evaluation now buffered came from an exact score rather than
-     * a bound. `score cp 150 lowerbound` means "at least 150" -- it falls out
-     * of an aspiration-window re-search, and the exact line normally follows a
-     * moment later. Every line used to overwrite the last, so a search stopped
-     * in between left an inequality standing in for a number, and in a review
-     * that number is a swing the player never caused. web-chess parsed these
-     * flags and then dropped them before they reached anything; this repo did
-     * not parse them at all.
+     * The evaluation buffered for the search now running, and whether it came
+     * from an exact score or a bound -- see `utils/engineEvalReading`. One
+     * value rather than two refs, because starting a search has to discard both
+     * and used to discard only the number.
      */
-    const pendingEvalIsExactRef = useRef(false);
+    const pendingEvalRef = useRef(emptyEvalReading());
     const pendingWdlRef = useRef<WdlStats | null>(null);
     const pendingSearchStatsRef = useRef<EngineSearchStats | null>(null);
     const pvDirtyRef = useRef(false);
@@ -295,8 +291,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             infoFlushTimerRef.current = null;
         }
         pendingInfoLineRef.current = null;
-        pendingEvalRef.current = null;
-        pendingEvalIsExactRef.current = false;
+        pendingEvalRef.current = emptyEvalReading();
         pendingWdlRef.current = null;
         pendingSearchStatsRef.current = null;
         pvDirtyRef.current = false;
@@ -313,11 +308,11 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
         pendingInfoLineRef.current = null;
 
-        if (pendingEvalRef.current !== null && pendingEvalRef.current !== latestEvalRef.current) {
-            latestEvalRef.current = pendingEvalRef.current;
-            setEvalScore(pendingEvalRef.current);
+        const bufferedEval = pendingEvalRef.current.score;
+        if (bufferedEval !== null && bufferedEval !== latestEvalRef.current) {
+            latestEvalRef.current = bufferedEval;
+            setEvalScore(bufferedEval);
         }
-        pendingEvalRef.current = null;
 
         if (pendingWdlRef.current !== null) {
             setWdl(pendingWdlRef.current);
@@ -467,7 +462,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         activeSearchTagRef.current = nextRequest.tag ?? null;
         stopRequestedRef.current = false;
         pendingInfoLineRef.current = null;
-        pendingEvalRef.current = null;
+        pendingEvalRef.current = emptyEvalReading();
         pendingWdlRef.current = null;
         latestEvalRef.current = 0;
         pvSlotRef.current = {};
@@ -891,11 +886,11 @@ export function useEngine(options: EngineInitOptions = {}) {
                     // A bound is taken only while nothing exact has arrived for
                     // this search -- better than no reading at all -- and never
                     // in place of one that has.
-                    const isBounded = BOUNDED_SCORE_PATTERN.test(msg);
-                    if (!isBounded || !pendingEvalIsExactRef.current) {
-                        pendingEvalRef.current = finalScore;
-                        if (!isBounded) pendingEvalIsExactRef.current = true;
-                    }
+                    pendingEvalRef.current = takeEvalReading(
+                        pendingEvalRef.current,
+                        finalScore,
+                        BOUNDED_SCORE_PATTERN.test(msg)
+                    );
                 }
                 if (wdlMatch) {
                     pendingWdlRef.current = {
