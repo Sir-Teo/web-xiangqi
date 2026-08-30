@@ -3832,7 +3832,9 @@ async function assertMoveLineImportErrorAccessibility(page) {
   const error = page.locator("#new-game-line-error");
   await error.waitFor({ timeout: 5000 });
   const errorText = await error.textContent();
-  if (!String(errorText || "").includes("No UCI moves found")) {
+  // The box takes three notations now, so the message names all three rather
+  // than only coordinates.
+  if (!String(errorText || "").includes("No moves found")) {
     throw new Error(`Invalid import did not show a helpful error: ${String(errorText || "").trim()}`);
   }
 

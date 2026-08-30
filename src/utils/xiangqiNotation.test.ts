@@ -11,6 +11,7 @@ import {
     canonicaliseNotationToken,
     parseMoveInNotation,
     parseMoveLineInNotation,
+    parseNotationRecord,
 } from './xiangqiNotation';
 import { START_FEN, legalMovesFrom, parseFenBoard, pieceSide, squareToUci, type BoardState, type Side } from './xiangqi';
 
@@ -401,5 +402,31 @@ describe('reading a whole record', () => {
     it('returns nothing for text that holds no moves', () => {
         const parsed = parseMoveLineInNotation(start(), 'w', 'the quick brown fox 1-0');
         expect(parsed.moves).toEqual([]);
+    });
+});
+
+describe('a record as it actually arrives', () => {
+    it('reads one that starts with the whitespace a stripped header leaves behind', () => {
+        // `[Event "..."]` is replaced by a space, so the text handed to the
+        // parser begins with separators. Stopping at the first empty token
+        // meant every real record parsed as nothing.
+        const parsed = parseMoveLineInNotation(start(), 'w', ' \n1. 炮二平五 马8进7\n2. 马二进三');
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7', 'h0g2']);
+    });
+
+    it('reads a record through the FEN-aware entry point', () => {
+        expect(parseNotationRecord(undefined, ' \n1. C2=5 H8+7').moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('starts from the FEN it is given, and from black when the FEN says so', () => {
+        const parsed = parseNotationRecord('3k5/9/9/9/9/9/9/9/9/R3K4 w - - 0 1', 'R9+1');
+        expect(parsed.moves).toEqual(['a0a1']);
+        // Black counts files from the a file, so its general on d9 is on file 4.
+        const black = parseNotationRecord('3k5/9/9/9/9/9/9/9/9/R3K4 b - - 0 1', 'K4+1');
+        expect(black.moves).toEqual(['d9d8']);
+    });
+
+    it('falls back to the opening position rather than losing the moves', () => {
+        expect(parseNotationRecord('not a fen at all', '1. C2=5').moves).toEqual(['h2e2']);
     });
 });

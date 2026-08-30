@@ -1,4 +1,13 @@
-import { legalMovesFrom, parseMove, pieceSide, squareToUci, type BoardState, type Side } from './xiangqi';
+import {
+    START_FEN,
+    legalMovesFrom,
+    parseFenBoard,
+    parseMove,
+    pieceSide,
+    squareToUci,
+    type BoardState,
+    type Side,
+} from './xiangqi';
 
 /**
  * Xiangqi moves in the two notations players actually read.
@@ -506,7 +515,12 @@ export function parseMoveLineInNotation(
     let side = sideToMove;
 
     for (const token of String(text ?? '').split(/[\s,;]+/)) {
-        if (!token || moves.length >= maxMoves) break;
+        if (moves.length >= maxMoves) break;
+        // An empty token is a leading or doubled separator, not the end of the
+        // record. Breaking on it meant a record that began with a newline --
+        // which is every record with a header stripped off the front -- parsed
+        // as no moves at all.
+        if (!token) continue;
         const uci = parseMoveInNotation(state, side, token);
         if (!uci) {
             // Only complain about something that was shaped like a move.
@@ -521,4 +535,31 @@ export function parseMoveLineInNotation(
     }
 
     return { moves, rejected };
+}
+
+/**
+ * A whole record read from its starting position.
+ *
+ * The convenience the import path wants: hand it the FEN the game starts from
+ * (or nothing, for the opening position) and the pasted text, and get the
+ * line back. An unreadable FEN falls back to the opening position rather than
+ * refusing, because the moves are the part being imported and a bad header
+ * should not lose them.
+ */
+export function parseNotationRecord(
+    startFen: string | undefined,
+    text: string,
+    maxMoves = 1024
+): ParsedNotationLine {
+    let board: BoardState;
+    let side: Side = 'w';
+    try {
+        const parts = String(startFen ?? '').trim().split(/\s+/);
+        board = parts[0] ? parseFenBoard(parts[0]) : parseFenBoard(START_FEN);
+        if (parts[1] === 'b') side = 'b';
+    } catch {
+        board = parseFenBoard(START_FEN);
+        side = 'w';
+    }
+    return parseMoveLineInNotation(board, side, text, maxMoves);
 }

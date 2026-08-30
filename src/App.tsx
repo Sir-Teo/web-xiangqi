@@ -45,6 +45,7 @@ import {
   formatMoveInStyle,
   formatRecordInStyle,
   isNotationStyle,
+  parseNotationRecord,
   type XiangqiNotationStyle,
 } from './utils/xiangqiNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
@@ -71,6 +72,7 @@ import {
   extractUciMoveLine,
   hasTooManyUciMoves,
   extractUciMoveTree,
+  stripRecordMetadata,
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
   MAX_MOVE_IMPORT_UCI_MOVES,
@@ -2997,17 +2999,36 @@ function App() {
     }
 
     const importedLine = extractUciMoveTree(text);
-    const moves = importedLine.moves;
+    const startFen = fenInput.trim() || extractFenTag(text) || undefined;
+    let moves = importedLine.moves;
+    /**
+     * A record written in WXF or Chinese carries no coordinates at all, so the
+     * UCI extractor finds nothing in it. Fall back to reading the notation --
+     * only when there were no coordinates, so a PGN that happens to contain a
+     * Chinese comment is still read as a PGN.
+     *
+     * Variations are not followed on this path: the parenthetical form is a
+     * PGN convention and a notation record does not use it, so this imports the
+     * line and says so rather than guessing at a tree.
+     */
+    let importedFromNotation = false;
+    if (moves.length === 0) {
+      const parsed = parseNotationRecord(startFen, stripRecordMetadata(text), MAX_MOVE_IMPORT_UCI_MOVES);
+      if (parsed.moves.length > 0) {
+        moves = parsed.moves;
+        importedFromNotation = true;
+      }
+    }
+
     if (importedLine.tooLarge || moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
       setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
       return;
     }
     if (moves.length === 0) {
-      setMoveLineError('No UCI moves found. Use coordinates like b2e2 h9g7.');
+      setMoveLineError('No moves found. Paste coordinates (b2e2 h9g7), WXF (C2=5 H8+7) or Chinese (炮二平五 马8进7).');
       return;
     }
 
-    const startFen = fenInput.trim() || extractFenTag(text) || undefined;
     const validation = validateMoveSequence(moves, startFen);
     if (!validation.ok) {
       setMoveLineError(
@@ -3017,7 +3038,8 @@ function App() {
       );
       return;
     }
-    if (importedLine.hasVariations) {
+    const hasVariations = importedLine.hasVariations && !importedFromNotation;
+    if (hasVariations) {
       const treeValidation = validateMoveTree(importedLine.moveTree, startFen);
       if (!treeValidation.ok) {
         setMoveLineError(
@@ -3037,7 +3059,7 @@ function App() {
       setWorkspaceMode('play');
     }
     setGameMode(nextGameMode);
-    if (importedLine.hasVariations) {
+    if (hasVariations) {
       loadMoveTree(importedLine.moveTree, moves, startFen);
     } else {
       loadMoves(moves, startFen);
@@ -4048,8 +4070,8 @@ function App() {
                     setMoveLineInput(nextValue);
                     setMoveLineError(null);
                   }}
-                  placeholder="1. b2e2 h9g7 b0c2"
-                  aria-label="UCI move line"
+                  placeholder="1. 炮二平五 马8进7   ·   1. C2=5 H8+7   ·   1. b2e2 h9g7"
+                  aria-label="Move line in coordinates, WXF or Chinese notation"
                   aria-invalid={moveLineError ? true : undefined}
                   aria-describedby={moveLineError ? 'new-game-line-error' : undefined}
                   rows={3}

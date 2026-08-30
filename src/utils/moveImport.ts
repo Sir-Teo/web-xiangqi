@@ -52,6 +52,18 @@ function stripDelimited(text: string, open: string, close: string): string {
     }
 }
 
+/**
+ * Tags, comments and semicolon remarks removed, so what is left is moves.
+ *
+ * Exported because the notation importer needs the same treatment: a Chinese
+ * record pasted from a database carries the same `[Event "..."]` header and
+ * `{...}` annotations as a PGN, and a comment word must not be offered to the
+ * move parser.
+ */
+export function stripRecordMetadata(text: string): string {
+    return stripPgnMetadata(text);
+}
+
 function stripPgnMetadata(text: string): string {
     const withoutTags = stripDelimited(String(text), '[', ']');
     return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
