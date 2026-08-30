@@ -80,6 +80,58 @@ function resolveThreadedVariant(allowSIMD: boolean): EngineRuntimeVariant {
     return allowSIMD ? 'threaded-simd' : 'threaded';
 }
 
+/** Cores kept back for the page, the compositor and everything else running. */
+const CORES_RESERVED_FOR_THE_REST_OF_THE_MACHINE = 2;
+
+/**
+ * The hard ceiling on engine threads, and it comes from the *build*.
+ *
+ * `WASM_PTHREAD_POOL_SIZE` in `scripts/build-pikafish.sh` prewarms this many
+ * pthread workers into the shipped core, and it is not merely a warm-up: the
+ * engine runs inside a worker, so when Pikafish asks for more search threads
+ * than the pool holds, the thread that asked blocks in `pthread_create` and
+ * never returns to the event loop that would start the new worker. The engine
+ * does not error -- it simply never answers `readyok`.
+ *
+ * Measured in the browser against the checked-in artifacts: 4 threads boots and
+ * is ready in about three seconds; 5 sits on "Loading engine" indefinitely and
+ * is still there when the 90-second ready timeout fires. The same artifacts run
+ * 17 threads happily under Node, where the pool is not the constraint, which is
+ * why this is easy to miss from a bench run.
+ *
+ * So the number here is *not* a judgement about how much of the machine to
+ * take. `npm run bench:nps` on the shipped SIMD core, 18-core machine:
+ *
+ *     threads   1     3     6      12     17
+ *     nodes/s   464k  1.43M 2.98M  5.39M  7.49M
+ *
+ * The engine scales close to linearly the whole way, so a desktop is getting a
+ * fifth of the search it could. Raising this needs the build raised with it and
+ * the artifacts rebuilt -- `WASM_PTHREAD_POOL_SIZE=12 npm run build`, which
+ * needs emsdk -- and the two must move together. Anything asking for more
+ * threads than the shipped core was built for hangs it.
+ */
+export const ENGINE_PTHREAD_POOL_SIZE = 4;
+
+export const MID_TIER_MAX_THREADS = 3;
+export const HIGH_TIER_MAX_THREADS = 4;
+
+/**
+ * How many threads a machine with this many cores gets.
+ *
+ * Both tiers used to be a constant, so every desktop above the tier boundary
+ * got 3 threads whether it had 9 cores or 64. The clamp to
+ * `ENGINE_PTHREAD_POOL_SIZE` is here rather than at the call sites so that no
+ * caller can raise a tier into the hang described above without also raising
+ * the build.
+ */
+export function threadsForCores(hardwareConcurrency: number, min: number, max: number): number {
+    const cores = Math.max(1, Math.trunc(finiteNumber(hardwareConcurrency, 1)));
+    const usable = cores - CORES_RESERVED_FOR_THE_REST_OF_THE_MACHINE;
+    const wanted = Math.max(min, Math.min(max, usable));
+    return Math.max(1, Math.min(ENGINE_PTHREAD_POOL_SIZE, wanted));
+}
+
 export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile {
     const viewportWidth = Math.max(0, Math.trunc(finiteNumber(input.viewportWidth, 1280)));
     const viewportHeight = Math.max(0, Math.trunc(finiteNumber(input.viewportHeight, 800)));
@@ -135,12 +187,12 @@ export function resolveEngineBootConfig(
         // Only the low tier is ever mobile-like, so the mid and high tiers are
         // always a pointer-and-keyboard machine with room for threads.
         variant = resolveThreadedVariant(allowSIMD);
-        threads = 2;
-        hashMB = 32;
+        threads = threadsForCores(profile.hardwareConcurrency, 2, MID_TIER_MAX_THREADS);
+        hashMB = 64;
     } else {
         variant = resolveThreadedVariant(allowSIMD);
-        threads = 3;
-        hashMB = 64;
+        threads = threadsForCores(profile.hardwareConcurrency, 4, HIGH_TIER_MAX_THREADS);
+        hashMB = 128;
     }
 
     if (options.saferBoot) {

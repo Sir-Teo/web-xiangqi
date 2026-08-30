@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+    ENGINE_PTHREAD_POOL_SIZE,
     detectDeviceTier,
     resolveEngineBootConfig,
     resolveLiveAnalysisPolicy,
+    threadsForCores,
 } from './analysisProfile';
 
 // 8 is the low end of what a roomy machine reports. Browsers disagree about
@@ -71,9 +73,37 @@ describe('device tiering', () => {
 
 describe('engine boot configuration', () => {
     it('only asks for threads on a roomy desktop', () => {
-        expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP)).threads).toBe(3);
-        expect(resolveEngineBootConfig(detectDeviceTier(LAPTOP)).threads).toBe(2);
+        expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP)).threads).toBe(4);
+        expect(resolveEngineBootConfig(detectDeviceTier(LAPTOP)).threads).toBe(3);
         expect(resolveEngineBootConfig(detectDeviceTier(PHONE)).threads).toBe(1);
+    });
+
+    it('scales with the cores instead of handing every desktop the same number', () => {
+        // Both tiers used to be a constant, so a 9-core machine and a 64-core
+        // machine were sized identically.
+        const nine = resolveEngineBootConfig(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 9 }));
+        const sixtyFour = resolveEngineBootConfig(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 64 }));
+        expect(nine.threads).toBeGreaterThan(1);
+        expect(sixtyFour.threads).toBeGreaterThanOrEqual(nine.threads);
+    });
+
+    it('never asks for more threads than the shipped core was built to hold', () => {
+        // Above ENGINE_PTHREAD_POOL_SIZE the engine blocks in pthread_create
+        // and never answers readyok -- measured in the browser at 5 threads
+        // against the checked-in artifacts. No device may reach that.
+        const enormous = [16, 32, 64, 128, 1024];
+        for (const hardwareConcurrency of enormous) {
+            const config = resolveEngineBootConfig(detectDeviceTier({ ...DESKTOP, hardwareConcurrency }));
+            expect(config.threads).toBeLessThanOrEqual(ENGINE_PTHREAD_POOL_SIZE);
+        }
+        expect(threadsForCores(1024, 8, 64)).toBeLessThanOrEqual(ENGINE_PTHREAD_POOL_SIZE);
+    });
+
+    it('leaves cores for the rest of the machine', () => {
+        // A 6-core machine gives the engine 4, not 6.
+        expect(threadsForCores(6, 1, 16)).toBe(4);
+        expect(threadsForCores(2, 1, 16)).toBe(1);
+        expect(threadsForCores(1, 1, 16)).toBe(1);
     });
 
     it('keeps a phone single-threaded however many cores it reports', () => {
