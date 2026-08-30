@@ -80,6 +80,14 @@ agree *within* a repo, and all three now do.
    nowhere near a stutter. The read-side ceiling is the cheaper design and is
    the thing to port.
 
+**Divergent because only this repo has the problem.** All three size the search
+from `hardwareConcurrency`, but only this one also caps it on a *build*
+constant: the shipped core is prewarmed with four pthread workers and asking
+for a fifth hangs the engine outright, with no error. web-chess and web-katrain
+have nothing equivalent because neither builds the engine it ships. Not a gap
+to close, but it is the one number here that cannot be changed from `src/`
+alone -- see "The thread ceiling is the build" in `docs/architecture.md`.
+
 **The rule this file exists to enforce:** any check that a sibling has and this
 repo does not should be either adopted or explained here. The gaps found this
 way so far were a deploy that ran no checks at all, a CI/deploy Node split

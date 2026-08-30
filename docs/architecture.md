@@ -46,7 +46,7 @@ checked-in engine artifacts survive.
 
 ## Main Thread
 
-`src/App.tsx` is the application shell at ~4,950 lines: board, panels, modals
+`src/App.tsx` is the application shell at ~5,300 lines: board, panels, modals
 and all wiring. web-katrain moved the equivalent into a store; doing the same
 here is the largest outstanding item in web-chess's
 `docs/cross-app-learning-plan.md`.
@@ -76,6 +76,66 @@ Easy to get backwards, and several tests exist only to pin them:
 and the flying-general rule. `validateMoveStr` returns a reason on rejection,
 which the tests assert against so a move is never rejected for the wrong rule.
 
+### Repetition, and the rule that is not chess's
+
+`utils/repetition.ts` is the other half, and it is the part xiangqi does
+differently. A repeated position is not a draw here: the side that will not
+stop checking is ruled to have **lost**, and the same goes for perpetually
+chasing an unprotected piece. `gameResultForPosition` had this written down as
+a comment and no code, so a player shuffling into a perpetual check saw
+nothing at all.
+
+`describeRepetition` counts occurrences along the played line and classifies
+the cycle since the previous visit to the same position. A side that checked
+on every one of its moves in that cycle is checking perpetually; one quiet
+move ends it, which is exactly the out the rules give the checker. The board
+shows a Repetition panel naming the side that has to vary.
+
+**It stops short of chases, deliberately.** 長捉 needs to know which piece is
+chased, whether it is protected, and whether the chaser threatens it or merely
+stands near it, and the rulebook carves out pinned pieces, a chased piece that
+is itself checking, and chasing with a general or a soldier. A guess there
+would put a wrong verdict on a real game, so an unclassified cycle says "a
+draw unless one side is perpetually chasing" rather than claiming to have
+ruled a chase out. Nothing in the module ends a game on its own.
+
+Position identity excludes the move counters, which differ on every visit and
+would make every position unique.
+
+## Notation
+
+`utils/xiangqiNotation.ts` writes a move the way players read it. UCI is the
+wire format and the right thing to store; it is the wrong thing to show,
+because every Chinese book, every database and the World Xiangqi Federation's
+own records write the first move as 炮二平五 or `C2=5`. A Move Notation
+preference picks between UCI, WXF and Chinese, and it reaches the move list,
+the breadcrumb, the engine's principal variations, the opening book, the
+review's key moments and the eval graph's tooltip.
+
+Three rules are easy to get backwards and all three are pinned by tests:
+
+- **Files are numbered from each player's own right**, so the two sides
+  disagree about every file except the middle one they both call five. Red's
+  number is `9 - fileIndex`, black's is `fileIndex + 1`.
+- **The trailing number is a distance after `+`/`-` but a destination file
+  after `=`** -- and for the horse, elephant and advisor, which never move
+  straight, it is a destination file either way. `R2+3` is three ranks;
+  `H2+3` is a file.
+- **Two of a kind on one file lose the file number** and take `+` for the one
+  nearer the opponent and `-` for the one behind. "Nearer the opponent" is the
+  higher rank for red and the lower for black. Only soldiers stack deeper than
+  two, and then the letter goes instead and they are counted from the front.
+
+A principal variation is **replayed**, not formatted move by move against the
+starting position: which chariot is the front one, and whether a file number
+needs disambiguating at all, both change as the line runs.
+
+WXF has no answer for two files each holding a stacked pair, where `+R+1`
+names two different moves; this keeps the file number in that one case. The
+guarantee that matters is in `xiangqiNotation.test.ts`: it walks every legal
+move in six positions and asserts no two produce the same string, because a
+record is only readable if each move in it names exactly one move.
+
 ## Engine Boundary
 
 `useEngine` loads the lightweight `pikafish.js` wrapper first, then lazily
@@ -95,6 +155,48 @@ value to limit fingerprinting, and Chromium 148 was observed here reporting
 `32`. The old `<= 8` test therefore put the same machine in the mid tier under
 one browser and the high tier under another — sizing the engine by browser
 rather than by machine. Every browser agrees that 4GB is constrained.
+
+### The thread ceiling is the build, not the device policy
+
+**Read this before raising the thread count.** `WASM_PTHREAD_POOL_SIZE=4` in
+`scripts/build-pikafish.sh` prewarms four pthread workers into the shipped
+core, and it is not merely a warm-up. The engine runs inside a worker, so when
+Pikafish asks for more search threads than the pool holds, the thread that
+asked blocks in `pthread_create` and never returns to the event loop that
+would start the new worker. Nothing errors: the engine simply never answers
+`readyok`, and the app sits on "Loading engine" until the 90-second ready
+timeout fires.
+
+Measured in the browser against the checked-in artifacts, by asking for each:
+
+| threads | result |
+| --- | --- |
+| 4 | ready in about three seconds |
+| 5 | never ready |
+| 8 | never ready |
+
+This is easy to miss from a bench run, because **Node has no such
+constraint** — `npm run bench:nps` drives the *same* artifacts at 17 threads
+happily. That is also where the numbers below come from, on an 18-core
+machine:
+
+| threads | 1 | 3 | 6 | 12 | 17 |
+| --- | --- | --- | --- | --- | --- |
+| nodes/second | 464k | 1.43M | 2.98M | 5.39M | 7.49M |
+
+So the engine scales close to linearly and a desktop is getting roughly a
+fifth of the search its hardware could deliver. `ENGINE_PTHREAD_POOL_SIZE` in
+`analysisProfile.ts` mirrors the build constant and clamps every thread choice
+inside `threadsForCores`, so a tier edit alone cannot reach the hang. Lifting
+the ceiling means raising `WASM_PTHREAD_POOL_SIZE` *and* rebuilding the
+artifacts, together — `WASM_PTHREAD_POOL_SIZE=12 npm run build`, which needs
+emsdk. The two must move as one: a source-only raise would let the tier ask
+for more than the shipped core was built for.
+
+Within that ceiling, threads now scale with `hardwareConcurrency` rather than
+being a constant per tier, keeping two cores back for the page. Both tiers
+used to be flat, so a 9-core machine and a 64-core machine were sized
+identically.
 
 Engine crashes are classified rather than surfaced raw:
 `shouldSuppressEngineRuntimeError` and `hasMemoryAccessOutOfBounds` keep a
@@ -168,6 +270,23 @@ abstraction does.
 - Share links encode the tree as base64url: `utils/shareTree.ts`.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
+
+## Telling the user what the engine is doing
+
+`utils/analysisActivity.ts` answers "what is the analysis engine doing" once,
+for the three places that show it: the graph's State card, the engine
+dashboard's Search card and the status line along the bottom. Each used to
+decide it from a different subset of the same five booleans, and none of them
+knew that live analysis stops while the tab is in the background — so a
+backgrounded tab read "Engine ready" and "Idle" beside a stale depth and
+looked exactly like an engine with nothing to do.
+
+`background` outranks `searching` in the ladder because stopping a search is
+asynchronous: `stop` goes out on the way and `isSearching` stays true until
+the engine answers `bestmove`, so a hidden tab would otherwise flash
+"Analyzing" for a position nothing will report on. It is also the only state
+that does not clear itself, which is why it is the only one that gets colour
+and a reason on screen.
 
 ## Two answers to "is this a constrained device?"
 
