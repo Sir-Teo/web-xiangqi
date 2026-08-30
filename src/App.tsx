@@ -15,7 +15,7 @@ import {
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
-import { START_FEN, hasAnyLegalMove, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
+import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
@@ -50,6 +50,12 @@ import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
 import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
+import {
+  describeRepetition,
+  formatRepetitionHeadline,
+  formatRepetitionRule,
+  shouldReportRepetition,
+} from './utils/repetition';
 import {
   describeAnalysisActivity,
   formatAnalysisActivity,
@@ -2483,6 +2489,28 @@ function App() {
     return before ? formatMoveInStyle(before, uci, notationStyle) : formatUciMove(uci);
   }, [notationStyle, treeNodes]);
 
+  /**
+   * Whether this position has stood here before, and what the rules say about
+   * how it got back.
+   *
+   * Read off the played line rather than the whole tree: a repetition is a
+   * property of the moves actually made, and a variation explored and left is
+   * not one of them.
+   */
+  const repetition = useMemo(() => {
+    const line = moveHistory.slice(0, currentMoveIndex + 1).map((record) => ({
+      board: record.board,
+      sideToMove: record.sideToMove,
+      inCheck: record.inCheck,
+    }));
+    // The root comes from its FEN rather than from the hook, which does not
+    // expose the board -- and the FEN is already the hook's own description of
+    // that position, so there is nothing to keep in step.
+    const [placement, sideChar] = rootFen.trim().split(/\s+/);
+    return describeRepetition(parseFenBoard(placement), sideChar === 'b' ? 'b' : 'w', line);
+  }, [currentMoveIndex, moveHistory, rootFen]);
+  const visibleRepetition = shouldReportRepetition(repetition) ? repetition : null;
+
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';
   const engineUnavailableReviewLabel = engineNotice?.text === 'Engine paused after crashes'
@@ -4513,6 +4541,25 @@ function App() {
                     {inCheck ? 'Check' : (isMobile && aiPlayActive && boardAiStatusText) || currentModeMeta.shortLabel}
                   </em>
                 </div>
+                {/* A repeated position is not a draw in xiangqi, and which it is
+                    depends on what the repeating moves were doing. The board
+                    said nothing at all about it before, so a player shuffling
+                    into a perpetual check had no way to know the rules were
+                    about to decide the game against them. */}
+                {visibleRepetition ? (
+                  <div
+                    className={`position-stat position-stat-repetition${visibleRepetition.mustVary ? ' position-stat-repetition-binding' : ''}`}
+                    role="status"
+                    data-testid="repetition-notice"
+                    data-verdict={visibleRepetition.verdict}
+                  >
+                    <span>Repetition</span>
+                    <strong>{formatRepetitionHeadline(visibleRepetition)}</strong>
+                    <em title={formatRepetitionRule(visibleRepetition)}>
+                      {formatRepetitionRule(visibleRepetition)}
+                    </em>
+                  </div>
+                ) : null}
                 <div className="position-stat position-stat-selection">
                   <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
                   <strong>{selectedPieceText}</strong>

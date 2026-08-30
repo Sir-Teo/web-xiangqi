@@ -5551,6 +5551,33 @@ summary:active {
   padding: 0.42rem 0.52rem;
 }
 
+/* The rule takes a whole sentence to state, so it gets the whole row rather
+   than a third of one beside Turn and Material. */
+.position-stat-repetition {
+  grid-column: 1 / -1;
+  border-color: rgba(245, 158, 11, 0.28);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
+}
+
+.position-stat-repetition strong {
+  color: var(--warning);
+}
+
+/* Amber says "look at this"; a perpetual check is going to decide the game
+   against somebody, so it says it louder. */
+.position-stat-repetition-binding {
+  border-color: rgba(239, 68, 68, 0.42);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.03));
+}
+
+.position-stat-repetition-binding strong {
+  color: var(--danger, #ef4444);
+}
+
+.position-stat-repetition em {
+  white-space: normal;
+}
+
 .capture-tray {
   min-width: 0;
   display: grid;
