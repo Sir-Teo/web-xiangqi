@@ -5,6 +5,7 @@ import {
     HIGH_TIER_MAX_THREADS,
     hashChoicesForTier,
     resolveDeepDiveBudget,
+    threadChoicesForProfile,
     MAX_ENGINE_THREADS,
     detectDeviceTier,
     resolveEngineBootConfig,
@@ -292,5 +293,45 @@ describe('a deep dive on one position', () => {
     it('scales with the tier', () => {
         expect(resolveDeepDiveBudget('high').moveTimeMs).toBeGreaterThan(resolveDeepDiveBudget('mid').moveTimeMs);
         expect(resolveDeepDiveBudget('mid').moveTimeMs).toBeGreaterThan(resolveDeepDiveBudget('low').moveTimeMs);
+    });
+});
+
+describe('the engine threads a machine may be asked for', () => {
+    it('offers a ladder that stops at what the tier already chose', () => {
+        // Upward has nothing to offer: the ceiling is the shipped core's thread
+        // pool, not a policy, so overriding can only go down.
+        const desktop = detectDeviceTier(DESKTOP);
+        const ceiling = resolveEngineBootConfig(desktop).threads;
+        const choices = threadChoicesForProfile(desktop);
+        expect(choices[choices.length - 1]).toBe(ceiling);
+        expect(Math.max(...choices)).toBeLessThanOrEqual(MAX_ENGINE_THREADS);
+    });
+
+    it('always offers one, which is the answer to "stop the fans"', () => {
+        for (const device of [DESKTOP, LAPTOP, PHONE]) {
+            expect(threadChoicesForProfile(detectDeviceTier(device))).toContain(1);
+        }
+    });
+
+    it('honours a count the machine offers', () => {
+        const config = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { threads: 2 });
+        expect(config.threads).toBe(2);
+    });
+
+    it('ignores a count above what the machine was going to take', () => {
+        const desktop = detectDeviceTier(DESKTOP);
+        const untouched = resolveEngineBootConfig(desktop).threads;
+        expect(resolveEngineBootConfig(desktop, { threads: 64 }).threads).toBe(untouched);
+        expect(resolveEngineBootConfig(desktop, { threads: 0 }).threads).toBe(untouched);
+        expect(resolveEngineBootConfig(desktop, { threads: Number.NaN }).threads).toBe(untouched);
+    });
+
+    it('offers a phone nothing to choose between', () => {
+        // The low tier is single-threaded, so there is no ladder to show.
+        expect(threadChoicesForProfile(detectDeviceTier(PHONE))).toEqual([1]);
+    });
+
+    it('still drops to one thread on a safer boot', () => {
+        expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP), { threads: 4, saferBoot: true }).threads).toBe(1);
     });
 });

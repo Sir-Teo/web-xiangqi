@@ -89,6 +89,7 @@ import {
   resolveEngineBootConfig,
   resolveLiveAnalysisPolicy,
   resolveReviewPolicy,
+  threadChoicesForProfile,
 } from './utils/analysisProfile';
 import {
   classifyMoveQualityForEval,
@@ -363,6 +364,7 @@ type StoredPreferences = {
   soundEnabled?: boolean;
   searchDepth?: number;
   engineHashMB?: number;
+  engineThreads?: number;
   analysisEngineMode?: AnalysisEngineMode;
   enginePvLineCount?: PvLineCount;
   aiStrength?: AiStrength;
@@ -467,6 +469,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       // to its own default. A value saved on another machine is a statement
       // about that machine.
       engineHashMB: Number.isFinite(Number(record.engineHashMB)) ? Math.trunc(Number(record.engineHashMB)) : undefined,
+      engineThreads: Number.isFinite(Number(record.engineThreads)) ? Math.trunc(Number(record.engineThreads)) : undefined,
       analysisEngineMode: isAnalysisEngineMode(record.analysisEngineMode) ? record.analysisEngineMode : undefined,
       enginePvLineCount: isPvLineCount(record.enginePvLineCount) ? record.enginePvLineCount : undefined,
       aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
@@ -907,6 +910,7 @@ function App() {
   const [searchDepth, setSearchDepth] = useState(storedPreferences.searchDepth ?? defaultSearchDepth);
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>(storedPreferences.analysisEngineMode ?? 'optimized');
   const [engineHashMB, setEngineHashMB] = useState<number | undefined>(storedPreferences.engineHashMB);
+  const [engineThreads, setEngineThreads] = useState<number | undefined>(storedPreferences.engineThreads);
   const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(storedPreferences.enginePvLineCount ?? 3);
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   // State rather than the stage ref, because the ref cannot re-render the
@@ -932,6 +936,7 @@ function App() {
     setSearchDepth(preferences.searchDepth ?? defaultSearchDepth);
     setAnalysisEngineMode(preferences.analysisEngineMode ?? 'optimized');
     setEngineHashMB(preferences.engineHashMB);
+    setEngineThreads(preferences.engineThreads);
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
@@ -951,6 +956,7 @@ function App() {
       soundEnabled,
       searchDepth,
       engineHashMB,
+      engineThreads,
       analysisEngineMode,
       enginePvLineCount,
       aiStrength,
@@ -964,6 +970,7 @@ function App() {
     assistMode,
     engineHashMB,
     enginePvLineCount,
+    engineThreads,
     notationStyle,
     orientation,
     searchDepth,
@@ -1147,8 +1154,8 @@ function App() {
   const deviceProfile = useMemo(() => detectDeviceProfile(), []);
 
   const baseEngineBootConfig = useMemo(
-    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport(), hashMB: engineHashMB }),
-    [deviceProfile, engineHashMB]
+    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport(), hashMB: engineHashMB, threads: engineThreads }),
+    [deviceProfile, engineHashMB, engineThreads]
   );
 
   const engineBootConfig = useMemo(() => {
@@ -1156,9 +1163,10 @@ function App() {
     return resolveEngineBootConfig(deviceProfile, {
       allowSIMD: baseEngineBootConfig.allowSIMD,
       hashMB: engineHashMB,
+      threads: engineThreads,
       saferBoot: true,
     });
-  }, [baseEngineBootConfig, deviceProfile, engineHashMB, engineSafetyBootLevel]);
+  }, [baseEngineBootConfig, deviceProfile, engineHashMB, engineSafetyBootLevel, engineThreads]);
 
   const engineDetailEnabled = engineEnabled && analysisTab === 'engine' && !isAiTurn && reviewStatus !== 'running';
   const analysisMultiPv = engineDetailEnabled ? enginePvLineCount : 1;
@@ -2387,6 +2395,7 @@ function App() {
   // the mobile header chip and in the analysis tab there instead.
   const engineHashChoices = useMemo(() => hashChoicesForTier(deviceProfile.tier), [deviceProfile.tier]);
   const deepDiveBudget = useMemo(() => resolveDeepDiveBudget(deviceProfile.tier), [deviceProfile.tier]);
+  const engineThreadChoices = useMemo(() => threadChoicesForProfile(deviceProfile), [deviceProfile]);
   const showEvalBar = engineEnabled && !isMobile;
   const displayEvalClass = displayEvalScore === null
     ? ''
@@ -4043,6 +4052,37 @@ function App() {
                 Changing it reboots the engine, which takes about a third of a
                 second, so the label says so rather than leaving a stall
                 unexplained. */}
+            {/* Downward only, and the ladder says so by stopping at what this
+                machine was going to take anyway. The reason to want it is an
+                unplugged laptop or a machine busy with something that matters
+                more than the search; upward has nothing to offer, because the
+                ceiling is the shipped core's thread pool rather than a policy. */}
+            {engineThreadChoices.length > 1 ? (
+              <div className="settings-group">
+                <span
+                  id="settings-engine-threads-label"
+                  className="settings-label"
+                  title="How much of the processor the search gets. Changing it restarts the engine."
+                >
+                  Engine Threads
+                </span>
+                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-threads-label">
+                  {engineThreadChoices.map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={`pill-btn ${engineBootConfig.threads === count ? 'pill-btn-active' : ''}`}
+                      onClick={() => setEngineThreads(count)}
+                      aria-pressed={engineBootConfig.threads === count}
+                      aria-label={`Engine threads ${count}${engineBootConfig.threads === count ? ', in use' : ''}`}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="settings-group">
               <span
                 id="settings-engine-hash-label"

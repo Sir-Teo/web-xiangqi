@@ -219,9 +219,35 @@ export function resolveHashMB(tier: DeviceTier, requested: unknown, fallback: nu
     return HASH_CHOICES_BY_TIER[tier].includes(wanted) ? wanted : fallback;
 }
 
+/**
+ * The thread counts a machine may be asked for, smallest first.
+ *
+ * The tier already picks a sensible number -- cores less two, capped at
+ * `MAX_ENGINE_THREADS` -- and the useful direction to override it is *down*:
+ * an unplugged laptop, or a machine doing something else that matters more
+ * than the search. Upward has nothing to offer, because the cap is the shipped
+ * core's thread pool rather than a policy.
+ *
+ * Built from the tier's own choice so the ladder never offers a machine more
+ * than it was going to take anyway, and always includes 1, which is the answer
+ * to "stop the fans".
+ */
+export function threadChoicesForProfile(profile: DeviceProfile): readonly number[] {
+    const ceiling = resolveEngineBootConfig(profile).threads;
+    const rungs = [1, 2, 3, 4, 6, 8].filter((count) => count <= ceiling);
+    if (!rungs.includes(ceiling)) rungs.push(ceiling);
+    return rungs;
+}
+
+/** An asked-for thread count, held inside what this machine already allows. */
+export function resolveThreads(profile: DeviceProfile, requested: unknown, fallback: number): number {
+    const wanted = Math.trunc(finiteNumber(requested, Number.NaN));
+    return threadChoicesForProfile(profile).includes(wanted) ? wanted : fallback;
+}
+
 export function resolveEngineBootConfig(
     profile: DeviceProfile,
-    options: { allowSIMD?: boolean; saferBoot?: boolean; hashMB?: number } = {}
+    options: { allowSIMD?: boolean; saferBoot?: boolean; hashMB?: number; threads?: number } = {}
 ): EngineBootConfig {
     const allowSIMD = options.allowSIMD !== false;
 
@@ -249,6 +275,13 @@ export function resolveEngineBootConfig(
     // boot halves it, so a retry after a crash still backs off from whatever
     // was actually in use.
     hashMB = resolveHashMB(profile.tier, options.hashMB, hashMB);
+    // Threads are checked against the tier's own number rather than a ladder,
+    // because the ladder is derived *from* that number -- asking
+    // threadChoicesForProfile here would recurse.
+    const wantedThreads = Math.trunc(finiteNumber(options.threads, Number.NaN));
+    if (Number.isFinite(wantedThreads) && wantedThreads >= 1 && wantedThreads <= threads) {
+        threads = wantedThreads;
+    }
 
     if (options.saferBoot) {
         variant = resolveSingleVariant(allowSIMD);
