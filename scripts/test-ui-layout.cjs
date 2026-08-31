@@ -3884,6 +3884,56 @@ async function assertMoveLineImport(page) {
 }
 
 /**
+ * The advice the import error gives, actually carried out.
+ *
+ * The error next door tells a reader whose record will not load: "if this
+ * record does not start from the opening, paste its FEN first." That advice is
+ * worth nothing if the flow does not work, and a handicap game -- Red giving
+ * odds of a horse, which is a real way xiangqi is played and a real reason a
+ * record does not start from the opening -- is the case it is aimed at.
+ *
+ * So: set the position, then paste a record written in Chinese, and get the
+ * game on the handicap board rather than on the opening one.
+ */
+async function assertANotationRecordCanStartFromAGivenPosition(page) {
+  // Red's left horse removed from b0.
+  const handicap = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/R1BAKABNR w - - 0 1";
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByLabel("FEN string").fill(handicap);
+  await page.getByTestId("uci-line-input").fill("炮二平五 马8进7 马二进三");
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null,
+    error: (document.querySelector("#new-game-line-error")?.textContent || "").trim(),
+    // The square the handicap took the horse from. If the record went in
+    // against the opening position instead, the horse is still standing.
+    b0: document.querySelector('[data-file="1"][data-rank="0"]')?.getAttribute("aria-label") || "",
+  }));
+
+  if (state.error) {
+    throw new Error(`A record starting from a set-up position was refused: "${state.error}"`);
+  }
+  if (state.plies !== "3 / 3") {
+    throw new Error(`Expected the three-move record to load, got ${state.plies}`);
+  }
+  if (/horse/i.test(state.b0)) {
+    throw new Error(
+      `The record loaded onto the opening position rather than the one given: b0 is "${state.b0}". ` +
+      `The import error tells readers to paste a FEN first, so that has to be what happens.`
+    );
+  }
+}
+
+/**
  * What the importer says when it understood the notation but not the game.
  *
  * The reader skips a token it cannot place and carries on, so two things used
@@ -7661,6 +7711,7 @@ async function main() {
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
     await assertNotationImportSaysWhatItCouldNotRead(page);
+    await assertANotationRecordCanStartFromAGivenPosition(page);
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
