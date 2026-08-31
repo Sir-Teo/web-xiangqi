@@ -261,11 +261,38 @@ headers on the response:
 | live analysis settles at | D22/S49 | D16/S30 |
 | engine ready | ~1.2s | ~0.4s |
 
-Nine times the nodes and six extra plies. That is the honest cost of the
-platform, and there is nothing to fix in it: threads need `SharedArrayBuffer`,
-`SharedArrayBuffer` needs isolation, and isolation needs headers Pages does not
-send. Hosting that sends them (Netlify, Cloudflare Pages, a Worker) would get
-the left column, and that is the only thing that would.
+Nine times the nodes and six extra plies — which is what the deployed site used
+to give up, and no longer does.
+
+**`public/coi-sw.js` puts the headers back.** A service worker sees every
+same-origin response before the page does, so it can add what the host omitted;
+`index.html` registers it and reloads once so the document comes back through
+it. The chain is unchanged — threads need `SharedArrayBuffer`, which needs
+isolation, which needs those headers — but the headers no longer have to come
+from the host. Measured over a server sending none, MultiPV 3:
+
+| | Pages as-is | Pages + `coi-sw.js` |
+| --- | --- | --- |
+| core | `single-simd` | `threaded-simd` |
+| threads | 1 | 8 |
+| nodes/second | 479k | 3.9M |
+| seldepth | 31 | 41 |
+| hash used | 4% | 26% |
+
+It caches nothing on purpose. The cleanup this repo carries exists because an
+older demo shipped a *caching* worker and a stale one went on serving old engine
+artifacts; this one only rewrites headers on responses it fetches from the
+network, so there is no cache to go stale and no build that can outlive a
+deploy. Offline support is the other half of what web-chess's worker does and is
+deliberately not here.
+
+Every branch fails safe — no worker support, an insecure context, a rejected
+registration, or a worker that never controls the page all leave the app
+single-threaded and working. The one reload carries a sessionStorage guard so it
+cannot become a loop, and the block is skipped entirely when the page is already
+isolated, so the dev server and every check here register nothing. Hosting that
+sends the headers itself (Netlify, Cloudflare Pages, a Worker) still skips the
+worker and the reload with it.
 
 What *was* wrong is that the app did not know. Threading was resolved entirely
 inside `templates/pikafish.js` — `resolveVariant` drops `threaded-simd` to
@@ -291,7 +318,10 @@ lower: a shallower reviewer disagrees with the played move less often.
 
 `test:prod:smoke` runs both configurations for this reason. It used to run only
 `vite preview`, which is isolated — so the deploy gate had never once loaded the
-app the way the deploy serves it.
+app the way the deploy serves it. Its second pass now asserts that the worker
+reaches isolation and a threaded core, and the invariant that failed here in the
+first place: that the dashboard's thread count agrees with what the page
+actually got.
 
 ### The emsdk version is part of the engine, and is pinned
 
