@@ -897,14 +897,49 @@
       return true;
     };
 
+    /**
+     * Load the core, and check that it actually arrived.
+     *
+     * `importScripts` throws when a request fails, but not when one *succeeds*
+     * carrying the wrong body -- a dev server under load, a captive portal, a
+     * CDN error page all return 200 with something that is not the core. The
+     * import then completes quietly having defined nothing, and the first sign
+     * of trouble is `getCoreFactory` reporting that the global is missing,
+     * which reads like the caller forgot to load it.
+     *
+     * So the global is checked here, where the cause is still visible, and the
+     * import is tried once more with a cache-busting query before giving up.
+     * Observed as an intermittent boot failure under a machine running several
+     * browser suites at once; a second attempt succeeds.
+     */
+    function importCoreScripts(scripts, variant) {
+      importScripts.apply(null, scripts);
+
+      let expectedGlobal = null;
+      try { expectedGlobal = coreMeta(variant).globalName; } catch (_) { expectedGlobal = null; }
+      if (!expectedGlobal || typeof self[expectedGlobal] !== "undefined") return;
+
+      const retried = scripts.map(function (url) {
+        return url + (url.indexOf("?") === -1 ? "?" : "&") + "pikafish-retry=1";
+      });
+      importScripts.apply(null, retried);
+      if (typeof self[expectedGlobal] === "undefined") {
+        throw new Error(
+          expectedGlobal + " was not defined after loading " + scripts.join(", ") +
+          " (twice). The request succeeded but did not return the engine core."
+        );
+      }
+    }
+
     self.onmessage = async function(event) {
       try {
         const data = event.data;
         if (data && typeof data === "object" && data.type === "init") {
-          if (Array.isArray(data.coreScripts) && data.coreScripts.length) {
-            importScripts.apply(null, data.coreScripts);
-          } else if (data.coreScript) {
-            importScripts(data.coreScript);
+          const coreScripts = Array.isArray(data.coreScripts) && data.coreScripts.length
+            ? data.coreScripts
+            : (data.coreScript ? [data.coreScript] : []);
+          if (coreScripts.length) {
+            importCoreScripts(coreScripts, data.bootstrapVariant || data.variant);
           }
           basePathOverride = data.basePath || basePathOverride;
           nnuePathOverride = data.nnuePath || nnuePathOverride;
