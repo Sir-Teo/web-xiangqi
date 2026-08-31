@@ -104,6 +104,9 @@ async function reviewGame(page, moves) {
       avgLoss: num(/AVG LOSS\s*\n?\s*(\d+)cp/),
       blunders: num(/BLUNDER\s*\n?\s*(\d+)/),
       mistakes: num(/MISTAKE\s*\n?\s*(\d+)/),
+      best: num(/BEST\s*\n?\s*(\d+)/),
+      good: num(/GOOD\s*\n?\s*(\d+)/),
+      inaccuracies: num(/INACCURA\w*\s*\n?\s*(\d+)/),
     };
   });
 }
@@ -147,6 +150,20 @@ async function main() {
       const say = (what) => fail(`${fixture.name}: ${what} — got ${JSON.stringify(result)}`);
 
       if (result.accuracy === null) { say("no accuracy reported"); continue; }
+
+      // Every move lands in exactly one bucket, so the buckets have to add up
+      // to the game. This is the check that says the review *looked at the
+      // whole game* rather than a prefix of it -- a distinction the accuracy
+      // number alone hides completely, because a review that quietly skipped
+      // half the moves still reports a perfectly plausible percentage. On a
+      // threaded engine a review is fast enough (a 120-ply game in under a
+      // second, because consecutive positions share almost all of their search
+      // tree) that "it finished quickly" is not evidence either way.
+      const classified = ["best", "good", "inaccuracies", "mistakes", "blunders"]
+        .reduce((total, key) => total + (result[key] ?? 0), 0);
+      if (classified !== fixture.moves.length) {
+        say(`classified ${classified} moves but the game is ${fixture.moves.length} plies`);
+      }
       if (fixture.minAccuracy !== undefined && result.accuracy < fixture.minAccuracy) say(`accuracy ${result.accuracy}% is below ${fixture.minAccuracy}%`);
       if (fixture.maxAccuracy !== undefined && result.accuracy > fixture.maxAccuracy) say(`accuracy ${result.accuracy}% is above ${fixture.maxAccuracy}%`);
       if (fixture.maxAvgLoss !== undefined && result.avgLoss > fixture.maxAvgLoss) say(`average loss ${result.avgLoss}cp is above ${fixture.maxAvgLoss}cp`);
