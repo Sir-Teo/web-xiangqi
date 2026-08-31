@@ -136,13 +136,97 @@ function startPlainServer(port) {
     if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       file = path.join(root, "index.html");
     }
-    res.writeHead(200, { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream" });
+
+    // Validators, because Pages sends them and the whole point of the weights
+    // cache is that it revalidates against one.
+    const stat = fs.statSync(file);
+    const etag = `"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+    const name = path.basename(file);
+    if (req.headers["if-none-match"] === etag) {
+      server.transferred.push({ name, status: 304, bytes: 0 });
+      res.writeHead(304, { ETag: etag, "Cache-Control": "max-age=600" });
+      res.end();
+      return;
+    }
+    server.transferred.push({ name, status: 200, bytes: stat.size });
+    res.writeHead(200, {
+      "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
+      "Cache-Control": "max-age=600",
+      ETag: etag,
+      "Last-Modified": stat.mtime.toUTCString(),
+      "Content-Length": stat.size,
+    });
     fs.createReadStream(file).pipe(res);
   });
+  // What the server actually put on the wire, which is the only way to tell a
+  // cache that works from one that does not.
+  server.transferred = [];
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => resolve(server));
   });
+}
+
+/**
+ * The engine's weights, fetched once rather than on every visit.
+ *
+ * `pikafish.nnue` is over 53MB and a browser HTTP cache will not store an entry
+ * that large -- so before `coi-sw.js` kept it in Cache Storage, every visit paid
+ * the whole 53MB again. That is around forty seconds on a ten-megabit phone
+ * connection, each time the board is opened.
+ *
+ * Two things have to hold, and they pull in opposite directions. The second
+ * visit must not re-transfer the body, or the cache is doing nothing. And it
+ * must still *ask* -- a conditional request, answered 304 -- because a copy
+ * served on its own authority is exactly the stale engine artifact this repo's
+ * `serviceWorkerCleanup` exists to clean up after.
+ */
+async function checkWeightsAreCachedAcrossVisits(browser, server) {
+  // One context for both visits: Cache Storage lives with the context, which is
+  // what makes the second load a returning visitor rather than a new one.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    });
+
+    const visit = async () => {
+      const before = server.transferred.length;
+      await page.goto(PLAIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForFunction(
+        () => /Engine ready/.test(document.body.innerText),
+        null,
+        { timeout: READY_TIMEOUT_MS }
+      );
+      await page.waitForTimeout(800);
+      return server.transferred.slice(before).filter((entry) => entry.name === "pikafish.nnue");
+    };
+
+    const first = await visit();
+    const second = await visit();
+
+    const bytes = (entries) => entries.reduce((total, entry) => total + entry.bytes, 0);
+    if (!first.length || bytes(first) === 0) {
+      throw new Error(`weights: the first visit never fetched them (${JSON.stringify(first)})`);
+    }
+    if (!second.length) {
+      throw new Error(
+        "weights: the second visit did not ask for them at all. A cached engine net has to be " +
+        "revalidated on every load, or a redeployed one is never picked up."
+      );
+    }
+    if (bytes(second) !== 0 || second.some((entry) => entry.status !== 304)) {
+      throw new Error(
+        `weights: the second visit transferred ${bytes(second)} bytes (${JSON.stringify(second)}). ` +
+        "Over 53MB is being re-sent on every visit -- see the weights cache in public/coi-sw.js."
+      );
+    }
+  } finally {
+    await context.close().catch(() => {});
+  }
 }
 
 /** The shell, the engine, and a clean console. Returns what the page reported. */
@@ -331,6 +415,8 @@ async function main() {
     } finally {
       await returning.close().catch(() => {});
     }
+
+    await checkWeightsAreCachedAcrossVisits(browser, plain);
 
     console.log(
       `Production smoke passed:\n` +
