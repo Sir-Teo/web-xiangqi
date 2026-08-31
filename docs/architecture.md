@@ -387,6 +387,38 @@ reaches isolation and a threaded core, and the invariant that failed here in the
 first place: that the dashboard's thread count agrees with what the page
 actually got.
 
+### A core that arrives as something else
+
+Running the browser suites back to back on one machine produced an intermittent
+boot failure — twice in three attempts, never when `test:ui:layout` ran alone:
+
+```
+Failed to boot Pikafish engine
+Error: PikafishCoreSingleSimd not found. Load pikafish-core-single-simd.js first.
+    at getCoreFactory (pikafish.js:277)
+```
+
+The message is misleading, which is most of why it was hard to place.
+`importScripts` throws when a request *fails*, and does not when one succeeds
+carrying the wrong body — a dev server under load, a captive portal, a CDN error
+page all answer 200 with something that is not the core. The import returns
+having defined nothing, and the first thing to notice is `getCoreFactory`, which
+reports a missing global as though the caller had forgotten to load it.
+
+The worker now checks the global immediately after importing, retries once with
+a cache-busting query, and if it is still missing says that the request
+succeeded and did not return the core.
+
+**What that is known to do, and what it is not.** Serving a deliberate
+non-engine body for the first request of the core makes the retry fire — the
+`?pikafish-retry=1` request appears in the network log and the engine reaches
+ready with a clean console — so the detection and the recovery both work at the
+import step. It is *not* established that this changes the outcome of the
+failure above: the app carries its own boot recovery, and in that constructed
+scenario it reached ready either way. The full suite sequence has run clean
+twice since, against two failures in three before, which is evidence and not
+proof.
+
 ### The emsdk version is part of the engine, and is pinned
 
 `install-emsdk.sh` used `EMSDK_VERSION=latest`, so the Pages deploy compiled the
