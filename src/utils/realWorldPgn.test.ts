@@ -86,3 +86,30 @@ describe('a Chinese record pasted from somewhere real', () => {
         expect(parsedNumbered.moves).toEqual(plain.moves);
     });
 });
+
+describe('telling the reader a file held more than one game', () => {
+    const LINE_TEXT = LINE.join(' ');
+
+    it('says so when a second game follows', () => {
+        const pgn = `[Event "One"]\n\n${LINE_TEXT} 1-0\n\n[Event "Two"]\n\nc3c4 c6c5 0-1\n`;
+        expect(extractUciMoveTree(pgn).hadMoreGames).toBe(true);
+    });
+
+    it('says so when the next game has no result on the first', () => {
+        const pgn = `[Event "One"]\n\n${LINE_TEXT}\n\n[Event "Two"]\n\nc3c4 c6c5\n`;
+        expect(extractUciMoveTree(pgn).hadMoreGames).toBe(true);
+    });
+
+    it('stays quiet for a single game, with or without a result', () => {
+        expect(extractUciMoveTree(`[Event "One"]\n\n${LINE_TEXT} 1-0\n`).hadMoreGames).toBe(false);
+        expect(extractUciMoveTree(`${LINE_TEXT}\n`).hadMoreGames).toBe(false);
+        expect(extractUciMoveTree(LINE_TEXT).hadMoreGames).toBe(false);
+    });
+
+    it('stays quiet when a comment merely mentions a result', () => {
+        const pgn = `[Event "One"]\n\n1. ${LINE[0]} {red was winning, 1-0 looked certain}\n${LINE.slice(1).join(' ')}\n`;
+        const result = extractUciMoveTree(pgn);
+        expect(result.hadMoreGames, 'a comment is not a game boundary').toBe(false);
+        expect(result.moves).toEqual(LINE);
+    });
+});

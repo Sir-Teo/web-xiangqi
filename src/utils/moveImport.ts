@@ -86,7 +86,7 @@ const PGN_RESULT_LINE = /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/;
  * scan is line-based and skips anything inside a `{...}` comment, so a comment
  * containing a bracket or the word `1-0` cannot end the game early.
  */
-function firstGameOnly(text: string): string {
+function firstGameOnly(text: string): { text: string; truncated: boolean } {
     const lines = String(text).split(/\r?\n/);
     const kept: string[] = [];
     let seenMoveText = false;
@@ -100,7 +100,7 @@ function firstGameOnly(text: string): string {
         if (!insideComment && PGN_TAG_LINE.test(line)) {
             // Tags before any moves are this game's own header; tags after them
             // belong to the next game.
-            if (seenMoveText) break;
+            if (seenMoveText) return { text: kept.join('\n'), truncated: true };
             kept.push(line);
             braceDepth = Math.max(0, braceDepth + opened - closed);
             continue;
@@ -111,15 +111,19 @@ function firstGameOnly(text: string): string {
 
         if (!insideComment && line.trim()) {
             seenMoveText = true;
-            if (PGN_RESULT_LINE.test(line)) break;
+            if (PGN_RESULT_LINE.test(line)) {
+                // A result ends this game; anything after it is another one.
+                const rest = lines.slice(kept.length).join('').trim();
+                return { text: kept.join('\n'), truncated: rest.length > 0 };
+            }
         }
     }
 
-    return kept.join('\n');
+    return { text: kept.join('\n'), truncated: false };
 }
 
 function stripPgnMetadata(text: string): string {
-    const withoutTags = stripDelimited(firstGameOnly(text), '[', ']');
+    const withoutTags = stripDelimited(firstGameOnly(text).text, '[', ']');
     return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
 }
 
@@ -183,7 +187,10 @@ export function extractUciMoveTree(text: string): {
     moveTree: SavedMoveTreeNode[];
     hasVariations: boolean;
     tooLarge: boolean;
+    /** The paste held more than one game and only the first was read. */
+    hadMoreGames: boolean;
 } {
+    const hadMoreGames = firstGameOnly(text).truncated;
     const cleaned = stripPgnMetadata(text);
     const root: SavedMoveTreeNode[] = [];
     const stack: SavedMoveTreeNode[][] = [];
@@ -228,6 +235,7 @@ export function extractUciMoveTree(text: string): {
         moveTree: root,
         hasVariations: root.length > 1 || hasBranch(root),
         tooLarge,
+        hadMoreGames,
     };
 }
 
@@ -299,7 +307,7 @@ export function extractAnnotatedMainLine(text: string): {
 } {
     // This one reads the raw text rather than going through stripPgnMetadata,
     // so it needs the same game boundary applied on its own.
-    const source = firstGameOnly(String(text));
+    const source = firstGameOnly(String(text)).text;
     const moves: string[] = [];
     const annotations: ImportedMoveAnnotation[] = [];
     let depth = 0;

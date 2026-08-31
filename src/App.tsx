@@ -2647,6 +2647,27 @@ function App() {
   const copiedShareToastTimerRef = useRef<number | null>(null);
   const downloadedPgnTimerRef = useRef<number | null>(null);
   const clearedHashTimerRef = useRef<number | null>(null);
+  // A paste can hold a whole database. Only the first game is read, and saying
+  // so is the difference between a deliberate choice and silently losing the
+  // rest -- which is what it looked like before the importer stopped running
+  // the games together.
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const importNoticeTimerRef = useRef<number | null>(null);
+  const showImportNotice = useCallback((text: string | null) => {
+    if (importNoticeTimerRef.current !== null) {
+      window.clearTimeout(importNoticeTimerRef.current);
+      importNoticeTimerRef.current = null;
+    }
+    setImportNotice(text);
+    if (!text) return;
+    importNoticeTimerRef.current = window.setTimeout(() => {
+      importNoticeTimerRef.current = null;
+      setImportNotice(null);
+    }, 12000);
+  }, []);
+  useEffect(() => () => {
+    if (importNoticeTimerRef.current !== null) window.clearTimeout(importNoticeTimerRef.current);
+  }, []);
   const copiedPvTimerRef = useRef<number | null>(null);
   const exportFailureTimerRef = useRef<number | null>(null);
   const fenErrorTimerRef = useRef<number | null>(null);
@@ -3061,6 +3082,7 @@ function App() {
   }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
+    showImportNotice(null);
     if (isMoveImportTextTooLarge(text)) {
       setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
       return;
@@ -3130,6 +3152,9 @@ function App() {
     const loadedNodeIds = hasVariations
       ? loadMoveTree(importedLine.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
+    if (importedLine.hadMoreGames) {
+      showImportNotice('Imported first game');
+    }
 
     /**
      * The review the record was carrying, if it was carrying one.
@@ -3168,7 +3193,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -3704,6 +3729,23 @@ function App() {
               >
                 <span className={`status-dot ${shareLinkNotice.tone}`} />
                 <span>{shareLinkNotice.text}</span>
+              </div>
+            ) : null}
+            {importNotice ? (
+              <div
+                className="top-engine-state top-engine-state-warning"
+                role="status"
+                data-testid="import-notice"
+                /* This slot is capped at 192px, which is about 25 characters
+                   of the mono face it uses, so a sentence here is clipped
+                   mid-word at every viewport width. The visible text is the
+                   short form and the whole of it lives on the label and the
+                   tooltip. */
+                title="The paste held more than one game. Only the first was imported."
+                aria-label="Imported the first game only. The paste held more than one game."
+              >
+                <span className="status-dot warning" />
+                <span>{importNotice}</span>
               </div>
             ) : null}
 
