@@ -490,3 +490,52 @@ describe('a record the reader cannot follow', () => {
         expect(parsed.moves).toEqual(['h2e2']);
     });
 });
+
+describe('a record that annotates its moves', () => {
+    /**
+     * The failure this prevents is not "the annotated move is skipped". It is
+     * that skipping it leaves the board a move behind, and the *next* token is
+     * then read against a position the record never reached -- where, because
+     * the opening is symmetric and files are numbered from each player's own
+     * right, it is very often a legal move for the other side.
+     *
+     * `1. C2=5! H8+7` imported as `b0c2`: one move, belonging to neither
+     * player's half of that line, with nothing rejected and no error shown.
+     */
+    it('reads a move that carries a suffix annotation', () => {
+        for (const suffix of ['!', '?', '!!', '??', '!?', '?!']) {
+            expect(canonicaliseNotationToken(`C2=5${suffix}`), suffix).toBe('C2=5');
+            expect(canonicaliseNotationToken(`炮二平五${suffix}`), suffix).toBe('C2=5');
+        }
+    });
+
+    it('reads a move that carries a check or mate mark', () => {
+        expect(canonicaliseNotationToken('C2=5+')).toBe('C2=5');
+        expect(canonicaliseNotationToken('C2=5#')).toBe('C2=5');
+        // A leading marker is the stacked-piece one and has to survive.
+        expect(canonicaliseNotationToken('+R+1')).toBe('+R+1');
+    });
+
+    it('still refuses a move number, which is what the shape check is for', () => {
+        for (const token of ['1.', '2...', '10.', '1-0', '$1']) {
+            expect(canonicaliseNotationToken(token), token).toBeNull();
+        }
+    });
+
+    it('imports an annotated record as the game that was played', () => {
+        const plain = parseNotationRecord(undefined, '1. C2=5 H8+7 2. H2+3 R9=8');
+        const annotated = parseNotationRecord(undefined, '1. C2=5! H8+7?! 2. H2+3 R9=8+');
+        expect(annotated.rejected).toEqual([]);
+        expect(annotated.moves).toEqual(plain.moves);
+        expect(annotated.moves).toEqual(['h2e2', 'h9g7', 'h0g2', 'i9h9']);
+    });
+
+    it('does not turn one skipped move into a different game', () => {
+        // The shape of the old bug, kept as its own case: one annotated move
+        // followed by the reply, which is a legal move for the other side in
+        // the position the reader would have been left sitting on.
+        const parsed = parseNotationRecord(undefined, '1. C2=5! H8+7');
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7']);
+        expect(parsed.moves).not.toContain('b0c2');
+    });
+});

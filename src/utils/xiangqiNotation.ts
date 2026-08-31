@@ -403,7 +403,22 @@ const DIGIT_TOKEN_ALIASES: Record<string, string> = {
  * does not read as a move.
  */
 export function canonicaliseNotationToken(text: string): string | null {
-    const trimmed = String(text ?? '').trim();
+    /**
+     * Records annotate their moves -- `C2=5!`, 馬8進7?!, `R9=8+` for the check
+     * -- and an annotated move is still that move.
+     *
+     * Dropping these on the floor was not a cosmetic loss. A token that does
+     * not read as a move is treated as decoration and skipped, so `1. C2=5!
+     * H8+7` skipped Red's move and then matched `H8+7` against a position
+     * where Red had not moved yet. It is a legal *Red* horse move there, so
+     * the record imported as a single move that appears nowhere in it, with
+     * nothing rejected and nothing said.
+     *
+     * Safe to strip because every complete move token ends in a number, in
+     * WXF and in Chinese alike, so a trailing run of these can never be part
+     * of one. A leading `+` or `-` is a stack marker and is left alone.
+     */
+    const trimmed = String(text ?? '').trim().replace(/[!?+#]+$/, '');
     if (!trimmed || trimmed.length > 12) return null;
 
     let out = '';
