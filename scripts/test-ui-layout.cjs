@@ -3995,18 +3995,23 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
   await page.getByTestId("uci-line-input").fill("C2=5 H8+7 R5=9 H2+3");
   await page.getByTestId("import-uci-line-btn").click();
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
-  const noticeText = String(
-    await page.waitForFunction(
-      () => {
-        const text = (document.querySelector('[data-testid="import-notice"]')?.textContent || "").trim();
-        return text.length > 0 ? text : null;
-      },
-      null,
-      { timeout: 5000 },
-    ).then((handle) => handle.jsonValue()),
-  );
-  if (!noticeText.includes("R5=9")) {
-    throw new Error(`A partly-read record imported without saying so: "${noticeText}"`);
+  const notice = await page.waitForFunction(
+    () => {
+      const node = document.querySelector('[data-testid="import-notice"]');
+      const text = (node?.textContent || "").trim();
+      return text.length > 0 ? { text, label: node.getAttribute("aria-label") || "" } : null;
+    },
+    null,
+    { timeout: 5000 },
+  ).then((handle) => handle.jsonValue());
+  if (!notice.text.includes("R5=9")) {
+    throw new Error(`A partly-read record imported without saying so: "${notice.text}"`);
+  }
+  // The visible slot is about 25 characters wide, so what a screen reader is
+  // given is a different string -- and it used to be one hardcoded sentence
+  // about a multi-game paste, which is not what happened here.
+  if (/first game/i.test(notice.label) || !notice.label.includes("R5=9")) {
+    throw new Error(`A partly-read record was announced as "${notice.label}"`);
   }
   const plies = await page.evaluate(
     () => (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null

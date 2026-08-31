@@ -2651,14 +2651,21 @@ function App() {
   // so is the difference between a deliberate choice and silently losing the
   // rest -- which is what it looked like before the importer stopped running
   // the games together.
-  const [importNotice, setImportNotice] = useState<string | null>(null);
+  /**
+   * The slot is capped at about 25 characters, so what is shown and what is
+   * read out cannot be the same string. They used to be one hardcoded pair
+   * describing a multi-game paste, which became wrong the moment a second kind
+   * of notice started using this slot: a reader was told "imported the first
+   * game only" about a record that was nothing of the sort.
+   */
+  const [importNotice, setImportNotice] = useState<{ text: string; label: string } | null>(null);
   const importNoticeTimerRef = useRef<number | null>(null);
-  const showImportNotice = useCallback((text: string | null) => {
+  const showImportNotice = useCallback((text: string | null, label?: string) => {
     if (importNoticeTimerRef.current !== null) {
       window.clearTimeout(importNoticeTimerRef.current);
       importNoticeTimerRef.current = null;
     }
-    setImportNotice(text);
+    setImportNotice(text ? { text, label: label ?? text } : null);
     if (!text) return;
     importNoticeTimerRef.current = window.setTimeout(() => {
       importNoticeTimerRef.current = null;
@@ -3172,9 +3179,15 @@ function App() {
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
       // file was left, this one says part of *this* game was.
-      showImportNotice(`Read ${moves.length} moves, then could not place ${notationRejected[0]}`);
+      showImportNotice(
+        `Stopped at ${notationRejected[0]}`,
+        `Imported ${moves.length} ${moves.length === 1 ? 'move' : 'moves'}. The record then reads ${notationRejected[0]}, which names no legal move in the position it had reached, so the rest was not imported.`
+      );
     } else if (importedLine.hadMoreGames) {
-      showImportNotice('Imported first game');
+      showImportNotice(
+        'Imported first game',
+        'Imported the first game only. The paste held more than one game.'
+      );
     }
 
     /**
@@ -3800,12 +3813,12 @@ function App() {
                    of the mono face it uses, so a sentence here is clipped
                    mid-word at every viewport width. The visible text is the
                    short form and the whole of it lives on the label and the
-                   tooltip. */
-                title="The paste held more than one game. Only the first was imported."
-                aria-label="Imported the first game only. The paste held more than one game."
+                   tooltip -- which is why each notice carries its own. */
+                title={importNotice.label}
+                aria-label={importNotice.label}
               >
                 <span className="status-dot warning" />
-                <span>{importNotice}</span>
+                <span>{importNotice.text}</span>
               </div>
             ) : null}
 
