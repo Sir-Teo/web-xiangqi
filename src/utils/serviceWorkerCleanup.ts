@@ -35,6 +35,25 @@ type CleanupEnvironment = {
 
 const LEGACY_CACHE_PREFIX = 'pikafish-demo-';
 
+/**
+ * The app's own worker, which this cleanup must never touch.
+ *
+ * This file exists because an old demo shipped a caching service worker at
+ * `<base>/sw.js`, and a stale one went on serving old engine artifacts long
+ * after the demo was gone. The cleanup was written to unregister it -- and
+ * `docs/parity.md` records the consequence: with every worker unregistered the
+ * app can have no worker of its own, so it gets no cross-origin isolation on
+ * GitHub Pages, so threaded Pikafish is unreachable there. The note names
+ * narrowing this cleanup as the prerequisite for fixing that.
+ *
+ * The name is deliberately not `sw.js`: the legacy test below matches that
+ * filename exactly, and a worker sharing the old name would be unregistered by
+ * the very code meant to spare it -- on every load, silently, leaving only the
+ * puzzle of a site that never becomes isolated. The explicit check here is the
+ * belt to that suspenders, so a future rename cannot reintroduce it.
+ */
+export const APP_SERVICE_WORKER_FILENAME = 'coi-sw.js';
+
 function normalizeBasePath(basePath: string) {
     const normalized = basePath.startsWith('/') ? basePath : `/${basePath}`;
     return normalized.endsWith('/') ? normalized : `${normalized}/`;
@@ -69,6 +88,9 @@ export function isLegacyWebXiangqiServiceWorker(
         registration.installing?.scriptURL,
         registration.waiting?.scriptURL,
     ].map((scriptUrl) => getPathname(scriptUrl, locationHref));
+
+    // Never the app's own worker, whatever else matches.
+    if (workerPaths.some((path) => path.endsWith(`/${APP_SERVICE_WORKER_FILENAME}`))) return false;
 
     return (
         (scopePath === basePath || scopePath.startsWith(basePath)) &&
