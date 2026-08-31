@@ -189,45 +189,69 @@ rather than by machine. Every browser agrees that 4GB is constrained.
 
 ### The thread ceiling is the build, not the device policy
 
-**Read this before raising the thread count.** `WASM_PTHREAD_POOL_SIZE=4` in
-`scripts/build-pikafish.sh` prewarms four pthread workers into the shipped
+**Read this before raising the thread count.** `WASM_PTHREAD_POOL_SIZE` in
+`scripts/build-pikafish.sh` prewarms that many pthread workers into the shipped
 core, and it is not merely a warm-up. The engine runs inside a worker, so when
-Pikafish asks for more search threads than the pool holds, the thread that
-asked blocks in `pthread_create` and never returns to the event loop that
-would start the new worker. Nothing errors: the engine simply never answers
-`readyok`, and the app sits on "Loading engine" until the 90-second ready
-timeout fires.
+Pikafish asks for more search threads than the pool holds, the thread that asked
+blocks in `pthread_create` and never returns to the event loop that would start
+the new worker. Nothing errors: the engine simply never answers `readyok`, and
+the app sits on "Loading engine" until the 90-second ready timeout fires.
 
-Measured in the browser against the checked-in artifacts, by asking for each:
+The pool was 4, which cost most of the machine's search. It is now 12, and
+`MAX_ENGINE_THREADS` stops the ask at 8 — `ENGINE_THREAD_HEADROOM` below the
+pool, because the two used to be the same number and there was nowhere to be
+wrong by one. `threadsForCores` applies that clamp, so a tier edit alone cannot
+reach the hang.
 
-| threads | result |
-| --- | --- |
-| 4 | ready in about three seconds |
-| 5 | never ready |
-| 8 | never ready |
+Measured in the browser on the rebuilt SIMD core, depth 18 from the start
+position, 256MB hash, 18-core machine:
 
-This is easy to miss from a bench run, because **Node has no such
-constraint** — `npm run bench:nps` drives the *same* artifacts at 17 threads
-happily. That is also where the numbers below come from, on an 18-core
-machine:
+| threads | 1 | 4 | 8 |
+| --- | --- | --- | --- |
+| nodes/second | 435k | 1.92M | 3.74M |
+| wall | 2501ms | 1407ms | 625ms |
 
-| threads | 1 | 3 | 6 | 12 | 17 |
-| --- | --- | --- | --- | --- | --- |
-| nodes/second | 464k | 1.43M | 2.98M | 5.39M | 7.49M |
+Node agrees at depth 20 — 448k / 1.80M / 3.51M — and shows 12 threads *slower*
+than 8 on this machine (3.28M), which is why the ask stops at 8 rather than at
+the pool. Boot cost is unchanged: ready in 333ms at 4 threads, 378ms at 8.
 
-So the engine scales close to linearly and a desktop is getting roughly a
-fifth of the search its hardware could deliver. `ENGINE_PTHREAD_POOL_SIZE` in
-`analysisProfile.ts` mirrors the build constant and clamps every thread choice
-inside `threadsForCores`, so a tier edit alone cannot reach the hang. Lifting
-the ceiling means raising `WASM_PTHREAD_POOL_SIZE` *and* rebuilding the
-artifacts, together — `WASM_PTHREAD_POOL_SIZE=12 npm run build`, which needs
-emsdk. The two must move as one: a source-only raise would let the tier ask
-for more than the shipped core was built for.
+The threaded core is only ever loaded on the mid and high tiers, which are
+always a pointer-and-keyboard machine, so the larger pool never reaches a phone:
+the low tier boots the single-threaded core, which has no pool at all.
 
-Within that ceiling, threads now scale with `hardwareConcurrency` rather than
-being a constant per tier, keeping two cores back for the page. Both tiers
-used to be flat, so a 9-core machine and a 64-core machine were sized
-identically.
+Raising this further means raising `WASM_PTHREAD_POOL_SIZE` *and* rebuilding the
+artifacts, together — `WASM_PTHREAD_POOL_SIZE=<n> npm run build`, which needs
+emsdk. A source-only raise would let a tier ask for more than the shipped core
+was built for.
+
+### The emsdk version is part of the engine, and is pinned
+
+`install-emsdk.sh` used `EMSDK_VERSION=latest`, so the Pages deploy compiled the
+engine with whatever emsdk was current that morning. That is not a
+reproducibility nicety: today's `latest` ships a threaded core that never
+becomes ready.
+
+Emscripten **6.0.2** dropped `mainScriptUrlOrBlob` from
+`INCOMING_MODULE_JS_API`, and `templates/pikafish.js` passes exactly that. The
+engine module is constructed inside a worker, where `document.currentScript`
+does not exist, so Emscripten's own `_scriptName` is undefined; without the key
+it spawns every pthread worker as `new Worker(undefined)` — a request for the
+literal path `"undefined"`, a 404, and a pool whose load dependency never
+clears.
+
+Nothing in the pipeline catches it, which is the part worth remembering:
+
+- the changelog promises an error in *debug* builds, and this build sets
+  `ASSERTIONS=0`, so the ignored key is silent;
+- `test:smoke` and `test:parity` pass, because they run under Node, which never
+  takes the worker path;
+- the browser suite that would see it lives in `ci.yml`, and the deploy job does
+  not wait for `ci.yml`.
+
+So an engine change is only proven by watching a real browser reach `readyok`.
+6.0.1 is the last release that honours the key; raising the pin means giving the
+worker the core's URL another way — building with `-sEXPORT_ES6` so
+`_scriptName` comes from `import.meta.url` is the supported replacement.
 
 Engine crashes are classified rather than surfaced raw:
 `shouldSuppressEngineRuntimeError` and `hasMemoryAccessOutOfBounds` keep a
@@ -297,7 +321,14 @@ abstraction does.
 ## Data Formats
 
 - Moves are lowercase UCI (`h2e2`) everywhere, including the opening book.
-- Export and import: `utils/gameExport.ts`, `utils/moveImport.ts`.
+- Export and import: `utils/gameExport.ts`, `utils/moveImport.ts`. The PGN
+  carries the review as well as the moves — NAGs (`$6`/`$2`/`$4`) for quality
+  and `{[%eval ...]}` for the evaluation after each move, both conventions other
+  tools already read. `utils/pgnAnnotations.ts` writes them, and a mate goes out
+  as `#3` rather than `299.97`, since the score is a sentinel and not an
+  evaluation. The "Better was" text holds a legal-looking move; the importer
+  strips comments before extracting moves, which is pinned by a test and swept
+  over 250 generated games.
 - Share links encode the tree as base64url: `utils/shareTree.ts`.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
@@ -319,44 +350,41 @@ the engine answers `bestmove`, so a hidden tab would otherwise flash
 that does not clear itself, which is why it is the only one that gets colour
 and a reason on screen.
 
-## Two answers to "is this a constrained device?"
+## Depth is a ceiling; time is the budget
 
-The engine's thread count and hash size are chosen in `useEngine.ts` from
-`window.innerWidth <= COMPACT_LAYOUT_MAX_WIDTH` — the width of the *window*.
-Meanwhile `detectDeviceTier` in `analysisProfile.ts` answers the same question
-from the smaller viewport dimension, the pointer type, the core count and the
-device memory, and `App.tsx` already calls it with all of those.
+Every live search carries both, and stops at whichever comes first. They used to
+bind the wrong way round: the high tier was capped at depth 12 with 1800ms to
+spend, and the Search Depth *preference* clamps the tier's number and defaulted
+to 8 — so the analysis board ran a 9ms search and sat idle for the rest of the
+second, with nothing on screen saying the slider was the reason.
 
-Neither knows about the other, and they disagree on an ordinary case — a desktop
-with a narrowed or split-screen window:
+Measured in the browser at 8 threads, from the start position, which is about
+the slowest position there is to search:
 
-    desktop, 800x900 window, 8 cores, 8GB, mouse
-      useEngine    -> compact: true    => 1 thread, 32MB hash
-      device tier  -> mobileLike: false, tier: mid
+| depth | 8 | 12 | 14 | 16 | 18 | 20 | 22 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| time | 9ms | 128ms | 250ms | 524ms | 1054ms | 1445ms | 4944ms |
 
-So a wide-enough machine gets the engine cut to a single thread because its
-*window* is narrow. Window width is not a device property: it changes when the
-user drags a corner, and it says nothing about cores or memory.
+The ceilings now sit where the move time is the binding constraint, which is the
+one that adapts to the position and the machine. In the app afterwards, start
+position, high tier: D13/S23 at 900k nps with three PV lines, D19/S37 at 3.6M
+with one.
 
-Both siblings decide this the other way, and neither looks at the viewport at
-all:
+**MultiPV costs depth, and it is worth knowing.** Three lines is about a quarter
+of the node rate and six plies. Three is still the right default for an analysis
+board — candidate moves are the point — but it is a choice, not free.
 
-- **web-chess** reads `hardwareConcurrency`, `deviceMemory` and a mobile
-  user-agent test.
-- **web-katrain** takes `Math.min(8, hardwareConcurrency)` in its worker,
-  computed fresh at init and never stored.
+Three ceilings that must not be confused:
 
-This repo is the only one of the three that lets a window dimension decide how
-much of the machine the search gets.
-
-`detectDeviceTier` is a pure function, already tested, and already computed at
-startup for exactly this purpose — so the fix is to ask it rather than to invent
-a better width rule.
-
-Not changed here, deliberately. This is engine resource policy: it decides how
-much of the machine the search gets, the effect is a runtime one, and Pikafish
-would not load in the browser available here, so the change could be written but
-not observed. It wants someone who can watch an analysis run before and after.
+- `WORKER_SAFE_MAX_DEPTH` is the **AI opponent's** ladder, deliberately short of
+  what the engine can do. It used to clamp live analysis too, so the board could
+  never look deeper than the hardest opponent plays.
+- `resolveLiveAnalysisPolicy` sets the **analysis** ceiling per tier, against
+  the move-time budget it has to fit inside.
+- `resolveReviewPolicy` is held **below** live analysis on purpose: a review
+  searches every unevaluated move, so its depth multiplies by the length of the
+  game. At D16 a 30-ply review finishes in 1.6s, measured. The revisit pass is
+  where the depth goes, on the few moves that turned out to matter.
 
 ## The two grading ladders disagree, and the looser one wins
 
@@ -517,52 +545,25 @@ looked at.
   exactly this: a pure label helper was changed in place while a bound was
   added, altering the text under every review row with nothing asserting it.
 - A mobile-like device is always the `low` tier; `resolveEngineBootConfig`
-  depends on that and a test pins it. Note what this does *not* cover: the
-  engine's own thread count and hash size are chosen in `useEngine.ts` from
-  window width and never consult the tier at all, so the pinned relationship
-  holds inside `analysisProfile.ts` while the numbers that actually reach the
-  engine are decided elsewhere. See "Two answers to 'is this a constrained
-  device?'" above.
+  depends on that and a test pins it. The low tier boots the single-threaded
+  core, which is what keeps the threaded core's prewarmed thread pool off
+  phones.
 - Storage readers must never throw on bad data; drop the record and move on.
-- If the eval graph ever goes blank rather than wrong, suspect a non-finite
-  `evalScore`. `EvalGraph` carries the last seen value forward with
-  `typeof x === 'number'`, which admits `NaN`, and a single `NaN` reaches the
-  SVG path and invalidates the whole line rather than one point. Left as-is
-  because the loose check is the house idiom here and nothing has been shown
-  to produce a `NaN` score — but it is the first place to look.
+- A non-finite `evalScore` used to blank the eval graph rather than dent it: it
+  reached the `d` attribute, where SVG discards the *entire* path, and it
+  poisoned both extent reduces, taking the axis with them. The clamp did not
+  help, since `Math.max(-limit, Math.min(limit, NaN))` is `NaN`. **Fixed**, both
+  halves together, because fixing only the stroke would have left the graph
+  broken. A non-finite score now means what it already meant everywhere else in
+  that component — this ply has no evaluation — so it is not carried forward and
+  the extent is taken over the finite points.
 
-  The review path is worth contrasting, because it is safe for a reason worth
-  copying rather than by luck: `clampWinPercentLoss` returns 0 for anything
-  non-finite, and every accuracy figure — the summary, the per-side split, the
-  per-phase breakdown — is derived through it. One guard at the boundary makes
-  everything downstream safe without each display having to re-check. `EvalGraph`
-  has no such boundary, which is why it is the exposed one.
-
-  Both siblings already handle this, and they do not handle it equally well —
-  worth knowing before copying the nearer one:
-
-  - **web-chess** drops the point (`if (!isFiniteNumber(cp)) continue` in
-    `buildWinrateSeries`). Safe, but the line then joins the surrounding points
-    as though nothing were missing, which reads as data rather than a gap.
-  - **web-katrain** breaks the path instead. `buildPath` sets `started = false`
-    on a non-finite value, so the stroke stops and restarts afterwards: the gap
-    is visible as a gap and the rest of the line survives. It also filters
-    non-finite values before taking min/max for the scale, since one `NaN`
-    would otherwise poison the axis, and walks backwards for the last finite
-    value rather than assuming the final one is usable.
-
-  katrain's is the one to copy. It is the only one of the three that keeps a
-  missing evaluation *legible* rather than merely non-fatal, and it guards the
-  scale as well as the stroke.
-
-  That second failure is real here, not hypothetical — checked in
-  `EvalGraph.tsx`. The clamp does not strip a bad value, because
-  `Math.max(-limit, Math.min(limit, NaN))` is `NaN`; and the extent is taken
-  with `points.reduce((best, p) => Math.max(best, p.eval), -Infinity)` and its
-  minimum counterpart, so one `NaN` makes the whole extent `NaN` and the axis
-  with it. So a single bad evaluation would take out the scale as well as the
-  line, and fixing only the stroke would leave the graph broken. Both halves are
-  one change or neither.
+  That is the same shape as `clampWinPercentLoss` on the review path: guard once
+  where the value arrives, and nothing downstream has to re-check. Prefer it to
+  the sibling approaches — web-chess drops the point, so the line joins across a
+  gap as though nothing were missing; web-katrain breaks the stroke, which keeps
+  a missing evaluation legible and is the one to copy if the graph ever needs to
+  distinguish "no reading" from "unchanged".
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range
