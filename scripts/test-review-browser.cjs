@@ -139,7 +139,10 @@ async function main() {
     // applied, so it always sees an empty board and always offers -- and the
     // dialog sits over the toolbar. Take the game from the library instead,
     // which is what the rest of this test is about.
-    const recovery = page.getByRole("button", { name: /start fresh/i });
+    // The dismiss button is named for what dismissing does, so it reads
+    // "Keep the link's game" whenever the address bar carried one in and
+    // "Start fresh" when it did not. Match either.
+    const recovery = page.getByRole("button", { name: /start fresh|keep the link/i });
     if (await recovery.count()) {
       await recovery.first().click();
       await page.waitForFunction(
