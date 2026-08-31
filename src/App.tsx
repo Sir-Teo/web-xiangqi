@@ -3102,8 +3102,18 @@ function App() {
      * line and says so rather than guessing at a tree.
      */
     let importedFromNotation = false;
+    /**
+     * Tokens the notation reader understood as moves and could not place.
+     *
+     * Kept because the reader skips them and carries on, so a record it can
+     * only half-follow imports as the part it managed -- which looks exactly
+     * like a complete import. Saying so is the same call the first-game notice
+     * makes below.
+     */
+    let notationRejected: string[] = [];
     if (moves.length === 0) {
       const parsed = parseNotationRecord(startFen, stripRecordMetadata(text), MAX_MOVE_IMPORT_UCI_MOVES);
+      notationRejected = parsed.rejected;
       if (parsed.moves.length > 0) {
         moves = parsed.moves;
         importedFromNotation = true;
@@ -3115,7 +3125,14 @@ function App() {
       return;
     }
     if (moves.length === 0) {
-      setMoveLineError('No moves found. Paste coordinates (b2e2 h9g7), WXF (C2=5 H8+7) or Chinese (炮二平五 马8进7).');
+      // Telling someone the format is wrong when it was read fine and the
+      // *position* is wrong sends them to fix the thing that already works.
+      // A record for a handicap or a set-up game reaches here every time.
+      setMoveLineError(
+        notationRejected.length > 0
+          ? `Read ${notationRejected[0]} as a move, but it names no legal move in the starting position. If this record does not start from the opening, paste its FEN first.`
+          : 'No moves found. Paste coordinates (b2e2 h9g7), WXF (C2=5 H8+7) or Chinese (炮二平五 马8进7).'
+      );
       return;
     }
 
@@ -3152,7 +3169,11 @@ function App() {
     const loadedNodeIds = hasVariations
       ? loadMoveTree(importedLine.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
-    if (importedLine.hadMoreGames) {
+    if (notationRejected.length > 0) {
+      // More pressing than the first-game notice: that one says the rest of a
+      // file was left, this one says part of *this* game was.
+      showImportNotice(`Read ${moves.length} moves, then could not place ${notationRejected[0]}`);
+    } else if (importedLine.hadMoreGames) {
       showImportNotice('Imported first game');
     }
 

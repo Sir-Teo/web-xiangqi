@@ -3883,6 +3883,87 @@ async function assertMoveLineImport(page) {
   }
 }
 
+/**
+ * What the importer says when it understood the notation but not the game.
+ *
+ * The reader skips a token it cannot place and carries on, so two things used
+ * to happen silently:
+ *
+ * - a record it could not follow at all reported "No moves found", which reads
+ *   as "wrong format" and sends the reader to fix the one thing that was
+ *   working. A record for a handicap or set-up game lands here every time,
+ *   and the fix is to paste its FEN -- which the old message never mentioned;
+ * - a record it could only half-follow imported the half, and looked exactly
+ *   like a complete import.
+ *
+ * The rejected tokens were already being collected for both cases and read by
+ * nobody.
+ */
+async function assertNotationImportSaysWhatItCouldNotRead(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  // Nothing readable: R5=9 is shaped like a move and names none, because Red
+  // has no chariot on its file 5.
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill("R5=9");
+  await page.getByTestId("import-uci-line-btn").click();
+  // Wait for the message itself, not merely for the element: the node renders
+  // with the error and is empty for a beat before React fills it, so reading
+  // it straight away returns "" and every assertion below passes vacuously.
+  // Read the message in the same evaluation that waits for it. Waiting and
+  // then reading is two trips, and the message can be cleared between them --
+  // which reported an empty string and made every assertion below vacuous.
+  const errorText = String(
+    await page.waitForFunction(
+      () => {
+        const text = (document.querySelector("#new-game-line-error")?.textContent || "").trim();
+        return text.length > 0 ? text : null;
+      },
+      null,
+      { timeout: 5000 },
+    ).then((handle) => handle.jsonValue()),
+  );
+  if (!errorText.includes("R5=9")) {
+    throw new Error(`The importer did not name the token it could not read: "${errorText}"`);
+  }
+  if (!/FEN/i.test(errorText)) {
+    throw new Error(`The importer did not offer the fix for a set-up record: "${errorText}"`);
+  }
+  if (/No moves found/i.test(errorText)) {
+    throw new Error(`A readable token was reported as an unreadable format: "${errorText}"`);
+  }
+
+  // Half readable: the first two are fine, R5=9 is not, and the last one is
+  // fine again -- so this imports three moves out of a four-move record.
+  await page.getByTestId("uci-line-input").fill("C2=5 H8+7 R5=9 H2+3");
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const noticeText = String(
+    await page.waitForFunction(
+      () => {
+        const text = (document.querySelector('[data-testid="import-notice"]')?.textContent || "").trim();
+        return text.length > 0 ? text : null;
+      },
+      null,
+      { timeout: 5000 },
+    ).then((handle) => handle.jsonValue()),
+  );
+  if (!noticeText.includes("R5=9")) {
+    throw new Error(`A partly-read record imported without saying so: "${noticeText}"`);
+  }
+  const plies = await page.evaluate(
+    () => (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null
+  );
+  if (plies !== "3 / 3") {
+    throw new Error(`Expected the three readable moves to import, got ${plies}`);
+  }
+}
+
 async function assertMoveLineImportPreservesVariations(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -7577,6 +7658,7 @@ async function main() {
     await assertMobileNewGameStartButtonVisible(page);
     await assertBlackToMoveTreeNumbering(page);
     await assertMoveLineImport(page);
+    await assertNotationImportSaysWhatItCouldNotRead(page);
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
