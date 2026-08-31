@@ -40,6 +40,84 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
 
+/**
+ * The engine's weights, kept out of the way of Chrome's cache size limit.
+ *
+ * `pikafish.nnue` is 53MB, and a browser HTTP cache will not store a single
+ * entry that large -- measured: the 710KB core is served from cache on a second
+ * fetch and never reaches the server again, while the weights are requested
+ * unconditionally every time, at full size, on every visit. GitHub Pages sends
+ * an ETag and `max-age=600` and neither helps, because the response is never
+ * stored to revalidate against. A player on a phone pays 53MB each time they
+ * open the board.
+ *
+ * Cache Storage has no per-entry limit, so the weights live there instead.
+ *
+ * **It always revalidates**, which is the whole reason this is safe. The
+ * failure this repo's `serviceWorkerCleanup` exists for is a cached engine
+ * artifact outliving a deploy, so a copy is never served on its own authority:
+ * every load sends a conditional request carrying the stored validator, and the
+ * cached body is used only when the server answers 304. A redeployed net
+ * answers 200 and replaces it. What is saved is the 53MB body, not the
+ * round-trip.
+ *
+ * A response with no validator is not cached at all -- there would be no way to
+ * ask whether it had changed.
+ */
+const WEIGHTS_CACHE = 'pikafish-weights-v1';
+const WEIGHTS_PATTERN = /\/pikafish\.nnue$/;
+
+function isolated(response) {
+    const headers = new Headers(response.headers);
+    headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+    headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+    });
+}
+
+async function serveWeights(request) {
+    let cache = null;
+    let cached = null;
+    try {
+        cache = await caches.open(WEIGHTS_CACHE);
+        cached = await cache.match(request.url);
+    } catch (_) {
+        // No Cache Storage (private mode, no quota): fall through to the network.
+    }
+
+    const validators = new Headers();
+    const etag = cached && cached.headers.get('ETag');
+    const lastModified = cached && cached.headers.get('Last-Modified');
+    if (etag) validators.set('If-None-Match', etag);
+    else if (lastModified) validators.set('If-Modified-Since', lastModified);
+
+    let response;
+    try {
+        // `no-cache` on the *browser* cache: it will not have stored this
+        // anyway, and the conditional headers above are the ones that matter.
+        response = await fetch(request.url, {
+            headers: validators,
+            cache: 'no-cache',
+            credentials: 'same-origin',
+        });
+    } catch (error) {
+        if (cached) return isolated(cached);
+        throw error;
+    }
+
+    if (response.status === 304 && cached) return isolated(cached);
+
+    if (response.ok && cache && (response.headers.get('ETag') || response.headers.get('Last-Modified'))) {
+        try { await cache.put(request.url, response.clone()); } catch (_) { /* over quota */ }
+    }
+    if (!response.ok && cached) return isolated(cached);
+    return isolated(response);
+}
+
 self.addEventListener('fetch', (event) => {
     const request = event.request;
 
@@ -55,25 +133,18 @@ self.addEventListener('fetch', (event) => {
     // `only-if-cached` outside same-origin mode throws if passed to fetch().
     if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
 
+    if (WEIGHTS_PATTERN.test(new URL(request.url).pathname)) {
+        event.respondWith(serveWeights(request));
+        return;
+    }
+
     event.respondWith(
         fetch(request)
             .then((response) => {
                 // An opaque response (status 0) has headers that cannot be read
                 // or replaced, and constructing a Response from one throws.
                 if (response.status === 0) return response;
-
-                const headers = new Headers(response.headers);
-                headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-                headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-                // Every asset this app loads is same-origin; under COEP they
-                // each need a CORP header of their own to be embeddable.
-                headers.set('Cross-Origin-Resource-Policy', 'same-origin');
-
-                return new Response(response.body, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers,
-                });
+                return isolated(response);
             })
             // Let the failure surface as the network failure it is, rather than
             // as a worker that swallowed the request.
