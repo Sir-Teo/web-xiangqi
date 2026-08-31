@@ -20,6 +20,7 @@ import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciT
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
+import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { buildLibraryPositionIndex, formatExplorerRecord, libraryPositionSignature, lookupLibraryPosition } from './utils/positionExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
@@ -150,7 +151,6 @@ const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; des
   { mode: 'AIvAI', label: 'AI exhibition', shortLabel: 'AI vs AI', description: 'Both sides are engine-driven for watching and review.' },
 ];
 
-type PieceCode = 'K' | 'A' | 'B' | 'N' | 'R' | 'C' | 'P' | 'k' | 'a' | 'b' | 'n' | 'r' | 'c' | 'p';
 const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   slow: 1500,
   normal: 800,
@@ -212,10 +212,6 @@ function initialPanelWidth(fallback: number) {
     if (typeof window === 'undefined') return fallback;
     return Math.max(PANEL_MIN_WIDTH, Math.min(fallback, Math.round(window.innerWidth * 0.26)));
 }
-const INITIAL_PIECE_COUNTS: Record<PieceCode, number> = {
-  K: 1, A: 2, B: 2, N: 2, R: 2, C: 2, P: 5,
-  k: 1, a: 2, b: 2, n: 2, r: 2, c: 2, p: 5,
-};
 const PIECE_SYMBOLS: Record<PieceCode, string> = {
   K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
   k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
@@ -274,12 +270,6 @@ const qaForcePanelError = import.meta.env.DEV
 
 
 const MAX_PREFERENCES_JSON_LENGTH = 4096;
-const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
-  K: 0, A: 20, B: 20, N: 40, R: 90, C: 45, P: 10,
-  k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
-};
-const CAPTURED_BY_RED: PieceCode[] = ['r', 'n', 'c', 'a', 'b', 'p'];
-const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 function makePgnDownloadFilename(opening?: string): string {
@@ -722,10 +712,6 @@ function getQualityArrowColor(quality: ReviewMoveQuality) {
     case 'blunder':
       return '#ef4444';
   }
-}
-
-function isPieceCode(value: string): value is PieceCode {
-  return value in PIECE_SYMBOLS;
 }
 
 function formatSquare(square: BoardSquare | null) {
@@ -2441,47 +2427,20 @@ function App() {
     gameResult, board, sideToMove,
   ]);
 
-  const materialSummary = useMemo(() => {
-    const currentCounts = Object.keys(INITIAL_PIECE_COUNTS).reduce((acc, key) => {
-      acc[key as PieceCode] = 0;
-      return acc;
-    }, {} as Record<PieceCode, number>);
-
-    board.forEach((row) => {
-      row.forEach((piece) => {
-        if (piece && isPieceCode(piece)) {
-          currentCounts[piece] += 1;
-        }
-      });
-    });
-
-    const makeCaptured = (pieces: PieceCode[]) => pieces
-      .map((piece) => ({
-        piece,
-        count: Math.max(0, INITIAL_PIECE_COUNTS[piece] - currentCounts[piece]),
-      }))
-      .filter((item) => item.count > 0);
-
-    const redCaptured = makeCaptured(CAPTURED_BY_RED);
-    const blackCaptured = makeCaptured(CAPTURED_BY_BLACK);
-    const redMaterialTenths = redCaptured.reduce(
-      (sum, item) => sum + PIECE_VALUES_TENTHS[item.piece] * item.count,
-      0
-    );
-    const blackMaterialTenths = blackCaptured.reduce(
-      (sum, item) => sum + PIECE_VALUES_TENTHS[item.piece] * item.count,
-      0
-    );
-    const deltaTenths = redMaterialTenths - blackMaterialTenths;
-
-    return {
-      redCaptured,
-      blackCaptured,
-      redMaterialTenths,
-      blackMaterialTenths,
-      deltaTenths,
-    };
-  }, [board]);
+  // The start position, not the standard opening set: a game loaded from a FEN
+  // began where its FEN says, and subtracting from the standard set reported
+  // every piece that setup never had as one this game captured.
+  const rootBoardForMaterial = useMemo(() => {
+    try {
+      return parseFenBoard(rootFen.split(/\s+/)[0]);
+    } catch {
+      return parseFenBoard(START_FEN);
+    }
+  }, [rootFen]);
+  const materialSummary = useMemo(
+    () => summarizeMaterial(board, rootBoardForMaterial),
+    [board, rootBoardForMaterial]
+  );
 
   const materialText = materialSummary.deltaTenths > 0
     ? `Red +${formatMaterialValue(materialSummary.deltaTenths)}`
