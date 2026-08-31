@@ -212,9 +212,23 @@ Two rules follow, and both are load-bearing:
 Rule 2 also bounds the cost, which previously needed a magic number. Reading one
 token costs a full legal-move generation plus writing every legal move in both
 notations; `maxMoves` bounds only the tokens that *matched*. A paste of 40,000
-move-shaped tokens naming nothing therefore paid that price 40,000 times and
-took four and a half seconds on the main thread, inside the import box's own
-200,000-character limit. Stopping at the first one costs one.
+move-shaped tokens naming nothing therefore paid that price 40,000 times --
+inside the import box's own 200,000-character limit. Stopping at the first one
+costs one.
+
+Measured in a browser rather than inferred from the unit suite, since the claim
+is about a frozen tab and vitest runs in Node. Longest stall of the main thread,
+found by watching a `requestAnimationFrame` ticker stop:
+
+| paste | skipping and reading on | stopping at the first |
+| --- | --- | --- |
+| 40,000 tokens naming nothing | 4431ms | 57ms |
+| 40,000 Chinese tokens | 4002ms | 29ms |
+| a real 120-ply record | 29ms | 29ms |
+
+Four and a half seconds is not slow, it is a page that has stopped answering.
+The real record is unaffected either way, which is the point: the bound costs
+nothing to anyone pasting an actual game.
 
 ## Engine Boundary
 
