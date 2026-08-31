@@ -2959,6 +2959,8 @@ function App() {
    * rides the same queue and the same tag as the live searches, so the position
    * changing cancels it exactly as it cancels any other search.
    */
+  const canDeepDive = isReady && engineEnabled && !isAiTurn && reviewStatus !== 'running';
+
   const runDeepDive = useCallback(() => {
     if (!isReady || !engineEnabled || isAiTurn || reviewControllerRef.current.active) return;
     analysisStageRef.current = 'deep-pending';
@@ -3348,6 +3350,42 @@ function App() {
       disabled: !canShareCurrentPosition,
       run: () => { void handleCopyShareLink(); },
     },
+    {
+      // The palette is where a keyboard-first player reaches for anything, and
+      // these five lived only as buttons -- two of them in the engine panel,
+      // which has to be open before they can be clicked at all.
+      id: 'deep-dive',
+      label: deepDiveActive ? 'Stop deep search' : 'Go deep on this position',
+      hint: deepDiveActive
+        ? undefined
+        : canDeepDive ? `Up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s` : 'Analysis engine only',
+      keywords: ['deep', 'search', 'think', 'analyse', 'analyze', 'depth', 'infinite'],
+      disabled: !deepDiveActive && !canDeepDive,
+      run: () => { if (deepDiveActive) stopSearch(); else runDeepDive(); },
+    },
+    { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
+    {
+      id: 'copy-fen',
+      label: 'Copy FEN',
+      keywords: ['position', 'clipboard', 'export'],
+      run: () => { void handleCopyFen(); },
+    },
+    {
+      id: 'restart-engine',
+      label: 'Restart engine',
+      hint: engineRequired ? undefined : 'Analysis engine only',
+      keywords: ['pikafish', 'reload', 'reboot', 'stuck'],
+      disabled: !engineRequired,
+      run: handleRestartEngine,
+    },
+    {
+      id: 'clear-hash',
+      label: 'Clear engine hash',
+      hint: isReady ? undefined : 'Engine is not ready',
+      keywords: ['transposition', 'table', 'cache', 'reset'],
+      disabled: !isReady,
+      run: handleClearEngineHash,
+    },
     { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], run: () => setAnalysisTab('tree') },
     { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], run: () => setAnalysisTab('review') },
     { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], run: () => setAnalysisTab('engine') },
@@ -3355,9 +3393,11 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canExportCurrentLine, canSaveCurrentPosition, canShareCurrentPosition, goToFirstMove, goToLatestMove,
-      handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleSaveGame, openLibraryPanel, resetGame,
-      setGameResult, startGameReview])
+  ], [canDeepDive, canExportCurrentLine, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
+      deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
+      handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
+      handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
+      stopSearch])
   const handleLoadGame = useCallback((game: SavedGame) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
@@ -5089,7 +5129,7 @@ function App() {
                         type="button"
                         className={`engine-cache-btn ${deepDiveActive ? 'engine-pv-btn-active' : ''}`}
                         onClick={deepDiveActive ? stopSearch : runDeepDive}
-                        disabled={!isReady || !engineEnabled || isAiTurn || reviewStatus === 'running'}
+                        disabled={!deepDiveActive && !canDeepDive}
                         title={deepDiveActive
                           ? 'Stop the deep search and keep what it has found'
                           : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`}
