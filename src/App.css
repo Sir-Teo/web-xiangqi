@@ -5402,7 +5402,8 @@ summary:active {
 
 .board-workspace {
   width: 100%;
-  max-width: 760px;
+  /* Was 760px, which capped the board before its own ceiling could. */
+  max-width: 1040px;
   height: 100%;
   min-height: 0;
   min-width: 0;

@@ -7,10 +7,18 @@
 .xiangqi-board { --board-pad: clamp(16px, calc(5.6cqi + 10px), 46px); }
 
 /* Board container scaling */
+/* The ceiling is here rather than in the layout because the board is the only
+   thing it should bound. It used to be 580px, which every monitor 1050px tall
+   or more ran into: at 1440x1080, 1920x1200 and 2560x1440 the board measured
+   exactly 580 wide while the row it sits in had room to spare. Below that
+   height it never binds -- the workspace derives width from the row's height
+   and lands under it anyway -- so this only ever changed large displays, which
+   is where a 9x10 grid has the most to gain and where a strong player is most
+   likely to be reading one. */
 .xiangqi-board-container {
     container-type: inline-size;
     width: 100%;
-    max-width: 580px;
+    max-width: 860px;
     aspect-ratio: 9 / 10;
     margin: 0 auto;
     container-type: inline-size;
