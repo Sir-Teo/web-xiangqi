@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    REVIEW_DECISIVE_ADVANTAGE_CP,
     REVIEW_THRESHOLDS,
     REVIEW_WIN_PERCENT_LOSS_THRESHOLDS,
     classifyMoveQuality,
@@ -10,6 +11,7 @@ import {
     formatReviewEngineMoveTime,
     formatReviewQualityCount,
     formatWinPercentLoss,
+    hasDecisiveAdvantageAfterMove,
     getEvalLossForMove,
     getEvalOverride,
     getMoveAccuracyForWinPercentLoss,
@@ -55,6 +57,30 @@ describe('move accuracy', () => {
     it('keeps a nonsense loss inside the 0-100 range', () => {
         expect(getMoveAccuracyForWinPercentLoss(Number.NaN)).toBeCloseTo(100, 3);
         expect(getMoveAccuracyForWinPercentLoss(1000)).toBe(0);
+    });
+});
+
+describe('an advantage still standing after a slip', () => {
+    it('needs a decisive edge, not merely a better position', () => {
+        // This flag is what turns "Big miss." into "Still winning, but ...".
+        // `buildReviewNote` is tested by passing the flag in directly, so the
+        // threshold that produces it was never exercised: dropping it from 600
+        // to 60 -- telling a player at six tenths of a pawn that they are still
+        // winning -- broke nothing.
+        expect(hasDecisiveAdvantageAfterMove(REVIEW_DECISIVE_ADVANTAGE_CP, 'red')).toBe(true);
+        expect(hasDecisiveAdvantageAfterMove(REVIEW_DECISIVE_ADVANTAGE_CP - 1, 'red')).toBe(false);
+        expect(hasDecisiveAdvantageAfterMove(100, 'red')).toBe(false);
+        expect(hasDecisiveAdvantageAfterMove(599, 'red')).toBe(false);
+        expect(hasDecisiveAdvantageAfterMove(600, 'red')).toBe(true);
+    });
+
+    it('reads the evaluation from the moving side', () => {
+        // Scores are Red's point of view, so Black's decisive advantage is a
+        // large negative number.
+        expect(hasDecisiveAdvantageAfterMove(-800, 'black')).toBe(true);
+        expect(hasDecisiveAdvantageAfterMove(-800, 'red')).toBe(false);
+        expect(hasDecisiveAdvantageAfterMove(800, 'red')).toBe(true);
+        expect(hasDecisiveAdvantageAfterMove(800, 'black')).toBe(false);
     });
 });
 
