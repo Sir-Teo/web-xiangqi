@@ -819,7 +819,13 @@ function App() {
   // A narrow window is not a weaker machine. This read innerWidth, so opening
   // the app small on a large display picked the lower depth and saved it, and
   // it stayed after the window grew. Ask the screen, as the engine tier does.
-  const defaultSearchDepth = detectDeviceScreen().width <= 900 ? 6 : 8;
+  // High enough that the tier's own ceiling and its move-time budget decide how
+  // long a search runs, rather than this preference. It used to default to 8,
+  // which on a high-tier machine meant a 9ms search inside an 1800ms budget --
+  // the slider was the binding constraint on every position, and nothing said
+  // so. Lowering it is still a real choice; raising it past the tier's ceiling
+  // is not, which is what the label under it now reports.
+  const defaultSearchDepth = detectDeviceScreen().width <= 900 ? 14 : 22;
   const initialSoundEnabled = storedPreferences.soundEnabled ?? true;
   const initialAiSpeed = storedPreferences.aiSpeed ?? 'normal';
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
@@ -1046,7 +1052,11 @@ function App() {
       setRightWidth(nextRight);
     }
   }, [viewportWidth, leftWidth, rightWidth]);
-  const safeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
+  // The AI opponent's ladder tops out at WORKER_SAFE_MAX_DEPTH; the analysis
+  // board's ceiling is the tier's, in resolveLiveAnalysisPolicy, which sets it
+  // against the move-time budget it has to fit inside. These were one number,
+  // so the board could never look deeper than the hardest opponent plays.
+  const aiSafeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
   const currentLineMoves = useMemo(() => {
     return activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
@@ -1134,9 +1144,9 @@ function App() {
   const liveAnalysisPolicy = useMemo(() => resolveLiveAnalysisPolicy({
     tier: engineBootConfig.tier,
     mode: analysisEngineMode,
-    searchDepth: safeSearchDepth,
+    searchDepth,
     detailEnabled: engineDetailEnabled,
-  }), [analysisEngineMode, engineBootConfig.tier, engineDetailEnabled, safeSearchDepth]);
+  }), [analysisEngineMode, engineBootConfig.tier, engineDetailEnabled, searchDepth]);
 
   const reviewPolicy = useMemo(() => resolveReviewPolicy(deviceProfile), [deviceProfile]);
   const reviewEngineSummary = useMemo<ReviewEngineSummary>(() => ({
@@ -1423,8 +1433,8 @@ function App() {
 
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const aiSearchConfig = useMemo(
-    () => getAiSearchConfig(aiStrength, safeSearchDepth),
-    [aiStrength, safeSearchDepth]
+    () => getAiSearchConfig(aiStrength, aiSafeSearchDepth),
+    [aiStrength, aiSafeSearchDepth]
   );
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
@@ -3863,12 +3873,14 @@ function App() {
               <label
                 htmlFor="settings-search-depth"
                 className="settings-label-value"
-                title="Applies to the AI opponent and caps live analysis"
+                title="Caps live analysis; the AI opponent has its own ceiling per strength"
               >
                 <span>Search Depth</span>
                 <strong>
                   {searchDepth}
-                  {searchDepth > safeSearchDepth ? ` · cap ${safeSearchDepth}` : ''}
+                  {liveAnalysisPolicy.primary.depth < searchDepth
+                    ? ` · this device ${liveAnalysisPolicy.primary.depth}`
+                    : ''}
                 </strong>
               </label>
               <input

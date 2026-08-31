@@ -236,16 +236,32 @@ export function resolveLiveAnalysisPolicy(input: {
     const normalizedDepth = Math.max(1, Math.trunc(input.searchDepth));
     const debounceMs = input.tier === 'low' ? 300 : 150;
 
+    // Depth is a ceiling; `moveTimeMs` is the budget. A search stops at
+    // whichever comes first, and these are set so that on the tier they belong
+    // to it is the *time* -- which is the one that adapts to the position and
+    // the machine, where a depth number does neither.
+    //
+    // They used to bind the other way round, and by a wide margin. Measured in
+    // the browser on the threaded SIMD core at 8 threads, from the start
+    // position, which is about the slowest position there is to search:
+    //
+    //     depth   8     12     14     16     18      20      22
+    //     time    9ms   128ms  250ms  524ms  1054ms  1445ms  4944ms
+    //
+    // The high tier was capped at depth 12 with 1800ms to spend, so it finished
+    // in 128ms and sat idle for the rest -- and the *default* Search Depth of 8
+    // pulled it lower still, to a 9ms search, because the preference clamps
+    // this. A whole second of the budget went unused on every position.
     const primaryByTier = {
         stable: {
-            low: { depth: Math.min(7, normalizedDepth), moveTimeMs: 700 },
-            mid: { depth: Math.min(9, normalizedDepth), moveTimeMs: 1000 },
-            high: { depth: Math.min(10, normalizedDepth), moveTimeMs: 1200 },
+            low: { depth: Math.min(12, normalizedDepth), moveTimeMs: 700 },
+            mid: { depth: Math.min(16, normalizedDepth), moveTimeMs: 1000 },
+            high: { depth: Math.min(18, normalizedDepth), moveTimeMs: 1200 },
         },
         optimized: {
-            low: { depth: Math.min(8, normalizedDepth), moveTimeMs: 900 },
-            mid: { depth: Math.min(10, normalizedDepth), moveTimeMs: 1400 },
-            high: { depth: Math.min(12, normalizedDepth), moveTimeMs: 1800 },
+            low: { depth: Math.min(14, normalizedDepth), moveTimeMs: 900 },
+            mid: { depth: Math.min(18, normalizedDepth), moveTimeMs: 1400 },
+            high: { depth: Math.min(22, normalizedDepth), moveTimeMs: 1800 },
         },
     } as const;
 
@@ -258,19 +274,11 @@ export function resolveLiveAnalysisPolicy(input: {
     let deepen: LiveAnalysisPolicy['deepen'] = null;
     if (input.mode === 'optimized' && input.detailEnabled) {
         if (input.tier === 'mid') {
-            deepen = {
-                delayMs: 1200,
-                depth: Math.min(11, normalizedDepth),
-                moveTimeMs: 2200,
-                goCmd: buildGoCmd(Math.min(11, normalizedDepth), 2200),
-            };
+            const depth = Math.min(22, normalizedDepth);
+            deepen = { delayMs: 1200, depth, moveTimeMs: 2200, goCmd: buildGoCmd(depth, 2200) };
         } else if (input.tier === 'high') {
-            deepen = {
-                delayMs: 1000,
-                depth: Math.min(14, normalizedDepth),
-                moveTimeMs: 3200,
-                goCmd: buildGoCmd(Math.min(14, normalizedDepth), 3200),
-            };
+            const depth = Math.min(26, normalizedDepth);
+            deepen = { delayMs: 1000, depth, moveTimeMs: 3200, goCmd: buildGoCmd(depth, 3200) };
         }
     }
 
@@ -286,10 +294,16 @@ export function resolveLiveAnalysisPolicy(input: {
 }
 
 export function resolveReviewPolicy(profile: DeviceProfile): ReviewPolicy {
+    // Ceilings, as above -- but held lower than live analysis on purpose. A
+    // review searches every unevaluated move in the game, so its depth is
+    // multiplied by the length of the game in a way live analysis is not, and
+    // the whole point of the pass is that it finishes while the player is still
+    // looking at it. The revisit pass below is where the depth goes, on the few
+    // moves that turned out to matter.
     const baseByTier = {
-        low: { depth: 8, moveTimeMs: 900 },
-        mid: { depth: 9, moveTimeMs: 1200 },
-        high: { depth: 10, moveTimeMs: 1500 },
+        low: { depth: 12, moveTimeMs: 900 },
+        mid: { depth: 14, moveTimeMs: 1200 },
+        high: { depth: 16, moveTimeMs: 1500 },
     } as const;
 
     const baseBudget = baseByTier[profile.tier];

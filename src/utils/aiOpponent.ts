@@ -14,6 +14,18 @@ export type AiMoveChoice = {
   multipv?: number;
 };
 
+/**
+ * The top of the AI opponent's strength ladder.
+ *
+ * This is a *game* setting -- how strong Master plays -- and it is deliberately
+ * short of what the engine can do, because an opponent that searches as deep as
+ * the analysis board is not an opponent anyone wants to play.
+ *
+ * It used to clamp live analysis too, through `safeSearchDepth` in App.tsx, so
+ * the analysis board could never look deeper than the hardest opponent. The
+ * analysis ceiling belongs to `resolveLiveAnalysisPolicy`, which sets it per
+ * tier alongside the move-time budget it has to fit inside.
+ */
 export const WORKER_SAFE_MAX_DEPTH = 12;
 
 export const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
