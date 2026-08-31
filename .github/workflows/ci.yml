@@ -109,6 +109,13 @@ jobs:
           npm run build:react
           npm run test:serve-demo
 
+      # The bundle that gets uploaded is otherwise the one thing no check loads:
+      # every browser suite here drives the *dev* server. Shallow on purpose --
+      # does the shell paint, does the engine reach ready from base-relative
+      # URLs, did anything throw.
+      - name: Production build smoke
+        run: npm run test:prod:smoke
+
       - name: Browser worker parity (quick)
         # Single-threaded in the browser. The threaded build initialises fine in
         # Node here — the smoke test above runs it — and fine in a browser

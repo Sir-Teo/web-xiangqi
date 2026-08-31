@@ -19,6 +19,7 @@
     "test": "vitest run",
     "build": "bash scripts/build-pikafish.sh",
     "test:engine:contract": "node scripts/test-engine-contract.cjs",
+    "test:prod:smoke": "node scripts/test-prod-smoke.cjs",
     "test:smoke": "node scripts/test-smoke.cjs threaded",
     "test:smoke:single": "node scripts/test-smoke.cjs single",
     "test:smoke:all": "node scripts/test-smoke.cjs threaded && node scripts/test-smoke.cjs single",
