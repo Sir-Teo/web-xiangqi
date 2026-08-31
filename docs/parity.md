@@ -9,9 +9,11 @@ wired into no workflow at all.
 ## Running everything locally
 
 ```bash
-npm run verify          # typecheck, lint, test, openings, library, smoke, parity, build:react
+npm run verify          # typecheck, lint, test, openings, library, engine contract,
+                        # smoke, parity, build:react -- and no browser, on purpose
 npm run audit           # dependency audit; not part of verify, runs in CI
 npm run test:ui:layout        # Playwright, desktop and mobile, fake Pikafish injected
+npm run test:prod:smoke       # loads the built dist/ in a browser; needs build:react first
 ```
 
 **Check the exit code, not the output.** `npm run verify | grep -q ...` keys off
@@ -27,15 +29,31 @@ The engine is built from source with emsdk. `npm run build` needs
 | --- | --- | --- | --- |
 | typecheck / lint / unit tests | yes | via `verify` | yes |
 | `audit` | no | yes | yes |
+| engine artifact contract | yes | yes | via `verify` |
 | browser suite (`test:ui:layout`) | no | **yes** | no |
+| production bundle smoke | no | yes | **yes** |
 
-The last row used to read "no" for the deploy *and* for `ci.yml`, because
-`ci.yml` was pull-request-only -- so nothing browser-level ever ran against
-`main`. `ci.yml` now also runs on pushes to `main`, which closes that.
+The browser-suite row used to read "no" for the deploy *and* for `ci.yml`,
+because `ci.yml` was pull-request-only -- so nothing browser-level ever ran
+against `main`. `ci.yml` now also runs on pushes to `main`, which closes that.
 
-The browser suite still does not run **in the deploy**, and that is deliberate:
-`ci.yml` publishes nothing, so if a browser test goes flaky it turns CI red
-without stopping the site from shipping.
+The big browser suite still does not run **in the deploy**, and that is still
+deliberate: `ci.yml` publishes nothing, so if a browser test goes flaky it turns
+CI red without stopping the site from shipping.
+
+**One browser check is now an exception**, and the trade is worth stating rather
+than hiding. `test:prod:smoke` runs in the deploy, which means a flake there
+*can* block a publish. It is there because the alternative turned out to be
+worse: `ci.yml` is not upstream of the deploy, so a red suite does not stop a
+publish, and the bundle in `dist` was the one thing no check had ever loaded --
+every other browser suite drives the dev server. The emsdk failure is the
+existence proof: Node passed, release builds were silent, and the browser suite
+that would have caught it was not upstream of anything.
+
+Its flake surface is kept small on purpose. It asks three questions -- does the
+shell paint, does the engine reach ready, did anything throw -- and asserts
+nothing about layout, timing or content. If it does prove flaky, the answer is
+to narrow it further, not to move it back downstream of the publish.
 
 ## How the three compare
 
