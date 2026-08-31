@@ -433,7 +433,10 @@ abstraction does.
 
   **What found it was running them through Game Review**: 20–28% accuracy with
   seven to ten blunders each, against 7% for a control of random moves. That is
-  the check to repeat before adding any. Entries now require a `source`, and a
+  the check to repeat before adding any, and `npm run test:review:calibration`
+  is now that check as a script — it reviews an engine self-play game and
+  asserts the score stays high, so "is the review broken or is the data wrong?"
+  takes thirty seconds rather than an afternoon. Entries now require a `source`, and a
   test refuses a run of eight identical moves shared between two of them.
 
   The general rule: any bundled move list needs the replay test, because the
@@ -734,6 +737,11 @@ them:
   was the one thing nothing had ever loaded. It runs as its own step in
   `deploy-pages.yml`, after `verify`, with a Chromium install — deliberately
   shallow, because its job is to catch a broken deploy, not to re-test the UI.
+- `test:review:calibration` runs an engine self-play game through the whole
+  review pipeline and asserts strong play still scores strongly. The scoring
+  *functions* were already covered by fixtures; what was not was the pipeline
+  end to end, which is the difference between "the review is broken" and "the
+  data is wrong" — a distinction that cost an afternoon once.
 
 This distinction is worth stating because the failure it prevents already
 happened twice in one night: `npm test` does not run `test:openings` or
