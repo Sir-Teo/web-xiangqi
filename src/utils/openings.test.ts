@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OPENINGS, getOpeningCandidates, matchOpening } from './openings';
+import { OPENINGS, OPENING_BOOK_START_FEN, getOpeningCandidates, isOpeningBookStart, matchOpening } from './openings';
 import { START_FEN, parseFenBoard, validateMoveStr } from './xiangqi';
 
 describe('the opening book itself', () => {
@@ -145,5 +145,43 @@ describe('suggesting continuations', () => {
 
     it('reads the history whatever case it arrives in', () => {
         expect(getOpeningCandidates(['H2E2'])).toEqual(getOpeningCandidates(['h2e2']));
+    });
+});
+
+describe('a game that did not begin from the standard array', () => {
+    // The book names lines from the opening position. The same moves played
+    // from somewhere else are those moves, not that opening -- and the name
+    // does not stay on screen: it reaches the saved game's label and the PGN's
+    // `[Opening]` tag, so a study set up from a FEN was filed as one.
+    const CUSTOM = '2bakab2/9/9/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/2BAKAB2 w - - 0 1';
+
+    it('names nothing when the root is not the opening position', () => {
+        expect(matchOpening(['h2e2'], CUSTOM)).toBeNull();
+        expect(matchOpening(['h2e2', 'h9g7', 'b0c2', 'b9c7'], CUSTOM)).toBeNull();
+    });
+
+    it('offers no continuations from a root it knows nothing about', () => {
+        expect(getOpeningCandidates([], 6, CUSTOM)).toEqual([]);
+        expect(getOpeningCandidates(['h2e2'], 6, CUSTOM)).toEqual([]);
+    });
+
+    it('still answers for the standard root, however it is written', () => {
+        expect(matchOpening(['h2e2'], OPENING_BOOK_START_FEN)?.name).toBe('Central Cannon');
+        expect(matchOpening(['h2e2'], `  ${OPENING_BOOK_START_FEN}  `)?.name).toBe('Central Cannon');
+        expect(getOpeningCandidates([], 6, OPENING_BOOK_START_FEN).length).toBeGreaterThan(0);
+    });
+
+    it('assumes the standard root when it is not told one', () => {
+        // Every existing caller that never had a custom root keeps working.
+        expect(matchOpening(['h2e2'])?.name).toBe('Central Cannon');
+        expect(getOpeningCandidates([], 6).length).toBeGreaterThan(0);
+    });
+
+    it('agrees with itself about which roots it will answer for', () => {
+        // The guard used to live at one call site and not the other.
+        expect(isOpeningBookStart(undefined)).toBe(true);
+        expect(isOpeningBookStart(OPENING_BOOK_START_FEN)).toBe(true);
+        expect(isOpeningBookStart(CUSTOM)).toBe(false);
+        expect(isOpeningBookStart('')).toBe(false);
     });
 });

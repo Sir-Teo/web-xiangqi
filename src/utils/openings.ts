@@ -1,5 +1,6 @@
 // Xiangqi opening recognition — WXF/standard classification
 // Move sequences are UCI strings from the starting position.
+import { START_FEN } from './xiangqi';
 
 export interface OpeningEntry {
     name: string;
@@ -90,11 +91,38 @@ export const OPENINGS: OpeningEntry[] = [
     { name: 'Mirror Pawn Opening', chinese: '對仙人指路', moves: ['c3c4', 'c6c5', 'g3g4', 'g6g5'] },
 ];
 /**
+ * The one position these lines are named from.
+ *
+ * Every entry here is a move sequence from the standard opening array, so a
+ * game that began anywhere else cannot be in the book -- the same four moves
+ * from a different position are not that opening, they are four moves.
+ */
+export const OPENING_BOOK_START_FEN = `${START_FEN} w - - 0 1`;
+
+/**
+ * Whether a root position is one the book can say anything about.
+ *
+ * Exported and taken as an argument rather than left to callers, because it was
+ * left to callers and one of them forgot: `getOpeningCandidates` checked the
+ * root and `matchOpening` did not, so a study set up from a FEN was named
+ * "Central Cannon" after one move -- in the board header, in the saved game's
+ * label, and in the PGN's `[Opening]` tag.
+ */
+export function isOpeningBookStart(startFen?: string): boolean {
+    if (startFen === undefined) return true;
+    return String(startFen).trim() === OPENING_BOOK_START_FEN;
+}
+
+/**
  * Find the longest named opening that matches a prefix of the given move history.
  * `moveHistory` is an array of UCI strings from the start of the game.
+ *
+ * Pass `startFen` whenever the game may not have begun from the standard array;
+ * without it this assumes it did.
  */
-export function matchOpening(moveHistory: string[]): OpeningEntry | null {
+export function matchOpening(moveHistory: string[], startFen?: string): OpeningEntry | null {
     if (moveHistory.length === 0) return null;
+    if (!isOpeningBookStart(startFen)) return null;
     // Lowercased for the same reason getOpeningCandidates does it: the book is
     // written in lowercase UCI and the two should not disagree about a match.
     const normalizedHistory = moveHistory.map((move) => String(move).toLowerCase());
@@ -118,7 +146,8 @@ export function matchOpening(moveHistory: string[]): OpeningEntry | null {
     return best;
 }
 
-export function getOpeningCandidates(moveHistory: string[], limit = 6): OpeningCandidate[] {
+export function getOpeningCandidates(moveHistory: string[], limit = 6, startFen?: string): OpeningCandidate[] {
+    if (!isOpeningBookStart(startFen)) return [];
     const normalizedHistory = moveHistory.map((move) => String(move).toLowerCase());
     const byMove = new Map<string, { entries: OpeningEntry[]; longestLine: number }>();
 

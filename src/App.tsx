@@ -2581,14 +2581,15 @@ function App() {
   }, [currentNodeId, treeNodes]);
 
   // Opening recognition
+  // Both pass the root: the book names lines from the standard array, and the
+  // same four moves from somewhere else are four moves, not that opening.
   const detectedOpening = useMemo(() => {
     const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
-    return matchOpening(uciMoves);
-  }, [moveHistory, currentMoveIndex]);
+    return matchOpening(uciMoves, rootFen);
+  }, [moveHistory, currentMoveIndex, rootFen]);
   const openingCandidates = useMemo(() => {
-    if (rootFen !== START_POSITION_FEN) return [];
     const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
-    return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4);
+    return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4, rootFen);
   }, [assistMode, currentMoveIndex, moveHistory, rootFen]);
 
   // Game library
