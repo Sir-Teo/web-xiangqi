@@ -348,6 +348,28 @@ abstraction does.
   evaluation. The "Better was" text holds a legal-looking move; the importer
   strips comments before extracting moves, which is pinned by a test and swept
   over 250 generated games.
+
+  **Read back too.** `extractAnnotatedMainLine` in `moveImport.ts` returns the
+  main line *with* its annotations, and the import applies them only when they
+  match the line that was actually loaded -- two parsers disagreeing about which
+  moves the line holds would put an annotation on the wrong move. It has to
+  tokenise rather than strip, and the order is the whole problem: `[%eval ...]`
+  lives inside a `{...}` comment, so stripping `[...]` first -- which the plain
+  extractor must do, because a FEN tag contains substrings that read as
+  coordinates -- removes the evaluation with the headers. Consuming `{` before
+  `[` takes the comment whole.
+
+  Only the three NAGs this app writes are mapped back; the rest of the table is
+  not a quality scale, and guessing would label a move nobody graded. The review
+  *summary* is not restored on import, deliberately: annotations were imported,
+  a review was not run.
+
+  Sweeping generated games through both directions found a real defect in the
+  exporter that reading the code did not: a mate in zero gives a distance of -0
+  for black, `${-0}` is `"0"`, so black's mate wrote as `#0` and read back as
+  red's. The sign now comes from the score, and the parser reads it as a
+  character -- `Number('-0') >= 0` is true, so a numeric test has the same bug
+  in reverse.
 - Share links encode the tree as base64url: `utils/shareTree.ts`.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
