@@ -300,6 +300,25 @@ rather than reaching the board.
 
 The auto-save stores a `SavedGame`, so restoring reuses that same validation.
 
+### Reading the library as a repertoire
+
+`utils/positionExplorer.ts` answers "have I been here before?" over the saved
+games. It is the half of Lichess's opening explorer that needs no data source,
+no network and no licence, and it is the half that is about the player.
+
+- Keyed on `positionKey` from the repetition module rather than on a move list,
+  so a transposition is found and the explorer cannot disagree with the
+  repetition rule about what the same position is.
+- The index is built whole per change to the library and looked up per
+  position, because a lookup happens on every position stepped through.
+  Measured: 24ms to index 200 games of 120 plies, 267ms for a full 500-game
+  library of 1024-move games, against a 9-microsecond lookup.
+- **Only the played line.** A saved game may carry a `moveTree` of variations,
+  and indexing those would count a position someone *considered* beside a game
+  that was played.
+- **`ongoing` is not a result.** It counts toward how often a move was chosen
+  and not toward how it did.
+
 `utils/serviceWorkerCleanup.ts` unregisters service workers from the older
 demo build and clears its caches, so a stale shell cannot keep serving old
 engine assets.
@@ -373,6 +392,16 @@ with one.
 **MultiPV costs depth, and it is worth knowing.** Three lines is about a quarter
 of the node rate and six plies. Three is still the right default for an analysis
 board — candidate moves are the point — but it is a choice, not free.
+
+**A deep dive is the fourth budget, and the one the user asks for.**
+`resolveDeepDiveBudget` runs one search on the current position at depth 36 with
+a 30s budget on a high tier, scaled down per tier. Bounded rather than `go
+infinite` deliberately: infinite returns no `bestmove` until stopped, and
+several paths in `App.tsx` wait on `bestmove`, so a bounded search settles on
+its own and nothing has to remember to end it. It carries the same analysis tag
+as the live searches, so a position change cancels it like any other search.
+Measured from a four-move opening at 8 threads: live analysis settles at D17,
+Go Deep reaches D26.
 
 Three ceilings that must not be confused:
 
