@@ -49,7 +49,15 @@ export interface MoveAnnotationInput {
 export function formatEvalCommand(evalScore: number): string | null {
     if (!Number.isFinite(evalScore)) return null;
     const mateDistance = mateDistanceFromScore(evalScore);
-    if (mateDistance !== null) return `[%eval #${mateDistance}]`;
+    if (mateDistance !== null) {
+        // The sign comes from the score, not from the distance. A mate in zero
+        // -- the position after this move is already mate -- gives a distance
+        // of -0 for black, and `${-0}` is "0", so black's mate wrote as `#0`
+        // and read back as red's. Found by sweeping generated games through
+        // the exporter and the importer.
+        const sign = evalScore < 0 ? '-' : '';
+        return `[%eval #${sign}${Math.abs(mateDistance)}]`;
+    }
     return `[%eval ${(evalScore / 100).toFixed(2)}]`;
 }
 

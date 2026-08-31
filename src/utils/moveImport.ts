@@ -1,4 +1,6 @@
 import type { SavedMoveTreeNode } from './gameLibrary';
+import type { ReviewMoveQuality } from './review';
+import { MATE_SCORE_BASE } from './engineEvalReading';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
 export const MAX_MOVE_IMPORT_UCI_MOVES = 1024;
@@ -175,6 +177,145 @@ export function extractUciMoveTree(text: string): {
         hasVariations: root.length > 1 || hasBranch(root),
         tooLarge,
     };
+}
+
+
+/** A move's review as a record carried it, for the moves that had one. */
+export interface ImportedMoveAnnotation {
+    /** Red-positive centipawns after the move, as this app stores an eval. */
+    evalScore?: number;
+    quality?: ReviewMoveQuality;
+}
+
+/**
+ * The standard glyphs, read back. `formatEvalCommand`'s counterparts live in
+ * `pgnAnnotations.ts`; only the three this app writes are mapped, because the
+ * rest of the NAG table is not a quality scale -- $3 is "very good move" and
+ * $5 is "interesting", and guessing at a grade for them would put a label on a
+ * move nobody graded.
+ */
+const QUALITY_FOR_NAG: Record<string, ReviewMoveQuality> = {
+    $6: 'inaccuracy',
+    $2: 'mistake',
+    $4: 'blunder',
+};
+
+/** The same three as suffix symbols, which many records use instead. */
+const QUALITY_FOR_SUFFIX: Record<string, ReviewMoveQuality> = {
+    '?!': 'inaccuracy',
+    '?': 'mistake',
+    '??': 'blunder',
+};
+
+function parseEvalCommand(comment: string): number | undefined {
+    // The sign is read as a character, not as a number: `#-0` is a real value
+    // (black is mated now) and `Number('-0') >= 0` is true, so a numeric test
+    // would read it as red's.
+    const mate = comment.match(/\[%eval\s+#(-)?(\d+)\]/i);
+    if (mate) {
+        const distance = Number(mate[2]);
+        if (!Number.isFinite(distance)) return undefined;
+        return mate[1] === '-' ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance;
+    }
+    const pawns = comment.match(/\[%eval\s+(-?\d+(?:\.\d+)?)\]/i);
+    if (!pawns) return undefined;
+    const value = Number(pawns[1]);
+    if (!Number.isFinite(value)) return undefined;
+    return Math.round(value * 100);
+}
+
+/**
+ * The main line *with* whatever each move was annotated with.
+ *
+ * A separate pass from `extractUciMoveLine`, and it returns the moves as well
+ * as the annotations so a caller can check the two agree rather than trusting
+ * two parsers to have walked the same line.
+ *
+ * It has to tokenise rather than strip, and the order matters: `[%eval 0.38]`
+ * lives *inside* a `{...}` comment, so stripping `[...]` tags first -- which is
+ * what the plain extractor does, and must do, because a FEN tag contains
+ * substrings that read as coordinates -- would remove the evaluation along with
+ * the headers. Consuming `{` before `[` means a comment is taken whole and the
+ * `[` inside it is never seen as a tag.
+ *
+ * Variations are skipped. An annotation inside one belongs to a move that was
+ * not played, and this reports the game.
+ */
+export function extractAnnotatedMainLine(text: string): {
+    moves: string[];
+    annotations: ImportedMoveAnnotation[];
+} {
+    const source = String(text);
+    const moves: string[] = [];
+    const annotations: ImportedMoveAnnotation[] = [];
+    let depth = 0;
+    let index = 0;
+
+    const annotate = (patch: ImportedMoveAnnotation) => {
+        if (depth > 0 || annotations.length === 0) return;
+        Object.assign(annotations[annotations.length - 1], patch);
+    };
+
+    while (index < source.length) {
+        const ch = source[index];
+
+        if (ch === '{') {
+            const end = source.indexOf('}', index + 1);
+            const comment = source.slice(index + 1, end < 0 ? source.length : end);
+            const evalScore = parseEvalCommand(comment);
+            if (evalScore !== undefined) annotate({ evalScore });
+            index = end < 0 ? source.length : end + 1;
+            continue;
+        }
+        if (ch === '[') {
+            const end = source.indexOf(']', index + 1);
+            index = end < 0 ? source.length : end + 1;
+            continue;
+        }
+        if (ch === ';') {
+            const end = source.indexOf('\n', index + 1);
+            index = end < 0 ? source.length : end + 1;
+            continue;
+        }
+        if (ch === '(') { depth += 1; index += 1; continue; }
+        if (ch === ')') { depth = Math.max(0, depth - 1); index += 1; continue; }
+        if (ch === '$') {
+            const nag = source.slice(index).match(/^\$\d+/);
+            if (nag) {
+                const quality = QUALITY_FOR_NAG[nag[0]];
+                if (quality) annotate({ quality });
+                index += nag[0].length;
+                continue;
+            }
+        }
+        if (ch === '?' || ch === '!') {
+            const suffix = source.slice(index).match(/^(\?\?|\?!|\?)/);
+            if (suffix) {
+                const quality = QUALITY_FOR_SUFFIX[suffix[0]];
+                if (quality) annotate({ quality });
+                index += suffix[0].length;
+                continue;
+            }
+        }
+
+        const move = source.slice(index).match(/^([a-i][0-9])\s*(?:->|=>|[-x:\u2192\u2013\u2014])?\s*([a-i][0-9])/i);
+        if (move && (index === 0 || !/[a-z0-9]/i.test(source[index - 1]))) {
+            const after = source[index + move[0].length];
+            if (after === undefined || !/[a-z0-9]/i.test(after)) {
+                if (depth === 0) {
+                    if (moves.length >= MAX_MOVE_IMPORT_UCI_MOVES) break;
+                    moves.push(`${move[1]}${move[2]}`.toLowerCase());
+                    annotations.push({});
+                }
+                index += move[0].length;
+                continue;
+            }
+        }
+
+        index += 1;
+    }
+
+    return { moves, annotations };
 }
 
 export function extractFenTag(text: string): string | null {

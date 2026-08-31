@@ -71,6 +71,7 @@ import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
 import {
   extractFenTag,
+  extractAnnotatedMainLine,
   extractUciMoveLine,
   hasTooManyUciMoves,
   extractUciMoveTree,
@@ -3142,11 +3143,40 @@ function App() {
       setWorkspaceMode('play');
     }
     setGameMode(nextGameMode);
-    if (hasVariations) {
-      loadMoveTree(importedLine.moveTree, moves, startFen);
-    } else {
-      loadMoves(moves, startFen);
+    const loadedNodeIds = hasVariations
+      ? loadMoveTree(importedLine.moveTree, moves, startFen)
+      : loadMoves(moves, startFen);
+
+    /**
+     * The review the record was carrying, if it was carrying one.
+     *
+     * The exporter writes NAGs and `[%eval ...]` into the PGN, and until now
+     * the importer stripped them -- so a game exported from here and pasted
+     * back lost every evaluation, and a PGN annotated anywhere else arrived as
+     * bare moves. Read on a separate pass, which returns the moves as well as
+     * the annotations so the two can be checked against the line that was
+     * actually loaded rather than trusted to have walked it the same way.
+     *
+     * A notation record has no coordinates and takes the other import path, so
+     * there is nothing to align to; skipped there.
+     */
+    if (!importedFromNotation) {
+      const annotated = extractAnnotatedMainLine(text);
+      const alignsWithLine = annotated.moves.length === moves.length
+        && annotated.moves.every((uci, index) => uci === moves[index]);
+      if (alignsWithLine) {
+        const updates = annotated.annotations
+          .map((annotation, index) => {
+            const nodeId = loadedNodeIds[index];
+            if (!nodeId) return null;
+            if (annotation.evalScore === undefined && annotation.quality === undefined) return null;
+            return { nodeId, evalScore: annotation.evalScore, quality: annotation.quality };
+          })
+          .filter((update): update is NonNullable<typeof update> => Boolean(update));
+        if (updates.length > 0) setNodeReviewDataBulk(updates);
+      }
     }
+
     setFenInput('');
     clearFenError();
     setMoveLineInput('');
@@ -3154,7 +3184,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
