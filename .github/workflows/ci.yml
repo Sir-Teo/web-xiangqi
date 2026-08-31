@@ -75,6 +75,15 @@ jobs:
       - name: Build WASM demo
         run: npm run build
 
+      # Static, so it runs where the browser suites cannot: it reads the
+      # artifacts that were just built and checks them against what
+      # templates/pikafish.js and analysisProfile.ts assume. This is the only
+      # gate that sees a toolchain silently dropping a Module key the wrapper
+      # depends on -- Node never takes the worker path, the browser suite below
+      # is single-threaded, and a release build says nothing.
+      - name: Engine artifact contract
+        run: npm run test:engine:contract
+
       - name: Node parity and smoke tests
         run: |
           npm run test:parity
