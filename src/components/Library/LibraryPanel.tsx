@@ -448,7 +448,7 @@ export function LibraryPanel({
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
         </span>
-        <span className="lib-summary-pill">
+        <span className="lib-summary-pill" data-testid="library-classics-count">
           <strong>{filteredHistorical.length}</strong> classics
         </span>
         {reviewInsight ? (
@@ -772,7 +772,14 @@ export function LibraryPanel({
       </p>
       <div className="lib-list" data-testid="historical-game-list">
         {filteredHistorical.length === 0 ? (
-          <p className="lib-empty">No games match your search.</p>
+          // Two different nothings. "No games match your search" in front of a
+          // section that has no games at all sends someone hunting for a filter
+          // to clear.
+          <p className="lib-empty">
+            {HISTORICAL_GAMES.length === 0
+              ? 'No classic games are bundled yet.'
+              : 'No games match your search.'}
+          </p>
         ) : (
           filteredHistorical.map((game) => (
             <div key={game.id} className="lib-card lib-card-aside-action">

@@ -53,6 +53,34 @@ describe('the bundled historical games', () => {
         }
     });
 
+    it('says where every entry came from', () => {
+        // The absence of this field is what let a fabricated set ship under the
+        // names of real grandmasters: the records were asserted, not checkable.
+        for (const game of HISTORICAL_GAMES) {
+            expect(game.source?.trim(), `${game.id} has no source`).toBeTruthy();
+        }
+    });
+
+    it('does not repeat a long move sequence across entries', () => {
+        // The smell that exposed the old set: seven of ten shared the identical
+        // eight-move block `a0a1 a9a8 a1d1 a8d8 i0i1 i9i8 i1h1 i8g8`, which for
+        // four of them was half the game. Real games share opening theory, so
+        // this only looks at runs long enough that sharing one is not theory.
+        const RUN = 8;
+        const runs = new Map<string, string>();
+        for (const game of HISTORICAL_GAMES) {
+            for (let start = 0; start + RUN <= game.moves.length; start += 1) {
+                const key = game.moves.slice(start, start + RUN).join(' ');
+                const seenIn = runs.get(key);
+                expect(
+                    seenIn,
+                    `${game.id} and ${seenIn} share ${RUN} moves in a row: ${key}`
+                ).toBeUndefined();
+                runs.set(key, game.id);
+            }
+        }
+    });
+
     it('stays an opening excerpt rather than growing into a claimed whole game', () => {
         // The file's own framing: these are the first eight to twelve moves a
         // side, and the result beside them belongs to the game they came from.

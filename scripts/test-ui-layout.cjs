@@ -5332,13 +5332,18 @@ async function assertLargeLibraryRendersProgressively(page) {
     searchPlaceholder: document.querySelector('[aria-label="Search library"]')?.getAttribute("placeholder") || "",
     savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
     historicalCards: document.querySelectorAll('[data-testid="historical-game-list"] .lib-card').length,
+    // What the panel says it is showing, so this checks the list agrees with
+    // its own summary rather than with a count of whatever happens to be
+    // bundled. It used to require exactly 10, which is a fact about the data
+    // set and not about progressive rendering, which is what this asserts.
+    historicalClaimed: Number(document.querySelector('[data-testid="library-classics-count"] strong')?.textContent || "-1"),
     showMoreText: document.querySelector('[data-testid="library-show-more-saved"]')?.textContent?.trim() || "",
     needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
     initial.savedCards !== 100 ||
-    initial.historicalCards !== 10 ||
+    initial.historicalCards !== initial.historicalClaimed ||
     !initial.searchPlaceholder.includes("moves") ||
     !initial.searchPlaceholder.includes("reviews") ||
     !initial.showMoreText.includes("50 more") ||
