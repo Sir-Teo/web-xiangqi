@@ -167,6 +167,55 @@ so a PGN carrying a Chinese comment is still read as a PGN. Variations are not
 followed on that path: the parenthetical form is a PGN convention that a
 notation record does not use.
 
+#### Skipping a token is not the safe option
+
+The reader walks a record token by token. Anything that is not a move -- a move
+number, a result, a word from a comment -- has to be skipped, because records
+are full of them. Anything that *is* a move and cannot be placed has to stop the
+read. Getting that distinction wrong is the same bug three times over, and it
+does not look like a bug:
+
+> `1. C2=5! H8+7` imported as `b0c2`. One move, belonging to neither half of
+> that line, with nothing rejected, no error and no notice.
+
+The mechanism is worth understanding once, because it is what makes the failure
+silent rather than loud. Skipping a token that carried a move leaves the board a
+move behind. The next token is then matched against a position the record never
+reached -- and the opening is symmetric with files numbered from each player's
+own right, so a reply written for one side is very often a legal move for the
+other. It parses. It is a real move. It is not the game.
+
+Three token shapes reached that path, all of them ordinary:
+
+- **an annotated move** -- `C2=5!`, 馬8進7?!, a `+` for the check;
+- **a move number written against the move** -- `1.C2=5`, `１．炮二平五`,
+  which is simply how some databases write it;
+- **Chinese notation for a file stacked deeper than three**, where the shape
+  table listed the WXF half (`35+1`) and not the Chinese one (三兵進一, folding
+  to `3P+1`). The formatter had been writing both all along, so those records
+  could be produced by this app and not read back by it -- while the same game
+  in WXF imported cleanly, which is what kept it hidden.
+
+Two rules follow, and both are load-bearing:
+
+1. **Canonicalisation folds decoration around a move, not just spelling inside
+   it.** A trailing run of `! ? + #` and a leading move number are stripped.
+   The move number needs its separator to count as one, because a Chinese token
+   may *open* with a numeral that belongs to the move -- 四兵進一 is a soldier,
+   not move four.
+2. **A move-shaped token that names no legal move ends the read.** It used to
+   be skipped, and the moves after it were imported from a position the record
+   never reached: `C2=5 H8+7 R5=9 H2+3` arrived as a three-move game whose third
+   move was played from the wrong board. What comes back now is a true prefix,
+   and the importer says which move stopped it.
+
+Rule 2 also bounds the cost, which previously needed a magic number. Reading one
+token costs a full legal-move generation plus writing every legal move in both
+notations; `maxMoves` bounds only the tokens that *matched*. A paste of 40,000
+move-shaped tokens naming nothing therefore paid that price 40,000 times and
+took four and a half seconds on the main thread, inside the import box's own
+200,000-character limit. Stopping at the first one costs one.
+
 ## Engine Boundary
 
 `useEngine` loads the lightweight `pikafish.js` wrapper first, then lazily
