@@ -113,7 +113,7 @@ export const MoveListTree = memo(function MoveListTree({
     const rows: JSX.Element[] = [];
     const rootContext = parseRootMoveContext(rootFen);
     const hasMoveQualityLegend = activeLineNodeIds.some((nodeId) => (
-        getMoveQualityClass(treeNodes, nodeId) !== 'quality-pending'
+        getMoveQualityClass(treeNodes, nodeId, rootNodeId) !== 'quality-pending'
     ));
     const entryAt = (lineIndex: number): MoveListEntry | null => {
         const nodeId = activeLineNodeIds[lineIndex];
@@ -125,7 +125,7 @@ export const MoveListTree = memo(function MoveListTree({
         const node = treeNodes[nodeId];
         const record = node?.record;
         if (!node || !record) return null;
-        const qualityClass = getMoveQualityClass(treeNodes, nodeId);
+        const qualityClass = getMoveQualityClass(treeNodes, nodeId, rootNodeId);
         // Coach hint: engine's best alternative (stored on this node from review)
         const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
         const note = record.quality && isCriticalReviewQuality(record.quality) ? record.reviewNote : null;
@@ -355,14 +355,32 @@ function makeMoveListEntry(
     };
 }
 
-function getMoveQualityClass(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string {
+function getMoveQualityClass(
+    treeNodes: Record<string, MoveTreeNode>,
+    nodeId: string,
+    rootNodeId: string
+): string {
     const node = treeNodes[nodeId];
     const record = node?.record;
     if (record?.quality) {
         return getMoveQualityClassName(record.quality);
     }
     const currentEval = record?.evalScore;
-    const parentEval = node?.parentId ? treeNodes[node.parentId]?.record?.evalScore : 0;
+    /**
+     * The root carries no record, so a first move has no parent evaluation to
+     * be judged against and stayed `quality-pending` for the life of the game
+     * -- every move but the first got a live colour. The `: 0` here was meant
+     * to cover it and never fired: the root's id is a truthy string, so the
+     * lookup ran and found nothing.
+     *
+     * Zero is the same baseline `EvalGraph` plots the start position at, so
+     * the two now agree rather than one grading a move the other does not.
+     * Both are wrong in the same way for a game set up from a lopsided
+     * position, where the start is not even -- and a review, whose stored
+     * quality is preferred above, is what corrects it.
+     */
+    const parentIsRoot = !node?.parentId || node.parentId === rootNodeId;
+    const parentEval = parentIsRoot ? 0 : treeNodes[node.parentId!]?.record?.evalScore;
     if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';
 
     const side = getReviewSideForRecord(record, record.ply - 1);
