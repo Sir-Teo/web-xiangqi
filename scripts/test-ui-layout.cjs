@@ -7053,6 +7053,77 @@ async function assertMobileSaveLibraryActions(page) {
   }
 }
 
+/**
+ * A perpetual check, read off a real game rather than assembled by hand.
+ *
+ * `repetition.test.ts` covers the classifier thoroughly, but it hands
+ * `describeRepetition` the `inCheck` flag itself. Nothing checked that the app
+ * *derives* that flag correctly from moves and puts the verdict on screen, and
+ * the gap was measurable: inverting `inCheck` inside `loadMoves` -- the path
+ * behind share links, PGN import and every saved game -- left the whole suite
+ * green. A game loaded with a perpetual check in it would have been reported as
+ * an ordinary repetition, which in xiangqi is the difference between a draw and
+ * a loss.
+ *
+ * Red chariot checks the general along the rank, the general steps between e9
+ * and e8, and the chariot follows between a9 and a8. Every red move in the
+ * cycle gives check and no black move does, so the rules bind Red: vary or be
+ * ruled to have lost.
+ */
+async function assertPerpetualCheckIsNamedAndBinding(page) {
+  const fen = encodeURIComponent("R3k4/9/9/9/9/9/9/9/9/3K5 b - - 0 1");
+  const moves = ["e9e8", "a9a8", "e8e9", "a8a9", "e9e8", "a9a8", "e8e9", "a8a9"];
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${fen}&moves=${moves.join("+")}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  const loaded = await page
+    .waitForFunction(
+      (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[2] ?? -1) === want,
+      moves.length,
+      { timeout: 10000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!loaded) throw new Error("The perpetual-check line did not load whole.");
+
+  const state = await page.evaluate(() => {
+    const stat = document.querySelector(".position-stat-repetition");
+    return {
+      present: Boolean(stat),
+      verdict: stat?.getAttribute("data-verdict") || "",
+      binding: stat?.className.includes("position-stat-repetition-binding") ?? false,
+      text: stat?.textContent?.trim() || "",
+    };
+  });
+
+  if (!state.present) {
+    throw new Error("A position repeated four times over showed no repetition notice at all.");
+  }
+  if (state.verdict !== "red-perpetual-check") {
+    throw new Error(
+      `A cycle where every red move checks was read as "${state.verdict}". ` +
+      `In xiangqi that is the difference between a draw and a loss for Red.`
+    );
+  }
+  if (!/Red is checking perpetually/i.test(state.text)) {
+    throw new Error(`The notice reads "${state.text}" and does not name what is happening.`);
+  }
+  if (!/Red has to vary/i.test(state.text)) {
+    throw new Error(`The notice reads "${state.text}" without telling Red what the rule requires.`);
+  }
+  if (!state.binding) {
+    throw new Error("The notice was not marked as binding, so it reads like an observation.");
+  }
+}
+
 async function assertSimpleRepetitionDoesNotAutoDraw(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   const repeatedLine = [
@@ -7553,6 +7624,7 @@ async function main() {
     await assertLargeLibraryRendersProgressively(page);
     await assertDenseEvalGraphLimitsPointMarkers(page);
     await assertSimpleRepetitionDoesNotAutoDraw(page);
+    await assertPerpetualCheckIsNamedAndBinding(page);
     await assertStalemateLossIsLabeled(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
