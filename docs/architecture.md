@@ -242,6 +242,57 @@ template they are copied from. Editing the template without rebuilding leaves
 the app loading the old wrapper, and the shipped copies were 35 lines behind
 when that check was added.
 
+### The deployed site is single-threaded, and every number above is not it
+
+**The table above is a dev-server measurement.** `vite.config.ts` sends COOP and
+COEP, so every dev server and every browser check in this repo is cross-origin
+isolated, gets `SharedArrayBuffer`, and loads a threaded core. **GitHub Pages
+sends neither header and cannot be configured to** — it serves static files with
+fixed ones. So the build a player actually loads always takes the other branch.
+
+Same build, same machine, same start position, the only difference being the
+headers on the response:
+
+| | cross-origin isolated | GitHub Pages |
+| --- | --- | --- |
+| core | `threaded-simd` | `single-simd` |
+| threads | 8 | 1 |
+| nodes/second | 3.7M | 414k |
+| live analysis settles at | D22/S49 | D16/S30 |
+| engine ready | ~1.2s | ~0.4s |
+
+Nine times the nodes and six extra plies. That is the honest cost of the
+platform, and there is nothing to fix in it: threads need `SharedArrayBuffer`,
+`SharedArrayBuffer` needs isolation, and isolation needs headers Pages does not
+send. Hosting that sends them (Netlify, Cloudflare Pages, a Worker) would get
+the left column, and that is the only thing that would.
+
+What *was* wrong is that the app did not know. Threading was resolved entirely
+inside `templates/pikafish.js` — `resolveVariant` drops `threaded-simd` to
+`single-simd`, `recommendedThreads` returns 1 for a non-threaded core — so the
+engine was always asked for one thread and always got it. But nothing told the
+app, and the app draws the dashboard. The deployed Core card read `single-simd`
+and `8T · 128MB` at the same time, and Settings offered an Engine Threads ladder
+— 1 2 3 4 6 8 — on which every rung was 1.
+
+`detectThreadSupport` now sits beside `detectSimdSupport` and mirrors the
+wrapper's own check, and `resolveEngineBootConfig` resolves it the way it
+already resolves `saferBoot`: single variant, one thread. The count, the ladder
+and the Core card's explanation all read that one config.
+
+**Time budgets absorb this and depth ceilings do not**, which is the reason the
+budget is `movetime` and the depth is a ceiling (see below). At 414k nps the
+same budget simply arrives at a shallower depth instead of overrunning. Game
+Review is unaffected in the way that matters — measured on a Pages-like server,
+the calibration fixtures score 99% for engine self-play and 6% for arbitrary
+legal moves, a 93-point separation against a gate that asks for 40, with a
+30-ply review taking 10.8s. Strong play scores *higher* single-threaded, not
+lower: a shallower reviewer disagrees with the played move less often.
+
+`test:prod:smoke` runs both configurations for this reason. It used to run only
+`vite preview`, which is isolated — so the deploy gate had never once loaded the
+app the way the deploy serves it.
+
 ### The emsdk version is part of the engine, and is pinned
 
 `install-emsdk.sh` used `EMSDK_VERSION=latest`, so the Pages deploy compiled the
