@@ -232,8 +232,8 @@ export function resolveHashMB(tier: DeviceTier, requested: unknown, fallback: nu
  * than it was going to take anyway, and always includes 1, which is the answer
  * to "stop the fans".
  */
-export function threadChoicesForProfile(profile: DeviceProfile): readonly number[] {
-    const ceiling = resolveEngineBootConfig(profile).threads;
+export function threadChoicesForProfile(profile: DeviceProfile, allowThreads = true): readonly number[] {
+    const ceiling = resolveEngineBootConfig(profile, { allowThreads }).threads;
     const rungs = [1, 2, 3, 4, 6, 8].filter((count) => count <= ceiling);
     if (!rungs.includes(ceiling)) rungs.push(ceiling);
     return rungs;
@@ -245,11 +245,17 @@ export function resolveThreads(profile: DeviceProfile, requested: unknown, fallb
     return threadChoicesForProfile(profile).includes(wanted) ? wanted : fallback;
 }
 
+/** Whether a resolved variant is one that can hold more than one thread. */
+export function isThreadedVariant(variant: EngineRuntimeVariant): boolean {
+    return variant === 'threaded' || variant === 'threaded-simd';
+}
+
 export function resolveEngineBootConfig(
     profile: DeviceProfile,
-    options: { allowSIMD?: boolean; saferBoot?: boolean; hashMB?: number; threads?: number } = {}
+    options: { allowSIMD?: boolean; allowThreads?: boolean; saferBoot?: boolean; hashMB?: number; threads?: number } = {}
 ): EngineBootConfig {
     const allowSIMD = options.allowSIMD !== false;
+    const allowThreads = options.allowThreads !== false;
 
     let variant: EngineRuntimeVariant;
     let threads: number;
@@ -281,6 +287,15 @@ export function resolveEngineBootConfig(
     const wantedThreads = Math.trunc(finiteNumber(options.threads, Number.NaN));
     if (Number.isFinite(wantedThreads) && wantedThreads >= 1 && wantedThreads <= threads) {
         threads = wantedThreads;
+    }
+
+    // Not a preference and not a fallback: on a page without cross-origin
+    // isolation the threaded core cannot load, so this is the same answer the
+    // wrapper is going to reach anyway. Resolving it here is what keeps the
+    // dashboard and the thread picker honest -- they read this config.
+    if (!allowThreads) {
+        variant = resolveSingleVariant(allowSIMD);
+        threads = 1;
     }
 
     if (options.saferBoot) {
@@ -478,6 +493,40 @@ export function detectSimdSupport(): boolean {
             0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
             10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
         ]));
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Whether this page may run the threaded core at all.
+ *
+ * Threads need `SharedArrayBuffer`, and a browser only hands that out to a
+ * cross-origin isolated page -- one served with COOP and COEP. `vite.config.ts`
+ * sets both, so every dev server and every browser test in this repo is
+ * isolated. **GitHub Pages sets neither, and cannot be made to**: it serves
+ * static files with fixed headers. So the deployed app -- the only build a
+ * player actually uses -- always lands here, and every check in this repo ran
+ * on the other side of the branch.
+ *
+ * `templates/pikafish.js` already handles it correctly: `resolveVariant` drops
+ * `threaded-simd` to `single-simd`, and `recommendedThreads` returns 1 for a
+ * non-threaded core, so the engine really is asked for one thread. What was
+ * missing is that *the app never knew*, and it is the app that draws the
+ * dashboard and the thread picker. The deployed engine dashboard read
+ * `single-simd` and `8T · 128MB` at the same time, and offered a thread ladder
+ * on which every rung was 1.
+ *
+ * Mirrors the wrapper's `wasmThreadsSupported` rather than testing
+ * `crossOriginIsolated` alone, because the guarantee wanted here is the one the
+ * wrapper will act on: a shared `WebAssembly.Memory` that actually constructs.
+ */
+export function detectThreadSupport(): boolean {
+    try {
+        if (typeof SharedArrayBuffer !== 'function') return false;
+        if (typeof Atomics !== 'object') return false;
+        const memory = new WebAssembly.Memory({ shared: true, initial: 8, maximum: 16 } as WebAssembly.MemoryDescriptor);
+        return memory.buffer instanceof SharedArrayBuffer;
     } catch {
         return false;
     }

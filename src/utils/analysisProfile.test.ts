@@ -6,6 +6,7 @@ import {
     hashChoicesForTier,
     resolveDeepDiveBudget,
     threadChoicesForProfile,
+    isThreadedVariant,
     MAX_ENGINE_THREADS,
     detectDeviceTier,
     resolveEngineBootConfig,
@@ -333,5 +334,49 @@ describe('the engine threads a machine may be asked for', () => {
 
     it('still drops to one thread on a safer boot', () => {
         expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP), { threads: 4, saferBoot: true }).threads).toBe(1);
+    });
+});
+
+/**
+ * The deployed app is the one nothing had run.
+ *
+ * `vite.config.ts` sends COOP and COEP, so every dev server and every browser
+ * test in this repo is cross-origin isolated and takes the threaded branch.
+ * GitHub Pages sends neither and cannot be configured to, so the build a player
+ * actually loads takes the other one -- and the app had no notion of it. The
+ * engine was fine (the wrapper drops to a single core and asks for one thread);
+ * what was wrong was everything the app drew from a config that still said
+ * eight. The dashboard read `single-simd` and `8T` together.
+ */
+describe('a page that is not cross-origin isolated', () => {
+    it('runs the single-threaded core whatever the machine is', () => {
+        for (const device of [DESKTOP, LAPTOP, PHONE]) {
+            const config = resolveEngineBootConfig(detectDeviceTier(device), { allowThreads: false });
+            expect(isThreadedVariant(config.variant), JSON.stringify(device)).toBe(false);
+            expect(config.threads, JSON.stringify(device)).toBe(1);
+        }
+    });
+
+    it('keeps SIMD, which does not need isolation', () => {
+        const config = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { allowThreads: false });
+        expect(config.variant).toBe('single-simd');
+    });
+
+    it('still honours an explicit request for a smaller hash', () => {
+        // Hash is a memory choice and has nothing to do with threads.
+        const config = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { allowThreads: false, hashMB: 64 });
+        expect(config.hashMB).toBe(64);
+    });
+
+    it('offers no thread ladder, because every rung would be one', () => {
+        expect(threadChoicesForProfile(detectDeviceTier(DESKTOP), false)).toEqual([1]);
+        expect(threadChoicesForProfile(detectDeviceTier(LAPTOP), false)).toEqual([1]);
+    });
+
+    it('leaves the isolated case exactly as it was', () => {
+        const isolated = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { allowThreads: true });
+        expect(isolated).toEqual(resolveEngineBootConfig(detectDeviceTier(DESKTOP)));
+        expect(isThreadedVariant(isolated.variant)).toBe(true);
+        expect(isolated.threads).toBeGreaterThan(1);
     });
 });

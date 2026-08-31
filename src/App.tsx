@@ -97,6 +97,7 @@ import {
   detectDeviceProfile,
   detectDeviceScreen,
   detectSimdSupport,
+  detectThreadSupport,
   hashChoicesForTier,
   resolveDeepDiveBudget,
   resolveEngineBootConfig,
@@ -1066,20 +1067,50 @@ function App() {
 
   const deviceProfile = useMemo(() => detectDeviceProfile(), []);
 
+  // Both read the machine once. Threads are the one that changes between here
+  // and the deploy: `vite.config.ts` sends COOP/COEP so every dev server and
+  // every browser test is cross-origin isolated, and GitHub Pages sends
+  // neither, so the built app runs single-threaded for real.
+  const engineCapabilities = useMemo(
+    () => ({ allowSIMD: detectSimdSupport(), allowThreads: detectThreadSupport() }),
+    []
+  );
+
   const baseEngineBootConfig = useMemo(
-    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport(), hashMB: engineHashMB, threads: engineThreads }),
-    [deviceProfile, engineHashMB, engineThreads]
+    () => resolveEngineBootConfig(deviceProfile, { ...engineCapabilities, hashMB: engineHashMB, threads: engineThreads }),
+    [deviceProfile, engineCapabilities, engineHashMB, engineThreads]
   );
 
   const engineBootConfig = useMemo(() => {
     if (engineSafetyBootLevel < 1) return baseEngineBootConfig;
     return resolveEngineBootConfig(deviceProfile, {
-      allowSIMD: baseEngineBootConfig.allowSIMD,
+      ...engineCapabilities,
       hashMB: engineHashMB,
       threads: engineThreads,
       saferBoot: true,
     });
-  }, [baseEngineBootConfig, deviceProfile, engineHashMB, engineSafetyBootLevel, engineThreads]);
+  }, [baseEngineBootConfig, deviceProfile, engineCapabilities, engineHashMB, engineSafetyBootLevel, engineThreads]);
+
+  // A strong player on a sixteen-core machine reading `single-simd` and a
+  // few hundred thousand nodes per second is owed the reason, and the reason
+  // is not their machine: a page has to be cross-origin isolated before a
+  // browser will hand out SharedArrayBuffer, and GitHub Pages does not send
+  // those headers. Nothing else in the app says this, so the dashboard does.
+  const engineCoreDetail = useMemo(() => {
+    const size = `${engineBootConfig.hashMB}MB hash`;
+    if (engineBootConfig.saferBoot) {
+      return `Running ${engineBootConfig.variant} on one thread with ${size}, after the engine failed to start.`;
+    }
+    if (!engineCapabilities.allowThreads) {
+      return (
+        `Running ${engineBootConfig.variant} on one thread with ${size}. ` +
+        `A multi-threaded search needs SharedArrayBuffer, which a browser only grants a ` +
+        `cross-origin isolated page, and this one is not served with the COOP and COEP ` +
+        `headers that would make it so. The search is correct, just slower.`
+      );
+    }
+    return `Running ${engineBootConfig.variant} on ${engineBootConfig.threads} thread${engineBootConfig.threads === 1 ? '' : 's'} with ${size}.`;
+  }, [engineBootConfig, engineCapabilities]);
 
   const engineDetailEnabled = engineEnabled && analysisTab === 'engine' && !isAiTurn && reviewStatus !== 'running';
   const analysisMultiPv = engineDetailEnabled ? enginePvLineCount : 1;
@@ -2356,7 +2387,10 @@ function App() {
   // the mobile header chip and in the analysis tab there instead.
   const engineHashChoices = useMemo(() => hashChoicesForTier(deviceProfile.tier), [deviceProfile.tier]);
   const deepDiveBudget = useMemo(() => resolveDeepDiveBudget(deviceProfile.tier), [deviceProfile.tier]);
-  const engineThreadChoices = useMemo(() => threadChoicesForProfile(deviceProfile), [deviceProfile]);
+  const engineThreadChoices = useMemo(
+    () => threadChoicesForProfile(deviceProfile, engineCapabilities.allowThreads),
+    [deviceProfile, engineCapabilities]
+  );
   const showEvalBar = engineEnabled && !isMobile;
   const displayEvalClass = displayEvalScore === null
     ? ''
@@ -5118,7 +5152,7 @@ function App() {
               ) : (
                 <>
                   <div className="engine-dashboard" role="group" aria-label="Engine diagnostics">
-                    <div className="engine-stat">
+                    <div className="engine-stat" title={engineCoreDetail} aria-label={engineCoreDetail}>
                       <span>Core</span>
                       <strong>{engineVariant}</strong>
                       <em>{engineBootConfig.threads}T · {engineBootConfig.hashMB}MB</em>
