@@ -287,6 +287,27 @@ Phases sit alongside that, in `utils/gamePhase.ts`:
   up per move, so a review restored from the library filters exactly as a fresh
   one does.
 
+## A game does not always start from the opening
+
+Custom-FEN setup is how anyone studies an endgame, and three things assumed it
+away. Worth checking any new feature against, because the failures are quiet:
+nothing errors, the screen just says something untrue.
+
+- **The captured trays** were `standard opening set − what is on the board`.
+  Load an endgame FEN and the board reported a haul of pieces the position never
+  had. `utils/material.ts` now subtracts from the position the game began from,
+  and reads *who is ahead* off the board rather than off the captures — those
+  are two questions, and deriving the balance from captures happened to work
+  only because both sides were subtracted from the same set.
+- **The opening name.** `getOpeningCandidates` checked the root; `matchOpening`,
+  three lines above it, did not. So a FEN study was named after one move, and
+  the name reaches the saved game's label and the PGN's `[Opening]` tag. The
+  guard is now inside `openings.ts` where a caller cannot forget it.
+- **The review's line signature** is the moves and not the root, so two lines
+  with the same moves from different roots share one. Unreachable today because
+  every root-changing path calls `resetReview()` first — recorded at the
+  function, because it is a coupling rather than a guarantee.
+
 ## Storage
 
 | What | Key | Module |

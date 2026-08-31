@@ -315,6 +315,20 @@ export function getReviewQualityPriority(quality: ReviewMoveQuality): number {
     return REVIEW_QUALITY_PRIORITY[quality];
 }
 
+/**
+ * The moves, and deliberately not the position they were played from.
+ *
+ * Two lines with the same moves from different roots therefore share a
+ * signature, and the freshness check in `App.tsx` would call a review of one
+ * current for the other. That is unreachable today because every path that
+ * changes the root -- loading a FEN, importing, loading a saved game, a new
+ * game, playing on from a position -- calls `resetReview()` first.
+ *
+ * Written down because it is a coupling rather than a guarantee: a new
+ * root-changing path that forgets that call would not fail loudly, it would
+ * show one game's accuracy beside another game's board. If that ever happens,
+ * the fix is to put the root in here rather than to remember harder.
+ */
 export function makeReviewLineSignatureFromMoves(moves: string[]): string {
     return moves.join(' ');
 }
