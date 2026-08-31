@@ -386,6 +386,35 @@ Three ceilings that must not be confused:
   game. At D16 a 30-ply review finishes in 1.6s, measured. The revisit pass is
   where the depth goes, on the few moves that turned out to matter.
 
+## The main thread is not where the time goes
+
+Measured, so nobody spends a night re-deriving it. `App.tsx` is ~5,400 lines in
+one component with about sixty `useState` hooks, which looks like it should
+re-render the world on every one of the engine's five info flushes a second. It
+does not: the panels are memoized and the flush interval does its job.
+
+Frame pacing at 1440x900 over 12 seconds, a 30-ply game, engine searching, and
+the same window with live analysis off as a control:
+
+| | median | p95 | frames > 32ms | long tasks |
+| --- | --- | --- | --- | --- |
+| searching | 16.7ms | 18.1ms | 0 | 0 |
+| idle (Play workspace) | 16.7ms | 18.2ms | 0 | 0 |
+
+Identical, and a flat 60fps. The heaviest workload in the app is the review
+pass, and it holds up under a phone-grade CPU:
+
+| CPU throttle | 30-ply review | frames > 32ms | longest task |
+| --- | --- | --- | --- |
+| none | 252ms | 0 | none |
+| 6x | 1457ms | 1 | 94ms |
+
+So `App.tsx`'s size is a **maintainability** problem — which the Project
+Invariants below already treat it as — and not a performance one. Every
+performance win available here has been in the engine: threads, and the depth
+budget above. Look there first, and measure before assuming the shell is the
+cost.
+
 ## The two grading ladders disagree, and the looser one wins
 
 `classifyMoveQualityForEval` grades a move twice — once on centipawns, once on
