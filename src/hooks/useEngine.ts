@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 import { detectEngineBootConfig } from '../utils/analysisProfile';
-import { emptyEvalReading, takeEvalReading } from '../utils/engineEvalReading';
+import { MATE_SCORE_BASE, emptyEvalReading, takeEvalReading } from '../utils/engineEvalReading';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
 const INFO_FLUSH_MS = 200;
 const ENGINE_SCRIPT_LOAD_TIMEOUT_MS = 12000;
 const ENGINE_READY_TIMEOUT_MS = 90000;
-const MATE_SCORE_BASE = 30000;
 
 export type PvLine = {
     depth: string;

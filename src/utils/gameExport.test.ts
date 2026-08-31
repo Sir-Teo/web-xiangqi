@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { exportPgn, exportPgnFromMoveTree, exportPgnFromUci } from './gameExport';
-import { extractFenTag, extractUciMoveLine, extractUciMoveTree } from './moveImport';
+import { extractFenTag, extractUciMoveLine, extractUciMoveTree, stripRecordMetadata } from './moveImport';
 import type { SavedMoveTreeNode } from './gameLibrary';
+import type { MoveRecord } from '../hooks/useXiangqi';
 
 const OPTIONS = { date: '2026.08.28' };
 
@@ -127,5 +128,66 @@ describe('exportPgn from move records', () => {
     it('reads the uci off each record', () => {
         const pgn = exportPgn([{ uci: 'h2e2' }, { uci: 'h9g7' }] as never, OPTIONS);
         expect(movetext(pgn)).toBe('1. h2e2 h9g7 *');
+    });
+});
+
+describe('the review travels with the game', () => {
+    // The export carried the moves and nothing else, so an annotated game
+    // opened in another tool as a bare move list.
+    const annotated = (uci: string, ply: number, extra: Partial<MoveRecord> = {}): MoveRecord => ({
+        uci,
+        piece: ply % 2 === 1 ? 'C' : 'c',
+        captured: '',
+        board: [],
+        sideToMove: ply % 2 === 1 ? 'b' : 'w',
+        inCheck: false,
+        ply,
+        ...extra,
+    });
+
+    it('writes the evaluation after each move as a PGN comment', () => {
+        const pgn = exportPgn([annotated('h2e2', 1, { evalScore: 38 })], { date: '2026.08.31' });
+        expect(pgn).toContain('1. h2e2 { [%eval 0.38] }');
+    });
+
+    it('marks a mistake with the glyph other tools already read', () => {
+        const pgn = exportPgn([
+            annotated('h2e2', 1, { evalScore: 38, quality: 'best' }),
+            annotated('h9g7', 2, { evalScore: -180, quality: 'mistake', bestMove: 'h7e7' }),
+        ], { date: '2026.08.31' });
+        expect(pgn).toContain('h9g7 $2 { [%eval -1.80] Better was h7e7 }');
+        // and leaves the good move unmarked
+        expect(pgn).toContain('1. h2e2 { [%eval 0.38] }');
+        expect(pgn).not.toContain('h2e2 $');
+    });
+
+    it('exports exactly what it used to when nothing has been reviewed', () => {
+        const pgn = exportPgn([annotated('h2e2', 1), annotated('h9g7', 2)], { date: '2026.08.31' });
+        expect(pgn).toContain('1. h2e2 h9g7');
+        expect(pgn).not.toContain('{');
+        expect(pgn).not.toContain('$');
+    });
+
+    it('keeps the annotation with its own half of the pair', () => {
+        // A black half-move joins the entry its red half started, so a glyph
+        // appended in the wrong place would drift onto the next move.
+        const pgn = exportPgn([
+            annotated('h2e2', 1, { quality: 'blunder', bestMove: 'b0c2' }),
+            annotated('h9g7', 2, { evalScore: 20 }),
+            annotated('b0c2', 3, {}),
+        ], { date: '2026.08.31' });
+        expect(pgn).toContain('1. h2e2 $4 { Better was b0c2 } h9g7 { [%eval 0.20] } 2. b0c2');
+    });
+
+    it('reads back as the same moves, comments and all', () => {
+        const moves = [
+            annotated('h2e2', 1, { evalScore: 38, quality: 'best' }),
+            annotated('h9g7', 2, { evalScore: -180, quality: 'blunder', bestMove: 'b9c7' }),
+            annotated('b0c2', 3, { evalScore: 210, quality: 'inaccuracy', bestMove: 'c3c4' }),
+        ];
+        const pgn = exportPgn(moves, { date: '2026.08.31' });
+        // "Better was b9c7" holds a legal-looking move; it must not be imported
+        // as one.
+        expect(extractUciMoveLine(stripRecordMetadata(pgn))).toEqual(['h2e2', 'h9g7', 'b0c2']);
     });
 });

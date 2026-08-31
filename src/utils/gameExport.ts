@@ -3,6 +3,7 @@ import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_FEN } from './xiangqi';
+import { annotationTokensForMove, type MoveAnnotationInput } from './pgnAnnotations';
 
 const RESULT_TAG: Record<NonNullable<GameResult>, string> = {
     'red-wins':   '1-0',
@@ -53,20 +54,33 @@ function tagLine(name: string, value: string): string {
     return `[${name} "${escapeTagValue(value)}"]`;
 }
 
-function buildMoveText(uciMoves: string[], startPosition: PgnStartPosition, result: string): string {
+/**
+ * The move text, with each move's review written after it when there is one.
+ *
+ * A black half-move joins the pair its red half started, which is why this
+ * appends rather than always pushing -- and an annotation goes on the end of
+ * whichever entry the move itself landed in, so glyph and comment stay with
+ * their move rather than drifting to the front of the next pair.
+ */
+function buildMoveText(
+    moves: Array<{ uci: string } & MoveAnnotationInput>,
+    startPosition: PgnStartPosition,
+    result: string
+): string {
     const movePairs: string[] = [];
     let sideToMove = startPosition.sideToMove;
     let moveNumber = startPosition.fullmove;
 
-    for (const uci of uciMoves) {
+    for (const move of moves) {
+        const annotated = [move.uci, ...annotationTokensForMove(move)].join(' ');
         if (sideToMove === 'w') {
-            movePairs.push(`${moveNumber}. ${uci}`);
+            movePairs.push(`${moveNumber}. ${annotated}`);
         } else {
             const whiteHalfMovePrefix = `${moveNumber}. `;
             if (movePairs.length > 0 && movePairs[movePairs.length - 1].startsWith(whiteHalfMovePrefix)) {
-                movePairs[movePairs.length - 1] += ` ${uci}`;
+                movePairs[movePairs.length - 1] += ` ${annotated}`;
             } else {
-                movePairs.push(`${moveNumber}... ${uci}`);
+                movePairs.push(`${moveNumber}... ${annotated}`);
             }
             moveNumber += 1;
         }
@@ -146,7 +160,10 @@ function buildTreeMoveText(
 
         const nextSeen = new Set(seen);
         nextSeen.add(nodeId);
-        const moveToken = formatPgnMove(record.uci, startPosition, plyIndex, forceMoveNumber);
+        const moveToken = [
+            formatPgnMove(record.uci, startPosition, plyIndex, forceMoveNumber),
+            ...annotationTokensForMove(record),
+        ].join(' ');
         const continuation = renderFromParent(nodeId, plyIndex + 1, false, nextSeen);
         return [moveToken, ...parentVariations, continuation].filter(Boolean).join(' ');
     };
@@ -218,7 +235,7 @@ export function exportPgn(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${buildMoveText(moves.map((move) => move.uci), startPosition, result)}\n`;
+    return `${tags}\n\n${buildMoveText(moves, startPosition, result)}\n`;
 }
 
 /**
@@ -294,7 +311,7 @@ export function exportPgnFromUci(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${buildMoveText(uciMoves, startPosition, result)}\n`;
+    return `${tags}\n\n${buildMoveText(uciMoves.map((uci) => ({ uci })), startPosition, result)}\n`;
 }
 
 export function exportPgnFromMoveTree(
