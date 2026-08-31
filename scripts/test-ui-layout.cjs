@@ -984,6 +984,115 @@ async function assertNotationStylesRenderDifferently(page) {
  * through the UI: faster, and it keeps the check about the lookup rather than
  * about the save button.
  */
+/**
+ * A reader whose data predates the storage keys being versioned.
+ *
+ * Three keys were renamed when they were namespaced: preferences, the
+ * auto-saved game and the library. `readVersionedStorage` reads the new name,
+ * falls back to the old one, promotes what it finds and deletes the old copy,
+ * and `storageKeys.test.ts` covers that function closely.
+ *
+ * What nothing covered is whether the *app* gets the benefit. The function
+ * being right is not the same claim as three call sites using it, and the
+ * difference is invisible except to somebody who has not cleared their browser
+ * since the rename -- which is every returning reader and no test profile.
+ *
+ * The payloads are what the app itself wrote in a real session, so they cannot
+ * drift into a shape it never produces.
+ */
+const LEGACY_PREFERENCES = '{"assistMode":"coach","orientation":"black","showArrows":true,"soundEnabled":true,"searchDepth":22,"analysisEngineMode":"optimized","enginePvLineCount":3,"aiStrength":5,"aiSpeed":"normal","notationStyle":"wxf"}';
+const LEGACY_AUTO_SAVE = '{"version":1,"savedAt":1788216790137,"game":{"gameMode":"PvP","moves":["h2e2","h9g7"],"opening":"Central Cannon vs Horse Defence","finalEval":22,"result":"ongoing","id":"auto-save","savedAt":1788216790137}}';
+const LEGACY_LIBRARY = '[{"id":"f48fad07-521c-4bd6-aacf-1b0eac7a797d","savedAt":1788216787901,"gameMode":"PvP","moves":["h2e2","h9g7"],"result":"ongoing","opening":"Central Cannon vs Horse Defence"}]';
+
+async function assertDataFromBeforeTheKeyRenameStillArrives(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  // Seeded through `evaluate` and a reload rather than `addInitScript`, which
+  // would re-seed on every navigation for the rest of the suite. The saved
+  // orientation here is black, so leaving it behind would flip the board under
+  // every later check that clicks a square by coordinate.
+  await page.evaluate(([prefs, auto, lib]) => {
+    localStorage.clear();
+    localStorage.setItem("xiangqi-app-preferences", prefs);  // legacy-key-on-purpose
+    localStorage.setItem("xiangqi-auto-saved-game", auto);  // legacy-key-on-purpose
+    localStorage.setItem("xiangqi-game-library", lib);  // legacy-key-on-purpose
+  }, [LEGACY_PREFERENCES, LEGACY_AUTO_SAVE, LEGACY_LIBRARY]);
+
+  try {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(1200);
+
+    const state = await page.evaluate(() => ({
+      promoted: {
+        preferences: localStorage.getItem("xiangqi:preferences:v1") !== null,
+        autoSave: localStorage.getItem("xiangqi:auto-saved-game:v1") !== null,
+        library: localStorage.getItem("xiangqi:library:v1") !== null,
+      },
+      leftBehind: {
+        preferences: localStorage.getItem("xiangqi-app-preferences") !== null,  // legacy-key-on-purpose
+        autoSave: localStorage.getItem("xiangqi-auto-saved-game") !== null,  // legacy-key-on-purpose
+        library: localStorage.getItem("xiangqi-game-library") !== null,  // legacy-key-on-purpose
+      },
+      offersTheUnfinishedGame: /Unfinished game/i.test(document.body.innerText),
+      // Orientation is the preference with a visible consequence. Read off the
+      // board rather than a class name: the square drawn lowest and leftmost is
+      // i9 when Black is at the bottom and a0 when Red is.
+      bottomLeftSquare: (() => {
+        const squares = [...document.querySelectorAll("[data-file][data-rank]")];
+        let best = null;
+        let bestScore = -Infinity;
+        for (const square of squares) {
+          const rect = square.getBoundingClientRect();
+          const score = rect.top - rect.left;
+          if (score > bestScore) { bestScore = score; best = square; }
+        }
+        return best?.getAttribute("aria-label") || "";
+      })(),
+    }));
+
+    for (const [name, ok] of Object.entries(state.promoted)) {
+      if (!ok) throw new Error(`${name} was not promoted to its versioned key.`);
+    }
+    for (const [name, left] of Object.entries(state.leftBehind)) {
+      if (left) throw new Error(`${name} was left under its old key after promotion.`);
+    }
+    if (!state.offersTheUnfinishedGame) {
+      throw new Error("An auto-saved game from before the rename was not offered back.");
+    }
+    if (!/^i9,/.test(state.bottomLeftSquare)) {
+      throw new Error(
+        `A saved orientation of black was not applied: the bottom-left square is ` +
+        `"${state.bottomLeftSquare}" rather than i9. Moving the key is only half of it.`
+      );
+    }
+
+    // And the library, which is the part a reader would miss most.
+    const dismiss = page.getByRole("button", { name: /start fresh|keep the link|restore/i });
+    if (await dismiss.count()) await dismiss.first().click().catch(() => {});
+    await page.waitForTimeout(400);
+    await page.getByRole("button", { name: /Open game library/i }).first().click();
+    const found = await page
+      .waitForFunction(() => document.querySelectorAll(".lib-card").length > 0, null, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    const text = await page.evaluate(() => document.body.innerText.slice(0, 400));
+    if (!found || !/Central Cannon/.test(text)) {
+      throw new Error("A library saved before the rename did not survive it.");
+    }
+    await page.keyboard.press("Escape");
+  } finally {
+    await page.evaluate(() => { try { localStorage.clear(); } catch { /* private mode */ } });
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  }
+}
+
 async function assertLibraryExplorerCountsOwnGames(page) {
   const GAMES = [
     ["h2e2", "h9g7", "c3c4", "c6c5", "b0c2"],
@@ -7769,6 +7878,7 @@ async function main() {
     await assertAdvertisedMoveShortcuts(page);
     await assertNotationStylesRenderDifferently(page);
     await assertLibraryExplorerCountsOwnGames(page);
+    await assertDataFromBeforeTheKeyRenameStillArrives(page);
     await assertPlayFromHereKeepsThePosition(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);

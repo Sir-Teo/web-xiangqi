@@ -469,14 +469,21 @@ try {
   // between assertions and a Pro-mode check read "coach". The suite that caught
   // it is not in `verify`, so it caught it late. This check is.
   {
+    // One script may name them on purpose: the check that a reader whose
+    // profile predates the rename still gets their games has to write the old
+    // names to have anything to migrate. Those lines say so, and only those
+    // lines are exempt -- the rule is "do not treat a legacy key as current",
+    // not "never write the characters".
+    const ON_PURPOSE = "legacy-key-on-purpose";
     const scriptsDir = __dirname;
     const legacyNames = Object.values(storageKeys.LEGACY_STORAGE_KEYS);
     const offenders = [];
     for (const entry of fs.readdirSync(scriptsDir)) {
       if (!/\.(cjs|js|mjs)$/.test(entry)) continue;
       const source = fs.readFileSync(path.join(scriptsDir, entry), "utf8");
+      const lines = source.split("\n").filter((line) => !line.includes(ON_PURPOSE));
       for (const legacy of legacyNames) {
-        const uses = source.split(`"${legacy}"`).length - 1;
+        const uses = lines.join("\n").split(`"${legacy}"`).length - 1;
         if (uses > 0) offenders.push(`${entry}: ${legacy} x${uses}`);
       }
     }
