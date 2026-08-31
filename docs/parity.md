@@ -16,6 +16,10 @@ npm run test:ui:layout        # Playwright, desktop and mobile, fake Pikafish in
 npm run test:prod:smoke       # loads the built dist/ in a browser; needs build:react first
 ```
 
+**Run it on Node 20.** CI and the deploy both pin 20, and a developer machine
+is often several majors ahead; a green run on 26 is not evidence about 20. With
+nvm: `export PATH="$HOME/.nvm/versions/node/v20.19.5/bin:$PATH"`.
+
 **Check the exit code, not the output.** `npm run verify | grep -q ...` keys off
 grep's status, not the gate's; that mistake put a commit over a failing
 typecheck during this work. Run the gate, then read `$?`.
