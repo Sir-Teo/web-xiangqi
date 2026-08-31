@@ -2174,6 +2174,35 @@ function App() {
     resetGame();
   }, [resetGame]);
 
+  /**
+   * Keep this position and start playing it against the engine.
+   *
+   * Switching to a Play mode goes through `applyMode`, which resets the board --
+   * so the one thing you most want to do after a review found your mistake was
+   * the one thing you could not do. You could see that move 15 was a blunder and
+   * be told what was better, and then had no way to try it.
+   *
+   * You take the side to move, because the position is being handed to you at
+   * the moment it is your turn. That is also what makes it safe: the engine does
+   * not move first, so nothing happens until you play something.
+   *
+   * The line up to here is kept rather than the whole game -- playing on from
+   * move 15 of a 40-move game means the moves after 15 did not happen.
+   */
+  const playFromHere = useCallback(() => {
+    stopAnalysis();
+    handleCancelReview();
+    resetReview();
+    setAiMoveError(null);
+    setPaused(false);
+    // The mode names the *engine's* side, so the human gets the other one.
+    setGameMode(sideToMove === 'w' ? 'PvAI-Black' : 'PvAI-Red');
+    setWorkspaceMode('play');
+    loadMoves(currentLineMoves, rootFen);
+    setGraphLoadSweepToken((token) => token + 1);
+    setMobileView('board');
+  }, [currentLineMoves, handleCancelReview, loadMoves, resetReview, rootFen, sideToMove, stopAnalysis]);
+
   const openLibraryPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
     setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
@@ -2463,6 +2492,9 @@ function App() {
       : 'Even';
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves;
   const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves;
+  // A finished game has nothing to play on from, and the starting position is
+  // already what "New game" gives you.
+  const canPlayFromHere = !gameResult && (currentMoveIndex >= 0 || rootFen !== START_POSITION_FEN);
   const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
 
 
@@ -3367,6 +3399,14 @@ function App() {
       disabled: !deepDiveActive && !canDeepDive,
       run: () => { if (deepDiveActive) stopSearch(); else runDeepDive(); },
     },
+    {
+      id: 'play-from-here',
+      label: 'Play from this position',
+      hint: canPlayFromHere ? 'You take the side to move' : 'Play a move or set up a position first',
+      keywords: ['practice', 'try', 'again', 'continue', 'engine', 'opponent', 'retry'],
+      disabled: !canPlayFromHere,
+      run: playFromHere,
+    },
     { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
       id: 'copy-fen',
@@ -3397,7 +3437,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canExportCurrentLine, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
+  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
@@ -5401,6 +5441,22 @@ function App() {
               >
                 {exportFailureKey === 'copy-share' ? <><IconX /> Copy Failed</> : copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
               </button>
+              {/* Next to Review Game on purpose: the review is what tells you a
+                  move was a mistake, and this is what lets you try the position
+                  again. Analysis workspace only -- in Play you are already
+                  playing the position. */}
+              {engineEnabled && canPlayFromHere && (
+                <button
+                  type="button"
+                  className="gc-btn"
+                  onClick={playFromHere}
+                  title={`Keep this position and play on against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                  aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                  data-testid="play-from-here-btn"
+                >
+                  <IconPlay aria-hidden="true" focusable="false" /> Play From Here
+                </button>
+              )}
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button
                   type="button"
