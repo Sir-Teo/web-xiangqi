@@ -11,6 +11,8 @@ import {
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/searchTerms';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { pgnDownloadFilename } from '../../utils/pgnFilename';
+import { resultLabel } from '../../utils/savedGameLabels';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
@@ -42,12 +44,6 @@ function formatDate(ts: number): string {
   });
 }
 
-function resultLabel(result: HistoricalGame['result'] | SavedGame['result']): string {
-  if (result === 'red') return 'Red wins';
-  if (result === 'black') return 'Black wins';
-  if (result === 'ongoing') return 'Ongoing';
-  return 'Draw';
-}
 
 function savedResultToGameResult(result: SavedGame['result']) {
   if (result === 'red') return 'red-wins';
@@ -57,13 +53,7 @@ function savedResultToGameResult(result: SavedGame['result']) {
 }
 
 function makeSavedGamePgnFilename(game: SavedGame) {
-  const date = new Date(game.savedAt).toISOString().slice(0, 10);
-  const slug = String(game.label || game.opening || 'saved-game')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'saved-game';
-  return `web-xiangqi-${date}-${slug}.pgn`;
+  return pgnDownloadFilename(game.label || game.opening, new Date(game.savedAt), 'saved-game');
 }
 
 function countStudyLines(nodes: SavedGame['moveTree']): number {

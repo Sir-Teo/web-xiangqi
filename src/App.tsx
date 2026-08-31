@@ -22,6 +22,7 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
+import { pgnDownloadFilename } from './utils/pgnFilename';
 import {
   DEFAULT_PANEL_WIDTH,
   PANEL_KEYBOARD_STEP,
@@ -47,7 +48,7 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
-import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile, formatPgnDate } from './utils/gameExport';
+import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import {
   NOTATION_STYLES,
@@ -267,17 +268,6 @@ const qaForcePanelError = import.meta.env.DEV
 const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
-function makePgnDownloadFilename(opening?: string): string {
-  // The player's date, matching the Date tag inside the file. UTC would name a
-  // file after tomorrow for anyone exporting in the evening west of Greenwich.
-  const date = formatPgnDate().replace(/\./g, '-');
-  const slug = String(opening || 'game')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'game';
-  return `web-xiangqi-${date}-${slug}.pgn`;
-}
 
 function isGameMode(value: unknown): value is GameMode {
   return value === 'PvP' || value === 'PvAI-Black' || value === 'PvAI-Red' || value === 'AIvAI';
@@ -2763,7 +2753,7 @@ function App() {
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = downloadTextFile(
-      makePgnDownloadFilename(detectedOpening?.name),
+      pgnDownloadFilename(detectedOpening?.name),
       pgn,
       'application/x-chess-pgn;charset=utf-8'
     );
