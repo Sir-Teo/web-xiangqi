@@ -4013,6 +4013,26 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
   if (/first game/i.test(notice.label) || !notice.label.includes("R5=9")) {
     throw new Error(`A partly-read record was announced as "${notice.label}"`);
   }
+
+  // And the announcement has to come from outside the top bar, because that
+  // bar is display:none below 900px -- which removes it from the
+  // accessibility tree, so a phone was told nothing at all.
+  const announced = await page.evaluate(() => {
+    const live = document.querySelector('[data-testid="notice-announcement"]');
+    if (!live) return { missing: true };
+    let node = live;
+    while (node) {
+      if (getComputedStyle(node).display === "none") return { hidden: true };
+      node = node.parentElement;
+    }
+    return { text: (live.textContent || "").trim() };
+  });
+  if (announced.missing || announced.hidden) {
+    throw new Error("The notice announcement is not in the accessibility tree.");
+  }
+  if (!announced.text.includes("R5=9")) {
+    throw new Error(`The notice was announced as "${announced.text}"`);
+  }
   const plies = await page.evaluate(
     () => (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null
   );

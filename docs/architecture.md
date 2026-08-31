@@ -1115,6 +1115,37 @@ text. A floor is only safe once the overflow it creates has somewhere to go.
 **Wanted before changing it: agreement on what the minimum board is, and on
 whether the board stage may scroll.**
 
+## A phone is told nothing when an import goes wrong (open question)
+
+Three messages share the top bar: "Shared link not loaded", "Imported first
+game", and "Stopped at <move>" when a record could only be read partway. All
+three say the same kind of thing -- *what you are looking at is not what you
+asked for* -- and all three are the ones a reader most needs.
+
+`@media (max-width: 900px)` sets `.top-engine-state { display: none }`, and the
+whole `section.panel.top` is hidden there too. Hiding the engine's running
+state on a phone is a reasonable trade for the room. Hiding these is not, and
+`display: none` also removes them from the accessibility tree, so a phone was
+given no account of them at all -- nothing seen, nothing announced.
+
+The announcement half is fixed and needs no layout decision: one `aria-live`
+region sits outside that bar, at app-shell level, and carries whichever notice
+is current at every width. The chips in the bar are now visual only, or desktop
+would announce each notice twice.
+
+What is left is a **decision about the phone layout**, which is why it is here
+rather than done:
+
+- the top bar cannot simply be un-hidden -- its parent section is what is
+  hidden, and it holds the workspace switch and the engine state as well;
+- the bottom status row is visible on a phone but already carries the engine
+  line, a CHECK badge and the FEN with its copy button;
+- a floating toast would be a new pattern for this app, which has none.
+
+Any of the three is defensible and they look different to use. Until one is
+picked, a sighted phone user importing a truncated record sees the moves that
+loaded and no warning.
+
 ## The tab order is a budget
 
 Every focusable thing is a key press between someone and the control they want,

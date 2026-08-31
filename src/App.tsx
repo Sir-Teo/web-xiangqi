@@ -3741,6 +3741,27 @@ function App() {
     >
       <h1 className="sr-only">Web Xiangqi</h1>
 
+      {/*
+        The notices live in the top bar, and the whole top bar is `display:
+        none` below 900px -- which takes them out of the accessibility tree
+        as well, so a phone got no account of them at all, seen or heard.
+        They are exactly the messages that must not be missed: a shared link
+        that did not load, a paste whose second game was left behind, a record
+        that stopped partway.
+
+        This region is outside that bar and is the only thing that announces
+        them, at every width; the chips themselves are visual. A phone still
+        shows nothing, which is an open question in docs/architecture.md --
+        this is the half that needs no layout decision.
+      */}
+      {/* `aria-live` without `role="status"` on purpose: the board's own
+          announcer is found by `.sr-only[role="status"]`, and a second match
+          for that selector silently becomes the one a query returns. A live
+          region needs only the attribute. */}
+      <div className="sr-only" aria-live="polite" data-testid="notice-announcement">
+        {importNotice?.label ?? shareLinkNotice?.text ?? ''}
+      </div>
+
       {/* Nineteen controls stand between the start of the page and the board:
           the toolbar, the pane resizer, the panel tabs, the graph navigator and
           the opening-book buttons. None of them is waste -- they are all things
@@ -3797,7 +3818,6 @@ function App() {
             {shareLinkNotice ? (
               <div
                 className={`top-engine-state top-engine-state-${shareLinkNotice.tone}`}
-                role="status"
                 data-testid="share-link-warning"
               >
                 <span className={`status-dot ${shareLinkNotice.tone}`} />
@@ -3807,7 +3827,6 @@ function App() {
             {importNotice ? (
               <div
                 className="top-engine-state top-engine-state-warning"
-                role="status"
                 data-testid="import-notice"
                 /* This slot is capped at 192px, which is about 25 characters
                    of the mono face it uses, so a sentence here is clipped
