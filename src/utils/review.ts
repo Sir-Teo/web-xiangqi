@@ -582,6 +582,21 @@ export function computeReviewArtifacts(
 
         const overrideEval = getEvalOverride(nodeId, evalOverrides);
         const currentEval = typeof overrideEval === 'number' ? overrideEval : record.evalScore;
+        /**
+         * The `: 0` here is unreachable, as it was in the move tree and in the
+         * board's last-move arrow, where it left the first move of every game
+         * ungraded: a root id is a truthy string, so the lookup always runs and
+         * the root holds no record.
+         *
+         * It does not bite here, and the reason is worth knowing before anyone
+         * "fixes" it. A review queues `[rootNodeId, ...activeLineNodeIds]`, so
+         * the root position is searched first and its score arrives as an
+         * override keyed by the root's id. The first move therefore has a real
+         * parent evaluation -- the engine's opinion of the start, not an
+         * assumed zero -- which is better than what the other two sites can do.
+         * `test-review-calibration.cjs` asserts the buckets add up to the whole
+         * game, so a first move dropped here would fail it.
+         */
         const parentOverride = node.parentId ? getEvalOverride(node.parentId, evalOverrides) : undefined;
         const parentEval = node.parentId
             ? (typeof parentOverride === 'number' ? parentOverride : treeNodes[node.parentId]?.record?.evalScore)
