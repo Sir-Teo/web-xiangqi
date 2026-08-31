@@ -1248,10 +1248,17 @@ async function assertPlayFromHereKeepsThePosition(page) {
 /**
  * The ply number a move gets when a player plays it, rather than loads it.
  *
- * `record.ply` is not decoration. `getReviewSideForRecord` decides whose move
- * it was with `record.ply % 2 === 1 ? 'red' : 'black'`, so an off-by-one here
- * hands every one of Red's mistakes to Black in Game Review and back again. It
- * also numbers the move list, the breadcrumb chips, and the eval graph.
+ * `record.ply` is not decoration. It numbers the move list, the breadcrumb
+ * chips and the eval graph, and it is the index `getMovePhaseForRecord` reads
+ * to decide whether a move belongs to the opening, the middlegame or the
+ * endgame -- which the review then reports against.
+ *
+ * It does *not* decide which side played the move, though this comment said so
+ * when it was written. `getReviewSideForRecord` reads `record.piece` first and
+ * takes the side from its case; the `ply % 2` line below it is a fallback for a
+ * record with no piece, which the loader and the interactive path both always
+ * set. An off-by-one here misnumbers and misphases a game. It does not swap the
+ * players over.
  *
  * Nothing covered it, because every other test that needs a game loads one
  * through `?moves=`, and the loader numbers plies on a line of its own.
@@ -1305,7 +1312,8 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
   if (plies.join(", ") !== "Ply 1, Ply 2") {
     throw new Error(
       `Two played moves were numbered "${plies.join(", ")}" rather than "Ply 1, Ply 2". ` +
-      `Ply parity is what decides whose move it was, so this misattributes the game.`
+      `Ply is what numbers the game and sorts its moves into opening, middlegame ` +
+      `and endgame, so this shifts both by one.`
     );
   }
 }
