@@ -1012,6 +1012,71 @@ async function assertLibraryExplorerCountsOwnGames(page) {
   await page.evaluate(() => { try { localStorage.removeItem("xiangqi:library:v1"); } catch (e) { /* ignore */ } });
 }
 
+/**
+ * "Play From Here" has to start from *here*.
+ *
+ * It hands a position from the analysis board to a game against the engine, and
+ * the failure that matters is silent: starting from the opening instead, or
+ * handing the reader the wrong colour. Either produces a perfectly working game
+ * that is not the one they asked for, and the board looks plausible in both
+ * cases.
+ *
+ * Five plies in it is Black to move, so the reader takes Black and the engine
+ * has Red -- "play on from this position" means continuing as whoever is on
+ * move, not always as Red.
+ */
+async function assertPlayFromHereKeepsThePosition(page) {
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0"];
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${MOVES.join("+")}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(700);
+
+  const read = () => page.evaluate(() => ({
+    workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() ?? null,
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? null,
+    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] ?? null,
+    mode: (document.body.innerText.match(/Local board|You play (?:Red|Black)|AI exhibition/) || [])[0] ?? null,
+  }));
+
+  const before = await read();
+  if (!before.fen || !before.fen.includes(" b ")) {
+    throw new Error(`Expected Black to move after five plies, got ${before.fen}`);
+  }
+
+  const button = page.locator("button:visible", { hasText: /Play From Here/i }).first();
+  if (!(await button.count())) throw new Error("No Play From Here control");
+  await button.click();
+  await page.waitForTimeout(1500);
+
+  const after = await read();
+  if (after.workspace !== "Play") throw new Error(`Play From Here left the workspace on ${after.workspace}`);
+  // Colour first: handing the reader the wrong one puts the engine on move, so
+  // it plays immediately and the position check below fires too -- with a
+  // message about the position, which is the symptom rather than the cause.
+  if (after.mode !== "You play Black") {
+    throw new Error(`Black is on move, so the reader should take Black; the mode reads "${after.mode}"`);
+  }
+  if (after.fen !== before.fen) {
+    throw new Error(`Play From Here changed the position.\n  was ${before.fen}\n  now ${after.fen}`);
+  }
+  if (after.plies !== before.plies) {
+    throw new Error(`Play From Here changed the move count: ${before.plies} -> ${after.plies}`);
+  }
+
+  // Back to Analysis: the workspace is shared with everything after this.
+  await page.locator(".top-mode-pills button", { hasText: /^Analysis$/ }).first().click().catch(() => {});
+  await page.waitForTimeout(600);
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -7122,6 +7187,7 @@ async function main() {
     await assertAdvertisedMoveShortcuts(page);
     await assertNotationStylesRenderDifferently(page);
     await assertLibraryExplorerCountsOwnGames(page);
+    await assertPlayFromHereKeepsThePosition(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
