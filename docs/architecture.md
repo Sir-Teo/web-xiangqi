@@ -187,6 +187,41 @@ value to limit fingerprinting, and Chromium 148 was observed here reporting
 one browser and the high tier under another — sizing the engine by browser
 rather than by machine. Every browser agrees that 4GB is constrained.
 
+### A four-core desktop is graded as a phone (open question)
+
+`detectDeviceTier` sends anything with `hardwareConcurrency <= 4` to the `low`
+tier, which means the single-threaded core, one thread, and a 16–24MB hash. That
+clause fires on *machine shape alone*, so it catches a four-core laptop with a
+mouse and a 1440px window as surely as it catches a phone — the `mobileLike`
+flag beside it does not have to be true.
+
+What it costs, measured here at low-tier settings (24MB hash, depth 16, median
+of three):
+
+| threads | 1 | 2 | 3 |
+| --- | --- | --- | --- |
+| nodes/second | 430k | 858k | 1.32M |
+
+Two threads is twice the search, and the budget is `movetime`, so twice the
+search is what a player actually gets. A four-core machine promoted to `mid`
+would take `threadsForCores(4, 2, 6)` = 2 threads and leave two for the browser.
+
+It is left alone for now because the gain is measured and the cost is not. The
+`mid` tier loads the *threaded* core, which prewarms a twelve-worker pthread
+pool; boot cost for that was measured on an eighteen-core machine (333ms at 4
+threads, 378ms at 8) and nothing here has measured it on a genuinely four-core
+one, which is the only machine the change affects. Simulating it by overriding
+`hardwareConcurrency` does not answer the question — it changes what the app
+asks for, not what the machine can give.
+
+Two guards already narrow the blast radius, and would still apply: a device
+reporting 4GB or less stays `low` on the memory test, and a coarse pointer or a
+viewport under 700px stays `low` on `mobileLike`. So the population in question
+is specifically three- and four-core machines with a fine pointer, a large
+window, and more than 4GB — desktops and laptops, not phones. **Wanted before
+changing it: engine-ready time and nodes/second on a real four-core machine,
+threaded core, and confirmation the UI stays responsive while the search runs.**
+
 ### The thread ceiling is the build, not the device policy
 
 **Read this before raising the thread count.** `WASM_PTHREAD_POOL_SIZE` in
