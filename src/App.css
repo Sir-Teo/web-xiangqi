@@ -5430,6 +5430,17 @@ summary:active {
    Sizing by height rather than width is what keeps the board from overflowing
    its row and sliding up behind the top toolbar, which it did by 38px at
    1440x600 before this term existed. */
+
+/* The board's ceiling, shared. `.xiangqi-board-container` enforces it on the
+   board and the wrap has to honour the same box, because the eval bar is
+   positioned against the *wrap* on the stated assumption that the wrap is
+   "exactly board-shaped". It stops being board-shaped the moment the board hits
+   this ceiling: the wrap keeps `height: 100%` of its row while the board cannot
+   grow past the cap, and the bar then runs on past the bottom of the board --
+   184px at 2560x1440, and 495px when the cap was 580. Bounding the wrap by the
+   same box keeps the assumption true. */
+:root { --board-max-width: 860px; }
+
 .board-workspace .board-wrap {
   /* Sizing from height is right, but 100vh minus a fixed 301px only models the
      chrome at one text size. Raise the text and the toolbars and dock grow while
@@ -5446,6 +5457,10 @@ summary:active {
   aspect-ratio: 9 / 10;
   width: auto;
   height: 100%;
+  max-width: var(--board-max-width);
+  /* 9:10, so the widest board implies its own tallest. Without this the wrap
+     stays as tall as its row after the width has stopped growing. */
+  max-height: calc(var(--board-max-width) * 10 / 9);
   /* No width floor here. A floor is a width the height has not agreed to: the
      row derives width from height via the aspect ratio, so anything wider makes
      the board taller than its row, and .board-stage hides the difference. At

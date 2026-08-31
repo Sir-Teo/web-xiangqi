@@ -18,7 +18,7 @@
 .xiangqi-board-container {
     container-type: inline-size;
     width: 100%;
-    max-width: 860px;
+    max-width: var(--board-max-width, 860px);
     aspect-ratio: 9 / 10;
     margin: 0 auto;
     container-type: inline-size;
