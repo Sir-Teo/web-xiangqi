@@ -6142,6 +6142,37 @@ summary:active {
   background: rgba(138, 138, 148, 0.85);
 }
 
+/* The bar says what it has to say with a proportion, and under forced colours
+   it was saying nothing at all.
+
+   `.eval-bar-red` is drawn as a `linear-gradient`, which is a background
+   *image*; forced colours strip background images and there is no
+   background-colour underneath, so red's share rendered fully transparent and
+   the track showed through. Both halves became one flat rectangle -- measured
+   as `rgba(255,255,255,0)` over a white track on a light high-contrast palette
+   and `rgba(0,0,0,0)` over a black one on a dark one. The midline went the same
+   way: white at 85% over white, black over black.
+
+   The fill becomes solid CanvasText so the boundary between the two shares is
+   the highest-contrast edge the palette has. The midline has the harder job of
+   being visible against *both* sides of that boundary, which no single colour
+   manages, so it is a Canvas stripe with CanvasText edges: the pale centre
+   reads against the filled half and the dark edges read against the empty one. */
+@media (forced-colors: active) {
+  .eval-bar-red {
+    background: CanvasText;
+  }
+
+  .eval-bar-midline {
+    box-sizing: border-box;
+    top: calc(50% - 1px);
+    height: 3px;
+    background: Canvas;
+    border-top: 1px solid CanvasText;
+    border-bottom: 1px solid CanvasText;
+  }
+}
+
 .eval-bar-readout {
   font-size: 0.62rem;
   font-variant-numeric: tabular-nums;
