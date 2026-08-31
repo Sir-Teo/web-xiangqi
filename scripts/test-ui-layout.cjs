@@ -403,6 +403,83 @@ async function assertNoDanglingAriaControls(page) {
   }
 }
 
+/**
+ * A tall display, where the board's ceiling is what it reaches rather than the
+ * room it has -- and where the eval bar stops matching it.
+ *
+ * Both defects here were invisible to this suite because it only ever measured
+ * a 1024x720 window, and below roughly 1050px of height the board's width is
+ * derived from the height of its row and never touches the ceiling at all.
+ *
+ * The ceiling was 580px, which every display 1050 tall or more ran into: six
+ * separate viewports measured a board exactly 580 wide with the row around it
+ * half empty. And because the eval bar is positioned against `.board-wrap` on
+ * the assumption that the wrap stays "exactly board-shaped", the moment the
+ * board stopped growing and the wrap did not, the bar carried on past the
+ * bottom of the board -- 184px at 2560x1440, 495px at the old ceiling.
+ *
+ * So this asserts the two together: the board uses the height it is given, and
+ * the bar is exactly as tall as the board.
+ */
+async function assertLargeDisplayBoardAndEvalBar(page) {
+  for (const viewport of [{ width: 1920, height: 1200 }, { width: 2560, height: 1440 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(600);
+
+    const measured = await page.evaluate(() => {
+      const board = document.querySelector(".xiangqi-board").getBoundingClientRect();
+      const barEl = document.querySelector(".eval-bar");
+      const bar = barEl ? barEl.getBoundingClientRect() : null;
+      const stage = document.querySelector(".board-stage").getBoundingClientRect();
+      return {
+        boardWidth: Math.round(board.width),
+        boardHeight: Math.round(board.height),
+        ratio: board.width / board.height,
+        insideStage: board.left >= stage.left - 1 && board.right <= stage.right + 1,
+        fitsViewport: board.bottom <= window.innerHeight + 1,
+        hasBar: Boolean(bar),
+        barTopDelta: bar ? Math.round(bar.top - board.top) : null,
+        barBottomDelta: bar ? Math.round(bar.bottom - board.bottom) : null,
+      };
+    });
+
+    const where = `${viewport.width}x${viewport.height}`;
+
+    // The old ceiling. Anything at or under it here means the board is being
+    // held back rather than sized by the room it has.
+    if (measured.boardWidth <= 580) {
+      throw new Error(
+        `Board is ${measured.boardWidth}px wide at ${where}, which is the old 580px ceiling or ` +
+        `below it. See --board-max-width in App.css.`
+      );
+    }
+    if (Math.abs(measured.ratio - 0.9) > 0.01) {
+      throw new Error(`Board is ${measured.ratio.toFixed(3)} rather than 9:10 at ${where}`);
+    }
+    if (!measured.insideStage || !measured.fitsViewport) {
+      throw new Error(
+        `Board escaped its row at ${where}: ${JSON.stringify(measured)}. An aspect-ratio box that ` +
+        `outgrows its row slides up behind the top toolbar.`
+      );
+    }
+    if (!measured.hasBar) {
+      throw new Error(`No eval bar at ${where}, so its alignment went unchecked`);
+    }
+    if (measured.barTopDelta !== 0 || measured.barBottomDelta !== 0) {
+      throw new Error(
+        `Eval bar does not match the board at ${where}: top off by ${measured.barTopDelta}px, ` +
+        `bottom off by ${measured.barBottomDelta}px. The bar is positioned against .board-wrap, ` +
+        `which has to stay bounded by the same box as the board.`
+      );
+    }
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6505,6 +6582,7 @@ async function main() {
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
+    await assertLargeDisplayBoardAndEvalBar(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
