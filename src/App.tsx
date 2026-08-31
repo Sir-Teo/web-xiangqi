@@ -4793,6 +4793,25 @@ function App() {
                     <span>Play from here</span>
                   </button>
                 ) : null}
+                {/* Copying is the useful half on a phone: an exported file lands
+                    in the Files app, while the clipboard is what a game gets
+                    pasted into. Desktop has had both; here there was only the
+                    download. */}
+                {showMobilePgnAction ? (
+                  <button
+                    className={`mobile-action-menu-btn ${copiedToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
+                    type="button"
+                    onClick={handleCopyPgn}
+                    disabled={!canExportCurrentLine}
+                    role="menuitem"
+                    title={exportFailureKey === 'copy-pgn' ? 'Could not copy PGN to clipboard' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
+                    aria-label={exportFailureKey === 'copy-pgn' ? 'PGN copy failed' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
+                    data-testid="mobile-copy-pgn-btn"
+                  >
+                    {exportFailureKey === 'copy-pgn' ? <IconX /> : copiedToast ? <IconCheck /> : <IconCopy />}
+                    <span>{exportFailureKey === 'copy-pgn' ? 'Copy failed' : copiedToast ? 'Copied' : 'Copy PGN'}</span>
+                  </button>
+                ) : null}
                 {showMobilePgnAction ? (
                   <button
                     className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
