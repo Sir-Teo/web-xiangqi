@@ -3338,11 +3338,18 @@ function App() {
     }
     setSavedToast(Boolean(saved));
     setSaveFailedToast(!saved);
+    // A failure outlasts a success on purpose. "Saved" is a confirmation of
+    // something the reader already expected and can be brief; "Save Failed"
+    // says the game they just tried to keep is not anywhere, and it is the only
+    // place that is said. At the shared 1800ms it was gone before someone who
+    // clicked and glanced away could see it, leaving them believing the save
+    // had worked -- measured with local storage filled to its quota, where the
+    // write really does fail and the library really does stay empty.
     savedToastTimerRef.current = window.setTimeout(() => {
       savedToastTimerRef.current = null;
       setSavedToast(false);
       setSaveFailedToast(false);
-    }, 1800);
+    }, saved ? 1800 : 8000);
   }, [currentGameSnapshot, saveGameToLibrary]);
 
 
