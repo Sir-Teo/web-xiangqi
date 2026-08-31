@@ -212,9 +212,19 @@ export const WatchControls = memo(function WatchControls({
 
             {/* ── Move scrubber ── */}
             <div className="wc-timeline">
-                <div className="wc-meta">
-                    <span>Move</span>
-                    <strong aria-live="polite">{timelineText}</strong>
+                {/* The live region has to cover the label as well as the
+                    number. On the <strong> alone it announced a bare "4 / 4"
+                    after every move -- read aloud as "four slash four", with
+                    nothing to say what was being counted. `aria-atomic` is what
+                    makes the whole thing read rather than only the part that
+                    changed. */}
+                <div className="wc-meta" aria-live="polite" aria-atomic="true">
+                    {/* An explicit space: the two are spaced by the flex gap,
+                        which is not text, so without it the region reads as
+                        "Move4 / 4". A whitespace-only node is not rendered as a
+                        flex item, so the layout is unchanged. */}
+                    <span>Move</span>{' '}
+                    <strong>{timelineText}</strong>
                 </div>
                 <input
                     type="range"
