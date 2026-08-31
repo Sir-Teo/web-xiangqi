@@ -329,6 +329,22 @@ isolated, so the dev server and every check here register nothing. Hosting that
 sends the headers itself (Netlify, Cloudflare Pages, a Worker) still skips the
 worker and the reload with it.
 
+**The reload is cheap, and it is not free.** It fires before the engine is
+fetched: on a first visit the pre-reload document takes two JavaScript responses
+and no engine assets at all, so the 710KB core and the 53MB NNUE are downloaded
+exactly once, after it. A shared link survives it intact -- `?moves=` is
+preserved across the reload, the position reloads to the same ply, and no
+restore prompt appears.
+
+What it does cost is one extra page load for devices that gain nothing from
+isolation. The `low` tier loads the single-threaded core whatever the headers
+say, so a phone -- and a four-core desktop, per the tiering question above --
+pays a reload for a capability it will not use. Skipping it would mean deciding
+the tier inside `index.html`, before React exists, which duplicates
+`detectDeviceTier` into a second place; the pool-size bug is what four copies of
+one constant looks like when they drift. Two JavaScript responses is the
+cheaper mistake.
+
 **Reload on `controllerchange`, never on `navigator.serviceWorker.ready`.** The
 two look equivalent and differ exactly where it matters. `ready` resolves as
 soon as *a* registration has an active worker — and a returning visitor still
