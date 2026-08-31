@@ -924,21 +924,34 @@ async function assertNotationStylesRenderDifferently(page) {
     ["UCI", "H2"],
   ];
 
+  // Each step waits for the thing it is waiting for: the settings dialog to be
+  // there before clicking in it, and the move list to actually carry the new
+  // notation afterwards. Fixed delays here were the most exposed part of this
+  // file -- seven of them in one check -- and a slower machine is all it takes.
+  const openSettings = async () => {
+    await page.getByRole("button", { name: /Open settings/i }).click();
+    await page.waitForSelector('button[aria-label*="notation" i]', { timeout: 5000 });
+  };
+
   const seen = [];
   for (const [style, marker] of expected) {
-    await page.getByRole("button", { name: /Open settings/i }).click();
-    await page.waitForTimeout(500);
+    await openSettings();
     const choice = page.locator(`button[aria-label*="${style} notation" i]`).first();
     if (!(await choice.count())) throw new Error(`No setting offering ${style} notation`);
     await choice.click();
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(700);
 
-    const row = await firstRow();
-    if (!row.includes(marker)) {
-      throw new Error(`With ${style} chosen the move list reads "${row}", which does not contain ${marker}`);
+    const arrived = await page
+      .waitForFunction((want) => {
+        const row = document.querySelector(".mtree-row");
+        return Boolean(row) && row.innerText.includes(want);
+      }, marker, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!arrived) {
+      throw new Error(`With ${style} chosen the move list reads "${await firstRow()}", which does not contain ${marker}`);
     }
-    seen.push(row);
+    seen.push(await firstRow());
   }
 
   if (new Set(seen).size !== seen.length) {
@@ -948,11 +961,13 @@ async function assertNotationStylesRenderDifferently(page) {
   // Put it back. Notation is a stored preference and this page is shared with
   // every assertion after it -- leaving UCI selected reached the opening-book
   // check as a move list it could not read.
-  await page.getByRole("button", { name: /Open settings/i }).click();
-  await page.waitForTimeout(500);
+  await openSettings();
   await page.locator('button[aria-label*="WXF notation" i]').first().click();
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(600);
+  await page
+    .waitForFunction(() => document.querySelector(".mtree-row")?.innerText.includes("C2=5") ?? false,
+      null, { timeout: 5000 })
+    .catch(() => {});
 }
 
 /**
@@ -1078,7 +1093,12 @@ async function assertPlayFromHereKeepsThePosition(page) {
   const button = page.locator("button:visible", { hasText: /Play From Here/i }).first();
   if (!(await button.count())) throw new Error("No Play From Here control");
   await button.click();
-  await page.waitForTimeout(1500);
+  await page
+    .waitForFunction(
+      () => document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() === "Play",
+      null, { timeout: 5000 },
+    )
+    .catch(() => {});
 
   const after = await read();
   if (after.workspace !== "Play") throw new Error(`Play From Here left the workspace on ${after.workspace}`);
