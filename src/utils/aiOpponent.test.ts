@@ -197,3 +197,87 @@ describe('the strength label and the opponent it describes', () => {
         for (let i = 1; i < depths.length; i += 1) expect(depths[i]).toBeGreaterThan(depths[i - 1]);
     });
 });
+
+describe('the promise the strength label makes', () => {
+    /**
+     * The suite above already pins that the strongest settings play the
+     * engine's move. What nothing pinned is the other direction: that the
+     * levels *advertised* as "best move only" are exactly the levels that
+     * behave that way.
+     *
+     * `describeAiStrength` writes that sentence into the settings from the
+     * multi-PV limit, and the behaviour comes from an early return keyed to
+     * the same limit. They agree today. A level whose limit is raised so its
+     * candidate lines can be shown would change the sentence and the
+     * behaviour together -- which is fine -- but a level given candidates
+     * while something upstream still forces the top one would be advertised
+     * as choosing and never choose.
+     *
+     * It is also the honest answer to a mutation sweep over this file.
+     * Handing Master a 500-centipawn blunder allowance, or giving Hard a
+     * beginner's weights, changes nothing observable: both return before
+     * either value is read. Those survivors are equivalent mutants rather
+     * than gaps, and the limit is what actually carries the promise.
+     */
+    /**
+     * Close together on purpose. A level that offers candidates still refuses
+     * ones far enough below the best -- Medium's allowance is 140 centipawns
+     * -- so alternatives written as blunders would be filtered out and every
+     * level would look like "best move only" for the wrong reason.
+     */
+    const OFFERED: AiCandidateLine[] = [
+        { score: 120, moves: ['h2e2'], multipv: 1, searchTag: null },
+        { score: 90, moves: ['b0c2'], multipv: 2, searchTag: null },
+        { score: 60, moves: ['a0a1'], multipv: 3, searchTag: null },
+        { score: 30, moves: ['i0i1'], multipv: 4, searchTag: null },
+        { score: 0, moves: ['e3e4'], multipv: 5, searchTag: null },
+    ];
+
+    const STRENGTHS: AiStrength[] = [1, 2, 3, 4, 5];
+
+    it('plays only the best move at every level that says so, however tempting the rest', () => {
+        for (const strength of STRENGTHS) {
+            if (!describeAiStrength(strength).includes('best move only')) continue;
+            // Every corner of the random draw, so a weighted pick over the
+            // offered lines could not agree by luck.
+            for (const draw of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 0.999]) {
+                const choice = chooseAiMoveFromPv({
+                    fallbackMove: 'h2e2',
+                    fallbackScore: 120,
+                    pvLines: OFFERED,
+                    searchTag: null,
+                    strength,
+                    random: () => draw,
+                });
+                expect(
+                    choice.move,
+                    `${AI_STRENGTH_LABELS[strength]} says "best move only" but played ${choice.move} at draw ${draw}`
+                ).toBe('h2e2');
+            }
+        }
+    });
+
+    it('says "best move only" for exactly the levels that behave that way', () => {
+        // The other direction: a level that always returns the best move but
+        // is advertised as choosing between candidates is the same defect
+        // wearing the other face.
+        for (const strength of STRENGTHS) {
+            const saysBestOnly = describeAiStrength(strength).includes('best move only');
+            const drawn = new Set(
+                [0, 0.2, 0.4, 0.6, 0.8, 0.99].map((draw) => chooseAiMoveFromPv({
+                    fallbackMove: 'h2e2',
+                    fallbackScore: 120,
+                    pvLines: OFFERED,
+                    searchTag: null,
+                    strength,
+                    random: () => draw,
+                }).move)
+            );
+            const onlyEverBest = drawn.size === 1 && drawn.has('h2e2');
+            expect(
+                onlyEverBest,
+                `${AI_STRENGTH_LABELS[strength]} is described as "${describeAiStrength(strength)}" but played ${[...drawn].join(', ')}`
+            ).toBe(saysBestOnly);
+        }
+    });
+});
