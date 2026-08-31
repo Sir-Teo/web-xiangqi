@@ -61,6 +61,19 @@ const EXPECTED = [
   { name: "arbitrary legal moves", moves: WEAK, maxAccuracy: 30, minAvgLoss: 250, minBlunders: 5 },
 ];
 
+/**
+ * vite colours its startup banner when it believes it is writing to a terminal,
+ * and a CI runner makes it believe that. The banner then reads
+ * `\x1b[1mLocal\x1b[22m:   \x1b[36mhttp://...`, so a pattern looking for
+ * `Local:` followed by `http` never matches and the server is declared dead
+ * thirty seconds after it started fine. Locally vite sees a pipe, drops the
+ * colour, and the same pattern matches every time -- which is why this passed
+ * here for weeks and failed the first time it ran on a runner.
+ */
+function stripAnsi(text) {
+  return String(text).replace(/\u001B\[[0-9;]*m/g, "");
+}
+
 function fail(message) {
   console.error(`Review calibration failed: ${message}`);
   process.exitCode = 1;
@@ -127,11 +140,11 @@ async function main() {
   let browser;
   try {
     const deadline = Date.now() + 30000;
-    while (Date.now() < deadline && !/Local:\s+http/.test(stdout)) {
+    while (Date.now() < deadline && !/Local:\s+http/.test(stripAnsi(stdout))) {
       if (/Port \d+ is already in use/.test(stderr)) throw new Error(`port ${PORT} is already in use`);
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
-    if (!/Local:\s+http/.test(stdout)) throw new Error(`server did not start:\n${stdout}\n${stderr}`);
+    if (!/Local:\s+http/.test(stripAnsi(stdout))) throw new Error(`server did not start:\n${stdout}\n${stderr}`);
 
     browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox"] });
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

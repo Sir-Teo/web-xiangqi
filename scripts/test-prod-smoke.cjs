@@ -66,10 +66,23 @@ function fail(message) {
   throw new Error(message);
 }
 
+/**
+ * vite colours its startup banner when it believes it is writing to a terminal,
+ * and a CI runner makes it believe that. The banner then reads
+ * `\x1b[1mLocal\x1b[22m:   \x1b[36mhttp://...`, so a pattern looking for
+ * `Local:` followed by `http` never matches and the server is declared dead
+ * thirty seconds after it started fine. Locally vite sees a pipe, drops the
+ * colour, and the same pattern matches every time -- which is why this passed
+ * here for weeks and failed the first time it ran on a runner.
+ */
+function stripAnsi(text) {
+  return String(text).replace(/\u001B\[[0-9;]*m/g, "");
+}
+
 async function waitForServer(stdoutRef, stderrRef, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (/Local:\s+http/.test(stdoutRef.value)) return;
+    if (/Local:\s+http/.test(stripAnsi(stdoutRef.value))) return;
     if (/Port \d+ is already in use/.test(stderrRef.value)) {
       throw new Error(
         `port ${PORT} is already in use — a previous preview server is still running. ` +
