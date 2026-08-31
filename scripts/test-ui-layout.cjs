@@ -4997,6 +4997,73 @@ async function assertRootMoveVariationsVisible(page) {
   }
 }
 
+/**
+ * Replaying a move keeps the line you are reading, not the one you added last.
+ *
+ * `applyUciMoveAtNode` has a branch for playing a move that is already in the
+ * tree, and inside it a choice: if the line you are on continues with that very
+ * move, keep the rest of your line; otherwise follow the most recently explored
+ * branch. Collapsing that choice to "always follow the most recent branch"
+ * survived the whole suite.
+ *
+ * `assertReplayedMoveKeepsChosenContinuation` next door does not reach it,
+ * because there the line being kept and the most recent branch are the same
+ * thing, so both sides of the choice give the same answer.
+ *
+ * Telling them apart needs the reader sitting on the *older* branch: build two
+ * replies to the same move, go back to the first one, then replay the move
+ * leading into them. Keeping the line means the first reply is still ahead;
+ * following the newest branch means being moved silently onto the second.
+ */
+async function assertReplayingAMoveKeepsTheLineBeingRead(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(800);
+
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+  const play = async (fromFile, fromRank, toFile, toRank) => {
+    await page.click(square(fromFile, fromRank));
+    await page.waitForSelector(`${square(toFile, toRank)}[aria-label*="legal"]`, { timeout: 5000 });
+    await page.click(square(toFile, toRank));
+    await page.waitForTimeout(300);
+  };
+
+  await play(7, 2, 4, 2); // h2e2
+  await play(7, 9, 6, 7); // h9g7 -- the first reply, and the one to come back to
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.waitForTimeout(250);
+  await play(1, 9, 2, 7); // b9c7 -- a second reply, now the most recent branch
+
+  // Back onto the first reply, which is now the older of the two.
+  await page.click('[data-node-id="n2"]');
+  await page.waitForTimeout(300);
+  await page.locator('.watch-controls button[aria-label="Go to first position"]').click();
+  await page.waitForTimeout(250);
+
+  await play(7, 2, 4, 2); // replay h2e2, which is already in the tree
+  await page.locator('.watch-controls button[aria-label="Go to latest move"]').click();
+  await page.waitForTimeout(300);
+
+  const active = await page.evaluate(() => {
+    const node = document.querySelector('[data-testid="move-tree-active"]');
+    return {
+      nodeId: node?.getAttribute("data-node-id") || "",
+      label: (node?.getAttribute("aria-label") || "").trim(),
+    };
+  });
+
+  if (active.nodeId !== "n2") {
+    throw new Error(
+      `Replaying a move moved the reader off the line they were on: ended on ${active.nodeId || "nothing"} ` +
+      `(${active.label}) rather than the reply they had gone back to.`
+    );
+  }
+}
+
 async function assertReplayedMoveKeepsChosenContinuation(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -7730,6 +7797,7 @@ async function main() {
     await assertMoveLineImportErrorAccessibility(page);
     await assertRootMoveVariationsVisible(page);
     await assertReplayedMoveKeepsChosenContinuation(page);
+    await assertReplayingAMoveKeepsTheLineBeingRead(page);
     await assertMoveTreeRespectsReducedMotion(page);
     await assertPgnTreeVariationExport(page);
     await assertCurrentPgnDownload(page);
