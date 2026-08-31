@@ -93,43 +93,57 @@ const CORES_RESERVED_FOR_THE_REST_OF_THE_MACHINE = 2;
  * never returns to the event loop that would start the new worker. The engine
  * does not error -- it simply never answers `readyok`.
  *
- * Measured in the browser against the checked-in artifacts: 4 threads boots and
- * is ready in about three seconds; 5 sits on "Loading engine" indefinitely and
- * is still there when the 90-second ready timeout fires. The same artifacts run
- * 17 threads happily under Node, where the pool is not the constraint, which is
- * why this is easy to miss from a bench run.
- *
  * So the number here is *not* a judgement about how much of the machine to
- * take. `npm run bench:nps` on the shipped SIMD core, 18-core machine:
+ * take. It mirrors the build, and `ENGINE_THREAD_HEADROOM` below is what keeps
+ * an ask away from the edge of it.
  *
- *     threads   1     3     6      12     17
- *     nodes/s   464k  1.43M 2.98M  5.39M  7.49M
+ * The pool was 4, which cost most of the machine's search. Measured under Node
+ * on the rebuilt SIMD core, 18 cores, depth 20, 256MB hash:
  *
- * The engine scales close to linearly the whole way, so a desktop is getting a
- * fifth of the search it could. Raising this needs the build raised with it and
- * the artifacts rebuilt -- `WASM_PTHREAD_POOL_SIZE=12 npm run build`, which
- * needs emsdk -- and the two must move together. Anything asking for more
- * threads than the shipped core was built for hangs it.
+ *     threads   1     4      8      12
+ *     nodes/s   448k  1.80M  3.51M  3.28M
+ *
+ * Eight threads is roughly twice four, and twelve is slower than eight on this
+ * machine, so the ask stops at eight and the pool is built four above it.
+ *
+ * Raising this needs the build raised with it and the artifacts rebuilt --
+ * `WASM_PTHREAD_POOL_SIZE=<n> npm run build`, which needs emsdk -- and the two
+ * must move together. Anything asking for more threads than the shipped core
+ * was built for hangs it.
  */
-export const ENGINE_PTHREAD_POOL_SIZE = 4;
+export const ENGINE_PTHREAD_POOL_SIZE = 12;
 
-export const MID_TIER_MAX_THREADS = 3;
-export const HIGH_TIER_MAX_THREADS = 4;
+/**
+ * How much of the pool is never asked for.
+ *
+ * The pool is what the core can hand out; asking for all of it leaves nothing
+ * for a thread Pikafish wants for its own bookkeeping, and the failure mode is
+ * the silent hang above rather than an error. The old code let a tier reach
+ * the pool size exactly, which is why the ceiling and the pool were the same
+ * number and there was nowhere to be wrong by one.
+ */
+export const ENGINE_THREAD_HEADROOM = 4;
+
+/** The most threads any device may ask the shipped core for. */
+export const MAX_ENGINE_THREADS = ENGINE_PTHREAD_POOL_SIZE - ENGINE_THREAD_HEADROOM;
+
+export const MID_TIER_MAX_THREADS = 6;
+export const HIGH_TIER_MAX_THREADS = 8;
 
 /**
  * How many threads a machine with this many cores gets.
  *
  * Both tiers used to be a constant, so every desktop above the tier boundary
  * got 3 threads whether it had 9 cores or 64. The clamp to
- * `ENGINE_PTHREAD_POOL_SIZE` is here rather than at the call sites so that no
- * caller can raise a tier into the hang described above without also raising
- * the build.
+ * The clamp to `MAX_ENGINE_THREADS` is here rather than at the call sites so
+ * that no caller can raise a tier into the hang described above without also
+ * raising the build.
  */
 export function threadsForCores(hardwareConcurrency: number, min: number, max: number): number {
     const cores = Math.max(1, Math.trunc(finiteNumber(hardwareConcurrency, 1)));
     const usable = cores - CORES_RESERVED_FOR_THE_REST_OF_THE_MACHINE;
     const wanted = Math.max(min, Math.min(max, usable));
-    return Math.max(1, Math.min(ENGINE_PTHREAD_POOL_SIZE, wanted));
+    return Math.max(1, Math.min(MAX_ENGINE_THREADS, wanted));
 }
 
 export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile {

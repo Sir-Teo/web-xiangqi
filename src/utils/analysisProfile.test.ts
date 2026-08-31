@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
     ENGINE_PTHREAD_POOL_SIZE,
+    ENGINE_THREAD_HEADROOM,
+    HIGH_TIER_MAX_THREADS,
+    MAX_ENGINE_THREADS,
     detectDeviceTier,
     resolveEngineBootConfig,
     resolveLiveAnalysisPolicy,
@@ -73,8 +76,8 @@ describe('device tiering', () => {
 
 describe('engine boot configuration', () => {
     it('only asks for threads on a roomy desktop', () => {
-        expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP)).threads).toBe(4);
-        expect(resolveEngineBootConfig(detectDeviceTier(LAPTOP)).threads).toBe(3);
+        expect(resolveEngineBootConfig(detectDeviceTier(DESKTOP)).threads).toBe(8);
+        expect(resolveEngineBootConfig(detectDeviceTier(LAPTOP)).threads).toBe(6);
         expect(resolveEngineBootConfig(detectDeviceTier(PHONE)).threads).toBe(1);
     });
 
@@ -88,15 +91,24 @@ describe('engine boot configuration', () => {
     });
 
     it('never asks for more threads than the shipped core was built to hold', () => {
-        // Above ENGINE_PTHREAD_POOL_SIZE the engine blocks in pthread_create
-        // and never answers readyok -- measured in the browser at 5 threads
-        // against the checked-in artifacts. No device may reach that.
+        // Past the pool the engine blocks in pthread_create and never answers
+        // readyok -- it does not error, it just never becomes ready. No device
+        // may reach that, and none may reach the edge of it either: the ask
+        // stops ENGINE_THREAD_HEADROOM below the pool.
         const enormous = [16, 32, 64, 128, 1024];
         for (const hardwareConcurrency of enormous) {
             const config = resolveEngineBootConfig(detectDeviceTier({ ...DESKTOP, hardwareConcurrency }));
-            expect(config.threads).toBeLessThanOrEqual(ENGINE_PTHREAD_POOL_SIZE);
+            expect(config.threads).toBeLessThanOrEqual(MAX_ENGINE_THREADS);
         }
-        expect(threadsForCores(1024, 8, 64)).toBeLessThanOrEqual(ENGINE_PTHREAD_POOL_SIZE);
+        expect(threadsForCores(1024, 8, 64)).toBeLessThanOrEqual(MAX_ENGINE_THREADS);
+    });
+
+    it('keeps the ask clear of the pool the core was built with', () => {
+        // The two numbers used to be the same, so a tier could ask for the
+        // whole pool and there was nowhere to be wrong by one.
+        expect(MAX_ENGINE_THREADS).toBe(ENGINE_PTHREAD_POOL_SIZE - ENGINE_THREAD_HEADROOM);
+        expect(ENGINE_THREAD_HEADROOM).toBeGreaterThan(0);
+        expect(MAX_ENGINE_THREADS).toBeGreaterThanOrEqual(HIGH_TIER_MAX_THREADS);
     });
 
     it('leaves cores for the rest of the machine', () => {
