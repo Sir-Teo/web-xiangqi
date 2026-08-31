@@ -15,12 +15,13 @@ import {
   IconSkipForward, IconMore, IconSearch
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
-import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiangqi';
+import { useXiangqi, type GameResult } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
+import { serializeSavedMoveTree } from './utils/savedMoveTree';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { buildLibraryPositionIndex, formatExplorerRecord, libraryPositionSignature, lookupLibraryPosition } from './utils/positionExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
@@ -336,26 +337,6 @@ function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: 
   return true;
 }
 
-function serializeSavedMoveTree(
-  treeNodes: Record<string, MoveTreeNode>,
-  parentId: string,
-  seen = new Set<string>()
-): SavedMoveTreeNode[] {
-  const parent = treeNodes[parentId];
-  if (!parent || seen.has(parentId)) return [];
-
-  const nextSeen = new Set(seen);
-  nextSeen.add(parentId);
-  return parent.childrenIds
-    .map((childId): SavedMoveTreeNode | null => {
-      const child = treeNodes[childId];
-      const uci = child?.record?.uci;
-      if (!child || !uci) return null;
-      const children = serializeSavedMoveTree(treeNodes, childId, nextSeen);
-      return children.length > 0 ? { uci, children } : { uci };
-    })
-    .filter((node): node is SavedMoveTreeNode => Boolean(node));
-}
 
 type ReviewPhase = 'base' | 'revisit';
 
