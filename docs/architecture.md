@@ -387,6 +387,41 @@ reaches isolation and a threaded core, and the invariant that failed here in the
 first place: that the dashboard's thread count agrees with what the page
 actually got.
 
+### What a visit costs
+
+Measured against a server sending what GitHub Pages sends -- an ETag,
+`Last-Modified` and `max-age=600` -- with the profile kept between visits:
+
+| | responses | bytes from the server |
+| --- | --- | --- |
+| first visit, cold | 9 | 55,054,236 |
+| every visit after | 1 | 0 |
+
+The one response on a repeat visit is the weights revalidation answering 304.
+Everything else -- the bundle, the stylesheet, the core and its wasm -- comes
+from the browser's own cache and never reaches the server.
+
+It was not always the second row. `pikafish.nnue` is 53,719,310 bytes, and **a
+browser HTTP cache will not store a single entry that large**: the 710KB core is
+served from cache on a second fetch and never asked for again, while the weights
+were requested unconditionally every time, at full size, on every visit. The
+ETag never came into it, because there was nothing stored to revalidate. A plain
+`fetch` from a bare page with no service worker behaves the same way, so it is
+neither the worker nor the engine.
+
+`public/coi-sw.js` keeps them in Cache Storage instead, which has no per-entry
+limit. **It always revalidates.** That is the whole reason it is safe here,
+where `serviceWorkerCleanup` exists because a cached engine artifact once
+outlived a deploy: a stored copy is never served on its own authority, every
+load sends a conditional request carrying the stored validator, and the cached
+body is used only when the server answers 304. What is saved is the body, not
+the round-trip. A response carrying no validator is not cached at all, since
+there would be no way to ask whether it had changed -- on such a host nothing is
+stored and the app is unaffected.
+
+Replacing the net is a 200 with the new body and then 304s again, which was
+measured rather than assumed.
+
 ### A core that arrives as something else
 
 Running the browser suites back to back on one machine produced an intermittent
