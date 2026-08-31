@@ -19,6 +19,7 @@ import { useXiangqi, type GameResult, type MoveTreeNode } from './hooks/useXiang
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
+import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { buildLibraryPositionIndex, formatExplorerRecord, libraryPositionSignature, lookupLibraryPosition } from './utils/positionExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
@@ -728,53 +729,6 @@ function formatMaterialValue(valueTenths: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
 }
 
-function formatMoveRuleHint(reason?: string) {
-  switch (reason) {
-    case 'horse leg blocked':
-      return 'Horse leg is blocked.';
-    case 'elephant eye blocked':
-      return 'Elephant eye is blocked.';
-    case 'cannon capture needs one screen':
-      return 'Cannon captures need exactly one screen.';
-    case 'cannon moves orthogonally':
-      return 'Cannon moves in straight lines.';
-    case 'cannon path blocked':
-      return 'Cannon path is blocked.';
-    case 'rook moves orthogonally':
-      return 'Chariot moves in straight lines.';
-    case 'rook path blocked':
-      return 'Chariot path is blocked.';
-    case 'horse moves in an L':
-      return 'Horse moves one point straight, then one point diagonal.';
-    case 'advisor moves 1 diagonally':
-      return 'Advisor moves one point diagonally inside the palace.';
-    case 'advisor must stay in palace':
-      return 'Advisor must stay inside the palace.';
-    case 'general moves 1 orthogonally':
-      return 'General moves one point orthogonally inside the palace.';
-    case 'general must stay in palace':
-      return 'General must stay inside the palace.';
-    case 'generals cannot face each other':
-      return 'Generals cannot face each other.';
-    case 'move must change square':
-      return 'Choose a different destination square.';
-    case 'move leaves general in check':
-      return 'That leaves your general in check.';
-    case 'elephant moves 2 diagonally':
-      return 'Elephant moves two points diagonally.';
-    case 'elephant cannot cross river':
-      return 'Elephant cannot cross the river.';
-    case 'pawn move is illegal':
-      return 'Soldiers move forward, then sideways after crossing the river.';
-    case 'not your piece':
-      return 'Move the side whose turn it is.';
-    case 'cannot capture your own piece':
-      return 'Choose an empty square or an opposing piece.';
-    default:
-      if (!reason) return 'That move is not legal in this position.';
-      return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
-  }
-}
 
 function makeEnginePositionCommand(rootFen: string, moves: string[]) {
   const rootParts = rootFen.trim().split(/\s+/);
