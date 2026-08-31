@@ -422,6 +422,14 @@ stored and the app is unaffected.
 Replacing the net is a 200 with the new body and then 304s again, which was
 measured rather than assumed.
 
+**Compression is not a lever, and the first visit is what it is.** Pages already
+applies `content-encoding: gzip` to the weights and the result is *larger* than
+the file -- 53,728,090 bytes against 53,719,310 -- because a quantised net is at
+its entropy limit; `gzip -6` locally agrees to within a few bytes. The only
+thing that would move the first visit is a smaller net, which is a playing
+strength decision rather than a delivery one: `scripts/build-pikafish.sh` takes
+whatever `pikafish.nnue` upstream ships.
+
 ### A core that arrives as something else
 
 Running the browser suites back to back on one machine produced an intermittent
