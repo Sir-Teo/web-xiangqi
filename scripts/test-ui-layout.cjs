@@ -861,6 +861,77 @@ async function assertAdvertisedMoveShortcuts(page) {
   }
 }
 
+/**
+ * The notation setting, which is the one a reader is most likely to change.
+ *
+ * Xiangqi is written three ways and players are not interchangeable about it:
+ * a Chinese player reads 炮二平五, an English-language database writes C2=5, and
+ * the engine speaks h2e2. The setting offers all three, and nothing here
+ * checked that choosing one changes what the move list says -- a preference
+ * that stores and restores perfectly while rendering the same text either way
+ * would pass every existing check.
+ *
+ * Deliberately engine-free: this is move rendering, so it needs no search and
+ * no readiness wait.
+ */
+async function assertNotationStylesRenderDifferently(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2+h9g7", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(500);
+  await page.locator("button:visible", { hasText: /Tree/ }).first().click().catch(() => {});
+  await page.waitForTimeout(500);
+
+  const firstRow = () => page.evaluate(() => {
+    const row = document.querySelector(".mtree-row");
+    return row ? row.innerText.replace(/\s+/g, " ").trim() : "";
+  });
+
+  const expected = [
+    ["WXF", "C2=5"],
+    ["中文", "炮二平五"],
+    ["UCI", "H2"],
+  ];
+
+  const seen = [];
+  for (const [style, marker] of expected) {
+    await page.getByRole("button", { name: /Open settings/i }).click();
+    await page.waitForTimeout(500);
+    const choice = page.locator(`button[aria-label*="${style} notation" i]`).first();
+    if (!(await choice.count())) throw new Error(`No setting offering ${style} notation`);
+    await choice.click();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(700);
+
+    const row = await firstRow();
+    if (!row.includes(marker)) {
+      throw new Error(`With ${style} chosen the move list reads "${row}", which does not contain ${marker}`);
+    }
+    seen.push(row);
+  }
+
+  if (new Set(seen).size !== seen.length) {
+    throw new Error(`Two notation styles rendered the same move list: ${JSON.stringify(seen)}`);
+  }
+
+  // Put it back. Notation is a stored preference and this page is shared with
+  // every assertion after it -- leaving UCI selected reached the opening-book
+  // check as a move list it could not read.
+  await page.getByRole("button", { name: /Open settings/i }).click();
+  await page.waitForTimeout(500);
+  await page.locator('button[aria-label*="WXF notation" i]').first().click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6969,6 +7040,7 @@ async function main() {
     await assertDialogsReturnFocusOnClose(page);
     await assertBoardMatchesThePlyItIsOn(page);
     await assertAdvertisedMoveShortcuts(page);
+    await assertNotationStylesRenderDifferently(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
