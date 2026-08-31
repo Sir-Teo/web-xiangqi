@@ -701,6 +701,97 @@ async function assertDialogsReturnFocusOnClose(page) {
   await runFlip();
 }
 
+/**
+ * The board shows the position for the ply you are standing on.
+ *
+ * Everything downstream assumes it. `App.tsx` sends the engine
+ * `position startpos moves ...` up to the current ply, so a board that is one
+ * move out is an evaluation of a position nobody is looking at -- and it looks
+ * entirely normal, because the number that comes back is a real evaluation of a
+ * real position.
+ *
+ * The expected board is computed here, by applying the moves to a starting
+ * array, rather than by asking the app: a check that uses the app's own rules to
+ * decide what the app should be showing agrees with itself no matter what
+ * either of them does.
+ */
+function boardAfterPlies(moves, plies) {
+  const START = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR";
+  const rows = START.split("/").map((row) => {
+    const out = [];
+    for (const ch of row) {
+      if (/\d/.test(ch)) for (let i = 0; i < Number(ch); i += 1) out.push("");
+      else out.push(ch);
+    }
+    return out;
+  });
+  const file = (ch) => ch.charCodeAt(0) - 97;
+  const at = (f, r) => rows[9 - r][f];
+  const set = (f, r, v) => { rows[9 - r][f] = v; };
+  for (let i = 0; i < plies; i += 1) {
+    const mv = moves[i];
+    set(file(mv[2]), Number(mv[3]), at(file(mv[0]), Number(mv[1])));
+    set(file(mv[0]), Number(mv[1]), "");
+  }
+  const placement = rows.map((row) => {
+    let out = "";
+    let run = 0;
+    for (const cell of row) {
+      if (!cell) { run += 1; continue; }
+      if (run) { out += run; run = 0; }
+      out += cell;
+    }
+    if (run) out += run;
+    return out;
+  }).join("/");
+  return { placement, side: plies % 2 === 0 ? "w" : "b" };
+}
+
+async function assertBoardMatchesThePlyItIsOn(page) {
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9", "g3g4", "g6g5",
+                 "b2b6", "h7h3", "c3c4", "c6c5", "b6c6", "h3h9", "i0i1", "i9i8"];
+
+  await page.setViewportSize({ width: 1280, height: 820 });
+
+  // Each prefix is loaded on its own rather than walked to with the move
+  // controls. This page is shared with every assertion before it, and those
+  // controls depend on where the board already is -- "Go to first position" is
+  // disabled at the first position, which is a click that can never land.
+  for (const plies of [0, 1, 5, 12, MOVES.length]) {
+    const query = plies === 0 ? "" : `?moves=${MOVES.slice(0, plies).join("+")}`;
+    await page.goto(`http://127.0.0.1:8192/web-xiangqi/${query}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    for (const name of [/start fresh|keep the link/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    await page.waitForTimeout(600);
+
+    const shown = await page.evaluate(() => {
+      const el = document.querySelector(".bottombar-fen");
+      const fen = el?.getAttribute("title") || el?.textContent?.replace(/^FEN:\s*/, "") || "";
+      const counter = (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null;
+      return { placement: fen.split(" ")[0], side: fen.split(" ")[1], counter };
+    });
+    const want = boardAfterPlies(MOVES, plies);
+
+    if (shown.counter !== `${plies} / ${plies}`) {
+      throw new Error(`Loading ${plies} plies left the counter at ${shown.counter}`);
+    }
+    if (shown.placement !== want.placement || shown.side !== want.side) {
+      throw new Error(
+        `After ${plies} plies the board is not the position those moves reach.\n` +
+        `  expected ${want.placement} ${want.side}\n` +
+        `  shown    ${shown.placement} ${shown.side}`
+      );
+    }
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6807,6 +6898,7 @@ async function main() {
     await assertForcedColoursRemainReadable(browser);
     await assertSkipLinkReachesTheBoard(page);
     await assertDialogsReturnFocusOnClose(page);
+    await assertBoardMatchesThePlyItIsOn(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
