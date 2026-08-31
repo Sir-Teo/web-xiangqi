@@ -3759,6 +3759,12 @@ function App() {
           for that selector silently becomes the one a query returns. A live
           region needs only the attribute. */}
       <div className="sr-only" aria-live="polite" data-testid="notice-announcement">
+        {/* Engine trouble is deliberately not here. The chip in the bar is
+            hidden on a phone like everything else in it, but `.mobile-engine-notice`
+            already carries that text on a phone and is a live region itself --
+            so adding it would announce every engine problem twice. Checked,
+            not assumed: with the engine forced to fail at 390px, both regions
+            read "Recovering engine". */}
         {importNotice?.label ?? shareLinkNotice?.text ?? ''}
       </div>
 
