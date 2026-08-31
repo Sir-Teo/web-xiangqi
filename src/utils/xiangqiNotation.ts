@@ -506,15 +506,6 @@ export interface ParsedNotationLine {
  * is collected in `rejected`, because that is the case worth telling a user
  * about.
  */
-/**
- * How many move-shaped tokens may fail before the parser stops reading.
- *
- * Not a correctness limit: nothing in the app reads `rejected`, and a record
- * this far from parsing is not going to start. It bounds the work a paste can
- * ask for. See the note in the loop below.
- */
-export const MAX_UNREADABLE_NOTATION_TOKENS = 64;
-
 export function parseMoveLineInNotation(
     board: BoardState,
     sideToMove: Side,
@@ -525,29 +516,10 @@ export function parseMoveLineInNotation(
     const rejected: string[] = [];
     let state = board;
     let side = sideToMove;
-    // Counted separately from `rejected`, which is only the tokens worth
-    // telling a reader about. A coordinate that names no legal move is not
-    // reportable -- it is as likely to be a word from a comment -- but it
-    // costs the same full generation, so it has to count against the bound.
-    let unreadable = 0;
 
     for (const token of String(text ?? '').split(/[\s,;]+/)) {
         if (moves.length >= maxMoves) break;
-        // Reading a move costs a full legal-move generation plus writing every
-        // one of them in both notations, so the work is bounded by the number
-        // of *move-shaped* tokens, not by `maxMoves` -- which counts only the
-        // ones that matched. A paste of tokens that all look like moves and
-        // name none therefore pays that price per token with nothing to show
-        // for it: 40,000 of them took four and a half seconds on the main
-        // thread, and the import box accepts up to 200,000 characters.
-        //
-        // Once a token reads as a move but names none, the record and the
-        // board are out of step, and every later token is being matched
-        // against a position the record never reached. A handful of failures
-        // can still be an annotation the stripper missed, so the bound is
-        // generous; thousands of them cannot be recovered from by reading
-        // further, only by telling the reader.
-        if (unreadable >= MAX_UNREADABLE_NOTATION_TOKENS) break;
+
         // An empty token is a leading or doubled separator, not the end of the
         // record. Breaking on it meant a record that began with a newline --
         // which is every record with a header stripped off the front -- parsed
@@ -555,11 +527,31 @@ export function parseMoveLineInNotation(
         if (!token) continue;
         const uci = parseMoveInNotation(state, side, token);
         if (!uci) {
-            // Only complain about something that was shaped like a move.
+            // A token that is not shaped like a move is decoration -- a move
+            // number, a result, a word from a comment. Skip it and read on.
             const shaped = canonicaliseNotationToken(token);
-            if (shaped) rejected.push(token);
-            if (shaped || COORDINATE_TOKEN.test(token.trim().toLowerCase())) unreadable += 1;
-            continue;
+            if (!shaped && !COORDINATE_TOKEN.test(token.trim().toLowerCase())) continue;
+
+            // A token that *is* shaped like a move, and names none, is a move
+            // the record wanted and this reader could not play. Stop there.
+            //
+            // Reading on was worse than it looked. The board stays where it
+            // was, so every later token is matched against a position the
+            // record never reached; the ones that happen to be legal there get
+            // imported too, and the result is a game nobody played. `C2=5 H8+7
+            // R5=9 H2+3` came in as a three-move game with its third move
+            // played from the wrong position. What comes back now is the part
+            // that was actually read: a true prefix of the record.
+            //
+            // It bounds the cost as well, which needed a magic number before.
+            // Reading one token costs a full legal-move generation plus
+            // writing every legal move in both notations, and `maxMoves`
+            // bounds only the ones that matched -- so a paste of 40,000
+            // move-shaped tokens naming nothing paid that price 40,000 times
+            // and took four and a half seconds on the main thread. The import
+            // box accepts 200,000 characters, which is room for exactly that.
+            rejected.push(token);
+            break;
         }
         const next = applyMoveUnchecked(state, uci);
         if (!next) break;

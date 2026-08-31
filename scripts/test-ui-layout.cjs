@@ -3938,8 +3938,10 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
     throw new Error(`A readable token was reported as an unreadable format: "${errorText}"`);
   }
 
-  // Half readable: the first two are fine, R5=9 is not, and the last one is
-  // fine again -- so this imports three moves out of a four-move record.
+  // Half readable: the first two are fine and R5=9 is not. H2+3 after it is
+  // legal in the position the reader is still sitting on, which is exactly why
+  // reading on was wrong -- it used to arrive as move three of a game whose
+  // move three was something else. What imports now is the true prefix.
   await page.getByTestId("uci-line-input").fill("C2=5 H8+7 R5=9 H2+3");
   await page.getByTestId("import-uci-line-btn").click();
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
@@ -3959,8 +3961,8 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
   const plies = await page.evaluate(
     () => (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null
   );
-  if (plies !== "3 / 3") {
-    throw new Error(`Expected the three readable moves to import, got ${plies}`);
+  if (plies !== "2 / 2") {
+    throw new Error(`Expected the two moves before the unreadable one, got ${plies}`);
   }
 }
 
