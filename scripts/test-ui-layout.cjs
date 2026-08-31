@@ -1136,6 +1136,71 @@ async function assertPlayFromHereKeepsThePosition(page) {
  * covers the rank behind. The generals stand on different files, so the
  * position is legal before the move as well as after.
  */
+/**
+ * The ply number a move gets when a player plays it, rather than loads it.
+ *
+ * `record.ply` is not decoration. `getReviewSideForRecord` decides whose move
+ * it was with `record.ply % 2 === 1 ? 'red' : 'black'`, so an off-by-one here
+ * hands every one of Red's mistakes to Black in Game Review and back again. It
+ * also numbers the move list, the breadcrumb chips, and the eval graph.
+ *
+ * Nothing covered it, because every other test that needs a game loads one
+ * through `?moves=`, and the loader numbers plies on a line of its own.
+ * Changing `ply: activePrefix.length + 1` to `activePrefix.length` left the
+ * entire suite green: loaded games stayed correctly numbered, and every move a
+ * player made was off by one and credited to the wrong side.
+ */
+async function assertPlayedMovesAreNumberedFromOne(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(400);
+
+  // `data-file` and `data-rank` are the UCI coordinates.
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+  const play = async (fromFile, fromRank, toFile, toRank, expectedPly) => {
+    await page.click(square(fromFile, fromRank));
+    // A click on a square the board does not think is a target only deselects,
+    // which would leave the game at the previous ply for no visible reason.
+    await page.waitForSelector(`${square(toFile, toRank)}[aria-label*="legal"]`, { timeout: 5000 });
+    await page.click(square(toFile, toRank));
+    const landed = await page
+      .waitForFunction(
+        (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === want,
+        expectedPly,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!landed) throw new Error(`move ${expectedPly} did not land`);
+  };
+
+  await play(7, 2, 4, 2, 1); // h2e2, the centre cannon
+  await play(7, 9, 6, 7, 2); // h9g7, a horse in reply
+
+  const plies = await page.evaluate(() =>
+    [...document.querySelectorAll(".tree-breadcrumb-chip")]
+      .map((chip) => chip.getAttribute("aria-label") || "")
+      .filter((label) => /^Ply /.test(label))
+      .map((label) => label.split(":")[0])
+  );
+
+  if (plies.join(", ") !== "Ply 1, Ply 2") {
+    throw new Error(
+      `Two played moves were numbered "${plies.join(", ")}" rather than "Ply 1, Ply 2". ` +
+      `Ply parity is what decides whose move it was, so this misattributes the game.`
+    );
+  }
+}
+
 async function assertCheckmateByPlayingTheMove(page) {
   const fen = encodeURIComponent("4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1");
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -7377,6 +7442,7 @@ async function main() {
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertStalemateLossIsLabeled(page);
     await assertCheckmateByPlayingTheMove(page);
+    await assertPlayedMovesAreNumberedFromOne(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
