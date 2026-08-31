@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
+import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
 import { EvalGraph } from './components/Panels/EvalGraph';
 import { ReviewPanel } from './components/Panels/ReviewPanel';
@@ -2355,6 +2356,10 @@ function App() {
     : null;
   const redPerspectiveEvalText = currentEvalText ? `Red POV ${currentEvalText}` : null;
   const liveEvalLabel = currentEvalText ? `Live engine evaluation, ${redPerspectiveEvalText}` : undefined;
+  // Only where the board leaves room beside it. On a phone the board is the
+  // full width of the screen and there is no gutter to sit in; the eval is on
+  // the mobile header chip and in the analysis tab there instead.
+  const showEvalBar = engineEnabled && !isMobile;
   const displayEvalClass = displayEvalScore === null
     ? ''
     : displayEvalScore > 0
@@ -4532,6 +4537,17 @@ function App() {
           <div className="mobile-board-center">
             <div className="board-workspace">
               <div className="board-wrap">
+                {/* Absolutely positioned against .board-wrap, which the
+                    aspect-ratio sizing keeps exactly board-shaped, so the bar
+                    is board-height without joining the grid that took such
+                    care to derive that height. */}
+                {showEvalBar ? (
+                  <EvalBar
+                    evalScore={displayEvalScore}
+                    evalText={currentEvalText}
+                    orientation={orientation}
+                  />
+                ) : null}
                 {aiPlayActive && (
                   <div
                     className="board-ai-status"
