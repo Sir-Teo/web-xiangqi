@@ -294,6 +294,19 @@ isolated, so the dev server and every check here register nothing. Hosting that
 sends the headers itself (Netlify, Cloudflare Pages, a Worker) still skips the
 worker and the reload with it.
 
+**Reload on `controllerchange`, never on `navigator.serviceWorker.ready`.** The
+two look equivalent and differ exactly where it matters. `ready` resolves as
+soon as *a* registration has an active worker — and a returning visitor still
+carrying the old demo worker has one, so it resolved against that, the reload
+fetched a second document that had also not been through `coi-sw.js`, and the
+sessionStorage guard spent itself on it and blocked the reload that would have
+worked. Everyone who had used the site before stayed single-threaded, silently
+and permanently. Only the controller being `coi-sw.js` means the next fetch goes
+through it. `test:prod:smoke` has a third pass for this: it installs the legacy
+worker first, then loads the app as a returning visitor would, because the other
+two passes start from a clean browser where ours is the first worker and the
+race cannot happen.
+
 What *was* wrong is that the app did not know. Threading was resolved entirely
 inside `templates/pikafish.js` — `resolveVariant` drops `threaded-simd` to
 `single-simd`, `recommendedThreads` returns 1 for a non-threaded core — so the
