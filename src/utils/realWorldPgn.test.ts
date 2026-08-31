@@ -106,6 +106,29 @@ describe('telling the reader a file held more than one game', () => {
         expect(extractUciMoveTree(LINE_TEXT).hadMoreGames).toBe(false);
     });
 
+    it('ends the game at a result even when no tags follow', () => {
+        // Every other multi-game fixture here carries a `[Event]` for the next
+        // game, and the tag branch alone stops those -- so the result branch
+        // went unexercised. Stray moves after a result, with no header of their
+        // own, are what only the result token can stop.
+        const pgn = `[Event "One"]\n\n${LINE.join(' ')} 1-0\nc3c4 c6c5\n`;
+        const result = extractUciMoveTree(pgn);
+        expect(result.moves, 'moves after the result must not join the game').toEqual(LINE);
+        expect(result.hadMoreGames).toBe(true);
+    });
+
+    it('does not end the game on a result sitting inside a comment', () => {
+        // The boundary scan skips lines inside `{...}`, and this is the shape
+        // that needs it: a comment spanning lines with a result alone on one of
+        // them. A mid-line mention cannot test it, because the pattern only
+        // matches a result at the end of a line -- which is why the earlier
+        // version of this passed with the comment shield removed entirely.
+        const pgn = `[Event "One"]\n\n1. ${LINE[0]} {red was winning\n1-0\nlooked certain} ${LINE.slice(1).join(' ')}\n`;
+        const result = extractUciMoveTree(pgn);
+        expect(result.moves, 'the comment must not cut the game short').toEqual(LINE);
+        expect(result.hadMoreGames).toBe(false);
+    });
+
     it('stays quiet when a comment merely mentions a result', () => {
         const pgn = `[Event "One"]\n\n1. ${LINE[0]} {red was winning, 1-0 looked certain}\n${LINE.slice(1).join(' ')}\n`;
         const result = extractUciMoveTree(pgn);
