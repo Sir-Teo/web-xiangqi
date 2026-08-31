@@ -319,6 +319,27 @@ no network and no licence, and it is the half that is about the player.
 - **`ongoing` is not a result.** It counts toward how often a move was chosen
   and not toward how it did.
 
+### What the user may change about the engine
+
+Hash and threads are settable, and both are held inside what the tier allows,
+because both can hang or crash the engine if they escape it:
+
+- **Hash** is a ladder per tier — low 16/24/48, mid 32/64/128/256, high
+  64/128/256/512. The ceiling is a memory judgement: the core is built with
+  `MAXIMUM_MEMORY=2147483648` and the NNUE alone is 53MB on top of the engine.
+  A size the tier does not offer falls back to the tier's *default*, not to the
+  nearest rung it does — a preference saved on another machine is a statement
+  about that machine.
+- **Threads** only go *down*. The ladder is derived from what the tier already
+  chose and stops there, because the ceiling is the shipped core's thread pool
+  rather than a policy, and asking past it hangs the engine. The reason to want
+  it is a laptop off its charger.
+
+Both clamp ahead of the safer-boot halving, so a retry after a crash backs off
+from whatever was actually in use rather than from the tier default. Changing
+either reboots the engine, which takes about a third of a second and which the
+labels say rather than leaving the stall unexplained.
+
 `utils/serviceWorkerCleanup.ts` unregisters service workers from the older
 demo build and clears its caches, so a stale shell cannot keep serving old
 engine assets.
@@ -429,7 +450,12 @@ Three ceilings that must not be confused:
 
 - `WORKER_SAFE_MAX_DEPTH` is the **AI opponent's** ladder, deliberately short of
   what the engine can do. It used to clamp live analysis too, so the board could
-  never look deeper than the hardest opponent plays.
+  never look deeper than the hardest opponent plays — and the traffic went the
+  other way as well: the analysis preference clamped the *opponent*, so with the
+  old default of 8, "Hard" and "Master" both searched depth 8 against tooltips
+  promising 9 and 12. The two hardest rungs were the same opponent. The AI now
+  plays `AI_DEPTH_LIMIT` and nothing else adjusts it, which is what its tooltip
+  has always claimed.
 - `resolveLiveAnalysisPolicy` sets the **analysis** ceiling per tier, against
   the move-time budget it has to fit inside.
 - `resolveReviewPolicy` is held **below** live analysis on purpose: a review
