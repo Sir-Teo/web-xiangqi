@@ -176,3 +176,24 @@ describe('reading the engine output', () => {
         }
     });
 });
+
+describe('the strength label and the opponent it describes', () => {
+    it('promises exactly what the opponent plays', () => {
+        // These disagreed. `describeAiStrength` reports the ladder, while the
+        // engine was handed `min(searchDepth, ...)` -- and with the analysis
+        // Search Depth preference defaulting to 8, "Hard" and "Master" both
+        // played depth 8 against tooltips promising 9 and 12. The top two rungs
+        // were the same opponent.
+        for (const strength of [1, 2, 3, 4, 5] as const) {
+            const played = getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH).depth;
+            expect(describeAiStrength(strength)).toContain(`depth ${played}`);
+            expect(played).toBe(AI_DEPTH_LIMIT[strength]);
+        }
+    });
+
+    it('keeps every rung of the ladder a different opponent', () => {
+        const depths = ([1, 2, 3, 4, 5] as const).map((s) => getAiSearchConfig(s, WORKER_SAFE_MAX_DEPTH).depth);
+        expect(new Set(depths).size).toBe(depths.length);
+        for (let i = 1; i < depths.length; i += 1) expect(depths[i]).toBeGreaterThan(depths[i - 1]);
+    });
+});

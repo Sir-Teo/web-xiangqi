@@ -1080,11 +1080,13 @@ function App() {
       setRightWidth(nextRight);
     }
   }, [viewportWidth, leftWidth, rightWidth]);
-  // The AI opponent's ladder tops out at WORKER_SAFE_MAX_DEPTH; the analysis
-  // board's ceiling is the tier's, in resolveLiveAnalysisPolicy, which sets it
-  // against the move-time budget it has to fit inside. These were one number,
-  // so the board could never look deeper than the hardest opponent plays.
-  const aiSafeSearchDepth = Math.min(searchDepth, WORKER_SAFE_MAX_DEPTH);
+  // The AI opponent plays its own ladder, and nothing else adjusts it. Search
+  // Depth is the *analysis* preference -- its ceiling is the tier's, set in
+  // resolveLiveAnalysisPolicy against the move-time budget it has to fit
+  // inside -- and letting it cap the opponent too made the strength labels
+  // lie: with the old default of 8, "Hard" and "Master" both played depth 8
+  // while their tooltips promised 9 and 12, so the top two rungs of the ladder
+  // were the same opponent.
   const currentLineMoves = useMemo(() => {
     return activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
@@ -1465,8 +1467,8 @@ function App() {
 
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const aiSearchConfig = useMemo(
-    () => getAiSearchConfig(aiStrength, aiSafeSearchDepth),
-    [aiStrength, aiSafeSearchDepth]
+    () => getAiSearchConfig(aiStrength, WORKER_SAFE_MAX_DEPTH),
+    [aiStrength]
   );
   const canGoBack = currentMoveIndex >= 0;
   const canGoForward = currentMoveIndex < moveHistory.length - 1;
