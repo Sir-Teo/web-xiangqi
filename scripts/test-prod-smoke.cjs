@@ -93,6 +93,16 @@ async function stopServer(server) {
   clearTimeout(timer);
 }
 
+/** The old demo's caching worker, as a returning visitor would still have it. */
+const LEGACY_WORKER = `
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(caches.open('pikafish-demo-legacy').then((c) => c.put('/web-xiangqi/stale', new Response('stale'))));
+});
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', () => {});
+`;
+
 /**
  * `dist` over HTTP with no COOP/COEP — GitHub Pages, as far as the browser is
  * concerned. In-process on purpose: a child would be another thing to leak.
@@ -106,6 +116,20 @@ function startPlainServer(port) {
   const root = path.join(ROOT, "dist");
   const server = http.createServer((req, res) => {
     let rel = decodeURIComponent(String(req.url).split("?")[0]).replace(/^\/web-xiangqi\/?/, "") || "index.html";
+
+    // Two fixtures the build does not contain, for the returning-visitor pass:
+    // the old demo's caching worker at the filename `serviceWorkerCleanup`
+    // recognises, and a bare page to install it from that will not boot the app.
+    if (rel === "sw.js") {
+      res.writeHead(200, { "Content-Type": "text/javascript" });
+      res.end(LEGACY_WORKER);
+      return;
+    }
+    if (rel === "legacy-setup.html") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end("<!doctype html><title>legacy</title>legacy");
+      return;
+    }
     if (rel.endsWith("/")) rel += "index.html";
     let file = path.join(root, rel);
     // SPA fallback, and a guard against escaping dist.
@@ -122,8 +146,8 @@ function startPlainServer(port) {
 }
 
 /** The shell, the engine, and a clean console. Returns what the page reported. */
-async function checkApp(browser, url, label) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+async function checkApp(target, url, label) {
+  const page = await target.newPage({ viewport: { width: 1280, height: 900 } });
   const problems = [];
   page.on("console", (message) => {
     if (message.type() === "error") problems.push(`console: ${message.text().slice(0, 200)}`);
@@ -260,10 +284,45 @@ async function main() {
       );
     }
 
+    // 3. The returning visitor: still carrying the old demo worker, which is an
+    //    active registration at the same scope. This is what shipped broken --
+    //    reloading on `navigator.serviceWorker.ready` resolved against *that*
+    //    worker, so the reload happened before coi-sw.js controlled anything and
+    //    the one-shot guard then blocked the reload that would have worked. The
+    //    symptom was a site that stayed single-threaded forever, silently.
+    const returning = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    let upgraded;
+    try {
+      const setup = await returning.newPage();
+      await setup.goto(`${PLAIN_URL}legacy-setup.html`, { waitUntil: "domcontentloaded", timeout: 30000 });
+      const before = await setup.evaluate(async () => {
+        const registration = await navigator.serviceWorker.register("/web-xiangqi/sw.js");
+        await navigator.serviceWorker.ready;
+        return registration.active ? registration.active.scriptURL : null;
+      });
+      if (!before || !/\/sw\.js$/.test(before)) fail(`returning: could not install the legacy worker (got ${before})`);
+      await setup.close();
+
+      upgraded = await checkApp(returning, PLAIN_URL, "returning");
+      if (!upgraded.isolated) {
+        fail(
+          "returning: a visitor who still has the old demo service worker never became " +
+          "cross-origin isolated, so the deployed app stays single-threaded for everyone who " +
+          "used the site before — see the controllerchange handler in index.html."
+        );
+      }
+      if (!/^threaded/.test(String(upgraded.variant))) {
+        fail(`returning: isolated, but the engine loaded "${upgraded.variant}"`);
+      }
+    } finally {
+      await returning.close().catch(() => {});
+    }
+
     console.log(
       `Production smoke passed:\n` +
       `  isolated: ${isolated.variant}, ${isolated.threads}T, board ${isolated.boardMs}ms, ready ${isolated.readyMs}ms\n` +
-      `  pages (no COOP/COEP, isolated by coi-sw.js): ${pages.variant}, ${pages.threads}T, board ${pages.boardMs}ms, ready ${pages.readyMs}ms`
+      `  pages (no COOP/COEP, isolated by coi-sw.js): ${pages.variant}, ${pages.threads}T, board ${pages.boardMs}ms, ready ${pages.readyMs}ms\n` +
+      `  returning visitor (legacy sw.js installed): ${upgraded.variant}, ${upgraded.threads}T, ready ${upgraded.readyMs}ms`
     );
   } catch (error) {
     console.error(`Production smoke failed: ${error && error.message ? error.message : error}`);
