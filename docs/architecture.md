@@ -709,11 +709,20 @@ looked at.
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
   the test first.
 - New pure logic goes in `src/utils/` with a colocated test, not into
-  `App.tsx`. This governs *new* logic: `App.tsx` already holds 53 top-level
-  helpers that predate it, so it is "stop adding", not a description of the
-  current state. 27 are six lines or fewer; the ones carrying enough logic to
-  deserve a test if they are ever touched are `initialPanelWidth`,
-  `serializeSavedMoveTree` and `formatMoveRuleHint`.
+  `App.tsx`. This governs *new* logic: `App.tsx` already holds a pile of
+  top-level helpers that predate it, so it is "stop adding", not a description
+  of the current state. Most are six lines or fewer.
+
+  **The three this list used to name as deserving tests are done** —
+  `initialPanelWidth` (with `clampPanelWidth` and `stepPanelWidth`, which share
+  its arithmetic) is `utils/panelWidth.ts`, `serializeSavedMoveTree` is
+  `utils/savedMoveTree.ts`, and `formatMoveRuleHint` is `utils/moveRuleHints.ts`.
+  Each turned out to encode a rule learned from a defect that nothing pinned:
+  a width below the minimum collapses rather than snapping open, the tree
+  serializer's `seen` set is copied per branch so a transposition is not
+  silently dropped, and every rejection reason needs a sentence or it reaches a
+  player as the engine's own words. `utils/material.ts` came out the same way,
+  and that one was carrying a live bug.
 
   The moment to extract one is when you are about to *edit* it. web-chess hit
   exactly this: a pure label helper was changed in place while a bound was
