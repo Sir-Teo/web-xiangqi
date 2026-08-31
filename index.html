@@ -43,20 +43,43 @@
       if (!window.isSecureContext) return;
       if (!('serviceWorker' in navigator)) return;
 
-      // At most one reload per tab, whatever happens. If the worker installs
-      // but does not isolate the page, this must not become a refresh loop --
-      // the app is usable either way, and a loop would make it unusable.
+      var WORKER = 'coi-sw.js';
       var RELOADED = 'web-xiangqi:coi-reload';
-      try { if (sessionStorage.getItem(RELOADED)) return; } catch (e) { return; }
 
-      navigator.serviceWorker.register('./coi-sw.js')
-        .then(function () { return navigator.serviceWorker.ready; })
+      function isOurs(worker) {
+        return Boolean(worker && worker.scriptURL && worker.scriptURL.indexOf(WORKER) !== -1);
+      }
+
+      // At most one reload per tab, whatever happens. If a reload somehow does
+      // not isolate the page, this must not become a refresh loop -- the app is
+      // usable either way, and a loop would make it unusable.
+      function reloadOnce() {
+        if (window.crossOriginIsolated) return;
+        try {
+          if (sessionStorage.getItem(RELOADED)) return;
+          sessionStorage.setItem(RELOADED, '1');
+        } catch (e) { return; }
+        window.location.reload();
+      }
+
+      navigator.serviceWorker.register('./' + WORKER)
         .then(function () {
-          // This document was fetched before the worker could touch it, so it
-          // is still not isolated. The next one will be.
-          if (window.crossOriginIsolated) return;
-          try { sessionStorage.setItem(RELOADED, '1'); } catch (e) { return; }
-          window.location.reload();
+          // Reload only once *our* worker is the controller, never merely once
+          // some worker is. Waiting on navigator.serviceWorker.ready instead
+          // looks equivalent and is not: a returning visitor still carrying the
+          // old demo worker has an active registration already, so `ready`
+          // resolves on that one, the reload happens before this worker has
+          // taken over, the second document is fetched without headers too, and
+          // the one-shot guard above then blocks the reload that would have
+          // worked. The site stays single-threaded forever, for no visible
+          // reason. Only the controller says the next fetch goes through us.
+          if (isOurs(navigator.serviceWorker.controller)) {
+            reloadOnce();
+            return;
+          }
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            if (isOurs(navigator.serviceWorker.controller)) reloadOnce();
+          });
         })
         .catch(function () { /* stays single-threaded, which is the old behaviour */ });
     })();
