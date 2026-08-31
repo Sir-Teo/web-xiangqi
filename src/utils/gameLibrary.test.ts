@@ -168,3 +168,65 @@ describe('normalizing a list of games', () => {
         expect(normalizeSavedGames({ games: [] })).toEqual([]);
     });
 });
+
+describe('the invariant every panel downstream relies on', () => {
+    /** Every number anywhere in a value, with the path that reached it. */
+    function nonFiniteNumbersIn(value: unknown, path = ''): string[] {
+        if (typeof value === 'number') return Number.isFinite(value) ? [] : [path || '(root)'];
+        if (!value || typeof value !== 'object') return [];
+        return Object.entries(value as Record<string, unknown>)
+            .flatMap(([key, child]) => nonFiniteNumbersIn(child, path ? `${path}.${key}` : key));
+    }
+
+    const withEveryNumberBroken = (bad: number) => ({
+        id: 'g1',
+        savedAt: Date.now(),
+        gameMode: 'PvP',
+        moves: ['h2e2', 'h9g7'],
+        result: 'red',
+        finalEval: bad,
+        review: {
+            summary: {
+                totalMoves: 2,
+                accuracy: bad,
+                averageCentipawnLoss: bad,
+                redAccuracy: bad,
+                blackAccuracy: bad,
+                redAverageCentipawnLoss: bad,
+                blackAverageCentipawnLoss: bad,
+                bestCount: 1, goodCount: 1, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+                reviewedAt: Date.now(),
+                lineSignature: 'h2e2 h9g7',
+                keyMoments: [{
+                    nodeId: 'n1', moveIndex: 0, jumpTarget: 0, ply: 1, side: 'red',
+                    quality: 'blunder', swing: bad, winPercentLoss: bad,
+                    evalBefore: bad, evalAfter: bad, playedMove: 'h2e2', note: 'x',
+                }],
+                engine: { tier: 'high', baseDepth: bad, baseMoveTimeMs: bad },
+            },
+            annotations: [{
+                nodeId: 'n1', moveIndex: 0, quality: 'blunder',
+                evalScore: bad, swing: bad, winPercentLoss: bad,
+            }],
+        },
+    });
+
+    // Nine `typeof x === 'number'` checks across LibraryPanel and App render
+    // these figures. That test narrows the type but admits NaN, so it is only
+    // safe because nothing non-finite gets this far -- which is this.
+    it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+        'lets no %p reach a reader, anywhere in the record',
+        (bad) => {
+            const normalized = normalizeSavedGame(withEveryNumberBroken(bad));
+            // Dropping the record entirely would also satisfy the invariant.
+            if (normalized === null) return;
+            expect(nonFiniteNumbersIn(normalized)).toEqual([]);
+        }
+    );
+
+    it('would notice if the sweep stopped looking', () => {
+        // A guard on the guard: the helper must actually find one.
+        expect(nonFiniteNumbersIn({ a: { b: [1, Number.NaN] } })).toEqual(['a.b.1']);
+        expect(nonFiniteNumbersIn({ a: 1, b: 'two' })).toEqual([]);
+    });
+});
