@@ -29,6 +29,7 @@
     "test:review:fixtures": "node scripts/test-review-fixtures-browser.cjs",
     "test:review:browser": "node scripts/test-review-browser.cjs",
     "test:review:parity": "node scripts/test-review-parity.cjs",
+    "test:review:calibration": "node scripts/test-review-calibration.cjs",
     "test:ui:install": "playwright install chromium",
     "test:ui:layout": "node scripts/test-ui-layout.cjs",
     "test:openings": "node scripts/test-openings.cjs",
