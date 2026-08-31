@@ -598,15 +598,24 @@ async function assertSkipLinkReachesTheBoard(page) {
   }
 
   await page.keyboard.press("Tab");
-  const first = await page.evaluate(() => {
-    const el = document.activeElement;
-    return {
-      isSkipLink: Boolean(el && el.classList.contains("skip-link")),
-      onScreen: el ? el.getBoundingClientRect().top >= 0 : false,
-    };
-  });
-  if (!first.isSkipLink) throw new Error("The first tab stop is not the skip link");
-  if (!first.onScreen) throw new Error("The skip link stayed off screen while focused");
+  const focusedSkipLink = await page.evaluate(
+    () => Boolean(document.activeElement && document.activeElement.classList.contains("skip-link"))
+  );
+  if (!focusedSkipLink) throw new Error("The first tab stop is not the skip link");
+
+  // It slides in over 120ms, so this waits for the transition rather than
+  // reading the rectangle the instant the key is pressed. Measured immediately
+  // it passed locally every time and failed on the first CI run, which is the
+  // same timing fragility either way -- the local machine was just winning the
+  // race.
+  await page
+    .waitForFunction(() => {
+      const el = document.querySelector(".skip-link");
+      return Boolean(el) && el.getBoundingClientRect().top >= 0;
+    }, null, { timeout: 5000 })
+    .catch(() => {
+      throw new Error("The skip link stayed off screen while focused");
+    });
 
   await page.keyboard.press("Enter");
   await page.waitForTimeout(200);
@@ -650,16 +659,20 @@ async function assertDialogsReturnFocusOnClose(page) {
     await trigger.first().focus();
     const before = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? null);
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(350);
-
-    const insideDialog = await page.evaluate(() => {
-      const el = document.activeElement;
-      return Boolean(el && el !== document.body);
-    });
-    if (!insideDialog) throw new Error(`${before}: opening left focus on the body`);
+    const tookFocus = await page
+      .waitForFunction((trigger) => {
+        const el = document.activeElement;
+        return Boolean(el) && el !== document.body && el.getAttribute("aria-label") !== trigger;
+      }, before, { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!tookFocus) throw new Error(`${before}: opening left focus on the body`);
 
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(400);
+    await page
+      .waitForFunction((trigger) => document.activeElement?.getAttribute("aria-label") === trigger,
+        before, { timeout: 5000 })
+      .catch(() => {});
 
     const after = await page.evaluate(() => ({
       label: document.activeElement?.getAttribute("aria-label") ?? null,
@@ -827,12 +840,22 @@ async function assertAdvertisedMoveShortcuts(page) {
     () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1)
   );
 
+  // Waits for the move to land rather than assuming a fixed delay is enough.
+  // A runner is slower than a laptop, and the whole point of these keys is that
+  // they change the ply -- so the arrival of that change is the thing to wait
+  // on.
   const press = async (key, expected, what) => {
     await page.keyboard.press(key);
-    await page.waitForTimeout(300);
-    const got = await ply();
-    if (got !== expected) {
-      throw new Error(`${key} should ${what}: expected ply ${expected}, got ${got}`);
+    const landed = await page
+      .waitForFunction(
+        (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === want,
+        expected,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!landed) {
+      throw new Error(`${key} should ${what}: expected ply ${expected}, got ${await ply()}`);
     }
   };
 
