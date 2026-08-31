@@ -236,17 +236,26 @@ const PIECE_NAMES: Record<PieceCode, string> = {
   c: 'Black cannon',
   p: 'Black soldier',
 };
+/**
+ * One line about the piece a beginner just picked up, in coach mode.
+ *
+ * Each names the restrictions the rules engine actually enforces on that piece,
+ * because the alternative is a refused move the hint gave no warning of. The
+ * elephant's eye was the one missing: the horse's leg was here from the start,
+ * and `formatMoveRuleHint` has a sentence for a blocked eye, so a beginner
+ * could be told about a rule at the moment it stopped them and never before.
+ */
 const PIECE_MOVE_HINTS: Record<PieceCode, string> = {
   K: 'General: palace steps; open-file capture',
   A: 'Advisor: diagonal inside palace',
-  B: 'Elephant: 2-point diagonal; no river',
+  B: 'Elephant: 2 diagonal; eye can block; no river',
   N: 'Horse: L move; leg can block',
   R: 'Chariot: straight lines, no blockers',
   C: 'Cannon: straight; capture over 1 screen',
   P: 'Soldier: forward; sideways after crossing river',
   k: 'General: palace steps; open-file capture',
   a: 'Advisor: diagonal inside palace',
-  b: 'Elephant: 2-point diagonal; no river',
+  b: 'Elephant: 2 diagonal; eye can block; no river',
   n: 'Horse: L move; leg can block',
   r: 'Chariot: straight lines, no blockers',
   c: 'Cannon: straight; capture over 1 screen',
