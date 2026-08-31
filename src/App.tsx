@@ -5283,8 +5283,16 @@ function App() {
                       const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
                       const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
-                      const pvScoreText = formatRedPovEngineScore(pv, sideToMove, 0);
-                      const pvScoreLabel = `Red POV score ${formatRedPovEngineScore(pv, sideToMove, 1)}`;
+                      // One decimal, like every other evaluation in the app.
+                      // At zero this badge could not tell a half-pawn from
+                      // level -- everything between -0.99 and +0.99 rendered as
+                      // "+0" or "-0", which is most of an opening and most of a
+                      // middlegame, and "-0" reads as a typo rather than as a
+                      // number. The screen-reader label had already been built
+                      // at one decimal all along, so the informative form
+                      // existed and was simply not the one on screen.
+                      const pvScoreText = formatRedPovEngineScore(pv, sideToMove, 1);
+                      const pvScoreLabel = `Red POV score ${pvScoreText}`;
                       const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';

@@ -1747,7 +1747,10 @@ async function assertEngineTelemetryDashboard(browser) {
       !telemetry.firstLineLabel.includes("Red POV score +0.4") ||
       telemetry.firstScoreLabel !== "Red POV score +0.4" ||
       telemetry.firstScoreTitle !== "Red POV score +0.4" ||
-      telemetry.firstScoreText !== "+0Red POV" ||
+      // One decimal, as everywhere else. This asserted "+0Red POV" for a
+      // +0.4 evaluation: at zero decimals the badge could not separate a
+      // half-pawn from level, which is most of an opening.
+      telemetry.firstScoreText !== "+0.4Red POV" ||
       telemetry.stageEvalText !== "Red POV +0.4" ||
       telemetry.stageEvalLabel !== "Live engine evaluation, Red POV +0.4" ||
       !telemetry.firstLineLabel.includes("depth 8") ||
