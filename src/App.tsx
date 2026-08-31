@@ -2591,12 +2591,17 @@ function App() {
     const record = treeNodes[currentNodeId]?.record;
     const currentEval = record?.evalScore;
     const parentId    = treeNodes[currentNodeId]?.parentId;
-    const parentEval  = parentId ? treeNodes[parentId]?.record?.evalScore : 0;
+    // Same baseline the move tree and the eval graph use for a first move: the
+    // root holds no record, so `parentId ? lookup : 0` found nothing and left
+    // the opening move's arrow grey while every later one was coloured. The
+    // root's id is truthy, so the zero was unreachable.
+    const parentIsRoot = !parentId || parentId === rootNodeId;
+    const parentEval  = parentIsRoot ? 0 : treeNodes[parentId]?.record?.evalScore;
     if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return '#94a3b8';
     const side = getReviewSideForRecord(record, record.ply - 1);
     const delta = getEvalLossForMove(parentEval, currentEval, side);
     return getQualityArrowColor(classifyMoveQualityForEval(delta, parentEval, currentEval, side));
-  }, [currentNodeId, treeNodes]);
+  }, [currentNodeId, rootNodeId, treeNodes]);
 
   // Opening recognition
   // Both pass the root: the book names lines from the standard array, and the
