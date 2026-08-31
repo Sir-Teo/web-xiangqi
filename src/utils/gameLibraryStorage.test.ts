@@ -35,8 +35,8 @@ beforeEach(() => {
     };
 });
 
-const save = (moves: string[]) =>
-    saveGame({ gameMode: 'PvP', moves, result: 'ongoing' } as never);
+const save = (moves: string[], opening?: string) =>
+    saveGame({ gameMode: 'PvP', moves, result: 'ongoing', opening } as never);
 
 describe('how many games the library keeps', () => {
     it('holds far more than a handful', () => {
@@ -45,12 +45,24 @@ describe('how many games the library keeps', () => {
     });
 
     it('caps at five hundred and drops the oldest, not the newest', () => {
-        for (let i = 0; i < 505; i += 1) save([i % 2 === 0 ? 'h2e2' : 'b2e2']);
+        // Each save is tagged so survivors can be named. Nothing here reads
+        // position in the returned array: `loadAllGames` sorts by `savedAt`
+        // descending, and five hundred saves inside one millisecond all carry
+        // the same stamp, so the order among them is whatever the sort happens
+        // to do. An earlier version of this asserted `games[0]` and failed
+        // about one run in five for exactly that reason.
+        for (let i = 0; i < 505; i += 1) save(['h2e2'], `game-${i}`);
+
         const games = loadAllGames();
         expect(games).toHaveLength(500);
-        // 505 saved, 500 kept: the survivors are saves 6 through 505, so the
-        // parity of the first one flips from even to odd.
-        expect(games[0].moves).toEqual(['b2e2']);
+
+        const kept = new Set(games.map((game) => game.opening));
+        for (const dropped of [0, 1, 2, 3, 4]) {
+            expect(kept.has(`game-${dropped}`), `game-${dropped} should have been dropped`).toBe(false);
+        }
+        for (const survivor of [5, 6, 250, 503, 504]) {
+            expect(kept.has(`game-${survivor}`), `game-${survivor} should have been kept`).toBe(true);
+        }
     });
 });
 
