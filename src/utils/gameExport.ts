@@ -22,6 +22,20 @@ interface PgnStartPosition {
     isCustom: boolean;
 }
 
+/**
+ * Today, where the player is, in the `YYYY.MM.DD` the PGN Date tag wants.
+ *
+ * `toISOString()` is UTC, and the PGN spec asks for the local date of the site.
+ * Anywhere west of Greenwich that means an evening game is stamped tomorrow:
+ * at UTC-4, everything exported after 8pm carried the next day's date. The
+ * three exporters each wrote the same `toISOString().slice(0, 10)` expression,
+ * so it was wrong in three places and could only be fixed in three places.
+ */
+export function formatPgnDate(date: Date = new Date()): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`;
+}
+
 function normalizeFen(fen?: string): string {
     return String(fen || '').trim().replace(/\s+/g, ' ');
 }
@@ -221,7 +235,7 @@ export function exportPgn(
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const date = options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
@@ -259,7 +273,7 @@ export function exportPgnTree(
     if (!hasTreeMoves(treeNodes, rootNodeId)) return null;
 
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const date = options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
@@ -297,7 +311,7 @@ export function exportPgnFromUci(
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+    const date = options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [

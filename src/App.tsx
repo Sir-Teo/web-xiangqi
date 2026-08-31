@@ -38,7 +38,7 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
-import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
+import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile, formatPgnDate } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import {
   NOTATION_STYLES,
@@ -273,7 +273,9 @@ const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 function makePgnDownloadFilename(opening?: string): string {
-  const date = new Date().toISOString().slice(0, 10);
+  // The player's date, matching the Date tag inside the file. UTC would name a
+  // file after tomorrow for anyone exporting in the evening west of Greenwich.
+  const date = formatPgnDate().replace(/\./g, '-');
   const slug = String(opening || 'game')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

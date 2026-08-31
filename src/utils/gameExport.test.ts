@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportPgn, exportPgnFromMoveTree, exportPgnFromUci } from './gameExport';
+import { exportPgn, exportPgnFromMoveTree, exportPgnFromUci, formatPgnDate } from './gameExport';
 import { extractFenTag, extractUciMoveLine, extractUciMoveTree, stripRecordMetadata } from './moveImport';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { MoveRecord } from '../hooks/useXiangqi';
@@ -189,5 +189,35 @@ describe('the review travels with the game', () => {
         // "Better was b9c7" holds a legal-looking move; it must not be imported
         // as one.
         expect(extractUciMoveLine(stripRecordMetadata(pgn))).toEqual(['h2e2', 'h9g7', 'b0c2']);
+    });
+});
+
+describe('the date a game is stamped with', () => {
+    it('is the local date, not UTC', () => {
+        // The PGN spec asks for the local date of the site. `toISOString()` is
+        // UTC, so anywhere west of Greenwich an evening game was stamped
+        // tomorrow -- at UTC-4, everything exported after 8pm.
+        const evening = new Date(2026, 7, 31, 20, 30);   // 31 Aug, 8:30pm local
+        expect(formatPgnDate(evening)).toBe('2026.08.31');
+    });
+
+    it('pads a single-digit month and day', () => {
+        expect(formatPgnDate(new Date(2026, 0, 5, 12, 0))).toBe('2026.01.05');
+    });
+
+    it('agrees with the local calendar whatever the offset is', () => {
+        // Written so it holds in any timezone CI runs in.
+        const now = new Date();
+        const pad = (value: number) => String(value).padStart(2, '0');
+        expect(formatPgnDate(now))
+            .toBe(`${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`);
+    });
+
+    it('reaches the Date tag of a game exported without one', () => {
+        const pgn = exportPgn([{
+            uci: 'h2e2', piece: 'C', captured: '', board: [],
+            sideToMove: 'b', inCheck: false, ply: 1,
+        } as MoveRecord]);
+        expect(tag(pgn, 'Date')).toBe(formatPgnDate());
     });
 });
