@@ -3,6 +3,7 @@ import {
     ENGINE_PTHREAD_POOL_SIZE,
     ENGINE_THREAD_HEADROOM,
     HIGH_TIER_MAX_THREADS,
+    hashChoicesForTier,
     MAX_ENGINE_THREADS,
     detectDeviceTier,
     resolveEngineBootConfig,
@@ -229,5 +230,39 @@ describe('one sizing policy, read from the machine', () => {
         expect(unmeasured.mobileLike).toBe(false);
         expect(unmeasured.tier).toBe('high');
         expect(resolveEngineBootConfig(unmeasured).threads).toBeGreaterThan(1);
+    });
+});
+
+describe('the engine hash a device may be asked for', () => {
+    it('offers a ladder that grows with the tier', () => {
+        expect(hashChoicesForTier('low')).toEqual([16, 24, 48]);
+        expect(hashChoicesForTier('mid')).toEqual([32, 64, 128, 256]);
+        expect(hashChoicesForTier('high')).toEqual([64, 128, 256, 512]);
+    });
+
+    it('honours a size the tier offers', () => {
+        const config = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { hashMB: 512 });
+        expect(config.hashMB).toBe(512);
+    });
+
+    it('falls back to the tier default rather than to the nearest rung', () => {
+        // A preference saved on another machine is a statement about *that*
+        // machine, so a size this tier does not offer is not clamped into it.
+        const desktop = detectDeviceTier(DESKTOP);
+        const untouched = resolveEngineBootConfig(desktop).hashMB;
+        expect(resolveEngineBootConfig(desktop, { hashMB: 4096 }).hashMB).toBe(untouched);
+        expect(resolveEngineBootConfig(desktop, { hashMB: 100 }).hashMB).toBe(untouched);
+        expect(resolveEngineBootConfig(desktop, { hashMB: Number.NaN }).hashMB).toBe(untouched);
+        expect(resolveEngineBootConfig(desktop, { hashMB: undefined }).hashMB).toBe(untouched);
+    });
+
+    it('still backs off from whatever was in use when a boot has to be retried', () => {
+        const safer = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { hashMB: 512, saferBoot: true });
+        expect(safer.hashMB).toBe(256);
+        expect(safer.threads).toBe(1);
+    });
+
+    it('never offers a phone a size a phone should not take', () => {
+        for (const size of hashChoicesForTier('low')) expect(size).toBeLessThanOrEqual(48);
     });
 });

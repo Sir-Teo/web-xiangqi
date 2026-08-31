@@ -183,9 +183,45 @@ export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile 
     };
 }
 
+/**
+ * The hash sizes a tier may be asked for, smallest first.
+ *
+ * The transposition table is the one engine resource a strong player expects to
+ * set, and it matters more now that a search runs for a second or two rather
+ * than nine milliseconds: a table that fills mid-search starts discarding work
+ * the search is about to want again. `hashfull` in the engine dashboard is what
+ * tells you the current size is too small.
+ *
+ * The ceiling per tier is a memory judgement, not a taste one. The core is
+ * built with `MAXIMUM_MEMORY=2147483648`, and the NNUE alone is 53MB on top of
+ * the engine itself, so the top of this ladder has to leave the module room to
+ * grow into. A low-tier device is a phone and gets no ladder worth offering.
+ */
+const HASH_CHOICES_BY_TIER: Record<DeviceTier, readonly number[]> = {
+    low: [16, 24, 48],
+    mid: [32, 64, 128, 256],
+    high: [64, 128, 256, 512],
+};
+
+export function hashChoicesForTier(tier: DeviceTier): readonly number[] {
+    return HASH_CHOICES_BY_TIER[tier];
+}
+
+/**
+ * An asked-for hash size, held inside what the tier allows.
+ *
+ * Anything outside the ladder falls back to the tier's default rather than to
+ * the nearest rung, because a stored preference from another machine is a
+ * statement about *that* machine and this one has its own default.
+ */
+export function resolveHashMB(tier: DeviceTier, requested: unknown, fallback: number): number {
+    const wanted = Math.trunc(finiteNumber(requested, Number.NaN));
+    return HASH_CHOICES_BY_TIER[tier].includes(wanted) ? wanted : fallback;
+}
+
 export function resolveEngineBootConfig(
     profile: DeviceProfile,
-    options: { allowSIMD?: boolean; saferBoot?: boolean } = {}
+    options: { allowSIMD?: boolean; saferBoot?: boolean; hashMB?: number } = {}
 ): EngineBootConfig {
     const allowSIMD = options.allowSIMD !== false;
 
@@ -208,6 +244,11 @@ export function resolveEngineBootConfig(
         threads = threadsForCores(profile.hardwareConcurrency, 4, HIGH_TIER_MAX_THREADS);
         hashMB = 128;
     }
+
+    // An explicit ask, held inside the tier's ladder. Applied before the safer
+    // boot halves it, so a retry after a crash still backs off from whatever
+    // was actually in use.
+    hashMB = resolveHashMB(profile.tier, options.hashMB, hashMB);
 
     if (options.saferBoot) {
         variant = resolveSingleVariant(allowSIMD);

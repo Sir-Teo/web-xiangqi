@@ -82,6 +82,7 @@ import {
   detectDeviceProfile,
   detectDeviceScreen,
   detectSimdSupport,
+  hashChoicesForTier,
   resolveEngineBootConfig,
   resolveLiveAnalysisPolicy,
   resolveReviewPolicy,
@@ -358,6 +359,7 @@ type StoredPreferences = {
   showArrows?: boolean;
   soundEnabled?: boolean;
   searchDepth?: number;
+  engineHashMB?: number;
   analysisEngineMode?: AnalysisEngineMode;
   enginePvLineCount?: PvLineCount;
   aiStrength?: AiStrength;
@@ -457,6 +459,11 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       showArrows: typeof record.showArrows === 'boolean' ? record.showArrows : undefined,
       soundEnabled: typeof record.soundEnabled === 'boolean' ? record.soundEnabled : undefined,
       searchDepth: Number.isFinite(searchDepth) ? Math.max(1, Math.min(24, Math.trunc(searchDepth))) : undefined,
+      // Not clamped here: which sizes are allowed is the tier's business, and
+      // resolveEngineBootConfig drops anything off this machine's ladder back
+      // to its own default. A value saved on another machine is a statement
+      // about that machine.
+      engineHashMB: Number.isFinite(Number(record.engineHashMB)) ? Math.trunc(Number(record.engineHashMB)) : undefined,
       analysisEngineMode: isAnalysisEngineMode(record.analysisEngineMode) ? record.analysisEngineMode : undefined,
       enginePvLineCount: isPvLineCount(record.enginePvLineCount) ? record.enginePvLineCount : undefined,
       aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
@@ -894,6 +901,7 @@ function App() {
 
   const [searchDepth, setSearchDepth] = useState(storedPreferences.searchDepth ?? defaultSearchDepth);
   const [analysisEngineMode, setAnalysisEngineMode] = useState<AnalysisEngineMode>(storedPreferences.analysisEngineMode ?? 'optimized');
+  const [engineHashMB, setEngineHashMB] = useState<number | undefined>(storedPreferences.engineHashMB);
   const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(storedPreferences.enginePvLineCount ?? 3);
   const [engineRestartToken, setEngineRestartToken] = useState(0);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
@@ -914,6 +922,7 @@ function App() {
     updateSoundEnabled(preferences.soundEnabled ?? true);
     setSearchDepth(preferences.searchDepth ?? defaultSearchDepth);
     setAnalysisEngineMode(preferences.analysisEngineMode ?? 'optimized');
+    setEngineHashMB(preferences.engineHashMB);
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
@@ -932,6 +941,7 @@ function App() {
       showArrows,
       soundEnabled,
       searchDepth,
+      engineHashMB,
       analysisEngineMode,
       enginePvLineCount,
       aiStrength,
@@ -943,6 +953,7 @@ function App() {
     aiStrength,
     analysisEngineMode,
     assistMode,
+    engineHashMB,
     enginePvLineCount,
     notationStyle,
     orientation,
@@ -1127,17 +1138,18 @@ function App() {
   const deviceProfile = useMemo(() => detectDeviceProfile(), []);
 
   const baseEngineBootConfig = useMemo(
-    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport() }),
-    [deviceProfile]
+    () => resolveEngineBootConfig(deviceProfile, { allowSIMD: detectSimdSupport(), hashMB: engineHashMB }),
+    [deviceProfile, engineHashMB]
   );
 
   const engineBootConfig = useMemo(() => {
     if (engineSafetyBootLevel < 1) return baseEngineBootConfig;
     return resolveEngineBootConfig(deviceProfile, {
       allowSIMD: baseEngineBootConfig.allowSIMD,
+      hashMB: engineHashMB,
       saferBoot: true,
     });
-  }, [baseEngineBootConfig, deviceProfile, engineSafetyBootLevel]);
+  }, [baseEngineBootConfig, deviceProfile, engineHashMB, engineSafetyBootLevel]);
 
   const engineDetailEnabled = engineEnabled && analysisTab === 'engine' && !isAiTurn && reviewStatus !== 'running';
   const analysisMultiPv = engineDetailEnabled ? enginePvLineCount : 1;
@@ -2359,6 +2371,7 @@ function App() {
   // Only where the board leaves room beside it. On a phone the board is the
   // full width of the screen and there is no gutter to sit in; the eval is on
   // the mobile header chip and in the analysis tab there instead.
+  const engineHashChoices = useMemo(() => hashChoicesForTier(deviceProfile.tier), [deviceProfile.tier]);
   const showEvalBar = engineEnabled && !isMobile;
   const displayEvalClass = displayEvalScore === null
     ? ''
@@ -3897,6 +3910,38 @@ function App() {
                 onChange={(e) => setSearchDepth(Number(e.target.value))}
                 className="premium-slider"
               />
+            </div>
+
+            {/* The transposition table is the one engine resource a strong
+                player expects to set, and it matters more now that a search
+                runs for a second or two: a table that fills mid-search starts
+                discarding work the search is about to want again. `hash %` in
+                the engine dashboard is what says the current size is too small.
+                Changing it reboots the engine, which takes about a third of a
+                second, so the label says so rather than leaving a stall
+                unexplained. */}
+            <div className="settings-group">
+              <span
+                id="settings-engine-hash-label"
+                className="settings-label"
+                title="The engine's transposition table. Changing it restarts the engine."
+              >
+                Engine Hash
+              </span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-hash-label">
+                {engineHashChoices.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={`pill-btn ${engineBootConfig.hashMB === size ? 'pill-btn-active' : ''}`}
+                    onClick={() => setEngineHashMB(size)}
+                    aria-pressed={engineBootConfig.hashMB === size}
+                    aria-label={`Engine hash ${size} megabytes${engineBootConfig.hashMB === size ? ', in use' : ''}`}
+                  >
+                    {size}MB
+                  </button>
+                ))}
+              </div>
             </div>
 
             {isAiMode && (
