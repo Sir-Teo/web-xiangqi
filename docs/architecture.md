@@ -728,6 +728,35 @@ happened twice in one night: `npm test` does not run `test:openings` or
 them), and a check that reports success is only telling you about the things it
 looked at.
 
+## The tab order is a budget
+
+Every focusable thing is a key press between someone and the control they want,
+and two of this app's lists grow with the game. `Board.tsx` fixed its share
+first — every occupied square was `tabIndex={0}`, so reaching the move list from
+the toolbar meant Tab thirty-two times through pieces — and the reasoning
+generalises.
+
+Measured on a 30-ply game, tab stops before the bottom command bar:
+
+| | stops on the page | before the bar |
+| --- | --- | --- |
+| before the breadcrumb change | 91 | 83 |
+| after | 61 | 53 |
+
+`utils/rovingFocus.ts` holds the arithmetic: which item carries the stop
+(wherever focus was last left, then whatever is current, then the last item) and
+where a key moves it (ends do not wrap — a strip representing a sequence should
+not jump from the last move back to the first). The case that bites is a
+remembered index the list has since outgrown, which happens every time someone
+steps back and plays a different move.
+
+**The move tree is the remaining half**, at one stop per ply. The same fix
+applies but it is not the same shape: the breadcrumb is a linear strip, and the
+tree is rows of red/black chips plus variation rows, so it needs two-dimensional
+movement and a decision about whether arrows enter a variation. That is a
+judgement about the primary navigation surface rather than a mechanical change,
+which is why it is written down here rather than guessed at.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
