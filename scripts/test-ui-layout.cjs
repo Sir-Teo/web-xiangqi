@@ -1201,6 +1201,67 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
   }
 }
 
+/** Red chariot e1 takes the pawn on e5 and checks the general on e9. */
+const CAPTURE_CHECK_FEN = "4k4/9/9/9/4p4/9/9/9/4R4/3K5 w - - 0 1";
+
+/** The record both entry points have to produce, however the move got there. */
+async function assertCaptureAndCheckAreRecorded(page, how) {
+  const state = await page.evaluate(() => ({
+    announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
+    title: [...document.querySelectorAll(".tree-breadcrumb-chip")].slice(-1)[0]?.getAttribute("aria-label") || "",
+    badge: document.body.innerText.includes("Check"),
+  }));
+
+  if (!/captures/i.test(state.title)) {
+    throw new Error(`A ${how} capture was described as "${state.title}" -- the piece taken was not recorded.`);
+  }
+  if (!/captures/i.test(state.announced)) {
+    throw new Error(`A ${how} capture was announced as "${state.announced}".`);
+  }
+  if (!/\bCheck\./.test(state.announced)) {
+    throw new Error(
+      `A ${how} checking move was announced as "${state.announced}". The same flag enforces ` +
+      `perpetual check, so this is not only a wording problem.`
+    );
+  }
+  if (!state.badge) {
+    throw new Error(`The board showed no Check badge after a ${how} move that gives check.`);
+  }
+}
+
+/**
+ * The same move, arrived at the other way: loaded rather than played.
+ *
+ * `loadMoves` builds its own move records, and it is the path behind share
+ * links, PGN import and every saved game -- so blanking `captured` there is not
+ * a smaller version of the same bug, it is the one that reaches most games.
+ * Nothing caught it: the whole suite stayed green with every loaded capture
+ * recorded as a quiet move.
+ *
+ * Same position and same move as the played case next door, so the two paths
+ * are being held to one answer rather than to two descriptions of one.
+ */
+async function assertALoadedCaptureRecordsWhatItDid(page) {
+  const fen = encodeURIComponent(CAPTURE_CHECK_FEN);
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${fen}&moves=e1e5`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForFunction(
+    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === 1,
+    null,
+    { timeout: 10000 },
+  );
+  await assertCaptureAndCheckAreRecorded(page, "loaded");
+}
+
 /**
  * What a played move records about itself: that it captured, and that it checks.
  *
@@ -1225,7 +1286,7 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
  * and not a mate, and no result modal covers the board.
  */
 async function assertAPlayedCaptureRecordsWhatItDid(page) {
-  const fen = encodeURIComponent("4k4/9/9/9/4p4/9/9/9/4R4/3K5 w - - 0 1");
+  const fen = encodeURIComponent(CAPTURE_CHECK_FEN);
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${fen}`, {
     waitUntil: "domcontentloaded",
@@ -1250,27 +1311,7 @@ async function assertAPlayedCaptureRecordsWhatItDid(page) {
     { timeout: 5000 },
   );
 
-  const state = await page.evaluate(() => ({
-    announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
-    title: [...document.querySelectorAll(".tree-breadcrumb-chip")].slice(-1)[0]?.getAttribute("aria-label") || "",
-    badge: document.body.innerText.includes("Check"),
-  }));
-
-  if (!/captures/i.test(state.title)) {
-    throw new Error(`A capture was described as "${state.title}" -- the piece taken was not recorded.`);
-  }
-  if (!/captures/i.test(state.announced)) {
-    throw new Error(`The capture was announced as "${state.announced}".`);
-  }
-  if (!/\bCheck\./.test(state.announced)) {
-    throw new Error(
-      `A checking move was announced as "${state.announced}". The same flag enforces ` +
-      `perpetual check, so this is not only a wording problem.`
-    );
-  }
-  if (!state.badge) {
-    throw new Error("The board showed no Check badge after a move that gives check.");
-  }
+  await assertCaptureAndCheckAreRecorded(page, "played");
 }
 
 async function assertCheckmateByPlayingTheMove(page) {
@@ -7516,6 +7557,7 @@ async function main() {
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);
+    await assertALoadedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
