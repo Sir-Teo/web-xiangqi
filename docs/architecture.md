@@ -679,9 +679,14 @@ annotation for anything that wants it.
 ## What `npm run verify` covers, and what it does not
 
 `npm run verify` runs typecheck, lint, the vitest suite, `test:openings`,
-`test:library`, `test:smoke`, `test:parity` and `build:react` — everything in
-CI's "React app checks" step except `npm audit`, which is left out so the
-command works offline, plus the two engine scripts that need no toolchain.
+`test:library`, `test:engine:contract`, `test:smoke`, `test:parity` and
+`build:react` — everything in CI's "React app checks" step except `npm audit`,
+which is left out so the command works offline, plus the engine scripts that
+need no toolchain.
+
+**It stays browser-free on purpose.** Everything in it runs with no Chromium
+installed, which is what lets it work offline; that is why `test:prod:smoke`
+is *not* in it despite being cheap.
 
 It is **not** the whole of CI, but the gap is narrower than it looks. CI also
 installs emsdk, rebuilds the Pikafish WASM (`npm run build`), and runs a
@@ -697,6 +702,25 @@ be caught before CI; what cannot is a change to the build itself — the patch,
 the emscripten templates or `build-pikafish.sh` — since that rebuild is the step
 requiring the toolchain. `verify` runs both, because they are cheap: smoke is 0.5s and parity 1.5s
 against a 4.3s command, so the engine is covered for the price of rounding.
+
+### Which gate is upstream of a deploy
+
+The distinction that matters is not local-versus-CI but **what runs before
+`dist` is uploaded**. `ci.yml` is not upstream of the Pages job, so a red suite
+there does not stop a publish — which is exactly how a broken engine could have
+shipped.
+
+Two checks were added for that reason, and both sit where the deploy will see
+them:
+
+- `test:engine:contract` reads the built engine artifacts and asserts what
+  `templates/pikafish.js` and `analysisProfile.ts` assume about them. Static, so
+  it runs inside `verify` without a browser or a toolchain.
+- `test:prod:smoke` serves `dist` with `vite preview` and loads it. Every other
+  browser suite here drives the *dev* server, so the bundle that gets uploaded
+  was the one thing nothing had ever loaded. It runs as its own step in
+  `deploy-pages.yml`, after `verify`, with a Chromium install — deliberately
+  shallow, because its job is to catch a broken deploy, not to re-test the UI.
 
 This distinction is worth stating because the failure it prevents already
 happened twice in one night: `npm test` does not run `test:openings` or
