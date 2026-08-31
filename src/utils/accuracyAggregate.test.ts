@@ -30,6 +30,35 @@ describe('accuracy aggregation', () => {
         expect(volatilityWeights(series)).toHaveLength(40)
     })
 
+    it('scales the volatility window with the length of the game', () => {
+        // The window is what volatility is measured over, and it decides how
+        // much each move counts toward the final accuracy. Nothing pinned its
+        // size: every other check here is structural -- one weight per move,
+        // inside the clamp, flat games at the floor -- and all of them hold
+        // just as well with the window twice as wide, which is a different
+        // accuracy for the same game.
+        //
+        // It is observable from outside. The moves before a full window has
+        // gone by all borrow the opening window, and the first sliding window
+        // *is* the opening window, so the run of identical leading weights is
+        // the window size less one.
+        //
+        // The series is deliberately gentle: a violent one saturates every
+        // weight at MAX_WEIGHT, every weight is then equal, and the run says
+        // nothing at all. That is what the first attempt at this measured.
+        const leadingRun = (weights: number[]) => {
+            let run = 1;
+            while (run < weights.length && weights[run] === weights[0]) run += 1;
+            return run;
+        };
+        const series = (length: number) =>
+            Array.from({ length }, (_, i) => 50 + Math.sin(i * 1.7) * 5);
+
+        expect(leadingRun(volatilityWeights(series(30)))).toBe(2);   // floor(30/10) = 3
+        expect(leadingRun(volatilityWeights(series(60)))).toBe(5);   // floor(60/10) = 6
+        expect(leadingRun(volatilityWeights(series(100)))).toBe(7);  // 10, held at MAX_WINDOW = 8
+    });
+
     it('keeps every weight inside the clamp', () => {
         const wild = Array.from({ length: 60 }, (_, i) => (i % 2 === 0 ? 0 : 100))
         const flat = Array.from({ length: 60 }, () => 50)
