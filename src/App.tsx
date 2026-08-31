@@ -22,6 +22,7 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
+import { rovingIndexForKey, rovingTabStopIndex } from './utils/rovingFocus';
 import { pgnDownloadFilename } from './utils/pgnFilename';
 import {
   DEFAULT_PANEL_WIDTH,
@@ -1456,6 +1457,34 @@ function App() {
     // with the current node a thousand pixels off the right edge. Re-run when
     // the view that carries it comes back.
   }, [breadcrumbNodeIds.length, currentNodeId, mobileView, mobileAnalysisTab, analysisTab]);
+
+  /**
+   * The breadcrumb is one composite widget, so it gets one tab stop.
+   *
+   * `rovingFocus.ts` holds the arithmetic and says why. The stop follows focus,
+   * so tabbing out and back returns you to the chip you were on rather than to
+   * the end of the line.
+   */
+  const [rovingBreadcrumbIndex, setRovingBreadcrumbIndex] = useState<number | null>(null);
+  const breadcrumbCurrentIndex = breadcrumbNodeIds.indexOf(currentNodeId);
+  const breadcrumbTabStopIndex = rovingTabStopIndex(
+    breadcrumbNodeIds.length,
+    rovingBreadcrumbIndex,
+    breadcrumbCurrentIndex >= 0 ? breadcrumbCurrentIndex : null
+  );
+
+  const handleBreadcrumbKeyDown = useCallback((
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    const next = rovingIndexForKey(event.key, breadcrumbNodeIds.length, index);
+    if (next === null) return;
+    event.preventDefault();
+    setRovingBreadcrumbIndex(next);
+    const strip = treeBreadcrumbRef.current;
+    const target = strip?.querySelector<HTMLButtonElement>(`[data-breadcrumb-index="${next}"]`);
+    target?.focus();
+  }, [breadcrumbNodeIds.length]);
 
   // A role="log" that does not follow its tail shows stale lines while the
   // newest sit below the fold -- measured 42px out of view on desktop. The
@@ -5018,7 +5047,21 @@ function App() {
             >
               {analysisTab === 'tree' ? (
                 <>
-                  <div className="tree-breadcrumb" ref={treeBreadcrumbRef}>
+                  {/* One tab stop with arrow keys inside it, the way the board
+                      works and for the same reason -- except this list grows
+                      with the game. Measured on a 30-ply game before the
+                      change: 91 tab stops on the page, 83 of them before the
+                      bottom command bar, half of those breadcrumb chips. A real
+                      100-ply game put a hundred of them between the toolbar and
+                      "Save". */}
+                  <div
+                    className="tree-breadcrumb"
+                    ref={treeBreadcrumbRef}
+                    role="toolbar"
+                    aria-label="Current line, one chip per move"
+                    aria-orientation="horizontal"
+                    aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+                  >
                     {breadcrumbNodeIds.map((nodeId, index) => {
                       const label = nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle);
                       const title = nodeTitle(nodeId, rootNodeId, treeNodes);
@@ -5028,6 +5071,10 @@ function App() {
                           type="button"
                           className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
                           onClick={() => jumpToNode(nodeId)}
+                          onFocus={() => setRovingBreadcrumbIndex(index)}
+                          onKeyDown={(event) => handleBreadcrumbKeyDown(event, index)}
+                          tabIndex={index === breadcrumbTabStopIndex ? 0 : -1}
+                          data-breadcrumb-index={index}
                           title={title}
                           aria-label={title}
                           aria-current={nodeId === currentNodeId ? 'true' : undefined}
