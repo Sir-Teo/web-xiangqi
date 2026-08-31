@@ -227,6 +227,21 @@ artifacts, together — `WASM_PTHREAD_POOL_SIZE=<n> npm run build`, which needs
 emsdk. A source-only raise would let a tier ask for more than the shipped core
 was built for.
 
+**Four places know the pool size, and `test:engine:contract` makes them agree:**
+the build script's default, the built artifacts themselves,
+`ENGINE_PTHREAD_POOL_SIZE` in `analysisProfile.ts`, and `templates/pikafish.js`
+— which needs it because it clamps a caller's explicit thread count, and
+`Pikafish.createWorkerEngine` is a published helper. Unclamped, a browser asking
+for 16 threads got a worker that timed out with nothing to read; 64 booted fine
+in the same run, so the failure is timing-dependent and not findable by trying
+once. Node is not clamped: the pool is a browser-worker concept and the same
+artifacts run 17 threads there, which is what `bench:nps` does.
+
+The check also compares `public/pikafish.js` and `dist/pikafish.js` against the
+template they are copied from. Editing the template without rebuilding leaves
+the app loading the old wrapper, and the shipped copies were 35 lines behind
+when that check was added.
+
 ### The emsdk version is part of the engine, and is pinned
 
 `install-emsdk.sh` used `EMSDK_VERSION=latest`, so the Pages deploy compiled the
