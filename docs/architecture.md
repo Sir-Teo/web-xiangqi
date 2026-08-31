@@ -1181,6 +1181,17 @@ holding the transform for the slide and dropping the panel out of layout when
 the transition ends. Either is a change to how the collapse *feels*, which is
 a design call rather than a bug fix.
 
+There is a real argument for leaving it as it is, which is worth stating
+because the numbers above only make one case. Today the board is exactly the
+same size whether the toolbars are shown or hidden, so toggling one is a
+cheap, reversible look at more of the page. If the row is reclaimed, every
+toggle resizes the board and every piece moves — and at the sizes where this
+matters most, by hundreds of pixels. A reader who collapses a bar to glance at
+something and expands it again would have the board jump twice. Nothing in
+`.board-workspace .board-wrap`'s comments claims that stability was the intent,
+but it is the behaviour, and it is not obviously worth trading away for
+everyone to fix it for the reader at 32px.
+
 **Wanted: whether the collapse should give the row back.** If it should, this
 is a smaller change than the floor and it fixes the same reader.
 
