@@ -72,7 +72,7 @@ and says which side of that line each item falls on.
 | Browser suite | `test:ui:browser` (Playwright) | `test:viewport` (raw CDP, no dependency) | `test:ui:layout` (Playwright) |
 | Where the browser suite runs | `ci.yml` (PRs + main) | `ci.yml` (PRs + main) | `ci.yml` (PRs + main) |
 | Node in CI / deploy | 20 / 20 | 24 / 24 | 20 / 20 |
-| Deploy gates | audit, lint, test, build | audit, lint, test:typecheck, test, build | audit, build (WASM), verify |
+| Deploy gates | audit, lint, test, build | audit, lint, test:typecheck, test, build | audit, build (WASM), verify, prod smoke (2 host configs) |
 | Hostile-input sweep | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` |
 | Where the ceilings sit | search query; library PGN 512KB; backup 8MB; auto-save 2MB | search query; auto-save 5MB; model upload 128MB; verdict scan 4000 nodes | search query; **import text 200KB, UCI moves 1024, tree nodes 1024** |
 
@@ -104,11 +104,20 @@ agree *within* a repo, and all three now do.
 
 **Divergent because only this repo has the problem.** All three size the search
 from `hardwareConcurrency`, but only this one also caps it on a *build*
-constant: the shipped core is prewarmed with four pthread workers and asking
-for a fifth hangs the engine outright, with no error. web-chess and web-katrain
-have nothing equivalent because neither builds the engine it ships. Not a gap
-to close, but it is the one number here that cannot be changed from `src/`
-alone -- see "The thread ceiling is the build" in `docs/architecture.md`.
+constant: the shipped core is prewarmed with a fixed pthread pool -- twelve, of
+which the app may ask for at most eight -- and asking for more than the pool
+holds hangs the engine outright, with no error. web-chess and web-katrain have
+nothing equivalent because neither builds the engine it ships. Not a gap to
+close, but it is the one number here that cannot be changed from `src/` alone
+-- see "The thread ceiling is the build" in `docs/architecture.md`.
+
+Only this repo also has to *earn* its threads at runtime. The other two are not
+built with a threaded WASM core, so cross-origin isolation costs them nothing;
+here it is the difference between 479k and 3.9M nodes per second, and GitHub
+Pages does not send the headers that grant it. `public/coi-sw.js` adds them --
+isolation only, no caching -- which is the one service worker this repo has
+ever deliberately kept. Offline support is still missing, and web-chess's
+`public/sw.js` remains the pattern for it.
 
 **The rule this file exists to enforce:** any check that a sibling has and this
 repo does not should be either adopted or explained here. The gaps found this
