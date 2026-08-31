@@ -451,13 +451,16 @@ const MOVE_TOKEN_SHAPE = new RegExp(
  * Accepts WXF, Chinese, and plain coordinates, so a caller does not have to
  * know which it was handed.
  */
+/** A move written as coordinates, which this reader also accepts. */
+const COORDINATE_TOKEN = /^[a-i][0-9][a-i][0-9]$/;
+
 export function parseMoveInNotation(
     board: BoardState,
     sideToMove: Side,
     text: string
 ): string | null {
     const raw = String(text ?? '').trim().toLowerCase();
-    if (/^[a-i][0-9][a-i][0-9]$/.test(raw)) {
+    if (COORDINATE_TOKEN.test(raw)) {
         // Coordinates still have to name a legal move, like everything else.
         return legalMovesInPosition(board, sideToMove).includes(raw) ? raw : null;
     }
@@ -503,6 +506,15 @@ export interface ParsedNotationLine {
  * is collected in `rejected`, because that is the case worth telling a user
  * about.
  */
+/**
+ * How many move-shaped tokens may fail before the parser stops reading.
+ *
+ * Not a correctness limit: nothing in the app reads `rejected`, and a record
+ * this far from parsing is not going to start. It bounds the work a paste can
+ * ask for. See the note in the loop below.
+ */
+export const MAX_UNREADABLE_NOTATION_TOKENS = 64;
+
 export function parseMoveLineInNotation(
     board: BoardState,
     sideToMove: Side,
@@ -513,9 +525,29 @@ export function parseMoveLineInNotation(
     const rejected: string[] = [];
     let state = board;
     let side = sideToMove;
+    // Counted separately from `rejected`, which is only the tokens worth
+    // telling a reader about. A coordinate that names no legal move is not
+    // reportable -- it is as likely to be a word from a comment -- but it
+    // costs the same full generation, so it has to count against the bound.
+    let unreadable = 0;
 
     for (const token of String(text ?? '').split(/[\s,;]+/)) {
         if (moves.length >= maxMoves) break;
+        // Reading a move costs a full legal-move generation plus writing every
+        // one of them in both notations, so the work is bounded by the number
+        // of *move-shaped* tokens, not by `maxMoves` -- which counts only the
+        // ones that matched. A paste of tokens that all look like moves and
+        // name none therefore pays that price per token with nothing to show
+        // for it: 40,000 of them took four and a half seconds on the main
+        // thread, and the import box accepts up to 200,000 characters.
+        //
+        // Once a token reads as a move but names none, the record and the
+        // board are out of step, and every later token is being matched
+        // against a position the record never reached. A handful of failures
+        // can still be an annotation the stripper missed, so the bound is
+        // generous; thousands of them cannot be recovered from by reading
+        // further, only by telling the reader.
+        if (unreadable >= MAX_UNREADABLE_NOTATION_TOKENS) break;
         // An empty token is a leading or doubled separator, not the end of the
         // record. Breaking on it meant a record that began with a newline --
         // which is every record with a header stripped off the front -- parsed
@@ -524,7 +556,9 @@ export function parseMoveLineInNotation(
         const uci = parseMoveInNotation(state, side, token);
         if (!uci) {
             // Only complain about something that was shaped like a move.
-            if (canonicaliseNotationToken(token)) rejected.push(token);
+            const shaped = canonicaliseNotationToken(token);
+            if (shaped) rejected.push(token);
+            if (shaped || COORDINATE_TOKEN.test(token.trim().toLowerCase())) unreadable += 1;
             continue;
         }
         const next = applyMoveUnchecked(state, uci);

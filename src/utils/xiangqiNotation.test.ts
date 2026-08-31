@@ -8,6 +8,7 @@ import {
     formatRecordInStyle,
     formatWxfMove,
     isNotationStyle,
+    MAX_UNREADABLE_NOTATION_TOKENS,
     canonicaliseNotationToken,
     parseMoveInNotation,
     parseMoveLineInNotation,
@@ -428,5 +429,57 @@ describe('a record as it actually arrives', () => {
 
     it('falls back to the opening position rather than losing the moves', () => {
         expect(parseNotationRecord('not a fen at all', '1. C2=5').moves).toEqual(['h2e2']);
+    });
+});
+
+describe('a record the reader cannot follow', () => {
+    /**
+     * Reading one token costs a full legal-move generation plus writing every
+     * legal move in both notations. `maxMoves` bounds the moves that *matched*,
+     * so it does not bound that work at all: a paste where every token looks
+     * like a move and none of them is one pays the price per token and matches
+     * nothing. Forty thousand of them -- which fits inside the import box's
+     * 200,000-character limit -- took four and a half seconds on the main
+     * thread before this bound existed.
+     *
+     * Stopping is not a loss. After the first token that reads as a move and
+     * names none, the record and the board have parted company, and every
+     * later token is being matched against a position the record never
+     * reached.
+     */
+    it('stops after a bounded number of unreadable tokens', () => {
+        const parsed = parseNotationRecord(undefined, 'C9=9 '.repeat(5_000));
+        expect(parsed.moves).toEqual([]);
+        expect(parsed.rejected.length).toBe(MAX_UNREADABLE_NOTATION_TOKENS);
+    });
+
+    it('counts a coordinate that names no legal move against the bound as well', () => {
+        // Not reportable -- a four-letter word from a comment reads the same --
+        // but it costs the same generation, so it has to be bounded too.
+        const parsed = parseNotationRecord(undefined, 'h2e2 '.repeat(5_000));
+        expect(parsed.moves).toEqual(['h2e2']);
+        expect(parsed.rejected).toEqual([]);
+    });
+
+    it('still reads a record longer than the bound', () => {
+        // The bound must not be reachable by a record that parses, or a real
+        // game would stop being read partway through. Both chariots shuffling
+        // is 80 plies of entirely legal moves -- comfortably past 64 -- and it
+        // is built by the formatter so the fixture cannot drift from it.
+        const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
+        const long = Array.from({ length: 20 }, () => cycle).flat();
+        expect(long.length).toBeGreaterThan(MAX_UNREADABLE_NOTATION_TOKENS);
+        const text = formatLineInStyle(parseFenBoard(START_FEN), long, 'wxf', long.length);
+        const parsed = parseNotationRecord(undefined, text);
+        expect(parsed.rejected).toEqual([]);
+        expect(parsed.moves).toEqual(long);
+    });
+
+    it('does not count a move number or a result against the bound', () => {
+        // These are skipped without a generation, so a hundred of them in a
+        // row must not stop a record that is otherwise readable.
+        const noise = Array.from({ length: 200 }, (_, i) => `${i + 1}.`).join(' ');
+        const parsed = parseNotationRecord(undefined, `${noise} C2=5 1-0`);
+        expect(parsed.moves).toEqual(['h2e2']);
     });
 });

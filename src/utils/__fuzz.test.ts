@@ -10,13 +10,16 @@ import { decodeSavedMoveTreeParam } from './shareTree';
 import { normalizeSavedGames, normalizeSavedMoveTree } from './gameLibrary';
 import { parseFenBoard, parseMove } from './xiangqi';
 import { toSearchTerms, matchesSearchTerms } from './searchTerms';
+import { canonicaliseNotationToken, parseNotationRecord } from './xiangqiNotation';
 
 /**
  * Every entry point here reads text the app did not write: a paste, a share
  * link, a library backup restored from a file. web-chess sweeps its six PGN
  * entry points this way; this repo had the guard on `moveImport` alone, which
  * is where its own quadratic bracket scan was caught. The rest were never
- * swept.
+ * swept -- including the notation reader, which was added last and is the
+ * one that pastes of a Chinese or WXF record land in. It was over the bound
+ * by four and a half seconds when it was finally swept.
  *
  * The assertion is a time bound rather than a value: what makes a wrong file
  * dangerous is not that it parses to the wrong thing, it is that it never
@@ -41,6 +44,14 @@ const NASTY: Array<[string, string]> = [
     ['nul bytes', '\0\0\0h2e2\0\0'],
     ['lone surrogates', '\ud800\ud800\ud800'],
     ['minified script', 'function f(){return[1,2,3]}'.repeat(20_000)],
+    // Shaped like moves, and that is the point: the notation reader spends a
+    // full legal-move generation on anything move-shaped, so junk it can
+    // discard cheaply is not what costs it. These are sized to the import
+    // box's own 200,000-character limit.
+    ['many chinese move tokens', '\u70ae\u4e8c\u5e73\u4e94 '.repeat(40_000)],
+    ['many wxf move tokens', 'C2=5 '.repeat(40_000)],
+    ['many move-shaped tokens naming nothing', 'C9=9 '.repeat(40_000)],
+    ['many numbered notation lines', Array.from({ length: 20_000 }, (_, i) => `${i}. C2=5 C8=5`).join('\n')],
 ];
 
 for (const [name, input] of NASTY) {
@@ -57,6 +68,8 @@ for (const [name, input] of NASTY) {
         try { parseFenBoard(input); } catch { /* an invalid FEN is expected to throw */ }
         parseMove(input);
         matchesSearchTerms(input, toSearchTerms(input));
+        canonicaliseNotationToken(input);
+        parseNotationRecord(undefined, input);
 
         const elapsed = performance.now() - started;
         expect(elapsed, `${name} took ${elapsed.toFixed(0)}ms`).toBeLessThan(1000);
