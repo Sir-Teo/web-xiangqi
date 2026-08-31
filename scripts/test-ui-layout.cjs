@@ -792,6 +792,75 @@ async function assertBoardMatchesThePlyItIsOn(page) {
   }
 }
 
+/**
+ * The shortcuts the buttons advertise.
+ *
+ * `WatchControls` puts them in its tooltips -- "First position (↑)", "Previous
+ * move (←)", "Next move (→)", "Latest move (↓)" -- which is a promise to the
+ * reader, and a global `keydown` listener is an easy thing to break from a long
+ * way away. Any new handler that swallows an arrow, or forgets to check
+ * `defaultPrevented`, silently turns a documented key into a dead one.
+ *
+ * The last check is the interesting one. The board uses the same four arrows to
+ * move its own cursor, so exactly one of the two has to act on a press: with
+ * the board focused the game must not move under it. That arbitration is the
+ * `defaultPrevented` guard in `WatchControls`, and nothing else here covers it.
+ */
+async function assertAdvertisedMoveShortcuts(page) {
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9"];
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${MOVES.join("+")}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(600);
+  // Somewhere that is not a control, so the global listener is what responds.
+  await page.evaluate(() => document.body.click());
+
+  const ply = () => page.evaluate(
+    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1)
+  );
+
+  const press = async (key, expected, what) => {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(300);
+    const got = await ply();
+    if (got !== expected) {
+      throw new Error(`${key} should ${what}: expected ply ${expected}, got ${got}`);
+    }
+  };
+
+  await press("ArrowUp", 0, "jump to the first position");
+  await press("ArrowRight", 1, "step to the next move");
+  await press("ArrowRight", 2, "step to the next move");
+  await press("ArrowLeft", 1, "step back a move");
+  await press("ArrowDown", MOVES.length, "jump to the latest move");
+
+  // With the board focused the arrows belong to the board's own cursor.
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  const focusedOnBoard = await page.evaluate(
+    () => Boolean(document.activeElement && document.activeElement.closest(".xiangqi-board"))
+  );
+  if (!focusedOnBoard) throw new Error("The skip link did not put focus on the board");
+  const before = await ply();
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(300);
+  const after = await ply();
+  if (after !== before) {
+    throw new Error(
+      `An arrow pressed with the board focused moved the game from ply ${before} to ${after}. ` +
+      `The board and the move controls both listen for arrows; only one may act.`
+    );
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6899,6 +6968,7 @@ async function main() {
     await assertSkipLinkReachesTheBoard(page);
     await assertDialogsReturnFocusOnClose(page);
     await assertBoardMatchesThePlyItIsOn(page);
+    await assertAdvertisedMoveShortcuts(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
