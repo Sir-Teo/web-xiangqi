@@ -6141,3 +6141,22 @@ summary:active {
 @media (prefers-reduced-motion: reduce) {
   .eval-bar-red { transition: none; }
 }
+
+/* The library explorer mirrors the book-continuations card directly above it —
+   same shape, same affordances — because they answer the same question from two
+   sources. The border colour is the only thing that separates "what the book
+   says" from "what you actually played". */
+.library-explorer-card {
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.library-explorer-card .opening-candidates-head strong {
+  color: #93c5fd;
+}
+
+.library-explorer-note {
+  margin: 0;
+  padding: 0.5rem 0.65rem 0.15rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
