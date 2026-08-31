@@ -213,7 +213,10 @@ position, 256MB hash, 18-core machine:
 
 Node agrees at depth 20 — 448k / 1.80M / 3.51M — and shows 12 threads *slower*
 than 8 on this machine (3.28M), which is why the ask stops at 8 rather than at
-the pool. Boot cost is unchanged: ready in 333ms at 4 threads, 378ms at 8.
+the pool. Boot cost is not what the bigger pool costs. Warm: ready in 333ms at 4 threads,
+378ms at 8. Cold -- a fresh browser context, nothing cached -- the board is on
+screen in about 110ms and the engine is ready in about 550ms, measured over
+three runs.
 
 The threaded core is only ever loaded on the mid and high tiers, which are
 always a pointer-and-keyboard machine, so the larger pool never reaches a phone:

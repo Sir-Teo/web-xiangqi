@@ -4695,6 +4695,23 @@ function App() {
                 role="menu"
                 aria-label="More board actions"
               >
+                {/* The desktop bar this mirrors is hidden at these widths, so
+                    without an entry here the only way to it on a phone is the
+                    command palette. */}
+                {engineEnabled && canPlayFromHere ? (
+                  <button
+                    className="mobile-action-menu-btn"
+                    type="button"
+                    onClick={() => { setShowMobileBoardActionMenu(false); playFromHere(); }}
+                    role="menuitem"
+                    title={`Keep this position and play on as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                    aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                    data-testid="mobile-play-from-here-btn"
+                  >
+                    <IconPlay />
+                    <span>Play from here</span>
+                  </button>
+                ) : null}
                 {showMobilePgnAction ? (
                   <button
                     className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
