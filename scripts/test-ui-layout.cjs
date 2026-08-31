@@ -622,6 +622,85 @@ async function assertSkipLinkReachesTheBoard(page) {
   }
 }
 
+/**
+ * Where focus goes when a dialog closes.
+ *
+ * A keyboard reader opens a dialog from a button and expects to be put back on
+ * that button when it closes; dropped on `document.body` instead, they have
+ * lost their place and must tab in from the top of the page again. The focus
+ * trap this suite already checks is only half the contract -- it keeps focus
+ * inside while the dialog is open and says nothing about where it lands after.
+ *
+ * The settings and new-game dialogs restored it. The command palette did not,
+ * on either exit: Escape and running a command both dropped focus on the body.
+ */
+async function assertDialogsReturnFocusOnClose(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(400);
+
+  for (const name of [/Start new game/i, /Open settings/i, /Open command palette/i]) {
+    const trigger = page.getByRole("button", { name });
+    if (!(await trigger.count())) throw new Error(`No trigger matching ${name}`);
+
+    await trigger.first().focus();
+    const before = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") ?? null);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(350);
+
+    const insideDialog = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el !== document.body);
+    });
+    if (!insideDialog) throw new Error(`${before}: opening left focus on the body`);
+
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+
+    const after = await page.evaluate(() => ({
+      label: document.activeElement?.getAttribute("aria-label") ?? null,
+      isBody: document.activeElement === document.body,
+    }));
+    if (after.isBody || after.label !== before) {
+      throw new Error(
+        `Closing the dialog opened from "${before}" left focus on ` +
+        `${after.isBody ? "document.body" : `"${after.label}"`} rather than returning it. ` +
+        `A reader who opened it from the keyboard has lost their place.`
+      );
+    }
+  }
+
+  // Running a command is the palette's other exit, and it has to behave too.
+  // Flip is run twice so the board is left the way it was found: this page is
+  // shared with the assertions that follow, and board orientation is a stored
+  // preference, so a single flip would reach them as a board with a0 in the
+  // wrong corner.
+  const runFlip = async () => {
+    const paletteTrigger = page.getByRole("button", { name: /Open command palette/i });
+    await paletteTrigger.first().focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(350);
+    await page.keyboard.type("flip");
+    await page.waitForTimeout(250);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    return page.evaluate(() => ({
+      label: document.activeElement?.getAttribute("aria-label") ?? null,
+      isBody: document.activeElement === document.body,
+    }));
+  };
+
+  const afterRun = await runFlip();
+  if (afterRun.isBody) {
+    throw new Error("Running a command from the palette left focus on document.body");
+  }
+  await runFlip();
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6727,6 +6806,7 @@ async function main() {
     await assertLargeDisplayBoardAndEvalBar(page);
     await assertForcedColoursRemainReadable(browser);
     await assertSkipLinkReachesTheBoard(page);
+    await assertDialogsReturnFocusOnClose(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);

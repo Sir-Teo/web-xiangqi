@@ -26,6 +26,14 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
 
     useEffect(() => {
         if (!open) return;
+        // Where focus was, so it can go back. Closing used to drop it on the
+        // body: a reader who opened the palette from the keyboard and pressed
+        // Escape lost their place entirely and had to tab in from the start of
+        // the page again. The settings and new-game dialogs have always
+        // restored it; this one did not.
+        const previouslyFocused = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
         setQuery('');
         setActiveIndex(0);
         setRecentIds(readRecentCommandIds());
@@ -34,6 +42,15 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
         // with focus still on the body, so the reader had to click the field
         // before typing, which defeats the point of a keyboard shortcut.
         inputRef.current?.focus({ preventScroll: true });
+        return () => {
+            // Guarded because a command can remove the control it was run from,
+            // and because a command that opens another dialog should keep the
+            // focus that dialog takes -- React runs this cleanup before that
+            // dialog's own effect.
+            if (previouslyFocused && document.contains(previouslyFocused)) {
+                previouslyFocused.focus({ preventScroll: true });
+            }
+        };
     }, [open]);
 
     const ranked = useMemo(() => rankCommands(commands, query, recentIds), [commands, query, recentIds]);
