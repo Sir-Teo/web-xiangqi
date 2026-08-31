@@ -27,6 +27,16 @@ async function waitForEngineReady(page, timeoutMs) {
   }, null, { timeout: timeoutMs });
 }
 
+/**
+ * A game with mistakes in it, for a test that needs key moments to exist.
+ *
+ * Legal and nothing more: reviewed, it produces blunders, which is the point.
+ */
+const REVIEW_FIXTURE_MOVES = [
+  "h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9", "g3g4", "g6g5", "h0g2", "h7i7",
+  "b2b4", "g7h5", "b4b1", "h5i3", "e0e1", "b7b2", "e1e0", "i7h7", "g2f4", "h7f7",
+];
+
 async function main() {
   let playwright;
   try {
@@ -68,12 +78,24 @@ async function main() {
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
-    await page.goto(`http://${host}:${port}${basePath}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Its own line, loaded through the share-link parameter, rather than a
+    // bundled Classic Game. This used to click `load-historical-hist-1`, which
+    // coupled a review smoke test to whatever happens to be in that list -- and
+    // when the list was emptied, the test failed for a reason that had nothing
+    // to do with reviewing.
+    //
+    // The line is deliberately full of mistakes: the assertions below need key
+    // moments to exist, and a well-played game has none.
+    await page.goto(
+      `http://${host}:${port}${basePath}?moves=${REVIEW_FIXTURE_MOVES.join("+")}`,
+      { waitUntil: "domcontentloaded", timeout: 60000 }
+    );
     await waitForEngineReady(page, 180000);
-
-    await page.getByRole("button", { name: /open game library/i }).click();
-    await page.locator('[data-testid="load-historical-hist-1"]').click();
-    await page.waitForSelector('[data-testid="graph-load-sweep"]', { timeout: 5000 });
+    await page.waitForFunction(
+      (expected) => document.body.innerText.includes(`${expected} / ${expected}`),
+      REVIEW_FIXTURE_MOVES.length,
+      { timeout: 30000 }
+    );
 
     await page.getByTestId("analysis-tab-review").click();
     await page.locator('.review-panel [data-testid="start-review-btn"]').click();
@@ -111,6 +133,21 @@ async function main() {
     await page.getByTestId("save-game-btn").click();
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
     await waitForEngineReady(page, 180000);
+
+    // The reload finds an auto-save and offers to restore it. The check that
+    // decides whether to offer runs on mount, before the URL's moves are
+    // applied, so it always sees an empty board and always offers -- and the
+    // dialog sits over the toolbar. Take the game from the library instead,
+    // which is what the rest of this test is about.
+    const recovery = page.getByRole("button", { name: /start fresh/i });
+    if (await recovery.count()) {
+      await recovery.first().click();
+      await page.waitForFunction(
+        () => !document.querySelector('[role="dialog"]'),
+        null,
+        { timeout: 10000 }
+      );
+    }
 
     await page.getByRole("button", { name: /open game library/i }).click();
     await page.locator('[data-testid^="load-saved-"]').first().click();
