@@ -418,7 +418,19 @@ export function canonicaliseNotationToken(text: string): string | null {
      * WXF and in Chinese alike, so a trailing run of these can never be part
      * of one. A leading `+` or `-` is a stack marker and is left alone.
      */
-    const trimmed = String(text ?? '').trim().replace(/[!?+#]+$/, '');
+    const trimmed = String(text ?? '').trim()
+        .replace(/[!?+#]+$/, '')
+        // And a move number written against the move rather than apart from
+        // it -- `1.C2=5`, `１．炮二平五`, `1)C2=5`, `1...H8+7`. Databases write
+        // records both ways, and this one failed the same way an annotated
+        // move did: skipped as decoration, leaving the next token to be read
+        // against a position a move behind.
+        //
+        // The separator is required, not optional. A Chinese token may open
+        // with a numeral -- a soldier counted from the front of a file more
+        // than three deep -- and that numeral is part of the move. None of
+        // them is followed by a full stop.
+        .replace(/^[0-9０-９]+[.。．)）、]+/, '');
     if (!trimmed || trimmed.length > 12) return null;
 
     let out = '';
@@ -444,11 +456,22 @@ export function canonicaliseNotationToken(text: string): string | null {
 }
 
 /**
- * The five shapes a move can canonicalise to.
+ * The six shapes a move can canonicalise to.
  *
- * The last two exist because WXF and Chinese order a stack marker and its file
- * differently: WXF writes `+P5+1`, Chinese writes 後九兵進一, which folds to
- * `-9P+1`. Both are one soldier of a stacked pair on a named file.
+ * They come in WXF/Chinese pairs wherever the two notations order the same
+ * parts differently. `+P5+1` against `-9P+1` is one such pair: WXF puts the
+ * file after the piece, Chinese before it, and both name one soldier of a
+ * stacked pair on a named file.
+ *
+ * The last pair is the file stacked deeper than the three words Chinese has
+ * for front, middle and rear, where each soldier is counted from the front
+ * instead. WXF drops the piece letter and writes `35+1`; Chinese keeps it and
+ * writes 三兵進一, which folds to `3P+1`.
+ *
+ * Only the WXF half was listed. The formatter has written both all along, so
+ * `formatChineseMove` produced 一兵進一 for a four-deep file and nothing could
+ * read it back -- a record written in Chinese stopped dead at that move, while
+ * the same game in WXF imported cleanly.
  */
 const MOVE_TOKEN_SHAPE = new RegExp(
     '^(?:' + [
@@ -457,6 +480,7 @@ const MOVE_TOKEN_SHAPE = new RegExp(
         '[+\\-M][KAEHRCP][1-9][+\\-=][1-9]', // +P5+1
         '[+\\-M][1-9][KAEHRCP][+\\-=][1-9]', // -9P+1
         '[1-9][1-9][+\\-=][1-9]',            // 35+1
+        '[1-9][KAEHRCP][+\\-=][1-9]',        // 3P+1, the Chinese half of it
     ].join('|') + ')$'
 );
 

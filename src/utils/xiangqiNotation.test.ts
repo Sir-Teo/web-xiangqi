@@ -173,6 +173,10 @@ describe('no two legal moves may share a notation', () => {
         ['the opening position, black', START_FEN, 'b'],
         ['stacked chariots and cannons', '3ak4/4a4/9/9/9/9/R3C4/R3C4/9/3AKA3', 'w'],
         ['soldiers three deep on two files', '3ak4/4a4/9/P3P4/P3P4/P3P4/9/9/9/3AKA3', 'w'],
+        // Four deep is where Chinese runs out of front/middle/rear and starts
+        // counting from the front instead -- a different shape, and the one
+        // the parser had no rule for.
+        ['soldiers four deep on one file', '4k4/9/4P4/4P4/4P4/4P4/9/9/9/4K4', 'w'],
         ['black doubled on a file', 'r2ak4/r3a4/9/9/9/9/9/9/9/3AKA3', 'b'],
         ['advisors and elephants both able to move', '3ak4/4a4/2b1b4/9/9/9/9/2B1B4/4A4/3AK4', 'w'],
     ];
@@ -345,6 +349,10 @@ describe('every legal move survives a round trip', () => {
         ['the opening position, black', START_FEN, 'b'],
         ['stacked chariots and cannons', '3ak4/4a4/9/9/9/9/R3C4/R3C4/9/3AKA3', 'w'],
         ['soldiers three deep on two files', '3ak4/4a4/9/P3P4/P3P4/P3P4/9/9/9/3AKA3', 'w'],
+        // Four deep is where Chinese runs out of front/middle/rear and starts
+        // counting from the front instead -- a different shape, and the one
+        // the parser had no rule for.
+        ['soldiers four deep on one file', '4k4/9/4P4/4P4/4P4/4P4/9/9/9/4K4', 'w'],
         ['advisors and elephants both able to move', '3ak4/4a4/2b1b4/9/9/9/9/2B1B4/4A4/3AK4', 'w'],
     ];
 
