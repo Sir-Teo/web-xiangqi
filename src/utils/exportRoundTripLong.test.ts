@@ -51,7 +51,7 @@ describe('a full-length game exported and read back', () => {
     });
 
     it('keeps every move for each result marker', () => {
-        for (const result of ['red', 'black', 'draw', undefined] as const) {
+        for (const result of ['red-wins', 'black-wins', 'draw', undefined] as const) {
             const pgn = exportPgnFromUci(LONG, { date: '2026.08.31', result });
             expect(extractUciMoveTree(pgn).moves, `result ${result}`).toEqual(LONG);
         }

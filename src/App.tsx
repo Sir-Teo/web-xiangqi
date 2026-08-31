@@ -3516,6 +3516,18 @@ function App() {
   // slot current. The check runs once, before the first write, so a fresh
   // board cannot clear the snapshot it is about to offer.
   const autoSaveCheckedRef = useRef(false);
+  // Read once, from the address the tab was opened with, so the recovery modal
+  // can tell a cold start from a followed link. Only the shape matters here --
+  // the link's own loader above does the validating.
+  const incomingLink = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const rawMoves = params.get('moves') ?? '';
+    const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen'));
+    if (!hasLink) return null;
+    return { moveCount: extractUciMoveLine(rawMoves).length };
+  }, []);
+
   const [autoSaveRecovery, setAutoSaveRecovery] = useState<AutoSavedGame | null>(null);
   const [autoSaveChecked, setAutoSaveChecked] = useState(false);
 
@@ -5748,6 +5760,7 @@ function App() {
         <AutoSaveRecoveryModal
           savedAt={autoSaveRecovery.savedAt}
           moveCount={autoSaveRecovery.game.moves.length}
+          incomingLink={incomingLink}
           onRestore={restoreAutoSavedGame}
           onDismiss={dismissAutoSaveRecovery}
         />

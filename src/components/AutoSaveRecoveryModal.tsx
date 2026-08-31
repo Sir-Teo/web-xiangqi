@@ -4,6 +4,19 @@ import './AutoSaveRecoveryModal.css';
 interface AutoSaveRecoveryModalProps {
     savedAt: number;
     moveCount: number;
+    /**
+     * The game the address bar carried in, if it carried one.
+     *
+     * A reader who has just clicked a shared analysis link is in a different
+     * situation from one opening the site cold, and the dismiss button means
+     * something different to each. Cold, it starts an empty board -- "Start
+     * fresh" is exactly right. Following a link, the link's game is *already*
+     * on the board, so "Start fresh" is the button that keeps it and "Restore"
+     * is the button that throws it away. The label said the opposite of what
+     * it did, so the reader who wanted the link had every reason to pick the
+     * button that discarded it.
+     */
+    incomingLink?: { moveCount: number } | null;
     onRestore: () => void;
     onDismiss: () => void;
 }
@@ -20,7 +33,13 @@ function describeWhen(savedAt: number, now = Date.now()): string {
     return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-export function AutoSaveRecoveryModal({ savedAt, moveCount, onRestore, onDismiss }: AutoSaveRecoveryModalProps) {
+export function AutoSaveRecoveryModal({
+    savedAt,
+    moveCount,
+    incomingLink = null,
+    onRestore,
+    onDismiss,
+}: AutoSaveRecoveryModalProps) {
     const modalRef = useRef<HTMLDivElement | null>(null);
     const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -74,7 +93,12 @@ export function AutoSaveRecoveryModal({ savedAt, moveCount, onRestore, onDismiss
                     {moveCount > 0
                         ? `${moveCount} ${moveCount === 1 ? 'move was' : 'moves were'} in progress ${describeWhen(savedAt)}.`
                         : `A position was in progress ${describeWhen(savedAt)}.`}
-                    {' '}Pick it up where you left off?
+                    {' '}
+                    {incomingLink
+                        ? `Restoring it replaces ${incomingLink.moveCount > 0
+                            ? `the ${incomingLink.moveCount}-move game`
+                            : 'the position'} this link opened.`
+                        : 'Pick it up where you left off?'}
                 </p>
                 <div className="auto-save-actions">
                     <button
@@ -90,7 +114,7 @@ export function AutoSaveRecoveryModal({ savedAt, moveCount, onRestore, onDismiss
                         type="button"
                         onClick={onDismiss}
                     >
-                        Start fresh
+                        {incomingLink ? "Keep the link's game" : 'Start fresh'}
                     </button>
                 </div>
             </div>

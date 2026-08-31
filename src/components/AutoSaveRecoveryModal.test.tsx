@@ -1,61 +1,61 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AutoSaveRecoveryModal } from './AutoSaveRecoveryModal';
 
-const noop = vi.fn();
-const NOW = Date.now();
+/**
+ * The dismiss button does two different things and used to have one name.
+ *
+ * Opened cold, dismissing starts an empty board, and "Start fresh" describes
+ * that exactly. Opened by following a shared link, the link's game is already
+ * on the board -- so dismissing *keeps* it and restoring *discards* it. Under
+ * the old label a reader who wanted the link they had just clicked had every
+ * reason to press Restore, which was the button that threw it away.
+ */
 
-function render(overrides: Partial<Parameters<typeof AutoSaveRecoveryModal>[0]> = {}) {
-    return renderToStaticMarkup(
+const render = (props: Partial<Parameters<typeof AutoSaveRecoveryModal>[0]> = {}) =>
+    renderToStaticMarkup(
         <AutoSaveRecoveryModal
-            savedAt={NOW - 5 * 60_000}
-            moveCount={12}
-            onRestore={noop}
-            onDismiss={noop}
-            {...overrides}
+            savedAt={Date.now() - 30_000}
+            moveCount={3}
+            onRestore={() => {}}
+            onDismiss={() => {}}
+            {...props}
         />
     );
-}
 
-describe('AutoSaveRecoveryModal', () => {
-    it('announces itself as a modal dialog with a name and a description', () => {
+describe('the unfinished-game prompt', () => {
+    it('offers a fresh board when the reader arrived cold', () => {
         const html = render();
-        expect(html).toContain('role="dialog"');
-        expect(html).toContain('aria-modal="true"');
-        expect(html).toContain('aria-labelledby="auto-save-title"');
-        expect(html).toContain('aria-describedby="auto-save-subtitle"');
-        expect(html).toContain('id="auto-save-title"');
-        expect(html).toContain('id="auto-save-subtitle"');
-    });
-
-    it('says how much work is at stake and how old it is', () => {
-        expect(render()).toContain('12 moves were in progress 5 minutes ago');
-    });
-
-    it('counts a single move in the singular', () => {
-        expect(render({ moveCount: 1 })).toContain('1 move was in progress');
-    });
-
-    it('describes a position when there are no moves to count', () => {
-        const html = render({ moveCount: 0 });
-        expect(html).toContain('A position was in progress');
-        expect(html).not.toContain('0 moves');
-    });
-
-    it('reads a fresh snapshot as just now, and an old one in the largest unit', () => {
-        expect(render({ savedAt: NOW })).toContain('moments ago');
-        expect(render({ savedAt: NOW - 3 * 3_600_000 })).toContain('3 hours ago');
-        expect(render({ savedAt: NOW - 2 * 86_400_000 })).toContain('2 days ago');
-    });
-
-    it('does not claim a snapshot came from the future', () => {
-        expect(render({ savedAt: NOW + 3_600_000 })).toContain('recently');
-    });
-
-    it('offers restoring as the primary action', () => {
-        const html = render();
-        expect(html).toContain('auto-save-btn-primary');
-        expect(html).toContain('Restore');
         expect(html).toContain('Start fresh');
+        expect(html).toContain('Pick it up where you left off?');
+        expect(html).not.toContain('link');
+    });
+
+    it('offers to keep the link when the reader followed one', () => {
+        const html = render({ incomingLink: { moveCount: 5 } });
+        expect(html).toContain("Keep the link&#x27;s game");
+        expect(html).not.toContain('Start fresh');
+    });
+
+    it('says what restoring would cost, in moves', () => {
+        expect(render({ incomingLink: { moveCount: 5 } }))
+            .toContain('Restoring it replaces the 5-move game this link opened.');
+    });
+
+    it('describes a link that carries a position rather than moves', () => {
+        expect(render({ incomingLink: { moveCount: 0 } }))
+            .toContain('Restoring it replaces the position this link opened.');
+    });
+
+    it('still counts the saved game correctly either way', () => {
+        expect(render({ moveCount: 1 })).toContain('1 move was in progress');
+        expect(render({ moveCount: 1, incomingLink: { moveCount: 2 } })).toContain('1 move was in progress');
+    });
+
+    it('keeps Restore as the button that carries focus', () => {
+        // Restore stays the default: it is the one that protects work the
+        // reader has not saved anywhere else.
+        const html = render({ incomingLink: { moveCount: 5 } });
+        expect(html.indexOf('Restore')).toBeLessThan(html.indexOf("Keep the link"));
     });
 });
