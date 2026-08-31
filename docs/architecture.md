@@ -418,14 +418,27 @@ abstraction does.
 - Share links encode the tree as base64url: `utils/shareTree.ts`.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
-- **So does `utils/historicalGames.ts` now, and it needed to.** Two of the ten
-  bundled Classic Games held a move that cannot be played, and both had been
-  shipping silently truncated: `handleLoadHistoricalGame` calls `loadMoves`
-  without validating — unlike saved games, which go through
-  `validateMoveSequence` — and `loadMoves` stops at the first illegal move
-  without saying so. The library card's label is built from the data, so it
-  advertised 19 plies and loaded 15. Any bundled move list needs the replay
-  test; the loader will not tell you.
+- **`utils/historicalGames.ts` is empty, and the reason is worth reading before
+  refilling it.** It shipped ten move lists attributed to real, named
+  grandmasters with specific events and dates, and they are not those games.
+  Seven of the ten contained the identical eight-move block
+  `a0a1 a9a8 a1d1 a8d8 i0i1 i9i8 i1h1 i8g8` — half the game, for four of them —
+  and that block leaves both chariots facing each other down an open file, so
+  `hist-1` has Hu Ronghua declining a free chariot. Two of the ten also
+  contained moves that are not legal at all, and had been loading silently
+  truncated: `handleLoadHistoricalGame` calls `loadMoves` without validating,
+  unlike saved games, and `loadMoves` stops at the first illegal move without
+  saying so, while the card's label — built from the data — advertised the full
+  length.
+
+  **What found it was running them through Game Review**: 20–28% accuracy with
+  seven to ten blunders each, against 7% for a control of random moves. That is
+  the check to repeat before adding any. Entries now require a `source`, and a
+  test refuses a run of eight identical moves shared between two of them.
+
+  The general rule: any bundled move list needs the replay test, because the
+  loader will not tell you, and needs provenance, because otherwise the records
+  are asserted rather than checkable.
 
 ## Words the engine chose, and words a player needs
 

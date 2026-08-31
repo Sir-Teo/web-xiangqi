@@ -14,7 +14,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - speaks UCI through a JS `postMessage()`-style wrapper
 - wrapper auto-selects threaded vs single-thread in browser (`variant: "auto"`)
 - smoke tests pass for both flavors (`threaded` and `single`)
-- React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, historical games, and opening-book continuations
+- React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, and opening-book continuations
 - React app auto-saves the game in progress, so a reload offers to pick it up where you left off
 - Evaluation bar beside the board, on the same winning-chance curve the review scores with, so the two cannot disagree
 - **Go Deep**: one bounded search on the position you are looking at, far past what live analysis has time for (depth 36 / 30s on a high tier)
