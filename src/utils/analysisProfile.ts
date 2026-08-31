@@ -239,12 +239,6 @@ export function threadChoicesForProfile(profile: DeviceProfile, allowThreads = t
     return rungs;
 }
 
-/** An asked-for thread count, held inside what this machine already allows. */
-export function resolveThreads(profile: DeviceProfile, requested: unknown, fallback: number): number {
-    const wanted = Math.trunc(finiteNumber(requested, Number.NaN));
-    return threadChoicesForProfile(profile).includes(wanted) ? wanted : fallback;
-}
-
 /** Whether a resolved variant is one that can hold more than one thread. */
 export function isThreadedVariant(variant: EngineRuntimeVariant): boolean {
     return variant === 'threaded' || variant === 'threaded-simd';

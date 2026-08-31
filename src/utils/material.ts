@@ -55,10 +55,6 @@ export function isPieceCode(value: string): value is PieceCode {
     return Object.prototype.hasOwnProperty.call(PIECE_VALUES_TENTHS, value);
 }
 
-export function pieceValueTenths(piece: PieceCode): number {
-    return PIECE_VALUES_TENTHS[piece];
-}
-
 function countPieces(board: BoardState): Record<PieceCode, number> {
     const counts = PIECE_CODES.reduce((acc, code) => {
         acc[code] = 0;

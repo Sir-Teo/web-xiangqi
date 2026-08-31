@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ReviewSummary } from '../utils/review';
 
-export const REVIEW_DEPTH = 10;
-
 export type ReviewStatus = 'idle' | 'running' | 'done';
 
 /**
