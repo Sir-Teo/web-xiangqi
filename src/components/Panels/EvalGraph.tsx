@@ -57,6 +57,33 @@ function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover']
     return index % 2 === 0 ? 'red' : 'black';
 }
 
+/**
+ * An evaluation the graph can draw.
+ *
+ * `typeof x === 'number'` admits NaN, and NaN is not survivable here: it
+ * reaches `d="... L NaN 12.00 ..."`, where SVG discards the *entire* path, so
+ * one bad point erases the whole line rather than one dot. The same value
+ * poisons the min/max extent and takes the axis with it, so both halves are one
+ * guard or neither.
+ *
+ * Nothing has been shown to produce a non-finite score. This is the same
+ * boundary `clampWinPercentLoss` gives the review path, which is why every
+ * accuracy figure downstream is safe without each display re-checking.
+ */
+function isFiniteEval(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** Min or max over the finite evaluations, and 0 when there are none. */
+function extentOf(points: Array<{ eval: number }>, pick: (a: number, b: number) => number): number {
+    let best: number | null = null;
+    for (const point of points) {
+        if (!isFiniteEval(point.eval)) continue;
+        best = best === null ? point.eval : pick(best, point.eval);
+    }
+    return best ?? 0;
+}
+
 export const EvalGraph = React.memo(function EvalGraph({
     history,
     currentMoveIndex,
@@ -91,7 +118,7 @@ export const EvalGraph = React.memo(function EvalGraph({
             branchCount: rootBranchCount,
         }];
         history.forEach((move, index) => {
-            if (typeof move.evalScore === 'number') previous = move.evalScore;
+            if (isFiniteEval(move.evalScore)) previous = move.evalScore;
             const before = notationStyle === 'uci' ? null : boardBeforeRecord(move);
             next.push({
                 moveIndex: index,
@@ -114,8 +141,8 @@ export const EvalGraph = React.memo(function EvalGraph({
 
         const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
         const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
-        const currentPlyHasStoredEval = typeof currentMove?.evalScore === 'number';
-        const shouldProjectLiveEval = typeof currentEval === 'number' && (isSearching || !currentPlyHasStoredEval);
+        const currentPlyHasStoredEval = isFiniteEval(currentMove?.evalScore);
+        const shouldProjectLiveEval = isFiniteEval(currentEval) && (isSearching || !currentPlyHasStoredEval);
         if (shouldProjectLiveEval) {
             next[activePointIndex] = {
                 ...next[activePointIndex],
@@ -142,7 +169,11 @@ export const EvalGraph = React.memo(function EvalGraph({
     }, [points.length, plotWidth]);
 
     const yFor = useCallback((evalScore: number) => {
-        const clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
+        // Math.max(-limit, Math.min(limit, NaN)) is NaN, so the clamp does not
+        // strip a bad value -- it carries it into the path and takes out the
+        // whole line.
+        const finite = isFiniteEval(evalScore) ? evalScore : 0;
+        const clamped = Math.max(-maxEvalClamp, Math.min(maxEvalClamp, finite));
         return PADDING.top + ((maxEvalClamp - clamped) / (maxEvalClamp * 2)) * plotHeight;
     }, [maxEvalClamp, plotHeight]);
 
@@ -198,14 +229,8 @@ export const EvalGraph = React.memo(function EvalGraph({
         }
         return Array.from(indexes).sort((left, right) => left - right);
     }, [currentPointIndex, points.length, xTickStep]);
-    const highestEval = useMemo(
-        () => points.reduce((best, point) => Math.max(best, point.eval), Number.NEGATIVE_INFINITY),
-        [points]
-    );
-    const lowestEval = useMemo(
-        () => points.reduce((best, point) => Math.min(best, point.eval), Number.POSITIVE_INFINITY),
-        [points]
-    );
+    const highestEval = useMemo(() => extentOf(points, Math.max), [points]);
+    const lowestEval = useMemo(() => extentOf(points, Math.min), [points]);
     const currentBranchCount = currentPoint?.branchCount ?? 0;
     const swing = highestEval - lowestEval;
     const shouldCompressBadges = pixelsPerPoint < 26;
