@@ -2392,6 +2392,9 @@ function App() {
     [deviceProfile, engineCapabilities]
   );
   const showEvalBar = engineEnabled && !isMobile;
+  // No eval to show, nothing wrong, and not ready yet: the wait itself.
+  const mobileEngineLoading = engineEnabled && !isReady && displayEvalScore === null;
+
   const displayEvalClass = displayEvalScore === null
     ? ''
     : displayEvalScore > 0
@@ -4575,7 +4578,7 @@ function App() {
                     engine was completely silent there -- in every mobile view, forever.
                     This slot is free exactly when it matters: a dead engine produces no
                     eval, so the chip above is absent. */}
-                {engineNotice && (
+                {engineNotice ? (
                   <span
                     className={`mobile-engine-notice mobile-engine-notice-${engineNotice.tone}`}
                     role="status"
@@ -4583,7 +4586,29 @@ function App() {
                   >
                     {engineNotice.text}
                   </span>
-                )}
+                ) : mobileEngineLoading ? (
+                  // The same slot, for the wait rather than the failure. The
+                  // engine's weights are 53MB, so on a phone connection this is
+                  // a minute or more during which the chip above cannot appear
+                  // -- and a board with no evaluation and no explanation reads
+                  // as an app whose analysis is simply broken. Desktop has said
+                  // "Loading engine" in the top bar all along; both panels that
+                  // carry it are display:none here.
+                  //
+                  // "Loading" rather than "Loading engine" because the longer
+                  // string wraps this header onto a second row -- 40px to 66px
+                  // at 390px wide -- which moves the board down and then back
+                  // up when the engine arrives. The full phrase is on the label
+                  // for anything reading it aloud.
+                  <span
+                    className="mobile-engine-notice"
+                    role="status"
+                    aria-label="Loading engine"
+                    title="Loading engine"
+                  >
+                    Loading
+                  </span>
+                ) : null}
                 {detectedOpening && (
                   <span className="mobile-opening-pill" title={detectedOpening.name}>
                     {detectedOpening.name}
