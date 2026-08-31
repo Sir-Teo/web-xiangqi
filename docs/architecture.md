@@ -1147,6 +1147,41 @@ text. A floor is only safe once the overflow it creates has somewhere to go.
 **Wanted before changing it: agreement on what the minimum board is, and on
 whether the board stage may scroll.**
 
+### There is a third option, and it needs neither decision
+
+The app already has the affordance: **Collapse top toolbar** and **Collapse
+bottom command bar**. They do not currently give the board anything, and the
+reason is in the CSS above — `.top.hidden` and `.bottom.hidden` apply
+`transform: translateY(±100%)`. A transform moves paint, not layout. The panel
+slides out of sight and keeps its grid row, so the stage is exactly as tall as
+it was and the board does not change by a pixel. Measured at 1024x720: the top
+panel is 229px before the click and 229px after it, and the board stays 57px.
+
+What that row is worth, at 1024x720, with the collapsed panels taken out of
+layout rather than slid out of view:
+
+| default font | board today | board with the row reclaimed |
+| --- | --- | --- |
+| 16px | 420px | 561px |
+| 24px | 196px | 498px |
+| 32px | 57px | **449px** |
+
+A reader at 32px who collapses both bars would go from ten ranks in 57 pixels to
+a 449px board. That is the whole problem solved for the reader who has it, and
+it needs no minimum-size policy and no scrolling, because the reader is the one
+choosing.
+
+It is not free, and the cost is why this is written down rather than done. The
+250ms slide is deliberate, and so is the `visibility` delay under it, which
+exists to take ten toolbar buttons out of the tab order once the fade has
+finished. Reclaiming the row means animating something that changes layout, or
+holding the transform for the slide and dropping the panel out of layout when
+the transition ends. Either is a change to how the collapse *feels*, which is
+a design call rather than a bug fix.
+
+**Wanted: whether the collapse should give the row back.** If it should, this
+is a smaller change than the floor and it fixes the same reader.
+
 ## A phone is told nothing when an import goes wrong (open question)
 
 Three messages share the top bar: "Shared link not loaded", "Imported first
