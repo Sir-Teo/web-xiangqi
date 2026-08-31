@@ -1201,6 +1201,78 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
   }
 }
 
+/**
+ * What a played move records about itself: that it captured, and that it checks.
+ *
+ * `record.captured` and `record.inCheck` are both written only on the
+ * interactive path, and both are load-bearing well past the label:
+ *
+ * - `captured` picks the arrow in the move label, names the piece taken in the
+ *   accessible title, feeds `getMovePhaseForRecord` (so opening/middlegame/
+ *   endgame), and is how `xiangqiNotation` reconstructs the board *before* the
+ *   move -- get it wrong and Chinese and WXF notation are written off a
+ *   position that never existed.
+ * - `inCheck` reaches the board's check overlay, the "Check" badge, this
+ *   announcement, and `describeRepetition`, which is what enforces perpetual
+ *   check.
+ *
+ * Neither was pinned anywhere. Blanking `captured`, and inverting `inCheck`,
+ * both left the whole suite green -- again because every other test loads its
+ * game through `?moves=`, where these fields are filled in by the loader.
+ *
+ * Red chariot e1 takes the pawn on e5 and, standing on the open e-file,
+ * checks the general on e9. Black still has d9 and f9, so this is a check
+ * and not a mate, and no result modal covers the board.
+ */
+async function assertAPlayedCaptureRecordsWhatItDid(page) {
+  const fen = encodeURIComponent("4k4/9/9/9/4p4/9/9/9/4R4/3K5 w - - 0 1");
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${fen}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(400);
+
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+  await page.click(square(4, 1));
+  // The board has to agree this is a capture before the click means anything.
+  await page.waitForSelector(`${square(4, 5)}[aria-label*="legal capture"]`, { timeout: 5000 });
+  await page.click(square(4, 5));
+  await page.waitForFunction(
+    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === 1,
+    null,
+    { timeout: 5000 },
+  );
+
+  const state = await page.evaluate(() => ({
+    announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
+    title: [...document.querySelectorAll(".tree-breadcrumb-chip")].slice(-1)[0]?.getAttribute("aria-label") || "",
+    badge: document.body.innerText.includes("Check"),
+  }));
+
+  if (!/captures/i.test(state.title)) {
+    throw new Error(`A capture was described as "${state.title}" -- the piece taken was not recorded.`);
+  }
+  if (!/captures/i.test(state.announced)) {
+    throw new Error(`The capture was announced as "${state.announced}".`);
+  }
+  if (!/\bCheck\./.test(state.announced)) {
+    throw new Error(
+      `A checking move was announced as "${state.announced}". The same flag enforces ` +
+      `perpetual check, so this is not only a wording problem.`
+    );
+  }
+  if (!state.badge) {
+    throw new Error("The board showed no Check badge after a move that gives check.");
+  }
+}
+
 async function assertCheckmateByPlayingTheMove(page) {
   const fen = encodeURIComponent("4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1");
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -7443,6 +7515,7 @@ async function main() {
     await assertStalemateLossIsLabeled(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
+    await assertAPlayedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
