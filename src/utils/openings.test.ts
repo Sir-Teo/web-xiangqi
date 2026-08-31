@@ -135,6 +135,37 @@ describe('suggesting continuations', () => {
         }
     });
 
+    it('counts distinct lines from part-way into a line too', () => {
+        // The root case above never runs the prefix comparison: with an empty
+        // history every entry matches and the next move is always `moves[0]`.
+        // These histories are where an off-by-one in the prefix loop or in
+        // `entry.moves[history.length]` would show, and they are also where a
+        // reader actually uses the card -- a few moves in, deciding what the
+        // book does next.
+        for (const history of [['h2e2'], ['h2e2', 'h9g7'], ['h2e2', 'b7e7'], ['b0c2']]) {
+            const candidates = getOpeningCandidates(history, 50);
+            const continuing = OPENINGS.filter(
+                entry => entry.moves.length > history.length
+                    && history.every((move, index) => entry.moves[index] === move),
+            );
+
+            for (const candidate of candidates) {
+                const lines = new Set(
+                    continuing
+                        .filter(entry => entry.moves[history.length] === candidate.move)
+                        .map(entry => entry.moves.join(' ')),
+                );
+                expect(candidate.count, `${history.join(' ')} -> ${candidate.move}`).toBe(lines.size);
+            }
+
+            // Nothing is dropped: with no limit in play the candidates account
+            // for every distinct line that continues from here.
+            const counted = candidates.reduce((total, candidate) => total + candidate.count, 0);
+            const distinct = new Set(continuing.map(entry => entry.moves.join(' '))).size;
+            expect(counted, `${history.join(' ')} total`).toBe(distinct);
+        }
+    });
+
     it('shows at most three names for a move', () => {
         for (const candidate of getOpeningCandidates([], 50)) {
             expect(candidate.names.length).toBeGreaterThan(0);
