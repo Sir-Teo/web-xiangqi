@@ -21,6 +21,46 @@
   <meta name="twitter:title" content="Web Xiangqi" />
   <meta name="twitter:description" content="A fast browser Xiangqi analysis board powered by Pikafish." />
   <title>Web Xiangqi | Pikafish Analysis Board</title>
+  <!-- Cross-origin isolation, on a host that will not send the headers itself.
+
+       The threaded Pikafish core needs SharedArrayBuffer, which a browser only
+       grants a cross-origin isolated page. vite.config.ts sends COOP/COEP, so
+       this is a no-op in development and in every browser check here. GitHub
+       Pages sends neither and cannot be configured to, so on the deployed site
+       ./coi-sw.js adds them and this reloads once to pick them up. Measured
+       there: 479k nodes/second single-threaded, 3.9M with the worker.
+
+       Inline and in <head> so the reload happens before React renders rather
+       than after a board is already on screen. Every branch fails safe: no
+       worker support, an insecure context, a rejected registration or a worker
+       that never controls the page all leave the app exactly as it was --
+       single-threaded, and working. -->
+  <script>
+    (function () {
+      // Already isolated (the dev server, or a host that sends the headers):
+      // there is nothing to add and no reason to install a worker.
+      if (window.crossOriginIsolated) return;
+      if (!window.isSecureContext) return;
+      if (!('serviceWorker' in navigator)) return;
+
+      // At most one reload per tab, whatever happens. If the worker installs
+      // but does not isolate the page, this must not become a refresh loop --
+      // the app is usable either way, and a loop would make it unusable.
+      var RELOADED = 'web-xiangqi:coi-reload';
+      try { if (sessionStorage.getItem(RELOADED)) return; } catch (e) { return; }
+
+      navigator.serviceWorker.register('./coi-sw.js')
+        .then(function () { return navigator.serviceWorker.ready; })
+        .then(function () {
+          // This document was fetched before the worker could touch it, so it
+          // is still not isolated. The next one will be.
+          if (window.crossOriginIsolated) return;
+          try { sessionStorage.setItem(RELOADED, '1'); } catch (e) { return; }
+          window.location.reload();
+        })
+        .catch(function () { /* stays single-threaded, which is the old behaviour */ });
+    })();
+  </script>
 </head>
 
 <body>

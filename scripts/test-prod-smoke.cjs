@@ -151,6 +151,12 @@ async function checkApp(browser, url, label) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   const boardMs = Date.now() - startedAt;
 
+  // On a host without isolation headers, coi-sw.js installs and the page
+  // reloads once. Let that settle so the assertions below read the document
+  // that came back through the worker rather than the one that preceded it.
+  await page.waitForTimeout(1500);
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
   const fresh = page.getByRole("button", { name: /start fresh/i });
   if (await fresh.count()) await fresh.first().click().catch(() => {});
 
@@ -226,26 +232,38 @@ async function main() {
       fail("the preview server did not send COOP/COEP, so the isolated pass tested nothing");
     }
 
-    // 2. Un-isolated, as GitHub Pages serves it: the single-threaded core, and
-    //    the numbers the app puts on screen about it.
+    // 2. Served the way GitHub Pages serves it -- no isolation headers on the
+    //    response -- where `public/coi-sw.js` has to put them back.
     plain = await startPlainServer(PLAIN_PORT);
     const pages = await checkApp(browser, PLAIN_URL, "pages");
-    if (pages.isolated) fail("the plain server sent isolation headers, so the Pages pass tested nothing");
-    if (pages.variant && !/^single/.test(pages.variant)) {
-      fail(`pages: engine loaded "${pages.variant}" without SharedArrayBuffer, which it cannot have done`);
-    }
-    if (pages.threads !== 1) {
+
+    if (!pages.isolated) {
       fail(
-        `pages: the engine dashboard reports ${pages.threads} threads on a page that is not ` +
-        `cross-origin isolated, where the engine can only have one. The app is reporting what ` +
-        `it asked for rather than what it got — see detectThreadSupport in analysisProfile.ts.`
+        "pages: the page never became cross-origin isolated, so coi-sw.js did not take effect. " +
+        "Without it the deployed app runs the single-threaded core at about an eighth of the " +
+        "nodes per second — see public/coi-sw.js and the registration in index.html."
+      );
+    }
+    if (!/^threaded/.test(String(pages.variant))) {
+      fail(`pages: isolated, but the engine loaded "${pages.variant}" rather than a threaded core`);
+    }
+
+    // The honesty invariant, which is what actually shipped wrong: whatever the
+    // page managed to become, the dashboard has to agree with it. It read
+    // `single-simd` and `8T` at the same time for as long as the app resolved
+    // threads without asking whether it could have any.
+    const threadedVariant = /^threaded/.test(String(pages.variant));
+    if (threadedVariant !== pages.threads > 1) {
+      fail(
+        `pages: the dashboard reports "${pages.variant}" and ${pages.threads} threads, which ` +
+        `cannot both be true — see detectThreadSupport in analysisProfile.ts`
       );
     }
 
     console.log(
       `Production smoke passed:\n` +
       `  isolated: ${isolated.variant}, ${isolated.threads}T, board ${isolated.boardMs}ms, ready ${isolated.readyMs}ms\n` +
-      `  pages (no COOP/COEP): ${pages.variant}, ${pages.threads}T, board ${pages.boardMs}ms, ready ${pages.readyMs}ms`
+      `  pages (no COOP/COEP, isolated by coi-sw.js): ${pages.variant}, ${pages.threads}T, board ${pages.boardMs}ms, ready ${pages.readyMs}ms`
     );
   } catch (error) {
     console.error(`Production smoke failed: ${error && error.message ? error.message : error}`);
