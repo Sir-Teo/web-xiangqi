@@ -43,7 +43,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const request = event.request;
 
-    // A navigation preload or a cache-only request is not ours to rewrite, and
+    // Handle as little as possible. Everything this app loads is a same-origin
+    // GET, and those are the only responses that need the headers -- so anything
+    // else is passed straight to the network untouched rather than rebuilt.
+    // Returning without calling respondWith() is not a fallback path, it is the
+    // browser's own path, which is the one worth preferring for requests this
+    // worker has no reason to be in the middle of.
+    if (request.method !== 'GET') return;
+    if (new URL(request.url).origin !== self.location.origin) return;
+
     // `only-if-cached` outside same-origin mode throws if passed to fetch().
     if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
 
