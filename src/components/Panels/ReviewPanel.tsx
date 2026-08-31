@@ -14,6 +14,7 @@ import {
     formatAverageCentipawnLoss,
     getWinPercentLossForMove,
     getMoveQualityClassName,
+    isFiniteNumber,
 } from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
 
@@ -79,13 +80,15 @@ export const ReviewPanel = memo(function ReviewPanel({
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
     const reviewEngineDetail = `Review engine: ${describeReviewEngineSummary(summary?.engine)}`;
-    const averageLossLabel = typeof summary?.averageCentipawnLoss === 'number'
+    const averageLossLabel = isFiniteNumber(summary?.averageCentipawnLoss)
         ? `Average centipawn loss ${formatAverageCentipawnLoss(summary.averageCentipawnLoss)}`
         : '';
     const sideAccuracyBreakdown = summary ? [
         { key: 'red', label: 'Red', value: summary.redAccuracy, loss: summary.redAverageCentipawnLoss },
         { key: 'black', label: 'Black', value: summary.blackAccuracy, loss: summary.blackAverageCentipawnLoss },
-    ].filter((item): item is { key: 'red' | 'black'; label: string; value: number; loss: number | undefined } => typeof item.value === 'number') : [];
+    // `typeof x === 'number'` admits NaN, which is how a bad figure reaches a
+    // renderer that assumes it has a number.
+    ].filter((item): item is { key: 'red' | 'black'; label: string; value: number; loss: number | undefined } => isFiniteNumber(item.value)) : [];
     const qualityBreakdown = summary ? [
         { key: 'best', label: 'Best', count: summary.bestCount },
         { key: 'good', label: 'Good', count: summary.goodCount },
@@ -189,9 +192,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                     <div className="review-summary-grid">
                         <div className="review-summary-card">
                             <span>Accuracy</span>
-                            <strong>{summary.accuracy}%</strong>
+                            <strong>{formatAccuracyPercent(summary.accuracy)}</strong>
                         </div>
-                        {typeof summary.averageCentipawnLoss === 'number' ? (
+                        {isFiniteNumber(summary.averageCentipawnLoss) ? (
                             <div
                                 className="review-summary-card"
                                 data-testid="review-average-loss"
@@ -207,12 +210,12 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 key={item.key}
                                 className="review-summary-card"
                                 data-testid={`review-${item.key}-accuracy`}
-                                aria-label={`${item.label} accuracy ${item.value}%${typeof item.loss === 'number' ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
-                                title={`${item.label} accuracy ${item.value}%${typeof item.loss === 'number' ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
+                                aria-label={`${item.label} accuracy ${formatAccuracyPercent(item.value)}${isFiniteNumber(item.loss) ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
+                                title={`${item.label} accuracy ${formatAccuracyPercent(item.value)}${isFiniteNumber(item.loss) ? `, average centipawn loss ${formatAverageCentipawnLoss(item.loss)}` : ''}`}
                             >
                                 <span>{item.label}</span>
                                 <strong>{item.value}%</strong>
-                                {typeof item.loss === 'number' ? (
+                                {isFiniteNumber(item.loss) ? (
                                     <em>{formatAverageCentipawnLoss(item.loss)} loss</em>
                                 ) : null}
                             </div>
@@ -251,12 +254,12 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 >
                                     <span className="review-phase-label">{phase.label}</span>
                                     <span className="review-phase-scores">
-                                        {typeof phase.redAccuracy === 'number' ? (
+                                        {isFiniteNumber(phase.redAccuracy) ? (
                                             <span aria-label={`Red accuracy in the ${phase.label.toLowerCase()} ${phase.redAccuracy}%`}>
                                                 <i aria-hidden="true">R</i> <strong>{phase.redAccuracy}%</strong>
                                             </span>
                                         ) : null}
-                                        {typeof phase.blackAccuracy === 'number' ? (
+                                        {isFiniteNumber(phase.blackAccuracy) ? (
                                             <span aria-label={`Black accuracy in the ${phase.label.toLowerCase()} ${phase.blackAccuracy}%`}>
                                                 <i aria-hidden="true">B</i> <strong>{phase.blackAccuracy}%</strong>
                                             </span>
@@ -453,7 +456,25 @@ export const ReviewPanel = memo(function ReviewPanel({
 ReviewPanel.displayName = 'ReviewPanel';
 
 function formatSwing(swing: number) {
+    // Every other number on this panel says "n/a" rather than rendering a
+    // non-finite one. This one did not, and put "NaNcp" on the card and into
+    // its aria-label.
+    if (!Number.isFinite(swing)) return 'n/a';
     return `${Math.round(swing)}cp`;
+}
+
+/**
+ * An accuracy percentage, which was rendered raw.
+ *
+ * `{summary.accuracy}%` puts "NaN%" on screen for a summary whose arithmetic
+ * went wrong upstream. Every figure here is derived through
+ * `clampWinPercentLoss`, which returns 0 for anything non-finite, so this
+ * should not happen -- but "should not happen" is what the eval graph's blank
+ * chart was, too.
+ */
+function formatAccuracyPercent(accuracy: number): string {
+    if (!Number.isFinite(accuracy)) return 'n/a';
+    return `${accuracy}%`;
 }
 
 function formatReviewEvalScore(score: number) {
@@ -486,7 +507,7 @@ function formatReviewEvalTitle(moment: ReviewKeyMoment) {
 }
 
 function getMomentWinPercentLoss(moment: ReviewKeyMoment) {
-    return typeof moment.winPercentLoss === 'number'
+    return isFiniteNumber(moment.winPercentLoss)
         ? Math.max(0, Math.min(100, moment.winPercentLoss))
         : getWinPercentLossForMove(moment.evalBefore, moment.evalAfter, moment.side);
 }

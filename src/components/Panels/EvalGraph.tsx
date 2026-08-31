@@ -6,7 +6,8 @@ import {
     formatWinPercentLossLabel,
     getMoveQualityClassName,
     isCriticalReviewQuality,
-} from '../../utils/review';
+
+    isFiniteNumber,} from '../../utils/review';
 import { formatUciMove } from '../../utils/moveNotation';
 import { boardBeforeRecord, formatMoveInStyle, type XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import {
@@ -70,9 +71,7 @@ function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover']
  * boundary `clampWinPercentLoss` gives the review path, which is why every
  * accuracy figure downstream is safe without each display re-checking.
  */
-function isFiniteEval(value: unknown): value is number {
-    return typeof value === 'number' && Number.isFinite(value);
-}
+const isFiniteEval = isFiniteNumber;
 
 /** Min or max over the finite evaluations, and 0 when there are none. */
 function extentOf(points: Array<{ eval: number }>, pick: (a: number, b: number) => number): number {

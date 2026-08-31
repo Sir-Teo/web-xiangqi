@@ -161,6 +161,19 @@ export function getWinPercentLossForMove(evalBefore: number, evalAfter: number, 
     return Math.max(0, loss);
 }
 
+/**
+ * A number that can be rendered, and a type guard so TypeScript agrees.
+ *
+ * `typeof x === 'number'` narrows but admits NaN; `Number.isFinite(x)` rejects
+ * NaN but does not narrow. Reaching for the first is how a non-finite value
+ * gets past a check into a renderer that assumes it has a number -- which is
+ * what put "NaN%" on the review panel and, in the eval graph, erased the whole
+ * chart. This is both.
+ */
+export function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function clampWinPercentLoss(loss: number): number {
     if (!Number.isFinite(loss)) return 0;
     return Math.max(0, Math.min(100, loss));
