@@ -16,6 +16,12 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - smoke tests pass for both flavors (`threaded` and `single`)
 - React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, historical games, and opening-book continuations
 - React app auto-saves the game in progress, so a reload offers to pick it up where you left off
+- Evaluation bar beside the board, on the same winning-chance curve the review scores with, so the two cannot disagree
+- **Go Deep**: one bounded search on the position you are looking at, far past what live analysis has time for (depth 36 / 30s on a high tier)
+- **Play From Here**: keep the position on screen and play it on against the engine, taking the side to move — the thing you want after a review finds your mistake
+- **From your library**: an opening explorer over your own saved games, keyed on the position so a transposition is found, with what you played from it and how those games ended
+- PGN carries the review both ways: NAGs and `{[%eval ...]}` on export, read back on import, in the shapes other tools already parse
+- Engine hash and thread count are settable per device, held inside what the shipped core can take
 - Command palette on `Ctrl`/`Cmd`+`K`: a searchable list of the actions that matter, with recently used first and unavailable commands shown with the reason rather than hidden
 
 ## What this repo contains
@@ -73,13 +79,20 @@ in `public/`, so even the engine scripts run:
 
 ```bash
 npm install
-npm run verify            # ~6s: typecheck, lint, tests, openings, library,
-                          # engine smoke + parity, and the React build
+npm run verify            # typecheck, lint, tests, openings, library, engine
+                          # artifact contract, engine smoke + parity, React build
 ```
+
+`verify` is deliberately **browser-free**, which is what lets it work offline.
 
 `verify` chains everything so the first failure stops it. Run it rather than the
 parts: chaining by hand is how a real failure gets reported as success, and
 `npm test` typechecks nothing on its own — Vitest transpiles without checking.
+
+`test:prod:smoke` is the one that loads what actually ships. Every other browser
+suite here drives the *dev* server, so the bundle in `dist/` was the one thing
+nothing had ever opened; it runs in the Pages deploy, which is the only job
+upstream of a publish.
 
 Not in `verify`:
 
@@ -88,6 +101,7 @@ npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
 npm run test:ui:install            # once per machine
 npm run test:ui:layout             # drives a real browser
+npm run test:prod:smoke            # loads the built dist/ in a browser
 npm run build                      # rebuilds the WASM; needs emsdk
 ```
 
@@ -129,7 +143,8 @@ compares the three and tracks what is worth moving between them.
   - it skips patch application if the patch was already applied
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
 - The wasm core build enables Emscripten/LLVM LTO by default (`WASM_ENABLE_LTO=yes`) and strips RTTI (`WASM_DISABLE_RTTI=yes`) for a smaller/faster core. Both are opt-out build env vars.
-- Threaded builds prewarm a small pthread worker pool by default (`WASM_PTHREAD_POOL_SIZE=4`) so the React app's device-aware thread counts are ready without over-allocating workers on modest machines.
+- Threaded builds prewarm a pthread worker pool (`WASM_PTHREAD_POOL_SIZE=12`), and the app never asks for more than `MAX_ENGINE_THREADS` (8) of it. The pool is a hard ceiling rather than a preference: asking past it blocks the engine in `pthread_create` and it never answers `readyok`. Measured in the browser at depth 18, 18-core machine: 435k nps at 1 thread, 1.92M at 4, 3.74M at 8. Raising it means raising the build *and* rebuilding the artifacts together — `scripts/test-engine-contract.cjs` fails if they drift apart.
+- `EMSDK_VERSION` is pinned. Emscripten 6.0.2 dropped `mainScriptUrlOrBlob`, which `templates/pikafish.js` needs to spawn pthread workers from the core rather than from an undefined script URL; without it the threaded core loads, answers `uci`, and never becomes ready. Node tests do not take that path and release builds say nothing, so the pin is the guard.
 - Browser threaded mode requires cross-origin isolation (`COOP`/`COEP`). `npm run serve:demo` sets these headers for local testing.
 - Browser demo shows header/thread support status, lets you force `threaded`/`single`/`auto`, and provides a simple click-to-move Xiangqi board UI.
 - Deployed builds expose `THIRD_PARTY_NOTICES.md` and `Pikafish-Copying.txt` under the `/web-xiangqi/` base path so users can trace the bundled engine source and license.
