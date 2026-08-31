@@ -268,20 +268,31 @@ async function main() {
         "nodes per second — see public/coi-sw.js and the registration in index.html."
       );
     }
-    if (!/^threaded/.test(String(pages.variant))) {
-      fail(`pages: isolated, but the engine loaded "${pages.variant}" rather than a threaded core`);
+    // Parity with an isolated host, rather than a named core. Which core the app
+    // picks is a property of the *machine* -- `detectDeviceTier` grades on cores,
+    // memory and viewport, and a two-core CI runner can land on a single-threaded
+    // core perfectly legitimately even when isolated. What the worker promises is
+    // that a host sending no headers ends up where a host sending them does, and
+    // that is the same claim on any machine.
+    if (pages.variant !== isolated.variant || pages.threads !== isolated.threads) {
+      fail(
+        `pages: with coi-sw.js the app got "${pages.variant}" / ${pages.threads}T, but an ` +
+        `isolated host gives "${isolated.variant}" / ${isolated.threads}T. The worker is ` +
+        `supposed to make those identical.`
+      );
     }
 
     // The honesty invariant, which is what actually shipped wrong: whatever the
     // page managed to become, the dashboard has to agree with it. It read
     // `single-simd` and `8T` at the same time for as long as the app resolved
     // threads without asking whether it could have any.
-    const threadedVariant = /^threaded/.test(String(pages.variant));
-    if (threadedVariant !== pages.threads > 1) {
-      fail(
-        `pages: the dashboard reports "${pages.variant}" and ${pages.threads} threads, which ` +
-        `cannot both be true — see detectThreadSupport in analysisProfile.ts`
-      );
+    for (const [label, result] of [["isolated", isolated], ["pages", pages]]) {
+      if (/^threaded/.test(String(result.variant)) !== result.threads > 1) {
+        fail(
+          `${label}: the dashboard reports "${result.variant}" and ${result.threads} threads, ` +
+          `which cannot both be true — see detectThreadSupport in analysisProfile.ts`
+        );
+      }
     }
 
     // 3. The returning visitor: still carrying the old demo worker, which is an
@@ -311,8 +322,11 @@ async function main() {
           "used the site before — see the controllerchange handler in index.html."
         );
       }
-      if (!/^threaded/.test(String(upgraded.variant))) {
-        fail(`returning: isolated, but the engine loaded "${upgraded.variant}"`);
+      if (upgraded.variant !== isolated.variant || upgraded.threads !== isolated.threads) {
+        fail(
+          `returning: got "${upgraded.variant}" / ${upgraded.threads}T where an isolated host ` +
+          `gives "${isolated.variant}" / ${isolated.threads}T`
+        );
       }
     } finally {
       await returning.close().catch(() => {});
