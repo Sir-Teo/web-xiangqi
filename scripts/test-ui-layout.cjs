@@ -1120,6 +1120,71 @@ async function assertPlayFromHereKeepsThePosition(page) {
   await page.waitForTimeout(600);
 }
 
+/**
+ * Checkmate arrived at by playing the move, rather than loaded already over.
+ *
+ * The two terminal checks beside this one both `goto` a position that is
+ * finished before the page opens, which tests the labelling and nothing else.
+ * The path a player actually takes is a legal move that happens to end the
+ * game: the move is applied, `gameResultForPosition` is asked about the
+ * position it produced, the modal appears, and the live region says what
+ * happened. A regression that only detected terminal positions on load would
+ * pass both of those and fail every real game.
+ *
+ * Red chariot a1 to a9 is mate: the chariot arriving on the ninth rank covers
+ * the Black general's file and both squares beside it, and the chariot on b8
+ * covers the rank behind. The generals stand on different files, so the
+ * position is legal before the move as well as after.
+ */
+async function assertCheckmateByPlayingTheMove(page) {
+  const fen = encodeURIComponent("4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1");
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${fen}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(400);
+
+  // `data-file` and `data-rank` are the UCI coordinates, so a1 is 0,1.
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+
+  await page.click(square(0, 1));
+  // Wait for the selection to be reflected on the destination rather than
+  // assuming the first click registered: a second click on a square the board
+  // does not consider a target just deselects, and the game would then sit at
+  // ply 0 with no move played and no obvious reason why.
+  await page.waitForSelector(`${square(0, 9)}[aria-label*="legal move"]`, { timeout: 5000 });
+  await page.click(square(0, 9));
+
+  await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 10000 });
+
+  const state = await page.evaluate(() => ({
+    subtitle: document.querySelector(".game-over-subtitle")?.textContent?.trim() || "",
+    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null,
+    announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
+  }));
+
+  if (state.plies !== "1 / 1") {
+    throw new Error(`The mating move did not land: board shows ${state.plies}`);
+  }
+  if (state.subtitle !== "Checkmate") {
+    throw new Error(`A mate delivered by a move was labelled "${state.subtitle}"`);
+  }
+  // What a player using a screen reader is told, which is their only account of
+  // the finish -- the modal heading is not announced on its own.
+  for (const fragment of ["a1", "a9", "Checkmate", "Red wins"]) {
+    if (!new RegExp(fragment, "i").test(state.announced)) {
+      throw new Error(`The finish was announced as "${state.announced}", missing ${fragment}`);
+    }
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -7311,6 +7376,7 @@ async function main() {
     await assertDenseEvalGraphLimitsPointMarkers(page);
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertStalemateLossIsLabeled(page);
+    await assertCheckmateByPlayingTheMove(page);
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
