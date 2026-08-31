@@ -22,6 +22,14 @@ import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } f
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
+import {
+  DEFAULT_PANEL_WIDTH,
+  PANEL_KEYBOARD_STEP,
+  PANEL_MAX_WIDTH,
+  clampPanelWidth,
+  initialPanelWidth,
+  stepPanelWidth,
+} from './utils/panelWidth';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { buildLibraryPositionIndex, formatExplorerRecord, libraryPositionSignature, lookupLibraryPosition } from './utils/positionExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
@@ -197,22 +205,8 @@ const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
 const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
-const PANEL_MIN_WIDTH = 60;
-const PANEL_MAX_WIDTH = 600;
-const PANEL_KEYBOARD_STEP = 40;
-const DEFAULT_LEFT_PANEL_WIDTH = 320;
-const DEFAULT_RIGHT_PANEL_WIDTH = 320;
-
-// 320px each is right on a wide screen and much too much on a narrow one: at
-// 920px the two panels take 640px and leave the board 248px, smaller than
-// either of them. The CSS already claws back what it can in that band -- it
-// drops the stage padding and hides the capture trays -- but the panel widths
-// live here. Scale the starting width to the window instead; dragging a panel
-// is untouched and still reaches PANEL_MAX_WIDTH.
-function initialPanelWidth(fallback: number) {
-    if (typeof window === 'undefined') return fallback;
-    return Math.max(PANEL_MIN_WIDTH, Math.min(fallback, Math.round(window.innerWidth * 0.26)));
-}
+const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
+const DEFAULT_RIGHT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
 const PIECE_SYMBOLS: Record<PieceCode, string> = {
   K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
   k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
@@ -740,12 +734,6 @@ function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
       const style = window.getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
-}
-
-function clampPanelWidth(width: number) {
-  const nextWidth = Math.round(width);
-  if (nextWidth < PANEL_MIN_WIDTH) return 0;
-  return Math.min(nextWidth, PANEL_MAX_WIDTH);
 }
 
 function formatCapturedTrayLabel(
@@ -2179,15 +2167,6 @@ function App() {
     setMobileAnalysisTab('library');
     setMobileView('analysis');
   }, []);
-
-  // Growing from collapsed resumes at the default width, because stepping 0 ->
-  // 40 lands under PANEL_MIN_WIDTH and clamps straight back to 0. Shrinking must
-  // not borrow that default: it made the decrease key reopen a closed panel to
-  // 280, so a keyboard user could never come to rest on collapsed.
-  const stepPanelWidth = (width: number, delta: number, fallback: number) => {
-    if (width <= 0 && delta < 0) return 0;
-    return clampPanelWidth((width > 0 ? width : fallback) + delta);
-  };
 
   const adjustLeftPanelWidth = useCallback((delta: number) => {
     setLeftWidth((width) => stepPanelWidth(width, delta, DEFAULT_LEFT_PANEL_WIDTH));
