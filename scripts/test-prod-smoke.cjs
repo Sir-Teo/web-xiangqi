@@ -22,6 +22,22 @@
  *   2. does the engine — loaded from `base`-relative URLs — reach `readyok`,
  *   3. did anything throw or log an error on the way.
  *
+ * It asks them twice, because there are two production configurations and only
+ * one of them was ever being tested.
+ *
+ * `vite preview` sends COOP and COEP, so the page it serves is cross-origin
+ * isolated and the engine loads its threaded core. **GitHub Pages sends
+ * neither**, and serves static files with fixed headers, so it cannot be made
+ * to. The deployed app therefore always runs the single-threaded core — and
+ * every browser check in this repo, this one included, ran on the other side of
+ * that branch.
+ *
+ * What got through was not subtle once seen: the engine dashboard reported
+ * `single-simd` and `8T` at the same time, and offered a thread picker whose
+ * every rung was 1. So the second pass serves `dist` the way Pages does, from a
+ * plain static server with no isolation headers, and checks that the app both
+ * works there and says so honestly.
+ *
  * Run after `build:react`, which is why `verify` calls it last.
  */
 
@@ -33,11 +49,21 @@ const ROOT = path.resolve(__dirname, "..");
 const PORT = Number(process.env.PROD_SMOKE_PORT || 8193);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const URL = `${ORIGIN}/web-xiangqi/`;
+const PLAIN_PORT = Number(process.env.PROD_SMOKE_PLAIN_PORT || PORT + 1);
+const PLAIN_URL = `http://127.0.0.1:${PLAIN_PORT}/web-xiangqi/`;
 const READY_TIMEOUT_MS = Number(process.env.PROD_SMOKE_READY_TIMEOUT_MS || 120000);
 
+/**
+ * Throws rather than exiting, so the teardown in `main` actually runs.
+ *
+ * It used to call `process.exit(1)`, which skips `finally` -- so any failed
+ * assertion left the preview server holding the port, and the *next* run died
+ * with "port 8193 is already in use". That is the failure the spawn below is
+ * commented against, arriving by the other door: a suite that stays red for a
+ * reason that has nothing to do with the code.
+ */
 function fail(message) {
-  console.error(`Production smoke failed: ${message}`);
-  process.exit(1);
+  throw new Error(message);
 }
 
 async function waitForServer(stdoutRef, stderrRef, timeoutMs) {
@@ -67,91 +93,170 @@ async function stopServer(server) {
   clearTimeout(timer);
 }
 
-async function main() {
-  for (const required of ["dist/index.html", "dist/pikafish.js", "dist/pikafish.nnue"]) {
-    if (!fs.existsSync(path.join(ROOT, required))) {
-      fail(`${required} is missing. Run \`npm run build:react\` (and \`npm run build\`) first.`);
+/**
+ * `dist` over HTTP with no COOP/COEP — GitHub Pages, as far as the browser is
+ * concerned. In-process on purpose: a child would be another thing to leak.
+ */
+function startPlainServer(port) {
+  const http = require("node:http");
+  const TYPES = {
+    ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+    ".wasm": "application/wasm", ".json": "application/json", ".svg": "image/svg+xml",
+  };
+  const root = path.join(ROOT, "dist");
+  const server = http.createServer((req, res) => {
+    let rel = decodeURIComponent(String(req.url).split("?")[0]).replace(/^\/web-xiangqi\/?/, "") || "index.html";
+    if (rel.endsWith("/")) rel += "index.html";
+    let file = path.join(root, rel);
+    // SPA fallback, and a guard against escaping dist.
+    if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      file = path.join(root, "index.html");
     }
-  }
+    res.writeHead(200, { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream" });
+    fs.createReadStream(file).pipe(res);
+  });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => resolve(server));
+  });
+}
 
-  const playwright = require("playwright");
-  const viteBin = path.join(ROOT, "node_modules", "vite", "bin", "vite.js");
-  // Its own process group, so the teardown below can take the whole tree.
-  // Killing the wrapper alone left a listener on the port, and the *next* run
-  // then failed to start -- a leaked server turns one bad run into a suite that
-  // stays red until someone notices a stray process.
-  const server = spawn(
-    process.execPath,
-    [viteBin, "preview", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
-    { cwd: ROOT, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"], detached: true }
+/** The shell, the engine, and a clean console. Returns what the page reported. */
+async function checkApp(browser, url, label) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const problems = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") problems.push(`console: ${message.text().slice(0, 200)}`);
+  });
+  page.on("pageerror", (error) => problems.push(`pageerror: ${String(error.message).slice(0, 200)}`));
+  page.on("requestfailed", (request) => {
+    // Favicons and the like are not worth failing a deploy over; engine and
+    // bundle assets are exactly what this exists to catch.
+    if (/\.(js|css|wasm|nnue)(\?|$)/.test(request.url())) {
+      problems.push(`request failed: ${request.url()} (${request.failure()?.errorText})`);
+    }
+  });
+
+  // A visible page: the app pauses analysis while the tab is hidden, and a
+  // headless page can report itself hidden.
+  await page.addInitScript(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  });
+
+  const startedAt = Date.now();
+  const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+  if (!response || !response.ok()) fail(`${label}: GET ${url} returned ${response ? response.status() : "no response"}`);
+
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const boardMs = Date.now() - startedAt;
+
+  const fresh = page.getByRole("button", { name: /start fresh/i });
+  if (await fresh.count()) await fresh.first().click().catch(() => {});
+
+  await page.waitForFunction(
+    () => /Engine ready/.test(document.body.innerText),
+    null,
+    { timeout: READY_TIMEOUT_MS }
   );
+  const readyMs = Date.now() - startedAt;
 
+  // The board is only useful if it drew all ninety points.
+  const squares = await page.evaluate(() => document.querySelectorAll("[data-file][data-rank]").length);
+  if (squares < 90) fail(`${label}: board rendered ${squares} squares, expected at least 90`);
+
+  // The engine dashboard lives behind the Engine tab, and the thread count is
+  // the whole point of the second pass.
+  await page.locator("button:visible", { hasText: /^Engine$/ }).first().click().catch(() => {});
+  await page.waitForSelector(".engine-dashboard", { timeout: 15000 }).catch(() => {});
+
+  const reported = await page.evaluate(() => {
+    const dashboard = document.querySelector(".engine-dashboard");
+    const text = dashboard ? dashboard.textContent : "";
+    const core = text.match(/threaded-simd|single-simd|threaded|single/);
+    const threads = text.match(/(\d+)T/);
+    return {
+      isolated: crossOriginIsolated,
+      sawDashboard: Boolean(dashboard),
+      variant: core ? core[0] : null,
+      threads: threads ? Number(threads[1]) : null,
+    };
+  });
+  if (!reported.sawDashboard) fail(`${label}: the engine dashboard never rendered, so nothing about the engine was checked`);
+
+  if (problems.length) fail(`${label}: the built app reported:\n  - ${problems.join("\n  - ")}`);
+  await page.close();
+  return { boardMs, readyMs, squares, ...reported };
+}
+
+async function main() {
   const stdout = { value: "" };
   const stderr = { value: "" };
-  server.stdout.on("data", (chunk) => { stdout.value += String(chunk); });
-  server.stderr.on("data", (chunk) => { stderr.value += String(chunk); });
-
+  let server;
   let browser;
+  let plain;
   try {
+    for (const required of ["dist/index.html", "dist/pikafish.js", "dist/pikafish.nnue"]) {
+      if (!fs.existsSync(path.join(ROOT, required))) {
+        fail(`${required} is missing. Run \`npm run build:react\` (and \`npm run build\`) first.`);
+      }
+    }
+
+    const playwright = require("playwright");
+    const viteBin = path.join(ROOT, "node_modules", "vite", "bin", "vite.js");
+    // Its own process group, so the teardown below can take the whole tree.
+    // Killing the wrapper alone left a listener on the port, and the *next* run
+    // then failed to start -- a leaked server turns one bad run into a suite that
+    // stays red until someone notices a stray process.
+    server = spawn(
+      process.execPath,
+      [viteBin, "preview", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
+      { cwd: ROOT, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"], detached: true }
+    );
+    server.stdout.on("data", (chunk) => { stdout.value += String(chunk); });
+    server.stderr.on("data", (chunk) => { stderr.value += String(chunk); });
+
     await waitForServer(stdout, stderr, 30000);
 
     browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox"] });
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
-    const problems = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") problems.push(`console: ${message.text().slice(0, 200)}`);
-    });
-    page.on("pageerror", (error) => problems.push(`pageerror: ${String(error.message).slice(0, 200)}`));
-    page.on("requestfailed", (request) => {
-      // Favicons and the like are not worth failing a deploy over; engine and
-      // bundle assets are exactly what this exists to catch.
-      if (/\.(js|css|wasm|nnue)(\?|$)/.test(request.url())) {
-        problems.push(`request failed: ${request.url()} (${request.failure()?.errorText})`);
-      }
-    });
+    // 1. Isolated, as `vite preview` serves it: the threaded core.
+    const isolated = await checkApp(browser, URL, "isolated");
+    if (!isolated.isolated) {
+      fail("the preview server did not send COOP/COEP, so the isolated pass tested nothing");
+    }
 
-    // A visible page: the app pauses analysis while the tab is hidden, and a
-    // headless page can report itself hidden.
-    await page.addInitScript(() => {
-      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
-      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
-    });
-
-    const startedAt = Date.now();
-    const response = await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    if (!response || !response.ok()) fail(`GET ${URL} returned ${response ? response.status() : "no response"}`);
-
-    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-    const boardMs = Date.now() - startedAt;
-
-    const fresh = page.getByRole("button", { name: /start fresh/i });
-    if (await fresh.count()) await fresh.first().click().catch(() => {});
-
-    await page.waitForFunction(
-      () => /Engine ready/.test(document.body.innerText),
-      null,
-      { timeout: READY_TIMEOUT_MS }
-    );
-    const readyMs = Date.now() - startedAt;
-
-    // The board is only useful if it drew all ninety points.
-    const squares = await page.evaluate(() => document.querySelectorAll("[data-file][data-rank]").length);
-    if (squares < 90) fail(`board rendered ${squares} squares, expected at least 90`);
-
-    if (problems.length) fail(`the built app reported:\n  - ${problems.join("\n  - ")}`);
+    // 2. Un-isolated, as GitHub Pages serves it: the single-threaded core, and
+    //    the numbers the app puts on screen about it.
+    plain = await startPlainServer(PLAIN_PORT);
+    const pages = await checkApp(browser, PLAIN_URL, "pages");
+    if (pages.isolated) fail("the plain server sent isolation headers, so the Pages pass tested nothing");
+    if (pages.variant && !/^single/.test(pages.variant)) {
+      fail(`pages: engine loaded "${pages.variant}" without SharedArrayBuffer, which it cannot have done`);
+    }
+    if (pages.threads !== 1) {
+      fail(
+        `pages: the engine dashboard reports ${pages.threads} threads on a page that is not ` +
+        `cross-origin isolated, where the engine can only have one. The app is reporting what ` +
+        `it asked for rather than what it got — see detectThreadSupport in analysisProfile.ts.`
+      );
+    }
 
     console.log(
-      `Production smoke passed (board ${boardMs}ms, engine ready ${readyMs}ms, ${squares} squares, no console errors).`
+      `Production smoke passed:\n` +
+      `  isolated: ${isolated.variant}, ${isolated.threads}T, board ${isolated.boardMs}ms, ready ${isolated.readyMs}ms\n` +
+      `  pages (no COOP/COEP): ${pages.variant}, ${pages.threads}T, board ${pages.boardMs}ms, ready ${pages.readyMs}ms`
     );
   } catch (error) {
-    console.error(String(error && error.stack ? error.stack : error));
+    console.error(`Production smoke failed: ${error && error.message ? error.message : error}`);
+    if (error && error.stack && !/^Production smoke/.test(String(error.message))) console.error(error.stack);
     if (stdout.value.trim()) console.error(`Server stdout:\n${stdout.value}`);
     if (stderr.value.trim()) console.error(`Server stderr:\n${stderr.value}`);
     process.exitCode = 1;
   } finally {
     if (browser) await browser.close().catch(() => {});
-    await stopServer(server);
+    if (plain) await new Promise((resolve) => plain.close(resolve));
+    if (server) await stopServer(server);
   }
 }
 
