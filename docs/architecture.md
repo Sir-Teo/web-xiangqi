@@ -394,6 +394,42 @@ abstraction does.
 - Share links encode the tree as base64url: `utils/shareTree.ts`.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
+- **So does `utils/historicalGames.ts` now, and it needed to.** Two of the ten
+  bundled Classic Games held a move that cannot be played, and both had been
+  shipping silently truncated: `handleLoadHistoricalGame` calls `loadMoves`
+  without validating — unlike saved games, which go through
+  `validateMoveSequence` — and `loadMoves` stops at the first illegal move
+  without saying so. The library card's label is built from the data, so it
+  advertised 19 plies and loaded 15. Any bundled move list needs the replay
+  test; the loader will not tell you.
+
+## Words the engine chose, and words a player needs
+
+`validatePieceMove` writes its rejection reasons for the code that reads them —
+"rook moves orthogonally", "pawn move is illegal". There is no rook in xiangqi,
+so `utils/moveRuleHints.ts` is not decoration: its fallback (capitalise the
+reason) is how a beginner gets told about a piece this game does not have, and
+four reasons were reaching players that way.
+
+The test is the interesting part, and the shape is worth copying. It holds **no
+list of reasons**. It drives the rules engine over every square pair in eight
+positions — four of them built for reasons the ordinary ones cannot reach: an
+elephant advanced far enough to try the river, an elephant whose eye its own
+soldier blocks, a general at the edge of its palace, a soldier pinned down the
+file — collects whatever the engine says, and asserts every reason found has a
+written sentence and every written sentence answers a reason that exists. A
+hand-written list would pass forever after someone added the twenty-fifth
+reason.
+
+The hints are a lookup record rather than a `switch` so "is this reason
+handled?" is a fact the test can read. Asked of the output instead, one written
+sentence ("Generals cannot face each other.") reads exactly like its own
+fallback and would be mistaken for one.
+
+`PIECE_MOVE_HINTS` in `App.tsx` is the same contract in the other direction:
+each names the restrictions the engine enforces on that piece, so a rule cannot
+first be mentioned at the moment it refuses a move. The elephant's eye was the
+one missing.
 
 ## Telling the user what the engine is doing
 
@@ -435,6 +471,14 @@ with one.
 **MultiPV costs depth, and it is worth knowing.** Three lines is about a quarter
 of the node rate and six plies. Three is still the right default for an analysis
 board — candidate moves are the point — but it is a choice, not free.
+
+**Playing on from a position.** `playFromHere` keeps the line up to the position
+on screen and switches to a Play mode, taking the side to move. Switching mode
+otherwise goes through `applyMode`, which resets the board — so the thing you
+most want after a review finds your mistake was the thing you could not do. The
+line is truncated at the current position, because playing on from move 15 means
+the moves after 15 did not happen, and the human takes the side to move so the
+engine never moves first.
 
 **A deep dive is the fourth budget, and the one the user asks for.**
 `resolveDeepDiveBudget` runs one search on the current position at depth 36 with
