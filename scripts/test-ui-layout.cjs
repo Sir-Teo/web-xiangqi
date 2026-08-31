@@ -932,6 +932,86 @@ async function assertNotationStylesRenderDifferently(page) {
   await page.waitForTimeout(600);
 }
 
+/**
+ * "From your library": what *your own* saved games did from here.
+ *
+ * It is the one panel that speaks about the reader's own play rather than the
+ * engine's opinion, so a wrong count is not a cosmetic slip -- it tells them
+ * they have played a line more or less often than they have. And it is derived
+ * data: an index built over every saved game, looked up by position, which is
+ * exactly the kind of thing that can go quietly wrong while still rendering a
+ * confident number.
+ *
+ * The library is seeded through storage rather than by saving three games
+ * through the UI: faster, and it keeps the check about the lookup rather than
+ * about the save button.
+ */
+async function assertLibraryExplorerCountsOwnGames(page) {
+  const GAMES = [
+    ["h2e2", "h9g7", "c3c4", "c6c5", "b0c2"],
+    ["h2e2", "h9g7", "c3c4", "i9i8", "b2b4"],
+    ["h2e2", "h9g7", "g3g4", "g6g5", "h0g2"],
+  ];
+
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate((games) => {
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify(games.map((moves, index) => ({
+      id: `explorer-fixture-${index}`,
+      savedAt: 1700000000000 + index,
+      gameMode: "PvP",
+      moves,
+      result: "ongoing",
+    }))));
+  }, GAMES);
+
+  const readCard = async (moves) => {
+    await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${moves.join("+")}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    for (const name of [/start fresh|keep the link/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    await page.waitForTimeout(900);
+    return page.evaluate(() => {
+      const card = document.querySelector(".library-explorer-card");
+      if (!card) return null;
+      return {
+        games: Number(card.querySelector(".opening-candidates-head strong")?.textContent?.trim() ?? "0"),
+        rows: [...card.querySelectorAll("button")].map((b) => b.textContent.replace(/\s+/g, " ").trim()),
+      };
+    });
+  };
+
+  // All three games passed through here, two of them continuing the same way.
+  const shared = await readCard(["h2e2", "h9g7"]);
+  if (!shared) throw new Error("No library card at a position three saved games reached");
+  if (shared.games !== 3) throw new Error(`Library card counted ${shared.games} games where three reached the position`);
+  if (shared.rows.length !== 2) {
+    throw new Error(`Expected two continuations from three games, got ${JSON.stringify(shared.rows)}`);
+  }
+  if (!shared.rows[0].includes("2 games") || !shared.rows[1].includes("1 game")) {
+    throw new Error(`Continuations are not split two and one: ${JSON.stringify(shared.rows)}`);
+  }
+
+  // A position only one of them reached.
+  const narrow = await readCard(["h2e2", "h9g7", "g3g4"]);
+  if (!narrow || narrow.games !== 1) {
+    throw new Error(`Expected one game at a position only one reached, got ${JSON.stringify(narrow)}`);
+  }
+
+  // And a position none of them reached says nothing at all.
+  const absent = await readCard(["b2e2", "b9c7"]);
+  if (absent) throw new Error(`Library card appeared for a position no saved game reached: ${JSON.stringify(absent)}`);
+
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:library:v1"); } catch (e) { /* ignore */ } });
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -7041,6 +7121,7 @@ async function main() {
     await assertBoardMatchesThePlyItIsOn(page);
     await assertAdvertisedMoveShortcuts(page);
     await assertNotationStylesRenderDifferently(page);
+    await assertLibraryExplorerCountsOwnGames(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
