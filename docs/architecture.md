@@ -479,6 +479,24 @@ thing that would move the first visit is a smaller net, which is a playing
 strength decision rather than a delivery one: `scripts/build-pikafish.sh` takes
 whatever `pikafish.nnue` upstream ships.
 
+#### The bundle is not where the load time is
+
+Worth writing down because the 393kB main bundle is the number a build log puts
+in front of you, and splitting it further is the obvious next idea.
+
+`dist/assets/index-*.js` is 393,713 bytes. A cold visit is 55,054,236. The
+bundle is **0.7% of it**, and `pikafish.nnue` is 97.6%. Splitting the bundle
+harder would move a fraction of a percent of what a first visitor waits for,
+and nothing at all for a returning one, who fetches zero bytes. The engine is
+already lazy, so the shell paints without waiting for any of it.
+
+A throttled measurement was attempted and is deliberately not quoted here. The
+isolation bootstrap reloads the page once when the service worker takes
+control, which lands in the middle of a timed load and destroys the execution
+context the measurement is running in; the numbers that survive that are of the
+reload, not of the load. The byte accounting above answers the question without
+it.
+
 ### A core that arrives as something else
 
 Running the browser suites back to back on one machine produced an intermittent
