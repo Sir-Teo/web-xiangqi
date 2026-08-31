@@ -480,6 +480,84 @@ async function assertLargeDisplayBoardAndEvalBar(page) {
   }
 }
 
+/**
+ * Windows High Contrast, which is a palette the page does not get to choose.
+ *
+ * Forced colours replace author colours with system ones and *strip background
+ * images*, and that second half is what catches CSS out: an element coloured by
+ * a `linear-gradient` has no background-colour underneath to fall back to, so it
+ * renders fully transparent rather than falling back to anything.
+ *
+ * That is exactly what happened to the eval bar. Red's share is a gradient, so
+ * it vanished, the track showed through, and the bar -- whose entire message is
+ * the proportion between the two shares -- became one blank rectangle in both
+ * the light and dark high-contrast palettes.
+ *
+ * So this asserts the things that have to survive the palette: the two shares
+ * of the eval bar are different colours, the grid is drawn in the system's own
+ * foreground rather than an authored brown that vanishes against it, and the
+ * two sides are still told apart -- by ring shape, since hue is not available.
+ */
+async function assertForcedColoursRemainReadable(browser) {
+  for (const colorScheme of ["light", "dark"]) {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 820 },
+      forcedColors: "active",
+      colorScheme,
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForTimeout(700);
+
+      const seen = await page.evaluate(() => {
+        const style = (selector, prop) => {
+          const el = document.querySelector(selector);
+          return el ? getComputedStyle(el)[prop] : null;
+        };
+        return {
+          active: matchMedia("(forced-colors: active)").matches,
+          trackBg: style(".eval-bar-track", "backgroundColor"),
+          fillBg: style(".eval-bar-red", "backgroundColor"),
+          gridStroke: style(".grid-line", "stroke"),
+          redOutline: style(".piece.red", "outlineStyle"),
+          blackOutline: style(".piece.black", "outlineStyle"),
+          pieceCount: document.querySelectorAll(".piece").length,
+        };
+      });
+
+      const where = `forced colours, ${colorScheme}`;
+      if (!seen.active) throw new Error(`${where}: the page did not report forced colours, so nothing was tested`);
+      if (seen.pieceCount < 32) throw new Error(`${where}: only ${seen.pieceCount} pieces rendered`);
+
+      // Transparent is the specific failure: a stripped gradient with nothing
+      // behind it. Equal-to-the-track is the same defect seen from outside.
+      if (!seen.fillBg || /rgba\(0, 0, 0, 0\)|transparent/.test(seen.fillBg) || seen.fillBg === seen.trackBg) {
+        throw new Error(
+          `${where}: the eval bar's fill is "${seen.fillBg}" against a track of "${seen.trackBg}", so the ` +
+          `bar shows no proportion at all. A gradient has no colour left once background images are ` +
+          `stripped -- give it a background-color in the forced-colors block in App.css.`
+        );
+      }
+      if (!seen.gridStroke || /rgba\(0, 0, 0, 0\)/.test(seen.gridStroke)) {
+        throw new Error(`${where}: board grid stroke is "${seen.gridStroke}"`);
+      }
+      if (seen.redOutline === seen.blackOutline) {
+        throw new Error(
+          `${where}: red and black pieces both use outline-style "${seen.redOutline}". Hue is not ` +
+          `available here, so the ring shape is what tells the sides apart.`
+        );
+      }
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6583,6 +6661,7 @@ async function main() {
 
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertLargeDisplayBoardAndEvalBar(page);
+    await assertForcedColoursRemainReadable(browser);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);
