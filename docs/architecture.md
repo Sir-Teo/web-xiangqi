@@ -909,6 +909,55 @@ happened twice in one night: `npm test` does not run `test:openings` or
 them), and a check that reports success is only telling you about the things it
 looked at.
 
+## The board pays for the reader's text size (open question)
+
+The desktop board takes its size from the height of the row it sits in, which
+is what stops it overflowing and sliding up behind the top toolbar — see the
+comments on `.board-workspace .board-wrap`. The cost of that choice is that the
+board absorbs *all* of the space the surrounding chrome takes, and the chrome
+grows with the reader's text size while the window does not.
+
+Measured with the browser's own default font size (Chrome's Appearance setting,
+which is what moves both `rem` and the `em` basis of a media query — setting
+`html { font-size }` moves only the first and does not reproduce this):
+
+| default font | 1024x720 | 1440x900 | 1920x1200 |
+| --- | --- | --- | --- |
+| 16px | 420px | 539px | 809px |
+| 20px | 282px | 427px | 751px |
+| 24px | 196px | 357px | 692px |
+| 32px | 57px | 163px | 489px |
+
+A 57px board is ten ranks in 57 pixels. The reader who most needs a large board
+gets the smallest one, and a wide window is what saves you — 1920x1200 is fine
+at every size.
+
+**Phones are not affected, which was worth checking rather than assuming.** The
+stacked layout holds: 390x844 measures 362px at every font size from 16 to 32,
+430x932 holds 402px, 768x1024 goes 693px to 609px, and the worst case, 360x640,
+only falls from 332px to 272px.
+
+**The obvious fix is wrong, and was measured before being discarded.** Adding a
+text-relative axis to the mobile breakpoint — `(max-width: 56.25em)`, which is
+the same 900px rule stated in `em`, in the shape of the
+`(min-width: 1360px) and (min-width: 64em)` rule already in `App.css` — flags
+exactly the right cases. Every board under 300px above matches it and every
+acceptable one does not. But sending those windows to the stacked layout makes
+it *worse*, not better: the stacked layout derives the board from height too, so
+on a short landscape window it collapses further. Measured at 1024x720 with a
+20px default: 282px on desktop, **36px** stacked. The stacked layout is only
+better on a tall window, which is why phones are fine and a 720px-tall laptop is
+not.
+
+So the fix is not a breakpoint. It is a floor: a minimum board size, with the
+stage allowed to scroll when the chrome and that minimum do not both fit.
+`.board-stage` currently hides its overflow, which is exactly why the present
+code has no floor — the comments record a floor being tried and causing the
+board to slide under the toolbar, costing Red's back rank at 1024x600 and 150%
+text. A floor is only safe once the overflow it creates has somewhere to go.
+**Wanted before changing it: agreement on what the minimum board is, and on
+whether the board stage may scroll.**
+
 ## The tab order is a budget
 
 Every focusable thing is a key press between someone and the control they want,
