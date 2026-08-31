@@ -4,6 +4,7 @@ import {
     ENGINE_THREAD_HEADROOM,
     HIGH_TIER_MAX_THREADS,
     hashChoicesForTier,
+    resolveDeepDiveBudget,
     MAX_ENGINE_THREADS,
     detectDeviceTier,
     resolveEngineBootConfig,
@@ -264,5 +265,32 @@ describe('the engine hash a device may be asked for', () => {
 
     it('never offers a phone a size a phone should not take', () => {
         for (const size of hashChoicesForTier('low')) expect(size).toBeLessThanOrEqual(48);
+    });
+});
+
+describe('a deep dive on one position', () => {
+    it('gives every tier far more time than live analysis has', () => {
+        for (const tier of ['low', 'mid', 'high'] as const) {
+            const deep = resolveDeepDiveBudget(tier);
+            const live = resolveLiveAnalysisPolicy({ tier, mode: 'optimized', searchDepth: 99, detailEnabled: true });
+            expect(deep.moveTimeMs).toBeGreaterThan(live.primary.moveTimeMs * 5);
+            expect(deep.depth).toBeGreaterThan(live.primary.depth);
+        }
+    });
+
+    it('is bounded, so it settles without anyone having to stop it', () => {
+        // `go infinite` returns no bestmove until stopped, and paths here wait
+        // on bestmove.
+        for (const tier of ['low', 'mid', 'high'] as const) {
+            const deep = resolveDeepDiveBudget(tier);
+            expect(deep.goCmd).toMatch(/^go depth \d+ movetime \d+$/);
+            expect(deep.goCmd).not.toContain('infinite');
+            expect(deep.moveTimeMs).toBeLessThanOrEqual(30_000);
+        }
+    });
+
+    it('scales with the tier', () => {
+        expect(resolveDeepDiveBudget('high').moveTimeMs).toBeGreaterThan(resolveDeepDiveBudget('mid').moveTimeMs);
+        expect(resolveDeepDiveBudget('mid').moveTimeMs).toBeGreaterThan(resolveDeepDiveBudget('low').moveTimeMs);
     });
 });

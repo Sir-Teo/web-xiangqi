@@ -84,6 +84,7 @@ import {
   detectDeviceScreen,
   detectSimdSupport,
   hashChoicesForTier,
+  resolveDeepDiveBudget,
   resolveEngineBootConfig,
   resolveLiveAnalysisPolicy,
   resolveReviewPolicy,
@@ -516,15 +517,17 @@ function logDiagnosticError(message: string, ...details: unknown[]) {
   }
 }
 
-function makeAnalysisTag(phase: 'primary' | 'deepen', requestKey: string) {
+type AnalysisPhase = 'primary' | 'deepen' | 'deep';
+
+function makeAnalysisTag(phase: AnalysisPhase, requestKey: string) {
   return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
 }
 
 function parseAnalysisTag(tag: string | null) {
   if (!tag || !tag.startsWith(`${ANALYSIS_TAG_PREFIX}|`)) return null;
   const [, phase, ...rest] = tag.split('|');
-  if ((phase !== 'primary' && phase !== 'deepen') || rest.length === 0) return null;
-  return { phase, requestKey: rest.join('|') };
+  if ((phase !== 'primary' && phase !== 'deepen' && phase !== 'deep') || rest.length === 0) return null;
+  return { phase: phase as AnalysisPhase, requestKey: rest.join('|') };
 }
 
 function makeReviewTag(phase: ReviewPhase, nodeId: string) {
@@ -905,6 +908,10 @@ function App() {
   const [engineHashMB, setEngineHashMB] = useState<number | undefined>(storedPreferences.engineHashMB);
   const [enginePvLineCount, setEnginePvLineCount] = useState<PvLineCount>(storedPreferences.enginePvLineCount ?? 3);
   const [engineRestartToken, setEngineRestartToken] = useState(0);
+  // State rather than the stage ref, because the ref cannot re-render the
+  // button that has to turn into "Stop". It happened to look right only
+  // because a running search re-renders constantly for its own reasons.
+  const [deepDiveActive, setDeepDiveActive] = useState(false);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
   const [spotlightPvIndex, setSpotlightPvIndex] = useState<number | null>(null);
@@ -1121,7 +1128,7 @@ function App() {
   }, [reviewSummary]);
 
   const applyBestMoveRef = useRef(false);
-  const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'settled'>('idle');
+  const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'deep-pending' | 'settled'>('idle');
   const analysisDeepenTimerRef = useRef<number | null>(null);
   const activeAnalysisRequestRef = useRef('');
   const currentAnalysisRequestKeyRef = useRef('');
@@ -1420,6 +1427,8 @@ function App() {
       if (currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(normalizeEvalForSide(score, sideToMove));
       }
+
+      if (analysisTag.phase === 'deep') setDeepDiveActive(false);
 
       if (
         analysisTag.phase === 'primary' &&
@@ -1843,6 +1852,7 @@ function App() {
     if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || !isPageVisible) {
       activeAnalysisRequestRef.current = '';
       analysisStageRef.current = 'idle';
+      setDeepDiveActive(false);
       clearAnalysisDeepenTimer();
       clearQueuedSearch();
       clearPvLines();
@@ -1856,6 +1866,8 @@ function App() {
     if (activeAnalysisRequestRef.current !== analysisRequestKey) {
       activeAnalysisRequestRef.current = analysisRequestKey;
       analysisStageRef.current = 'idle';
+      // The deep search belonged to the position that just went away.
+      setDeepDiveActive(false);
       clearAnalysisDeepenTimer();
       clearPvLines();
       clearWdl();
@@ -2373,6 +2385,7 @@ function App() {
   // full width of the screen and there is no gutter to sit in; the eval is on
   // the mobile header chip and in the analysis tab there instead.
   const engineHashChoices = useMemo(() => hashChoicesForTier(deviceProfile.tier), [deviceProfile.tier]);
+  const deepDiveBudget = useMemo(() => resolveDeepDiveBudget(deviceProfile.tier), [deviceProfile.tier]);
   const showEvalBar = engineEnabled && !isMobile;
   const displayEvalClass = displayEvalScore === null
     ? ''
@@ -2937,6 +2950,26 @@ function App() {
       setCopiedPvIndex(null);
     }, 1800);
   }, [clearExportFailure, showExportFailure]);
+
+  /**
+   * Stop on this position and go as deep as the machine can in a bounded wait.
+   *
+   * Live analysis is budgeted to keep up with someone stepping through a game.
+   * This is the other thing a strong player wants and could not ask for. It
+   * rides the same queue and the same tag as the live searches, so the position
+   * changing cancels it exactly as it cancels any other search.
+   */
+  const runDeepDive = useCallback(() => {
+    if (!isReady || !engineEnabled || isAiTurn || reviewControllerRef.current.active) return;
+    analysisStageRef.current = 'deep-pending';
+    setDeepDiveActive(true);
+    queueSearch(
+      currentPositionCommand,
+      deepDiveBudget.goCmd,
+      0,
+      makeAnalysisTag('deep', analysisRequestKey),
+    );
+  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, engineEnabled, isAiTurn, isReady, queueSearch]);
 
   const handleClearEngineHash = useCallback(() => {
     if (clearedHashTimerRef.current !== null) {
@@ -5048,6 +5081,27 @@ function App() {
                   <div className="engine-pv-controls engine-runtime-controls" role="group" aria-label="Engine runtime controls">
                     <span>Runtime</span>
                     <div className="engine-runtime-buttons">
+                      {/* The one thing live analysis cannot do: stop on this
+                          position and go as deep as the machine can. Bounded,
+                          so it settles on its own; stoppable, so a long wait is
+                          never forced on anyone. */}
+                      <button
+                        type="button"
+                        className={`engine-cache-btn ${deepDiveActive ? 'engine-pv-btn-active' : ''}`}
+                        onClick={deepDiveActive ? stopSearch : runDeepDive}
+                        disabled={!isReady || !engineEnabled || isAiTurn || reviewStatus === 'running'}
+                        title={deepDiveActive
+                          ? 'Stop the deep search and keep what it has found'
+                          : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`}
+                        aria-label={deepDiveActive
+                          ? 'Stop the deep search'
+                          : `Deep search this position, up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)} seconds`}
+                        data-testid="deep-dive-btn"
+                      >
+                        {deepDiveActive
+                          ? <><IconPause aria-hidden="true" focusable="false" /> Stop</>
+                          : <><IconSearch aria-hidden="true" focusable="false" /> Go Deep</>}
+                      </button>
                       <button
                         type="button"
                         className="engine-cache-btn"

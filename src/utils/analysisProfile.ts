@@ -334,6 +334,35 @@ export function resolveLiveAnalysisPolicy(input: {
     };
 }
 
+/**
+ * One position, thought about properly, because the user asked.
+ *
+ * Live analysis is budgeted to keep up with someone stepping through a game:
+ * it has a second or two per position and has to be ready for the next one. The
+ * thing it cannot do is the thing a strong player most often wants -- stop on
+ * *this* position and go as deep as the machine can in a reasonable wait.
+ *
+ * A one-shot search rather than an infinite mode. `go infinite` returns no
+ * `bestmove` until it is stopped, and several paths here wait on `bestmove`; a
+ * bounded search settles on its own, so nothing has to remember to end it, and
+ * the user can still stop it early.
+ *
+ * The time is the budget and the depth is a ceiling well past what the time
+ * will reach, for the same reason as everywhere else in this module. Thirty
+ * seconds is chosen to be long enough to be worth pressing and short enough
+ * that nobody wonders whether it is stuck -- the search reports rising depth
+ * throughout.
+ */
+export function resolveDeepDiveBudget(tier: DeviceTier): SearchBudget {
+    const byTier = {
+        low: { depth: 24, moveTimeMs: 10_000 },
+        mid: { depth: 30, moveTimeMs: 20_000 },
+        high: { depth: 36, moveTimeMs: 30_000 },
+    } as const;
+    const budget = byTier[tier];
+    return { ...budget, goCmd: buildGoCmd(budget.depth, budget.moveTimeMs) };
+}
+
 export function resolveReviewPolicy(profile: DeviceProfile): ReviewPolicy {
     // Ceilings, as above -- but held lower than live analysis on purpose. A
     // review searches every unevaluated move in the game, so its depth is
