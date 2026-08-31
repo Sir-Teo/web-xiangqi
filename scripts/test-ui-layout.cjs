@@ -558,6 +558,70 @@ async function assertForcedColoursRemainReadable(browser) {
   }
 }
 
+/**
+ * The way past the toolbar for someone using a keyboard.
+ *
+ * Nineteen controls sit between the start of the page and the board -- the
+ * toolbar, the pane resizer, the panel tabs, the graph navigator, the four
+ * opening-book buttons -- so the board, which is what the page is for, was the
+ * twentieth press of Tab. Every one of those stops is a real control and none
+ * of them should be removed; the answer is a way around them.
+ *
+ * A skip link only works if it is the *first* thing focus reaches and if it is
+ * genuinely invisible until then, so both are checked, along with the thing it
+ * actually promises: that activating it puts focus on a board square.
+ */
+async function assertSkipLinkReachesTheBoard(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(400);
+
+  const offScreen = await page.evaluate(() => {
+    const el = document.querySelector(".skip-link");
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return { bottom: rect.bottom, display: style.display, visibility: style.visibility };
+  });
+  if (!offScreen) throw new Error("No skip link on the page");
+  if (offScreen.bottom > 0) {
+    throw new Error(`Skip link is on screen before it is focused (bottom ${offScreen.bottom})`);
+  }
+  // display:none or visibility:hidden would take it out of the tab order, which
+  // is the one place it has to be.
+  if (offScreen.display === "none" || offScreen.visibility === "hidden") {
+    throw new Error(`Skip link is hidden in a way that removes it from the tab order: ${JSON.stringify(offScreen)}`);
+  }
+
+  await page.keyboard.press("Tab");
+  const first = await page.evaluate(() => {
+    const el = document.activeElement;
+    return {
+      isSkipLink: Boolean(el && el.classList.contains("skip-link")),
+      onScreen: el ? el.getBoundingClientRect().top >= 0 : false,
+    };
+  });
+  if (!first.isSkipLink) throw new Error("The first tab stop is not the skip link");
+  if (!first.onScreen) throw new Error("The skip link stayed off screen while focused");
+
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  const landed = await page.evaluate(() => {
+    const el = document.activeElement;
+    return {
+      onBoard: Boolean(el && el.closest && el.closest(".xiangqi-board")),
+      label: el ? el.getAttribute("aria-label") : null,
+    };
+  });
+  if (!landed.onBoard) {
+    throw new Error(`Skip link did not move focus to the board: ${JSON.stringify(landed)}`);
+  }
+}
+
 async function assertDesktopBoardLayout(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6662,6 +6726,7 @@ async function main() {
     await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
     await assertLargeDisplayBoardAndEvalBar(page);
     await assertForcedColoursRemainReadable(browser);
+    await assertSkipLinkReachesTheBoard(page);
     await assertNoDanglingAriaControls(page);
     await assertOpeningBookArrowsGuideBoard(page);
     await assertBoardKeyboardNavigation(page);

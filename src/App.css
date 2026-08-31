@@ -6207,3 +6207,30 @@ summary:active {
   font-size: 0.7rem;
   color: var(--text-secondary);
 }
+
+/* Off-screen until it is focused, which is the only time it is useful. It must
+   not be `display: none` or `visibility: hidden` -- both take it out of the tab
+   order, which is the one thing it exists to be in. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--accent, #10b981);
+  background: var(--bg-elevated, #14141a);
+  color: var(--text-primary, #f4f4f5);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: top 120ms ease;
+}
+
+.skip-link:focus-visible,
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}

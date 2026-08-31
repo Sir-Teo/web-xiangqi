@@ -3519,6 +3519,16 @@ function App() {
   // Read once, from the address the tab was opened with, so the recovery modal
   // can tell a cold start from a followed link. Only the shape matters here --
   // the link's own loader above does the validating.
+  // The board carries a single roving tab stop, so the square to focus is
+  // whichever one currently holds it -- the last square the player used, not a
+  // fixed corner.
+  const focusBoard = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const target = document.querySelector<HTMLElement>('.xiangqi-board [tabindex="0"]')
+      ?? document.querySelector<HTMLElement>('.xiangqi-board [data-file][data-rank]');
+    target?.focus();
+  }, []);
+
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
@@ -3689,6 +3699,16 @@ function App() {
       data-assist-mode={assistMode}
     >
       <h1 className="sr-only">Web Xiangqi</h1>
+
+      {/* Nineteen controls stand between the start of the page and the board:
+          the toolbar, the pane resizer, the panel tabs, the graph navigator and
+          the opening-book buttons. None of them is waste -- they are all things
+          a player uses -- but the board is what the page is for, and reaching it
+          took twenty presses of Tab. This is the standard way out, and it is the
+          first thing focus lands on. */}
+      <button type="button" className="skip-link" onClick={focusBoard}>
+        Skip to board
+      </button>
 
       {/* ── Top bar ── */}
       <section className={`panel top ${topPanelOpen ? '' : 'hidden'}`}>
