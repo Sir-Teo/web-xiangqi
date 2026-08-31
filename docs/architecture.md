@@ -1156,6 +1156,8 @@ reason is in the CSS above — `.top.hidden` and `.bottom.hidden` apply
 slides out of sight and keeps its grid row, so the stage is exactly as tall as
 it was and the board does not change by a pixel. Measured at 1024x720: the top
 panel is 229px before the click and 229px after it, and the board stays 57px.
+On screen the row it vacated is simply an empty band — the collapse trades a
+toolbar for a blank strip of the same height, and gives the board nothing.
 
 What that row is worth, at 1024x720, with the collapsed panels taken out of
 layout rather than slid out of view:
