@@ -153,6 +153,42 @@ function main() {
     for (const core of CORES) checkCore(dir, core, expectedPool);
   }
 
+  // The wrapper carries its own copy, because it clamps a caller's explicit
+  // thread count and is a published helper -- `Pikafish.createWorkerEngine` is
+  // in the README, so someone outside this repo can ask for 16 threads.
+  const wrapper = fs.readFileSync(path.join(ROOT, "templates/pikafish.js"), "utf8");
+  const wrapperPool = wrapper.match(/const WASM_PTHREAD_POOL_SIZE = (\d+);/);
+  if (!wrapperPool) {
+    fail("Could not read WASM_PTHREAD_POOL_SIZE from templates/pikafish.js");
+  } else if (expectedPool !== null && Number(wrapperPool[1]) !== expectedPool) {
+    fail(
+      `templates/pikafish.js believes the pool is ${wrapperPool[1]}, but ` +
+      `ENGINE_PTHREAD_POOL_SIZE is ${expectedPool}. The wrapper clamps a caller's ` +
+      `thread count against its copy, so a stale one lets a browser ask past what ` +
+      `the shipped core holds -- which hangs it without erroring.`
+    );
+  }
+
+  // And the shipped copies have to *be* the template. `build-pikafish.sh` copies
+  // it into `public/` and `dist/`, so editing the template without rebuilding
+  // leaves the app running the old wrapper -- which is not a subtle difference
+  // when the edit is a thread clamp. Nothing checked this, and the copies were
+  // 35 lines behind when it was added.
+  for (const dir of SHIPPED_DIRS) {
+    const shipped = path.join(ROOT, dir, "pikafish.js");
+    if (!fs.existsSync(shipped)) {
+      if (dir === "public") fail(`${dir}/pikafish.js is missing`);
+      continue;
+    }
+    if (fs.readFileSync(shipped, "utf8") !== wrapper) {
+      fail(
+        `${dir}/pikafish.js does not match templates/pikafish.js. The build copies the ` +
+        `template into place, so this one is stale and it is what the app actually loads. ` +
+        `Rerun \`npm run build\`, or copy the template over it.`
+      );
+    }
+  }
+
   // The build script's default has to agree too, or a plain `npm run build`
   // silently produces artifacts the app will over-ask.
   const buildScript = fs.readFileSync(path.join(ROOT, "scripts/build-pikafish.sh"), "utf8");
@@ -175,7 +211,7 @@ function main() {
 
   console.log(
     `Engine contract check passed (${CORES.length} cores, pool ${expectedPool}, ` +
-    `max ask ${maxThreads}).`
+    `app max ask ${maxThreads}, wrapper agrees).`
   );
 }
 

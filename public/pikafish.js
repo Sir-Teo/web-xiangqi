@@ -224,13 +224,42 @@
     return clampInt(Math.floor(memMB / 16), 32, 256);
   }
 
+  /**
+   * The pthread pool the shipped threaded cores are built with.
+   *
+   * Mirrors `WASM_PTHREAD_POOL_SIZE` in `scripts/build-pikafish.sh`, and
+   * `scripts/test-engine-contract.cjs` fails if the two drift apart -- because
+   * being wrong about it is not a small error. In a browser the engine runs
+   * inside a worker, so asking for more search threads than the pool holds
+   * blocks the calling thread in `pthread_create`: the engine does not error,
+   * it simply never answers `readyok`.
+   *
+   * Node is not constrained by this and is deliberately not clamped. The pool
+   * is a browser-worker concept; the same artifacts run 17 threads happily
+   * under Node, which is what `npm run bench:nps` does.
+   */
+  const WASM_PTHREAD_POOL_SIZE = 12;
+
+  /**
+   * The most a browser may ask for, kept clear of the pool rather than equal to
+   * it -- Pikafish wants a thread for its own bookkeeping, and the failure mode
+   * for being one over is the silent hang above rather than an error.
+   */
+  const MAX_BROWSER_THREADS = WASM_PTHREAD_POOL_SIZE - 4;
+
   function recommendedThreads(opts, variant) {
     if (!isThreadedVariant(variant)) return 1;
+    // An explicit ask is honoured, but not past what the core can hand out.
+    // This is a published helper -- `Pikafish.createWorkerEngine` is in the
+    // README -- so a caller passing 16 would otherwise get a worker that loads,
+    // answers `uci`, and never becomes ready, with nothing to read.
+    const ceiling = isNode() ? 64 : MAX_BROWSER_THREADS;
     if (opts && Number.isFinite(Number(opts.threads))) {
-      return clampInt(Number(opts.threads), 1, 64);
+      return clampInt(Number(opts.threads), 1, ceiling);
     }
-    const defaultMaxThreads = isNode() ? 8 : 4;
-    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || defaultMaxThreads, 1, 64);
+    // The browser default was 4 because the pool was 4. It tracks the pool now.
+    const defaultMaxThreads = isNode() ? 8 : MAX_BROWSER_THREADS;
+    const maxAutoThreads = clampInt((opts && opts.maxAutoThreads) || defaultMaxThreads, 1, ceiling);
     const hw = detectHardwareThreads();
     const target = isNode() ? hw : Math.max(1, hw - 1);
     return clampInt(target, 1, maxAutoThreads);
