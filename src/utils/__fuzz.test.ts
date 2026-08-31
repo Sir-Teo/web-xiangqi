@@ -3,6 +3,8 @@ import {
     extractUciMoveLine,
     extractUciMoveTree,
     extractFenTag,
+    extractAnnotatedMainLine,
+    stripRecordMetadata,
     isMoveImportTextTooLarge,
     hasTooManyUciMoves,
 } from './moveImport';
@@ -63,6 +65,8 @@ for (const [name, input] of NASTY) {
         extractUciMoveLine(input);
         extractUciMoveTree(input);
         extractFenTag(input);
+        stripRecordMetadata(input);
+        extractAnnotatedMainLine(input);
         decodeSavedMoveTreeParam(input);
         normalizeSavedGames(input);
         try { parseFenBoard(input); } catch { /* an invalid FEN is expected to throw */ }
