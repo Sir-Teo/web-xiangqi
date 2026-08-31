@@ -29,6 +29,11 @@ export type HistoricalGame = {
  *
  *  - An excerpt cannot carry an outcome of its own. If a `result` is added it
  *    is a fact about the game it was taken from, and belongs in that framing.
+ *  - **Every line is replayed through the rules engine by
+ *    `historicalGames.test.ts`.** Two of these ten did not survive that when it
+ *    was written, and had been shipping truncated: `loadMoves` stops at the
+ *    first illegal move without saying so, so a game with a bad ply loads short
+ *    and looks complete. Add moves only if they replay.
  *  - There is no provenance field here. Both sibling apps have one --
  *    web-katrain records `source: 'go4go.com'` beside bundled SGFs, web-chess
  *    stores a `lichessGameId` and fetches the moves -- and either approach
@@ -159,12 +164,16 @@ export const HISTORICAL_GAMES: HistoricalGame[] = [
     date: '1982',
     result: 'red',
     opening: 'Central Cannon vs Pawn Formation',
+    // Trimmed at ply 15. The record continued 'c7e6', and black has no piece on
+    // c7 in this line -- its only horse move was 'h9g7', so the horse that move
+    // needs is on g7 and the plies after it are unmoored from any position this
+    // game reached. `loadMoves` stops at the first illegal move without saying
+    // so, so this loaded three plies short and looked complete.
     moves: [
       'b2e2', 'e6e5', 'h0g2', 'h9g7',
       'a0a1', 'a9a8', 'a1d1', 'a8d8',
       'i0i1', 'i9i8', 'i1h1', 'i8g8',
-      'h2h4', 'c6c5', 'd1d6', 'c7e6',
-      'g3g4', 'g7e8',
+      'h2h4', 'c6c5', 'd1d6',
     ],
   },
   {
@@ -191,12 +200,15 @@ export const HISTORICAL_GAMES: HistoricalGame[] = [
     date: '1973',
     result: 'draw',
     opening: 'Central Cannon vs Screen Horse',
+    // Trimmed at ply 15, same reason as hist-8. The record continued 'g7h5',
+    // and that horse's leg is its own unmoved pawn on g6 -- only 'g7e6' and
+    // 'g7e8' are available -- so everything after it belongs to a position this
+    // line never stood in.
     moves: [
       'b2e2', 'h9g7', 'h0g2', 'b9c7',
       'a0a1', 'a9a8', 'a1d1', 'a8d8',
       'i0i1', 'i9i8', 'i1h1', 'i8g8',
-      'h2h4', 'e6e5', 'h4h6', 'g7h5',
-      'h6h9', 'h5g3', 'e2e5',
+      'h2h4', 'e6e5', 'h4h6',
     ],
   },
 ];
