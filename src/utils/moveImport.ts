@@ -66,8 +66,60 @@ export function stripRecordMetadata(text: string): string {
     return stripPgnMetadata(text);
 }
 
+/** A tag pair on its own line, which is how a PGN game announces itself. */
+const PGN_TAG_LINE = /^\s*\[\s*[A-Za-z][A-Za-z0-9_]*\s+"/;
+/** The token a PGN game ends with. */
+const PGN_RESULT_LINE = /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/;
+
+/**
+ * The first game in the text, and nothing after it.
+ *
+ * A file exported from a database holds many games, and pasting one used to
+ * produce a single run-on game: `stripPgnMetadata` erases `[...]` tags outright,
+ * so the second game's header vanished and its moves carried straight on from
+ * the first game's last position. What the player saw depended on whether those
+ * moves happened to be legal there -- a few junk moves appended if they were,
+ * and a silent truncation at the first illegal one if they were not. Neither
+ * says anything went wrong.
+ *
+ * A game ends at a result token, or where the next one's tag pairs begin. The
+ * scan is line-based and skips anything inside a `{...}` comment, so a comment
+ * containing a bracket or the word `1-0` cannot end the game early.
+ */
+function firstGameOnly(text: string): string {
+    const lines = String(text).split(/\r?\n/);
+    const kept: string[] = [];
+    let seenMoveText = false;
+    let braceDepth = 0;
+
+    for (const line of lines) {
+        const insideComment = braceDepth > 0;
+        const opened = (line.match(/\{/g) ?? []).length;
+        const closed = (line.match(/\}/g) ?? []).length;
+
+        if (!insideComment && PGN_TAG_LINE.test(line)) {
+            // Tags before any moves are this game's own header; tags after them
+            // belong to the next game.
+            if (seenMoveText) break;
+            kept.push(line);
+            braceDepth = Math.max(0, braceDepth + opened - closed);
+            continue;
+        }
+
+        kept.push(line);
+        braceDepth = Math.max(0, braceDepth + opened - closed);
+
+        if (!insideComment && line.trim()) {
+            seenMoveText = true;
+            if (PGN_RESULT_LINE.test(line)) break;
+        }
+    }
+
+    return kept.join('\n');
+}
+
 function stripPgnMetadata(text: string): string {
-    const withoutTags = stripDelimited(String(text), '[', ']');
+    const withoutTags = stripDelimited(firstGameOnly(text), '[', ']');
     return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
 }
 
@@ -245,7 +297,9 @@ export function extractAnnotatedMainLine(text: string): {
     moves: string[];
     annotations: ImportedMoveAnnotation[];
 } {
-    const source = String(text);
+    // This one reads the raw text rather than going through stripPgnMetadata,
+    // so it needs the same game boundary applied on its own.
+    const source = firstGameOnly(String(text));
     const moves: string[] = [];
     const annotations: ImportedMoveAnnotation[] = [];
     let depth = 0;
