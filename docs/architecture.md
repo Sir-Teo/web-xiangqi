@@ -811,6 +811,39 @@ performance win available here has been in the engine: threads, and the depth
 budget above. Look there first, and measure before assuming the shell is the
 cost.
 
+### Stepping through a full-length game, and a number that was a lie
+
+The section above measures a 30-ply game. A pro's game is longer, and
+navigation is the interaction they perform most, so the same question again at
+120 plies: load the whole game from a share link, then step back through it.
+
+| | measured |
+| --- | --- |
+| load a 120-ply game to first paint | 248ms |
+| step to the previous move, median | 8ms |
+| the same, p90 / worst of 30 | 10ms / 13ms |
+
+Nothing to fix. It is recorded because the first attempt at this measurement
+produced a confident, completely false answer, and the trap is easy to fall
+into twice.
+
+Measured through the in-app Browser pane, stepping appeared to take **996 to
+1002 milliseconds**, every time, on three independent signals -- the board DOM,
+the FEN readout and the move tree all changing together a second after the
+click. That is exactly what a real one-second debounce would look like.
+
+The pane reports itself hidden, and a hidden page gets the browser's background
+treatment: `requestAnimationFrame` stops firing entirely and `setTimeout` is
+clamped to about one second. The polling loop doing the measuring was itself
+the thing being clamped. Overriding `document.hidden` -- which the engine
+already needs, see the QA notes -- does not help, because the throttle belongs
+to the browser rather than to the page.
+
+So: **assert the environment before believing a duration.** Count rAF frames
+over 400ms (expect roughly 25) and time a `setTimeout(5)` (expect under 100ms);
+if either fails, the number that follows is about the harness. The figures in
+this section come from headless Playwright, which passes both checks.
+
 ## The two grading ladders disagree, and the looser one wins
 
 `classifyMoveQualityForEval` grades a move twice — once on centipawns, once on
