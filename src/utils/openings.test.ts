@@ -26,6 +26,40 @@ describe('the opening book itself', () => {
         }
     });
 
+    it('names each line once, so the board is not choosing between two names', () => {
+        // Four lines were in the book twice under different names, and
+        // matchOpening returns the first longest match -- so which name the
+        // board showed was decided by the order of the array.
+        const seen = new Map<string, string>();
+        for (const entry of OPENINGS) {
+            const line = entry.moves.join(' ');
+            expect(seen.get(line), `${line} is also ${seen.get(line)}`).toBeUndefined();
+            seen.set(line, entry.name);
+        }
+    });
+
+    it('does not reuse an English name for two different lines', () => {
+        const seen = new Map<string, string>();
+        for (const entry of OPENINGS) {
+            expect(seen.get(entry.name), `${entry.name} is also ${seen.get(entry.name)}`).toBeUndefined();
+            seen.set(entry.name, entry.moves.join(' '));
+        }
+    });
+
+    it('reads 順炮 as same-direction and 列炮 as opposite-direction', () => {
+        // These were the wrong way round on all seven entries: every 順炮 line
+        // was labelled Opposite-Direction and every 列炮 line Same-Direction.
+        // 順炮 is both central cannons coming from the same flank -- red
+        // 炮二平五, black 炮8平5, which is h2e2 h7e7 -- and 列炮 is black
+        // answering from the other one, 炮2平5, which is h2e2 b7e7.
+        for (const entry of OPENINGS) {
+            if (entry.chinese.includes('順炮')) expect(entry.name).toContain('Same-Direction');
+            if (entry.chinese.includes('列炮')) expect(entry.name).toContain('Opposite-Direction');
+        }
+        expect(matchOpening(['h2e2', 'h7e7'])?.chinese).toBe('順炮');
+        expect(matchOpening(['h2e2', 'b7e7'])?.chinese).toBe('列炮');
+    });
+
     it('gives every line at least one move and a name', () => {
         for (const entry of OPENINGS) {
             expect(entry.moves.length).toBeGreaterThan(0);
