@@ -1243,10 +1243,16 @@ path gave up four — the ply a played move records, what it stores about a
 capture and a check, whether replaying a move keeps the line being read, and
 whether it keeps the evaluation the move already had.
 
-Two survivors in `aiOpponent.ts` are **equivalent mutants rather than gaps**:
-Master's blunder allowance and Hard's candidate weights are both unreachable,
-because those levels return before either value is read. Noted in the test so
-the next sweep does not rediscover them.
+`gameLibrary.ts` — a dropped move tree, start position or review, and a cap
+that keeps the oldest games instead of the newest, are all caught, mostly by
+`test-library.cjs`.
+
+Three survivors are **equivalent mutants rather than gaps**, and each is noted
+where it lives so the next sweep does not rediscover it: Master's blunder
+allowance and Hard's candidate weights in `aiOpponent.ts` are unreachable
+because those levels return before either value is read, and `loadAllGames`'s
+sort order is invisible because the library panel re-sorts with its own
+comparator and the explorer does not care about order.
 
 Not swept: `useEngine.ts` beyond its four pure exports, and `App.tsx`. Both are
 mostly effects and wiring, where a mutation tends to break the build or the

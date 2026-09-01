@@ -424,6 +424,18 @@ function createSavedGameId() {
     return `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Newest first, which is a convenience rather than a contract.
+ *
+ * Nothing downstream depends on it: the library panel sorts what it is handed
+ * with its own comparator and a sort the reader chooses, and the position
+ * explorer indexes by position and does not care about order. Reversing this
+ * line is invisible to the app, which a mutation sweep confirms — it is an
+ * equivalent mutant, not a gap in the tests.
+ *
+ * Left in because a caller reading "all games" is entitled to a sensible
+ * order, and noted because the line looks load-bearing and is not.
+ */
 export function loadAllGames(): SavedGame[] {
     return readAll().sort((a, b) => b.savedAt - a.savedAt);
 }
