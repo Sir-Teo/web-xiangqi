@@ -14,6 +14,20 @@ comparing all three and tracking what is worth moving between them.
 [chess]: https://github.com/Sir-Teo/web-chess/blob/main/docs/architecture.md
 [plan]: https://github.com/Sir-Teo/web-chess/blob/main/docs/cross-app-learning-plan.md
 
+## Open questions
+
+Everything below that is waiting on a decision rather than on work, collected
+because they are spread across a long document. Each one has the measurements
+beside it in its own section; what is listed here is the question.
+
+| Question | What is wanted |
+| --- | --- |
+| [A four-core desktop is graded as a phone](#a-four-core-desktop-is-graded-as-a-phone-open-question) | Nodes/second and engine-ready time on a real four-core machine running the threaded core. |
+| [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px viewport currently takes the single-threaded core whatever the hardware says. |
+| [The board pays for the reader's text size](#the-board-pays-for-the-readers-text-size-open-question) | Either a minimum board size and permission for the stage to scroll, or a decision on [whether collapsing a toolbar should give its row back](#there-is-a-third-option-and-it-needs-neither-decision) — 57px becomes 449px at 32px text, at the cost of the board resizing on every toggle. |
+| [The review note speaks a notation the reader did not choose](#the-review-note-speaks-a-notation-the-reader-did-not-choose-open-question) | Which of three fixes, given the note is stored per move rather than only displayed. |
+| [A phone is told nothing when an import goes wrong](#a-phone-is-told-nothing-when-an-import-goes-wrong-open-question) | Where a notice should live on a phone. The announcement half is done; the visible half needs a layout decision. |
+
 ## Runtime Overview
 
 ```mermaid
