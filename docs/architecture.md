@@ -975,7 +975,9 @@ fresh one.
 Forty-eight rounds on a single page — walking a 30-ply game end to end with the
 keyboard both ways, cycling the Tree, Review and Engine tabs, opening and
 closing the library, and flipping the board twice — with the heap sampled after
-a forced collection between rounds:
+a forced collection between rounds. The engine is up and analysing throughout,
+which was checked rather than assumed: a soak of a page whose engine never
+booted would be a soak of the shell only.
 
 | | KB |
 | --- | --- |
