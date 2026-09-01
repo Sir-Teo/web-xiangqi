@@ -102,9 +102,22 @@ describe('refusing to restore something unusable', () => {
     });
 
     it('rejects a snapshot from a version it does not know', () => {
+        // The game inside has to be one that *would* be restored, or this
+        // passes without the version check doing anything: `GAME` is an
+        // AutoSaveInput and carries no `savedAt`, so `normalizeSavedGame`
+        // rejects it on its own and the version is never what decided.
+        // Confirmed by mutation: deleting `parsed.version !== 1` left the old
+        // form of this test green.
         const { storage } = stubStorage();
-        storage.setItem(AUTO_SAVED_GAME_KEY, JSON.stringify({ version: 2, savedAt: 1, game: { ...GAME, id: 'x' } }));
+        const restorable = { ...GAME, id: 'x', savedAt: 1_700_000_000_000 };
+        storage.setItem(AUTO_SAVED_GAME_KEY, JSON.stringify({ version: 1, savedAt: 1, game: restorable }));
+        expect(readAutoSavedGame(storage), 'the fixture must be restorable at version 1').not.toBeNull();
+
+        storage.setItem(AUTO_SAVED_GAME_KEY, JSON.stringify({ version: 2, savedAt: 1, game: restorable }));
         expect(readAutoSavedGame(storage)).toBeNull();
+
+        storage.setItem(AUTO_SAVED_GAME_KEY, JSON.stringify({ savedAt: 1, game: restorable }));
+        expect(readAutoSavedGame(storage), 'a snapshot with no version at all').toBeNull();
     });
 
     it('rejects a snapshot whose game does not survive validation', () => {
