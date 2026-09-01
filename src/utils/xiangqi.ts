@@ -62,7 +62,14 @@ export function parseFenBoard(fen: string): BoardState {
     return out;
 }
 
-export function boardToFen(state: BoardState, stm: Side, fullmove: number = 1): string {
+/**
+ * `halfmove` is the count of plies since the last capture, and it is not
+ * decoration. Pikafish adjudicates the natural limit from it: the same endgame
+ * searched at depth 14 reports mate in 3 when the field says 0 or 45, and 0.00
+ * when it says 119. Writing a flat 0 tells the engine no progress-free moves
+ * have happened and can turn a drawn position into a claimed win.
+ */
+export function boardToFen(state: BoardState, stm: Side, fullmove: number = 1, halfmove: number = 0): string {
     const rows = [];
     for (let rank = 9; rank >= 0; rank--) {
         let row = "";
@@ -82,7 +89,8 @@ export function boardToFen(state: BoardState, stm: Side, fullmove: number = 1): 
         if (empties) row += String(empties);
         rows.push(row || "9");
     }
-    return rows.join("/") + " " + stm + " - - 0 " + fullmove;
+    const clock = Number.isFinite(halfmove) && halfmove > 0 ? Math.trunc(halfmove) : 0;
+    return rows.join("/") + " " + stm + " - - " + clock + " " + fullmove;
 }
 
 export function squareToUci(file: number, rank: number): string {

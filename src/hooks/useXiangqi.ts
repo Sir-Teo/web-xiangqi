@@ -73,6 +73,13 @@ interface RootPosition {
     sideToMove: Side;
     inCheck: boolean;
     fullmove: number;
+    /**
+     * Plies since the last capture, as the starting FEN stated them. Kept
+     * because Pikafish adjudicates the natural limit from this field, so a
+     * position pasted mid-endgame that arrives claiming zero is a different
+     * position to the engine than the one the reader pasted.
+     */
+    halfmove: number;
 }
 
 const ROOT_NODE_ID = 'root';
@@ -93,6 +100,7 @@ function createStartRootPosition(): RootPosition {
         sideToMove: 'w',
         inCheck: false,
         fullmove: 1,
+        halfmove: 0,
     };
 }
 
@@ -118,11 +126,16 @@ function parseRootPositionFromFen(fen: string): RootPosition | null {
         const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
             ? Math.trunc(parsedFullmove)
             : 1;
+        const parsedHalfmove = Number(parts[4]);
+        const halfmove = Number.isFinite(parsedHalfmove) && parsedHalfmove > 0
+            ? Math.trunc(parsedHalfmove)
+            : 0;
         return {
             board,
             sideToMove: side,
             inCheck: isInCheck(board, side),
             fullmove,
+            halfmove,
         };
     } catch {
         return null;
@@ -133,6 +146,29 @@ function fullmoveForPly(rootPosition: RootPosition, ply: number) {
     const normalizedPly = Math.max(0, Math.trunc(ply));
     const blackRootOffset = rootPosition.sideToMove === 'b' ? 1 : 0;
     return rootPosition.fullmove + Math.floor((normalizedPly + blackRootOffset) / 2);
+}
+
+/**
+ * The halfmove clock at a node: plies since the last capture.
+ *
+ * Walked from the node's own ancestry rather than stored on the record, so it
+ * stays right when a line is replayed, branched or loaded, and there is no
+ * second copy of it to fall out of step. The root's own value comes from the
+ * FEN the game started from.
+ */
+function halfmoveForNode(
+    treeNodes: Record<string, MoveTreeNode>,
+    nodeId: string,
+    rootPosition: RootPosition
+): number {
+    const path = findPathToNode(treeNodes, nodeId);
+    let clock = rootPosition.halfmove;
+    for (const id of path) {
+        const record = treeNodes[id]?.record;
+        if (!record) continue;
+        clock = record.captured ? 0 : clock + 1;
+    }
+    return clock;
 }
 
 function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string[] {
@@ -212,8 +248,18 @@ export function useXiangqi() {
         () => activeLineNodeIds.map((nodeId) => treeNodes[nodeId]?.record).filter((record): record is MoveRecord => Boolean(record)),
         [activeLineNodeIds, treeNodes]
     );
-    const currentFen = boardToFen(board, sideToMove, fullmoveForPly(rootPosition, currentMoveIndex + 1));
-    const rootFen = boardToFen(rootPosition.board, rootPosition.sideToMove, rootPosition.fullmove);
+    const currentFen = boardToFen(
+        board,
+        sideToMove,
+        fullmoveForPly(rootPosition, currentMoveIndex + 1),
+        halfmoveForNode(treeNodes, activeLineNodeIds[currentMoveIndex] ?? ROOT_NODE_ID, rootPosition)
+    );
+    const rootFen = boardToFen(
+        rootPosition.board,
+        rootPosition.sideToMove,
+        rootPosition.fullmove,
+        rootPosition.halfmove
+    );
 
     const syncPositionForNode = useCallback((nextTree: Record<string, MoveTreeNode>, nodeId: string) => {
         const position = getPositionFromNode(nextTree, nodeId, rootPosition);
@@ -673,7 +719,12 @@ export function useXiangqi() {
         const pos = getPositionFromNode(treeNodes, nodeId, rootPosition);
         const node = treeNodes[nodeId];
         const ply = node?.record?.ply ?? 0;
-        return boardToFen(pos.board, pos.sideToMove, fullmoveForPly(rootPosition, ply));
+        return boardToFen(
+            pos.board,
+            pos.sideToMove,
+            fullmoveForPly(rootPosition, ply),
+            halfmoveForNode(treeNodes, nodeId, rootPosition)
+        );
     }, [rootPosition, treeNodes]);
 
     const getNodeMoves = useCallback((nodeId: string): string[] => (

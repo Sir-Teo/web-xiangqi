@@ -1431,6 +1431,75 @@ async function assertAPlayedCaptureRecordsWhatItDid(page) {
   await assertCaptureAndCheckAreRecorded(page, "played");
 }
 
+/**
+ * The halfmove clock a pasted position arrived with, kept and counted.
+ *
+ * That field is how Pikafish adjudicates the natural limit. The same endgame
+ * searched at depth 14 answers mate in 3 when the field says 0 or 45, and 0.00
+ * when it says 119 -- so a position pasted mid-endgame whose clock is thrown
+ * away is a different position to the engine than the one the reader pasted,
+ * and the engine will claim a win in a game that is heading for a draw.
+ *
+ * The app wrote a flat 0 into every FEN it produced and ignored the one it was
+ * given. What the engine is handed for a custom start is `position fen <root>
+ * moves ...`, so the root's clock is the part that has to be right; the engine
+ * counts the moves itself. The displayed FEN counts them too, which is what
+ * this checks, because that is the number a reader copies out.
+ */
+async function assertAPastedHalfmoveClockIsKeptAndCounted(page) {
+  // Black general e9, red chariot a1, red general d0, and a black soldier on
+  // i1 for the chariot to take. Nobody is in check and the generals do not
+  // face, so the position loads.
+  const fen = "4k4/9/9/9/9/9/9/9/R7p/3K5 w - - 45 30";
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${encodeURIComponent(fen)}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1000);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(400);
+
+  const shownFen = () => page.evaluate(() =>
+    (document.querySelector(".bottombar-fen")?.getAttribute("title") || "").trim()
+  );
+  const clockOf = (text) => {
+    const parts = String(text).trim().split(/\s+/);
+    return parts.length >= 6 ? parts[4] : null;
+  };
+
+  const loaded = await shownFen();
+  if (clockOf(loaded) !== "45") {
+    throw new Error(`A pasted halfmove clock of 45 came back as ${clockOf(loaded)}: ${loaded}`);
+  }
+
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+  const play = async (fromFile, fromRank, toFile, toRank) => {
+    await page.click(square(fromFile, fromRank));
+    await page.waitForSelector(`${square(toFile, toRank)}[aria-label*="legal"]`, { timeout: 5000 });
+    await page.click(square(toFile, toRank));
+    await page.waitForTimeout(400);
+  };
+
+  await play(0, 1, 0, 2); // a1a2, a quiet move
+  const afterQuiet = await shownFen();
+  if (clockOf(afterQuiet) !== "46") {
+    throw new Error(`A quiet move left the clock at ${clockOf(afterQuiet)} rather than 46: ${afterQuiet}`);
+  }
+
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.waitForTimeout(400);
+  await play(0, 1, 8, 1); // a1i1, taking the soldier
+  const afterCapture = await shownFen();
+  if (clockOf(afterCapture) !== "0") {
+    throw new Error(`A capture left the clock at ${clockOf(afterCapture)} rather than 0: ${afterCapture}`);
+  }
+}
+
 async function assertCheckmateByPlayingTheMove(page) {
   const fen = encodeURIComponent("4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1");
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -6146,7 +6215,11 @@ async function assertFenTaggedMoveLineImport(page) {
   }
 
   const fen = await page.locator(".bottombar-fen").getAttribute("title");
-  if (!fen || !fen.includes(" w - - 0 18")) {
+  // ` 1 18`, not ` 0 18`. The tag says the clock was 0 and h9g7 is a horse
+  // move, so one ply has passed with nothing captured. This read ` 0 18` for
+  // as long as `boardToFen` wrote a flat zero into every FEN it produced; the
+  // expectation was describing that, not the position.
+  if (!fen || !fen.includes(" w - - 1 18")) {
     throw new Error(`FEN-tagged import did not advance from the tagged root FEN: ${fen}`);
   }
 }
@@ -7972,6 +8045,7 @@ async function main() {
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertPerpetualCheckIsNamedAndBinding(page);
     await assertStalemateLossIsLabeled(page);
+    await assertAPastedHalfmoveClockIsKeptAndCounted(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);

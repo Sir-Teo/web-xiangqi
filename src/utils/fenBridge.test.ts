@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    START_FEN,
     boardToFen,
     cloneBoardState,
     legalMovesFrom,
@@ -88,5 +89,36 @@ describe('the FEN the engine is given', () => {
         for (const [fen, side, expected] of MEASURED) {
             expect(boardToFen(parseFenBoard(fen), side, 1), fen).toBe(expected);
         }
+    });
+});
+
+describe('the halfmove clock in that FEN', () => {
+    /**
+     * Not a decoration, and the engine settles the argument. The same endgame
+     * searched at depth 14 reports mate in 3 when this field says 0 or 45, and
+     * 0.00 when it says 119 -- Pikafish adjudicates the natural limit from it.
+     * `boardToFen` wrote a flat 0 into every FEN the app produced, which tells
+     * the engine no progress-free moves have happened and can turn a drawn
+     * endgame into a claimed win.
+     */
+    const board = parseFenBoard(START_FEN);
+
+    it('writes the clock it is given', () => {
+        expect(boardToFen(board, 'w', 30, 45)).toContain(' w - - 45 30');
+    });
+
+    it('still writes a zero when nobody supplies one', () => {
+        // Every existing caller, and the opening position, where it is true.
+        expect(boardToFen(board, 'w', 1)).toContain(' w - - 0 1');
+    });
+
+    it('refuses a clock that is not a count', () => {
+        for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(boardToFen(board, 'w', 1, bad as number), String(bad)).toContain(' w - - 0 1');
+        }
+    });
+
+    it('truncates a fractional clock rather than writing a decimal point into a FEN', () => {
+        expect(boardToFen(board, 'w', 1, 12.7)).toContain(' w - - 12 1');
     });
 });
