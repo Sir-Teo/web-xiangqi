@@ -285,6 +285,34 @@ window, and more than 4GB — desktops and laptops, not phones. **Wanted before
 changing it: engine-ready time and nodes/second on a real four-core machine,
 threaded core, and confirmation the UI stays responsive while the search runs.**
 
+#### The phone half of that clause has never been measured
+
+The question above is about four-core desktops and says the `mobileLike`
+guards "would still apply". Worth being explicit about what they do, because
+the cost is the same table and the justification is not written down anywhere.
+
+Measured against the deployed site, varying only the viewport:
+
+| viewport | core fetched |
+| --- | --- |
+| 390x844 | `pikafish-core-single-simd.js` |
+| 768x1024 | `pikafish-core-simd.js` |
+| 1440x900 | `pikafish-core-simd.js` |
+
+The browser reported 18 cores, 32GB and `crossOriginIsolated: true` in all
+three. Nothing but `minViewport < 700` sent the first one to the single-threaded
+core — hardware does not get a vote. By the table above that is 430k nodes per
+second against 1.32M, on a `movetime` budget, so it is a third of the search.
+
+This is emulation on desktop hardware, which is exactly the case that cannot
+settle it: a real flagship phone reports eight cores, not eighteen, and has
+thermal and battery limits a desktop does not. There are good reasons to be
+careful on a phone and none of them are recorded here — which is the point.
+**Wanted, and it is the same shape as the four-core question: nodes/second and
+engine-ready time on a real phone running the threaded core, plus what it does
+to battery and to a sustained search, before anyone lets hardware outvote the
+viewport.**
+
 ### The thread ceiling is the build, not the device policy
 
 **Read this before raising the thread count.** `WASM_PTHREAD_POOL_SIZE` in
