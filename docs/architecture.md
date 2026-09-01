@@ -966,6 +966,40 @@ over 400ms (expect roughly 25) and time a `setTimeout(5)` (expect under 100ms);
 if either fails, the number that follows is about the harness. The figures in
 this section come from headless Playwright, which passes both checks.
 
+### A session left open does not grow
+
+The frame-pacing figures above are about one page load. The other question is
+what a page does over hours, and every other check in this repo starts from a
+fresh one.
+
+Forty-eight rounds on a single page — walking a 30-ply game end to end with the
+keyboard both ways, cycling the Tree, Review and Engine tabs, opening and
+closing the library, and flipping the board twice — with the heap sampled after
+a forced collection between rounds:
+
+| | KB |
+| --- | --- |
+| first round | 14,201 |
+| last round | 13,503 |
+| peak | 15,971 |
+| net change | **−698** |
+
+No trend. The heap is a sawtooth oscillating between roughly 12.5MB and 16MB,
+and it ends where it started. Saving a game each round adds about 90KB that
+does not come back, which is the library holding what was saved rather than a
+leak.
+
+Two things had to be got right before that number meant anything, and both
+looked like findings on the way past:
+
+- **`performance.memory` is bucketed.** Sixteen rounds of it returned 20020KB
+  sixteen times — one distinct value. That is not a stable heap, it is a
+  quantised constant. CDP's `Performance.getMetrics` reports the real
+  `JSHeapUsedSize`, and the same soak then gave sixteen different figures.
+- **Sixteen rounds is not enough to see a trend.** With the real metric, the
+  first sixteen showed 2.5MB of growth and looked like a slow leak. Forty-eight
+  showed −698KB. The sixteen had landed on a rising edge of the sawtooth.
+
 ## The two grading ladders disagree, and the looser one wins
 
 `classifyMoveQualityForEval` grades a move twice — once on centipawns, once on
