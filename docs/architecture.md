@@ -1247,6 +1247,10 @@ whether it keeps the evaluation the move already had.
 that keeps the oldest games instead of the newest, are all caught, mostly by
 `test-library.cjs`.
 
+`moveImport.ts` — a multi-game file no longer truncated at the first game, the
+notice that a second game was left behind suppressed, and the move cap raised
+past what the app accepts.
+
 Three survivors are **equivalent mutants rather than gaps**, and each is noted
 where it lives so the next sweep does not rediscover it: Master's blunder
 allowance and Hard's candidate weights in `aiOpponent.ts` are unreachable
