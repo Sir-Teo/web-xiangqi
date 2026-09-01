@@ -5280,6 +5280,73 @@ async function assertRootMoveVariationsVisible(page) {
  * leading into them. Keeping the line means the first reply is still ahead;
  * following the newest branch means being moved silently onto the second.
  */
+/**
+ * Replaying a move keeps the evaluation the move already had.
+ *
+ * `applyUciMoveAtNode`, on the branch for a move already in the tree, carries
+ * the stored evaluation forward when no new one is supplied:
+ * `evalScore: evalScore ?? existingChild.record.evalScore`. Dropping that
+ * fallback survived the whole suite, and the reason it survived is worth
+ * recording: the browser suite runs against a stubbed engine, and where a real
+ * one is running it re-evaluates the position within milliseconds, so the loss
+ * heals before anything could see it. Testing it against an engine at all is a
+ * race.
+ *
+ * There is no race if the evaluations never came from an engine. A PGN
+ * carrying `[%eval ...]` gives every move a stored evaluation and nothing is
+ * running to replace it, so a dropped one stays dropped.
+ *
+ * The signal is the tree's own `quality-pending` class, which is exactly what
+ * it shows for a move it has no evaluation for. Deliberately no NAGs in the
+ * fixture: a stored `quality` takes precedence over the evaluation when the
+ * colour is chosen, and would mask the very thing being checked.
+ */
+async function assertReplayingAMoveKeepsItsEvaluation(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(600);
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill(
+    '[Variant "Xiangqi"]\n\n1. b2e2 {[%eval 0.30]} h9g7 {[%eval -0.20]} 2. b0c2 {[%eval 0.45]} *'
+  );
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.waitForTimeout(500);
+
+  const graded = () => page.evaluate(() =>
+    Object.fromEntries([...document.querySelectorAll("[data-node-id]")]
+      .map((chip) => [chip.getAttribute("data-node-id"), !/quality-pending/.test(String(chip.className))]))
+  );
+
+  const before = await graded();
+  if (!before.n3) {
+    throw new Error(`An imported [%eval] did not reach the move: ${JSON.stringify(before)}`);
+  }
+
+  // Step back one, then play the same move again. The move is already in the
+  // tree, so this is the branch that has to carry the evaluation forward.
+  await page.locator('.watch-controls button[aria-label="Go to previous move"]').click();
+  await page.waitForTimeout(300);
+  const square = (file, rank) => `[data-file="${file}"][data-rank="${rank}"]`;
+  await page.click(square(1, 0));
+  await page.waitForSelector(`${square(2, 2)}[aria-label*="legal"]`, { timeout: 5000 });
+  await page.click(square(2, 2));
+  await page.waitForTimeout(500);
+
+  const after = await graded();
+  if (!after.n3) {
+    throw new Error(
+      "Replaying a move threw away the evaluation it already had: the move lost its colour " +
+      `and reads as unevaluated. ${JSON.stringify(after)}`
+    );
+  }
+}
+
 async function assertReplayingAMoveKeepsTheLineBeingRead(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8068,6 +8135,7 @@ async function main() {
     await assertRootMoveVariationsVisible(page);
     await assertReplayedMoveKeepsChosenContinuation(page);
     await assertReplayingAMoveKeepsTheLineBeingRead(page);
+    await assertReplayingAMoveKeepsItsEvaluation(page);
     await assertMoveTreeRespectsReducedMotion(page);
     await assertPgnTreeVariationExport(page);
     await assertCurrentPgnDownload(page);
