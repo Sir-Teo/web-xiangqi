@@ -51,6 +51,7 @@ import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
+import { describeMoveNumber } from './utils/moveNumbering';
 import {
   NOTATION_STYLES,
   NOTATION_STYLE_DESCRIPTIONS,
@@ -375,7 +376,8 @@ function nodeLabel(
   nodeId: string,
   rootNodeId: string,
   treeNodes: ReturnType<typeof useXiangqi>['treeNodes'],
-  notationStyle: XiangqiNotationStyle
+  notationStyle: XiangqiNotationStyle,
+  rootFen: string
 ) {
   if (nodeId === rootNodeId) return 'Start';
   const record = treeNodes[nodeId]?.record;
@@ -383,8 +385,17 @@ function nodeLabel(
   // The breadcrumb sits directly above the move list on a phone. Writing the
   // same move two ways six pixels apart -- "俥 E1→F1" over "R5=4" -- reads as
   // two different moves.
-  if (notationStyle !== 'uci') return `${record.ply}. ${formatRecordInStyle(record, notationStyle)}`;
-  return `${record.ply}. ${formatMoveRecordLabel(record)}`;
+  //
+  // The number had the same problem and it was not fixed with the notation.
+  // This read `${record.ply}.`, which is a ply index punctuated as a move
+  // number: on a 40-ply game the last chip said "39. C8-6" while the move list
+  // immediately below it called that same move "20. C8-6". `describeMoveNumber`
+  // is the move list's own rule, so the two now agree by construction. The
+  // chip's `aria-label` still says "Ply 39", which is the honest reading of a
+  // strip carrying one chip per ply.
+  const { label } = describeMoveNumber(rootFen, record.ply);
+  if (notationStyle !== 'uci') return `${label} ${formatRecordInStyle(record, notationStyle)}`;
+  return `${label} ${formatMoveRecordLabel(record)}`;
 }
 
 function nodeTitle(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
@@ -5293,7 +5304,7 @@ function App() {
                     aria-keyshortcuts="ArrowLeft ArrowRight Home End"
                   >
                     {breadcrumbNodeIds.map((nodeId, index) => {
-                      const label = nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle);
+                      const label = nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle, rootFen);
                       const title = nodeTitle(nodeId, rootNodeId, treeNodes);
                       return (
                         <button

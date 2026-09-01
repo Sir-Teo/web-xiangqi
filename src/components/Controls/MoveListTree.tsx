@@ -11,6 +11,7 @@ import {
     isCriticalReviewQuality,
 } from '../../utils/review';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
+import { describeMoveNumber } from '../../utils/moveNumbering';
 import {
     boardBeforeRecord,
     formatMoveInStyle,
@@ -111,14 +112,13 @@ export const MoveListTree = memo(function MoveListTree({
     }
 
     const rows: JSX.Element[] = [];
-    const rootContext = parseRootMoveContext(rootFen);
     const hasMoveQualityLegend = activeLineNodeIds.some((nodeId) => (
         getMoveQualityClass(treeNodes, nodeId, rootNodeId) !== 'quality-pending'
     ));
     const entryAt = (lineIndex: number): MoveListEntry | null => {
         const nodeId = activeLineNodeIds[lineIndex];
         if (!nodeId) return null;
-        return makeMoveListEntry(nodeId, lineIndex, rootContext);
+        return makeMoveListEntry(nodeId, lineIndex, rootFen);
     };
 
     const renderMoveChip = (nodeId: string, compact = false) => {
@@ -328,31 +328,18 @@ function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeN
     return line;
 }
 
-function parseRootMoveContext(rootFen: string): { sideToMove: MoveSide; fullmove: number } {
-    const parts = rootFen.trim().split(/\s+/);
-    const sideToMove: MoveSide = parts[1] === 'b' ? 'b' : 'w';
-    const parsedFullmove = Number(parts[5]);
-    const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
-        ? Math.trunc(parsedFullmove)
-        : 1;
-    return { sideToMove, fullmove };
-}
-
 function makeMoveListEntry(
     nodeId: string,
     lineIndex: number,
-    rootContext: { sideToMove: MoveSide; fullmove: number }
+    rootFen: string
 ): MoveListEntry {
-    const side: MoveSide = rootContext.sideToMove === 'w'
-        ? (lineIndex % 2 === 0 ? 'w' : 'b')
-        : (lineIndex % 2 === 0 ? 'b' : 'w');
-    const blackRootOffset = rootContext.sideToMove === 'b' ? 1 : 0;
-    return {
-        nodeId,
-        lineIndex,
-        side,
-        moveNumber: rootContext.fullmove + Math.floor((lineIndex + blackRootOffset) / 2),
-    };
+    // `lineIndex` is 0-based and `describeMoveNumber` takes a 1-based ply, which
+    // is what a MoveRecord stores. The arithmetic used to live here as well as
+    // in `useXiangqi` and the breadcrumb; the breadcrumb is what proved that
+    // three statements of one rule is two too many -- it had drifted into
+    // numbering plies instead.
+    const { moveNumber, side } = describeMoveNumber(rootFen, lineIndex + 1);
+    return { nodeId, lineIndex, side, moveNumber };
 }
 
 function getMoveQualityClass(

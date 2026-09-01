@@ -1403,6 +1403,73 @@ async function assertBoardAnimatesAMoveInBothDirections(page) {
   }
 }
 
+/**
+ * The breadcrumb and the move list must call a move by the same number.
+ *
+ * They did not. `nodeLabel` rendered `${record.ply}.` -- a ply index, written
+ * with the full stop a move number uses -- while `MoveListTree` numbered the
+ * same moves properly two rows below it. On a 40-ply game the last chip read
+ * "39. C8-6" and the move list called that move "20. C8-6", on one screen, in
+ * a tool whose users say "move 20" to each other.
+ *
+ * Asserted as agreement between the two surfaces rather than against a literal,
+ * so it holds for a study loaded from a FEN at move 20 as well as for a game
+ * from the opening. The chips' `aria-label` still says "Ply N" and is asserted
+ * by `assertPlayedMovesAreNumberedFromOne`; a strip with one chip per ply is
+ * exactly what that should say, and it is only the visible number that had to
+ * agree with the list beside it.
+ */
+async function assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(
+    "http://127.0.0.1:8192/web-xiangqi/?moves=h2c2+b7e7+c2c1+i9i8+b2f2+i8f8+e0e1+d9e8",
+    { waitUntil: "domcontentloaded", timeout: 60000 },
+  );
+  await page.waitForSelector(".tree-breadcrumb-chip", { timeout: 30000 });
+  await page.getByTestId("move-tree-row-label-3").waitFor({ timeout: 10000 });
+
+  const read = await page.evaluate(() => ({
+    chips: [...document.querySelectorAll(".tree-breadcrumb-chip")].map((chip) =>
+      (chip.textContent || "").replace("/", "").trim()),
+    rows: [...document.querySelectorAll(".mtree-num")].map((cell) =>
+      (cell.textContent || "").trim()),
+  }));
+
+  const moveChips = read.chips.filter((text) => /^\d/.test(text));
+  if (moveChips.length !== 8 || read.rows.length !== 4) {
+    throw new Error(
+      `Expected 8 move chips over 4 move-list rows, got ${moveChips.length} and ` +
+      `${read.rows.length}. The fixture no longer loads eight plies, so nothing ` +
+      `below is about numbering.`
+    );
+  }
+
+  const highest = (labels) =>
+    Math.max(...labels.map((label) => Number((label.match(/^(\d+)/) || [])[1] ?? 0)));
+  const chipHigh = highest(moveChips);
+  const rowHigh = highest(read.rows);
+  if (chipHigh !== rowHigh) {
+    throw new Error(
+      `The breadcrumb's last move is numbered ${chipHigh} and the move list ` +
+      `numbers the same move ${rowHigh}. Eight plies are four moves; a chip ` +
+      `numbered ${chipHigh} is counting plies and punctuating them as moves. ` +
+      `Both surfaces read utils/moveNumbering.ts -- one of them has stopped.`
+    );
+  }
+
+  // Red takes the full stop and Black the ellipsis, which is what lets a chip
+  // be read on its own. Without this, numbering every chip "1." twice over
+  // would satisfy the check above.
+  const shapes = moveChips.map((text) => (/^\d+\.\.\./.test(text) ? "b" : "w"));
+  if (shapes.join("") !== "wbwbwbwb") {
+    throw new Error(
+      `Breadcrumb chips alternate ${shapes.join("")} rather than wbwbwbwb. ` +
+      `Black's move is written "20..." and Red's "20.", which is the ` +
+      `convention every record uses and what tells the two chips apart.`
+    );
+  }
+}
+
 async function assertPlayedMovesAreNumberedFromOne(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8404,6 +8471,7 @@ async function main() {
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
     await assertBoardAnimatesAMoveInBothDirections(page);
+    await assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);
     await assertALoadedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
@@ -8429,7 +8497,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
