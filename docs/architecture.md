@@ -624,6 +624,34 @@ nothing errors, the screen just says something untrue.
   every root-changing path calls `resetReview()` first — recorded at the
   function, because it is a coupling rather than a guarantee.
 
+### The halfmove clock is load-bearing
+
+The fifth field of a FEN — plies since the last capture — looks like the one
+nobody reads, because xiangqi has no fifty-move rule to hang on it. Pikafish
+reads it. It adjudicates the natural limit from it, and the difference is not
+subtle. The same endgame, searched at depth 14, differing only in that field:
+
+| clock | engine says |
+| --- | --- |
+| 0 | mate in 3 |
+| 45 | mate in 3 |
+| 119 | 0.00 |
+
+`boardToFen` used to write a flat `0` into every FEN the app produced, and
+`parseRootPositionFromFen` dropped the one it was given. Loading that endgame
+with a clock of 119 therefore showed **+M3 and 100% winning chances**; it now
+shows **0.00 and 50%**, which is the game the reader actually pasted.
+
+A game from the opening was never affected: it reaches the engine as `position
+startpos moves ...`, and the engine counts the plies itself. A custom start
+goes as `position fen <root> moves ...`, so the root's clock is the only part
+the engine cannot work out — which is exactly the case a pasted endgame is.
+
+The clock is derived from a node's ancestry rather than stored on each record:
+a capture resets it, anything else adds one, and the root's value is whatever
+its FEN said. There is no second copy to fall out of step, and it stays right
+when a line is replayed or branched.
+
 ## Storage
 
 | What | Key | Module |
