@@ -1272,6 +1272,39 @@ everyone to fix it for the reader at 32px.
 **Wanted: whether the collapse should give the row back.** If it should, this
 is a smaller change than the floor and it fixes the same reader.
 
+## The review note speaks a notation the reader did not choose (open question)
+
+A blunder card currently reads, on two adjacent lines:
+
+> **Try C2+7**
+> Big miss. **B7→B0** was stronger by 1000+cp.
+
+Both name the same move. `C2+7` is the reader's chosen notation, rendered by
+the panel; `B7→B0` is `formatUciMove`, which `buildReviewNote` uses because it
+is handed UCI strings and no board. So the same suggestion appears twice, once
+in a notation nobody selected — and for a reader using 中文 it arrives in the
+middle of Chinese text.
+
+It is not a wrong move. Black numbers files from its own right, so `C2+7` is
+the b-file cannon advancing seven, which is `b7b0`, which is `B7→B0`. Worth
+stating because the two strings look like different moves at a glance, and
+checking took working the file numbering out from first principles.
+
+Three ways out, and the reason this is a question rather than a commit is that
+the note is **stored**, not just displayed — it is persisted per move in the
+library as `note` and `reviewNote`:
+
+- **Localise it at render.** `buildReviewNote` would return the sentence and
+  the move separately, and the panel would render the move through
+  `formatMoveText` like everything else. Most faithful, and it changes the
+  shape of a persisted field.
+- **Drop the move from the note.** The panel already prints `Best: C2+7`
+  immediately below, so the note repeating it adds nothing: "Big miss. 1000+cp
+  stronger than the move played." Smallest change, and old stored notes keep
+  the old wording.
+- **Leave it.** Coordinates are notation-independent and stable in storage,
+  which is a real argument for a field that outlives a preference.
+
 ## A phone is told nothing when an import goes wrong (open question)
 
 Three messages share the top bar: "Shared link not loaded", "Imported first
