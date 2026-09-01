@@ -49,6 +49,13 @@ const BOARD_RANKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const BOARD_FILES = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
 const TOUCH_MARKER_DELAY_MS = 480;
 const TOUCH_MARKER_MOVE_TOLERANCE_PX = 10;
+/**
+ * How far a mouse must travel before a press becomes a drag rather than a
+ * click. Small, because a drag that needs a deliberate shove feels broken, but
+ * not zero: a hand resting on a mouse moves a pixel or two while clicking, and
+ * treating that as a drag would swallow the click that follows it.
+ */
+const DRAG_THRESHOLD_PX = 4;
 
 function formatSquareName(file: number, rank: number) {
     return `${FILE_LABELS[file]}${rank}`;
@@ -107,6 +114,17 @@ function firstOccupiedSquare(
 
 interface BoardProps {
     board: BoardState;
+    /**
+     * The side whose pieces may be dragged, or null when none may be.
+     *
+     * One prop rather than two, because the board needs the same answer for
+     * both halves of the question: dragging is only offered for a piece that
+     * could actually move (its owner is to play) and only while the caller is
+     * accepting moves at all -- not during the engine's turn, and not after
+     * the game has ended. The caller already knows both; the board should not
+     * have to infer either.
+     */
+    draggableSide?: 'w' | 'b' | null;
     selected: { file: number, rank: number } | null;
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
@@ -130,6 +148,7 @@ interface BoardProps {
 
 export const Board = React.memo(function Board({
     board,
+    draggableSide = null,
     selected,
     validTargets,
     onSquareClick,
@@ -167,6 +186,31 @@ export const Board = React.memo(function Board({
         triggered: boolean;
     } | null>(null);
     const suppressNextClickRef = useRef(false);
+    /**
+     * Dragging a piece, which is the interaction every comparable board has and
+     * this one did not.
+     *
+     * Added strictly beside click-to-move rather than instead of it. The piece
+     * is not selected on `pointerdown` -- doing that would make the `click`
+     * that follows a plain click a *second* call on the same square, which
+     * `onSquareClick` reads as "deselect". Selection happens the moment the
+     * pointer crosses the drag threshold, so a press that never moves is still
+     * an ordinary click and every existing path is untouched.
+     *
+     * Mouse only, on purpose. A touch drag needs `touch-action: none` on the
+     * squares, which would take the board out of the page's scrolling, and the
+     * long press is already spoken for by board markers. Tapping a piece and
+     * tapping its destination is the better phone interaction anyway.
+     */
+    const dragStartRef = useRef<{
+        pointerId: number;
+        file: number;
+        rank: number;
+        clientX: number;
+        clientY: number;
+        started: boolean;
+    } | null>(null);
+    const [drag, setDrag] = useState<{ file: number; rank: number; dx: number; dy: number } | null>(null);
     /**
      * Identity per piece, so the stylesheet's `left`/`top` transition has a
      * DOM node to carry. Keyed by square, a move unmounts one element and
@@ -219,6 +263,18 @@ export const Board = React.memo(function Board({
         for (const highlight of highlights) set.add(`${highlight.file}:${highlight.rank}`);
         return set;
     }, [highlights]);
+
+    const canDragFrom = useCallback((file: number, rank: number) => {
+        if (!draggableSide) return false;
+        const piece = board[rank]?.[file];
+        if (!piece) return false;
+        return (piece === piece.toUpperCase() ? 'w' : 'b') === draggableSide;
+    }, [board, draggableSide]);
+
+    const endDrag = useCallback(() => {
+        dragStartRef.current = null;
+        setDrag((previous) => (previous ? null : previous));
+    }, []);
 
     const clearTouchMarkerTimer = useCallback(() => {
         if (touchMarkerTimerRef.current !== null) {
@@ -303,6 +359,19 @@ export const Board = React.memo(function Board({
             return;
         }
 
+        if (event.pointerType === 'mouse' && event.button === 0 && canDragFrom(file, rank)) {
+            // Armed, not started. Whether this is a drag or a click is not yet
+            // known, and it is the pointer's next few pixels that decide.
+            dragStartRef.current = {
+                pointerId: event.pointerId,
+                file,
+                rank,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                started: false,
+            };
+        }
+
         if (event.pointerType === 'mouse' || event.button !== 0 || !onToggleHighlight) return;
         cancelTouchMarker();
         const pointerId = event.pointerId;
@@ -321,18 +390,62 @@ export const Board = React.memo(function Board({
             suppressNextClickRef.current = true;
             onToggleHighlight({ file: active.file, rank: active.rank });
         }, TOUCH_MARKER_DELAY_MS);
-    }, [cancelTouchMarker, onAddArrow, onToggleHighlight]);
+    }, [canDragFrom, cancelTouchMarker, onAddArrow, onToggleHighlight]);
 
     const handleMarkerPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+        const dragStart = dragStartRef.current;
+        if (dragStart && dragStart.pointerId === event.pointerId) {
+            const dx = event.clientX - dragStart.clientX;
+            const dy = event.clientY - dragStart.clientY;
+            if (!dragStart.started) {
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+                dragStart.started = true;
+                // Capture so the piece keeps following a pointer that has left
+                // the square it was picked up from -- which it does immediately.
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                // Selecting here is what puts the legal destinations on the
+                // board, and it is skipped when this piece is already the
+                // selected one, because `onSquareClick` reads a second call on
+                // the same square as "deselect".
+                if (!(selected?.file === dragStart.file && selected?.rank === dragStart.rank)) {
+                    onSquareClick(dragStart.file, dragStart.rank);
+                }
+            }
+            setDrag({ file: dragStart.file, rank: dragStart.rank, dx, dy });
+            return;
+        }
+
         const active = touchMarkerPointerRef.current;
         if (!active || active.pointerId !== event.pointerId || active.triggered) return;
         const moved = Math.hypot(event.clientX - active.clientX, event.clientY - active.clientY);
         if (moved > TOUCH_MARKER_MOVE_TOLERANCE_PX) {
             cancelTouchMarker();
         }
-    }, [cancelTouchMarker]);
+    }, [cancelTouchMarker, onSquareClick, selected]);
 
     const handleMarkerPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
+        const dragStart = dragStartRef.current;
+        if (dragStart && dragStart.pointerId === event.pointerId) {
+            const wasDragging = dragStart.started;
+            endDrag();
+            if (wasDragging) {
+                // The click that follows the drag would land on the square the
+                // piece was picked up from and read as "deselect", undoing the
+                // selection the drop just used.
+                suppressNextClickRef.current = true;
+                // The pieces layer takes no pointer events, so the topmost
+                // element under the cursor is the destination square itself.
+                const dropped = squareFromElement(document.elementFromPoint(event.clientX, event.clientY));
+                if (dropped && (dropped.file !== dragStart.file || dropped.rank !== dragStart.rank)) {
+                    onSquareClick(dropped.file, dropped.rank);
+                }
+                // Dropped back where it started, or outside the board: the
+                // piece returns and stays selected, which is what a cancelled
+                // drag should leave behind.
+                return;
+            }
+        }
+
         if (event.button === 2 && (onToggleHighlight || onAddArrow)) {
             event.preventDefault();
             const start = markerDragStartRef.current;
@@ -354,12 +467,13 @@ export const Board = React.memo(function Board({
         if (triggered) {
             event.preventDefault();
         }
-    }, [cancelTouchMarker, onAddArrow, onToggleHighlight]);
+    }, [cancelTouchMarker, endDrag, onAddArrow, onSquareClick, onToggleHighlight]);
 
     const handleMarkerPointerCancel = useCallback(() => {
         markerDragStartRef.current = null;
+        endDrag();
         cancelTouchMarker();
-    }, [cancelTouchMarker]);
+    }, [cancelTouchMarker, endDrag]);
 
     const handleContextMenu = useCallback((event: React.MouseEvent) => {
         if (!onToggleHighlight && !onAddArrow) return;
@@ -446,7 +560,12 @@ export const Board = React.memo(function Board({
                 </div>
 
                 {/* Invisible Hitbox Layer for clicking the exact intersections */}
-                <div className="hitboxes-layer" onClick={handleHitboxClick} ref={hitboxesRef}>
+                <div
+                    className="hitboxes-layer"
+                    onClick={handleHitboxClick}
+                    ref={hitboxesRef}
+                    data-dragging={drag ? 'true' : undefined}
+                >
                     {ranks.map(rank => (
                         files.map(file => {
                             const piece = board[rank][file];
@@ -460,6 +579,7 @@ export const Board = React.memo(function Board({
                                     style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
                                     data-file={file}
                                     data-rank={rank}
+                                    data-draggable={canDragFrom(file, rank) ? 'true' : undefined}
                                     aria-label={formatSquareAriaLabel(file, rank, piece, isSelected, target, highlightedSquares.has(`${file}:${rank}`))}
                                     aria-keyshortcuts={squareKeyshortcuts}
                                     tabIndex={tabStopSquare?.file === file && tabStopSquare?.rank === rank ? 0 : -1}
@@ -543,12 +663,23 @@ export const Board = React.memo(function Board({
                         // slides across an occupied square is lifted above it
                         // for the length of the slide.
                         const isMoving = movedTo?.file === file && movedTo?.rank === rank;
+                        const isDragging = drag?.file === file && drag?.rank === rank;
 
                         return (
                             <div
                                 key={id}
-                                className={`piece ${colorClass} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''}`}
-                                style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
+                                className={`piece ${colorClass} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''} ${isDragging ? 'dragging' : ''}`}
+                                style={{
+                                    left: leftFor(file, orientation),
+                                    top: topFor(rank, orientation),
+                                    // Offset from where the piece sits rather
+                                    // than an absolute position, so it keeps
+                                    // the point it was grabbed by instead of
+                                    // snapping its centre to the cursor.
+                                    ...(isDragging
+                                        ? ({ '--drag-x': `${drag.dx}px`, '--drag-y': `${drag.dy}px` } as React.CSSProperties)
+                                        : null),
+                                }}
                             >
                                 {PIECE_LABELS[piece] || piece}
                             </div>

@@ -234,6 +234,16 @@
    the more specific selector, so an outline declared on this rule never won —
    and blue is the better ring on the board anyway, where --accent already
    means "selected" and "legal move". */
+/* Only a piece that could actually move offers the grab cursor, so the pointer
+   answers "is this mine, and is it my turn?" before anything is clicked. */
+.hitbox[data-draggable="true"] {
+    cursor: grab;
+}
+
+.hitboxes-layer[data-dragging="true"] .hitbox {
+    cursor: grabbing;
+}
+
 .hitbox:focus-visible {
     background: rgba(255, 235, 160, 0.22);
 }
@@ -339,6 +349,17 @@
         0 8px 16px rgba(0, 0, 0, 0.45),
         0 0 0 3px var(--accent-glow);
     z-index: 15;
+}
+
+/* The piece under the cursor while it is being dragged.
+   After `.piece.selected` on purpose: a dragged piece is also a selected one,
+   the two rules have equal specificity, and this transform has to win. The
+   slide is switched off because the piece is already following a pointer --
+   transitioning `left`/`top` here would make it lag behind the cursor. */
+.piece.dragging {
+    transition: none;
+    transform: translate(calc(-50% + var(--drag-x, 0px)), calc(-50% + var(--drag-y, 0px))) scale(1.12);
+    z-index: 20;
 }
 
 /* ─── Piece Colors ───────────────────────────────────────────────────────── */

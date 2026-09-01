@@ -1470,6 +1470,124 @@ async function assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page) {
   }
 }
 
+/**
+ * Dragging a piece, and the click paths it must not have disturbed.
+ *
+ * The board had no drag at all -- every comparable board has one, and two
+ * clicks is a slower, less direct way to play a move you have already decided
+ * on. It is added strictly beside click-to-move rather than instead of it,
+ * which is the part that needs guarding: the piece is deliberately *not*
+ * selected on `pointerdown`, because the `click` that follows a plain press
+ * would then be a second call on the same square and `onSquareClick` reads that
+ * as "deselect". So the two selection assertions below are not padding -- they
+ * are the regression the shortcut would cause.
+ *
+ * Mouse only, on purpose. A touch drag needs `touch-action: none` on the
+ * squares, taking the board out of the page's scrolling, and the long press is
+ * already spoken for by board markers.
+ */
+async function assertPiecesCanBeDraggedWithoutBreakingClicks(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForTimeout(400);
+
+  const centre = async (file, rank) => {
+    const box = await page.locator(`.hitbox[data-file="${file}"][data-rank="${rank}"]`).boundingBox();
+    if (!box) throw new Error(`No square at file ${file} rank ${rank}`);
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const ply = () => page.evaluate(() =>
+    Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1));
+  const dragSquare = async (fromFile, fromRank, toFile, toRank) => {
+    const from = await centre(fromFile, fromRank);
+    const to = await centre(toFile, toRank);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 20, from.y + 4, { steps: 3 });
+    const lifted = await page.locator(".piece.dragging").count();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    return lifted;
+  };
+
+  // Red's centre cannon, dragged.
+  const lifted = await dragSquare(7, 2, 4, 2);
+  if (lifted !== 1) {
+    throw new Error(
+      `Dragging a piece lifted ${lifted} pieces rather than 1. The piece under ` +
+      `the cursor should carry the .dragging class while the button is held.`
+    );
+  }
+  if (await ply() !== 1) {
+    throw new Error("Dragging Red's cannon from h2 to e2 did not play the move.");
+  }
+  if (await page.locator(".piece.dragging").count() !== 0) {
+    throw new Error("A piece was left in the dragging state after the drop.");
+  }
+
+  // Black to move. Clicking a piece selects it and clicking it again lets go --
+  // the behaviour that selecting on pointerdown would have broken.
+  const black = await centre(1, 9);
+  await page.mouse.click(black.x, black.y);
+  await page.waitForTimeout(250);
+  if (await page.locator(".piece.selected").count() !== 1) {
+    throw new Error("A plain click no longer selects a piece.");
+  }
+  await page.mouse.click(black.x, black.y);
+  await page.waitForTimeout(250);
+  if (await page.locator(".piece.selected").count() !== 0) {
+    throw new Error("Clicking the selected piece again no longer deselects it.");
+  }
+
+  // And two clicks still play a move.
+  const target = await centre(2, 7);
+  await page.mouse.click(black.x, black.y);
+  await page.waitForTimeout(150);
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(400);
+  if (await ply() !== 2) {
+    throw new Error("Click-to-move no longer plays a move.");
+  }
+
+  // A drag that ends somewhere illegal plays nothing rather than something.
+  const beforeIllegal = await ply();
+  await dragSquare(0, 0, 4, 4);
+  if (await ply() !== beforeIllegal) {
+    throw new Error("Dropping a chariot on a square it cannot reach played a move.");
+  }
+
+  // An opponent's piece cannot be picked up, and says so before it is tried.
+  const beforeOpponent = await ply();
+  const liftedOpponent = await dragSquare(0, 9, 0, 8);
+  if (liftedOpponent !== 0 || await ply() !== beforeOpponent) {
+    throw new Error(
+      `An opponent's piece was draggable (lifted ${liftedOpponent}). Only the ` +
+      `side to move may be dragged, which is what draggableSide carries.`
+    );
+  }
+  const affordance = await page.evaluate(() => ({
+    own: document.querySelector('.hitbox[data-file="4"][data-rank="0"]')?.dataset.draggable ?? "none",
+    opponent: document.querySelector('.hitbox[data-file="4"][data-rank="9"]')?.dataset.draggable ?? "none",
+    empty: document.querySelector('.hitbox[data-file="4"][data-rank="5"]')?.dataset.draggable ?? "none",
+  }));
+  if (affordance.own !== "true" || affordance.opponent !== "none" || affordance.empty !== "none") {
+    throw new Error(
+      `The grab cursor is offered on the wrong squares: ${JSON.stringify(affordance)}. ` +
+      `It should mark exactly the pieces a drag could move.`
+    );
+  }
+}
+
 async function assertPlayedMovesAreNumberedFromOne(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8472,6 +8590,7 @@ async function main() {
     await assertPlayedMovesAreNumberedFromOne(page);
     await assertBoardAnimatesAMoveInBothDirections(page);
     await assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page);
+    await assertPiecesCanBeDraggedWithoutBreakingClicks(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);
     await assertALoadedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
@@ -8497,7 +8616,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

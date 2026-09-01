@@ -5028,6 +5028,13 @@ function App() {
                   selected={selected}
                   validTargets={validTargets}
                   onSquareClick={handleSquareClick}
+                  // Dragging is offered for exactly the pieces a click could
+                  // move: the side to play, and only while the board is taking
+                  // moves at all. `handleSquareClick` already refuses the other
+                  // cases, but refusing them after the piece has been dragged
+                  // across the board and dropped is not the same as never
+                  // offering the grab cursor.
+                  draggableSide={!gameResult && !isAiTurn ? sideToMove : null}
                   orientation={orientation}
                   highlights={showArrows ? userHighlights : []}
                   onToggleHighlight={showArrows ? handleToggleHighlight : undefined}
