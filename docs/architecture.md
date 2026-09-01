@@ -1353,6 +1353,16 @@ the b-file cannon advancing seven, which is `b7b0`, which is `B7→B0`. Worth
 stating because the two strings look like different moves at a glance, and
 checking took working the file numbering out from first principles.
 
+It is the only surface that does this, which was checked rather than assumed.
+With 中文 selected, the breadcrumb, the eval graph's current point and the book
+continuations all read in Chinese; the move tree prints the Chinese reading and
+then the raw coordinates deliberately, as a cross-reference you can paste into
+an engine, and drops the second copy in UCI mode where it would be the same
+move twice. The board's spoken announcement stays English prose — "Black
+soldier from G6 moves to G5" — which is consistent with an interface that is
+in English throughout and offers a *move notation* setting rather than a
+language one.
+
 Three ways out, and the reason this is a question rather than a commit is that
 the note is **stored**, not just displayed — it is persisted per move in the
 library as `note` and `reviewNote`:
