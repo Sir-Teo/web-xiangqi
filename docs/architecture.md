@@ -1251,8 +1251,15 @@ that keeps the oldest games instead of the newest, are all caught, mostly by
 notice that a second game was left behind suppressed, and the move cap raised
 past what the app accepts.
 
-Three survivors are **equivalent mutants rather than gaps**, and each is noted
-where it lives so the next sweep does not rediscover it: Master's blunder
+`useXiangqi.ts`'s FEN legality guards — five of six could be deleted with the
+whole suite green, which is the gate between a pasted position and both the
+board and the engine. Now held by a check that drives the FEN box.
+
+Four survivors are **equivalent mutants rather than gaps**, and each is noted
+where it lives so the next sweep does not rediscover it: `kingsFacing` in
+`parseRootPositionFromFen` catches a strict subset of the guard after it, since
+facing generals attack each other and the side not to move is therefore already
+in check, so no position pins it alone; Master's blunder
 allowance and Hard's candidate weights in `aiOpponent.ts` are unreachable
 because those levels return before either value is read, and `loadAllGames`'s
 sort order is invisible because the library panel re-sorts with its own

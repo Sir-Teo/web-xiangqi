@@ -1505,6 +1505,95 @@ async function assertSettingsExplainTheirOwnOptions(page) {
   await page.waitForTimeout(300);
 }
 
+/**
+ * The positions the FEN box has to refuse.
+ *
+ * `parseRootPositionFromFen` guards the boundary between a pasted or shared
+ * FEN and both the board and the engine: exactly one general a side, each
+ * inside its own palace, not facing each other down an open file, and the side
+ * not to move not already in check. A mutation sweep removed those guards one
+ * at a time and only the last was noticed — five of them could be deleted with
+ * the whole suite still green.
+ *
+ * Five of the six positions below are illegal for exactly one reason, and each
+ * of those pins one guard: removing that guard alone makes the box accept it.
+ *
+ * The sixth, the facing generals, pins nothing on its own and is kept for what
+ * it documents. `kingsFacing` cannot be pinned by any position, because the
+ * condition it catches is a strict subset of the next guard's: generals facing
+ * down an open file attack each other, so the side not to move is also in
+ * check. Removing `kingsFacing` alone changes nothing; removing it *and* the
+ * check guard is what lets the position through. Measured, not assumed.
+ *
+ * Driven through the FEN box rather than `?fen=`, which keeps this to a single
+ * page load rather than one per case, and is the path a reader uses to set a
+ * position up.
+ */
+const ILLEGAL_POSITIONS = [
+  ["two red generals", "5k3/9/9/9/9/9/9/9/9/3KK4 w - - 0 1"],
+  ["two black generals", "3kk4/9/9/9/9/9/9/9/9/5K3 w - - 0 1"],
+  ["red general outside its palace", "4k4/9/9/9/9/9/9/9/9/K8 w - - 0 1"],
+  ["black general outside its palace", "k8/9/9/9/9/9/9/9/9/4K4 w - - 0 1"],
+  // Refused by the check guard as much as by `kingsFacing` -- see above.
+  ["generals facing down an open file", "4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1"],
+  // Black is already in check on Red's turn, which no legal game reaches.
+  ["the side not to move already in check", "4k4/9/9/9/9/9/9/9/4R4/3K5 w - - 0 1"],
+];
+
+/** Legal, so a rejection above cannot be the box refusing everything. */
+const LEGAL_CONTROL = "4k4/9/9/9/9/9/9/9/R8/3K5 w - - 0 1";
+
+async function assertTheFenBoxRefusesImpossiblePositions(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(600);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForTimeout(400);
+
+  const fenBox = page.getByLabel("FEN string");
+  const submit = async () => {
+    // The form's own submit, so this goes through the same path the reader's
+    // Enter key does.
+    await fenBox.press("Enter");
+    await page.waitForTimeout(350);
+  };
+  const errorText = () => page.evaluate(
+    () => (document.querySelector("#new-game-fen-error")?.textContent || "").trim()
+  );
+
+  // The control first: if this is refused, every rejection below means nothing.
+  await fenBox.fill(LEGAL_CONTROL);
+  await submit();
+  if (await errorText()) {
+    throw new Error(`The FEN box refused a legal position: ${await errorText()}`);
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForTimeout(300);
+
+  for (const [name, fen] of ILLEGAL_POSITIONS) {
+    await fenBox.fill(fen);
+    await submit();
+    const message = await errorText();
+    if (!message) {
+      throw new Error(
+        `The FEN box accepted a position with ${name}: ${fen}. That position reaches ` +
+        `the board and the engine, neither of which expects one.`
+      );
+    }
+    await fenBox.fill("");
+    await page.waitForTimeout(120);
+  }
+}
+
 async function assertAPastedHalfmoveClockIsKeptAndCounted(page) {
   // Black general e9, red chariot a1, red general d0, and a black soldier on
   // i1 for the chariot to take. Nobody is in check and the generals do not
@@ -8173,6 +8262,7 @@ async function main() {
     await assertPerpetualCheckIsNamedAndBinding(page);
     await assertStalemateLossIsLabeled(page);
     await assertSettingsExplainTheirOwnOptions(page);
+    await assertTheFenBoxRefusesImpossiblePositions(page);
     await assertAPastedHalfmoveClockIsKeptAndCounted(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
