@@ -1446,6 +1446,65 @@ async function assertAPlayedCaptureRecordsWhatItDid(page) {
  * counts the moves itself. The displayed FEN counts them too, which is what
  * this checks, because that is the number a reader copies out.
  */
+/**
+ * The settings that need explaining explain themselves on screen.
+ *
+ * "Coach" against "Pro", and "Stable" against "Optimized", mean nothing until
+ * somebody says what they do. The words were written -- they sat in `title`
+ * and `aria-label` on each button -- but `title` is a hover tooltip, and a
+ * phone has no hover. So the reader most likely to need the explanation was
+ * the one who could not reach it, unless they were using a screen reader.
+ *
+ * Move Notation already showed its description in the panel; these two now do
+ * the same, with the same words and the same class. The hint has to follow the
+ * selection, or it is worse than none.
+ */
+async function assertSettingsExplainTheirOwnOptions(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(800);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.getByRole("button", { name: /Open settings/i }).first().click();
+  await page.waitForTimeout(600);
+
+  const hints = () => page.evaluate(() =>
+    [...document.querySelectorAll(".settings-hint")]
+      .filter((node) => node.offsetParent)
+      .map((node) => (node.textContent || "").trim())
+  );
+
+  const before = await hints();
+  if (before.length < 3) {
+    throw new Error(`Expected a visible description under each group that needs one, saw ${before.length}: ${JSON.stringify(before)}`);
+  }
+  if (!before.some((text) => /Coach interface/i.test(text))) {
+    throw new Error(`No visible description of the Interface setting: ${JSON.stringify(before)}`);
+  }
+  if (!before.some((text) => /profile/i.test(text))) {
+    throw new Error(`No visible description of the Analysis Engine setting: ${JSON.stringify(before)}`);
+  }
+
+  // A hint that does not follow the selection is worse than no hint.
+  // Matched on the accessible name, which is the aria-label these buttons
+  // carry -- `/^Pro$/` matches the visible text and finds nothing.
+  await page.getByRole("button", { name: /^Pro interface/i }).first().click();
+  await page.waitForTimeout(300);
+  const after = await hints();
+  if (after.some((text) => /Coach interface/i.test(text))) {
+    throw new Error(`The Interface description still described Coach after choosing Pro: ${JSON.stringify(after)}`);
+  }
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
+
 async function assertAPastedHalfmoveClockIsKeptAndCounted(page) {
   // Black general e9, red chariot a1, red general d0, and a black soldier on
   // i1 for the chariot to take. Nobody is in check and the generals do not
@@ -8045,6 +8104,7 @@ async function main() {
     await assertSimpleRepetitionDoesNotAutoDraw(page);
     await assertPerpetualCheckIsNamedAndBinding(page);
     await assertStalemateLossIsLabeled(page);
+    await assertSettingsExplainTheirOwnOptions(page);
     await assertAPastedHalfmoveClockIsKeptAndCounted(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);

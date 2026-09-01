@@ -4034,6 +4034,12 @@ function App() {
                   Pro
                 </button>
               </div>
+              {/* The same visible hint Move Notation has. These two groups are
+                  the ones whose labels do not explain themselves -- "Coach" and
+                  "Optimized" mean nothing until told -- and the telling lived
+                  only in `title`, which does not exist on a touch screen. The
+                  words are the ones already written for the tooltip. */}
+              <p className="settings-hint">{ASSIST_MODE_COPY[assistMode].title}</p>
             </div>
 
             <div className="settings-group">
@@ -4142,6 +4148,7 @@ function App() {
                   Optimized
                 </button>
               </div>
+              <p className="settings-hint">{ANALYSIS_ENGINE_MODE_COPY[analysisEngineMode].title}</p>
             </div>
 
             <div className="settings-group">
