@@ -966,6 +966,41 @@ over 400ms (expect roughly 25) and time a `setTimeout(5)` (expect under 100ms);
 if either fails, the number that follows is about the harness. The figures in
 this section come from headless Playwright, which passes both checks.
 
+### Tapping a piece on a slow phone
+
+The frame-pacing and review figures above are about the work the app does to
+itself. The interaction a player performs most is tapping a piece and seeing
+its legal moves appear, and that is the one that decides whether the app feels
+broken on a cheap device.
+
+At 390x844, engine loaded and analysing, timed from the tap to the destination
+squares actually being marked legal:
+
+| CPU | median | worst of eight |
+| --- | --- | --- |
+| none | 27ms | 181ms |
+| 4x slower | 45ms | 79ms |
+| 6x slower | 63ms | 121ms |
+
+Sixty milliseconds at six times slower is still inside the range that reads as
+instant. Nothing to do here.
+
+**Telling whether the engine is actually up costs more thought than it looks**,
+and three signals in a row gave the wrong answer while measuring this:
+
+- `"Engine ready"` is text in the desktop-only top bar; a phone never renders
+  it, so waiting for it times out on a working engine.
+- The eval readout is desktop chrome too.
+- `performance.getEntriesByType("resource")` does not list it either, because
+  **the engine is fetched by its worker**, and worker requests are not in the
+  page's resource timing.
+
+What does work is intercepting requests at the browser level -- `page.on
+("request")` sees the worker's fetches -- and looking for `pikafish.nnue`,
+which is 53MB and which nothing else asks for. That also shows the tiering
+choosing a core: a phone here takes `pikafish-core-single-simd`, the desktop
+takes `pikafish-core-simd`.
+
 ### A session left open does not grow
 
 The frame-pacing figures above are about one page load. The other question is
