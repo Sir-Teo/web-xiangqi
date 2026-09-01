@@ -1208,6 +1208,36 @@ the emscripten templates or `build-pikafish.sh` — since that rebuild is the st
 requiring the toolchain. `verify` runs both, because they are cheap: smoke is 0.5s and parity 1.5s
 against a 4.3s command, so the engine is covered for the price of rounding.
 
+### What has been mutation-swept, and what has not
+
+Sweeping means changing one line to something plausible and wrong, running the
+suite, and treating a pass as a gap. It is the only way to find out whether a
+test is holding the thing it appears to be about. Recorded so the next person
+can aim at what is not covered rather than re-confirming what is.
+
+Swept and clean — every mutation tried was caught:
+
+- `review.ts` — side of the loss, the two grading ladders combining, each
+  centipawn threshold, the decisive-advantage guard. `gradingLadders.test.ts`
+  catches threshold moves precisely.
+- `gameExport.ts` — result token, move numbering start, numbering advance, and
+  whether a custom start is flagged.
+- `xiangqiNotation.ts` — front/rear markers in both tables and the WXF signs.
+
+Swept and found gaps, all since closed: `useXiangqi.ts`'s interactive move
+path gave up four — the ply a played move records, what it stores about a
+capture and a check, whether replaying a move keeps the line being read, and
+whether it keeps the evaluation the move already had.
+
+Two survivors in `aiOpponent.ts` are **equivalent mutants rather than gaps**:
+Master's blunder allowance and Hard's candidate weights are both unreachable,
+because those levels return before either value is read. Noted in the test so
+the next sweep does not rediscover them.
+
+Not swept: `useEngine.ts` beyond its four pure exports, and `App.tsx`. Both are
+mostly effects and wiring, where a mutation tends to break the build or the
+whole suite rather than isolate a claim.
+
 ### Which gate is upstream of a deploy
 
 The distinction that matters is not local-versus-CI but **what runs before
