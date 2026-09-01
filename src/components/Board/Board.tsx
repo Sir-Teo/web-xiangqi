@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
+import { nextPieceIdentityState, type PieceIdentityState } from '../../utils/pieceIdentity';
 import { BoardArrows } from './BoardArrows';
 
 export type BoardOrientation = 'red' | 'black';
@@ -166,6 +167,45 @@ export const Board = React.memo(function Board({
         triggered: boolean;
     } | null>(null);
     const suppressNextClickRef = useRef(false);
+    /**
+     * Identity per piece, so the stylesheet's `left`/`top` transition has a
+     * DOM node to carry. Keyed by square, a move unmounts one element and
+     * mounts another, and a new element has nothing to transition from — the
+     * 300ms slide in `Board.css` had never once fired. See `pieceIdentity.ts`.
+     *
+     * Called during render rather than in an effect because the key has to be
+     * right in the same commit that moves the piece; `nextPieceIdentityState`
+     * returns its input unchanged for a board it has already seen, so a
+     * repeated render (React's development double-invoke among them) produces
+     * the same ids.
+     */
+    const pieceIdentityRef = useRef<PieceIdentityState | null>(null);
+    pieceIdentityRef.current = nextPieceIdentityState(pieceIdentityRef.current, board);
+    const pieceIds = pieceIdentityRef.current.ids;
+    const movedTo = pieceIdentityRef.current.movedTo;
+
+    /**
+     * The pieces to draw, in a stable order.
+     *
+     * Sorted on the id, which never changes for a piece, so the only thing a
+     * move does to this list is change one entry's square. Ranks and files
+     * decide where a piece is drawn, not where it sits in the DOM -- every
+     * piece is absolutely positioned, and the one case where paint order shows
+     * is a cannon crossing its screen, which `.piece.moving` lifts instead.
+     */
+    const renderedPieces = useMemo(() => {
+        const list: Array<{ id: string; file: number; rank: number; piece: string }> = [];
+        for (let rank = 0; rank < 10; rank += 1) {
+            for (let file = 0; file < 9; file += 1) {
+                const piece = board[rank]?.[file];
+                if (!piece) continue;
+                list.push({ id: pieceIds[rank][file] || `sq-${file}-${rank}`, file, rank, piece });
+            }
+        }
+        list.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        return list;
+    }, [board, pieceIds]);
+
     const targetBySquare = useMemo(() => {
         const map = new Map<string, { capture: boolean }>();
         for (const target of validTargets) {
@@ -478,27 +518,42 @@ export const Board = React.memo(function Board({
                         }
                     })}
 
-                    {/* Pieces */}
-                    {ranks.map(rank => (
-                        files.map(file => {
-                            const piece = board[rank][file];
-                            if (!piece) return null;
+                    {/* Pieces, in a flat list ordered by identity rather than
+                        by square -- both halves are load-bearing, and each was
+                        measured failing on its own.
 
-                            const isSelected = selected?.file === file && selected?.rank === rank;
-                            const isRed = piece === piece.toUpperCase();
-                            const colorClass = isRed ? 'red' : 'black';
+                        Flat, because React scopes keys to the array they sit
+                        in: with one sub-array per rank, a piece changing rank
+                        crosses between two sibling arrays and is remounted
+                        however stable its key is. With that alone, a same-rank
+                        move animated and every other move did not.
 
-                            return (
-                                <div
-                                    key={`piece-${file}-${rank}`}
-                                    className={`piece ${colorClass} ${isSelected ? 'selected' : ''}`}
-                                    style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
-                                >
-                                    {PIECE_LABELS[piece] || piece}
-                                </div>
-                            );
-                        })
-                    ))}
+                        Ordered by identity, because a list ordered by square
+                        makes a move an array *reorder*, and React then moves
+                        the DOM node as well as restyling it. That was directional
+                        -- stepping back animated, stepping forward jumped the
+                        whole way on the first frame. An identity order never
+                        reorders: a move changes only `left`/`top`, which is
+                        exactly what the transition is written against. */}
+                    {renderedPieces.map(({ id, file, rank, piece }) => {
+                        const isSelected = selected?.file === file && selected?.rank === rank;
+                        const isRed = piece === piece.toUpperCase();
+                        const colorClass = isRed ? 'red' : 'black';
+                        // A cannon captures over a screen, so the one piece that
+                        // slides across an occupied square is lifted above it
+                        // for the length of the slide.
+                        const isMoving = movedTo?.file === file && movedTo?.rank === rank;
+
+                        return (
+                            <div
+                                key={id}
+                                className={`piece ${colorClass} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''}`}
+                                style={{ left: leftFor(file, orientation), top: topFor(rank, orientation) }}
+                            >
+                                {PIECE_LABELS[piece] || piece}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

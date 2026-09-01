@@ -1266,6 +1266,143 @@ async function assertPlayFromHereKeepsThePosition(page) {
  * entire suite green: loaded games stayed correctly numbered, and every move a
  * player made was off by one and credited to the wrong side.
  */
+/**
+ * The board's move animation, checked by where the piece is actually painted.
+ *
+ * `Board.css` gives `.piece` a 300ms `left`/`top` transition and it had never
+ * once run, because the pieces were keyed by square: a move unmounted one
+ * element and mounted another, and a fresh element has nothing to slide from.
+ * Two further things had to be right before the stylesheet's own animation
+ * would fire, and each of them failed on its own in a way that looked like
+ * success from the other side:
+ *
+ *   - the pieces must render as one flat list. React scopes keys to the array
+ *     they sit in, so with a sub-array per rank a piece changing rank crosses
+ *     between siblings and is remounted whatever its key. Measured with that
+ *     alone: a same-rank move animated and every rank-changing move did not.
+ *   - the list must be ordered by identity, not by square. Ordered by square, a
+ *     move is an array reorder and React moves the DOM node as well as
+ *     restyling it; that was directional -- stepping back animated and stepping
+ *     forward jumped the whole distance on the first frame.
+ *
+ * So this asserts the property rather than the mechanism, and it asserts it in
+ * both directions, because one direction passing is exactly what the second bug
+ * looked like. `transitionrun` is deliberately not the signal: it did not fire
+ * for the forward step even while the node persisted, and where a piece is
+ * painted is the thing a reader can see.
+ *
+ * The jump case is asserted too, and it is not decoration. Carrying identity
+ * across an arbitrary position change would slide pieces along paths no move
+ * ever took.
+ */
+async function assertBoardAnimatesAMoveInBothDirections(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2+h9g7+b0c2+c6c5", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".piece", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+
+  // Where every piece is now, keyed by the node, so a replaced node is
+  // distinguishable from one that merely moved.
+  const mark = () => page.evaluate(() => {
+    window.__animRects = new Map();
+    for (const node of document.querySelectorAll(".piece")) {
+      window.__animRects.set(node, node.getBoundingClientRect().toJSON());
+    }
+  });
+
+  // Sample for a dozen frames and report the largest displacement seen on any
+  // surviving node, whether it was ever caught part of the way there, and how
+  // many of the marked nodes stopped existing -- a replaced node and a node
+  // that teleports are different defects and want different messages.
+  const sample = () => page.evaluate(async () => {
+    let settled = { dx: 0, dy: 0 };
+    let sawPartial = false;
+    const seen = [];
+    for (let frame = 0; frame < 14; frame += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      for (const node of document.querySelectorAll(".piece")) {
+        const was = window.__animRects.get(node);
+        if (!was) continue;
+        const now = node.getBoundingClientRect();
+        const dx = Math.round(now.x - was.x);
+        const dy = Math.round(now.y - was.y);
+        if (!dx && !dy) continue;
+        seen.push({ frame, dx, dy });
+        if (Math.abs(dx) > Math.abs(settled.dx)) settled.dx = dx;
+        if (Math.abs(dy) > Math.abs(settled.dy)) settled.dy = dy;
+      }
+    }
+    for (const step of seen) {
+      const shortOfX = Math.abs(step.dx) < Math.abs(settled.dx);
+      const shortOfY = Math.abs(step.dy) < Math.abs(settled.dy);
+      if (shortOfX || shortOfY) sawPartial = true;
+    }
+    const live = new Set(document.querySelectorAll(".piece"));
+    let replaced = 0;
+    for (const node of window.__animRects.keys()) if (!live.has(node)) replaced += 1;
+    return { moved: Math.abs(settled.dx) + Math.abs(settled.dy), sawPartial, replaced };
+  });
+
+  const stepped = async (label, selector) => {
+    await mark();
+    await page.click(selector);
+    const result = await sample();
+    await page.waitForTimeout(450);
+    return { label, ...result };
+  };
+
+  const back = await stepped("stepping back", '.wc-nav button[aria-label="Go to previous move"]');
+  const forward = await stepped("stepping forward", '.wc-nav button[aria-label="Go to next move"]');
+
+  for (const step of [back, forward]) {
+    if (step.replaced > 0) {
+      throw new Error(
+        `${step.replaced} piece element(s) were destroyed and recreated while ` +
+        `${step.label}, so there is nothing for the slide in Board.css to carry. ` +
+        `A piece must keep its DOM node across a move: see the key on the piece ` +
+        `list in Board.tsx and utils/pieceIdentity.ts.`
+      );
+    }
+    if (step.moved === 0) {
+      throw new Error(
+        `No piece moved while ${step.label}, so this check proves nothing about ` +
+        `the animation. The navigation control it clicks has probably moved.`
+      );
+    }
+    if (!step.sawPartial) {
+      throw new Error(
+        `The board does not animate when ${step.label}: the piece was painted ` +
+        `${step.moved}px from where it started on the very first frame, having ` +
+        `never been caught part of the way. Board.css asks for a 300ms slide, so ` +
+        `the piece element is being replaced or reordered rather than restyled -- ` +
+        `see the pieces list in Board.tsx and utils/pieceIdentity.ts.`
+      );
+    }
+  }
+
+  // A jump is not a move, and nothing may slide across one.
+  await mark();
+  await page.click('.wc-nav button[aria-label="Go to first position"]');
+  const jump = await sample();
+  if (jump.replaced === 0) {
+    throw new Error(
+      "Jumping to the start of the game kept every piece element, which means " +
+      "identity was carried across a position change that is not a move. The " +
+      "no-animation result below would then be luck rather than the rebuild."
+    );
+  }
+  if (jump.sawPartial) {
+    throw new Error(
+      "Jumping to the start of the game animated a piece across the board. " +
+      "Identity is only carried when two positions differ by a single move; " +
+      "carrying it across a jump slides pieces along paths no move ever took."
+    );
+  }
+}
+
 async function assertPlayedMovesAreNumberedFromOne(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8266,6 +8403,7 @@ async function main() {
     await assertAPastedHalfmoveClockIsKeptAndCounted(page);
     await assertCheckmateByPlayingTheMove(page);
     await assertPlayedMovesAreNumberedFromOne(page);
+    await assertBoardAnimatesAMoveInBothDirections(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);
     await assertALoadedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
@@ -8291,7 +8429,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
