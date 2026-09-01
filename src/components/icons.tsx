@@ -188,3 +188,10 @@ export const IconSearch = (props: React.SVGProps<SVGSVGElement>) => (
         <circle cx="11" cy="11" r="7" /><line x1="16.5" y1="16.5" x2="21" y2="21" />
     </svg>
 );
+
+/** A target: the threat search asks what the opponent is aiming at. */
+export const IconTarget = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...decorativeIconProps(props)}>
+        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.4" fill="currentColor" />
+    </svg>
+);

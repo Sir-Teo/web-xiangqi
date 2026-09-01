@@ -6234,3 +6234,15 @@ summary:active {
 @media (prefers-reduced-motion: reduce) {
   .skip-link { transition: none; }
 }
+
+/* The threat card replaces the candidate list while a threat is showing. It is
+   the opponent's move, not a suggestion, so it borrows the danger colour the
+   threat arrow uses rather than the engine green every other line has. */
+.threat-card {
+  border-color: rgba(244, 63, 94, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.16);
+}
+
+.threat-card .pv-line-rank {
+  color: #fda4af;
+}

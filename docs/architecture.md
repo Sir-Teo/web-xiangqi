@@ -84,6 +84,89 @@ Easy to get backwards, and several tests exist only to pin them:
 - Red is `'w'` and uses uppercase pieces; Black is `'b'` and lowercase.
 - Evaluations are **Red-positive**, so Black loses ground when a score rises.
 
+## The board's animation, and the three things that had to be true
+
+`Board.css` has given `.piece` a 300ms `left`/`top` transition since the board
+was written, and it had never once fired. Pieces teleported. Measured rather
+than read off the code, because the stylesheet looks correct and so does the
+component: stepping one move back on a loaded game ran **zero** `transitionrun`
+events and replaced exactly one of the 31 piece nodes.
+
+Three separate things stood between that stylesheet and a moving piece, and
+each of them fails in a way that looks like success from the other side. Worth
+reading in order, because fixing any one alone leaves a bug that is *harder* to
+see than the original.
+
+1. **A piece must keep its DOM node across a move.** The elements were keyed by
+   the square they stood on, so a move unmounts the element on the source square
+   and mounts a different one on the destination; a freshly mounted element has
+   no previous `left` to transition from. `utils/pieceIdentity.ts` carries
+   identity across a single move instead.
+2. **The pieces must render as one flat list.** React scopes keys to the array
+   they sit in, and the pieces were a nested `ranks.map(files.map(...))` — one
+   sub-array per rank. A piece changing rank crosses between two sibling arrays
+   and is remounted however stable its key is. With the key fixed and the nesting
+   left alone, a same-rank move animated and every rank-changing move did not,
+   which is a state that reads as "the animation works" if the first move you try
+   is a cannon along a rank.
+3. **The list must be ordered by identity, not by square.** Ordered by square, a
+   move is an array *reorder*, and React moves the DOM node as well as restyling
+   it. That was directional: stepping back animated and stepping forward jumped
+   the whole distance on the first frame. Sorting on the id — which never changes
+   for a piece — means a move changes only `left`/`top`, which is what the
+   transition is written against.
+
+### Identity is carried across one move, and rebuilt for anything else
+
+`nextPieceIdentityState(previous, board)` diffs two boards and transfers the
+moving piece's id when they differ by exactly one move. Anything larger — loading
+a game, clicking into the move tree, opening a variation — bumps a generation and
+rebuilds every id, so nothing slides along a path no move ever took.
+
+The diff is deliberately direction-agnostic, because stepping *back* is the
+navigation a reader performs most and it is the same shape in reverse:
+
+| | source square | destination square |
+| --- | --- | --- |
+| play `h2e2` capturing | `C` → `''` | `c` → `C` |
+| undo it | `''` → `C` | `C` → `c` |
+
+The pairing is found by asking which of the two changed squares holds, afterwards,
+the piece the other held before. That is true of exactly one ordering unless two
+pieces swapped, and one move cannot swap two pieces — so both orderings matching
+is refused rather than guessed at. Undoing a capture also puts a piece back on the
+square the mover left, and that piece is new to the DOM: it takes a fresh id
+rather than inheriting the one that just travelled away from it.
+
+**The browser gate asserts where the piece is painted, not which events fired.**
+`transitionrun` did not fire for the forward step even while the node persisted,
+so it is not a signal about the thing a reader can see. The gate samples the
+piece's box for a dozen frames and asks whether it was ever caught part of the
+way; it does that in both directions, because one direction passing is exactly
+what bug 3 looked like, and it asserts that a *jump* is not animated, because
+carrying identity too eagerly is the other way to get this wrong.
+
+## Dragging a piece
+
+Added beside click-to-move rather than in place of it, and the awkward part is
+why the piece is **not** selected on `pointerdown`, which is the obvious place
+for it. `onSquareClick` reads a second call on the same square as "deselect", so
+selecting on press would make every plain click select and immediately let go.
+Selection happens instead the moment the pointer crosses a four-pixel threshold,
+which leaves a press that never moves as an ordinary click and every existing
+path untouched. The gate pins both selection behaviours for that reason.
+
+`draggableSide` is one prop rather than two because the board needs the same
+answer for both halves of the question: a piece is draggable when its owner is
+to play *and* the caller is taking moves at all. `handleSquareClick` already
+refuses the engine's turn and a finished game, but refusing after the piece has
+been dragged across the board is not the same as never offering the grab cursor.
+
+**Mouse only, deliberately.** A touch drag wants `touch-action: none` on the
+squares, which takes the board out of the page's scrolling, and the long press is
+already spoken for by board markers. Tap-a-piece, tap-a-square is the better
+phone interaction regardless.
+
 ## Rules
 
 `utils/xiangqi.ts` is the whole rule set: move generation, legality, check,
@@ -928,6 +1011,47 @@ its own and nothing has to remember to end it. It carries the same analysis tag
 as the live searches, so a position change cancels it like any other search.
 Measured from a four-move opening at 8 threads: live analysis settles at D17,
 Go Deep reaches D26.
+
+**Show Threat is the question the best move does not answer.** `passMoveFen`
+in `utils/threatPosition.ts` returns the same board with the other side to move
+— a null move — and the engine's reply to it is what the opponent is
+threatening. A beginner asks this as "why is this losing?" and a professional as
+"what am I being asked to stop?", and one output serves both.
+
+Three things about it are load-bearing:
+
+- **It is refused when the side to move is in check.** The side that passes stops
+  being the side to move, and a side not to move may not be under attack — the
+  engine would be handed a position whose general can simply be taken. That is
+  also when the question stops being interesting: a player in check is not being
+  threatened with something, they are being hit with it. The button says so
+  rather than sitting disabled with no account of itself. Facing generals are the
+  same rule arriving by another route, since `attacksSquare` treats a general as
+  attacking down an open file.
+- **The halfmove clock does not advance.** It is load-bearing (see above — the
+  same endgame reads mate in 3 at 0 and 0.00 at 119), so moving it would evaluate
+  the threat at a different point of the game from the position it is about.
+  Nothing has progressed; a pass is a question, not a ply. The fullmove counter
+  *does* advance when Black passes, because that field counts Red's turns.
+- **It goes out as a bare `position fen`, not the root plus the game's moves**,
+  because no move reaches it. That costs the engine its repetition history for
+  this one search, which matters more here than in chess — a repetition in
+  xiangqi decides the game — and is the honest price of asking about a position
+  the game cannot arrive at.
+
+The search carries its own tag prefix, `threat|`, so it cannot be mistaken for
+the analysis of the position on screen. Everything the panel shows filters on
+`parseAnalysisTag`; reusing that prefix would put the opponent's evaluation on
+the eval bar and the opponent's move at the top of the candidate list, both
+labelled as the position's own. The threat card therefore *replaces* the
+candidate list rather than sitting beside it, and names whose move it is showing.
+
+**Turning it off has to put the analysis stage back to `idle`.** This is the part
+that does not happen for free: `dispatchQueuedSearch` clears the PV lines when
+any search starts, and the analysis effect only restarts from `idle`, so
+dismissing the threat would otherwise leave the eval bar and the candidate list
+blank until the reader navigated somewhere else. The gate asserts the recovery,
+not just the display.
 
 Three ceilings that must not be confused:
 

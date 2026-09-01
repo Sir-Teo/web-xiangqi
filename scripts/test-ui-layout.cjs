@@ -1588,6 +1588,153 @@ async function assertPiecesCanBeDraggedWithoutBreakingClicks(page) {
   }
 }
 
+/**
+ * Show Threat: give the opponent the move and read the engine's reply.
+ *
+ * This is a search of a *different position* from the one on screen, and the
+ * whole risk of the feature is that its numbers get mistaken for the position's
+ * own. So the assertions are mostly about separation: the threat has its own
+ * search tag, so the candidate list and the eval bar must be replaced rather
+ * than mixed into, and turning the threat off must bring live analysis *back*
+ * -- which is the part that does not happen for free, because the threat search
+ * leaves the analysis stage settled with the PV lines cleared underneath it.
+ *
+ * Uses the real engine, like the other searches here, because the thing being
+ * checked is the round trip: a passed FEN goes out, a move comes back, and the
+ * app puts it where a reader can tell it apart from advice.
+ */
+async function assertShowThreatIsSeparateFromTheAnalysis(page) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    "http://127.0.0.1:8192/web-xiangqi/?moves=h2c2+b7e7+c2c1+i9i8+b2f2+i8f8+e0e1+d9e8",
+    { waitUntil: "domcontentloaded", timeout: 60000 },
+  );
+  await page.waitForSelector(".piece", { timeout: 30000 });
+  for (const name of [/keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForFunction(() => document.body.innerText.includes("Engine ready"), null, { timeout: 90000 });
+  // `analysis-tab-engine` is what every other engine check here clicks. A
+  // `getByRole("button", { name: /^Engine$/ })` lookup finds nothing reliably --
+  // it was the first thing tried and it timed out waiting for PV lines that
+  // never render outside this tab.
+  await page.getByTestId("analysis-tab-engine").click();
+  await page.waitForSelector('[data-testid="engine-pv-line-0"]', { timeout: 60000 });
+
+  const count = (selector) => page.evaluate((s) => document.querySelectorAll(s).length, selector);
+
+  const threatButton = page.getByTestId("show-threat-btn");
+  if (!(await threatButton.isEnabled())) {
+    throw new Error("Show Threat is disabled in a position where nobody is in check.");
+  }
+
+  await threatButton.click();
+  await page.waitForSelector('[data-testid="threat-card"]', { timeout: 20000 });
+  await page.waitForFunction(() => {
+    const line = document.querySelector('[data-testid="threat-line"]');
+    return line && !/Searching/.test(line.textContent || "");
+  }, null, { timeout: 60000 });
+
+  if (await count('[data-testid^="engine-pv-line-"]') !== 0) {
+    throw new Error(
+      "The candidate list is still on screen beside the threat. They are " +
+      "evaluations of two different positions and a reader comparing them is " +
+      "comparing nothing."
+    );
+  }
+  if (await count('[data-testid^="board-arrow-threat"]') !== 1) {
+    throw new Error("The threat move was not drawn on the board.");
+  }
+  const cardText = (await page.getByTestId("threat-card").innerText()).trim();
+  if (!/IF (BLACK|RED) MOVED NOW/i.test(cardText)) {
+    throw new Error(
+      `The threat card does not say whose move it is showing: ${JSON.stringify(cardText)}. ` +
+      `A move on the board with no owner reads as a suggestion.`
+    );
+  }
+
+  // Turning it off must restore live analysis, not leave the panel empty.
+  await page.getByTestId("show-threat-btn").click();
+  await page.waitForSelector('[data-testid="threat-card"]', { state: "detached", timeout: 10000 });
+  const restored = await page
+    .waitForSelector('[data-testid="engine-pv-line-0"]', { timeout: 60000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!restored) {
+    throw new Error(
+      "Live analysis did not come back after the threat was dismissed. The " +
+      "threat search clears the analysis PV lines and leaves the stage settled, " +
+      "so stopThreat has to put the stage back to idle for the effect to re-fire."
+    );
+  }
+  if (await count('[data-testid^="board-arrow-threat"]') !== 0) {
+    throw new Error("The threat arrow outlived the threat.");
+  }
+
+  // In check there is no position to pass from, and the control must say so
+  // rather than failing on the press.
+  //
+  // Asserted against a minimal pair -- the same position with the chariot one
+  // file over -- because "the button is disabled" is true in a great many
+  // worlds, including one where the FEN never loaded at all. The control is
+  // what makes the refusal mean the thing it claims to mean. Both carry a
+  // soldier on e5, or the generals face down the open e-file and the control is
+  // refused for the other reason.
+  const loadFen = async (fen) => {
+    await page.goto(
+      "http://127.0.0.1:8192/web-xiangqi/?fen=" + encodeURIComponent(fen),
+      { waitUntil: "domcontentloaded", timeout: 60000 },
+    );
+    await page.waitForSelector(".piece", { timeout: 30000 });
+    for (const name of [/keep the link/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    await page.waitForFunction(() => document.body.innerText.includes("Engine ready"), null, { timeout: 90000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    const button = page.getByTestId("show-threat-btn");
+    await button.waitFor({ timeout: 20000 });
+    const onScreen = await page.evaluate(() =>
+      (document.body.innerText.match(/FEN:\s*(\S+)/) || [])[1] ?? "");
+    if (!onScreen.startsWith(fen.split(" ")[0])) {
+      throw new Error(
+        `The position did not load: asked for ${fen.split(" ")[0]}, board shows ` +
+        `${onScreen}. Nothing after this is about the position it claims to be.`
+      );
+    }
+    return button;
+  };
+
+  const controlButton = await loadFen("3ak4/9/9/9/4p4/9/9/9/3r5/3AKA3 w - - 4 12");
+  if (!(await controlButton.isEnabled())) {
+    throw new Error(
+      "Show Threat is disabled in the control position, where nobody is in " +
+      "check. The in-check assertion below would then pass for a reason that " +
+      "has nothing to do with the check."
+    );
+  }
+
+  const inCheckButton = await loadFen("3ak4/9/9/9/4p4/9/9/9/4r4/3AKA3 w - - 4 12");
+  if (await page.locator(".check-badge").count() === 0) {
+    throw new Error("The in-check fixture is not in check, so it tests nothing.");
+  }
+  if (await inCheckButton.isEnabled()) {
+    throw new Error(
+      "Show Threat is offered while Red is in check. The side that passes stops " +
+      "being the side to move, and a side not to move may not be under attack -- " +
+      "the engine would be handed a position with a capturable general."
+    );
+  }
+  const why = String(await inCheckButton.getAttribute("title") || "");
+  if (!/in check/i.test(why)) {
+    throw new Error(
+      `The disabled Show Threat button does not say why: ${JSON.stringify(why)}. ` +
+      `Being in check is the common reason and it is not obvious that it is one.`
+    );
+  }
+}
+
 async function assertPlayedMovesAreNumberedFromOne(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8591,6 +8738,7 @@ async function main() {
     await assertBoardAnimatesAMoveInBothDirections(page);
     await assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page);
     await assertPiecesCanBeDraggedWithoutBreakingClicks(page);
+    await assertShowThreatIsSeparateFromTheAnalysis(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);
     await assertALoadedCaptureRecordsWhatItDid(page);
     await assertGameOverReviewPreservesResult(page);
@@ -8616,7 +8764,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

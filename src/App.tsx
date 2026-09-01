@@ -12,7 +12,7 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore, IconSearch
+  IconSkipForward, IconMore, IconSearch, IconTarget
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult } from './hooks/useXiangqi';
@@ -52,6 +52,7 @@ import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { describeMoveNumber } from './utils/moveNumbering';
+import { passMoveFen } from './utils/threatPosition';
 import {
   NOTATION_STYLES,
   NOTATION_STYLE_DESCRIPTIONS,
@@ -152,7 +153,7 @@ type BoardArrow = {
   from: BoardSquare;
   to: BoardSquare;
   color: string;
-  kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'user';
+  kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'threat' | 'user';
   opacity?: number;
   strokeWidth?: number;
 };
@@ -207,6 +208,7 @@ const ASSIST_MODE_COPY: Record<AssistMode, { ariaLabel: string; title: string }>
 const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
+const THREAT_TAG_PREFIX = 'threat';
 const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
@@ -516,6 +518,28 @@ function parseAnalysisTag(tag: string | null) {
 
 function makeReviewTag(phase: ReviewPhase, nodeId: string) {
   return `${REVIEW_TAG_PREFIX}|${phase}|${nodeId}`;
+}
+
+/**
+ * A threat search carries its own prefix so it cannot be mistaken for the
+ * analysis of the position on screen.
+ *
+ * It is a search of a *different* position -- the same board with the other
+ * side to move -- and everything the analysis panel shows is filtered on
+ * `parseAnalysisTag`. Reusing that prefix would put the opponent's evaluation
+ * on the eval bar and the opponent's move at the top of the candidate list,
+ * both labelled as the position's own. The request key inside it is still the
+ * analysis one, so a threat is dropped by the same navigation that drops an
+ * analysis.
+ */
+function makeThreatTag(requestKey: string) {
+  return `${THREAT_TAG_PREFIX}|${requestKey}`;
+}
+
+function parseThreatTag(tag: string | null) {
+  if (!tag || !tag.startsWith(`${THREAT_TAG_PREFIX}|`)) return null;
+  const requestKey = tag.slice(THREAT_TAG_PREFIX.length + 1);
+  return requestKey ? { requestKey } : null;
 }
 
 function makeAiTag(positionCommand: string, depth: number, strength: AiStrength) {
@@ -840,6 +864,16 @@ function App() {
   // button that has to turn into "Stop". It happened to look right only
   // because a running search re-renders constantly for its own reasons.
   const [deepDiveActive, setDeepDiveActive] = useState(false);
+  /**
+   * Whether the board is showing the opponent's threat rather than the
+   * position's own analysis.
+   *
+   * State rather than a ref for the same reason `deepDiveActive` is: it decides
+   * what the button says and what the panel draws. It also gates the live
+   * analysis effect, which is the part that needs care -- see the comment where
+   * it is turned off.
+   */
+  const [threatActive, setThreatActive] = useState(false);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
   const [spotlightPvIndex, setSpotlightPvIndex] = useState<number | null>(null);
@@ -1855,6 +1889,10 @@ function App() {
       return;
     }
 
+    // A threat search is running or its result is on screen. Restarting live
+    // analysis here would overwrite the one thing the reader asked to see.
+    if (threatActive) return;
+
     if (activeAnalysisRequestRef.current !== analysisRequestKey) {
       activeAnalysisRequestRef.current = analysisRequestKey;
       analysisStageRef.current = 'idle';
@@ -1893,6 +1931,7 @@ function App() {
     liveAnalysisPolicy.primary.goCmd,
     queueSearch,
     stopSearch,
+    threatActive,
   ]);
 
   useEffect(() => {
@@ -1903,6 +1942,15 @@ function App() {
       !engineEnabled ||
       !isReady ||
       isAiTurn ||
+      // A threat is on screen, and a deepen search would replace it with an
+      // analysis of the position it is not about. Not reachable through the UI
+      // as it stands -- leaving the Engine tab clears `engineDetailEnabled` and
+      // settles the stage, and the threat control only exists inside that tab
+      // -- but the argument is about tab ordering rather than about this
+      // effect, which is exactly the kind of coupling worth stating in code.
+      // Toggling a threat now also re-runs this effect, whose cleanup cancels
+      // any deepen already scheduled.
+      threatActive ||
       reviewControllerRef.current.active ||
       !isPageVisible ||
       !engineDetailEnabled
@@ -1949,6 +1997,7 @@ function App() {
     isReady,
     liveAnalysisPolicy.deepen,
     queueSearch,
+    threatActive,
   ]);
 
   // AI move effect
@@ -2348,6 +2397,17 @@ function App() {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
   }, [analysisRequestKey, engineEnabled, pvLines]);
+  /**
+   * The engine's answer to the threat question, kept apart from the analysis of
+   * the position on screen -- they are evaluations of two different positions
+   * and must never be read as one.
+   */
+  const threatPvLines = useMemo(() => {
+    if (!engineEnabled || !threatActive) return [];
+    return pvLines.filter((pv) => parseThreatTag(pv.searchTag)?.requestKey === analysisRequestKey);
+  }, [analysisRequestKey, engineEnabled, pvLines, threatActive]);
+  const threatPv = threatPvLines[0] ?? null;
+  const threatMove = threatPv?.moves[0] ?? null;
   const spotlightPvLine = spotlightPvIndex == null ? null : currentAnalysisPvLines[spotlightPvIndex] ?? null;
   useEffect(() => {
     setSpotlightPvIndex(null);
@@ -2383,9 +2443,15 @@ function App() {
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
     [liveEvalScore, sideToMove]
   );
+  // `wdl` comes straight off the engine and carries no search tag, unlike the
+  // PV lines. While a threat is showing, the running search is of a different
+  // position with the other side to move, so those numbers describe neither the
+  // position nor the side this bar is drawn for -- they would arrive inverted
+  // and labelled as the position's own. There is no win/draw/loss reading for
+  // the board while the question on screen is about a passed move.
   const displayWdl = useMemo(
-    () => normalizeWdlForSide(wdl, sideToMove),
-    [sideToMove, wdl]
+    () => (threatActive ? null : normalizeWdlForSide(wdl, sideToMove)),
+    [sideToMove, threatActive, wdl]
   );
   const shouldShowWdlBar = engineEnabled && (engineDetailEnabled || displayWdl !== null);
   const currentEvalText = topAnalysisPv
@@ -2988,7 +3054,86 @@ function App() {
    * rides the same queue and the same tag as the live searches, so the position
    * changing cancels it exactly as it cancels any other search.
    */
-  const canDeepDive = isReady && engineEnabled && !isAiTurn && reviewStatus !== 'running';
+  // `!threatActive` closes a race rather than expressing a preference. Starting
+  // a deep dive while a threat is showing makes `canShowThreat` false, which
+  // fires the guard effect, which calls `stopThreat`, which puts the analysis
+  // stage back to `idle` -- and the analysis effect then queues an ordinary
+  // primary search straight over the deep search that was just asked for. The
+  // two are mutually exclusive in both directions instead: `canShowThreat`
+  // carries `!deepDiveActive` for the same reason from the other side.
+  const canDeepDive = isReady && engineEnabled && !isAiTurn
+    && reviewStatus !== 'running' && !threatActive;
+
+  /**
+   * Give the opponent the move and let the engine answer: what is the threat?
+   *
+   * The question every player has and that the best move does not answer. A
+   * beginner asks it as "why is this losing?" and a professional as "what am I
+   * being asked to stop?", and the same output serves both.
+   *
+   * `passMoveFen` refuses when the side to move is in check, because a side
+   * that is not to move may not be under attack -- and because a player in
+   * check is not being threatened with something, they are being hit with it.
+   * So `canShowThreat` is false there and the control says so rather than
+   * failing on the press.
+   *
+   * The command is a bare `position fen`, not the root plus the game's moves,
+   * because no move reaches this position. That costs the engine its repetition
+   * history for this one search, which is the honest price of the question:
+   * repetition in xiangqi decides games, and a passed position is not one the
+   * game can arrive at.
+   */
+  const threatFen = useMemo(() => passMoveFen(currentFen), [currentFen]);
+  // `isPageVisible` belongs here for the same reason it gates live analysis: a
+  // backgrounded tab has its searches stopped and its queue cleared, so without
+  // it the threat card sits on "Searching…" for a search that was cancelled
+  // before it began. The guard effect below then takes the card away rather
+  // than leaving it lying about what the engine is doing.
+  const canShowThreat = isReady && engineEnabled && !isAiTurn && isPageVisible
+    && reviewStatus !== 'running' && !deepDiveActive && Boolean(threatFen);
+
+  const stopThreat = useCallback(() => {
+    // Live analysis restarts only from `idle`, and the threat search left the
+    // stage `settled` with the analysis PV lines cleared underneath it -- so
+    // without this the eval bar and the candidate list would stay blank until
+    // the reader navigated somewhere else.
+    //
+    // Written outside the state updater on purpose. React invokes an updater
+    // twice in development, so a ref write inside one runs twice; this one is
+    // idempotent and would have survived that, but the pattern does not
+    // generalise and the guard it needed to be correct is not worth keeping.
+    // Every caller already checks that a threat is showing, and the worst a
+    // stray call could do is queue one redundant search.
+    analysisStageRef.current = 'idle';
+    setThreatActive(false);
+  }, []);
+
+  const runThreatSearch = useCallback(() => {
+    if (!canShowThreat || !threatFen) return;
+    analysisStageRef.current = 'settled';
+    setThreatActive(true);
+    queueSearch(
+      `position fen ${threatFen}`,
+      liveAnalysisPolicy.primary.goCmd,
+      0,
+      makeThreatTag(analysisRequestKey),
+    );
+  }, [analysisRequestKey, canShowThreat, liveAnalysisPolicy.primary.goCmd, queueSearch, threatFen]);
+
+  // Navigating away answers a different question, so the threat goes with it.
+  // `analysisRequestKey` changes on every position, mode and policy change,
+  // which is exactly the set of things that invalidate the search behind it.
+  useEffect(() => {
+    setThreatActive(false);
+  }, [analysisRequestKey]);
+
+  // Anything that takes the analysis engine away -- the opponent's turn
+  // starting, a review beginning, the engine going down -- takes the threat
+  // with it. Without this the card stays on screen over a search that has been
+  // stopped, and `stopThreat` is what lets live analysis start again after.
+  useEffect(() => {
+    if (threatActive && !canShowThreat) stopThreat();
+  }, [canShowThreat, stopThreat, threatActive]);
 
   const runDeepDive = useCallback(() => {
     if (!isReady || !engineEnabled || isAiTurn || reviewControllerRef.current.active) return;
@@ -3460,6 +3605,18 @@ function App() {
       run: () => { if (deepDiveActive) stopSearch(); else runDeepDive(); },
     },
     {
+      id: 'show-threat',
+      label: threatActive ? 'Stop showing the threat' : 'Show the threat',
+      hint: threatActive
+        ? 'Back to analysing the position as it stands'
+        : canShowThreat
+          ? `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first`
+          : threatFen ? 'Analysis engine only' : `${sideToMoveLabel} is in check`,
+      keywords: ['threat', 'null', 'pass', 'opponent', 'danger', 'attack', 'idea'],
+      disabled: !threatActive && !canShowThreat,
+      run: () => { if (threatActive) stopThreat(); else runThreatSearch(); },
+    },
+    {
       id: 'play-from-here',
       label: 'Play from this position',
       hint: canPlayFromHere ? 'You take the side to move' : 'Play a move or set up a position first',
@@ -3497,7 +3654,8 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
+  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
+      runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
@@ -3700,6 +3858,16 @@ function App() {
       result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, kind: 'last', opacity: 0.82, strokeWidth: 5 });
     }
 
+    // The threat is what the reader asked to see, so it is drawn even though
+    // the engine arrows for the real position are gone while it is showing.
+    if (threatMove) {
+      const from = uciToSquare(threatMove.substring(0, 2));
+      const to = uciToSquare(threatMove.substring(2, 4));
+      if (from && to) {
+        result.push({ from, to, color: '#f43f5e', kind: 'threat', opacity: 0.92, strokeWidth: 6 });
+      }
+    }
+
     const hasEngineMoveArrows = engineEnabled && Boolean(currentAnalysisPvLines.some((pv) => pv.moves[0]));
     if (!hasEngineMoveArrows && openingCandidates.length > 0) {
       const bookArrowLimit = assistMode === 'pro' ? 3 : 2;
@@ -3747,7 +3915,7 @@ function App() {
     }
 
     return [...result, ...userArrows];
-  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, userArrows]);
+  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
@@ -5441,6 +5609,27 @@ function App() {
                           ? <><IconPause aria-hidden="true" focusable="false" /> Stop</>
                           : <><IconSearch aria-hidden="true" focusable="false" /> Go Deep</>}
                       </button>
+                      {/* Give the opponent the move and read the reply. The
+                          button says why it is unavailable rather than sitting
+                          disabled with no account of itself -- being in check is
+                          the common reason and it is not obvious that it is one. */}
+                      <button
+                        type="button"
+                        className={`engine-cache-btn ${threatActive ? 'engine-pv-btn-active' : ''}`}
+                        onClick={threatActive ? stopThreat : runThreatSearch}
+                        disabled={!threatActive && !canShowThreat}
+                        title={threatActive
+                          ? 'Back to analysing the position as it stands'
+                          : !threatFen
+                            ? `${sideToMoveLabel} is in check, so there is no position to pass from`
+                            : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening`}
+                        aria-label={threatActive
+                          ? 'Stop showing the threat and analyse the position as it stands'
+                          : 'Show the threat: let the opponent move first'}
+                        data-testid="show-threat-btn"
+                      >
+                        <IconTarget aria-hidden="true" focusable="false" /> {threatActive ? 'Threat on' : 'Threat'}
+                      </button>
                       <button
                         type="button"
                         className="engine-cache-btn"
@@ -5465,6 +5654,49 @@ function App() {
                       </button>
                     </div>
                   </div>
+                  {/* The threat replaces the candidate list rather than sitting
+                      beside it, because the two are evaluations of different
+                      positions and a reader comparing them side by side would be
+                      comparing nothing. The card says whose move it is showing. */}
+                  {threatActive ? (
+                    <div className="pv-lines-container">
+                      <div className="pv-line premium-card threat-card" data-testid="threat-card">
+                        <div className="pv-line-heading">
+                          <span className="pv-line-rank">
+                            If {sideToMove === 'w' ? 'Black' : 'Red'} moved now
+                          </span>
+                          {/* Red POV like every other evaluation here, and said
+                              so, because this one is a score for a position the
+                              reader is not looking at -- an unlabelled number
+                              beside "If Black moved now" reads as Black's. The
+                              side passed to the formatter is the *opponent*,
+                              since that is who is to move in the searched
+                              position. */}
+                          {threatPv ? (
+                            <span
+                              className="pv-line-standing"
+                              title={`Red POV score ${formatRedPovEngineScore(threatPv, sideToMove === 'w' ? 'b' : 'w')}`}
+                            >
+                              {formatRedPovEngineScore(threatPv, sideToMove === 'w' ? 'b' : 'w')} Red POV
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="pv-line-moves" data-testid="threat-line">
+                          {threatPv
+                            ? formatLineInStyle(
+                                parseFenBoard((threatFen ?? currentFen).split(' ')[0]),
+                                threatPv.moves,
+                                notationStyle,
+                                6,
+                              )
+                            : 'Searching…'}
+                        </div>
+                        <div className="pv-empty">
+                          A passed move: this position is not one the game can reach.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="pv-lines-container">
                     {currentAnalysisPvLines.length === 0 ? (
                       <div className="pv-empty">No PV available yet.</div>
@@ -5568,6 +5800,7 @@ function App() {
                       );
                     })}
                   </div>
+                  )}
                   {assistMode === 'pro' ? (
                     <div
                       className="engine-output-terminal mt-4"
