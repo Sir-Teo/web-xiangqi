@@ -29,6 +29,8 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Cloud book** (象棋云库, chessdb.cn): what is played from the position on the board, with the database's score, rank and win rate for each move, one click to play. Off until turned on, because it sends the position to chessdb.cn; nothing else ever leaves the machine
 - **Hint** in a game against the engine: one move, drawn as an arrow and named in your notation, for the beginner who is stuck -- analysis stays off while playing
 - Variations can be deleted (the cross at the end of each variation row) and a line cut where it stands (palette: *Delete this move and what follows*)
+- **Set up a position by hand**: a board editor with the fourteen pieces and an erase brush, checking the rules of the set as you place them (soldiers behind their rank, elephants off their points, facing generals, a check against the side not to move) so Done only loads a position a game could reach; from the New Game dialog or the palette
+- **Copy record**: the line as a numbered record in the chosen notation -- `1. 炮二平五 馬8進7` -- for pasting where a person will read it, beside Copy PGN for programs
 - Single-key shortcuts: `F` flip, `X` threat, `D` deep search, `H` hint, `E`/`T`/`R` the Engine, Tree and Review panels, arrows to step through the game; each is printed beside its command in the palette
 
 ## What this repo contains
