@@ -54,6 +54,8 @@ import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './u
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { describePvStanding } from './utils/pvStanding';
+import { useCloudBook } from './hooks/useCloudBook';
+import { CLOUD_BOOK_SITE_NAME, formatCloudBookScore } from './utils/cloudBook';
 import {
   NOTATION_STYLES,
   NOTATION_STYLE_DESCRIPTIONS,
@@ -346,6 +348,7 @@ type StoredPreferences = {
   aiSpeed?: AiSpeed;
   notationStyle?: XiangqiNotationStyle;
   deepSearchMode?: DeepSearchMode;
+  cloudBookEnabled?: boolean;
 };
 
 type ReviewController = {
@@ -466,6 +469,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
       notationStyle: isNotationStyle(record.notationStyle) ? record.notationStyle : undefined,
       deepSearchMode: isDeepSearchMode(record.deepSearchMode) ? record.deepSearchMode : undefined,
+      cloudBookEnabled: typeof record.cloudBookEnabled === 'boolean' ? record.cloudBookEnabled : undefined,
     };
   } catch {
     return {};
@@ -879,6 +883,13 @@ function App() {
    */
   const [deepSearchMode, setDeepSearchMode] = useState<DeepSearchMode>(storedPreferences.deepSearchMode ?? 'bounded');
   /**
+   * Off until asked. The cloud book is the one feature here that sends
+   * anything off the machine -- the position, to chessdb.cn -- and a reader
+   * who never asked for that should not find it happening. Once on, it stays
+   * on across reloads like any other preference.
+   */
+  const [cloudBookEnabled, setCloudBookEnabled] = useState(storedPreferences.cloudBookEnabled ?? false);
+  /**
    * Whether the board is showing the opponent's threat rather than the
    * position's own analysis.
    *
@@ -912,6 +923,7 @@ function App() {
     setAiStrength(preferences.aiStrength ?? 5);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
     setDeepSearchMode(preferences.deepSearchMode ?? 'bounded');
+    setCloudBookEnabled(preferences.cloudBookEnabled ?? false);
     handleSpeedChange(preferences.aiSpeed ?? 'normal');
   }, [defaultSearchDepth, handleSpeedChange, updateSoundEnabled]);
 
@@ -935,9 +947,11 @@ function App() {
       aiSpeed,
       notationStyle,
       deepSearchMode,
+      cloudBookEnabled,
     });
   }, [
     aiSpeed,
+    cloudBookEnabled,
     deepSearchMode,
     aiStrength,
     analysisEngineMode,
@@ -2709,6 +2723,19 @@ function App() {
     return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4, rootFen);
   }, [assistMode, currentMoveIndex, moveHistory, rootFen]);
 
+  // The cloud book answers the same question the local book does -- what is
+  // played here -- from a database no bundled table could match. Asked only
+  // when switched on, and only for the position on the board.
+  const cloudBookReading = useCloudBook(currentFen, cloudBookEnabled);
+  // The hook answers for the position it was last asked about, and for the
+  // frame between a navigation and its effect that is the previous one.
+  // Drawing that list under the new side's label would put Red's moves
+  // beside 'for Black', so anything not for this position reads as loading.
+  const cloudBook = cloudBookReading.fen === currentFen || cloudBookReading.status === 'off'
+    ? cloudBookReading
+    : { status: 'loading' as const, moves: [], fen: currentFen };
+  const cloudBookMoveLimit = assistMode === 'pro' ? 6 : 4;
+
   // Game library
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
@@ -3646,6 +3673,13 @@ function App() {
       disabled: !canPlayFromHere,
       run: playFromHere,
     },
+    {
+      id: 'cloud-book',
+      label: cloudBookEnabled ? 'Turn the cloud book off' : 'Turn the cloud book on',
+      hint: cloudBookEnabled ? undefined : `Looks each position up on ${CLOUD_BOOK_SITE_NAME}`,
+      keywords: ['chessdb', 'opening', 'database', 'online', 'book', '云库'],
+      run: () => setCloudBookEnabled((enabled) => !enabled),
+    },
     { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], shortcut: 'F', run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
       id: 'copy-fen',
@@ -3676,7 +3710,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, cloudBookEnabled, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -4874,6 +4908,79 @@ function App() {
                       </div>
                     </div>
                   ) : null}
+                  <div className="opening-candidates-card cloud-book-card" data-testid="cloud-book-card" data-status={cloudBook.status} data-fen={cloudBook.fen}>
+                    <div className="opening-candidates-head">
+                      <span>Cloud book</span>
+                      <strong>
+                        {cloudBook.status === 'ok'
+                          ? cloudBook.moves.length
+                          : cloudBook.status === 'loading'
+                            ? '…'
+                            : ''}
+                      </strong>
+                    </div>
+                    {!cloudBookEnabled ? (
+                      <>
+                        <p className="library-explorer-note">
+                          What is played here, from the {CLOUD_BOOK_SITE_NAME} database. Sends this position, and nothing else, to {CLOUD_BOOK_SITE_NAME}.
+                        </p>
+                        <button
+                          type="button"
+                          className="chip-btn cloud-book-toggle"
+                          onClick={() => setCloudBookEnabled(true)}
+                          data-testid="cloud-book-enable"
+                        >
+                          Turn on
+                        </button>
+                      </>
+                    ) : cloudBook.status === 'ok' && cloudBook.moves.length > 0 ? (
+                      <div className="opening-candidates-list">
+                        {cloudBook.moves.slice(0, cloudBookMoveLimit).map((move) => {
+                          const moveText = formatLineInStyle(board, [move.uci], notationStyle, 1);
+                          const scoreText = formatCloudBookScore(move.score, sideToMove);
+                          const winrateText = move.winrate === null ? '' : `${move.winrate.toFixed(1)}% for ${sideToMoveLabel}`;
+                          return (
+                            <button
+                              key={move.uci}
+                              type="button"
+                              className={`opening-candidate-btn cloud-book-move cloud-book-rank-${move.rank}`}
+                              onClick={() => handlePlayBookMove(move.uci)}
+                              disabled={Boolean(gameResult) || isAiTurn}
+                              title={isAiTurn ? 'Wait for the AI move to finish' : `${CLOUD_BOOK_SITE_NAME} ${move.note ? `note ${move.note}, ` : ''}score ${scoreText} Red POV${winrateText ? `, win rate ${winrateText}` : ''}`}
+                              aria-label={`Play cloud book move ${moveText}, score ${scoreText} Red POV${winrateText ? `, win rate ${winrateText}` : ''}`}
+                              data-testid={`cloud-book-move-${move.uci}`}
+                            >
+                              <strong>{moveText}</strong>
+                              <span className="opening-candidate-main">
+                                <span>{winrateText || move.note || 'Known move'}</span>
+                                {move.note && winrateText ? <small>{move.note}</small> : null}
+                              </span>
+                              <em>{scoreText}</em>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="library-explorer-note" role="status">
+                        {cloudBook.status === 'loading'
+                          ? `Asking ${CLOUD_BOOK_SITE_NAME}…`
+                          : cloudBook.status === 'error'
+                            ? `${CLOUD_BOOK_SITE_NAME} did not answer. It will be asked again on the next position.`
+                            : 'Not in the cloud book.'}
+                      </p>
+                    )}
+                    {cloudBookEnabled ? (
+                      <button
+                        type="button"
+                        className="chip-btn cloud-book-toggle"
+                        onClick={() => setCloudBookEnabled(false)}
+                        title={`Stop sending positions to ${CLOUD_BOOK_SITE_NAME}`}
+                        data-testid="cloud-book-disable"
+                      >
+                        Turn off
+                      </button>
+                    ) : null}
+                  </div>
                   <div className="graph-jump-controls">
                     <button type="button" className="chip-btn graph-jump-btn" onClick={goToFirstMove} disabled={!canGoBack} title="Go to first position" aria-label="Go to first position">
                       <IconSkipBack aria-hidden="true" focusable="false" />

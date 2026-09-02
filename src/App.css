@@ -6160,6 +6160,19 @@ summary:active {
   color: #93c5fd;
 }
 
+.cloud-book-card .cloud-book-toggle {
+  margin-top: 0.4rem;
+  align-self: flex-start;
+}
+
+.cloud-book-card .cloud-book-rank-2 strong {
+  color: var(--accent);
+}
+
+.cloud-book-card .cloud-book-rank-0 strong {
+  color: var(--text-secondary);
+}
+
 .library-explorer-note {
   margin: 0;
   padding: 0.5rem 0.65rem 0.15rem;
