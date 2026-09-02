@@ -2303,6 +2303,14 @@ summary:active {
 }
 
 /* Additional tree navigation breadcrumb not present in web-chess */
+.tree-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.4rem 0.1rem 0;
+  flex-shrink: 0;
+}
+
 .tree-breadcrumb {
   display: flex;
   flex: 0 0 auto;

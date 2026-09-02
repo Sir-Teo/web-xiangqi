@@ -54,6 +54,7 @@ import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './u
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { describePvStanding } from './utils/pvStanding';
+import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
 import { CLOUD_BOOK_SITE_NAME, formatCloudBookScore } from './utils/cloudBook';
 import {
@@ -152,7 +153,7 @@ type DeepSearchMode = 'bounded' | 'infinite';
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; positionKey?: string } | null;
-type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | `copy-pv-${number}`;
+type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
   from: BoardSquare;
@@ -2794,6 +2795,8 @@ function App() {
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
+  const [copiedRecordToast, setCopiedRecordToast] = useState(false);
+  const copiedRecordToastTimerRef = useRef<number | null>(null);
   const [copiedShareToast, setCopiedShareToast] = useState(false);
   const [downloadedPgnToast, setDownloadedPgnToast] = useState(false);
   const [engineHashFeedback, setEngineHashFeedback] = useState<EngineHashFeedback>(null);
@@ -2864,6 +2867,9 @@ function App() {
       }
       if (copiedFenToastTimerRef.current !== null) {
         window.clearTimeout(copiedFenToastTimerRef.current);
+      }
+      if (copiedRecordToastTimerRef.current !== null) {
+        window.clearTimeout(copiedRecordToastTimerRef.current);
       }
       if (copiedShareToastTimerRef.current !== null) {
         window.clearTimeout(copiedShareToastTimerRef.current);
@@ -3103,6 +3109,34 @@ function App() {
       setCopiedFenToast(false);
     }, 2000);
   }, [clearExportFailure, currentFen, showExportFailure]);
+
+  /**
+   * The line on the board as a numbered record in the reader's notation --
+   * `1. 炮二平五 馬8進7` -- which is what gets pasted into a chat or a notebook.
+   * A PGN is for another program; this is for another person.
+   */
+  const recordText = useMemo(
+    () => formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle),
+    [currentMoveIndex, moveHistory, notationStyle, rootFen]
+  );
+  const canCopyRecord = recordText.length > 0;
+  const handleCopyRecord = useCallback(async () => {
+    if (!recordText) return;
+    const ok = await copyToClipboard(recordText);
+    if (!ok) {
+      showExportFailure('copy-record');
+      return;
+    }
+    clearExportFailure();
+    if (copiedRecordToastTimerRef.current !== null) {
+      window.clearTimeout(copiedRecordToastTimerRef.current);
+    }
+    setCopiedRecordToast(true);
+    copiedRecordToastTimerRef.current = window.setTimeout(() => {
+      copiedRecordToastTimerRef.current = null;
+      setCopiedRecordToast(false);
+    }, 2000);
+  }, [clearExportFailure, recordText, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
     const rawLine = moves.filter(Boolean).join(' ').trim();
@@ -3728,6 +3762,14 @@ function App() {
       run: handleDownloadPgn,
     },
     {
+      id: 'copy-record',
+      label: `Copy record in ${NOTATION_STYLE_LABELS[notationStyle]}`,
+      hint: canCopyRecord ? 'Numbered moves, one pair per line' : 'Play or import a line first',
+      keywords: ['notation', 'chinese', 'wxf', 'text', 'clipboard', '棋谱', 'export'],
+      disabled: !canCopyRecord,
+      run: () => { void handleCopyRecord(); },
+    },
+    {
       id: 'copy-link',
       label: 'Copy link',
       hint: canShareCurrentPosition ? undefined : 'Play a move or set up a position first',
@@ -3836,7 +3878,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleDeleteNode, isAiTurn, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, canCopyRecord, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -5873,6 +5915,23 @@ function App() {
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
                   />
+                  {canCopyRecord ? (
+                    <div className="tree-actions">
+                      {/* The record as a person reads it, in the notation the
+                          list above is written in. Copy PGN in the bottom bar
+                          is the same moves for another program. */}
+                      <button
+                        type="button"
+                        className={`chip-btn ${exportFailureKey === 'copy-record' ? 'chip-btn-warning' : ''}`}
+                        onClick={handleCopyRecord}
+                        title={exportFailureKey === 'copy-record' ? 'Could not copy the record' : `Copy the moves up to here as a numbered ${NOTATION_STYLE_LABELS[notationStyle]} record`}
+                        aria-label={exportFailureKey === 'copy-record' ? 'Record copy failed' : copiedRecordToast ? 'Record copied' : `Copy record in ${NOTATION_STYLE_LABELS[notationStyle]}`}
+                        data-testid="copy-record-btn"
+                      >
+                        {exportFailureKey === 'copy-record' ? <><IconX /> Copy failed</> : copiedRecordToast ? <><IconCheck /> Copied</> : <><IconCopy /> Copy record</>}
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               ) : analysisTab === 'review' ? (
                 <ReviewPanel
