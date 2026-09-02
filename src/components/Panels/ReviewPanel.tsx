@@ -38,6 +38,7 @@ type Props = {
     onClear: () => void;
     onNavigateNode: (nodeId: string) => void;
     onPlayBestMove?: (nodeId: string, bestMove: string) => void;
+    onPracticeMoment?: (nodeId: string) => void;
     /**
      * Writes one move of the reviewed line in the notation the reader chose.
      * A key moment carries move ids, not boards, and WXF and Chinese both need
@@ -66,6 +67,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     onClear,
     onNavigateNode,
     onPlayBestMove,
+    onPracticeMoment,
     formatMoveText = (_nodeId, uci) => formatUciMove(uci),
 }: Props) {
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
@@ -423,16 +425,31 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             <em>Best: {formatMoveText(moment.nodeId, moment.bestMove)}</em>
                                         ) : null}
                                     </button>
-                                    {moment.bestMove && onPlayBestMove ? (
-                                        <button
-                                            type="button"
-                                            className="review-best-move-btn"
-                                            onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
-                                            data-testid={`review-try-best-${moment.moveIndex}`}
-                                            aria-label={`Try engine suggestion ${formatMoveText(moment.nodeId, moment.bestMove)} instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
-                                        >
-                                            Try best <strong>{formatMoveText(moment.nodeId, moment.bestMove)}</strong>
-                                        </button>
+                                    {(onPracticeMoment || (moment.bestMove && onPlayBestMove)) ? (
+                                        <div className="review-moment-actions">
+                                            {onPracticeMoment ? (
+                                                <button
+                                                    type="button"
+                                                    className="review-best-move-btn review-practice-btn"
+                                                    onClick={() => onPracticeMoment(moment.nodeId)}
+                                                    data-testid={`review-practice-${moment.moveIndex}`}
+                                                    aria-label={`Practice the position before ${formatMoveText(moment.nodeId, moment.playedMove)}`}
+                                                >
+                                                    Practice position
+                                                </button>
+                                            ) : null}
+                                            {moment.bestMove && onPlayBestMove ? (
+                                                <button
+                                                    type="button"
+                                                    className="review-best-move-btn"
+                                                    onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
+                                                    data-testid={`review-try-best-${moment.moveIndex}`}
+                                                    aria-label={`Try engine suggestion ${formatMoveText(moment.nodeId, moment.bestMove)} instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
+                                                >
+                                                    Try best <strong>{formatMoveText(moment.nodeId, moment.bestMove)}</strong>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                     ) : null}
                                 </div>
                             ))}

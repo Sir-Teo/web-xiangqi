@@ -3141,13 +3141,18 @@ summary:active {
   font-size: 0.68rem;
 }
 
+.review-moment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: 0.35rem;
+}
+
 .review-best-move-btn {
-  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   min-height: 1.75rem;
-  margin-left: 0.35rem;
   padding: 0.22rem 0.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xs);
@@ -3156,6 +3161,11 @@ summary:active {
   font-size: 0.68rem;
   font-weight: 800;
   cursor: pointer;
+}
+
+.review-practice-btn {
+  border-color: rgba(63, 185, 80, 0.34);
+  color: var(--accent);
 }
 
 .review-best-move-btn strong {

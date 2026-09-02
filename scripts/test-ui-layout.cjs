@@ -5284,6 +5284,39 @@ async function assertReviewBestMoveBranchAction(page) {
   ) {
     throw new Error(`Loaded review chance loss was not preserved when re-saving: ${JSON.stringify(resavedReview)}`);
   }
+
+  await page.getByTestId("review-practice-0").click();
+  await page.waitForFunction(
+    () => document.querySelector(".board-stage-kicker")?.textContent?.trim() === "Play board",
+    null,
+    { timeout: 5000 },
+  );
+  const practiceState = await page.evaluate(() => ({
+    workspace: [...document.querySelectorAll(".top-mode-pills button")]
+      .find((button) => button.textContent?.trim() === "Play")?.getAttribute("aria-pressed") || "",
+    stage: document.querySelector(".board-stage-kicker")?.textContent?.trim() || "",
+    mode: document.querySelector(".board-stage-copy h1")?.textContent?.trim() || "",
+    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || "",
+    reviewVisible: Boolean(document.querySelector(".review-panel")),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+  if (
+    practiceState.workspace !== "true" ||
+    practiceState.stage !== "Play board" ||
+    !practiceState.mode.includes("Red") ||
+    practiceState.plies !== "0 / 0" ||
+    practiceState.reviewVisible ||
+    practiceState.overflowX > 2
+  ) {
+    throw new Error(`Review practice did not start before the mistake with Red to move: ${JSON.stringify(practiceState)}`);
+  }
+
+  // Load the fixture again to leave the existing branch-analysis assertion
+  // independent from the new practice route, which intentionally clears the
+  // completed review and starts a new game from that position.
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-best-branch").click();
+  await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
   await page.getByTestId("review-try-best-0").click();
   await page.getByTestId("move-tree-active").waitFor({ timeout: 5000 });
   const state = await page.evaluate(() => ({

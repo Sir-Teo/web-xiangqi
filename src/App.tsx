@@ -3332,6 +3332,26 @@ function App() {
     }
   }, [applyUciMoveAtNode, clearBoardMarkers, gameResult, treeNodes]);
 
+  /** Start an engine game from immediately before a reviewed mistake. */
+  const handlePracticeReviewMoment = useCallback((nodeId: string) => {
+    const parentNodeId = treeNodes[nodeId]?.parentId;
+    if (!parentNodeId) return;
+    const practiceMoves = getNodeMoves(parentNodeId);
+    const practiceSide = getNodeFen(parentNodeId).trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
+
+    stopAnalysis();
+    handleCancelReview();
+    resetReview();
+    setGameResult(null);
+    setAiMoveError(null);
+    setPaused(false);
+    setGameMode(practiceSide === 'w' ? 'PvAI-Black' : 'PvAI-Red');
+    setWorkspaceMode('play');
+    loadMoves(practiceMoves, rootFen);
+    setGraphLoadSweepToken((token) => token + 1);
+    setMobileView('board');
+  }, [getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
+
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
     if (!ok) {
@@ -5869,6 +5889,7 @@ function App() {
                   onClear={clearCompletedReview}
                   onNavigateNode={jumpToNode}
                   onPlayBestMove={handlePlayReviewBestMove}
+                  onPracticeMoment={handlePracticeReviewMoment}
                   formatMoveText={formatReviewMoveText}
                 />
               ) : (
