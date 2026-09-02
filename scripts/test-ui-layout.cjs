@@ -8166,10 +8166,10 @@ async function assertMobileSaveLibraryActions(page) {
   await page.getByRole("button", { name: /^Engine panel/ }).click();
   await page.getByTestId("mobile-analysis-tab-engine").waitFor({ state: "visible", timeout: 5000 });
   const engineRoute = await page.evaluate(() => ({
-    analysisSelected: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-pressed"),
+    analysisSelected: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current"),
     engineSelected: document.querySelector('[data-testid="mobile-analysis-tab-engine"]')?.getAttribute("aria-selected"),
   }));
-  if (engineRoute.analysisSelected !== "true" || engineRoute.engineSelected !== "true") {
+  if (engineRoute.analysisSelected !== "page" || engineRoute.engineSelected !== "true") {
     throw new Error(`Engine panel command did not route the phone to Engine: ${JSON.stringify(engineRoute)}`);
   }
   await page.getByTestId("mobile-view-board").click();
