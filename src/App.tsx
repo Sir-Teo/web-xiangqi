@@ -1044,6 +1044,7 @@ function App() {
     getNodeMoves,
     jumpToMove,
     jumpToNode,
+    deleteNode,
   } = useXiangqi();
 
   const viewportWidth = viewportSize.width;
@@ -3595,6 +3596,19 @@ function App() {
   }, [currentGameSnapshot, saveGameToLibrary]);
 
 
+  /**
+   * Cutting the tree is the one edit a study needs that the board cannot
+   * express. A running review is over the line as it stands, so it is cancelled
+   * first; a finished one is cleared by the line-signature effect on its own.
+   */
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    if (nodeId === rootNodeId) return;
+    if (reviewStatus === 'running') handleCancelReview();
+    clearBoardMarkers();
+    deleteNode(nodeId);
+  }, [clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId]);
+  const canDeleteCurrentMove = currentNodeId !== rootNodeId && !isAiTurn;
+
   const paletteCommands = useMemo<Command[]>(() => [
     { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { setGameResult(null); resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
@@ -3703,6 +3717,14 @@ function App() {
       disabled: !isReady,
       run: handleClearEngineHash,
     },
+    {
+      id: 'delete-from-here',
+      label: 'Delete this move and what follows',
+      hint: canDeleteCurrentMove ? 'Every branch under it goes too' : 'Nothing to delete at the start position',
+      keywords: ['remove', 'cut', 'prune', 'variation', 'truncate', 'undo'],
+      disabled: !canDeleteCurrentMove,
+      run: () => handleDeleteNode(currentNodeId),
+    },
     { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], shortcut: 'T', run: () => setAnalysisTab('tree') },
     { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], shortcut: 'R', run: () => setAnalysisTab('review') },
     { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', run: () => setAnalysisTab('engine') },
@@ -3710,7 +3732,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, cloudBookEnabled, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canPlayFromHere, canShowThreat, cloudBookEnabled, currentNodeId, handleDeleteNode, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -5722,6 +5744,7 @@ function App() {
                     activeLineNodeIds={activeLineNodeIds}
                     notationStyle={notationStyle}
                     onNavigateNode={jumpToNode}
+                    onDeleteNode={handleDeleteNode}
                   />
                 </>
               ) : analysisTab === 'review' ? (

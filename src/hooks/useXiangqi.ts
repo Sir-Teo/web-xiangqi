@@ -21,6 +21,7 @@ import {
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
+import { removeSubtree } from '../utils/moveTreeEdit';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
@@ -571,6 +572,36 @@ export function useXiangqi() {
         syncPositionForNode(treeNodes, targetId);
     }, [rootPosition, treeNodes, syncPositionForNode]);
 
+    /**
+     * Remove a move and every move after it, on every branch under it.
+     *
+     * The active line is cut at the node and re-extended from its parent
+     * along whatever branch remains, so the board keeps a line to stand on.
+     * If the position on screen was inside what was removed, the board steps
+     * back to the parent -- the last position that still exists.
+     */
+    const deleteNode = useCallback((nodeId: string): boolean => {
+        const { tree: nextTree, removedIds } = removeSubtree(treeNodes, ROOT_NODE_ID, nodeId);
+        if (removedIds.length === 0) return false;
+        const parentId = treeNodes[nodeId]?.parentId ?? ROOT_NODE_ID;
+        const removed = new Set(removedIds);
+        const cutAt = activeLineNodeIds.findIndex((id) => removed.has(id));
+        setTreeNodes(nextTree);
+        if (cutAt === -1) return true;
+
+        const prefix = activeLineNodeIds.slice(0, cutAt);
+        const nextActiveLine = [...prefix, ...preferredContinuation(nextTree, parentId)];
+        setActiveLineNodeIds(nextActiveLine);
+        if (currentMoveIndex >= cutAt) {
+            const nextIndex = cutAt - 1;
+            setCurrentMoveIndex(nextIndex);
+            const position = getPositionFromNode(nextTree, parentId, rootPosition);
+            setGameResult(gameResultForPosition(position.board, position.sideToMove));
+            syncPositionForNode(nextTree, parentId);
+        }
+        return true;
+    }, [activeLineNodeIds, currentMoveIndex, rootPosition, syncPositionForNode, treeNodes]);
+
     const jumpToMove = useCallback((index: number) => {
         if (index < -1 || index >= activeLineNodeIds.length) return;
         const nodeId = index === -1 ? ROOT_NODE_ID : activeLineNodeIds[index];
@@ -939,5 +970,6 @@ export function useXiangqi() {
         loadFen,
         jumpToMove,
         jumpToNode,
+        deleteNode,
     };
 }

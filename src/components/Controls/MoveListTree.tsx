@@ -18,7 +18,7 @@ import {
     formatRecordInStyle,
     type XiangqiNotationStyle,
 } from '../../utils/xiangqiNotation';
-import { IconSpark, IconCornerDownRight } from '../icons';
+import { IconSpark, IconCornerDownRight, IconX } from '../icons';
 
 type Props = {
     treeNodes: Record<string, MoveTreeNode>;
@@ -29,6 +29,8 @@ type Props = {
     activeLineNodeIds: string[];
     notationStyle?: XiangqiNotationStyle;
     onNavigateNode: (nodeId: string) => void;
+    /** Offered on each variation row; the main line is never deletable from here. */
+    onDeleteNode?: (nodeId: string) => void;
 };
 
 type MoveSide = 'w' | 'b';
@@ -51,6 +53,7 @@ export const MoveListTree = memo(function MoveListTree({
     activeLineNodeIds,
     notationStyle = 'uci',
     onNavigateNode,
+    onDeleteNode,
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -181,10 +184,28 @@ export const MoveListTree = memo(function MoveListTree({
         const variationRoots = parent.childrenIds.filter((childId) => childId !== mainChild);
         variationRoots.forEach((variationRootId) => {
             const variationLine = buildVariationLine(variationRootId, treeNodes);
+            const firstRecord = treeNodes[variationRootId]?.record;
+            const variationName = firstRecord ? formatMoveLabel(firstRecord, notationStyle) : 'variation';
             rows.push(
                 <div key={`var-${parentId}-${variationRootId}`} className="mtree-variation">
                     <IconCornerDownRight className="mtree-var-marker" />
                     {variationLine.map((nodeId) => renderMoveChip(nodeId, true))}
+                    {onDeleteNode ? (
+                        // At the end of the row rather than the start, so it
+                        // cannot be mistaken for the first move of the line,
+                        // and named after that move so a reader with several
+                        // variations open knows which one is going.
+                        <button
+                            type="button"
+                            className="mtree-var-delete"
+                            onClick={() => onDeleteNode(variationRootId)}
+                            title={`Delete the variation starting ${variationName}`}
+                            aria-label={`Delete the variation starting ${variationName}`}
+                            data-testid={`delete-variation-${variationRootId}`}
+                        >
+                            <IconX aria-hidden="true" focusable="false" />
+                        </button>
+                    ) : null}
                 </div>
             );
         });
