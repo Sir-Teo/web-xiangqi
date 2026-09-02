@@ -1,0 +1,131 @@
+/* The editor draws the same board the game does -- it reuses Board.css for the
+   surface, grid, river and pieces -- inside a dialog, so the only rules here
+   are the dialog and the palette around it. */
+.board-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 12, 0.72);
+  z-index: 9200;
+}
+
+.board-editor {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(96vw, 760px);
+  max-height: 94vh;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: var(--radius-lg, 14px);
+  background: var(--bg-elevated, #111827);
+  border: 1px solid var(--border-default, #2a3441);
+  box-shadow: var(--shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.6));
+  z-index: 9201;
+}
+
+.board-editor-board {
+  --board-max-width: 520px;
+  align-self: center;
+}
+
+.board-editor-board .hitbox {
+  cursor: cell;
+}
+
+.board-editor-board .hitbox[data-brush="erase"] {
+  cursor: not-allowed;
+}
+
+.board-editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.board-editor-side h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.board-editor-palette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+}
+
+.board-editor-brush {
+  aspect-ratio: 1;
+  min-height: unset;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  font-family: var(--font-cjk-serif);
+  font-weight: 900;
+  font-size: 1.1rem;
+  background: linear-gradient(160deg, #f5e6c8, #d9c39a);
+  color: #1d1d1d;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.board-editor-brush-red {
+  color: #b91c1c;
+}
+
+.board-editor-brush-erase {
+  background: var(--bg-input, #1f2937);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.board-editor-brush[aria-pressed="true"] {
+  border-color: var(--accent, #10b981);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35);
+}
+
+.board-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.board-editor-row .pill-btn,
+.board-editor-row .gc-btn {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.board-editor-problem {
+  margin: 0;
+  min-height: 2.4em;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--danger, #f87171);
+}
+
+.board-editor-problem[data-ok="true"] {
+  color: var(--text-secondary);
+}
+
+.board-editor-fen {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted, #7b8794);
+  word-break: break-all;
+}
+
+@media (max-width: 640px) {
+  .board-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .board-editor-palette {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}

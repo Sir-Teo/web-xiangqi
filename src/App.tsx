@@ -49,6 +49,7 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
+import { BoardEditor } from './components/Board/BoardEditor';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { describeMoveNumber } from './utils/moveNumbering';
@@ -837,6 +838,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
+  const [showBoardEditor, setShowBoardEditor] = useState(false);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -3388,6 +3390,14 @@ function App() {
     setMobileView('board');
   }, [getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
 
+  const handleApplyEditedPosition = useCallback((fen: string) => {
+    setShowBoardEditor(false);
+    // The editor only offers Done for a legal position, so this succeeds;
+    // the mode is the one picked in the New Game dialog, or the current one
+    // when the editor was opened from the palette.
+    handleLoadFenRef.current?.(fen, showNewGameMenu ? pendingGameMode : gameMode);
+  }, [gameMode, pendingGameMode, showNewGameMenu]);
+
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
     if (!ok) {
@@ -3413,6 +3423,9 @@ function App() {
     clearFenError();
     closeNewGameMenu();
   }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
+
+  const handleLoadFenRef = useRef<typeof handleLoadFen | null>(null);
+  handleLoadFenRef.current = handleLoadFen;
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
@@ -3762,6 +3775,13 @@ function App() {
       run: handleDownloadPgn,
     },
     {
+      id: 'setup-position',
+      label: 'Set up a position',
+      hint: 'Place the pieces by hand',
+      keywords: ['editor', 'board', 'compose', 'endgame', 'fen', 'edit'],
+      run: () => { setShowSettings(false); setShowBoardEditor(true); },
+    },
+    {
       id: 'copy-record',
       label: `Copy record in ${NOTATION_STYLE_LABELS[notationStyle]}`,
       hint: canCopyRecord ? 'Numbered moves, one pair per line' : 'Play or import a line first',
@@ -4037,7 +4057,7 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery) return;
+      if (showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
@@ -4103,7 +4123,7 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     analysisTab, autoSaveRecovery, canDeepDive, canHint, canShowThreat, deepDiveActive, engineEnabled,
-    runDeepDive, runHint, runThreatSearch, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
+    runDeepDive, runHint, runThreatSearch, showBoardEditor, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
     stopThreat, threatActive, visibleGameResult,
   ]);
 
@@ -4907,6 +4927,17 @@ function App() {
                   {fenError}
                 </span>
               ) : null}
+              {/* For the position nobody has a FEN for: the endgame in a
+                  book, a composed problem, the one a friend described. */}
+              <button
+                type="button"
+                className="new-game-file-btn"
+                style={{ marginTop: '0.5rem' }}
+                onClick={() => setShowBoardEditor(true)}
+                data-testid="open-board-editor-btn"
+              >
+                Set up the board by hand
+              </button>
             </div>
             <div className="new-game-fen-section">
               <p className="new-game-strength-label">Import Move Line</p>
@@ -6510,7 +6541,7 @@ function App() {
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
               onScrub={jumpToMove}
-              shortcutsEnabled={!showSettings && !showNewGameMenu && !visibleGameResult}
+              shortcutsEnabled={!showSettings && !showNewGameMenu && !visibleGameResult && !showBoardEditor}
             />
           </div>
 
@@ -6579,6 +6610,15 @@ function App() {
           reason={visibleGameOverReason}
           onNewGame={() => { setGameResult(null); resetGame(); }}
           onReview={dismissGameOverForReview}
+        />
+      )}
+
+      {showBoardEditor && (
+        <BoardEditor
+          initialBoard={board}
+          initialSide={sideToMove}
+          onCancel={() => setShowBoardEditor(false)}
+          onApply={handleApplyEditedPosition}
         />
       )}
 
