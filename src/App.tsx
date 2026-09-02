@@ -4113,25 +4113,6 @@ function App() {
               </button>
             </div>
 
-            {/* Mobile panel toggles */}
-            <div className="mobile-actions">
-              <button
-                type="button"
-                onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT_PANEL_WIDTH)}
-                title="Toggle graph panel"
-                aria-label="Toggle graph panel"
-              >
-                <IconBarChart />
-              </button>
-              <button
-                type="button"
-                onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT_PANEL_WIDTH)}
-                title="Toggle tree panel"
-                aria-label="Toggle move tree panel"
-              >
-                <IconTree />
-              </button>
-            </div>
           </div>
         </div>
         <button

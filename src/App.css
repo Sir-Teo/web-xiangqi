@@ -289,45 +289,6 @@ body.resizing * {
   display: none;
 }
 
-.mobile-actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: 0.35rem;
-  background: rgba(13, 17, 23, 0.5);
-  padding: 0.2rem;
-  border-radius: 24px;
-  border: 1px solid var(--border-subtle);
-}
-
-.mobile-actions button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  min-height: unset;
-  padding: 0;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  box-sizing: border-box;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .mobile-actions button:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-primary);
-  }
-}
-
-.mobile-actions button:active {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.mobile-actions .btn-label {
-  display: none;
-}
 
 .top-mode-pills {
   display: flex;
@@ -1359,11 +1320,6 @@ body.resizing * {
   /* Hide resize handles on mobile */
   .resize-handle-right,
   .resize-handle-left {
-    display: none;
-  }
-
-  /* Hide old panel toggle buttons — replaced by tab strip */
-  .mobile-actions {
     display: none;
   }
 
@@ -3630,11 +3586,6 @@ summary:active {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-}
-
-/* Safety: keep mobile labels visible for Xiangqi text buttons */
-.mobile-actions .btn-label {
-  display: inline;
 }
 
 /* Responsive tweaks for Xiangqi-specific elements */
