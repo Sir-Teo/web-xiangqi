@@ -8124,7 +8124,22 @@ async function assertMobileSaveLibraryActions(page) {
       `Top-bar palette button is visible at mobile width, so this check no longer covers the only mobile route: ${JSON.stringify(paletteState)}`,
     );
   }
-  await page.keyboard.press("Escape");
+
+  // Commands naming a panel need to take a phone to that panel, not merely
+  // change the desktop tab hidden behind the Board view. This used to close
+  // the palette and leave the reader staring at exactly the same board.
+  const commandSearch = page.getByRole("combobox", { name: "Search commands" });
+  await commandSearch.fill("engine panel");
+  await page.getByRole("button", { name: /^Engine panel/ }).click();
+  await page.getByTestId("mobile-analysis-tab-engine").waitFor({ state: "visible", timeout: 5000 });
+  const engineRoute = await page.evaluate(() => ({
+    analysisSelected: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-pressed"),
+    engineSelected: document.querySelector('[data-testid="mobile-analysis-tab-engine"]')?.getAttribute("aria-selected"),
+  }));
+  if (engineRoute.analysisSelected !== "true" || engineRoute.engineSelected !== "true") {
+    throw new Error(`Engine panel command did not route the phone to Engine: ${JSON.stringify(engineRoute)}`);
+  }
+  await page.getByTestId("mobile-view-board").click();
   await page.waitForFunction(
     () => !document.querySelector('[role="dialog"][aria-label="Commands"]'),
     null,

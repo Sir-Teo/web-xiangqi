@@ -3684,9 +3684,9 @@ function App() {
     {
       id: 'review-game',
       label: 'Review game',
-      hint: canExportCurrentLine ? undefined : 'Play or import a line first',
+      hint: canStartReview ? undefined : reviewStartTitle,
       keywords: ['accuracy', 'blunders', 'report'],
-      disabled: !canExportCurrentLine,
+      disabled: !canStartReview,
       run: startGameReview,
     },
     {
@@ -3797,16 +3797,26 @@ function App() {
       disabled: !canDeleteCurrentMove,
       run: () => handleDeleteNode(currentNodeId),
     },
-    { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], shortcut: 'T', run: () => setAnalysisTab('tree') },
-    { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], shortcut: 'R', run: () => setAnalysisTab('review') },
-    { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', run: () => setAnalysisTab('engine') },
+    {
+      id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], shortcut: 'T',
+      run: () => { setAnalysisTab('tree'); setMobileAnalysisTab('moves'); setMobileView('analysis'); },
+    },
+    {
+      id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], shortcut: 'R',
+      run: () => { setAnalysisTab('review'); setMobileAnalysisTab('review'); setMobileView('analysis'); },
+    },
+    {
+      id: 'tab-engine', label: 'Engine panel', hint: engineEnabled ? undefined : 'Available in Analysis',
+      keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', disabled: !engineEnabled,
+      run: () => { setAnalysisTab('engine'); setMobileAnalysisTab('engine'); setMobileView('analysis'); },
+    },
     { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: () => setLeftPanelTab('graph') },
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, cloudBookEnabled, currentNodeId, handleDeleteNode, isAiTurn, playFromHere, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleDeleteNode, isAiTurn, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
-      deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
+      deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
       stopSearch])
