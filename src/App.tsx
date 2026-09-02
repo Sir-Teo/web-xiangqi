@@ -12,7 +12,7 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore, IconSearch, IconTarget
+  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { useXiangqi, type GameResult } from './hooks/useXiangqi';
@@ -214,6 +214,7 @@ const ANALYSIS_TAG_PREFIX = 'analysis';
 const AI_TAG_PREFIX = 'ai';
 const REVIEW_TAG_PREFIX = 'review';
 const THREAT_TAG_PREFIX = 'threat';
+const HINT_TAG_PREFIX = 'hint';
 const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
@@ -554,6 +555,25 @@ function parseThreatTag(tag: string | null) {
   const requestKey = tag.slice(THREAT_TAG_PREFIX.length + 1);
   return requestKey ? { requestKey } : null;
 }
+
+/**
+ * A hint is a search of the position the human is about to move in, during a
+ * game against the engine -- where analysis is off, so nothing else is
+ * looking at it. It carries the position command so a reply that arrives
+ * after the position has changed is dropped rather than drawn.
+ */
+function makeHintTag(positionCommand: string) {
+  return `${HINT_TAG_PREFIX}|${positionCommand}`;
+}
+
+function parseHintTag(tag: string | null) {
+  if (!tag || !tag.startsWith(`${HINT_TAG_PREFIX}|`)) return null;
+  const positionCommand = tag.slice(HINT_TAG_PREFIX.length + 1);
+  return positionCommand ? { positionCommand } : null;
+}
+
+/** Enough to be right about the obvious and quick enough to feel like an answer. */
+const HINT_GO_CMD = 'go depth 14 movetime 900';
 
 function makeAiTag(positionCommand: string, depth: number, strength: AiStrength) {
   return `${AI_TAG_PREFIX}|${depth}|${strength}|${positionCommand}`;
@@ -899,6 +919,12 @@ function App() {
    * it is turned off.
    */
   const [threatActive, setThreatActive] = useState(false);
+  /**
+   * The move the engine would play for the human, when they asked. Cleared on
+   * every position change, so a hint is only ever drawn where it was asked.
+   */
+  const [hintMove, setHintMove] = useState<string | null>(null);
+  const [hintPending, setHintPending] = useState(false);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
   const [spotlightPvIndex, setSpotlightPvIndex] = useState<number | null>(null);
@@ -1405,6 +1431,13 @@ function App() {
 
         controller.completed += 1;
         updateReviewProgress(controller.completed, controller.total);
+        return;
+      }
+
+      const hintTag = parseHintTag(searchTag);
+      if (hintTag) {
+        setHintPending(false);
+        if (uci && hintTag.positionCommand === currentPositionCommand) setHintMove(uci);
         return;
       }
 
@@ -3195,6 +3228,34 @@ function App() {
     ? 'until stopped'
     : `for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`;
 
+  /**
+   * Ask the engine what it would play for the human, in a game against it.
+   *
+   * Analysis is off while playing on purpose -- the point of a game is to find
+   * the move yourself -- but a beginner who is stuck wants one nudge, not the
+   * whole evaluation. The search rides the same queue as the opponent's own
+   * moves and it is the human's turn, so the two cannot collide.
+   */
+  const canHint = aiPlayActive && !isAiTurn && !gameResult && isReady && !paused
+    && !isSearching && !isSearchQueued && !hintPending;
+  const runHint = useCallback(() => {
+    if (!canHint) return;
+    setHintMove(null);
+    setHintPending(true);
+    queueSearch(currentPositionCommand, HINT_GO_CMD, 0, makeHintTag(currentPositionCommand));
+  }, [canHint, currentPositionCommand, queueSearch]);
+
+  useEffect(() => {
+    setHintMove(null);
+    setHintPending(false);
+  }, [currentNodeId, aiPlayActive]);
+
+  const hintText = useMemo(() => {
+    if (hintPending) return 'Thinking of a hint…';
+    if (!hintMove) return null;
+    return `Hint: ${formatLineInStyle(board, [hintMove], notationStyle, 1)}`;
+  }, [board, hintMove, hintPending, notationStyle]);
+
   const handleClearEngineHash = useCallback(() => {
     if (clearedHashTimerRef.current !== null) {
       window.clearTimeout(clearedHashTimerRef.current);
@@ -3680,6 +3741,17 @@ function App() {
       run: () => { if (threatActive) stopThreat(); else runThreatSearch(); },
     },
     {
+      id: 'hint',
+      label: 'Hint',
+      hint: aiPlayActive
+        ? (canHint ? 'What the engine would play for you' : isAiTurn ? 'Wait for your turn' : 'Not right now')
+        : 'Only while playing against the engine',
+      keywords: ['help', 'suggest', 'stuck', 'best move', 'coach'],
+      shortcut: 'H',
+      disabled: !canHint,
+      run: runHint,
+    },
+    {
       id: 'play-from-here',
       label: 'Play from this position',
       hint: canPlayFromHere ? 'You take the side to move' : 'Play a move or set up a position first',
@@ -3732,7 +3804,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canPlayFromHere, canShowThreat, cloudBookEnabled, currentNodeId, handleDeleteNode, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, cloudBookEnabled, currentNodeId, handleDeleteNode, isAiTurn, playFromHere, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -3930,6 +4002,10 @@ function App() {
             openEnginePanel();
           }
           break;
+        case 'h':
+          if (!canHint) return;
+          runHint();
+          break;
         case 'e':
           if (!engineEnabled) return;
           openEnginePanel();
@@ -3952,8 +4028,8 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    analysisTab, autoSaveRecovery, canDeepDive, canShowThreat, deepDiveActive, engineEnabled,
-    runDeepDive, runThreatSearch, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
+    analysisTab, autoSaveRecovery, canDeepDive, canHint, canShowThreat, deepDiveActive, engineEnabled,
+    runDeepDive, runHint, runThreatSearch, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
     stopThreat, threatActive, visibleGameResult,
   ]);
 
@@ -4047,6 +4123,14 @@ function App() {
       }
     }
 
+    if (hintMove) {
+      const from = uciToSquare(hintMove.substring(0, 2));
+      const to = uciToSquare(hintMove.substring(2, 4));
+      if (from && to) {
+        result.push({ from, to, color: '#38bdf8', kind: 'engine-focus', opacity: 0.95, strokeWidth: 7 });
+      }
+    }
+
     const hasEngineMoveArrows = engineEnabled && Boolean(currentAnalysisPvLines.some((pv) => pv.moves[0]));
     if (!hasEngineMoveArrows && openingCandidates.length > 0) {
       const bookArrowLimit = assistMode === 'pro' ? 3 : 2;
@@ -4094,7 +4178,7 @@ function App() {
     }
 
     return [...result, ...userArrows];
-  }, [assistMode, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  }, [assistMode, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
@@ -6179,6 +6263,19 @@ function App() {
                   <IconPlay aria-hidden="true" focusable="false" /> Play From Here
                 </button>
               )}
+              {aiPlayActive && (
+                <button
+                  type="button"
+                  className={`gc-btn ${hintMove ? 'gc-btn-active' : ''}`}
+                  onClick={runHint}
+                  disabled={!canHint}
+                  title={canHint ? 'Ask the engine what it would play for you (H)' : isAiTurn ? 'Wait for your turn' : hintPending ? 'Thinking of a hint' : 'No hint right now'}
+                  aria-keyshortcuts="H"
+                  data-testid="hint-btn"
+                >
+                  <IconSpark aria-hidden="true" focusable="false" /> Hint
+                </button>
+              )}
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (
                 <button
                   type="button"
@@ -6321,8 +6418,9 @@ function App() {
                 {inCheck ? <span className="check-badge">CHECK</span> : null}
               </div>
             ) : (
-              <div className="bottom-engine-info">
-                {inCheck ? <span className="check-badge">CHECK</span> : 'Play mode'}
+              <div className="bottom-engine-info" data-testid="play-status">
+                {hintText ?? 'Play mode'}
+                {inCheck ? <span className="check-badge">CHECK</span> : null}
               </div>
             )}
             <div className="bottombar-fen-group">
