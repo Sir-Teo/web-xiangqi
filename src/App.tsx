@@ -3597,6 +3597,7 @@ function App() {
         ? undefined
         : canDeepDive ? `Up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s` : 'Analysis engine only',
       keywords: ['deep', 'search', 'think', 'analyse', 'analyze', 'depth', 'infinite'],
+      shortcut: 'D',
       disabled: !deepDiveActive && !canDeepDive,
       run: () => { if (deepDiveActive) stopSearch(); else runDeepDive(); },
     },
@@ -3609,6 +3610,7 @@ function App() {
           ? `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first`
           : threatFen ? 'Analysis engine only' : `${sideToMoveLabel} is in check`,
       keywords: ['threat', 'null', 'pass', 'opponent', 'danger', 'attack', 'idea'],
+      shortcut: 'X',
       disabled: !threatActive && !canShowThreat,
       run: () => { if (threatActive) stopThreat(); else runThreatSearch(); },
     },
@@ -3620,7 +3622,7 @@ function App() {
       disabled: !canPlayFromHere,
       run: playFromHere,
     },
-    { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
+    { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], shortcut: 'F', run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
       id: 'copy-fen',
       label: 'Copy FEN',
@@ -3643,12 +3645,12 @@ function App() {
       disabled: !isReady,
       run: handleClearEngineHash,
     },
-    { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], run: () => setAnalysisTab('tree') },
-    { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], run: () => setAnalysisTab('review') },
-    { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], run: () => setAnalysisTab('engine') },
+    { id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], shortcut: 'T', run: () => setAnalysisTab('tree') },
+    { id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], shortcut: 'R', run: () => setAnalysisTab('review') },
+    { id: 'tab-engine', label: 'Engine panel', keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', run: () => setAnalysisTab('engine') },
     { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: () => setLeftPanelTab('graph') },
-    { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], run: goToFirstMove },
-    { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], run: goToLatestMove },
+    { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
+    { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
   ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
@@ -3790,6 +3792,107 @@ function App() {
     if (!restored) clearAutoSavedGame();
     setAutoSaveRecovery(null);
   }, [autoSaveRecovery, handleLoadGame]);
+
+  /**
+   * Single-key shortcuts for the things a player reaches for mid-analysis.
+   *
+   * The letters are the ones lichess taught a generation of analysis-board
+   * users: F flips, X asks what the opponent threatens, and the panel keys
+   * follow the tab labels. Held off any text field, any dialog and any
+   * modifier, and off the palette's own chord, so they cannot swallow typing.
+   *
+   * X and D switch to the Engine panel first when the reader is elsewhere,
+   * because that is where the answer is drawn -- and switching panels changes
+   * the analysis request key, which cancels a threat or a deep search started
+   * in the same breath. So the request is held in a ref and run by the effect
+   * below once the panel is up, rather than fired and then cancelled.
+   */
+  const pendingShortcutRef = useRef<'threat' | 'deep' | null>(null);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
+        return;
+      }
+      const openEnginePanel = () => {
+        setAnalysisTab('engine');
+        setMobileAnalysisTab('engine');
+        setMobileView('analysis');
+      };
+      switch (event.key.toLowerCase()) {
+        case 'f':
+          setOrientation((side) => (side === 'red' ? 'black' : 'red'));
+          break;
+        case 'x':
+          if (threatActive) {
+            stopThreat();
+          } else if (!canShowThreat) {
+            return;
+          } else if (analysisTab === 'engine') {
+            runThreatSearch();
+          } else {
+            pendingShortcutRef.current = 'threat';
+            openEnginePanel();
+          }
+          break;
+        case 'd':
+          if (deepDiveActive) {
+            stopSearch();
+          } else if (!canDeepDive) {
+            return;
+          } else if (analysisTab === 'engine') {
+            runDeepDive();
+          } else {
+            pendingShortcutRef.current = 'deep';
+            openEnginePanel();
+          }
+          break;
+        case 'e':
+          if (!engineEnabled) return;
+          openEnginePanel();
+          break;
+        case 't':
+          setAnalysisTab('tree');
+          setMobileAnalysisTab('moves');
+          setMobileView('analysis');
+          break;
+        case 'r':
+          setAnalysisTab('review');
+          setMobileAnalysisTab('review');
+          setMobileView('analysis');
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    analysisTab, autoSaveRecovery, canDeepDive, canShowThreat, deepDiveActive, engineEnabled,
+    runDeepDive, runThreatSearch, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
+    stopThreat, threatActive, visibleGameResult,
+  ]);
+
+  useEffect(() => {
+    const pending = pendingShortcutRef.current;
+    if (!pending || analysisTab !== 'engine') return;
+    if (pending === 'threat' && canShowThreat) {
+      pendingShortcutRef.current = null;
+      runThreatSearch();
+    } else if (pending === 'deep' && canDeepDive) {
+      pendingShortcutRef.current = null;
+      runDeepDive();
+    } else if (!isReady) {
+      // Still booting: keep the request until the engine can take it.
+      return;
+    } else {
+      pendingShortcutRef.current = null;
+    }
+  }, [analysisTab, canDeepDive, canShowThreat, isReady, runDeepDive, runThreatSearch]);
 
   const reviewNarrativeTags = useMemo(
     () => (reviewStatus === 'done'
@@ -4035,8 +4138,9 @@ function App() {
                 type="button"
                 className="top-action-btn"
                 onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
-                title="Flip board"
+                title="Flip board (F)"
                 aria-label="Flip board orientation"
+                aria-keyshortcuts="F"
               >
                 <IconFlip />
                 <span className="btn-label-desktop">Flip</span>
@@ -5575,8 +5679,9 @@ function App() {
                         onClick={deepDiveActive ? stopSearch : runDeepDive}
                         disabled={!deepDiveActive && !canDeepDive}
                         title={deepDiveActive
-                          ? 'Stop the deep search and keep what it has found'
-                          : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`}
+                          ? 'Stop the deep search and keep what it has found (D)'
+                          : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s (D)`}
+                        aria-keyshortcuts="D"
                         aria-label={deepDiveActive
                           ? 'Stop the deep search'
                           : `Deep search this position, up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)} seconds`}
@@ -5596,10 +5701,11 @@ function App() {
                         onClick={threatActive ? stopThreat : runThreatSearch}
                         disabled={!threatActive && !canShowThreat}
                         title={threatActive
-                          ? 'Back to analysing the position as it stands'
+                          ? 'Back to analysing the position as it stands (X)'
                           : !threatFen
                             ? `${sideToMoveLabel} is in check, so there is no position to pass from`
-                            : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening`}
+                            : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening (X)`}
+                        aria-keyshortcuts="X"
                         aria-label={threatActive
                           ? 'Stop showing the threat and analyse the position as it stands'
                           : 'Show the threat: let the opponent move first'}
