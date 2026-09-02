@@ -3794,6 +3794,20 @@ summary:active {
 .mobile-engine-notice-warning { color: var(--warning); border-color: rgba(245, 158, 11, 0.32); }
 .mobile-engine-notice-danger { color: var(--danger); border-color: rgba(239, 68, 68, 0.32); }
 
+.mobile-request-notice {
+  display: flex; align-items: center; gap: 6px;
+  flex: 1 0 100%; min-width: 0;
+  padding: 3px 7px; border: 1px solid rgba(245, 158, 11, 0.32); border-radius: 5px;
+  background: rgba(245, 158, 11, 0.08); color: var(--warning);
+  font-size: 0.68rem; font-family: var(--font-mono);
+}
+.mobile-request-notice > span:last-child {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-request-notice-danger {
+  border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); color: var(--danger);
+}
+
 .mobile-opening-pill { font-size: 0.68rem; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 .mobile-board-actions {

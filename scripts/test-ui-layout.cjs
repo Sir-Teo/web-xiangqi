@@ -4842,6 +4842,29 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
   if (plies !== "2 / 2") {
     throw new Error(`Expected the two moves before the unreadable one, got ${plies}`);
   }
+
+  // A phone needs a visible account of the same problem. The top-bar chip is
+  // intentionally hidden at this width; the compact board header is the one
+  // persistent visual surface that does not cover the position.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileNotice = page.getByTestId("mobile-request-notice");
+  await mobileNotice.waitFor({ state: "visible", timeout: 5000 });
+  const mobileState = await mobileNotice.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      text: (node.textContent || "").trim(),
+      right: rect.right,
+      viewportWidth: window.innerWidth,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    };
+  });
+  if (!mobileState.text.includes("R5=9")) {
+    throw new Error(`The phone showed the partial import as "${mobileState.text}".`);
+  }
+  if (mobileState.right > mobileState.viewportWidth + 1 || mobileState.scrollWidth > mobileState.clientWidth + 1) {
+    throw new Error(`The phone import notice overflowed its header: ${JSON.stringify(mobileState)}`);
+  }
 }
 
 async function assertMoveLineImportPreservesVariations(page) {

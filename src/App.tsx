@@ -5329,6 +5329,17 @@ function App() {
                   <IconSettings />
                 </button>
               </div>
+              {(importNotice || shareLinkNotice) ? (
+                <div
+                  className={`mobile-request-notice mobile-request-notice-${shareLinkNotice?.tone ?? 'warning'}`}
+                  data-testid="mobile-request-notice"
+                  title={importNotice?.label ?? shareLinkNotice?.text}
+                  aria-hidden="true"
+                >
+                  <span className={`status-dot ${shareLinkNotice?.tone ?? 'warning'}`} />
+                  <span>{importNotice?.text ?? shareLinkNotice?.text}</span>
+                </div>
+              ) : null}
             </div>
           )}
           {isMobile && mobileView === 'board' && showMobileBoardActionMenu ? (
