@@ -28,6 +28,22 @@ beside it in its own section; what is listed here is the question.
 | [The review note speaks a notation the reader did not choose](#the-review-note-speaks-a-notation-the-reader-did-not-choose-open-question) | Which of three fixes, given the note is stored per move rather than only displayed. |
 | [A phone is told nothing when an import goes wrong](#a-phone-is-told-nothing-when-an-import-goes-wrong-open-question) | Where a notice should live on a phone. The announcement half is done; the visible half needs a layout decision. |
 
+## The one thing that leaves the machine
+
+Everything here runs locally: the engine is WebAssembly in a worker, the
+library is localStorage, a share link is a URL the reader copies. The
+exception is the cloud book. `src/hooks/useCloudBook.ts` asks
+`https://www.chessdb.cn/chessdb.php?action=queryall&board=<fen>` for the
+position on the board, and only while the reader has turned the card on; the
+preference is off by default and the card says what is sent. Replies are
+cached per FEN for the life of the page (`src/utils/cloudBook.ts`), a failed
+request is not cached, and a reading is drawn only for the position it was
+fetched for -- the frame between a navigation and its fetch used to show the
+previous position's moves under the new side's label. The service answers a
+plain cross-origin GET from a browser page; that was checked from this app
+before the hook was written, and the recorded reply for the start position is
+the parser's test fixture.
+
 ## Runtime Overview
 
 ```mermaid

@@ -25,6 +25,11 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Show Threat**: hand the opponent the move and let the engine answer what they are threatening — the question the best move does not answer, refused only when the side to move is in check, and kept visibly apart from the position's own evaluation
 - Pieces can be dragged as well as clicked, and a move slides rather than teleporting, so what changed on the board is visible without re-reading it
 - Command palette on `Ctrl`/`Cmd`+`K`: a searchable list of the actions that matter, with recently used first and unavailable commands shown with the reason rather than hidden
+- **Infinite analysis**: the `∞` toggle beside Go Deep sends `go infinite`, so the depth climbs on this position until Stop or the next move; the engine hash defaults are sized so a deep search does not fill the table halfway through (256MB on a high-tier machine, 128MB mid)
+- **Cloud book** (象棋云库, chessdb.cn): what is played from the position on the board, with the database's score, rank and win rate for each move, one click to play. Off until turned on, because it sends the position to chessdb.cn; nothing else ever leaves the machine
+- **Hint** in a game against the engine: one move, drawn as an arrow and named in your notation, for the beginner who is stuck -- analysis stays off while playing
+- Variations can be deleted (the cross at the end of each variation row) and a line cut where it stands (palette: *Delete this move and what follows*)
+- Single-key shortcuts: `F` flip, `X` threat, `D` deep search, `H` hint, `E`/`T`/`R` the Engine, Tree and Review panels, arrows to step through the game; each is printed beside its command in the palette
 
 ## What this repo contains
 
