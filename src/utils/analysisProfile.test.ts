@@ -154,6 +154,19 @@ describe('engine boot configuration', () => {
         expect(resolveEngineBootConfig(detectDeviceTier(PHONE), { allowSIMD: false }).variant).toBe('single');
     });
 
+    it('defaults the desktop tiers to a table a deep search does not fill', () => {
+        // Measured on the high tier at 128MB: hashfull 94% fifteen seconds into
+        // the thirty-second deep search, 100% at the end. The defaults are the
+        // next rung up on each ladder, and still not the top of it.
+        const high = resolveEngineBootConfig(detectDeviceTier(DESKTOP));
+        expect(high.tier).toBe('high');
+        expect(high.hashMB).toBe(256);
+        expect(hashChoicesForTier('high').indexOf(256)).toBeLessThan(hashChoicesForTier('high').length - 1);
+        const mid = resolveEngineBootConfig(detectDeviceTier({ ...DESKTOP, hardwareConcurrency: 8 }));
+        expect(mid.tier).toBe('mid');
+        expect(mid.hashMB).toBe(128);
+    });
+
     it('retreats to one thread and half the hash after a bad boot', () => {
         const normal = resolveEngineBootConfig(detectDeviceTier(DESKTOP));
         const safer = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { saferBoot: true });

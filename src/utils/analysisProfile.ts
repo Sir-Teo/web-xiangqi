@@ -264,11 +264,22 @@ export function resolveEngineBootConfig(
         // always a pointer-and-keyboard machine with room for threads.
         variant = resolveThreadedVariant(allowSIMD);
         threads = threadsForCores(profile.hardwareConcurrency, 2, MID_TIER_MAX_THREADS);
-        hashMB = 64;
+        hashMB = 128;
     } else {
         variant = resolveThreadedVariant(allowSIMD);
         threads = threadsForCores(profile.hardwareConcurrency, 4, HIGH_TIER_MAX_THREADS);
-        hashMB = 128;
+        // Sized for the deep search, not the live one. Measured in the browser
+        // on the high tier at 128MB, 8 threads, a middlegame position, during
+        // the 30s Go Deep: hashfull 49% at 5s, 80% at 10s, 94% at 15s, 100% at
+        // 30s -- so the second half of every deep search was overwriting the
+        // first half's work, and an infinite search filled it and stayed
+        // full. At 256MB the same search read 51% at 15s, 86% at 25s and 97%
+        // at the end, one ply deeper (24 against 23): full only in its last
+        // seconds rather than for half its length. The mid tier moved up for
+        // the same reason at its own 20s budget. Both sit two rungs below
+        // their ladder's top, so a reader on a tight machine can step down,
+        // and one who runs infinite searches can step up.
+        hashMB = 256;
     }
 
     // An explicit ask, held inside the tier's ladder. Applied before the safer
