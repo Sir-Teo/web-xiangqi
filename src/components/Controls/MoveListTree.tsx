@@ -9,6 +9,7 @@ import {
     getMoveQualityClassName,
     getReviewSideForRecord,
     isCriticalReviewQuality,
+    formatReviewNoteForDisplay,
 } from '../../utils/review';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
 import { describeMoveNumber } from '../../utils/moveNumbering';
@@ -131,7 +132,9 @@ export const MoveListTree = memo(function MoveListTree({
         const qualityClass = getMoveQualityClass(treeNodes, nodeId, rootNodeId);
         // Coach hint: engine's best alternative (stored on this node from review)
         const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
-        const note = record.quality && isCriticalReviewQuality(record.quality) ? record.reviewNote : null;
+        const note = record.quality && isCriticalReviewQuality(record.quality) && record.reviewNote
+            ? formatReviewNoteForDisplay(record.reviewNote, record.bestMove)
+            : null;
         const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
         const isCurrent = currentNodeId === nodeId;
         return (

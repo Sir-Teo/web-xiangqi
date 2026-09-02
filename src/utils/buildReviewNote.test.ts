@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_REPORTED_CENTIPAWN_LOSS, buildReviewNote } from './review';
+import { MAX_REPORTED_CENTIPAWN_LOSS, buildReviewNote, formatReviewNoteForDisplay } from './review';
 
 const note = (over: Partial<Parameters<typeof buildReviewNote>[0]> = {}) =>
     buildReviewNote({ quality: 'good', playedMove: 'h2e2', swing: 40, ...over });
@@ -20,11 +20,11 @@ describe('the note under a reviewed move', () => {
         expect(note({ quality: 'good', swing: 25 })).toBe('Solid choice. Only 25cp off the best line.');
     });
 
-    it('names the stronger move when there is one', () => {
+    it('keeps the stronger move in the notation-aware suggestion beside the note', () => {
         const text = note({ quality: 'mistake', swing: 240, bestMove: 'b0c2' });
         expect(text).toMatch(/^Missed a stronger continuation\./);
         expect(text).toMatch(/240cp/);
-        expect(text).toMatch(/B0|b0/);
+        expect(text).not.toMatch(/B0|b0/);
     });
 
     it('scales its language with the severity', () => {
@@ -77,6 +77,17 @@ describe('the note under a reviewed move', () => {
 
     it('leaves an unbounded swing unmarked', () => {
         expect(note({ quality: 'mistake', swing: 240, bestMove: 'b0c2' })).not.toMatch(/\+cp/);
+    });
+
+    it('normalizes coordinate prose from saved reviews', () => {
+        expect(formatReviewNoteForDisplay(
+            'Big miss. B0→C2 was stronger by 520cp.',
+            'b0c2',
+        )).toBe('Big miss. The engine move was stronger by 520cp.');
+        expect(formatReviewNoteForDisplay(
+            'Still winning, but H0->G2 kept more of the advantage (350cp).',
+            'h0g2',
+        )).toBe('Still winning, but the engine line kept more of the advantage (350cp).');
     });
 
     it('never puts a non-number in front of the reader', () => {

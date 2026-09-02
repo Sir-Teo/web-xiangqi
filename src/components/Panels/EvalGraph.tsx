@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import type { MoveRecord } from '../../hooks/useXiangqi';
 import {
     formatReviewQuality,
+    formatReviewNoteForDisplay,
     formatWinPercentLoss,
     formatWinPercentLossLabel,
     getMoveQualityClassName,
@@ -653,7 +654,9 @@ export const EvalGraph = React.memo(function EvalGraph({
                                     Chance {formatWinPercentLoss(tooltipPoint.winPercentLoss)}
                                 </em>
                             ) : null}
-                            {tooltipPoint?.reviewNote ? <span>{tooltipPoint.reviewNote}</span> : null}
+                            {tooltipPoint?.reviewNote ? (
+                                <span>{formatReviewNoteForDisplay(tooltipPoint.reviewNote, tooltipPoint.bestMove)}</span>
+                            ) : null}
                             {tooltipPoint?.bestMove && tooltipPoint.bestMove !== tooltipPoint.uci ? (
                                 <em>Engine: {tooltipPoint.bestMoveNotation ?? formatUciMove(tooltipPoint.bestMove)}</em>
                             ) : null}

@@ -7,6 +7,7 @@ import {
     describeReviewEngineSummary,
     formatWinPercentLoss,
     formatWinPercentLossLabel,
+    formatReviewNoteForDisplay,
     formatReviewEngineSummary,
     filterKeyMoments,
     formatReviewQuality,
@@ -329,7 +330,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 {focusMoment.bestMove ? (
                                     <em>Try {formatMoveText(focusMoment.nodeId, focusMoment.bestMove)}</em>
                                 ) : null}
-                                <p>{focusMoment.note}</p>
+                                <p>{formatReviewNoteForDisplay(focusMoment.note, focusMoment.bestMove)}</p>
                             </>
                         ) : (
                             <>
@@ -417,7 +418,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             <span>Chance</span>
                                             <strong>{formatReviewChanceLoss(moment)}</strong>
                                         </div>
-                                        <p>{moment.note}</p>
+                                        <p>{formatReviewNoteForDisplay(moment.note, moment.bestMove)}</p>
                                         {moment.bestMove ? (
                                             <em>Best: {formatMoveText(moment.nodeId, moment.bestMove)}</em>
                                         ) : null}

@@ -1,4 +1,3 @@
-import { formatUciMove } from './moveNotation';
 import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
 import { MIN_WEIGHT, aggregateAccuracy, volatilityWeights } from './accuracyAggregate';
 import type { BoardState } from './xiangqi';
@@ -389,14 +388,14 @@ export function buildReviewNote({
     }
     if (bestMove && bestMove !== playedMove) {
         if (retainedDecisiveAdvantage && isCriticalReviewQuality(quality)) {
-            return `Still winning, but ${formatUciMove(bestMove)} kept more of the advantage (${cpSwing}).`;
+            return `Still winning, but the engine line kept more of the advantage (${cpSwing}).`;
         }
         const prefix = quality === 'blunder'
             ? 'Big miss.'
             : quality === 'mistake'
                 ? 'Missed a stronger continuation.'
                 : 'Small slip.';
-        return `${prefix} ${formatUciMove(bestMove)} was stronger by ${cpSwing}.`;
+        return `${prefix} The engine move was stronger by ${cpSwing}.`;
     }
     if (quality === 'blunder') {
         return `Major evaluation swing: ${cpSwing}.`;
@@ -408,6 +407,22 @@ export function buildReviewNote({
         return `Noticeable drop of ${cpSwing}.`;
     }
     return `Evaluation slipped by ${cpSwing}.`;
+}
+
+/**
+ * Old saved reviews embedded a coordinate move in their prose. Current notes
+ * keep the move in the dedicated, notation-aware suggestion beside the prose;
+ * normalize the two historical sentence shapes so loading a saved study does
+ * not bring the duplicate coordinates back.
+ */
+export function formatReviewNoteForDisplay(note: string, bestMove?: string): string {
+    if (!bestMove || !/^[a-i][0-9][a-i][0-9]$/i.test(bestMove)) return note;
+    const from = bestMove.slice(0, 2);
+    const to = bestMove.slice(2, 4);
+    const move = `${from}\\s*(?:→|->|[-–—])?\\s*${to}`;
+    return note
+        .replace(new RegExp(`Still winning, but\\s+${move}\\s+kept`, 'i'), 'Still winning, but the engine line kept')
+        .replace(new RegExp(`${move}\\s+was stronger`, 'i'), 'The engine move was stronger');
 }
 
 /** One phase's share of a review, in the same terms as the overall summary. */
