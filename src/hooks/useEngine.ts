@@ -18,6 +18,8 @@ export type PvLine = {
     searchTag: string | null;
     /** The engine reported this score as a bound, not a value. */
     bounded?: boolean;
+    /** Win/draw/loss per mille for the side to move, when UCI_ShowWDL is on. */
+    wdl?: WdlStats;
 };
 
 export type WdlStats = { win: number; draw: number; loss: number };
@@ -924,6 +926,14 @@ export function useEngine(options: EngineInitOptions = {}) {
                     multipv: multipvIndex,
                     searchTag: activeSearchTagRef.current,
                     bounded: BOUNDED_SCORE_PATTERN.test(msg),
+                    // Every multipv line carries its own wdl; only the first
+                    // feeds the bar, but a reader comparing candidates wants
+                    // each line's chances beside its score.
+                    ...(wdlMatch ? { wdl: {
+                        win: parseInt(wdlMatch[1], 10),
+                        draw: parseInt(wdlMatch[2], 10),
+                        loss: parseInt(wdlMatch[3], 10),
+                    } } : {}),
                 };
 
                 // Direct slot assignment — no array manipulation in hot path.

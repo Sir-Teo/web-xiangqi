@@ -6200,6 +6200,12 @@ function App() {
                       // promising "raw UCI" beside a line written in WXF.
                       const pvRawLine = pv.moves.join(' ');
                       const lineActionContext = `engine line ${i + 1}, ${depthLabel}, ${pvLineLabel}`;
+                      // Red's chances, like every other number on this card:
+                      // the engine's wdl is for the side to move.
+                      const lineWdl = pv.wdl ? normalizeWdlForSide(pv.wdl, sideToMove) : null;
+                      const lineWdlText = lineWdl
+                        ? `Red ${Math.round(lineWdl.win / 10)}% · draw ${Math.round(lineWdl.draw / 10)}% · Black ${Math.round(lineWdl.loss / 10)}%`
+                        : null;
                       const playPvLabel = firstMove
                         ? `Play ${firstMoveText} from engine line ${i + 1}`
                         : `Play engine line ${i + 1} first move unavailable`;
@@ -6214,7 +6220,7 @@ function App() {
                           className={`pv-line premium-card ${spotlightPvIndex === i ? 'pv-line-spotlight' : ''}`}
                           role="group"
                           tabIndex={0}
-                          aria-label={`Engine line ${i + 1}, ${lineStanding}, ${pvScoreLabel}, ${depthLabel}, ${pvLineLabel}`}
+                          aria-label={`Engine line ${i + 1}, ${lineStanding}, ${pvScoreLabel}, ${depthLabel}${lineWdlText ? `, ${lineWdlText}` : ''}, ${pvLineLabel}`}
                           onMouseEnter={() => setSpotlightPvIndex(i)}
                           onMouseLeave={() => setSpotlightPvIndex(null)}
                           onFocus={() => setSpotlightPvIndex(i)}
@@ -6242,7 +6248,10 @@ function App() {
                                 {lineStanding}
                               </span>
                             </div>
-                            <span className="turnNum">Depth {pv.depth}</span>
+                            <span className="turnNum">
+                              Depth {pv.depth}
+                              {lineWdlText ? <span className="pv-line-wdl" title={lineWdlText} data-testid={`engine-pv-wdl-${i}`}> · {lineWdlText}</span> : null}
+                            </span>
                             <span className="move">{formatLineInStyle(board, pv.moves, notationStyle, 7)}</span>
                           </div>
                           <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
