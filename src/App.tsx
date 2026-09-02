@@ -53,6 +53,7 @@ import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './u
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
+import { describePvStanding } from './utils/pvStanding';
 import {
   NOTATION_STYLES,
   NOTATION_STYLE_DESCRIPTIONS,
@@ -696,11 +697,6 @@ function formatEngineTelemetryDetail(
     parts.push(`${stats.timeMs}ms`);
   }
   return `Search ${parts.join(' · ')}`;
-}
-
-function formatEvalGap(centipawns: number) {
-  const normalized = Math.max(0, Math.round(centipawns));
-  return `${(normalized / 100).toFixed(1)} behind`;
 }
 
 function getQualityArrowColor(quality: ReviewMoveQuality) {
@@ -5683,7 +5679,7 @@ function App() {
                       <div className="pv-empty">No PV available yet.</div>
                     ) : currentAnalysisPvLines.map((pv, i) => {
                       const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
-                      const lineStanding = i === 0 ? 'Best' : formatEvalGap(bestRawScore - pv.score);
+                      const lineStanding = describePvStanding(bestRawScore, pv.score, i);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
                       // One decimal, like every other evaluation in the app.
                       // At zero this badge could not tell a half-pawn from
