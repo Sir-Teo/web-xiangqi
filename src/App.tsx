@@ -145,6 +145,8 @@ type WorkspaceMode = 'play' | 'analysis';
 type AssistMode = 'coach' | 'pro';
 type AnalysisEngineMode = 'stable' | 'optimized';
 type PvLineCount = 1 | 3 | 5;
+/** How long a deep search runs: the tier's bounded budget, or until stopped. */
+type DeepSearchMode = 'bounded' | 'infinite';
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; positionKey?: string } | null;
@@ -343,6 +345,7 @@ type StoredPreferences = {
   aiStrength?: AiStrength;
   aiSpeed?: AiSpeed;
   notationStyle?: XiangqiNotationStyle;
+  deepSearchMode?: DeepSearchMode;
 };
 
 type ReviewController = {
@@ -429,6 +432,10 @@ function isAiSpeed(value: unknown): value is AiSpeed {
   return value === 'slow' || value === 'normal' || value === 'fast' || value === 'step';
 }
 
+function isDeepSearchMode(value: unknown): value is DeepSearchMode {
+  return value === 'bounded' || value === 'infinite';
+}
+
 function isPvLineCount(value: unknown): value is PvLineCount {
   return value === 1 || value === 3 || value === 5;
 }
@@ -458,6 +465,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
       aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
       notationStyle: isNotationStyle(record.notationStyle) ? record.notationStyle : undefined,
+      deepSearchMode: isDeepSearchMode(record.deepSearchMode) ? record.deepSearchMode : undefined,
     };
   } catch {
     return {};
@@ -861,6 +869,16 @@ function App() {
   // because a running search re-renders constantly for its own reasons.
   const [deepDiveActive, setDeepDiveActive] = useState(false);
   /**
+   * Bounded by default: a search that settles on its own needs nothing
+   * remembered. Infinite is the mode every desktop GUI offers and a strong
+   * player expects -- the engine keeps going on this position until told to
+   * stop or the position changes, and the depth keeps climbing past what any
+   * budget would allow. Navigation cancels it the way it cancels any other
+   * search: the queue sends `stop`, waits for `bestmove`, and dispatches the
+   * next position.
+   */
+  const [deepSearchMode, setDeepSearchMode] = useState<DeepSearchMode>(storedPreferences.deepSearchMode ?? 'bounded');
+  /**
    * Whether the board is showing the opponent's threat rather than the
    * position's own analysis.
    *
@@ -893,6 +911,7 @@ function App() {
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
+    setDeepSearchMode(preferences.deepSearchMode ?? 'bounded');
     handleSpeedChange(preferences.aiSpeed ?? 'normal');
   }, [defaultSearchDepth, handleSpeedChange, updateSoundEnabled]);
 
@@ -915,9 +934,11 @@ function App() {
       aiStrength,
       aiSpeed,
       notationStyle,
+      deepSearchMode,
     });
   }, [
     aiSpeed,
+    deepSearchMode,
     aiStrength,
     analysisEngineMode,
     assistMode,
@@ -3137,11 +3158,14 @@ function App() {
     setDeepDiveActive(true);
     queueSearch(
       currentPositionCommand,
-      deepDiveBudget.goCmd,
+      deepSearchMode === 'infinite' ? 'go infinite' : deepDiveBudget.goCmd,
       0,
       makeAnalysisTag('deep', analysisRequestKey),
     );
-  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, engineEnabled, isAiTurn, isReady, queueSearch]);
+  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, deepSearchMode, engineEnabled, isAiTurn, isReady, queueSearch]);
+  const deepSearchLimitText = deepSearchMode === 'infinite'
+    ? 'until stopped'
+    : `for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`;
 
   const handleClearEngineHash = useCallback(() => {
     if (clearedHashTimerRef.current !== null) {
@@ -3595,7 +3619,7 @@ function App() {
       label: deepDiveActive ? 'Stop deep search' : 'Go deep on this position',
       hint: deepDiveActive
         ? undefined
-        : canDeepDive ? `Up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s` : 'Analysis engine only',
+        : canDeepDive ? (deepSearchMode === 'infinite' ? 'Until stopped' : `Up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`) : 'Analysis engine only',
       keywords: ['deep', 'search', 'think', 'analyse', 'analyze', 'depth', 'infinite'],
       shortcut: 'D',
       disabled: !deepDiveActive && !canDeepDive,
@@ -3652,7 +3676,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive,
+  ], [canDeepDive, canExportCurrentLine, canPlayFromHere, canShowThreat, playFromHere, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -5680,16 +5704,36 @@ function App() {
                         disabled={!deepDiveActive && !canDeepDive}
                         title={deepDiveActive
                           ? 'Stop the deep search and keep what it has found (D)'
-                          : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s (D)`}
+                          : deepSearchMode === 'infinite'
+                            ? 'Search this position until stopped (D)'
+                            : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s (D)`}
                         aria-keyshortcuts="D"
                         aria-label={deepDiveActive
                           ? 'Stop the deep search'
-                          : `Deep search this position, up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)} seconds`}
+                          : `Deep search this position, ${deepSearchLimitText}`}
                         data-testid="deep-dive-btn"
                       >
                         {deepDiveActive
                           ? <><IconPause aria-hidden="true" focusable="false" /> Stop</>
                           : <><IconSearch aria-hidden="true" focusable="false" /> Go Deep</>}
+                      </button>
+                      {/* The other way a deep search can end: never, until the
+                          reader says so. Pressed, Go Deep sends `go infinite`
+                          and the depth climbs until Stop or a new position.
+                          A toggle beside the button rather than a setting,
+                          because it is decided per position, not per session. */}
+                      <button
+                        type="button"
+                        className={`engine-cache-btn engine-infinite-btn ${deepSearchMode === 'infinite' ? 'engine-pv-btn-active' : ''}`}
+                        onClick={() => setDeepSearchMode((mode) => (mode === 'infinite' ? 'bounded' : 'infinite'))}
+                        aria-pressed={deepSearchMode === 'infinite'}
+                        title={deepSearchMode === 'infinite'
+                          ? `Deep search runs until stopped. Press to limit it to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s.`
+                          : `Deep search stops after ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s. Press to let it run until stopped.`}
+                        aria-label="Let a deep search run until stopped"
+                        data-testid="deep-infinite-toggle"
+                      >
+                        ∞
                       </button>
                       {/* Give the opponent the move and read the reply. The
                           button says why it is unavailable rather than sitting

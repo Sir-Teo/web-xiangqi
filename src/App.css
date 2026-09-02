@@ -3272,6 +3272,14 @@ summary:active {
   height: 0.86rem;
 }
 
+/* The infinity glyph is the whole label, so it gets the room a word would. */
+.engine-infinite-btn {
+  min-width: 2rem;
+  padding: 0 0.45rem;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 .pv-lines-container {
   display: flex;
   flex-direction: column;
