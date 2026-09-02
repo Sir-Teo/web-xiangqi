@@ -3348,6 +3348,8 @@ function App() {
     setGameMode(practiceSide === 'w' ? 'PvAI-Black' : 'PvAI-Red');
     setWorkspaceMode('play');
     loadMoves(practiceMoves, rootFen);
+    setAnalysisTab('tree');
+    setMobileAnalysisTab('moves');
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
   }, [getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
