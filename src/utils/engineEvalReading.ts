@@ -64,3 +64,31 @@ export function takeEvalReading(current: EvalReading, score: number, isBounded: 
     if (current.score === score && current.exact === !isBounded) return current;
     return { score, exact: !isBounded };
 }
+
+/**
+ * One evaluation in the words a reader uses: pawns to `decimals` places, or
+ * `+M3` / `-M3` when the score is the mate sentinel above.
+ *
+ * `(score / 100).toFixed(2)` was written out five times across the graph, the
+ * review panel and the library, and every one of them printed a mate as
+ * `+299.85` -- three hundred pawns, because `MATE_SCORE_BASE - 15` divided by
+ * a hundred is 299.85 and nothing along the way knew the number was a mate.
+ * The eval bar and the candidate list had already been taught this (they read
+ * `scoreStr`, which carries `+M15` from the engine); the surfaces that only
+ * ever see a raw number had not, so the same position read `+M15` beside the
+ * board and `+299.85` on the graph.
+ *
+ * Returns null for a non-finite score so each caller decides what a missing
+ * reading looks like, the way `formatEvalCommand` does for PGN.
+ *
+ * The sign comes from the score rather than from the distance: a mate in zero
+ * for black gives a distance of `-0`, and `${-0}` is `"0"`.
+ */
+export function formatEvaluationText(score: number, decimals = 2): string | null {
+    if (!Number.isFinite(score)) return null;
+    const mateDistance = mateDistanceFromScore(score);
+    if (mateDistance !== null) {
+        return `${score < 0 ? '-' : '+'}M${Math.abs(mateDistance)}`;
+    }
+    return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
+}

@@ -9,6 +9,7 @@ import {
     isCriticalReviewQuality,
 
     isFiniteNumber,} from '../../utils/review';
+import { formatEvaluationText } from '../../utils/engineEvalReading';
 import { formatUciMove } from '../../utils/moveNotation';
 import { boardBeforeRecord, formatMoveInStyle, type XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import {
@@ -168,6 +169,11 @@ export const EvalGraph = React.memo(function EvalGraph({
         return PADDING.left + (pointIndex / (points.length - 1)) * plotWidth;
     }, [points.length, plotWidth]);
 
+    const clampToPlot = useCallback((evalScore: number) => {
+        if (!isFiniteEval(evalScore)) return 0;
+        return Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
+    }, [maxEvalClamp]);
+
     const yFor = useCallback((evalScore: number) => {
         // Math.max(-limit, Math.min(limit, NaN)) is NaN, so the clamp does not
         // strip a bad value -- it carries it into the path and takes out the
@@ -232,7 +238,12 @@ export const EvalGraph = React.memo(function EvalGraph({
     const highestEval = useMemo(() => extentOf(points, Math.max), [points]);
     const lowestEval = useMemo(() => extentOf(points, Math.min), [points]);
     const currentBranchCount = currentPoint?.branchCount ?? 0;
-    const swing = highestEval - lowestEval;
+    // How far the line travelled, which is a distance rather than an
+    // evaluation -- so `+M15` would be as wrong here as `+299.85` was. Taken
+    // over the clamped extremes, so the number says what the chart shows: a
+    // game that reached mate swung the full height of the plot, not three
+    // hundred pawns.
+    const swing = clampToPlot(highestEval) - clampToPlot(lowestEval);
     const shouldCompressBadges = pixelsPerPoint < 26;
 
     const nearestPointForEvent = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
@@ -680,8 +691,7 @@ export const EvalGraph = React.memo(function EvalGraph({
 EvalGraph.displayName = 'EvalGraph';
 
 function formatEval(score: number): string {
-    const sign = score > 0 ? '+' : '';
-    return `${sign}${(score / 100).toFixed(2)}`;
+    return formatEvaluationText(score) ?? 'n/a';
 }
 
 function formatRedPovEval(score: number): string {

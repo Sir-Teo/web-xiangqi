@@ -3687,16 +3687,27 @@ async function assertEngineMateScoresRenderAsMate(browser) {
         document.querySelector(".board-stage-chip-eval")?.textContent?.includes("Red POV +M3");
     }, null, { timeout: 15000 });
 
-    const state = await page.evaluate(() => ({
-      firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
-      firstScoreLabel: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("aria-label") || "",
-      firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
-      firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
-      stageEvalText: document.querySelector(".board-stage-chip-eval")?.textContent?.replace(/\s+/g, " ").trim() || "",
-      stageEvalLabel: document.querySelector(".board-stage-chip-eval")?.getAttribute("aria-label") || "",
-      stageEvalClass: document.querySelector(".board-stage-chip-eval")?.className || "",
-      overflowX: document.body.scrollWidth - document.body.clientWidth,
-    }));
+    const state = await page.evaluate(() => {
+      const summaryCard = (label) => {
+        const card = [...document.querySelectorAll(".graph-summary-card")]
+          .find((node) => node.querySelector("span")?.textContent?.trim() === label);
+        return card?.querySelector("strong")?.textContent?.replace(/\s+/g, " ").trim() || "";
+      };
+      return {
+        firstLineLabel: document.querySelector(".pv-line")?.getAttribute("aria-label") || "",
+        firstScoreLabel: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("aria-label") || "",
+        firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
+        firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+        stageEvalText: document.querySelector(".board-stage-chip-eval")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        stageEvalLabel: document.querySelector(".board-stage-chip-eval")?.getAttribute("aria-label") || "",
+        stageEvalClass: document.querySelector(".board-stage-chip-eval")?.className || "",
+        graphCurrent: summaryCard("Current"),
+        graphSwing: summaryCard("Swing"),
+        graphLegend: document.querySelector(".graph-legend strong")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        graphPeakRed: document.querySelector(".graph-extrema span")?.textContent?.replace(/\s+/g, " ").trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
 
     if (
       !state.firstLineLabel.includes("Red POV score +M3") ||
@@ -3709,6 +3720,20 @@ async function assertEngineMateScoresRenderAsMate(browser) {
       state.overflowX > 2
     ) {
       throw new Error(`Engine mate score did not render as mate on desktop: ${JSON.stringify(state)}`);
+    }
+
+    // The graph reads a bare number rather than the engine's `scoreStr`, which
+    // is how it came to print a mate in three as `+299.97` -- three hundred
+    // pawns -- beside an eval bar reading `+M3` for the same position. The
+    // Swing card is the one exception: it is a distance between two
+    // evaluations, so it stays a number.
+    if (
+      state.graphCurrent !== "Red POV +M3" ||
+      state.graphLegend !== "Red POV +M3" ||
+      state.graphPeakRed !== "Peak Red +M3" ||
+      !/^[+-]?\d+\.\d\d$/.test(state.graphSwing)
+    ) {
+      throw new Error(`Eval graph did not name the mate: ${JSON.stringify(state)}`);
     }
     await context.close();
   } catch (error) {

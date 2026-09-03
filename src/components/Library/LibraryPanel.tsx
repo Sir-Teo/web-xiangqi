@@ -9,6 +9,7 @@ import {
   type ReviewSummary,
 } from '../../utils/review';
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
+import { formatEvaluationText } from '../../utils/engineEvalReading';
 import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/searchTerms';
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { pgnDownloadFilename } from '../../utils/pgnFilename';
@@ -117,7 +118,7 @@ function getSavedGameSearchText(game: SavedGame) {
     game.moves.join(' '),
     treeMoves.join(' '),
     typeof game.finalEval === 'number'
-      ? `${game.finalEval}cp final evaluation ${(game.finalEval / 100).toFixed(2)}`
+      ? `${game.finalEval}cp final evaluation ${formatEvaluationText(game.finalEval) ?? 'n/a'}`
       : '',
     summary ? formatLibraryReviewSummary(summary) : '',
     summary?.lineSignature,
@@ -665,7 +666,7 @@ export function LibraryPanel({
                 {typeof game.finalEval === 'number' && (
                   <>
                     <span className={`lib-eval ${game.finalEval > 0 ? 'lib-eval--pos' : 'lib-eval--neg'}`}>
-                      {game.finalEval > 0 ? '+' : ''}{(game.finalEval / 100).toFixed(2)}
+                      {formatEvaluationText(game.finalEval) ?? 'n/a'}
                     </span>
                   </>
                 )}

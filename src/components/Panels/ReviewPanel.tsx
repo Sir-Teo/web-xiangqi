@@ -17,6 +17,7 @@ import {
     getMoveQualityClassName,
     isFiniteNumber,
 } from '../../utils/review';
+import { formatEvaluationText } from '../../utils/engineEvalReading';
 import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
@@ -496,8 +497,7 @@ function formatAccuracyPercent(accuracy: number): string {
 }
 
 function formatReviewEvalScore(score: number) {
-    if (!Number.isFinite(score)) return 'n/a';
-    return `${score > 0 ? '+' : ''}${(score / 100).toFixed(2)}`;
+    return formatEvaluationText(score) ?? 'n/a';
 }
 
 function formatReviewSide(side: ReviewSide) {
