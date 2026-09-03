@@ -3683,6 +3683,58 @@ async function assertEngineTelemetryDashboard(browser) {
  * Page-level, so it runs without an engine: the count is the fifth field of
  * the FEN the board already hands the engine.
  */
+/**
+ * Rotating a tablet must not flash a 36-pixel board.
+ *
+ * The stylesheet switches layouts on `@media (max-width: 900px)`, which applies
+ * on the resize itself. The markup used to switch on `viewportWidth <= 900`,
+ * and that width arrives through a 50ms debounce -- so for about a tenth of a
+ * second the desktop dock and toolbars were laid out at phone width, wrapped
+ * onto enough rows to eat the stage, and the board (whose height is its row's
+ * and whose width follows from 9:10) collapsed to 36x36 before the mobile
+ * markup arrived.
+ *
+ * The bar is one animation frame, which is what the fix actually buys and what
+ * a reader can perceive: after it the board is a board. Measured on the code
+ * this replaced, the speck was still there two frames later and for about six.
+ * A check that settles first cannot see any of it, which is why it went
+ * unnoticed.
+ */
+async function assertCrossingTheBreakpointKeepsABoard(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(600);
+
+  const measure = () => page.evaluate(() => {
+    const box = document.querySelector(".xiangqi-board")?.getBoundingClientRect();
+    return box
+      ? { width: Math.round(box.width), height: Math.round(box.height), ratio: box.width / box.height }
+      : null;
+  });
+
+  for (const [from, to] of [
+    [{ width: 1280, height: 820 }, { width: 390, height: 844 }],
+    [{ width: 390, height: 844 }, { width: 1280, height: 820 }],
+  ]) {
+    await page.setViewportSize(from);
+    await page.waitForTimeout(400);
+    await page.setViewportSize(to);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
+    const settled = await measure();
+    const where = `${from.width}x${from.height} to ${to.width}x${to.height}`;
+    if (!settled || settled.width < 200 || Math.abs(settled.ratio - 0.9) > 0.02) {
+      throw new Error(
+        `The board was still collapsed a frame after the layout changed, ${where}: ` +
+        `${JSON.stringify(settled)}. The markup and the stylesheet have to switch on the same query.`
+      );
+    }
+  }
+}
+
 async function assertCaptureFreeCountExplainsALevelEnding(page) {
   const ENDING = "3k5/9/9/9/9/9/9/9/4A4/3AK1R2 w - -";
   const load = async (clock, viewport) => {
@@ -8829,6 +8881,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertCrossingTheBreakpointKeepsABoard(page);
     await assertCaptureFreeCountExplainsALevelEnding(page);
     await assertEngineMateScoresRenderAsMate(browser);
     await assertEngineRestartDropsBufferedInfo(browser);

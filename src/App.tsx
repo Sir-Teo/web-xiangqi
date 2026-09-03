@@ -151,6 +151,14 @@ const LazyLibraryPanel = React.lazy(() =>
   import('./components/Library/LibraryPanel').then((module) => ({ default: module.LibraryPanel }))
 );
 
+/**
+ * The one breakpoint the app has. Written here and read by `matchMedia` so the
+ * markup switches on the same condition `@media (max-width: 900px)` does in
+ * App.css; two copies of a breakpoint is two layouts that can be on screen at
+ * once.
+ */
+const MOBILE_LAYOUT_QUERY = '(max-width: 900px)';
+
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
 type AssistMode = 'coach' | 'pro';
@@ -1086,7 +1094,37 @@ function App() {
   } = useXiangqi();
 
   const viewportWidth = viewportSize.width;
-  const isMobile = viewportWidth <= 900;
+  /**
+   * Which layout is on screen, taken from the same query the stylesheet uses.
+   *
+   * It used to be `viewportWidth <= 900`, and `viewportWidth` arrives through a
+   * 50ms debounce -- so a window crossing the breakpoint got the mobile
+   * *stylesheet* immediately and the mobile *markup* two frames later. In
+   * between, the desktop dock and toolbars were laid out at phone width, wrapped
+   * onto enough rows to eat the stage, and `.board-workspace` is a size
+   * container whose rows do not stretch: the board, which takes its height from
+   * its row and its width from that, collapsed to 36x36. Measured at 1280x820
+   * resized to 390x844, the speck stood for about 100ms on every crossing --
+   * every tablet rotation.
+   *
+   * `matchMedia` flips on the crossing itself and nowhere else, so the markup
+   * and the stylesheet change in the same frame. The debounce stays for
+   * `viewportWidth`, which feeds panel sizing where the cost of running on
+   * every resize event is real and the cost of being 50ms late is not.
+   */
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window === 'undefined' || typeof window.matchMedia !== 'function'
+      ? false
+      : window.matchMedia(MOBILE_LAYOUT_QUERY).matches
+  ));
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(MOBILE_LAYOUT_QUERY);
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    setIsMobile(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   // initialPanelWidth scales the starting width to the window, but it only ran
   // at mount: a window opened narrow and then widened kept 26%-of-narrow panels
