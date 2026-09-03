@@ -193,7 +193,6 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [variant, setVariant] = useState<string>('unknown');
     const [outputLines, setOutputLines] = useState<string[]>([]);
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
-    const [evalScore, setEvalScore] = useState<number>(0);
     const [wdl, setWdl] = useState<WdlStats | null>(null);
     const [searchStats, setSearchStats] = useState<EngineSearchStats | null>(null);
     const [isSearchQueued, setIsSearchQueued] = useState(false);
@@ -205,6 +204,21 @@ export function useEngine(options: EngineInitOptions = {}) {
     const outputLinesRef = useRef<string[]>([]);
     const pvLinesRef = useRef<PvLine[]>([]);
     const pvSlotRef = useRef<Record<number, PvLine>>({});
+    /**
+     * The evaluation this search has most recently read, handed to
+     * `onBestMove` when it finishes. Reset to 0 when a search starts, so a
+     * search that never reports a score reports nothing rather than the
+     * previous position's number.
+     *
+     * A `useState` mirrored this and was returned from the hook, and nothing
+     * ever read it: App.tsx takes its evaluation off the top PV line, which
+     * carries a search tag and so cannot be mistaken for another position's.
+     * The state was a re-render of the whole app on every buffered info flush
+     * -- five a second while a search runs -- for a number with no reader, and
+     * it was quietly wrong as well: the reset above cleared the ref but not the
+     * state, so a position evaluating to exactly 0 compared equal to the reset
+     * and left the previous position's evaluation standing.
+     */
     const latestEvalRef = useRef(0);
     const pendingInfoLineRef = useRef<string | null>(null);
     /**
@@ -310,9 +324,8 @@ export function useEngine(options: EngineInitOptions = {}) {
         pendingInfoLineRef.current = null;
 
         const bufferedEval = pendingEvalRef.current.score;
-        if (bufferedEval !== null && bufferedEval !== latestEvalRef.current) {
+        if (bufferedEval !== null) {
             latestEvalRef.current = bufferedEval;
-            setEvalScore(bufferedEval);
         }
 
         if (pendingWdlRef.current !== null) {
@@ -658,7 +671,6 @@ export function useEngine(options: EngineInitOptions = {}) {
             setVariant('disabled');
             setOutputLines([]);
             setPvLines([]);
-            setEvalScore(0);
             setWdl(null);
             setSearchStats(null);
         };
@@ -981,7 +993,6 @@ export function useEngine(options: EngineInitOptions = {}) {
         sendCommand,
         outputLines,
         pvLines,
-        evalScore,
         wdl,
         searchStats,
     };
