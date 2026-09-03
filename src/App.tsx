@@ -15,7 +15,7 @@ import {
   IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
-import { useXiangqi, type GameResult } from './hooks/useXiangqi';
+import { useXiangqi, type GameResult, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
@@ -1074,6 +1074,8 @@ function App() {
     jumpToMove,
     jumpToNode,
     deleteNode,
+    captureTreeSnapshot,
+    restoreTreeSnapshot,
   } = useXiangqi();
 
   const viewportWidth = viewportSize.width;
@@ -3731,12 +3733,56 @@ function App() {
    * express. A running review is over the line as it stands, so it is cancelled
    * first; a finished one is cleared by the line-signature effect on its own.
    */
+  /**
+   * A deletion can be taken back for a few seconds. The cross on a variation
+   * row and the palette command both remove a move and everything after it,
+   * which on the main line can be a whole game, with no confirmation -- a
+   * confirmation would slow down the pruning the cross exists for. An undo
+   * costs nothing until it is needed.
+   */
+  const [deleteUndo, setDeleteUndo] = useState<{ snapshot: MoveTreeSnapshot; removed: number } | null>(null);
+  const deleteUndoTimerRef = useRef<number | null>(null);
+  const dismissDeleteUndo = useCallback(() => {
+    if (deleteUndoTimerRef.current !== null) {
+      window.clearTimeout(deleteUndoTimerRef.current);
+      deleteUndoTimerRef.current = null;
+    }
+    setDeleteUndo(null);
+  }, []);
+  useEffect(() => () => {
+    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
+  }, []);
+  // A snapshot from a different root cannot be restored, so do not offer it.
+  useEffect(() => { dismissDeleteUndo(); }, [dismissDeleteUndo, rootFen]);
+
   const handleDeleteNode = useCallback((nodeId: string) => {
     if (nodeId === rootNodeId) return;
     if (reviewStatus === 'running') handleCancelReview();
     clearBoardMarkers();
-    deleteNode(nodeId);
-  }, [clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId]);
+    const snapshot = captureTreeSnapshot();
+    let removed = 0;
+    const stack = [nodeId];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      removed += 1;
+      stack.push(...(treeNodes[id]?.childrenIds ?? []));
+    }
+    if (!deleteNode(nodeId)) return;
+    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
+    setDeleteUndo({ snapshot, removed });
+    deleteUndoTimerRef.current = window.setTimeout(() => {
+      deleteUndoTimerRef.current = null;
+      setDeleteUndo(null);
+    }, 10000);
+  }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
+
+  const handleUndoDelete = useCallback(() => {
+    if (!deleteUndo) return;
+    if (reviewStatus === 'running') handleCancelReview();
+    clearBoardMarkers();
+    restoreTreeSnapshot(deleteUndo.snapshot);
+    dismissDeleteUndo();
+  }, [clearBoardMarkers, deleteUndo, dismissDeleteUndo, handleCancelReview, restoreTreeSnapshot, reviewStatus]);
   const canDeleteCurrentMove = currentNodeId !== rootNodeId && !isAiTurn;
 
   const paletteCommands = useMemo<Command[]>(() => [
@@ -6621,6 +6667,16 @@ function App() {
           onReview={dismissGameOverForReview}
         />
       )}
+
+      {deleteUndo ? (
+        <div className="undo-toast" role="status" data-testid="delete-undo-toast">
+          <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
+          <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
+          <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
+            <IconX />
+          </button>
+        </div>
+      ) : null}
 
       {showBoardEditor && (
         <BoardEditor

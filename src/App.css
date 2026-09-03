@@ -3328,6 +3328,47 @@ summary:active {
   line-height: 1;
 }
 
+/* Bottom-left, just above the bottom bar: centred it covered the captured
+   pieces tray, and the right is where the move list's own actions are. It
+   goes away on its own. */
+.undo-toast {
+  position: fixed;
+  left: 12px;
+  bottom: 76px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  z-index: 8900;
+}
+
+.undo-toast-btn {
+  min-height: unset;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-accent, var(--accent));
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-toast-dismiss {
+  min-height: unset;
+  padding: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+}
+
 .pv-line-wdl {
   color: var(--text-muted);
   font-weight: 500;

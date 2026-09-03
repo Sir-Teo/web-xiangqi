@@ -48,6 +48,13 @@ export interface MoveTreeNode {
     record?: MoveRecord;
 }
 
+export type MoveTreeSnapshot = {
+    treeNodes: Record<string, MoveTreeNode>;
+    activeLineNodeIds: string[];
+    currentMoveIndex: number;
+    rootFen: string;
+};
+
 export type MoveSequenceValidation =
     | { ok: true }
     | { ok: false; failedIndex: number; move: string; reason: string };
@@ -602,6 +609,36 @@ export function useXiangqi() {
         return true;
     }, [activeLineNodeIds, currentMoveIndex, rootPosition, syncPositionForNode, treeNodes]);
 
+    /**
+     * The tree as it stands, so a deletion can be taken back.
+     *
+     * Everything a delete changes is here and nothing else: the nodes, the
+     * line the board is on, and where on it the board stands. The root FEN is
+     * carried so a snapshot from before a New Game or an import is refused
+     * rather than grafted onto a different position.
+     */
+    const captureTreeSnapshot = useCallback((): MoveTreeSnapshot => ({
+        treeNodes,
+        activeLineNodeIds,
+        currentMoveIndex,
+        rootFen,
+    }), [activeLineNodeIds, currentMoveIndex, rootFen, treeNodes]);
+
+    const restoreTreeSnapshot = useCallback((snapshot: MoveTreeSnapshot): boolean => {
+        if (snapshot.rootFen !== rootFen) return false;
+        const nodeId = snapshot.currentMoveIndex === -1
+            ? ROOT_NODE_ID
+            : snapshot.activeLineNodeIds[snapshot.currentMoveIndex];
+        if (!snapshot.treeNodes[nodeId]) return false;
+        setTreeNodes(snapshot.treeNodes);
+        setActiveLineNodeIds(snapshot.activeLineNodeIds);
+        setCurrentMoveIndex(snapshot.currentMoveIndex);
+        const position = getPositionFromNode(snapshot.treeNodes, nodeId, rootPosition);
+        setGameResult(gameResultForPosition(position.board, position.sideToMove));
+        syncPositionForNode(snapshot.treeNodes, nodeId);
+        return true;
+    }, [rootFen, rootPosition, syncPositionForNode]);
+
     const jumpToMove = useCallback((index: number) => {
         if (index < -1 || index >= activeLineNodeIds.length) return;
         const nodeId = index === -1 ? ROOT_NODE_ID : activeLineNodeIds[index];
@@ -971,5 +1008,7 @@ export function useXiangqi() {
         jumpToMove,
         jumpToNode,
         deleteNode,
+        captureTreeSnapshot,
+        restoreTreeSnapshot,
     };
 }
