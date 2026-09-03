@@ -25,8 +25,6 @@ beside it in its own section; what is listed here is the question.
 | [A four-core desktop is graded as a phone](#a-four-core-desktop-is-graded-as-a-phone-open-question) | Nodes/second and engine-ready time on a real four-core machine running the threaded core. |
 | [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px viewport currently takes the single-threaded core whatever the hardware says. |
 | [The board pays for the reader's text size](#the-board-pays-for-the-readers-text-size-open-question) | Either a minimum board size and permission for the stage to scroll, or a decision on [whether collapsing a toolbar should give its row back](#there-is-a-third-option-and-it-needs-neither-decision) — 57px becomes 449px at 32px text, at the cost of the board resizing on every toggle. |
-| [The review note speaks a notation the reader did not choose](#the-review-note-speaks-a-notation-the-reader-did-not-choose-open-question) | Which of three fixes, given the note is stored per move rather than only displayed. |
-| [A phone is told nothing when an import goes wrong](#a-phone-is-told-nothing-when-an-import-goes-wrong-open-question) | Where a notice should live on a phone. The announcement half is done; the visible half needs a layout decision. |
 
 ## The one thing that leaves the machine
 
@@ -632,7 +630,35 @@ the file -- 53,728,090 bytes against 53,719,310 -- because a quantised net is at
 its entropy limit; `gzip -6` locally agrees to within a few bytes. The only
 thing that would move the first visit is a smaller net, which is a playing
 strength decision rather than a delivery one: `scripts/build-pikafish.sh` takes
-whatever `pikafish.nnue` upstream ships.
+whatever `pikafish.nnue` upstream ships. Upstream ships one -- `evaluate.h`
+defines `EvalFileDefaultNameBig` and no small counterpart -- so there is nothing
+to choose between.
+
+**So the wait cannot be shortened, and what was wrong is that it was
+unexplained.** "Loading engine" stood alone for the whole download, which on a
+phone connection is a minute or more with a board that has no evaluation and
+nothing saying why -- indistinguishable from an engine that is never coming.
+`templates/pikafish.js` now reads the body as a stream and posts the byte count
+out of the worker, and the status line reads `Loading engine · 21 of 53 MB`.
+
+Three things about that are not obvious:
+
+- **The page cannot measure this itself.** The weights are fetched *inside the
+  engine's worker*, and a worker's fetches are in neither the document's
+  resource timing nor its network events. This is the same fact that made
+  "telling whether the engine is up" hard to measure, above. The count has to
+  come from the wrapper.
+- **`content-length` is the encoded length**, and Pages gzips the net -- to
+  slightly more than it started as. The declared total is therefore close but
+  not exact, and a decoded body can outrun it, so the percentage clamps.
+  It is used as a capacity hint for the buffer too, which grows if the body
+  passes it: collecting chunks and joining them at the end would hold two
+  copies of 53MB at once on the device least able to afford it.
+- **The phone gets a percentage instead of the word, not beside it.** That chip
+  lives in the header measured at 40px against 66px in the note above; "Loading
+  24%" wraps it onto a second row, which moves the board down for the whole
+  download and back up when the engine arrives. `40%` is narrower than
+  `Loading`. The sentence is on the label and the title.
 
 #### The bundle is not where the load time is
 
@@ -1551,9 +1577,22 @@ everyone to fix it for the reader at 32px.
 **Wanted: whether the collapse should give the row back.** If it should, this
 is a smaller change than the floor and it fixes the same reader.
 
-## The review note speaks a notation the reader did not choose (open question)
+## The review note spoke a notation the reader did not choose (settled)
 
-A blunder card currently reads, on two adjacent lines:
+**Decided: the second option below, plus a rewriter for what is already
+stored.** `buildReviewNote` no longer names the move at all -- a blunder card
+reads "Big miss. The engine move was stronger by 1000+cp." -- and
+`formatReviewNoteForDisplay` rewrites the two old sentence shapes at render, so
+a game reviewed before the change reads the same as one reviewed after without
+touching what is in storage. Every surface that prints a note goes through it:
+the review panel, the move tree and the eval graph tooltip.
+
+The rest of this section is the analysis that led there, kept because the
+reasoning about a *stored* field is the part worth having next time.
+
+---
+
+A blunder card used to read, on two adjacent lines:
 
 > **Try C2+7**
 > Big miss. **B7→B0** was stronger by 1000+cp.
@@ -1579,7 +1618,7 @@ soldier from G6 moves to G5" — which is consistent with an interface that is
 in English throughout and offers a *move notation* setting rather than a
 language one.
 
-Three ways out, and the reason this is a question rather than a commit is that
+Three ways out, and the reason this was a question rather than a commit is that
 the note is **stored**, not just displayed — it is persisted per move in the
 library as `note` and `reviewNote`:
 
@@ -1594,7 +1633,27 @@ library as `note` and `reviewNote`:
 - **Leave it.** Coordinates are notation-independent and stable in storage,
   which is a real argument for a field that outlives a preference.
 
-## A phone is told nothing when an import goes wrong (open question)
+The second won because the panel already prints `Best: C2+7` directly below, so
+the note was repeating a move that was on screen anyway -- and because the
+argument for leaving it, that storage should be preference-independent, is
+satisfied by a note that names no move at all. The display rewriter is what
+keeps the first option's faithfulness for games already reviewed.
+
+## A phone was told nothing when an import went wrong (settled)
+
+**Decided: the mobile board header carries the notice**, as a full-width row
+under the actions -- `.mobile-request-notice`, marked `aria-hidden` because the
+app-shell live region described below is what announces it, and announcing it
+twice is worse than not seeing it. That is none of the three options weighed
+below exactly: the top bar stayed hidden, the bottom status row kept its own
+job, and no toast was introduced. The header row was available because it is
+the phone's own chrome rather than a desktop bar being un-hidden, so it costs
+nothing at any other width.
+
+The rest of this section is why the obvious answers were not taken.
+
+---
+
 
 Three messages share the top bar: "Shared link not loaded", "Imported first
 game", and "Stopped at <move>" when a record could only be read partway. All
@@ -1621,9 +1680,9 @@ rather than done:
   line, a CHECK badge and the FEN with its copy button;
 - a floating toast would be a new pattern for this app, which has none.
 
-Any of the three is defensible and they look different to use. Until one is
-picked, a sighted phone user importing a truncated record sees the moves that
-loaded and no warning.
+Any of the three is defensible and they look different to use -- which is what
+sent the answer to a fourth place, the mobile header, described at the top of
+this section.
 
 ## The tab order is a budget
 
