@@ -5519,6 +5519,16 @@ summary:active {
    184px at 2560x1440, and 495px when the cap was 580. Bounding the wrap by the
    same box keeps the assumption true. */
 :root { --board-max-width: 860px; }
+/* The smallest board the desktop layout may shrink to before the stage scrolls
+   instead. A width, like --board-max-width, so the two read against each other;
+   the floor is applied as a height because that is the axis this board is sized
+   from, exactly as max-height is derived from max-width below.
+
+   Chosen as the smallest board this app already ships anywhere: the stacked
+   phone layout bottoms out at 272px on a 360x640 screen at 32px text, and that
+   is treated as usable. See "The board pays for the reader's text size" in
+   docs/architecture.md. */
+:root { --board-min-width: 272px; }
 
 .board-workspace .board-wrap {
   /* Sizing from height is right, but 100vh minus a fixed 301px only models the
@@ -5548,6 +5558,56 @@ summary:active {
      way, so the board takes the room it actually has. */
   min-width: 0;
   align-self: end;
+}
+
+/* Deriving the board from its row is right until the row runs out. The chrome
+   around it -- two toolbars and the position dock -- grows with the reader's
+   text size while the window does not, and the board absorbs all of it: at
+   1024x600 a 314px board became 98px at 24px text and 36px at 32px. Ten ranks
+   in 36 pixels is not a small board, it is no board, and it is the reader who
+   asked for larger text who gets it. WCAG 1.4.4 asks for 200% without loss of
+   function; this lost the function entirely.
+     So: a floor, and somewhere for the overflow to go. The comments above
+   record a floor being tried before and putting the board under the toolbar --
+   that was a floor without the second half. `.board-stage` clips its overflow,
+   so anything past the row simply disappeared. Scrolling the stage keeps every
+   rank reachable, and because the floor only binds where the row is already
+   too short, nothing scrolls at any size that was fine before.
+     Desktop only. The stacked layout derives the board from height as well but
+   holds up: 390x844 measures 362px at every size from 16 to 32, and its worst
+   case is the 272px this floor is taken from. */
+@media (min-width: 901px) {
+  .board-workspace {
+    /* The floor has to move the layout, not paint over it. `minmax(0, 1fr)`
+       lets the board row shrink to nothing, so a board held at its floor simply
+       overlapped the dock underneath it -- the pieces drew on top of Turn,
+       Selection and Material. `auto` as the row's minimum is the content's own
+       minimum, which is what the floor is, so the row takes it, the dock is
+       pushed below, and the stage scrolls to reach both. */
+    grid-template-rows: minmax(auto, 1fr) auto;
+  }
+
+  .board-workspace .board-wrap {
+    min-height: calc(var(--board-min-width) * 10 / 9);
+    /* `align-self: end` on the rule above is what puts the board against the
+       dock below it, and it is also what made the first attempt at a floor
+       useless: an end-aligned box that outgrows its area overflows *upward*,
+       and upward overflow is not scrollable -- `scrollHeight` equals
+       `clientHeight` and the top ranks are simply gone under the toolbar. The
+       `safe` keyword is exactly this case: it keeps end alignment until the
+       item would overflow and falls back to start, which puts the excess below
+       where the scroll can reach it. */
+    align-self: safe end;
+  }
+
+  .board-stage {
+    /* Only the axis that can overflow. The board is centred horizontally and
+       bounded by the row's width, so a sideways scrollbar would only ever be a
+       rounding artefact. This has to come after the `overflow: hidden` further
+       up the file, which is what used to swallow the excess. */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
 }
 
 .position-dock {

@@ -3817,6 +3817,113 @@ async function assertEngineDownloadReportsItsProgress(browser) {
   }
 }
 
+/**
+ * The reader who asks for larger text must not get a smaller board than anyone.
+ *
+ * The desktop board takes its height from the row it sits in, which is what
+ * stops it sliding up behind the toolbar. The cost is that it absorbs every
+ * pixel the surrounding chrome takes, and the chrome grows with the reader's
+ * default font size while the window does not. Measured before the floor
+ * below: 1024x600 went 314px at 16px text to 98px at 24px and **36px** at 32px.
+ * Ten ranks in 36 pixels is not a small board, it is no board -- and WCAG 1.4.4
+ * asks for 200% text without loss of function.
+ *
+ * The floor is `--board-min-width`, and the stage scrolls where the floor and
+ * the chrome do not both fit. Both halves are required: the CSS comments record
+ * a floor being tried on its own, which put the board under the toolbar because
+ * `.board-stage` clipped what would not fit.
+ *
+ * Chrome's own font setting is what has to move, not `html { font-size }` --
+ * the second moves `rem` but not the `em` basis of a media query, and does not
+ * reproduce this at all.
+ */
+async function assertLargeTextKeepsAUsableBoard(browser) {
+  const FLOOR = 272;
+  const cases = [
+    { viewport: { width: 1024, height: 600 }, font: 16, floored: false },
+    { viewport: { width: 1024, height: 600 }, font: 24, floored: true },
+    { viewport: { width: 1024, height: 720 }, font: 32, floored: true },
+    { viewport: { width: 1440, height: 900 }, font: 32, floored: true },
+  ];
+
+  for (const { viewport, font, floored } of cases) {
+    const context = await browser.newContext({ viewport });
+    try {
+      const page = await context.newPage();
+      await clearAutoSaveBetweenNavigations(page);
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Page.enable");
+      await cdp.send("Page.setFontSizes", { fontSizes: { standard: font, fixed: font } });
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForTimeout(500);
+
+      const measured = await page.evaluate(() => {
+        const stage = document.querySelector(".board-stage");
+        const box = () => document.querySelector(".xiangqi-board").getBoundingClientRect();
+        const before = box();
+        // Scroll to the far end and check the last rank is on screen there:
+        // a floor with nowhere for its overflow to go is what put the board
+        // under the toolbar the last time this was tried.
+        stage.scrollTop = stage.scrollHeight;
+        const scrolled = box();
+        const reachable = scrolled.bottom <= window.innerHeight + 1 && scrolled.top >= -1;
+        stage.scrollTop = 0;
+        // A floor that only makes the child taller leaves the grid row where it
+        // was, and the board paints straight over the dock below it -- pieces
+        // on top of Turn, Selection and Material. The row has to take the
+        // floor, not the board alone.
+        const dock = document.querySelector(".position-dock")?.getBoundingClientRect();
+        const overlapsDock = Boolean(dock) &&
+          Math.min(before.bottom, dock.bottom) - Math.max(before.top, dock.top) > 1 &&
+          Math.min(before.right, dock.right) - Math.max(before.left, dock.left) > 1;
+        return {
+          width: Math.round(before.width),
+          ratio: before.width / before.height,
+          scrollable: stage.scrollHeight - stage.clientHeight,
+          reachable,
+          overlapsDock,
+          overflowX: document.body.scrollWidth - document.body.clientWidth,
+        };
+      });
+
+      const where = `${viewport.width}x${viewport.height} at ${font}px text`;
+      if (measured.width < FLOOR - 1) {
+        throw new Error(`The board fell under its floor at ${where}: ${JSON.stringify(measured)}`);
+      }
+      if (Math.abs(measured.ratio - 0.9) > 0.02) {
+        throw new Error(`The board stopped being 9:10 at ${where}: ${JSON.stringify(measured)}`);
+      }
+      if (!measured.reachable) {
+        throw new Error(
+          `The board could not be brought fully on screen at ${where}: ${JSON.stringify(measured)}. ` +
+          `A floor needs somewhere for its overflow to go.`
+        );
+      }
+      if (measured.overlapsDock) {
+        throw new Error(
+          `The board painted over the position dock at ${where}: ${JSON.stringify(measured)}. ` +
+          `The floor has to move the grid row, not just the board inside it.`
+        );
+      }
+      if (measured.overflowX > 2) {
+        throw new Error(`The floor pushed the page sideways at ${where}: ${JSON.stringify(measured)}`);
+      }
+      // The floor must not cost anything where the row was already big enough.
+      if (!floored && measured.scrollable > 1) {
+        throw new Error(`The stage scrolled where nothing needed it, ${where}: ${JSON.stringify(measured)}`);
+      }
+      await context.close();
+    } catch (error) {
+      try { await context.close(); } catch (_) {}
+      throw error;
+    }
+  }
+}
+
 async function assertCrossingTheBreakpointKeepsABoard(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8998,6 +9105,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);
     await assertCaptureFreeCountExplainsALevelEnding(page);
     await assertEngineDownloadReportsItsProgress(browser);

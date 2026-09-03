@@ -24,7 +24,6 @@ beside it in its own section; what is listed here is the question.
 | --- | --- |
 | [A four-core desktop is graded as a phone](#a-four-core-desktop-is-graded-as-a-phone-open-question) | Nodes/second and engine-ready time on a real four-core machine running the threaded core. |
 | [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px viewport currently takes the single-threaded core whatever the hardware says. |
-| [The board pays for the reader's text size](#the-board-pays-for-the-readers-text-size-open-question) | Either a minimum board size and permission for the stage to scroll, or a decision on [whether collapsing a toolbar should give its row back](#there-is-a-third-option-and-it-needs-neither-decision) — 57px becomes 449px at 32px text, at the cost of the board resizing on every toggle. |
 
 ## The one thing that leaves the machine
 
@@ -1480,7 +1479,65 @@ happened twice in one night: `npm test` does not run `test:openings` or
 them), and a check that reports success is only telling you about the things it
 looked at.
 
-## The board pays for the reader's text size (open question)
+## The board paid for the reader's text size (settled)
+
+**Decided: a floor, and the stage scrolls where the floor and the chrome do not
+both fit.** `--board-min-width` is 272px, chosen because it is the smallest
+board this app already ships anywhere — the stacked phone layout bottoms out
+there on a 360x640 screen at 32px text, and that case is treated as usable, so
+the desktop has no business going below it. The same grid, measured again:
+
+| default font | 1024x600 before | after | 1024x720 before | after |
+| --- | --- | --- | --- | --- |
+| 16px | 314px | 314px | 422px | 422px |
+| 20px | 231px | **272px, scrolls** | 339px | 339px |
+| 24px | 98px | **272px, scrolls** | 206px | **272px, scrolls** |
+| 32px | 36px | **272px, scrolls** | 70px | **272px, scrolls** |
+
+Measured in one run each side rather than quoted from the table further down,
+which was taken on a different machine and reads a few percent smaller
+throughout; what matters is the pair, not the absolute figure. Nothing at 16px
+changes by a pixel anywhere, and 1920x1200 is untouched at every size, because
+the floor binds only where the row was already too short. Six of the sixteen
+cells measured scroll, every one of them a case that previously showed a board
+too small to play on.
+
+**Three things had to be true together**, and the first attempt at this had one
+of them:
+
+- **A floor.** `min-height`, since height is the axis this board is sized from;
+  the constant is written as a width so it reads against `--board-max-width`,
+  the way `max-height` is already derived from it.
+- **Somewhere for the overflow to go.** `.board-stage` clipped it, which is
+  what the comments in `App.css` mean when they say a floor was tried and put
+  the board under the toolbar. The stage scrolls on the desktop layout now.
+- **Overflow in the direction the scroll can reach.** This is the one that is
+  easy to miss and it failed silently: `.board-wrap` is `align-self: end`, and
+  an end-aligned box that outgrows its area overflows *upward*, where scroll
+  cannot follow — `scrollHeight` equals `clientHeight` and the top ranks are
+  simply gone. `align-self: safe end` keeps the end alignment until the item
+  would overflow and falls back to start, which is exactly this case.
+- **The row taking the floor, not only the board.** `.board-workspace` is
+  `grid-template-rows: minmax(0, 1fr) auto`, and a row whose minimum is zero
+  does not grow for a child's `min-height` — so the board simply drew over the
+  position dock, pieces on top of Turn, Selection and Material. `minmax(auto,
+  1fr)` makes the row's minimum the content's own, which is what the floor is.
+  The screenshot of that overlap looked *fine* at a glance, which is why the
+  browser check asserts the two boxes do not intersect rather than only that
+  the board is big enough.
+
+Desktop only. The stacked layout derives its board from height too but holds
+up, as the paragraph on phones below records.
+
+**The third option in this section was not taken**, and is still worth having
+written down: it needs a design decision about how the collapse feels, and this
+fixes the reader without asking them to discover a toolbar toggle first. WCAG
+1.4.4 asks for 200% text without loss of function, which is not satisfied by
+a workaround the reader has to find.
+
+The rest of this section is the measurement and the analysis that led here.
+
+---
 
 The desktop board takes its size from the height of the row it sits in, which
 is what stops it overflowing and sliding up behind the top toolbar — see the
@@ -1522,12 +1579,11 @@ not.
 
 So the fix is not a breakpoint. It is a floor: a minimum board size, with the
 stage allowed to scroll when the chrome and that minimum do not both fit.
-`.board-stage` currently hides its overflow, which is exactly why the present
-code has no floor — the comments record a floor being tried and causing the
-board to slide under the toolbar, costing Red's back rank at 1024x600 and 150%
-text. A floor is only safe once the overflow it creates has somewhere to go.
-**Wanted before changing it: agreement on what the minimum board is, and on
-whether the board stage may scroll.**
+`.board-stage` used to hide its overflow, which is exactly why the code had no
+floor — the comments record a floor being tried and causing the board to slide
+under the toolbar, costing Red's back rank at 1024x600 and 150% text. A floor is
+only safe once the overflow it creates has somewhere to go. That is what was
+built; the numbers are at the top of this section.
 
 ### There is a third option, and it needs neither decision
 
@@ -1574,8 +1630,10 @@ something and expands it again would have the board jump twice. Nothing in
 but it is the behaviour, and it is not obviously worth trading away for
 everyone to fix it for the reader at 32px.
 
-**Wanted: whether the collapse should give the row back.** If it should, this
-is a smaller change than the floor and it fixes the same reader.
+**Still open: whether the collapse should give the row back.** It is no longer
+the reader's only way out — the floor above fixes them without asking them to
+find a toolbar toggle — but a collapse that vacates a row and hands the board
+nothing is still a control that does not do what it looks like it does.
 
 ## The review note spoke a notation the reader did not choose (settled)
 
