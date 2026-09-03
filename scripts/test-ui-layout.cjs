@@ -3671,6 +3671,76 @@ async function assertEngineTelemetryDashboard(browser) {
   }
 }
 
+/**
+ * A ground-out ending reads level, and the board has to say why.
+ *
+ * `gameResultForPosition` never adjudicates a draw -- which move-limit edition
+ * applies is the tournament's decision. Pikafish has no such reticence: it
+ * calls the game drawn at `rule60 >= 120` and shades every evaluation towards
+ * level on the way there. Without a notice, a won ending simply drifts to 0.00
+ * with nothing on screen to account for it.
+ *
+ * Page-level, so it runs without an engine: the count is the fifth field of
+ * the FEN the board already hands the engine.
+ */
+async function assertCaptureFreeCountExplainsALevelEnding(page) {
+  const ENDING = "3k5/9/9/9/9/9/9/9/4A4/3AK1R2 w - -";
+  const load = async (clock, viewport) => {
+    await page.setViewportSize(viewport);
+    await page.goto(
+      `http://127.0.0.1:8192/web-xiangqi/?fen=${encodeURIComponent(`${ENDING} ${clock} 70`)}`,
+      { waitUntil: "domcontentloaded", timeout: 60000 }
+    );
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    for (const name of [/start fresh|keep the link/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    return page.evaluate(() => {
+      const node = document.querySelector('[data-testid="capture-free-notice"]');
+      return {
+        present: Boolean(node),
+        reached: node?.getAttribute("data-reached") || "",
+        text: node?.textContent?.replace(/\s+/g, " ").trim() || "",
+        overflowX: document.body.scrollWidth - document.body.clientWidth,
+      };
+    });
+  };
+  const desktop = { width: 1280, height: 820 };
+
+  const quiet = await load(0, desktop);
+  if (quiet.present) {
+    throw new Error(`The 60-move notice showed on a position with nothing to say: ${JSON.stringify(quiet)}`);
+  }
+
+  const counting = await load(98, desktop);
+  if (
+    !counting.present ||
+    counting.reached !== "false" ||
+    !counting.text.includes("49 moves without a capture") ||
+    !counting.text.includes("11 moves left")
+  ) {
+    throw new Error(`The 60-move notice did not count a capture-free ending: ${JSON.stringify(counting)}`);
+  }
+
+  // Past `rule60 >= 120`, which is the point the engine stops calling it a win.
+  for (const viewport of [desktop, { width: 390, height: 844 }]) {
+    const reached = await load(124, viewport);
+    const where = `${viewport.width}x${viewport.height}`;
+    if (
+      !reached.present ||
+      reached.reached !== "true" ||
+      !reached.text.includes("62 moves without a capture") ||
+      !reached.text.includes("Play is not stopped")
+    ) {
+      throw new Error(`The 60-move notice did not report the limit at ${where}: ${JSON.stringify(reached)}`);
+    }
+    if (reached.overflowX > 2) {
+      throw new Error(`The 60-move notice pushed the page sideways at ${where}: ${JSON.stringify(reached)}`);
+    }
+  }
+}
+
 async function assertEngineMateScoresRenderAsMate(browser) {
   const desktop = await newIsolatedPage(browser);
   try {
@@ -8759,6 +8829,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertCaptureFreeCountExplainsALevelEnding(page);
     await assertEngineMateScoresRenderAsMate(browser);
     await assertEngineRestartDropsBufferedInfo(browser);
     await assertEngineRestartRestoresDetailOptions(browser);

@@ -793,18 +793,33 @@ a capture resets it, anything else adds one, and the root's value is whatever
 its FEN said. There is no second copy to fall out of step, and it stays right
 when a line is replayed or branched.
 
-The engine and the app now disagree about one thing, deliberately. Pikafish
+The engine and the app still disagree about one thing, deliberately. Pikafish
 will call a position drawn once that clock is high enough; `gameResultForPosition`
 never returns a draw at all, for the same reason it does not adjudicate a
 repetition — the rule depends on which ruleset you are playing, and guessing
-would put a wrong verdict on a real game. So a long capture-free ending shows
-0.00 with the game still running, and the app says nothing about why.
+would put a wrong verdict on a real game.
 
-That is a reporting gap rather than a wrong answer, and it is now cheap to
-close if anyone wants to: the clock is on the board's FEN, so a notice in the
-shape of the repetition one — stating the count and what the rule would say,
-without ending the game — needs no new state. What it needs is a decision
-about *which* limit to name, which is the same question the chase rules raise.
+**The game is still not ended, but the board no longer stays silent.**
+`utils/captureFreeRule.ts` reports the count beside the repetition notice from
+thirty capture-free moves on, and names what the engine will do with it. That
+was recorded here as a reporting gap that needed a decision about *which* limit
+to name; the decision is that there is nothing to decide, because the notice
+reports the *engine's* rule rather than adjudicating the game — and the engine's
+rule is readable, `rule60 >= 120` in `position.cpp`.
+
+Naming it turned out to matter more than the draw itself. `evaluate.cpp` shades
+every evaluation towards level all the way there:
+
+```cpp
+v -= (v * pos.rule60_count()) / 253;
+```
+
+so a won ending is already reading flatter than it is long before the limit,
+with nothing on screen to account for it. The same endgame at clock 0 and clock
+124 is +M3 and 0.00, and only the second one used to look like a broken engine.
+
+The count comes off the board's FEN, so there is no new state and no second
+copy to fall out of step — which is what made this cheap.
 
 ## Storage
 

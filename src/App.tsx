@@ -82,6 +82,12 @@ import {
   shouldReportRepetition,
 } from './utils/repetition';
 import {
+  describeCaptureFree,
+  formatCaptureFreeHeadline,
+  formatCaptureFreeRule,
+  readCaptureFreePlies,
+} from './utils/captureFreeRule';
+import {
   describeAnalysisActivity,
   formatAnalysisActivity,
   isAnalysisActivityStalled,
@@ -2708,6 +2714,14 @@ function App() {
   // A forbidden move is worth saying at the first repetition, before it is
   // played, whatever the threshold for an unforced one.
   const visibleRepetition = shouldReportRepetition(repetition) || cloudRuleHasVerdict ? repetition : null;
+  /**
+   * Why a won ending reads level. The clock is already the fifth field of the
+   * FEN the board hands the engine, so this needs no state of its own.
+   */
+  const captureFree = useMemo(
+    () => describeCaptureFree(readCaptureFreePlies(currentFen)),
+    [currentFen]
+  );
   const cloudRuleText = useMemo(() => {
     if (!cloudRuleHasVerdict) return null;
     const name = (uci: string) => formatMoveInStyle(board, uci, notationStyle);
@@ -5750,6 +5764,25 @@ function App() {
                         {cloudRuleText}
                       </em>
                     ) : null}
+                  </div>
+                ) : null}
+                {/* The other rule the app will not adjudicate but the engine
+                    does. Pikafish draws the game at sixty capture-free moves
+                    and discounts its evaluation all the way there, so without
+                    this a ground-out ending simply reads flatter than it is
+                    with nothing on screen to say why. */}
+                {captureFree ? (
+                  <div
+                    className={`position-stat position-stat-repetition${captureFree.reached ? ' position-stat-repetition-binding' : ''}`}
+                    role="status"
+                    data-testid="capture-free-notice"
+                    data-reached={captureFree.reached ? 'true' : 'false'}
+                  >
+                    <span>60-move rule</span>
+                    <strong>{formatCaptureFreeHeadline(captureFree)}</strong>
+                    <em title={formatCaptureFreeRule(captureFree)}>
+                      {formatCaptureFreeRule(captureFree)}
+                    </em>
                   </div>
                 ) : null}
                 <div className="position-stat position-stat-selection">
