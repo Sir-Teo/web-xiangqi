@@ -57,6 +57,7 @@ import { passMoveFen } from './utils/threatPosition';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
+import { useCloudRule } from './hooks/useCloudRule';
 import { CLOUD_BOOK_SITE_NAME, formatCloudBookScore } from './utils/cloudBook';
 import {
   NOTATION_STYLES,
@@ -2694,7 +2695,31 @@ function App() {
     const [placement, sideChar] = rootFen.trim().split(/\s+/);
     return describeRepetition(parseFenBoard(placement), sideChar === 'b' ? 'b' : 'w', line);
   }, [currentMoveIndex, moveHistory, rootFen]);
-  const visibleRepetition = shouldReportRepetition(repetition) ? repetition : null;
+  /**
+   * chessdb.cn's ruling on the moves from here, once the position has stood
+   * here before. It is the part `describeRepetition` cannot do: a chase.
+   */
+  const repetitionLineMoves = useMemo(
+    () => moveHistory.slice(0, currentMoveIndex + 1).map((record) => record.uci),
+    [currentMoveIndex, moveHistory]
+  );
+  const cloudRule = useCloudRule(rootFen, repetitionLineMoves, repetition.occurrences >= 2, cloudBookEnabled);
+  const cloudRuleHasVerdict = cloudRule.status === 'ok' && (cloudRule.banned.length > 0 || cloudRule.drawing.length > 0);
+  // A forbidden move is worth saying at the first repetition, before it is
+  // played, whatever the threshold for an unforced one.
+  const visibleRepetition = shouldReportRepetition(repetition) || cloudRuleHasVerdict ? repetition : null;
+  const cloudRuleText = useMemo(() => {
+    if (!cloudRuleHasVerdict) return null;
+    const name = (uci: string) => formatMoveInStyle(board, uci, notationStyle);
+    const parts: string[] = [];
+    if (cloudRule.banned.length > 0) {
+      parts.push(`${cloudRule.banned.map(name).join(', ')} ${cloudRule.banned.length === 1 ? 'is' : 'are'} forbidden: repeating it loses.`);
+    }
+    if (cloudRule.drawing.length > 0) {
+      parts.push(`${cloudRule.drawing.map(name).join(', ')} would be ruled a draw.`);
+    }
+    return `${CLOUD_BOOK_SITE_NAME}: ${parts.join(' ')}`;
+  }, [board, cloudRule.banned, cloudRule.drawing, cloudRuleHasVerdict, notationStyle]);
 
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';
@@ -5179,7 +5204,7 @@ function App() {
                     {!cloudBookEnabled ? (
                       <>
                         <p className="library-explorer-note">
-                          What is played here, from the {CLOUD_BOOK_SITE_NAME} database. Sends this position, and nothing else, to {CLOUD_BOOK_SITE_NAME}.
+                          What is played here, from the {CLOUD_BOOK_SITE_NAME} database, and its ruling on a repetition. Sends this position -- and, once a position repeats, the moves that led to it -- and nothing else, to {CLOUD_BOOK_SITE_NAME}.
                         </p>
                         <button
                           type="button"
@@ -5720,6 +5745,11 @@ function App() {
                     <em title={formatRepetitionRule(visibleRepetition)}>
                       {formatRepetitionRule(visibleRepetition)}
                     </em>
+                    {cloudRuleText ? (
+                      <em className="position-stat-cloud-rule" title={cloudRuleText} data-testid="repetition-cloud-rule">
+                        {cloudRuleText}
+                      </em>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="position-stat position-stat-selection">

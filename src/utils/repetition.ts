@@ -40,6 +40,10 @@ import { boardToFen, type BoardState, type Side } from './xiangqi';
  * unclassified cycle reports `unforced`, and the wording tells the player it
  * is a draw *unless a chase is involved* rather than claiming it is drawn.
  *
+ * `cloudRule.ts` is where a chase does get adjudicated: chessdb.cn has the
+ * machinery, and once the reader has the cloud book on, the moves it rules
+ * forbidden or drawn are shown under this module's verdict.
+ *
  * Nothing here ends a game on its own. It describes the position so the board
  * can say what the rules require, which is what a player needs and what the
  * repo did not have.

@@ -3328,6 +3328,13 @@ summary:active {
   line-height: 1;
 }
 
+/* The cloud's ruling under the local one, in the same small type. */
+.position-stat-cloud-rule {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--warning, #f59e0b);
+}
+
 /* Bottom-left, just above the bottom bar: centred it covered the captured
    pieces tray, and the right is where the move list's own actions are. It
    goes away on its own. */
