@@ -94,6 +94,7 @@ import {
   isAnalysisActivityStalled,
   resolveAnalysisActivity,
 } from './utils/analysisActivity';
+import { describeShareLinkFailure, shareLinkHeadline, type ShareLinkFailure } from './utils/shareLinkNotice';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
@@ -169,7 +170,7 @@ type PvLineCount = 1 | 3 | 5;
 type DeepSearchMode = 'bounded' | 'infinite';
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
-type ShareLinkNotice = { tone: 'warning'; text: string; positionKey?: string } | null;
+type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
 type BoardSquare = { file: number; rank: number };
 type BoardArrow = {
@@ -3144,7 +3145,12 @@ function App() {
 
     clearExportFailure();
     setShareLinkNotice(share.treeOmitted
-      ? { tone: 'warning', text: 'Variations omitted', positionKey: shareNoticePositionKey }
+      ? {
+          tone: 'warning',
+          text: 'Variations omitted',
+          detail: 'The link was copied. It carries more variations than a link can hold, so only the line on screen went with it.',
+          positionKey: shareNoticePositionKey,
+        }
       : null
     );
     if (copiedShareToastTimerRef.current !== null) {
@@ -3667,6 +3673,20 @@ function App() {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
     shareLinkLoadedRef.current = true;
 
+    /**
+     * The recipient did not write this link and cannot see the sender's
+     * console, which is where the reason used to go. The import box has said
+     * which move stopped it since it was written; a share link said "Shared
+     * link not loaded" for five different failures and nothing else.
+     */
+    const failShareLink = (failure: ShareLinkFailure) => {
+      setShareLinkNotice({
+        tone: 'warning',
+        text: shareLinkHeadline(failure),
+        detail: describeShareLinkFailure(failure),
+      });
+    };
+
     const params = new URLSearchParams(window.location.search);
     const rawFen = params.get('fen')?.trim() || undefined;
     const rawMoves = params.get('moves') || '';
@@ -3674,7 +3694,7 @@ function App() {
     const sharedMoveTree = decodeSavedMoveTreeParam(rawTree);
     const rawMode = params.get('mode');
     if (isMoveImportTextTooLarge(rawMoves)) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      failShareLink({ kind: 'too-long' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
     }
@@ -3684,7 +3704,7 @@ function App() {
     // the cap so the line it returns can always be saved, which means its own
     // length can no longer tell us the link was too long.
     if (hasTooManyUciMoves(rawMoves)) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      failShareLink({ kind: 'too-many-moves' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
       return;
     }
@@ -3694,21 +3714,26 @@ function App() {
     // damaged in transit -- and silently dropping it handed the recipient a
     // shorter game than was sent, with nothing said.
     const sharedMoveTokens = rawMoves.trim().split(/\s+/).filter(Boolean);
-    if (sharedMoveTokens.some((token) => !/^[a-i][0-9][a-i][0-9]$/i.test(token))) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+    const unreadableToken = sharedMoveTokens.find((token) => !/^[a-i][0-9][a-i][0-9]$/i.test(token));
+    if (unreadableToken !== undefined) {
+      failShareLink({ kind: 'unreadable-move', token: unreadableToken.slice(0, 12) });
       logDiagnosticWarning('Ignored shared Xiangqi link with unreadable moves:', rawMoves.slice(0, 80));
       return;
     }
     if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
+      // Every move token read as a move above, so an empty line here means the
+      // `tree` parameter was the only content and it did not decode.
       if (rawTree || rawMoves.trim()) {
-        setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+        failShareLink({ kind: 'variations-only' });
       }
       return;
     }
 
     const validation = validateMoveSequence(moves, rawFen);
     if (!validation.ok) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      failShareLink(validation.reason === 'Invalid start FEN'
+        ? { kind: 'bad-start-position' }
+        : { kind: 'illegal-move', moveNumber: (validation.failedIndex ?? 0) + 1, reason: validation.reason });
       logDiagnosticWarning('Ignored invalid shared Xiangqi link:', validation);
       return;
     }
@@ -3717,12 +3742,16 @@ function App() {
     const sharedTreeContainsLine = sharedMoveTree?.length ? moveTreeContainsLine(sharedMoveTree, moves) : false;
     const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true && sharedTreeContainsLine : false;
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
-      setShareLinkNotice({ tone: 'warning', text: 'Shared link not loaded' });
+      failShareLink({ kind: 'variations-only' });
       logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
       return;
     }
 
-    setShareLinkNotice(rawTree && !canLoadSharedTree ? { tone: 'warning', text: 'Shared variations not loaded' } : null);
+    if (rawTree && !canLoadSharedTree) {
+      failShareLink({ kind: 'variations' });
+    } else {
+      setShareLinkNotice(null);
+    }
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok) {
       logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
     } else if (sharedMoveTree?.length && treeValidation?.ok && !sharedTreeContainsLine) {
@@ -4430,9 +4459,9 @@ function App() {
         that stopped partway.
 
         This region is outside that bar and is the only thing that announces
-        them, at every width; the chips themselves are visual. A phone still
-        shows nothing, which is an open question in docs/architecture.md --
-        this is the half that needs no layout decision.
+        them, at every width; the chips themselves are visual. The phone sees
+        them too, in `.mobile-request-notice` under the board header, which is
+        marked aria-hidden so this region stays the only voice.
       */}
       {/* `aria-live` without `role="status"` on purpose: the board's own
           announcer is found by `.sr-only[role="status"]`, and a second match
@@ -4445,7 +4474,8 @@ function App() {
             so adding it would announce every engine problem twice. Checked,
             not assumed: with the engine forced to fail at 390px, both regions
             read "Recovering engine". */}
-        {importNotice?.label ?? shareLinkNotice?.text ?? ''}
+        {importNotice?.label
+          ?? (shareLinkNotice ? `${shareLinkNotice.text}. ${shareLinkNotice.detail}` : '')}
       </div>
 
       {/* Nineteen controls stand between the start of the page and the board:
@@ -4505,6 +4535,10 @@ function App() {
               <div
                 className={`top-engine-state top-engine-state-${shareLinkNotice.tone}`}
                 data-testid="share-link-warning"
+                /* Same shape as the import chip beside it: the slot is 192px,
+                   so the sentence lives on the tooltip and the label. */
+                title={`${shareLinkNotice.text}. ${shareLinkNotice.detail}`}
+                aria-label={`${shareLinkNotice.text}. ${shareLinkNotice.detail}`}
               >
                 <span className={`status-dot ${shareLinkNotice.tone}`} />
                 <span>{shareLinkNotice.text}</span>
@@ -5585,7 +5619,8 @@ function App() {
                 <div
                   className={`mobile-request-notice mobile-request-notice-${shareLinkNotice?.tone ?? 'warning'}`}
                   data-testid="mobile-request-notice"
-                  title={importNotice?.label ?? shareLinkNotice?.text}
+                  title={importNotice?.label
+                    ?? (shareLinkNotice ? `${shareLinkNotice.text}. ${shareLinkNotice.detail}` : undefined)}
                   aria-hidden="true"
                 >
                   <span className={`status-dot ${shareLinkNotice?.tone ?? 'warning'}`} />

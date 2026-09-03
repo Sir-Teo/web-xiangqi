@@ -3837,6 +3837,78 @@ async function assertEngineDownloadReportsItsProgress(browser) {
  * the second moves `rem` but not the `em` basis of a media query, and does not
  * reproduce this at all.
  */
+/**
+ * A link that does not load has to say why.
+ *
+ * The recipient did not write the link and cannot see the sender's console,
+ * which is where the reason went: five different failures all produced
+ * "Shared link not loaded" and nothing else. The import box beside it has said
+ * which move stopped it since it was written.
+ *
+ * The chip stays short -- its slot is 192px, about 25 characters of the mono
+ * face it uses -- so the sentence is on the label and the tooltip, which is the
+ * shape the import chip next to it already uses, and it is what the live region
+ * announces.
+ */
+async function assertShareLinkSaysWhyItDidNotLoad(page) {
+  const expectations = [
+    {
+      what: "a move that cannot be played",
+      query: "?moves=h2e2+h9g7+h0g2+i9h9+i0h0+h9h4",
+      // The sixth ply, which a record counts as Black's third move, and the
+      // rules engine's "rook path blocked" turned into a sentence.
+      says: ["move 3 for Black", "Chariot path is blocked"],
+    },
+    {
+      what: "a token that is not a move",
+      query: "?moves=h2e2+zz99+h0g2",
+      says: ['"zz99"', "ask for it again"],
+    },
+    {
+      what: "a starting position that cannot exist",
+      query: `?fen=${encodeURIComponent("nonsense w - - 0 1")}`,
+      says: ["starting position in the link"],
+    },
+    {
+      what: "more moves than a game can hold",
+      query: `?moves=${Array.from({ length: 1200 }, () => "h2e2").join("+")}`,
+      says: ["more moves than"],
+    },
+  ];
+
+  for (const { what, query, says } of expectations) {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto(`http://127.0.0.1:8192/web-xiangqi/${query}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("share-link-warning").waitFor({ timeout: 10000 });
+
+    const state = await page.evaluate(() => {
+      const chip = document.querySelector('[data-testid="share-link-warning"]');
+      return {
+        chip: chip?.textContent?.replace(/\s+/g, " ").trim() || "",
+        label: chip?.getAttribute("aria-label") || "",
+        title: chip?.getAttribute("title") || "",
+        announced: document.querySelector('[data-testid="notice-announcement"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
+      };
+    });
+
+    if (state.chip !== "Shared link not loaded") {
+      throw new Error(`The headline changed for ${what}: ${JSON.stringify(state)}`);
+    }
+    for (const phrase of says) {
+      if (!state.label.includes(phrase)) {
+        throw new Error(`The reason for ${what} did not mention ${phrase}: ${JSON.stringify(state)}`);
+      }
+    }
+    if (state.title !== state.label || state.announced !== state.label) {
+      throw new Error(`Seen, heard and hovered disagreed for ${what}: ${JSON.stringify(state)}`);
+    }
+  }
+}
+
 async function assertLargeTextKeepsAUsableBoard(browser) {
   const FLOOR = 272;
   const cases = [
@@ -9105,6 +9177,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);
     await assertCaptureFreeCountExplainsALevelEnding(page);
