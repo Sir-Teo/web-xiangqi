@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 import { detectEngineBootConfig } from '../utils/analysisProfile';
 import { MATE_SCORE_BASE, emptyEvalReading, takeEvalReading } from '../utils/engineEvalReading';
+import { shouldPublishAssetProgress, type EngineAssetProgress } from '../utils/engineAssetProgress';
 
 // Advanced wrapper hook for Pikafish engine communication in Web Worker
 const OUTPUT_LINE_LIMIT = 100;
@@ -196,6 +197,11 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [wdl, setWdl] = useState<WdlStats | null>(null);
     const [searchStats, setSearchStats] = useState<EngineSearchStats | null>(null);
     const [isSearchQueued, setIsSearchQueued] = useState(false);
+    /**
+     * How far the engine's 53MB weights have got. Null before the first byte
+     * and after the engine is up; see `utils/engineAssetProgress`.
+     */
+    const [assetProgress, setAssetProgress] = useState<EngineAssetProgress | null>(null);
     const enabled = options.enabled ?? true;
 
     const engineRef = useRef<any>(null);
@@ -240,6 +246,13 @@ export function useEngine(options: EngineInitOptions = {}) {
     const initTokenRef = useRef(0);
     const isSearchingRef = useRef(false);
     const stopRequestedRef = useRef(false);
+    /**
+     * The last reading handed to React. A chunk is a few hundred kilobytes, so
+     * the download reports a few hundred times and the readout moves in
+     * megabytes; publishing every chunk would re-render the app for a number
+     * nobody could see change.
+     */
+    const publishedAssetProgressRef = useRef<EngineAssetProgress | null>(null);
     const pendingSearchRef = useRef<SearchRequest | null>(null);
     const pendingOptionCommandsRef = useRef<Map<string, string>>(new Map());
     const activeSearchSignatureRef = useRef('');
@@ -553,6 +566,8 @@ export function useEngine(options: EngineInitOptions = {}) {
         const threads = options.threads ?? fallbackBootConfig!.threads;
         const hashMB = options.hashMB ?? fallbackBootConfig!.hashMB;
         didConfigureSessionRef.current = false;
+        publishedAssetProgressRef.current = null;
+        setAssetProgress(null);
         setIsReady(false);
         setIsSearching(false);
         setSearchStats(null);
@@ -575,6 +590,13 @@ export function useEngine(options: EngineInitOptions = {}) {
             onWorkerErrorRef.current?.(`[boot-error] Pikafish did not finish booting within ${Math.ceil(readyTimeoutMs / 1000)}s.`);
         }, readyTimeoutMs);
 
+        const handleAssetProgress = (progress: EngineAssetProgress) => {
+            if (initToken !== initTokenRef.current) return;
+            if (!shouldPublishAssetProgress(publishedAssetProgressRef.current, progress)) return;
+            publishedAssetProgressRef.current = progress;
+            setAssetProgress(progress);
+        };
+
         let createEnginePromise: Promise<any>;
         try {
             const engineBasePath = getEngineAssetUrl();
@@ -587,6 +609,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 threads,
                 hashMB,
                 initTimeoutMs: readyTimeoutMs,
+                onAssetProgress: handleAssetProgress,
             }));
         } catch (err: any) {
             clearEngineBootTimer();
@@ -672,6 +695,8 @@ export function useEngine(options: EngineInitOptions = {}) {
             setOutputLines([]);
             setPvLines([]);
             setWdl(null);
+            publishedAssetProgressRef.current = null;
+            setAssetProgress(null);
             setSearchStats(null);
         };
 
@@ -801,6 +826,10 @@ export function useEngine(options: EngineInitOptions = {}) {
             clearEngineReadyTimer();
             appendOutputLine(msg);
             setIsReady(true);
+            if (publishedAssetProgressRef.current !== null) {
+                publishedAssetProgressRef.current = null;
+                setAssetProgress(null);
+            }
         } else if (msg.startsWith('[worker-error]')) {
             clearEngineReadyTimer();
             flushBufferedInfo();
@@ -995,5 +1024,6 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvLines,
         wdl,
         searchStats,
+        assetProgress,
     };
 }

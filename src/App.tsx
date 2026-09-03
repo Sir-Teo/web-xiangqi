@@ -15,6 +15,7 @@ import {
   IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
+import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
@@ -1434,6 +1435,7 @@ function App() {
     pvLines,
     wdl,
     searchStats,
+    assetProgress,
   } = useEngine({
     enabled: engineRequired,
     restartToken: engineRestartToken,
@@ -2701,7 +2703,21 @@ function App() {
   const bottomEngineStatus = !isReady
     ? engineNotice?.text ?? formatAnalysisActivity(analysisActivity)
     : formatAnalysisActivity(analysisActivity);
-  const topEngineStatusText = engineNotice?.text ?? (isReady ? 'Engine ready' : 'Loading engine');
+  /**
+   * The engine's weights are 53MB and the whole app waits on them, so "Loading
+   * engine" used to stand alone for a minute or more on a phone connection --
+   * indistinguishable from an engine that is never coming. The count comes out
+   * of the worker, which is the only place that can see the request at all.
+   */
+  const engineDownloadText = formatEngineDownload(assetProgress);
+  const engineDownloadShortText = formatEngineDownloadShort(assetProgress);
+  const topEngineStatusText = engineNotice?.text ?? (
+    isReady
+      ? 'Engine ready'
+      : engineDownloadText
+        ? `Loading engine · ${engineDownloadText}`
+        : 'Loading engine'
+  );
   const topEngineStatusLabel = isReady
     ? `${topEngineStatusText}, runtime ${engineVariant}`
     : topEngineStatusText;
@@ -5480,10 +5496,18 @@ function App() {
                   <span
                     className="mobile-engine-notice"
                     role="status"
-                    aria-label="Loading engine"
-                    title="Loading engine"
+                    aria-label={engineDownloadShortText
+                      ? `Loading engine, ${engineDownloadShortText} of the weights downloaded`
+                      : 'Loading engine'}
+                    title={engineDownloadText ? `Loading engine · ${engineDownloadText}` : 'Loading engine'}
                   >
-                    Loading
+                    {/* The percentage *instead of* the word, not beside it.
+                        This slot is the one measured at 40px against 66px:
+                        "Loading 24%" wraps the header onto a second row, which
+                        moves the board down for the whole download and back up
+                        when the engine arrives. What it is saying is on the
+                        label and the title. */}
+                    {engineDownloadShortText ?? 'Loading'}
                   </span>
                 ) : null}
                 {detectedOpening && (

@@ -55,15 +55,65 @@
     return p.replace(/[\\/][^\\/]*$/, "");
   }
 
-  async function readBytes(input) {
+  function reportProgress(onProgress, loaded, total, done) {
+    if (typeof onProgress !== "function") return;
+    // A reporting failure must never be able to stop the engine booting.
+    try { onProgress({ loaded: loaded, total: total, done: done }); } catch (_) {}
+  }
+
+  /**
+   * The weights are 53MB and nothing downstream can start without them, so the
+   * app spends the whole download saying "Loading engine" and no more. Reading
+   * the body as a stream costs the same bytes and lets the wrapper say how many
+   * have arrived.
+   *
+   * `content-length` is the *encoded* length, and GitHub Pages gzips the net --
+   * to slightly more than it started as, since a quantised net is at its
+   * entropy limit -- so the total is close but not exact. It is used as a
+   * capacity hint and the buffer grows if the body outruns it; a caller
+   * showing a percentage has to clamp.
+   */
+  async function readBytes(input, onProgress) {
     if (input instanceof Uint8Array) return input;
     if (isNode()) {
       const fs = require("fs");
-      return fs.readFileSync(input);
+      const bytes = fs.readFileSync(input);
+      reportProgress(onProgress, bytes.length, bytes.length, true);
+      return bytes;
     }
     const res = await fetch(input);
     if (!res.ok) throw new Error("Failed to fetch NNUE: " + input);
-    return new Uint8Array(await res.arrayBuffer());
+    const declared = Number(res.headers.get("content-length"));
+    const total = Number.isFinite(declared) && declared > 0 ? declared : 0;
+    const canStream = typeof onProgress === "function" && res.body && typeof res.body.getReader === "function";
+    if (!canStream) {
+      const whole = new Uint8Array(await res.arrayBuffer());
+      reportProgress(onProgress, whole.length, whole.length, true);
+      return whole;
+    }
+
+    const reader = res.body.getReader();
+    // Preallocated from the hint rather than collecting chunks and joining
+    // them, which would hold two copies of 53MB at once on the device least
+    // able to afford it.
+    let bytes = new Uint8Array(total || 1 << 20);
+    let loaded = 0;
+    reportProgress(onProgress, 0, total, false);
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      const chunk = step.value;
+      if (loaded + chunk.length > bytes.length) {
+        const grown = new Uint8Array(Math.max(loaded + chunk.length, bytes.length * 2));
+        grown.set(bytes.subarray(0, loaded));
+        bytes = grown;
+      }
+      bytes.set(chunk, loaded);
+      loaded += chunk.length;
+      reportProgress(onProgress, loaded, total, false);
+    }
+    reportProgress(onProgress, loaded, total || loaded, true);
+    return loaded === bytes.length ? bytes : bytes.subarray(0, loaded);
   }
 
   function toUint8Array(input) {
@@ -343,7 +393,10 @@
 
     async function loadNNUE(nnueSource) {
       const target = "/pikafish.nnue";
-      const bytes = await readBytes(nnueSource || opts.nnuePath || joinPath(basePath, "pikafish.nnue"));
+      const bytes = await readBytes(
+        nnueSource || opts.nnuePath || joinPath(basePath, "pikafish.nnue"),
+        opts.onAssetProgress
+      );
       try {
         mod.FS.unlink(target);
       } catch (_) {}
@@ -613,6 +666,18 @@
             }
             return;
           }
+          if (data.type === "assetProgress") {
+            // The weights are downloaded inside the worker, so the page cannot
+            // see the request at all -- worker fetches are not in the document's
+            // resource timing either. This is the only way the app learns how
+            // far a 53MB download has got.
+            if (typeof opts.onAssetProgress === "function") {
+              try {
+                opts.onAssetProgress({ loaded: data.loaded, total: data.total, done: data.done });
+              } catch (_) {}
+            }
+            return;
+          }
           if (data.type === "inited") {
             activeVariant = data.variant || activeVariant;
             settled = true;
@@ -673,6 +738,7 @@
         threads: opts.threads,
         autoHashMB: opts.autoHashMB,
         hashMB: opts.hashMB,
+        reportAssetProgress: typeof opts.onAssetProgress === "function",
         coreScript,
         coreScripts
       });
@@ -816,7 +882,20 @@
       let threadsOverride = undefined;
       let autoHashMBOverride = true;
       let hashMBOverride = undefined;
+      let reportAssetProgressOverride = false;
       let forwardAttached = false;
+
+    function postAssetProgress(progress) {
+      if (!reportAssetProgressOverride) return;
+      try {
+        self.postMessage({
+          type: "assetProgress",
+          loaded: progress.loaded,
+          total: progress.total,
+          done: progress.done
+        });
+      } catch (_) {}
+    }
 
     function ensureEngine() {
       if (!enginePromise) {
@@ -830,7 +909,8 @@
             maxAutoThreads: maxAutoThreadsOverride,
             threads: threadsOverride,
             autoHashMB: autoHashMBOverride,
-            hashMB: hashMBOverride
+            hashMB: hashMBOverride,
+            onAssetProgress: reportAssetProgressOverride ? postAssetProgress : undefined
           });
         }
         return enginePromise;
@@ -951,6 +1031,7 @@
           threadsOverride = data.threads;
           autoHashMBOverride = data.autoHashMB !== false;
           hashMBOverride = data.hashMB;
+          reportAssetProgressOverride = data.reportAssetProgress === true;
           const engine = await ensureEngine();
           attachForwarder(engine);
           self.postMessage({ type: "inited", variant: engine.variant });

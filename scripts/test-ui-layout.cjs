@@ -148,6 +148,16 @@ async function installFakePikafish(page, fakeConfig) {
         ...(window.__createWorkerEngineOptions || []),
         engineOptions,
       ];
+      if (config.variant === "fake-slow-weights" && typeof engineOptions.onAssetProgress === "function") {
+        // The real wrapper streams the 53MB net inside the worker and posts the
+        // count out; this stands in for that, one step at a time, and holds the
+        // engine back until a test releases it.
+        const total = 53 * 1024 * 1024;
+        window.__reportWeights = (loadedMb, done) => {
+          engineOptions.onAssetProgress({ loaded: loadedMb * 1024 * 1024, total, done: Boolean(done) });
+        };
+        window.__reportWeights(0, false);
+      }
       if (config.variant === "fake-create-hangs") {
         return new Promise(() => {});
       }
@@ -182,6 +192,10 @@ async function installFakePikafish(page, fakeConfig) {
             }, 0);
           } else if (command === "isready") {
             if (config.variant === "fake-stall-ready") return;
+            if (config.variant === "fake-slow-weights") {
+              window.__finishEngineBoot = () => emit("readyok");
+              return;
+            }
             setTimeout(() => emit("readyok"), 0);
           } else if (command === "stop" && config.variant === "fake-review-hangs") {
             setTimeout(() => emit("bestmove b0c2"), 0);
@@ -3700,6 +3714,109 @@ async function assertEngineTelemetryDashboard(browser) {
  * A check that settles first cannot see any of it, which is why it went
  * unnoticed.
  */
+/**
+ * A 53MB download has to say how far it has got.
+ *
+ * `pikafish.nnue` is 97.6% of a first visit and nothing in the app works
+ * without it, so "Loading engine" used to stand alone for a minute or more on a
+ * phone connection -- indistinguishable from an engine that is never coming.
+ * The page cannot see the request either: the weights are fetched inside the
+ * engine's worker, whose fetches appear in neither the document's resource
+ * timing nor its network events, which is why the count is posted out of the
+ * wrapper rather than measured here.
+ *
+ * The mobile half is the one with a trap. That chip sits in a header measured
+ * at 40px against 66px, and a string long enough to wrap it moves the board
+ * down for the whole download and back up when the engine arrives -- so the
+ * phone gets the percentage *instead of* the word, not beside it.
+ */
+async function assertEngineDownloadReportsItsProgress(browser) {
+  for (const viewport of [{ width: 1280, height: 820 }, { width: 390, height: 844 }]) {
+    const { context, page } = await newIsolatedPage(browser, viewport);
+    const phone = viewport.width < 900;
+    try {
+      await installFakePikafish(page, { variant: "fake-slow-weights" });
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+      const read = () => page.evaluate((isPhone) => {
+        const node = isPhone
+          ? document.querySelector(".mobile-engine-notice")
+          : [...document.querySelectorAll("*")].find(
+              (el) => el.children.length === 0 && /Loading engine|Engine ready/.test(el.textContent || "")
+            );
+        const header = document.querySelector(".mobile-engine-notice")?.parentElement;
+        return {
+          text: node?.textContent?.replace(/\s+/g, " ").trim() || "",
+          label: node?.getAttribute("aria-label") || "",
+          headerHeight: header ? Math.round(header.getBoundingClientRect().height) : -1,
+          overflowX: document.body.scrollWidth - document.body.clientWidth,
+        };
+      }, phone);
+
+      const before = await read();
+      const settled = phone ? before.headerHeight : -1;
+
+      await page.waitForFunction(() => typeof window.__reportWeights === "function", null, { timeout: 15000 });
+      await page.evaluate(() => window.__reportWeights(21, false));
+      await page.waitForFunction(
+        (isPhone) => {
+          const node = isPhone
+            ? document.querySelector(".mobile-engine-notice")
+            : [...document.querySelectorAll("*")].find(
+                (el) => el.children.length === 0 && /Loading engine/.test(el.textContent || "")
+              );
+          return /%|MB/.test(node?.textContent || "");
+        },
+        phone,
+        { timeout: 15000 }
+      );
+      const during = await read();
+      const where = `${viewport.width}x${viewport.height}`;
+
+      if (phone) {
+        if (during.text !== "40%" || !during.label.includes("Loading engine, 40%")) {
+          throw new Error(`The phone chip did not carry the download at ${where}: ${JSON.stringify(during)}`);
+        }
+        // The whole reason the phone gets a percentage and not a sentence.
+        if (during.headerHeight !== settled) {
+          throw new Error(
+            `The download readout grew the mobile header from ${settled}px to ${during.headerHeight}px at ${where}, ` +
+            `which moves the board down for the whole download and back up when the engine arrives.`
+          );
+        }
+      } else if (during.text !== "Loading engine · 21 of 53 MB") {
+        throw new Error(`The top bar did not carry the download at ${where}: ${JSON.stringify(during)}`);
+      }
+      if (during.overflowX > 2) {
+        throw new Error(`The download readout pushed the page sideways at ${where}: ${JSON.stringify(during)}`);
+      }
+
+      // Once the engine is up the wait is over and the readout has to go.
+      await page.evaluate(() => {
+        window.__reportWeights(53, true);
+        window.__finishEngineBoot();
+      });
+      await page.waitForFunction(
+        (isPhone) => (isPhone
+          ? !document.querySelector(".mobile-engine-notice")
+          : Boolean([...document.querySelectorAll("*")].find(
+              (el) => el.children.length === 0 && /Engine ready/.test(el.textContent || "")
+            ))),
+        phone,
+        { timeout: 15000 }
+      );
+      await context.close();
+    } catch (error) {
+      try { await context.close(); } catch (_) {}
+      throw error;
+    }
+  }
+}
+
 async function assertCrossingTheBreakpointKeepsABoard(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8883,6 +9000,7 @@ async function main() {
     await assertEngineTelemetryDashboard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);
     await assertCaptureFreeCountExplainsALevelEnding(page);
+    await assertEngineDownloadReportsItsProgress(browser);
     await assertEngineMateScoresRenderAsMate(browser);
     await assertEngineRestartDropsBufferedInfo(browser);
     await assertEngineRestartRestoresDetailOptions(browser);
