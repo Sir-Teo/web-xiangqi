@@ -13,6 +13,7 @@ npm run verify          # typecheck, lint, test, openings, library, engine contr
                         # smoke, parity, build:react -- and no browser, on purpose
 npm run audit           # dependency audit; not part of verify, runs in CI
 npm run test:ui:layout        # Playwright, desktop and mobile, fake Pikafish injected
+npm run test:ui:soak          # seeded random walk over the app; not a gate, see below
 npm run test:prod:smoke       # loads the built dist/ in a browser; needs build:react first
 ```
 
@@ -75,6 +76,7 @@ and says which side of that line each item falls on.
 | Deploy gates | audit, lint, test, build | audit, lint, test:typecheck, test, build | audit, build (WASM), verify, prod smoke (2 host configs) |
 | Hostile-input sweep | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` |
 | Undefined CSS token guard | none | none | `src/__cssTokens.test.ts` |
+| Randomised UI soak | none | none | `test:ui:soak`, run by hand |
 | Where the ceilings sit | search query; library PGN 512KB; backup 8MB; auto-save 2MB | search query; auto-save 5MB; model upload 128MB; verdict scan 4000 nodes | search query; **import text 200KB, UCI moves 1024, tree nodes 1024** |
 
 **Deliberate, leave alone.** The `verify` lists differ because the apps differ:
@@ -111,6 +113,19 @@ agree *within* a repo, and all three now do.
    reading a computed style rather than the stylesheet. All three repos are
    hand-written CSS with token palettes, so all three can have this defect and
    only this one would notice.
+
+**Deliberately not a gate.** `test:ui:soak` walks the app at random from a
+seed and checks the properties that hold in *any* state -- the FEN parses to
+ten ranks of nine with two generals, the board keeps its 9:10 box inside the
+viewport, nothing scrolls sideways, no `NaN` reaches the screen, the error
+boundary has not fired. It asks the opposite question from `test:ui:layout`,
+which knows what it is looking for; this finds the cases nobody wrote down.
+
+It is not in `verify` and not in `ci.yml`, on purpose: a random walk that fails
+reports a seed and a round number rather than a behaviour, and a suite that
+sometimes fails for reasons nobody has named is worse than no suite. Run it
+when changing something structural -- layout, navigation, the review, storage
+-- and reproduce any failure from its seed.
 
 **Divergent because only this repo has the problem.** All three size the search
 from `hardwareConcurrency`, but only this one also caps it on a *build*

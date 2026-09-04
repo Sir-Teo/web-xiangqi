@@ -32,6 +32,7 @@
     "test:review:calibration": "node scripts/test-review-calibration.cjs",
     "test:ui:install": "playwright install chromium",
     "test:ui:layout": "node scripts/test-ui-layout.cjs",
+    "test:ui:soak": "node scripts/test-ui-soak.cjs",
     "test:openings": "node scripts/test-openings.cjs",
     "test:library": "node scripts/test-library.cjs",
     "test:serve-demo": "node scripts/test-serve-demo.cjs",

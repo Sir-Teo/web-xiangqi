@@ -1490,6 +1490,34 @@ the emscripten templates or `build-pikafish.sh` — since that rebuild is the st
 requiring the toolchain. `verify` runs both, because they are cheap: smoke is 0.5s and parity 1.5s
 against a 4.3s command, so the engine is covered for the price of rounding.
 
+### A seeded random walk, and what it is for
+
+`scripts/test-ui-soak.cjs` drives the app at random from a seed and checks, every
+few rounds, the properties that hold in *any* state it can be in: the FEN parses
+to ten ranks of nine points with two generals, the board keeps its 9:10 box
+inside the viewport with a plausible number of pieces on it, nothing scrolls
+sideways, no `NaN` or `undefined` is on screen, and the error boundary has not
+fired. Both profiles, desktop and an iPhone 13.
+
+It asks the opposite question from `test-ui-layout.cjs`. That suite knows what
+it is looking for; this one finds the states nobody wrote a case for -- a panel
+open at a width that only a particular sequence of taps reaches, a notice that
+only appears after a review is cancelled mid-flight.
+
+**It is not a gate and is not in `verify` or `ci.yml`.** A random walk that
+fails reports a seed and a round number rather than a behaviour, and a suite
+that sometimes fails for reasons nobody has named is worse than none. The seed
+is what makes it usable: a failure reproduces exactly with `--seeds <n>
+--profile <p>`.
+
+It found nothing on the day it was written, across roughly two thousand
+interactions. That is the expected result and is why the check on the check
+matters: breaking `.xiangqi-board-container`'s `aspect-ratio` to 7/10 makes it
+report `board is 0.700 rather than 9:10` at three separate rounds. An earlier
+attempt to prove that broke the *wrap's* ratio instead and the soak stayed
+clean -- correctly, because the board takes its shape from the container, not
+the wrap. A soak that passes proves nothing until you have watched it fail.
+
 ### What has been mutation-swept, and what has not
 
 Sweeping means changing one line to something plausible and wrong, running the

@@ -118,6 +118,7 @@ npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
 npm run test:ui:install            # once per machine
 npm run test:ui:layout             # drives a real browser
+npm run test:ui:soak               # seeded random walk, checks invariants
 npm run test:prod:smoke            # loads the built dist/ in a browser
 npm run build                      # rebuilds the WASM; needs emsdk
 ```
