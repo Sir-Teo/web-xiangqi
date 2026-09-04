@@ -53,6 +53,7 @@ import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { BoardEditor } from './components/Board/BoardEditor';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
+import { MAX_MOVE_COMMENT_LENGTH } from './utils/moveComment';
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { describePvStanding } from './utils/pvStanding';
@@ -1084,6 +1085,8 @@ function App() {
     setCurrentNodeEval,
     setNodeEvals,
     setNodeBestMove,
+    setNodeComment,
+    setNodeComments,
     setNodeReviewDataBulk,
     clearAllReviewData,
     getNodeFen,
@@ -1165,6 +1168,15 @@ function App() {
   ), [rootNodeId, treeNodes]);
   const hasStudyBranches = useMemo(() => (
     Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
+  ), [treeNodes]);
+  /**
+   * A straight line is stored as a list of moves, which is compact and cannot
+   * carry anything else. A note is attached to a move, so a game holding one
+   * has to be stored as a tree even when it has no variations -- otherwise the
+   * note is written, shown, and silently dropped by the next save.
+   */
+  const hasCommentedMoves = useMemo(() => (
+    Object.values(treeNodes).some((node) => Boolean(node.record?.comment))
   ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
@@ -3132,7 +3144,11 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, detectedOpening, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || currentLineMoves.length === 0)
+    // Notes travel with the link for the same reason variations do: what is
+    // being shared is a study, not a move list. They spend the same 8000
+    // characters of tree budget, and a link that outgrows it already falls back
+    // to the main line with "Variations omitted" said out loud.
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     const share = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
@@ -3161,7 +3177,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3223,6 +3239,76 @@ function App() {
     [currentMoveIndex, moveHistory, notationStyle, rootFen]
   );
   const canCopyRecord = recordText.length > 0;
+
+  /**
+   * The reader's note on the move they are standing on.
+   *
+   * Held as a draft rather than written on every keystroke: a comment lives in
+   * the move tree, and the tree is what auto-save and the library serialize, so
+   * a keystroke that reached it would re-render the app and rewrite storage
+   * once per character. The draft is committed when the field loses focus, when
+   * the reader steps to another move, and 600ms after they stop typing -- the
+   * last one because a note is worth keeping even if the tab is closed with the
+   * cursor still in the box.
+   */
+  const [moveCommentDraft, setMoveCommentDraft] = useState('');
+  const moveCommentEditRef = useRef<{ nodeId: string; draft: string } | null>(null);
+  const moveCommentTimerRef = useRef<number | null>(null);
+  const treeNodesRef = useRef(treeNodes);
+  // Synced in an effect rather than during render, and declared immediately
+  // above the effect that reads it: effects run in declaration order, so a
+  // commit that adds a move and steps onto it has the new tree in hand by the
+  // time the note below is loaded from it.
+  useEffect(() => {
+    treeNodesRef.current = treeNodes;
+  }, [treeNodes]);
+
+  const commitMoveComment = useCallback(() => {
+    if (moveCommentTimerRef.current !== null) {
+      window.clearTimeout(moveCommentTimerRef.current);
+      moveCommentTimerRef.current = null;
+    }
+    const pending = moveCommentEditRef.current;
+    if (pending) setNodeComment(pending.nodeId, pending.draft);
+  }, [setNodeComment]);
+
+  const handleMoveCommentChange = useCallback((value: string) => {
+    setMoveCommentDraft(value);
+    if (moveCommentEditRef.current) moveCommentEditRef.current.draft = value;
+    if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
+    moveCommentTimerRef.current = window.setTimeout(() => {
+      moveCommentTimerRef.current = null;
+      const pending = moveCommentEditRef.current;
+      if (pending) setNodeComment(pending.nodeId, pending.draft);
+    }, 600);
+  }, [setNodeComment]);
+
+  // Stepping to another move writes the note being edited before loading the
+  // next one, so a note is never lost by navigating away from it. The tree is
+  // read through a ref because it changes on every move and this must not
+  // re-run -- and re-reset the draft -- while someone is typing into it.
+  useEffect(() => {
+    const previous = moveCommentEditRef.current;
+    if (previous && previous.nodeId !== currentNodeId) {
+      if (moveCommentTimerRef.current !== null) {
+        window.clearTimeout(moveCommentTimerRef.current);
+        moveCommentTimerRef.current = null;
+      }
+      setNodeComment(previous.nodeId, previous.draft);
+    }
+    const editableNodeId = currentNodeId && currentNodeId !== rootNodeId ? currentNodeId : null;
+    const stored = editableNodeId ? treeNodesRef.current[editableNodeId]?.record?.comment ?? '' : '';
+    moveCommentEditRef.current = editableNodeId ? { nodeId: editableNodeId, draft: stored } : null;
+    setMoveCommentDraft(stored);
+  }, [currentNodeId, rootNodeId, setNodeComment]);
+
+  useEffect(() => () => {
+    if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
+  }, []);
+
+  const moveCommentTarget = currentNodeId && currentNodeId !== rootNodeId
+    ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen)
+    : null;
   const handleCopyRecord = useCallback(async () => {
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
@@ -3657,6 +3743,18 @@ function App() {
           })
           .filter((update): update is NonNullable<typeof update> => Boolean(update));
         if (updates.length > 0) setNodeReviewDataBulk(updates);
+
+        // The prose in the same comments. Kept apart from the review data
+        // because it is the reader's and a re-run of the review must not
+        // overwrite it.
+        const comments = annotated.annotations
+          .map((annotation, index) => {
+            const nodeId = loadedNodeIds[index];
+            if (!nodeId || !annotation.comment) return null;
+            return { nodeId, comment: annotation.comment };
+          })
+          .filter((update): update is { nodeId: string; comment: string } => Boolean(update));
+        if (comments.length > 0) setNodeComments(comments);
       }
     }
 
@@ -3667,7 +3765,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -3803,7 +3901,7 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || moves.length === 0)
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || moves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     return {
@@ -3824,7 +3922,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   const handleSaveGame = useCallback(() => {
     const { gameMode: mode, moves, ...rest } = currentGameSnapshot;
@@ -3950,6 +4048,24 @@ function App() {
       run: () => { setShowSettings(false); setShowBoardEditor(true); },
     },
     {
+      id: 'write-note',
+      label: 'Write a note on this move',
+      hint: moveCommentTarget
+        ? `Your own note on ${moveCommentTarget}, kept apart from the review's`
+        : 'Step to a move first',
+      keywords: ['comment', 'annotate', 'study', 'remark', '注释'],
+      disabled: !moveCommentTarget,
+      run: () => {
+        setAnalysisTab('tree');
+        setMobileAnalysisTab('moves');
+        setMobileView('analysis');
+        // After the panel is up, or the field is not in the document yet.
+        window.setTimeout(() => {
+          document.getElementById('move-comment-input')?.focus();
+        }, 0);
+      },
+    },
+    {
       id: 'copy-record',
       label: `Copy record in ${NOTATION_STYLE_LABELS[notationStyle]}`,
       hint: canCopyRecord ? 'Numbered moves, one pair per line' : 'Play or import a line first',
@@ -4066,7 +4182,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, canCopyRecord, canDeepDive, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, canCopyRecord, canDeepDive, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -6152,6 +6268,32 @@ function App() {
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
                   />
+                  {/* The thinking, beside the moves. Everything attached to a
+                      move here was written by the engine -- an evaluation, a
+                      best move, a review note it overwrites on every re-run --
+                      so a study built on this board carried the line and none of
+                      the reasoning for it. The note is the reader's, kept in a
+                      separate field for exactly that reason. */}
+                  <div className="move-comment">
+                    <label className="move-comment-label" htmlFor="move-comment-input">
+                      <span>Note</span>
+                      <em>{moveCommentTarget ?? 'Step to a move to write one'}</em>
+                    </label>
+                    <textarea
+                      id="move-comment-input"
+                      className="move-comment-input"
+                      data-testid="move-comment-input"
+                      value={moveCommentDraft}
+                      onChange={(event) => handleMoveCommentChange(event.target.value)}
+                      onBlur={commitMoveComment}
+                      disabled={!moveCommentTarget}
+                      maxLength={MAX_MOVE_COMMENT_LENGTH}
+                      rows={2}
+                      spellCheck
+                      placeholder={moveCommentTarget ? 'Why this move' : ''}
+                      aria-label={moveCommentTarget ? `Note on ${moveCommentTarget}` : 'Note on the current move'}
+                    />
+                  </div>
                   {canCopyRecord ? (
                     <div className="tree-actions">
                       {/* The record as a person reads it, in the notation the

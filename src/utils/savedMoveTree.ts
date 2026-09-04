@@ -1,5 +1,6 @@
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { SavedMoveTreeNode } from './gameLibrary';
+import { normalizeMoveComment } from './moveComment';
 
 /**
  * The move tree as it is written to storage and to a share link.
@@ -21,7 +22,9 @@ import type { SavedMoveTreeNode } from './gameLibrary';
  *
  * A childless node is written as `{ uci }` with no `children` key, which is
  * what the reader treats as equivalent to an empty array and what keeps a
- * share link short.
+ * share link short. A move with no note omits `comment` for the same reason:
+ * the share link's tree budget is 8000 characters of JSON, and an empty string
+ * per node would spend it on nothing.
  */
 export function serializeSavedMoveTree(
     treeNodes: Record<string, MoveTreeNode>,
@@ -39,7 +42,14 @@ export function serializeSavedMoveTree(
             const uci = child?.record?.uci;
             if (!child || !uci) return null;
             const children = serializeSavedMoveTree(treeNodes, childId, nextSeen);
-            return children.length > 0 ? { uci, children } : { uci };
+            // Normalised on the way out as well as in: a comment is stored, and
+            // a store written by an older build is read by this one.
+            const comment = normalizeMoveComment(child.record?.comment);
+            return {
+                uci,
+                ...(comment ? { comment } : {}),
+                ...(children.length > 0 ? { children } : {}),
+            };
         })
         .filter((node): node is SavedMoveTreeNode => Boolean(node));
 }

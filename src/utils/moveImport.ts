@@ -1,6 +1,7 @@
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { ReviewMoveQuality } from './review';
 import { MATE_SCORE_BASE } from './engineEvalReading';
+import { normalizeMoveComment } from './moveComment';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
 export const MAX_MOVE_IMPORT_UCI_MOVES = 1024;
@@ -245,6 +246,8 @@ export interface ImportedMoveAnnotation {
     /** Red-positive centipawns after the move, as this app stores an eval. */
     evalScore?: number;
     quality?: ReviewMoveQuality;
+    /** Whatever prose the comment carried once the commands were taken out. */
+    comment?: string;
 }
 
 /**
@@ -266,6 +269,25 @@ const QUALITY_FOR_SUFFIX: Record<string, ReviewMoveQuality> = {
     '?': 'mistake',
     '??': 'blunder',
 };
+
+/**
+ * The prose left in a PGN comment once the machine-readable parts are removed.
+ *
+ * A comment written by this app reads `{ [%eval 0.42] Better was b2e2 Note }`,
+ * and the note is the only part a person wrote. Bracketed `[%...]` commands go
+ * first -- there are more of them in the wild than this app writes, and none
+ * are prose -- then the "Better was <move>" the exporter adds, then anything
+ * left is the note.
+ *
+ * A comment carrying only commands leaves nothing, which is the common case and
+ * has to produce no note rather than an empty one.
+ */
+function parseFreeTextComment(comment: string): string | undefined {
+    const prose = comment
+        .replace(/\[%[^\]]*\]/g, ' ')
+        .replace(/\bBetter was\s+[a-i][0-9][a-i][0-9]\b/gi, ' ');
+    return normalizeMoveComment(prose);
+}
 
 function parseEvalCommand(comment: string): number | undefined {
     // The sign is read as a character, not as a number: `#-0` is a real value
@@ -326,6 +348,8 @@ export function extractAnnotatedMainLine(text: string): {
             const comment = source.slice(index + 1, end < 0 ? source.length : end);
             const evalScore = parseEvalCommand(comment);
             if (evalScore !== undefined) annotate({ evalScore });
+            const note = parseFreeTextComment(comment);
+            if (note) annotate({ comment: note });
             index = end < 0 ? source.length : end + 1;
             continue;
         }

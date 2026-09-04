@@ -1,5 +1,6 @@
 import { mateDistanceFromScore } from './engineEvalReading';
 import type { ReviewMoveQuality } from './review';
+import { normalizeMoveComment } from './moveComment';
 
 /**
  * Writing the review into the PGN, so the analysis leaves with the game.
@@ -40,6 +41,8 @@ export interface MoveAnnotationInput {
     bestMove?: string;
     /** The move actually played, so a redundant "better was" can be dropped. */
     uci?: string;
+    /** The reader's own note, which is the last thing in the comment. */
+    comment?: string;
 }
 
 /**
@@ -86,6 +89,14 @@ export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     if (worthNamingBest && input.bestMove && input.bestMove !== input.uci) {
         comment.push(`Better was ${input.bestMove}`);
     }
+
+    // The reader's note goes last, after the machine-readable parts, which is
+    // where every tool that writes both puts it and where the importer looks
+    // for it. `normalizeMoveComment` has already taken the braces out; without
+    // that a `}` typed in a note would end the comment and leave the rest of
+    // the sentence in the move stream.
+    const note = normalizeMoveComment(input.comment);
+    if (note) comment.push(note);
 
     if (comment.length) tokens.push(`{ ${comment.join(' ')} }`);
     return tokens;

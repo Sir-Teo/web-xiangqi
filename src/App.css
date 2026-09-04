@@ -2117,6 +2117,19 @@ body.resizing * {
   padding: 0 0.2rem 0.1rem;
 }
 
+/* The reader's own note, told apart from the review's by the rule beside it
+   rather than by colour -- the quality palette is already spending colour on
+   this row and a fourth hue would compete with it. */
+.mtree-comment {
+  max-width: 16rem;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  padding: 0 0.2rem 0.1rem 0.4rem;
+  border-left: 2px solid var(--border);
+  margin-left: 0.2rem;
+}
+
 /* Interactive Active States */
 button:active:not(:disabled),
 .gc-btn:active:not(:disabled),
@@ -6397,4 +6410,63 @@ summary:active {
 
 .threat-card .pv-line-rank {
   color: #fda4af;
+}
+
+/* ── A reader's note on a move ─────────────────────────────────────────────
+   Sits under the move list because that is where a study is built. The field
+   is two rows at rest and grows no further: a note is a sentence about one
+   move, and a box that grows with its content would push the move list around
+   as you type into it. */
+.move-comment {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.55rem 0.6rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.move-comment-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.move-comment-label span {
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.move-comment-label em {
+  font-style: normal;
+  font-size: 0.66rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-comment-input {
+  width: 100%;
+  min-width: 0;
+  resize: none;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.03));
+  color: var(--text-primary);
+}
+
+.move-comment-input::placeholder { color: var(--text-tertiary); }
+
+.move-comment-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

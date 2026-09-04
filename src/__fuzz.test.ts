@@ -1,11 +1,13 @@
 import { expect, it } from 'vitest';
 import {
+    extractAnnotatedMainLine,
     extractFenTag,
     extractUciMoveLine,
     extractUciMoveTree,
     hasTooManyUciMoves,
     isMoveImportTextTooLarge,
 } from './utils/moveImport';
+import { normalizeMoveComment } from './utils/moveComment';
 import { parseFenBoard, parseMove } from './utils/xiangqi';
 import { decodeSavedMoveTreeParam } from './utils/shareTree';
 import { normalizeSavedGame, normalizeSavedGames, normalizeSavedMoveTree } from './utils/gameLibrary';
@@ -73,6 +75,12 @@ for (const [name, input] of NASTY) {
         extractUciMoveLine(input);
         extractUciMoveTree(input);
         extractFenTag(input);
+        // The annotated pass walks the same text a second time, with its own
+        // scanner for `{...}` comments and `$` glyphs, and now pulls prose out
+        // of every comment it finds. `many braces` and `alternating` are the
+        // inputs that pass the most work through it.
+        extractAnnotatedMainLine(input);
+        normalizeMoveComment(input);
 
         try { parseFenBoard(input); } catch { /* invalid FEN is expected to throw */ }
         parseMove(input);

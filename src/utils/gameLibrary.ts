@@ -11,6 +11,7 @@ import type {
 } from './review';
 import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations } from './review';
 import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
+import { normalizeMoveComment } from './moveComment';
 
 export { GAME_LIBRARY_STORAGE_KEY };
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
@@ -45,6 +46,8 @@ type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode {
     uci: string;
+    /** The reader's note on this move; see `utils/moveComment`. */
+    comment?: string;
     children?: SavedMoveTreeNode[];
 }
 
@@ -135,7 +138,17 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
         : [];
     if (children.some((child) => child === null)) return null;
     const normalizedChildren = children.filter((child): child is SavedMoveTreeNode => Boolean(child));
-    return normalizedChildren.length > 0 ? { uci, children: normalizedChildren } : { uci };
+    // A note is bounded and folded on the way back out of storage, not only on
+    // the way in: this reader also sees records written by an older build and
+    // by anything that hand-edits localStorage. A note that cannot be read is
+    // dropped rather than failing the node, since losing a sentence is better
+    // than losing the variation it sits on.
+    const comment = normalizeMoveComment(raw.comment);
+    return {
+        uci,
+        ...(comment ? { comment } : {}),
+        ...(normalizedChildren.length > 0 ? { children: normalizedChildren } : {}),
+    };
 }
 
 export function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | undefined | null {

@@ -22,6 +22,7 @@ import {
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
 import { removeSubtree } from '../utils/moveTreeEdit';
+import { isSameMoveComment, normalizeMoveComment } from '../utils/moveComment';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
@@ -35,6 +36,11 @@ export interface MoveRecord {
     swing?: number;
     winPercentLoss?: number;
     reviewNote?: string;
+    /**
+     * A note the reader wrote, kept apart from `reviewNote`, which the review
+     * writes and overwrites on every re-run. See `utils/moveComment`.
+     */
+    comment?: string;
     board: BoardState;
     sideToMove: Side;
     inCheck: boolean;
@@ -61,6 +67,8 @@ export type MoveSequenceValidation =
 
 export type SerializableMoveTreeNode = {
     uci: string;
+    /** The reader's note on this move, when they wrote one. */
+    comment?: string;
     children?: SerializableMoveTreeNode[];
 };
 
@@ -521,6 +529,7 @@ export function useXiangqi() {
                         sideToMove: nextSide,
                         inCheck: nextInCheck,
                         ply: plyIndex + 1,
+                        ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),
                     },
                 };
 
@@ -840,6 +849,44 @@ export function useXiangqi() {
         });
     }, []);
 
+    /**
+     * The reader's own note on a move. Passing an empty comment clears it, so
+     * "cleared" and "never written" end up the same stored state.
+     */
+    const setNodeComment = useCallback((nodeId: string, comment: string) => {
+        if (nodeId === ROOT_NODE_ID) return;
+        const normalized = normalizeMoveComment(comment);
+        setTreeNodes((prevTree) => {
+            const node = prevTree[nodeId];
+            if (!node?.record || isSameMoveComment(node.record.comment, normalized)) return prevTree;
+            const record = { ...node.record };
+            if (normalized) record.comment = normalized;
+            else delete record.comment;
+            return { ...prevTree, [nodeId]: { ...node, record } };
+        });
+    }, []);
+
+    /**
+     * Notes for many moves at once, which is what an import produces. One state
+     * update rather than one per move: a pasted record may carry a thousand.
+     */
+    const setNodeComments = useCallback((updates: Array<{ nodeId: string; comment: string }>) => {
+        if (updates.length === 0) return;
+        setTreeNodes((prevTree) => {
+            let changed = false;
+            const nextTree = { ...prevTree };
+            for (const { nodeId, comment } of updates) {
+                if (nodeId === ROOT_NODE_ID) continue;
+                const node = nextTree[nodeId];
+                const normalized = normalizeMoveComment(comment);
+                if (!node?.record || !normalized || isSameMoveComment(node.record.comment, normalized)) continue;
+                nextTree[nodeId] = { ...node, record: { ...node.record, comment: normalized } };
+                changed = true;
+            }
+            return changed ? nextTree : prevTree;
+        });
+    }, []);
+
     const setNodeBestMove = useCallback((nodeId: string, bestMove: string) => {
         if (!bestMove || nodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
@@ -996,6 +1043,8 @@ export function useXiangqi() {
         setNodeEval,
         setNodeEvals,
         setNodeBestMove,
+        setNodeComment,
+        setNodeComments,
         setNodeReviewDataBulk,
         clearAllReviewData,
         getNodeFen,

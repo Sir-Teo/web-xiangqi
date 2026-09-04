@@ -3850,6 +3850,96 @@ async function assertEngineDownloadReportsItsProgress(browser) {
  * shape the import chip next to it already uses, and it is what the live region
  * announces.
  */
+/**
+ * A note a person writes on a move has to survive the app being closed.
+ *
+ * Everything attached to a move here was written by the engine -- an
+ * evaluation, a best move, a review note it overwrites on every re-run -- so a
+ * study built on this board carried the line and none of the reasoning for it.
+ *
+ * The half that is easy to get wrong is storage, not editing. A straight line
+ * is auto-saved as a list of moves, which is compact and cannot carry anything
+ * else; a note only survives because a game holding one is stored as a tree
+ * instead. Written, shown, and silently dropped by the next save is exactly
+ * what this asserts against, which is why it reloads rather than reading the
+ * field back.
+ */
+async function assertAMoveNoteSurvivesAReload(browser) {
+  // Its own context, because the shared page carries an init script that wipes
+  // the auto-save on every navigation -- which is exactly the thing under test.
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 820 });
+  try {
+  const NOTE = "Chariot belongs here first, or the horse has no square.";
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4+e9e8", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(600);
+
+  const field = page.getByTestId("move-comment-input");
+  if (await field.isDisabled()) {
+    throw new Error("The note field was disabled on a move, so there was nothing to write on");
+  }
+  await field.fill(NOTE);
+  await page.evaluate(() => document.querySelector('[data-testid="move-comment-input"]').blur());
+  await page.waitForFunction(
+    (note) => document.querySelector(".mtree-comment")?.getAttribute("title") === note,
+    NOTE,
+    { timeout: 10000 }
+  );
+
+  // The note is on the move it was written on and nowhere else.
+  const written = await page.evaluate(() => ({
+    marks: document.querySelectorAll(".mtree-comment").length,
+    shown: document.querySelector(".mtree-comment")?.textContent || "",
+  }));
+  if (written.marks !== 1) {
+    throw new Error(`A note reached ${written.marks} moves rather than one: ${JSON.stringify(written)}`);
+  }
+  if (!written.shown.endsWith("\u2026")) {
+    throw new Error(`A long note was not cut for the move list: ${JSON.stringify(written)}`);
+  }
+
+  // Auto-save is debounced, and the note has to be in it before the reload.
+  await page.waitForFunction(
+    (note) => (localStorage.getItem("xiangqi:auto-saved-game:v1") || "").includes(note.slice(0, 24)),
+    NOTE,
+    { timeout: 15000 }
+  );
+
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const restore = page.getByRole("button", { name: /^restore$/i });
+  if (!(await restore.count())) {
+    throw new Error("The reload offered no unfinished game to restore, so the note could not be checked");
+  }
+  await restore.first().click();
+
+  const recovered = await page
+    .waitForFunction(
+      (note) => document.querySelector(".mtree-comment")?.getAttribute("title") === note,
+      NOTE,
+      { timeout: 15000 }
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!recovered) {
+    const state = await page.evaluate(() => ({
+      marks: [...document.querySelectorAll(".mtree-comment")].map((n) => n.getAttribute("title")),
+      stored: (localStorage.getItem("xiangqi:auto-saved-game:v1") || "").slice(0, 300),
+    }));
+    throw new Error(`A note did not survive the reload: ${JSON.stringify(state)}`);
+  }
+    await context.close();
+  } catch (error) {
+    try { await context.close(); } catch (_) {}
+    throw error;
+  }
+}
+
 async function assertShareLinkSaysWhyItDidNotLoad(page) {
   const expectations = [
     {
@@ -9177,6 +9267,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertAMoveNoteSurvivesAReload(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);

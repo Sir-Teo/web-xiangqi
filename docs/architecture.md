@@ -846,6 +846,22 @@ with nothing on screen to account for it. The same endgame at clock 0 and clock
 The count comes off the board's FEN, so there is no new state and no second
 copy to fall out of step — which is what made this cheap.
 
+### A note is why a straight line is sometimes stored as a tree
+
+`currentGameSnapshot` stores a game as a list of moves and only falls back to
+serializing the whole tree when there are variations to keep -- which is right,
+because a list is a fraction of the size and most games have no branches.
+
+A note a reader writes on a move breaks that rule, and quietly. The note lives
+on the move record; a list of moves has nowhere to put one. So a note on a
+branch-free game was written, drawn beside the move, and dropped by the next
+auto-save, which is the worst of the three possible behaviours. `hasCommentedMoves`
+now joins `hasStudyBranches` in choosing the tree, in the snapshot and in the
+share link both.
+
+The browser check for this reloads rather than reading the field back, for the
+same reason: reading it back passes whether or not anything was stored.
+
 ## Storage
 
 | What | Key | Module |
@@ -1444,6 +1460,21 @@ allowance and Hard's candidate weights in `aiOpponent.ts` are unreachable
 because those levels return before either value is read, and `loadAllGames`'s
 sort order is invisible because the library panel re-sorts with its own
 comparator and the explorer does not care about order.
+
+Swept when written, and two of thirteen mutations survived --
+`moveComment.ts`, `captureFreeRule.ts`, `engineAssetProgress.ts`,
+`engineEvalReading.ts` and `shareLinkNotice.ts`. Both survivors were tests that
+looked like they covered a branch and did not, which is the exact failure this
+practice exists to find:
+
+- **`normalizeMoveComment`'s control-character pass could be deleted.** Its
+  test folded `\n`, `\r` and `\t`, and `\s` already covers all three -- so
+  nothing in the suite depended on the pass at all, and a bell or a NUL would
+  have reached storage, a PGN and a URL intact.
+- **`summarizeMoveComment`'s word-boundary threshold could be dropped.** Its
+  test cut a single long word with no space in it, which behaves the same
+  however the boundary rule is written. A note whose *second* word is the long
+  one is the case that separates them.
 
 Not swept: `useEngine.ts` beyond its four pure exports, and `App.tsx`. Both are
 mostly effects and wiring, where a mutation tends to break the build or the

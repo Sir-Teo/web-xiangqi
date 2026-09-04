@@ -12,6 +12,7 @@ import {
     formatReviewNoteForDisplay,
 } from '../../utils/review';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
+import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveNumber } from '../../utils/moveNumbering';
 import {
     boardBeforeRecord,
@@ -136,6 +137,10 @@ export const MoveListTree = memo(function MoveListTree({
             ? formatReviewNoteForDisplay(record.reviewNote, record.bestMove)
             : null;
         const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
+        // The reader's own note, which is not the review's. Shown under the
+        // move like the review note is, so a study reads as a study: a line of
+        // fifty moves with three notes on it has to make the three findable.
+        const comment = record.comment ? summarizeMoveComment(record.comment) : null;
         const isCurrent = currentNodeId === nodeId;
         return (
             <span key={nodeId} className="mtree-chip-wrap">
@@ -174,6 +179,11 @@ export const MoveListTree = memo(function MoveListTree({
                 {note ? (
                     <span className="mtree-review-note" title={note}>
                         {note}
+                    </span>
+                ) : null}
+                {comment ? (
+                    <span className="mtree-comment" title={record.comment}>
+                        {comment}
                     </span>
                 ) : null}
             </span>
@@ -333,6 +343,7 @@ function formatMoveAriaLabel(
         `UCI ${formatUciMove(record.uci)}`,
         record.quality ? `Review quality ${formatReviewQuality(record.quality)}` : '',
         coachMove ? `Engine suggestion ${formatAlternative(record, coachMove, notationStyle)}` : '',
+        record.comment ? `Note, ${record.comment}` : '',
     ].filter(Boolean);
     return parts.join(', ');
 }
