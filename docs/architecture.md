@@ -951,6 +951,43 @@ requiring the new state to be missing from it. A test that only checked
 afterwards would pass on any machine where the debounce happened to win the
 race, which is most of them.
 
+### A game came back cut off at wherever you were standing
+
+The auto-save stores the line only as far as the cursor, so that restoring puts
+the reader back on the move they were looking at. Everything past the cursor
+therefore lives only in the move tree -- and the tree was stored only for a
+study with branches, or (since notes arrived) one with notes. A straight line
+has neither.
+
+So: step back through a game to look something up, close the tab, come back,
+and the game was **cut off at the move you happened to be standing on**. The
+rest was not hidden or unreachable, it was never written.
+
+The clause that stored the tree when the cursor was at the *start* is the same
+bug, noticed at the one position where the loss is total and therefore obvious.
+The condition now asks the honest question -- does the tree hold more than the
+line being saved -- rather than enumerating the shapes that usually mean it
+does.
+
+Fixing the write only got half of it. `loadMoveTree` built the active line from
+the saved moves and stopped there, so the tree came back with the continuation
+present but off the line: the move list draws variations only where a node has
+more than one child, so a single-child continuation past the cursor rendered
+nothing and "next move" stayed disabled. It now walks that continuation on and
+leaves the cursor where it was, which is what `jumpToNode` has always done for
+a click -- loading was the one path that disagreed. It follows the *first*
+child rather than `preferredContinuation`'s last, because "most recently
+explored" is a fact about a session and a tree just read off disk has not had
+one.
+
+Both halves are mutation-checked, and the first attempt at checking them was
+wrong in a way worth recording: run against the shared dev server, the
+write-side mutant appeared to **survive**. It does not -- the real suite, which
+starts its own server per run, fails it on the assertion above. A long-lived
+HMR server keeps a previous version of a module alive in an open page, and this
+app writes during unload, so a write can land after the probe's last read and
+be credited to the wrong code. Explore on the shared server; decide on the gate.
+
 ### Reading the library as a repertoire
 
 `utils/positionExplorer.ts` answers "have I been here before?" over the saved

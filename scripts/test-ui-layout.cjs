@@ -4047,6 +4047,95 @@ async function assertADeepSearchSurvivesAHiddenTab(browser) {
  * state to be absent. Without that the test would pass on a slow machine for
  * the wrong reason: the debounce would simply have got there first.
  */
+/**
+ * The auto-save stores the line only as far as the cursor, so that restoring
+ * puts the reader back on the move they were looking at. Everything past the
+ * cursor therefore exists only in the move tree -- and a straight line has no
+ * branches, so the tree was not being stored, and the rest of the game was
+ * dropped. It came back cut off at wherever the reader happened to be standing.
+ *
+ * Two halves, and both have to hold: the snapshot has to carry the tree, and
+ * the loader has to walk it back onto the active line instead of stopping at
+ * the saved cursor.
+ *
+ * Waits on the write rather than sleeping through it. A fixed wait read
+ * storage before the debounce landed and reported the *previous* snapshot,
+ * which looks exactly like a pass.
+ */
+async function assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser) {
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 820 });
+  const KEY = "xiangqi:auto-saved-game:v1";
+  try {
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".mtree-chip", { timeout: 30000 });
+    await page.waitForFunction(
+      (k) => {
+        try { return (JSON.parse(localStorage.getItem(k) || "{}")?.game?.moves || []).length === 3; }
+        catch (_) { return false; }
+      },
+      KEY,
+      { timeout: 20000 }
+    );
+
+    // Step back to the first move, the way a reader looking something up does.
+    await page.locator(".mtree-chip").first().click();
+    // Wait for the write, not for a duration.
+    await page.waitForFunction(
+      (k) => {
+        try { return (JSON.parse(localStorage.getItem(k) || "{}")?.game?.moves || []).length === 1; }
+        catch (_) { return false; }
+      },
+      KEY,
+      { timeout: 20000 }
+    );
+
+    const stored = await page.evaluate((k) => {
+      const game = JSON.parse(localStorage.getItem(k) || "{}").game || {};
+      const walk = (nodes) => (nodes || []).reduce((n, x) => n + 1 + walk(x.children), 0);
+      return { moves: game.moves, treeMoves: walk(game.moveTree) };
+    }, KEY);
+    if (stored.treeMoves !== 3) {
+      throw new Error(`The cursor line was stored without the rest of the game: ${JSON.stringify(stored)}`);
+    }
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    const restore = page.getByRole("button", { name: /^restore$/i });
+    if (!(await restore.count())) {
+      throw new Error("The reload offered no game to restore, so the rest of it could not be checked");
+    }
+    await restore.first().click();
+    await page.waitForFunction(() => document.querySelectorAll(".mtree-chip").length === 3, null, { timeout: 15000 })
+      .catch(() => {});
+
+    const back = await page.evaluate(() => ({
+      chips: [...document.querySelectorAll(".mtree-chip")].map((c) => c.textContent.trim()),
+      active: document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || null,
+      canGoForward: [...document.querySelectorAll('button[aria-label="Go to next move"]')].some((b) => !b.disabled),
+    }));
+    if (back.chips.length !== 3) {
+      throw new Error(`A game stepped back through came back cut off at the cursor: ${JSON.stringify(back)}`);
+    }
+    // And the cursor is still where it was left, not dragged to the end.
+    if (!back.active || !back.active.includes("b2b4")) {
+      throw new Error(`Restoring moved the reader off the move they were on: ${JSON.stringify(back)}`);
+    }
+    if (!back.canGoForward) {
+      throw new Error(`The restored game could not be stepped forward into: ${JSON.stringify(back)}`);
+    }
+
+    await context.close();
+  } catch (error) {
+    try { await context.close(); } catch (_) {}
+    throw error;
+  }
+}
+
 async function assertADiscardedTabKeepsTheLastThingDone(browser) {
   // Its own context: the shared page wipes the auto-save between navigations,
   // which is the thing being read here.
@@ -9670,6 +9759,7 @@ async function main() {
     await assertAMoveNoteSurvivesAReload(browser);
     await assertANoteSurvivesTheMoveChangingUnderIt(page);
     await assertADiscardedTabKeepsTheLastThingDone(browser);
+    await assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);

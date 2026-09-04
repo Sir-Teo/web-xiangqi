@@ -3946,7 +3946,15 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || moves.length === 0)
+    // `moves` stops where the cursor is standing, so that restoring puts the
+    // reader back on the move they were looking at. Anything past the cursor
+    // exists only in the tree, and a straight line has no branches and may
+    // have no notes -- so without this last clause a game stepped back through
+    // and then closed came back cut off at the cursor, with the rest silently
+    // dropped. The `=== 0` case is the same bug at the root, where it was
+    // noticed first.
+    const holdsMoreThanTheSavedLine = moves.length === 0 || moves.length < activeLineNodeIds.length;
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || holdsMoreThanTheSavedLine)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     return {

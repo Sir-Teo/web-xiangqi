@@ -555,23 +555,32 @@ export function useXiangqi() {
             cursor = childId;
         }
 
-        if (activeLine.length === 0 && tree[ROOT_NODE_ID].childrenIds.length > 0) {
-            cursor = ROOT_NODE_ID;
-            while (tree[cursor]?.childrenIds.length) {
-                const childId = tree[cursor].childrenIds[0];
-                activeLine.push(childId);
-                cursor = childId;
-            }
+        // The saved line stops where the reader was standing, and the rest of
+        // the game lives on past it in the tree. Walk that continuation onto
+        // the active line so those moves stay reachable, and leave the cursor
+        // where it was: `jumpToNode` has always done this for a click, and
+        // loading was the one path that did not -- so a game stepped back
+        // through and then reloaded came back cut off at the cursor.
+        //
+        // First child rather than `preferredContinuation`'s last: "most
+        // recently explored" is a fact about a session, and a tree that has
+        // just been read off disk has not had one. First child is the main
+        // line, which is what the reader means by the rest of the game.
+        const cursorIndex = activeLine.length - 1;
+        while (tree[cursor]?.childrenIds.length) {
+            const childId = tree[cursor].childrenIds[0];
+            activeLine.push(childId);
+            cursor = childId;
         }
 
-        const shouldKeepRootSelected = mainLineMoves.length === 0;
-        const activeNodeId = shouldKeepRootSelected ? ROOT_NODE_ID : activeLine[activeLine.length - 1] ?? ROOT_NODE_ID;
+        const shouldKeepRootSelected = mainLineMoves.length === 0 || activeLine.length === 0;
+        const activeNodeId = shouldKeepRootSelected ? ROOT_NODE_ID : activeLine[cursorIndex] ?? ROOT_NODE_ID;
         const position = getPositionFromNode(tree, activeNodeId, root);
         nodeCounterRef.current = counter;
         setRootPosition(root);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
-        setCurrentMoveIndex(shouldKeepRootSelected ? -1 : activeLine.length - 1);
+        setCurrentMoveIndex(shouldKeepRootSelected ? -1 : cursorIndex);
         setBoard(position.board);
         setSideToMove(position.sideToMove);
         setInCheck(position.inCheck);
