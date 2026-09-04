@@ -53,7 +53,7 @@ import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { BoardEditor } from './components/Board/BoardEditor';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
-import { MAX_MOVE_COMMENT_LENGTH } from './utils/moveComment';
+import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComment';
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { describePvStanding } from './utils/pvStanding';
@@ -4356,6 +4356,53 @@ function App() {
     }, AUTO_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timeout);
   }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot]);
+
+  const currentGameSnapshotRef = useRef(currentGameSnapshot);
+  useEffect(() => {
+    currentGameSnapshotRef.current = currentGameSnapshot;
+  }, [currentGameSnapshot]);
+
+  /**
+   * The debounce above assumes the tab lives another 600ms, and a phone does
+   * not promise that: iOS discards a backgrounded tab without warning and
+   * without running an unload handler. What it does run first is `pagehide`,
+   * so the snapshot is written there too. The cost of a duplicate write is one
+   * localStorage set; the cost of missing one is the move just played -- or the
+   * whole game, when it was the first move and nothing had been stored yet.
+   *
+   * A note being typed is rewritten into the snapshot on the way out rather
+   * than read from the tree, because it has not reached the tree yet: it is
+   * sitting in the draft ref waiting for its own debounce, and it would
+   * otherwise be the one thing this flush failed to save.
+   */
+  useEffect(() => {
+    if (!autoSaveChecked || autoSaveRecovery) return;
+    const flush = () => {
+      let snapshot = currentGameSnapshotRef.current;
+      const pending = moveCommentEditRef.current;
+      if (pending) {
+        const node = treeNodesRef.current[pending.nodeId];
+        const normalized = normalizeMoveComment(pending.draft);
+        if (node?.record && normalized !== (node.record.comment ?? '')) {
+          const record = { ...node.record };
+          if (normalized) record.comment = normalized;
+          else delete record.comment;
+          const patched = { ...treeNodesRef.current, [pending.nodeId]: { ...node, record } };
+          snapshot = { ...snapshot, moveTree: serializeSavedMoveTree(patched, rootNodeId) };
+        }
+      }
+      writeAutoSavedGame(snapshot);
+    };
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, [autoSaveChecked, autoSaveRecovery, rootNodeId]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     clearAutoSavedGame();

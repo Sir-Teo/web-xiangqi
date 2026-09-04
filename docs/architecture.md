@@ -924,6 +924,33 @@ rather than reaching the board.
 
 The auto-save stores a `SavedGame`, so restoring reuses that same validation.
 
+### The 600ms the tab does not always have
+
+The auto-save is debounced by 600ms, which quietly assumes the tab survives
+the wait. On a phone it often does not: iOS discards a backgrounded tab
+whenever it wants the memory, and it does not run an unload handler on the way
+out. Everything changed inside that window was gone.
+
+The size of the loss is small but the shape of it is bad. Usually it is the
+last move played. Occasionally it is the *whole game*, because
+`isWorthAutoSaving` refuses to store an empty board -- so a game backgrounded
+right after its first move had never been written at all, and came back with no
+recovery offer, which reads as the app having thrown the game away.
+
+`pagehide` is the event that does still fire, so the snapshot is written there
+as well. A duplicate write costs one `localStorage.setItem`.
+
+The note being typed is rebuilt into that snapshot rather than read from the
+tree, because at that instant it is not in the tree: it is in the draft ref
+waiting on its own 600ms, and it would otherwise have been the single thing the
+flush failed to save -- someone typing a note is exactly the someone who is
+about to be interrupted.
+
+Both halves are checked by reading storage immediately *before* the flush and
+requiring the new state to be missing from it. A test that only checked
+afterwards would pass on any machine where the debounce happened to win the
+race, which is most of them.
+
 ### Reading the library as a repertoire
 
 `utils/positionExplorer.ts` answers "have I been here before?" over the saved

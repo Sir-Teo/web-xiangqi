@@ -4037,6 +4037,119 @@ async function assertADeepSearchSurvivesAHiddenTab(browser) {
  * The whole race runs inside one page task, so the 600ms debounce provably
  * cannot fire in between and rescue the note by another route.
  */
+/**
+ * The auto-save is debounced by 600ms, and a phone does not promise the tab
+ * lives long enough to pay it -- iOS discards a backgrounded tab without
+ * running an unload handler. `pagehide` is the event that does fire, and this
+ * checks the app writes there rather than trusting the timer.
+ *
+ * Both halves read storage immediately *before* the flush and require the new
+ * state to be absent. Without that the test would pass on a slow machine for
+ * the wrong reason: the debounce would simply have got there first.
+ */
+async function assertADiscardedTabKeepsTheLastThingDone(browser) {
+  // Its own context: the shared page wipes the auto-save between navigations,
+  // which is the thing being read here.
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 820 });
+  try {
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    // The debounce gets to store the loaded game once, so the checks below are
+    // about the *change* that follows rather than about a first write.
+    await page.waitForFunction(
+      () => (localStorage.getItem("xiangqi:auto-saved-game:v1") || "").includes("b4d4"),
+      null,
+      { timeout: 20000 }
+    );
+
+    // --- the position as it stood when the tab went away ---
+    await page.locator('button[aria-label="Go to previous move"]:visible').first().click();
+    const stepped = await page.evaluate(() => {
+      // The played line, not the raw text: the move tree keeps `b4d4` either
+      // way, because stepping back does not delete the move from the tree.
+      const line = () => {
+        try {
+          return JSON.parse(localStorage.getItem("xiangqi:auto-saved-game:v1") || "{}")?.game?.moves ?? null;
+        } catch (_) {
+          return null;
+        }
+      };
+      const before = line();
+      window.dispatchEvent(new Event("pagehide"));
+      return { before, after: line() };
+    });
+    if (!Array.isArray(stepped.before) || stepped.before.length !== 3) {
+      throw new Error(`The debounce had already written the step back, so the flush proved nothing: ${JSON.stringify(stepped)}`);
+    }
+    if (!Array.isArray(stepped.after) || stepped.after.length !== 2) {
+      throw new Error(`pagehide did not store the position as it stood: ${JSON.stringify(stepped)}`);
+    }
+
+    // --- and a note that had not finished being typed ---
+    const NOTE = "Held the file rather than trading it off.";
+    await page.locator(".mtree-chip").first().click();
+    await page.waitForTimeout(250);
+    const typed = await page.evaluate((note) => {
+      const read = () => localStorage.getItem("xiangqi:auto-saved-game:v1") || "";
+      const field = document.querySelector('[data-testid="move-comment-input"]');
+      if (!field) return { error: "no note field" };
+      if (field.disabled) return { error: "the note field was disabled on a move" };
+      field.focus();
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+      setter.call(field, note);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      // Same task as the keystroke: neither the note's debounce nor the
+      // auto-save's can have run, so the note is only in the draft ref.
+      const before = read();
+      window.dispatchEvent(new Event("pagehide"));
+      return { error: null, before, after: read() };
+    }, NOTE);
+
+    if (typed.error) throw new Error(`Could not type the note: ${typed.error}`);
+    if (typed.before.includes("Held the file")) {
+      throw new Error("The note reached storage before the flush, so the flush proved nothing");
+    }
+    if (!typed.after.includes("Held the file")) {
+      throw new Error(`pagehide dropped a note that was still being typed: ${typed.after.slice(0, 300)}`);
+    }
+
+    // In storage is not the same as back on the board: the flush writes a move
+    // tree that the normal path would not have written yet, so the restore has
+    // to be able to read it.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    const restore = page.getByRole("button", { name: /^restore$/i });
+    if (!(await restore.count())) {
+      throw new Error("The discarded tab left nothing to restore, so the flushed note could not be checked");
+    }
+    await restore.first().click();
+    const back = await page
+      .waitForFunction(
+        (note) => document.querySelector(".mtree-comment")?.getAttribute("title") === note,
+        NOTE,
+        { timeout: 15000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!back) {
+      const state = await page.evaluate(() => ({
+        marks: [...document.querySelectorAll(".mtree-comment")].map((n) => n.getAttribute("title")),
+      }));
+      throw new Error(`A flushed note reached storage but not the board: ${JSON.stringify(state)}`);
+    }
+
+    await context.close();
+  } catch (error) {
+    try { await context.close(); } catch (_) {}
+    throw error;
+  }
+}
+
 async function assertANoteSurvivesTheMoveChangingUnderIt(page) {
   const NOTE = "Cannon first, or the horse never gets out.";
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4+e9e8", {
@@ -9556,6 +9669,7 @@ async function main() {
     await assertADeepSearchSurvivesAHiddenTab(browser);
     await assertAMoveNoteSurvivesAReload(browser);
     await assertANoteSurvivesTheMoveChangingUnderIt(page);
+    await assertADiscardedTabKeepsTheLastThingDone(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);
