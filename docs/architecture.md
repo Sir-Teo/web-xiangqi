@@ -1873,6 +1873,41 @@ Any of the three is defensible and they look different to use -- which is what
 sent the answer to a fourth place, the mobile header, described at the top of
 this section.
 
+## A heading the phone could not hear
+
+The analysis panel's `<h2>Analysis</h2>` lives in the same header as the
+desktop tab strip. A phone has its own tab bar, so that header was
+`display: none` -- which is right for the strip and wrong for the heading:
+`display: none` removes an element from the accessibility tree, so a screen
+reader on a phone heard the app's `h1` and then, next, the review panel's `h3`.
+A section with no heading, on the surface where the outline is the only
+structure there is.
+
+`display: contents` on the header drops its own box without dropping its
+children, so the strip can be hidden on its own and the heading kept the way
+the narrow-panel rule at the top of `App.css` already keeps it -- absolutely
+positioned at a pixel, still in the tree. Desktop is untouched: the strip is
+visible and the heading is 68px wide as before.
+
+The check reads the *tree*, not the pixels. A heading hidden the
+visually-hidden way is still there and one behind `display: none` is not, and
+that distinction is the whole of the fix -- a check that measured a bounding
+box would pass either way.
+
+This is the same fact the notices already turn on: "`display: none` also
+removes them from the accessibility tree" is written a few sections up, about
+the import warnings. It cost a heading here for the same reason.
+
+**An existing check had the same confusion in it and had to be corrected, not
+worked around.** `assertPanelTabAccessibility` asserted that every
+`.panel-header-tabs` is `display: none` on a phone -- the container, not the
+strip -- and that container is also where the heading lives, so the assertion
+quietly required the heading to be gone. What it is *for* is that a phone
+exposes one tablist, its own. It now counts the `role="tab"` elements actually
+in the accessibility tree and requires exactly the mobile bar's five, which
+says the same thing about the tabs, nothing about the heading, and rather more
+than the old form did: leaking the desktop strip now reports seven.
+
 ## The tab order is a budget
 
 Every focusable thing is a key press between someone and the control they want,

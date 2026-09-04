@@ -3880,6 +3880,77 @@ async function assertEngineDownloadReportsItsProgress(browser) {
  * Asserted on the depth, which is the only thing that proves the search
  * carried on rather than being restarted on return.
  */
+/**
+ * The heading outline survives the phone's own tab bar.
+ *
+ * A screen reader navigating by heading is reading the only structure a phone
+ * offers, and the analysis panel's `<h2>Analysis</h2>` sits in the same header
+ * as the desktop tab strip. The phone has its own tab bar, so that header was
+ * `display: none` -- which takes the heading out of the accessibility tree
+ * along with the tabs, leaving the app's `h1` followed by the review panel's
+ * `h3`: a section with no heading at all.
+ *
+ * Asserted on the tree rather than on the pixels: a heading hidden the
+ * visually-hidden way is still there, and one behind `display: none` is not,
+ * which is exactly the distinction the fix turns on.
+ */
+async function assertTheHeadingOutlineHasNoGaps(browser) {
+  for (const viewport of [{ width: 1280, height: 820 }, { width: 390, height: 844 }]) {
+    const { context, page } = await newIsolatedPage(browser, viewport);
+    const phone = viewport.width < 900;
+    try {
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2+h9g7+h0g2+i9h9", {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      for (const name of [/keep the link/i, /start fresh/i, /restore/i]) {
+        const button = page.getByRole("button", { name });
+        if (await button.count()) { await button.first().click().catch(() => {}); break; }
+      }
+      await page.waitForTimeout(500);
+      if (phone) {
+        await page.getByRole("button", { name: /^analysis$/i }).first().click().catch(() => {});
+        await page.waitForTimeout(400);
+        await page.getByTestId("mobile-analysis-tab-review").click().catch(() => {});
+      } else {
+        await page.getByTestId("analysis-tab-review").click().catch(() => {});
+      }
+      await page.waitForTimeout(700);
+
+      const outline = await page.evaluate(() => {
+        const inTree = (el) => {
+          for (let node = el; node; node = node.parentElement) {
+            const style = getComputedStyle(node);
+            if (style.display === "none" || style.visibility === "hidden") return false;
+            if (node.getAttribute && node.getAttribute("aria-hidden") === "true") return false;
+          }
+          return true;
+        };
+        const headings = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].filter(inTree);
+        const levels = headings.map((h) => Number(h.tagName[1]));
+        return {
+          headings: headings.map((h) => `${h.tagName} ${h.textContent.trim().slice(0, 20)}`),
+          jumps: levels.map((level, i) => (i && level - levels[i - 1] > 1 ? `h${levels[i - 1]} to h${level}` : null)).filter(Boolean),
+          hasAnalysisHeading: headings.some((h) => h.id === "right-panel-heading"),
+        };
+      });
+
+      const where = `${viewport.width}x${viewport.height}`;
+      if (outline.jumps.length > 0) {
+        throw new Error(`The heading outline skips a level at ${where}: ${JSON.stringify(outline)}`);
+      }
+      if (!outline.hasAnalysisHeading) {
+        throw new Error(`The analysis panel lost its heading at ${where}: ${JSON.stringify(outline)}`);
+      }
+      await context.close();
+    } catch (error) {
+      try { await context.close(); } catch (_) {}
+      throw error;
+    }
+  }
+}
+
 async function assertADeepSearchSurvivesAHiddenTab(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
@@ -5055,7 +5126,20 @@ async function assertPanelTabAccessibility(page) {
     engineControls: document.querySelector('[data-testid="mobile-analysis-tab-engine"]')?.getAttribute("aria-controls") || "",
     librarySelected: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-selected") || "",
     libraryControls: document.querySelector('[data-testid="mobile-analysis-tab-library"]')?.getAttribute("aria-controls") || "",
-    hiddenPanelTabStrips: [...document.querySelectorAll(".panel-header-tabs")].every((el) => getComputedStyle(el).display === "none"),
+    // The property this is for: a phone exposes *one* tablist, its own. It used
+    // to be asserted as "every `.panel-header-tabs` is display:none", which is
+    // the container rather than the strip -- and that container also holds the
+    // panel's `<h2>`, so the assertion quietly required the heading to be gone
+    // from the accessibility tree too. Counting the tabs that are actually
+    // exposed says the same thing about the tabs and nothing about the heading.
+    exposedTabs: [...document.querySelectorAll("[role='tab']")].filter((el) => {
+      for (let node = el; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        if (node.getAttribute && node.getAttribute("aria-hidden") === "true") return false;
+      }
+      return true;
+    }).length,
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
@@ -5068,7 +5152,7 @@ async function assertPanelTabAccessibility(page) {
     mobileUpdated.engineControls !== "right-analysis-content" ||
     mobileUpdated.librarySelected !== "true" ||
     mobileUpdated.libraryControls !== "left-panel-content" ||
-    !mobileUpdated.hiddenPanelTabStrips ||
+    mobileUpdated.exposedTabs !== 5 ||
     mobileUpdated.overflowX > 2
   ) {
     throw new Error(`Mobile panel tabs are not exposed accessibly: ${JSON.stringify(mobileUpdated)}`);
@@ -9372,6 +9456,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertTheHeadingOutlineHasNoGaps(browser);
     await assertADeepSearchSurvivesAHiddenTab(browser);
     await assertAMoveNoteSurvivesAReload(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);

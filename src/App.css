@@ -4099,8 +4099,34 @@ summary:active {
     border-bottom: 1px solid var(--border-subtle);
   }
 
+  /* The phone has its own tab bar, so the desktop strip goes -- but the header
+     is also where `<h2 id="right-panel-heading">Analysis</h2>` lives, and
+     `display: none` takes it out of the accessibility tree along with the tabs.
+     A screen reader then hears the app's `h1` and, next, the review panel's
+     `h3`: a section with no heading, on the surface where the outline is the
+     only structure there is.
+
+     `display: contents` drops the header's own box without dropping its
+     children, so the strip can be hidden on its own and the heading kept the
+     way the narrow-panel rule at the top of this file already keeps it. */
   [data-mobile-view="analysis"] .panel-header-tabs {
+    display: contents;
+  }
+
+  [data-mobile-view="analysis"] .panel-header-tabs > .analysis-tab-strip {
     display: none;
+  }
+
+  [data-mobile-view="analysis"] .panel-header-tabs > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   /* A landscape phone hands the analysis panel the full 900px, but its content
