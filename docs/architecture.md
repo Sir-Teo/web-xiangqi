@@ -980,6 +980,12 @@ child rather than `preferredContinuation`'s last, because "most recently
 explored" is a fact about a session and a tree just read off disk has not had
 one.
 
+Saving to the library had the same hole and is fixed by the same two changes:
+`handleSaveGame` destructures the same snapshot, `useGameLibrary`'s `save`
+passes `moveTree` straight through, and loading a library game goes through the
+same `handleLoadGame`. That path is the worse one to lose a game on, because
+there the reader explicitly asked to keep it.
+
 Both halves are mutation-checked, and the first attempt at checking them was
 wrong in a way worth recording: run against the shared dev server, the
 write-side mutant appeared to **survive**. It does not -- the real suite, which
