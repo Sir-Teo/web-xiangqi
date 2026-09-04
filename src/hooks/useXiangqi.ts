@@ -23,6 +23,7 @@ import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
 import { removeSubtree } from '../utils/moveTreeEdit';
 import { isSameMoveComment, normalizeMoveComment } from '../utils/moveComment';
+import { bestLineForMove } from '../utils/engineBestLine';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
@@ -32,6 +33,12 @@ export interface MoveRecord {
     captured: string;
     evalScore?: number;
     bestMove?: string; // engine's best move from the parent position (set during review)
+    /**
+     * The engine's whole line from the parent position, starting with
+     * `bestMove`. The review gets it free with `bestmove`; see
+     * `utils/engineBestLine`.
+     */
+    bestLine?: string[];
     quality?: ReviewMoveQuality;
     swing?: number;
     winPercentLoss?: number;
@@ -887,15 +894,19 @@ export function useXiangqi() {
         });
     }, []);
 
-    const setNodeBestMove = useCallback((nodeId: string, bestMove: string) => {
+    const setNodeBestMove = useCallback((nodeId: string, bestMove: string, bestLine?: string[]) => {
         if (!bestMove || nodeId === ROOT_NODE_ID) return;
+        const line = bestLineForMove(bestMove, bestLine);
         setTreeNodes((prevTree) => {
             const node = prevTree[nodeId];
-            if (!node?.record || node.record.bestMove === bestMove) return prevTree;
-            return {
-                ...prevTree,
-                [nodeId]: { ...node, record: { ...node.record, bestMove } },
-            };
+            if (!node?.record) return prevTree;
+            const sameMove = node.record.bestMove === bestMove;
+            const sameLine = (node.record.bestLine ?? []).join(' ') === (line ?? []).join(' ');
+            if (sameMove && sameLine) return prevTree;
+            const record = { ...node.record, bestMove };
+            if (line) record.bestLine = line;
+            else delete record.bestLine;
+            return { ...prevTree, [nodeId]: { ...node, record } };
         });
     }, []);
 
@@ -907,6 +918,7 @@ export function useXiangqi() {
         swing?: number;
         winPercentLoss?: number;
         reviewNote?: string;
+        bestLine?: string[];
     }>) => {
         if (updates.length === 0) return;
         setTreeNodes((prevTree) => {
@@ -918,10 +930,12 @@ export function useXiangqi() {
                 const record = node?.record;
                 if (!record) continue;
 
+                const nextLine = bestLineForMove(update.bestMove ?? record.bestMove, update.bestLine ?? record.bestLine);
                 const nextRecord: MoveRecord = {
                     ...record,
                     evalScore: typeof update.evalScore === 'number' ? update.evalScore : record.evalScore,
                     bestMove: update.bestMove ?? record.bestMove,
+                    bestLine: nextLine,
                     quality: update.quality,
                     swing: typeof update.swing === 'number' ? update.swing : undefined,
                     winPercentLoss: typeof update.winPercentLoss === 'number' ? update.winPercentLoss : undefined,
@@ -931,6 +945,7 @@ export function useXiangqi() {
                 const changed =
                     nextRecord.evalScore !== record.evalScore ||
                     nextRecord.bestMove !== record.bestMove ||
+                    (nextRecord.bestLine ?? []).join(' ') !== (record.bestLine ?? []).join(' ') ||
                     nextRecord.quality !== record.quality ||
                     nextRecord.swing !== record.swing ||
                     nextRecord.winPercentLoss !== record.winPercentLoss ||

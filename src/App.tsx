@@ -1486,7 +1486,11 @@ function App() {
         if (uci) {
           const childNodeId = treeNodes[reviewTag.nodeId]?.childrenIds
             .find(cid => activeLineNodeIds.includes(cid));
-          if (childNodeId) setNodeBestMove(childNodeId, uci);
+          // The principal variation arrives with `bestmove` and starts with it,
+          // so the line the engine would have played on costs nothing extra to
+          // keep -- and without it the review can say which move was better and
+          // never what it was for.
+          if (childNodeId) setNodeBestMove(childNodeId, uci, completedPvLines[0]?.moves);
         }
 
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
@@ -2775,6 +2779,20 @@ function App() {
   }, [notationStyle, treeNodes]);
 
   /**
+   * The engine's line from the position before a move, in the reader's
+   * notation. Every move after the first needs the board the one before it
+   * left, which is what `formatLineInStyle` walks -- a per-move formatter
+   * cannot do this, since it only ever has one board.
+   */
+  const formatReviewLineText = useCallback((nodeId: string, moves: string[]) => {
+    if (notationStyle === 'uci') return moves.map((uci) => formatUciMove(uci)).join(' ');
+    const record = treeNodes[nodeId]?.record;
+    const before = record ? boardBeforeRecord(record) : null;
+    if (!before) return moves.map((uci) => formatUciMove(uci)).join(' ');
+    return formatLineInStyle(before, moves, notationStyle, moves.length);
+  }, [notationStyle, treeNodes]);
+
+  /**
    * Whether this position has stood here before, and what the rules say about
    * how it got back.
    *
@@ -3908,6 +3926,7 @@ function App() {
         moveIndex,
         evalScore: record.evalScore,
         bestMove: record.bestMove,
+        bestLine: record.bestLine,
         quality: record.quality,
         swing: record.swing,
         winPercentLoss: record.winPercentLoss,
@@ -4254,6 +4273,7 @@ function App() {
               nodeId,
               evalScore: annotation.evalScore,
               bestMove: annotation.bestMove,
+              bestLine: annotation.bestLine,
               quality: annotation.quality,
               swing: annotation.swing,
               winPercentLoss: annotation.winPercentLoss,
@@ -6357,6 +6377,7 @@ function App() {
                   onPlayBestMove={handlePlayReviewBestMove}
                   onPracticeMoment={handlePracticeReviewMoment}
                   formatMoveText={formatReviewMoveText}
+                  formatLineText={formatReviewLineText}
                 />
               ) : (
                 <>

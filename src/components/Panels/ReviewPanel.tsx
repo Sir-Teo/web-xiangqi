@@ -18,6 +18,7 @@ import {
     isFiniteNumber,
 } from '../../utils/review';
 import { formatEvaluationText } from '../../utils/engineEvalReading';
+import { isBestLineWorthShowing } from '../../utils/engineBestLine';
 import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
@@ -47,6 +48,8 @@ type Props = {
      * tree, does the lookup. Defaults to coordinates.
      */
     formatMoveText?: (nodeId: string, uci: string) => string;
+    /** The engine's line from the position before a move, in one string. */
+    formatLineText?: (nodeId: string, moves: string[]) => string;
 };
 
 type ReviewMomentSideFilter = 'all' | 'red' | 'black';
@@ -70,6 +73,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     onPlayBestMove,
     onPracticeMoment,
     formatMoveText = (_nodeId, uci) => formatUciMove(uci),
+    formatLineText = (_nodeId, moves) => moves.map((uci) => formatUciMove(uci)).join(' '),
 }: Props) {
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
     const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
@@ -333,6 +337,20 @@ export const ReviewPanel = memo(function ReviewPanel({
                                 {focusMoment.bestMove ? (
                                     <em>Try {formatMoveText(focusMoment.nodeId, focusMoment.bestMove)}</em>
                                 ) : null}
+                                {/* What the better move was *for*. The review
+                                    could say which move to play and never what
+                                    it prepares, which is the half a reader
+                                    learns from. It costs no extra search: the
+                                    line arrives with `bestmove`. */}
+                                {isBestLineWorthShowing(focusMoment.bestLine) ? (
+                                    <em
+                                        className="review-best-line"
+                                        data-testid="review-focus-best-line"
+                                        title={formatLineText(focusMoment.nodeId, focusMoment.bestLine)}
+                                    >
+                                        {formatLineText(focusMoment.nodeId, focusMoment.bestLine)}
+                                    </em>
+                                ) : null}
                                 <p>{formatReviewNoteForDisplay(focusMoment.note, focusMoment.bestMove)}</p>
                             </>
                         ) : (
@@ -424,6 +442,14 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         <p>{formatReviewNoteForDisplay(moment.note, moment.bestMove)}</p>
                                         {moment.bestMove ? (
                                             <em>Best: {formatMoveText(moment.nodeId, moment.bestMove)}</em>
+                                        ) : null}
+                                        {isBestLineWorthShowing(moment.bestLine) ? (
+                                            <em
+                                                className="review-best-line"
+                                                title={formatLineText(moment.nodeId, moment.bestLine)}
+                                            >
+                                                {formatLineText(moment.nodeId, moment.bestLine)}
+                                            </em>
                                         ) : null}
                                     </button>
                                     {(onPracticeMoment || (moment.bestMove && onPlayBestMove)) ? (

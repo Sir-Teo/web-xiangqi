@@ -743,6 +743,35 @@ Engine crashes are classified rather than surfaced raw:
 WASM abort from reaching the user as an unhandled error, and a failed boot
 can be retried with `saferBoot`, which drops to one thread and half the hash.
 
+## The review said which move, and never what for
+
+A key moment read *Try C2+7* and then a sentence about how much the played move
+cost. Both are about the move that was not played; neither says what it was
+*preparing*, which is the half a reader learns from. Getting it meant leaving
+the review, stepping back a ply, and waiting for a fresh search of a position
+the review had already searched -- possibly deeper than the live one will reach.
+
+The engine had already given it away. `bestmove` arrives with the principal
+variation that produced it, and that PV *starts with the best move*, so keeping
+it is one field and no extra work. `utils/engineBestLine.ts` bounds it at twelve
+plies and pairs it with the recommendation it belongs to:
+
+- **Bounded**, because it is stored per critical moment and a long game has many.
+  Twelve plies is past where a reader is following the line rather than reading
+  it, and past where a bounded search's tail is worth trusting.
+- **Paired**, because the PV and the recorded best move come from the same
+  search and disagreeing means they did not. `bestLineForMove` returns nothing
+  rather than putting one search's continuation under another's recommendation
+  -- which is also what makes a saved review from a build without the field
+  safe to read.
+- **Stopped at the first token that is not a move**, rather than filtered: a
+  line with a hole in it is not a line, because the moves after the hole no
+  longer follow the ones before.
+
+Rendering it needs `formatLineInStyle` rather than the per-move formatter the
+panel already had, since every move after the first is read against the board
+the one before it left.
+
 ## Review and Accuracy
 
 `utils/review.ts` scores a game on **winning chances, not centipawns**, using
@@ -1495,11 +1524,11 @@ because those levels return before either value is read, and `loadAllGames`'s
 sort order is invisible because the library panel re-sorts with its own
 comparator and the explorer does not care about order.
 
-Swept when written, and two of thirteen mutations survived --
+Swept when written, and two of eighteen mutations survived --
 `moveComment.ts`, `captureFreeRule.ts`, `engineAssetProgress.ts`,
-`engineEvalReading.ts` and `shareLinkNotice.ts`. Both survivors were tests that
-looked like they covered a branch and did not, which is the exact failure this
-practice exists to find:
+`engineEvalReading.ts`, `shareLinkNotice.ts` and `engineBestLine.ts`. Both
+survivors were tests that looked like they covered a branch and did not, which
+is the exact failure this practice exists to find:
 
 - **`normalizeMoveComment`'s control-character pass could be deleted.** Its
   test folded `\n`, `\r` and `\t`, and `\s` already covers all three -- so

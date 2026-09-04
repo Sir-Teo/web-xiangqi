@@ -6470,3 +6470,19 @@ summary:active {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* The engine's continuation under the move it recommends. Monospaced and one
+   step quieter than the move above it: the move is the instruction, the line
+   is the reason, and a reader scanning several moments needs to tell them
+   apart without reading both. */
+.review-best-line {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-style: normal;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border);
+  overflow-wrap: anywhere;
+}

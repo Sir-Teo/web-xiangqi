@@ -279,7 +279,10 @@ async function installFakePikafish(page, fakeConfig) {
               const isAfterBlackHorse = movesPart === "b2e2 h9g7";
               setTimeout(() => {
                 if (isRoot && count >= 2) {
-                  emit("info depth 11 multipv 1 score cp 0 pv b0c2");
+                  // More than one move on purpose: the review keeps the whole
+                  // principal variation now, and a one-move line is the
+                  // recommendation printed twice rather than a line.
+                  emit("info depth 11 multipv 1 score cp 0 pv b0c2 b9c7 h0g2");
                   emit("bestmove b0c2");
                   return;
                 }
@@ -6293,6 +6296,20 @@ async function assertReviewRevisitRefreshesDecisionBestMove(browser) {
       state.overflowX > 2
     ) {
       throw new Error(`Review revisit did not refresh the decision-point best move: ${JSON.stringify(state)}`);
+    }
+
+    // The line under the recommendation. It says what the better move was
+    // *for*, which is the half the review used to leave out, and it is written
+    // in the reader's notation like everything else on this card -- the second
+    // and third moves are read against the boards the ones before them left,
+    // which a per-move formatter cannot do.
+    const line = await page.evaluate(
+      () => document.querySelector('[data-testid="review-focus-best-line"]')?.textContent?.replace(/\s+/g, " ").trim() || ""
+    );
+    if (!line.startsWith("H8+7") || line.split(" ").length < 3 || /[a-i][0-9][a-i][0-9]/.test(line)) {
+      throw new Error(
+        `The review did not show the engine's line in the reader's notation: ${JSON.stringify({ line })}`
+      );
     }
   } finally {
     await context.close();

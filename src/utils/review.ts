@@ -1,6 +1,7 @@
 import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
 import { MIN_WEIGHT, aggregateAccuracy, volatilityWeights } from './accuracyAggregate';
 import type { BoardState } from './xiangqi';
+import { bestLineForMove } from './engineBestLine';
 
 export const REVIEW_THRESHOLDS = {
     best: 40,
@@ -27,6 +28,8 @@ export interface ReviewRecordLike {
     ply: number;
     evalScore?: number;
     bestMove?: string;
+    /** The engine's line from the parent position; see `utils/engineBestLine`. */
+    bestLine?: string[];
 }
 
 export interface ReviewTreeNodeLike {
@@ -46,6 +49,8 @@ export interface ReviewKeyMoment {
     evalBefore: number;
     evalAfter: number;
     bestMove?: string;
+    /** What the engine would have played on, starting with `bestMove`. */
+    bestLine?: string[];
     playedMove: string;
     note: string;
 }
@@ -82,6 +87,7 @@ export interface ReviewAnnotation {
     moveIndex: number;
     evalScore: number;
     bestMove?: string;
+    bestLine?: string[];
     quality: ReviewMoveQuality;
     swing: number;
     winPercentLoss?: number;
@@ -92,6 +98,7 @@ export interface SavedReviewAnnotation {
     moveIndex: number;
     evalScore?: number;
     bestMove?: string;
+    bestLine?: string[];
     quality?: ReviewMoveQuality;
     swing?: number;
     winPercentLoss?: number;
@@ -651,6 +658,7 @@ export function computeReviewArtifacts(
             moveIndex,
             evalScore: currentEval,
             bestMove: record.bestMove,
+            bestLine: bestLineForMove(record.bestMove, record.bestLine),
             quality,
             swing,
             winPercentLoss,
@@ -670,6 +678,7 @@ export function computeReviewArtifacts(
                 evalBefore: parentEval,
                 evalAfter: currentEval,
                 bestMove: record.bestMove,
+                bestLine: bestLineForMove(record.bestMove, record.bestLine),
                 playedMove: record.uci,
                 note,
             });

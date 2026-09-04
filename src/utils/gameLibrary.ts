@@ -12,6 +12,7 @@ import type {
 import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations } from './review';
 import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
 import { normalizeMoveComment } from './moveComment';
+import { bestLineForMove } from './engineBestLine';
 
 export { GAME_LIBRARY_STORAGE_KEY };
 const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
@@ -227,6 +228,11 @@ function normalizeSavedReviewAnnotation(raw: unknown, moveCount: number): SavedR
         moveIndex,
         evalScore: asFiniteNumber(raw.evalScore),
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
+        // Bounded and re-checked on read like everything else here, and paired
+        // with the move it starts from: a saved review may predate the field
+        // entirely, or come from a build whose line and recommendation were
+        // written by different searches.
+        bestLine: bestLineForMove(normalizeSavedMove(raw.bestMove) ?? undefined, raw.bestLine),
         quality: asMoveQuality(raw.quality),
         swing: asFiniteNumber(raw.swing),
         winPercentLoss: asWinPercentLoss(raw.winPercentLoss),
