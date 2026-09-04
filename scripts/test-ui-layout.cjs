@@ -4026,6 +4026,102 @@ async function assertADeepSearchSurvivesAHiddenTab(browser) {
   }
 }
 
+/**
+ * A note is committed by blur, and clicking another move blurs the field --
+ * so the blur path covers the way a mouse leaves a note. It does not cover the
+ * way the current move changes while the field *keeps* focus, which happens
+ * for real every time the engine plays its reply while you are still typing
+ * about your own move. That path is held by the effect on `currentNodeId`,
+ * which flushes the draft before loading the next move's note.
+ *
+ * The whole race runs inside one page task, so the 600ms debounce provably
+ * cannot fire in between and rescue the note by another route.
+ */
+async function assertANoteSurvivesTheMoveChangingUnderIt(page) {
+  const NOTE = "Cannon first, or the horse never gets out.";
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4+e9e8", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForSelector(".mtree-chip", { timeout: 15000 });
+  await page.waitForTimeout(400);
+
+  // Step onto the third move with a real click, the way a reader would.
+  const chips = page.locator(".mtree-chip");
+  if ((await chips.count()) < 4) {
+    throw new Error(`The four-move game drew ${await chips.count()} moves, so there was nothing to annotate`);
+  }
+  await chips.nth(2).click();
+  await page.waitForTimeout(200);
+
+  const annotated = await page.evaluate(() => {
+    const active = document.querySelector('[data-testid="move-tree-active"]');
+    return active ? active.getAttribute("data-node-id") : null;
+  });
+  if (!annotated) throw new Error("Clicking a move did not make it the current one");
+
+  const race = await page.evaluate((note) => {
+    const field = document.querySelector('[data-testid="move-comment-input"]');
+    if (!field) return { error: "no note field" };
+    if (field.disabled) return { error: "the note field was disabled on a move" };
+    field.focus();
+    // React listens for `input`; assigning `.value` directly does not produce
+    // one, so go through the prototype setter the way React's own tests do.
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(field, note);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    // Same task, so the debounce has not run. A *dispatched* click does not
+    // move focus the way a real one does, which is the point: no blur fires.
+    const chips = document.querySelectorAll(".mtree-chip");
+    chips[0].dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    return {
+      error: null,
+      stillFocused: document.activeElement === field,
+      steppedTo: chips[0].getAttribute("data-node-id"),
+    };
+  }, NOTE);
+
+  if (race.error) throw new Error(`Could not run the race: ${race.error}`);
+  // Without this the test would be re-proving the blur path.
+  if (!race.stillFocused) {
+    throw new Error("The field lost focus during the step, so this proved the blur commit rather than the flush");
+  }
+  if (race.steppedTo === annotated) {
+    throw new Error("The step landed on the move being annotated, so nothing changed under the field");
+  }
+
+  const landed = await page
+    .waitForFunction(
+      (note) => document.querySelector(".mtree-comment")?.getAttribute("title") === note,
+      NOTE,
+      { timeout: 10000 }
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  const where = await page.evaluate(() => {
+    const marks = [...document.querySelectorAll(".mtree-comment")];
+    return {
+      count: marks.length,
+      owners: marks.map((mark) => mark.closest(".mtree-chip-wrap")?.querySelector("[data-node-id]")?.getAttribute("data-node-id") || "?"),
+      titles: marks.map((mark) => mark.getAttribute("title") || ""),
+      draft: document.querySelector('[data-testid="move-comment-input"]')?.value ?? null,
+    };
+  });
+
+  if (!landed || where.count !== 1) {
+    throw new Error(`A note typed as the move changed under it reached ${where.count} moves: ${JSON.stringify(where)}`);
+  }
+  if (where.owners[0] !== annotated) {
+    throw new Error(`The note landed on ${where.owners[0]} rather than the move it was written on (${annotated}): ${JSON.stringify(where)}`);
+  }
+  // And the field now shows the move that was stepped to, not the old draft.
+  if (where.draft !== "") {
+    throw new Error(`The field kept the previous move's draft after stepping away: ${JSON.stringify(where)}`);
+  }
+}
+
 async function assertAMoveNoteSurvivesAReload(browser) {
   // Its own context, because the shared page carries an init script that wipes
   // the auto-save on every navigation -- which is exactly the thing under test.
@@ -9459,6 +9555,7 @@ async function main() {
     await assertTheHeadingOutlineHasNoGaps(browser);
     await assertADeepSearchSurvivesAHiddenTab(browser);
     await assertAMoveNoteSurvivesAReload(browser);
+    await assertANoteSurvivesTheMoveChangingUnderIt(page);
     await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);

@@ -1311,6 +1311,27 @@ which is 53MB and which nothing else asks for. That also shows the tiering
 choosing a core: a phone here takes `pikafish-core-single-simd`, the desktop
 takes `pikafish-core-simd`.
 
+### Typing a note does not cost a frame
+
+Move notes are a controlled `<textarea>`: every keystroke sets React state in
+`App.tsx`, which is a six-thousand-line component. That is the shape that
+usually deserves an uncontrolled field and a ref, so it was measured before
+being left alone -- seventy keystrokes, timed from the key to the character
+actually being in the field, so the number includes React committing.
+
+| CPU | median | p90 | worst of seventy |
+| --- | --- | --- | --- |
+| none | 2ms | 2ms | 19ms |
+| 4x slower | 8ms | 10ms | 33ms |
+| 6x slower | 14ms | 16ms | 42ms |
+
+Fourteen milliseconds at six times slower is inside a frame. The re-render is
+cheap because the panels below the field are memoised and the draft is the only
+state a keystroke touches -- the tree, the engine and the board all read from
+refs that the keystroke does not write. **Leave the field controlled**; making
+it uncontrolled would trade the debounce-and-blur commit logic, which is the
+part that actually has bugs in it, for two milliseconds that nobody can feel.
+
 ### A session left open does not grow
 
 The frame-pacing figures above are about one page load. The other question is
