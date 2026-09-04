@@ -124,6 +124,77 @@ function checkInvariants() {
   return out;
 }
 
+/**
+ * Whatever state the walk reached, saving it and restoring it has to give it
+ * back. This is the shape of a bug that was real: the auto-save stored the
+ * line only as far as the cursor, and for a game with no branches and no notes
+ * the tree was not stored at all, so everything past the cursor was dropped.
+ *
+ * It asks only whether anything got *smaller*, so a snapshot that legitimately
+ * gains a field is not a finding, and reports the counts rather than a diff --
+ * a seed is only useful if the failure says what to look at.
+ */
+async function roundTripLoss(page) {
+  const read = () => page.evaluate((k) => {
+    let parsed;
+    try { parsed = JSON.parse(localStorage.getItem(k) || "null"); } catch (_) { return null; }
+    const game = parsed && parsed.game;
+    if (!game) return null;
+    const walk = (nodes, out) => {
+      for (const node of nodes || []) {
+        out.moves.push(node.uci);
+        if (node.comment) out.notes.push(node.comment);
+        walk(node.children, out);
+      }
+      return out;
+    };
+    const tree = walk(game.moveTree, { moves: [], notes: [] });
+    return {
+      line: (game.moves || []).join(" "),
+      treeMoves: tree.moves.length,
+      notes: tree.notes.slice().sort().join(" | "),
+      startFen: game.startFen || null,
+    };
+  }, "xiangqi:auto-saved-game:v1");
+
+  const before = await read().catch(() => null);
+  // Nothing worth saving is not a finding -- a walk can end back at the start.
+  if (!before || (!before.line && !before.treeMoves)) return [];
+
+  await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => {});
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 }).catch(() => {});
+  const restore = page.getByRole("button", { name: /^restore$/i });
+  if (!(await restore.count().catch(() => 0))) {
+    return [`round trip: a game was stored (${before.treeMoves || before.line.split(" ").length} moves) but nothing was offered to restore`];
+  }
+  await restore.first().click().catch(() => {});
+  await page.waitForTimeout(1500);
+
+  const after = await read().catch(() => null);
+  if (!after) return ["round trip: nothing was stored after restoring"];
+
+  const out = [];
+  // Not equality: the stored line is a function of where the cursor is *and*
+  // of whether a review has finished -- a finished review stores the whole
+  // line on purpose, so its annotations line up with it -- and a restore can
+  // legitimately cross that boundary. Losing moves off the line is the
+  // invariant; gaining them is the review.
+  const lost = before.line ? before.line.split(" ").filter((m) => !after.line.split(" ").includes(m)) : [];
+  if (lost.length) {
+    out.push(`round trip: the line lost ${lost.join(", ")} -- came back as "${after.line}" rather than "${before.line}"`);
+  }
+  if (after.treeMoves < before.treeMoves) {
+    out.push(`round trip: the tree came back with ${after.treeMoves} moves rather than ${before.treeMoves}`);
+  }
+  if (after.notes !== before.notes) {
+    out.push(`round trip: notes came back as [${after.notes}] rather than [${before.notes}]`);
+  }
+  if (after.startFen !== before.startFen) {
+    out.push(`round trip: the start position came back as ${after.startFen} rather than ${before.startFen}`);
+  }
+  return out;
+}
+
 async function runOne(browser, playwright, { seed, rounds, profile }) {
   const random = rng(seed);
   const phone = profile === "mobile";
@@ -143,7 +214,14 @@ async function runOne(browser, playwright, { seed, rounds, profile }) {
       problems.push(`console error: ${text.slice(0, 180)}`);
     });
     await page.addInitScript(() => {
-      try { window.localStorage.clear(); } catch (_) { /* storage unavailable */ }
+      // Once per seed rather than on every navigation: the round-trip check at
+      // the end reloads on purpose and needs the auto-save to survive it.
+      try {
+        if (!window.sessionStorage.getItem("__soak_started")) {
+          window.sessionStorage.setItem("__soak_started", "1");
+          window.localStorage.clear();
+        }
+      } catch (_) { /* storage unavailable */ }
       try {
         Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
       } catch (_) { /* already defined */ }
@@ -248,6 +326,8 @@ async function runOne(browser, playwright, { seed, rounds, profile }) {
     await page.waitForTimeout(700);
     const broken = await page.evaluate(checkInvariants).catch(() => []);
     if (broken.length) problems.push(`at rest: ${broken.join("; ")}`);
+
+    problems.push(...await roundTripLoss(page));
   } finally {
     await context.close();
   }

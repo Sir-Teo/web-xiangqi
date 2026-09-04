@@ -1609,6 +1609,28 @@ attempt to prove that broke the *wrap's* ratio instead and the soak stayed
 clean -- correctly, because the board takes its shape from the container, not
 the wrap. A soak that passes proves nothing until you have watched it fail.
 
+#### The walk also has to survive being saved
+
+Every seed ends by asking the one question the layout suite cannot ask of a
+state nobody wrote down: reload, restore, and check that what comes back is
+what went in. It exists because the loss it looks for was real -- the auto-save
+stored the line only as far as the cursor, and for a game with no branches and
+no notes the tree was not stored at all.
+
+It reports *shrinkage* rather than difference, in the tree's move count, the
+notes, and the start position. Difference was the first version and it was
+wrong: the stored line is a function of the cursor **and** of whether a review
+has finished -- a finished review stores the whole line on purpose, so its
+annotations line up with it -- so a restore that crosses that boundary
+legitimately comes back with a longer line. Two seeds reported that as a
+failure until the check was narrowed to moves actually lost.
+
+Checked against the check, both ways. Reverting the loader half reports `the
+tree came back with 0 moves rather than 10` on two of five seeds; the fixed
+code is clean on all five, on both profiles. The root case -- cursor at the
+start position, whole game in the tree -- was worth isolating on its own, and
+round-trips exactly.
+
 ### What has been mutation-swept, and what has not
 
 Sweeping means changing one line to something plausible and wrong, running the
