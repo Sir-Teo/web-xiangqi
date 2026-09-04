@@ -24,6 +24,7 @@ beside it in its own section; what is listed here is the question.
 | --- | --- |
 | [A four-core desktop is graded as a phone](#a-four-core-desktop-is-graded-as-a-phone-open-question) | Nodes/second and engine-ready time on a real four-core machine running the threaded core. |
 | [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px viewport currently takes the single-threaded core whatever the hardware says. |
+| [Whether collapsing a toolbar should give its row back](#there-is-a-third-option-and-it-is-the-one-still-open) | A decision about how the collapse should feel. It vacates a row and hands the board nothing, which is a control that does not do what it looks like it does — but reclaiming the row resizes the board on every toggle. No longer urgent: the board's floor fixes the reader this was for. |
 
 ## The one thing that leaves the machine
 
@@ -1687,7 +1688,7 @@ under the toolbar, costing Red's back rank at 1024x600 and 150% text. A floor is
 only safe once the overflow it creates has somewhere to go. That is what was
 built; the numbers are at the top of this section.
 
-### There is a third option, and it needs neither decision
+### There is a third option, and it is the one still open
 
 The app already has the affordance: **Collapse top toolbar** and **Collapse
 bottom command bar**. They do not currently give the board anything, and the
