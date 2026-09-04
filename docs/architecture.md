@@ -772,6 +772,14 @@ Rendering it needs `formatLineInStyle` rather than the per-move formatter the
 panel already had, since every move after the first is read against the board
 the one before it left.
 
+**A key moment's fields are whitelisted on read**, which is why the line had to
+be added to `normalizeReviewKeyMoment` as well as written. Storing it and not
+reading it back is the quiet failure this shape invites: the review looked
+right when it ran and lost its lines the first time the game came back out of
+the library. The annotation path needed the same, and the summary rebuild
+carries key moments over from what was stored rather than recomputing them --
+so nothing downstream would have noticed.
+
 ## Review and Accuracy
 
 `utils/review.ts` scores a game on **winning chances, not centipawns**, using
@@ -1908,6 +1916,22 @@ which is why it is written down here rather than guessed at.
   gap as though nothing were missing; web-katrain breaks the stroke, which keeps
   a missing evaluation legible and is the one to copy if the graph ever needs to
   distinguish "no reading" from "unchanged".
+- A CSS custom property that does not exist takes the whole declaration with
+  it. `border: 1px solid var(--border)` is not a border with a default colour;
+  it is invalid at computed-value time, so the declaration becomes `unset` and
+  no border is drawn at all. The tokens here are `--border-subtle`,
+  `--border-default`, `--border-strong` and `--border-accent`, and four rules
+  written in one session all reached for a `--border` that was never defined
+  and all silently drew nothing. Nothing warns: not the build, not the linter,
+  not the browser's console. Read the computed style, not the stylesheet.
+  `src/__cssTokens.test.ts` is the guard, and writing it hit two traps worth
+  knowing: `import.meta.glob(..., { query: '?raw' })` over `.css` returns an
+  empty string for every file, because Vite's CSS plugin answers first -- the
+  glob finds all nine and the check then passes over nothing; and `node:fs` in
+  `src/` typechecks only with a `/// <reference types="node" />`, since
+  `tsconfig.app.json` types this directory for the browser. Vitest transpiles
+  without checking, so the second one failed in `npm run verify` and nowhere
+  else.
 - The checked-in engine artifacts in `public/` are the shipped engine.
   `build:react` must not delete them.
 - A capability value read from a browser API needs its documented range

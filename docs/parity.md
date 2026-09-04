@@ -74,6 +74,7 @@ and says which side of that line each item falls on.
 | Node in CI / deploy | 20 / 20 | 24 / 24 | 20 / 20 |
 | Deploy gates | audit, lint, test, build | audit, lint, test:typecheck, test, build | audit, build (WASM), verify, prod smoke (2 host configs) |
 | Hostile-input sweep | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` | `src/__fuzz.test.ts` |
+| Undefined CSS token guard | none | none | `src/__cssTokens.test.ts` |
 | Where the ceilings sit | search query; library PGN 512KB; backup 8MB; auto-save 2MB | search query; auto-save 5MB; model upload 128MB; verdict scan 4000 nodes | search query; **import text 200KB, UCI moves 1024, tree nodes 1024** |
 
 **Deliberate, leave alone.** The `verify` lists differ because the apps differ:
@@ -101,6 +102,15 @@ agree *within* a repo, and all three now do.
    web-xiangqi in 7ms and web-katrain in 30ms. Neither is a bug today; 30ms is
    nowhere near a stutter. The read-side ceiling is the cheaper design and is
    the thing to port.
+3. **Only this repo checks that its CSS tokens exist.** A `var(--token)` with
+   no fallback and no definition is invalid at computed-value time, so the whole
+   declaration is dropped and nothing is drawn -- silently, with no warning from
+   the build, the linter or the browser. `src/__cssTokens.test.ts` reads every
+   stylesheet under `src/` and fails on one. It was written after four rules in
+   one sitting all reached for a `--border` that has never existed, found by
+   reading a computed style rather than the stylesheet. All three repos are
+   hand-written CSS with token palettes, so all three can have this defect and
+   only this one would notice.
 
 **Divergent because only this repo has the problem.** All three size the search
 from `hardwareConcurrency`, but only this one also caps it on a *build*

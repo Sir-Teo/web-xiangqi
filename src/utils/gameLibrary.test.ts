@@ -119,6 +119,72 @@ describe('validating a stored start position', () => {
     });
 });
 
+describe('what a review keeps through the library', () => {
+    const reviewed = (keyMoment: Record<string, unknown>, annotation: Record<string, unknown>) => game({
+        review: {
+            summary: {
+                totalMoves: 2,
+                accuracy: 70,
+                bestCount: 1, goodCount: 1, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+                reviewedAt: 1_700_000_000_000,
+                lineSignature: 'h2e2 h9g7',
+                keyMoments: [{
+                    nodeId: 'n1', moveIndex: 0, jumpTarget: 0, ply: 1, side: 'red',
+                    quality: 'blunder', swing: 400, winPercentLoss: 30,
+                    evalBefore: 20, evalAfter: -380, playedMove: 'h2e2', note: 'x',
+                    ...keyMoment,
+                }],
+            },
+            annotations: [{
+                nodeId: 'n1', moveIndex: 0, quality: 'blunder',
+                evalScore: -380, swing: 400, winPercentLoss: 30,
+                ...annotation,
+            }],
+        },
+    });
+
+    /**
+     * Every field on a key moment is whitelisted here, so a new one does not
+     * arrive for free. A review read back without its line showed the move the
+     * engine preferred and not what it was for -- so the same review looked
+     * different after a trip through the library than it did when it ran.
+     */
+    it('keeps the engine line on a key moment and on its annotation', () => {
+        const normalized = normalizeSavedGame(reviewed(
+            { bestMove: 'b0c2', bestLine: ['b0c2', 'b9c7', 'h0g2'] },
+            { bestMove: 'b0c2', bestLine: ['b0c2', 'b9c7', 'h0g2'] },
+        ));
+        expect(normalized?.review?.summary.keyMoments[0].bestLine).toEqual(['b0c2', 'b9c7', 'h0g2']);
+        expect(normalized?.review?.annotations[0].bestLine).toEqual(['b0c2', 'b9c7', 'h0g2']);
+    });
+
+    /** A line from a different search than the recommendation is not that move's line. */
+    it('drops a line that does not start with the move it is filed under', () => {
+        const normalized = normalizeSavedGame(reviewed(
+            { bestMove: 'b0c2', bestLine: ['h2e2', 'h9g7'] },
+            { bestMove: 'b0c2', bestLine: ['h2e2', 'h9g7'] },
+        ));
+        expect(normalized?.review?.summary.keyMoments[0].bestLine).toBeUndefined();
+        expect(normalized?.review?.annotations[0].bestLine).toBeUndefined();
+    });
+
+    /** A review written before the field existed still loads. */
+    it('reads a review that carries no line at all', () => {
+        const normalized = normalizeSavedGame(reviewed({ bestMove: 'b0c2' }, { bestMove: 'b0c2' }));
+        expect(normalized?.review?.summary.keyMoments).toHaveLength(1);
+        expect(normalized?.review?.summary.keyMoments[0].bestLine).toBeUndefined();
+    });
+
+    it('does not let junk in a stored line reach a reader', () => {
+        const normalized = normalizeSavedGame(reviewed(
+            { bestMove: 'b0c2', bestLine: ['b0c2', 'not-a-move', 'h0g2'] },
+            { bestMove: 'b0c2', bestLine: 'b0c2 b9c7' },
+        ));
+        expect(normalized?.review?.summary.keyMoments[0].bestLine).toEqual(['b0c2']);
+        expect(normalized?.review?.annotations[0].bestLine).toBeUndefined();
+    });
+});
+
 describe('normalizing a variation tree', () => {
     it('leaves an absent tree absent and rejects a non-array', () => {
         expect(normalizeSavedMoveTree(undefined)).toBeUndefined();

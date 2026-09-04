@@ -2126,7 +2126,7 @@ body.resizing * {
   line-height: 1.35;
   color: var(--text-secondary);
   padding: 0 0.2rem 0.1rem 0.4rem;
-  border-left: 2px solid var(--border);
+  border-left: 2px solid var(--border-default);
   margin-left: 0.2rem;
 }
 
@@ -6421,7 +6421,7 @@ summary:active {
   display: grid;
   gap: 0.3rem;
   padding: 0.55rem 0.6rem 0.6rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
 }
 
 .move-comment-label {
@@ -6459,8 +6459,8 @@ summary:active {
   line-height: 1.45;
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
   color: var(--text-primary);
 }
 
@@ -6483,6 +6483,6 @@ summary:active {
   line-height: 1.5;
   color: var(--text-tertiary);
   padding-left: 0.5rem;
-  border-left: 2px solid var(--border);
+  border-left: 2px solid var(--border-default);
   overflow-wrap: anywhere;
 }

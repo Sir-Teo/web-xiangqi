@@ -283,6 +283,11 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string, moveCoun
         evalBefore,
         evalAfter,
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
+        // Whitelisted like every other field here, which is why it had to be
+        // added rather than arriving for free: a key moment read back without
+        // it showed the move the engine preferred and not the line it was
+        // for, so a review looked different after a trip through the library.
+        bestLine: bestLineForMove(normalizeSavedMove(raw.bestMove) ?? undefined, raw.bestLine),
         playedMove,
         note,
     };
