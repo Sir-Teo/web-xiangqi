@@ -35,6 +35,14 @@ export interface AnalysisActivityInput {
     isSearchQueued: boolean;
     /** A `go` is outstanding. */
     isSearching: boolean;
+    /**
+     * A deep or infinite search is running -- the one search that is not
+     * stopped when the tab goes to the background, because the reader asked
+     * for it by name. Required rather than optional: every caller has to decide
+     * what it means for them, and the answer is `false` for all of the ones
+     * that are not the analysis panel.
+     */
+    deepSearchRunning: boolean;
 }
 
 /**
@@ -42,11 +50,15 @@ export interface AnalysisActivityInput {
  * stopping a search is asynchronous: `stop` is sent on the way out and
  * `isSearching` stays true until the engine answers `bestmove`, so a hidden tab
  * would otherwise report "Analyzing" for the moment in between.
+ *
+ * A deep search is the exception to that exception. It is not stopped when the
+ * tab goes away, so `isSearching` staying true is not a straggler -- it is the
+ * truth, and "Paused" would be the lie.
  */
 export function resolveAnalysisActivity(input: AnalysisActivityInput): AnalysisActivity {
     if (!input.engineEnabled) return 'engine-off';
     if (!input.isReady) return 'loading';
-    if (!input.pageVisible) return 'background';
+    if (!input.pageVisible) return input.deepSearchRunning ? 'searching' : 'background';
     if (input.isSearchQueued) return 'queued';
     if (input.isSearching) return 'searching';
     return 'idle';

@@ -13,6 +13,7 @@ const running: AnalysisActivityInput = {
     pageVisible: true,
     isSearchQueued: false,
     isSearching: true,
+    deepSearchRunning: false,
 };
 
 describe('resolveAnalysisActivity', () => {
@@ -32,6 +33,29 @@ describe('resolveAnalysisActivity', () => {
 
     it('says the engine is off before anything else', () => {
         expect(resolveAnalysisActivity({ ...running, engineEnabled: false, isReady: false })).toBe('engine-off');
+    });
+
+    /**
+     * The one search that is not stopped by hiding the tab. Reporting "Paused"
+     * over a search that is still deepening would be the only state here that
+     * is actually wrong rather than merely uninformative.
+     */
+    it('does not call a running deep search paused', () => {
+        expect(resolveAnalysisActivity({ ...running, pageVisible: false, deepSearchRunning: true })).toBe('searching');
+        expect(isAnalysisActivityStalled(
+            resolveAnalysisActivity({ ...running, pageVisible: false, deepSearchRunning: true })
+        )).toBe(false);
+    });
+
+    it('still says paused when the hidden tab has only live analysis to lose', () => {
+        expect(resolveAnalysisActivity({ ...running, pageVisible: false })).toBe('background');
+    });
+
+    /** A deep search that has finished while hidden leaves nothing running. */
+    it('says paused again once the deep search is over', () => {
+        expect(resolveAnalysisActivity({
+            ...running, pageVisible: false, deepSearchRunning: false, isSearching: false,
+        })).toBe('background');
     });
 
     it('says loading before it says paused', () => {

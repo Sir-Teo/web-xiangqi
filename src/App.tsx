@@ -912,7 +912,18 @@ function App() {
   // State rather than the stage ref, because the ref cannot re-render the
   // button that has to turn into "Stop". It happened to look right only
   // because a running search re-renders constantly for its own reasons.
-  const [deepDiveActive, setDeepDiveActive] = useState(false);
+  const [deepDiveActive, setDeepDiveActiveState] = useState(false);
+  /**
+   * The same flag where an event handler can read it. The visibility handler is
+   * subscribed once and must not resubscribe every time a deep search starts,
+   * and it has to see the current value rather than the one from the last
+   * commit -- so the ref is written by the setter, not by an effect behind it.
+   */
+  const deepDiveActiveRef = useRef(false);
+  const setDeepDiveActive = useCallback((next: boolean) => {
+    deepDiveActiveRef.current = next;
+    setDeepDiveActiveState(next);
+  }, []);
   /**
    * Bounded by default: a search that settles on its own needs nothing
    * remembered. Infinite is the mode every desktop GUI offers and a strong
@@ -1874,6 +1885,13 @@ function App() {
     const onVisibilityChange = () => {
       const visible = !document.hidden;
       setIsPageVisible(visible);
+      // A deep or infinite search is the one search the reader asked for by
+      // name, and the reason to ask is usually so they can do something else
+      // while it runs -- which on a browser means another tab. Live analysis
+      // and the AI opponent still stop the moment the tab goes away; this one
+      // is left alone, and the infinite mode's own description says it runs
+      // until stopped.
+      if (!visible && deepDiveActiveRef.current) return;
       if (!visible) {
         applyBestMoveRef.current = false;
         activeAnalysisRequestRef.current = '';
@@ -2005,6 +2023,12 @@ function App() {
 
   // Analysis engine effect
   useEffect(() => {
+    // Before the teardown below, which is what would otherwise stop the deep
+    // search this effect re-runs for: hiding the tab flips `isPageVisible`, and
+    // the teardown clears the stage the search is holding. Coming back finds
+    // the stage still `deep-pending` and queues nothing, which is the same
+    // thing that happens when the tab was never hidden at all.
+    if (!isPageVisible && deepDiveActiveRef.current) return;
     if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || !isPageVisible) {
       activeAnalysisRequestRef.current = '';
       analysisStageRef.current = 'idle';
@@ -2060,6 +2084,7 @@ function App() {
     liveAnalysisPolicy.debounceMs,
     liveAnalysisPolicy.primary.goCmd,
     queueSearch,
+    setDeepDiveActive,
     stopSearch,
     threatActive,
   ]);
@@ -2707,6 +2732,7 @@ function App() {
     engineEnabled,
     isReady,
     pageVisible: isPageVisible,
+    deepSearchRunning: deepDiveActive,
     isSearchQueued,
     isSearching,
   });
@@ -3164,7 +3190,7 @@ function App() {
       ? {
           tone: 'warning',
           text: 'Variations omitted',
-          detail: 'The link was copied. It carries more variations than a link can hold, so only the line on screen went with it.',
+          detail: 'The link was copied. This study is larger than a link can hold, so only the line on screen went with it -- its variations, and any notes written on them, stayed behind.',
           positionKey: shareNoticePositionKey,
         }
       : null
@@ -3446,7 +3472,7 @@ function App() {
       0,
       makeAnalysisTag('deep', analysisRequestKey),
     );
-  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, deepSearchMode, engineEnabled, isAiTurn, isReady, queueSearch]);
+  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, deepSearchMode, engineEnabled, isAiTurn, isReady, queueSearch, setDeepDiveActive]);
   const deepSearchLimitText = deepSearchMode === 'infinite'
     ? 'until stopped'
     : `for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`;
@@ -6401,8 +6427,8 @@ function App() {
                         title={deepDiveActive
                           ? 'Stop the deep search and keep what it has found (D)'
                           : deepSearchMode === 'infinite'
-                            ? 'Search this position until stopped (D)'
-                            : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s (D)`}
+                            ? 'Search this position until stopped, including while this tab is in the background (D)'
+                            : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s, and keep going if this tab goes to the background (D)`}
                         aria-keyshortcuts="D"
                         aria-label={deepDiveActive
                           ? 'Stop the deep search'

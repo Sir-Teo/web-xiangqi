@@ -3864,6 +3864,94 @@ async function assertEngineDownloadReportsItsProgress(browser) {
  * what this asserts against, which is why it reloads rather than reading the
  * field back.
  */
+/**
+ * A search the reader asked for by name keeps running when the tab goes away.
+ *
+ * Live analysis stops when the page is hidden, and should: it runs on its own
+ * and nobody is looking. A deep search is different -- it is started by hand,
+ * it can run for thirty seconds or until stopped, and the reason to start one
+ * is usually so you can do something else while it runs. On a browser, doing
+ * something else means another tab, which used to kill it: hiding the page
+ * cleared the analysis stage the search was holding and stopped the engine.
+ *
+ * Asserted on the depth, which is the only thing that proves the search
+ * carried on rather than being restarted on return.
+ */
+async function assertADeepSearchSurvivesAHiddenTab(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.addInitScript(() => {
+      let qaHidden = false;
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => qaHidden });
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => (qaHidden ? "hidden" : "visible"),
+      });
+      window.__webXiangqiSetHiddenForQa = (hidden) => {
+        qaHidden = Boolean(hidden);
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+    });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2+h9g7+h0g2+i9h9", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    for (const name of [/keep the link/i, /start fresh/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.waitForFunction(
+      () => /Engine ready/i.test(document.querySelector(".top-engine-state")?.textContent || ""),
+      null,
+      { timeout: 40000 }
+    );
+
+    // `D22/1.5s` is the *budget* the tier grants and never moves; `D20/S44` is
+    // the search's own reading. Only the second one says anything about whether
+    // the search carried on.
+    const depth = () => page.evaluate(() => {
+      const match = document.body.innerText.match(/\bD(\d+)\/S(\d+)/);
+      return match ? Number(match[1]) : -1;
+    });
+
+    // Infinite, not the bounded budget: a bounded search can finish inside the
+    // hidden window on a busy machine, and a finished search is indistinguishable
+    // from a stopped one. This ran green standalone and failed in the full suite
+    // for exactly that reason.
+    await page.getByTestId("deep-infinite-toggle").click();
+    await page.evaluate(() => document.body.click());
+    await page.keyboard.press("d");
+    await page.waitForFunction(() => /Stop/i.test(document.body.innerText), null, { timeout: 20000 });
+    await page.waitForFunction(() => /\bD\d+\/S\d+/.test(document.body.innerText), null, { timeout: 20000 });
+    const beforeHiding = await depth();
+
+    await page.evaluate(() => window.__webXiangqiSetHiddenForQa(true));
+    await page.waitForTimeout(4000);
+    await page.evaluate(() => window.__webXiangqiSetHiddenForQa(false));
+    await page.waitForTimeout(1500);
+
+    const afterReturn = await depth();
+    const stillRunning = await page.evaluate(() => /Stop/i.test(document.body.innerText));
+    if (!stillRunning) {
+      throw new Error(`The deep search was stopped by hiding the tab (depth ${beforeHiding} then ${afterReturn})`);
+    }
+    if (!(afterReturn > beforeHiding)) {
+      throw new Error(
+        `The deep search did not get deeper across a hidden tab: ${beforeHiding} then ${afterReturn}. ` +
+        `Equal depth means it was restarted on return rather than left alone.`
+      );
+    }
+    // Leave nothing searching behind: an infinite search outlives the page
+    // otherwise, and this suite shares a browser.
+    await page.getByTestId("deep-dive-btn").click();
+    await page.waitForTimeout(300);
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertAMoveNoteSurvivesAReload(browser) {
   // Its own context, because the shared page carries an init script that wipes
   // the auto-save on every navigation -- which is exactly the thing under test.
@@ -9267,6 +9355,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertEngineTelemetryDashboard(browser);
+    await assertADeepSearchSurvivesAHiddenTab(browser);
     await assertAMoveNoteSurvivesAReload(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);
     await assertLargeTextKeepsAUsableBoard(browser);

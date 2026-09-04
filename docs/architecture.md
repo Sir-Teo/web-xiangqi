@@ -862,6 +862,14 @@ share link both.
 The browser check for this reloads rather than reading the field back, for the
 same reason: reading it back passes whether or not anything was stored.
 
+The ceilings were checked rather than assumed, since a note is the first thing
+stored per move that is not a handful of characters. The worst case a reader
+can build is 1024 tree nodes carrying the 500-character maximum each, which is
+about 553KB against the 2MB auto-save cap -- so the `too-large` branch, which
+drops the snapshot outright, stays out of reach of ordinary use. A share link's
+tree budget is the one a study *can* exceed, and it already falls back to the
+main line and says so.
+
 ## Storage
 
 | What | Key | Module |
@@ -1041,6 +1049,32 @@ the engine answers `bestmove`, so a hidden tab would otherwise flash
 "Analyzing" for a position nothing will report on. It is also the only state
 that does not clear itself, which is why it is the only one that gets colour
 and a reason on screen.
+
+### A hidden tab stops live analysis, and not a deep search
+
+Hiding the page stops everything the engine is doing on its own: live analysis,
+its deepen pass, and the AI opponent's move. That is the right default -- the
+work runs unasked and nobody is looking at it.
+
+A deep or infinite search is the exception, because it is the one search a
+reader starts by name, and the reason to start one is usually so they can do
+something else while it runs. On a browser, doing something else means another
+tab. Two places had to agree for that to work, and only one of them is the
+obvious one:
+
+- the `visibilitychange` handler, which stopped the engine outright;
+- the analysis effect, which re-runs on `isPageVisible` and whose teardown
+  clears `analysisStageRef` -- the stage the deep search is holding. Clearing it
+  is what would let the *return* to visible queue a live search over the top.
+
+Coming back finds the stage still `deep-pending` and queues nothing, which is
+exactly what happens when the tab was never hidden. The flag is read through a
+ref written by the setter rather than by an effect: the visibility handler is
+subscribed once and has to see the current value, not the previous commit's.
+
+The check asserts the search got *deeper* across the hide, which is the only
+reading that separates "kept running" from "restarted on return". It reads
+`D20/S44` and not `D22/1.5s` -- the second is the tier's budget and never moves.
 
 ## Depth is a ceiling; time is the budget
 
