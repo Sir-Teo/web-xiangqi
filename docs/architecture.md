@@ -1131,7 +1131,16 @@ abstraction does.
   red's. The sign now comes from the score, and the parser reads it as a
   character -- `Number('-0') >= 0` is true, so a numeric test has the same bug
   in reverse.
-- Share links encode the tree as base64url: `utils/shareTree.ts`.
+- **DhtmlXQ**, in `utils/dhtmlxq.ts`, is the block every dpxq.com (东萍象棋)
+  game page carries and the paste a Chinese player most often has. Four
+  digits a move, `x` from the left and `y` from the *top*, so `2625` is
+  c3-c4; a `binit` of 32 two-digit positions in a fixed piece order with `99`
+  for a piece not on the board; `comment<n>` as a note on move `n`. There is
+  no published specification, so the module's test replays a movelist quoted
+  from a real page through the rules engine -- a wrong axis, origin or
+  direction is refused within a ply or two. The import box reads it before
+  the coordinate and notation readers, because its digits are neither. Who
+  moves first is not written down and is read off the first move's piece.
 - The opening book is `utils/openings.ts`; a test replays every line through
   the rules engine so it can never advertise an unplayable move.
 - **`utils/historicalGames.ts` is empty, and the reason is worth reading before

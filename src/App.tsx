@@ -57,6 +57,7 @@ import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComme
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
+import { parseDhtmlXqRecord } from './utils/dhtmlxq';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
@@ -3913,8 +3914,20 @@ function App() {
       return;
     }
 
-    const importedLine = extractUciMoveTree(text);
-    const startFen = fenInput.trim() || extractFenTag(text) || undefined;
+    // A DhtmlXQ record -- the block every dpxq.com game page carries, and
+    // the paste a Chinese player most often has -- holds no coordinates the
+    // UCI extractor knows and no notation the reader knows. Read first, so
+    // its digits are not mistaken for either.
+    const dhtml = parseDhtmlXqRecord(text);
+    if (dhtml && dhtml.moves.length === 0 && dhtml.startFen) {
+      // A diagram: a position and nothing played from it.
+      handleLoadFen(dhtml.startFen, nextGameMode);
+      return;
+    }
+    const importedLine = dhtml
+      ? { moves: dhtml.moves, moveTree: [], hasVariations: false, tooLarge: false, hadMoreGames: false }
+      : extractUciMoveTree(text);
+    const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(text) || undefined;
     let moves = importedLine.moves;
     /**
      * A record written in WXF or Chinese carries no coordinates at all, so the
@@ -3936,7 +3949,7 @@ function App() {
      * makes below.
      */
     let notationRejected: string[] = [];
-    if (moves.length === 0) {
+    if (moves.length === 0 && !dhtml) {
       const parsed = parseNotationRecord(startFen, stripRecordMetadata(text), MAX_MOVE_IMPORT_UCI_MOVES);
       notationRejected = parsed.rejected;
       if (parsed.moves.length > 0) {
@@ -4023,7 +4036,17 @@ function App() {
      * A notation record has no coordinates and takes the other import path, so
      * there is nothing to align to; skipped there.
      */
-    if (!importedFromNotation) {
+    if (dhtml) {
+      // The record's own notes, numbered by move from one; zero is about the
+      // position before the game and has no move to sit on.
+      const comments = Array.from(dhtml.comments.entries())
+        .map(([moveNumber, comment]) => {
+          const nodeId = loadedNodeIds[moveNumber - 1];
+          return moveNumber >= 1 && nodeId ? { nodeId, comment } : null;
+        })
+        .filter((update): update is { nodeId: string; comment: string } => Boolean(update));
+      if (comments.length > 0) setNodeComments(comments);
+    } else if (!importedFromNotation) {
       const annotated = extractAnnotatedMainLine(text);
       const alignsWithLine = annotated.moves.length === moves.length
         && annotated.moves.every((uci, index) => uci === moves[index]);
@@ -4059,7 +4082,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;

@@ -6093,6 +6093,44 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
   }
 }
 
+/**
+ * The DhtmlXQ block a dpxq.com game page carries. Six moves from a real
+ * record, with a note on the second, pasted into the import box: the line
+ * has to load, and the note has to land on its move.
+ */
+async function assertADhtmlXqRecordImports(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill([
+    "[DhtmlXQ]",
+    "[DhtmlXQ_binit]8979695949392919097717866646260600102030405060708012720323436383[/DhtmlXQ_binit]",
+    "[DhtmlXQ_movelist]262563641927706217071022[/DhtmlXQ_movelist]",
+    "[DhtmlXQ_comment2]A quiet reply.||Second line.[/DhtmlXQ_comment2]",
+    "[/DhtmlXQ]",
+  ].join("\n"));
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const state = await page.evaluate(() => ({
+    meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
+    comments: [...document.querySelectorAll(".mtree-comment")].map((el) => el.getAttribute("title") ?? ""),
+    error: document.querySelector("#new-game-line-error")?.textContent ?? "",
+  }));
+  // c3c4 g6g5 b0c2 h9g7 b2a2 b9c7
+  if (state.meta !== "6 / 6" || !state.fen.startsWith("r1bakab1r/9/1cn3nc1/p1p1p3p/6p2/2P6/P3P1P1P/C1N4C1/9/R1BAKABNR w")) {
+    throw new Error(`The DhtmlXQ record did not import as its six moves: ${JSON.stringify(state)}`);
+  }
+  // A note folds its line breaks to spaces on the way into the tree.
+  if (state.comments.length !== 1 || !state.comments[0].includes("A quiet reply. Second line.")) {
+    throw new Error(`The record's note did not land on its move: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertMoveLineImportPreservesVariations(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10207,6 +10245,7 @@ async function main() {
     await assertMoveLineImport(page);
     await assertNotationImportSaysWhatItCouldNotRead(page);
     await assertANotationRecordCanStartFromAGivenPosition(page);
+    await assertADhtmlXqRecordImports(page);
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
