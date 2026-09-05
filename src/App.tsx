@@ -308,6 +308,20 @@ function isAiGameModeValue(mode: GameMode) {
   return mode !== 'PvP';
 }
 
+/**
+ * Which way up the board should be for the person playing it.
+ *
+ * "You play Black" used to leave Red at the bottom, so the human played from
+ * the top of the board for the whole game -- every other board turns to face
+ * the player. Null for the two modes where nobody or everybody is a human,
+ * which leave the orientation as the reader had it.
+ */
+function orientationForHuman(mode: GameMode): BoardOrientation | null {
+  if (mode === 'PvAI-Black') return 'red';
+  if (mode === 'PvAI-Red') return 'black';
+  return null;
+}
+
 type ShareUrlBuildResult = {
   url: string;
   treeOmitted: boolean;
@@ -2397,6 +2411,8 @@ function App() {
       setWorkspaceMode('play');
     }
     setGameMode(mode);
+    const facing = orientationForHuman(mode);
+    if (facing) setOrientation(facing);
     resetGame();
   }, [resetGame]);
 
@@ -2423,6 +2439,7 @@ function App() {
     setPaused(false);
     // The mode names the *engine's* side, so the human gets the other one.
     setGameMode(sideToMove === 'w' ? 'PvAI-Black' : 'PvAI-Red');
+    setOrientation(sideToMove === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
     loadMoves(currentLineMoves, rootFen);
     setGraphLoadSweepToken((token) => token + 1);
@@ -3613,6 +3630,7 @@ function App() {
     setAiMoveError(null);
     setPaused(false);
     setGameMode(practiceSide === 'w' ? 'PvAI-Black' : 'PvAI-Red');
+    setOrientation(practiceSide === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
     loadMoves(practiceMoves, rootFen);
     setAnalysisTab('tree');
@@ -3650,6 +3668,8 @@ function App() {
       setWorkspaceMode('play');
     }
     setGameMode(nextGameMode);
+    const facing = orientationForHuman(nextGameMode);
+    if (facing) setOrientation(facing);
     setFenInput('');
     clearFenError();
     closeNewGameMenu();
@@ -3743,6 +3763,8 @@ function App() {
       setWorkspaceMode('play');
     }
     setGameMode(nextGameMode);
+    const facing = orientationForHuman(nextGameMode);
+    if (facing) setOrientation(facing);
     const loadedNodeIds = hasVariations
       ? loadMoveTree(importedLine.moveTree, moves, startFen)
       : loadMoves(moves, startFen);

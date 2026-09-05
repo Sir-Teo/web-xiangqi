@@ -1209,6 +1209,7 @@ async function assertPlayFromHereKeepsThePosition(page) {
     fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? null,
     plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] ?? null,
     mode: (document.body.innerText.match(/Local board|You play (?:Red|Black)|AI exhibition/) || [])[0] ?? null,
+    orientation: document.querySelector(".xiangqi-board-container")?.getAttribute("data-orientation") ?? null,
   }));
 
   const before = await read();
@@ -1233,6 +1234,10 @@ async function assertPlayFromHereKeepsThePosition(page) {
   // message about the position, which is the symptom rather than the cause.
   if (after.mode !== "You play Black") {
     throw new Error(`Black is on move, so the reader should take Black; the mode reads "${after.mode}"`);
+  }
+  // And the board turns to face them, as it does for a new game as Black.
+  if (after.orientation !== "black") {
+    throw new Error(`Playing on as Black should put Black at the bottom; the board reads "${after.orientation}"`);
   }
   if (after.fen !== before.fen) {
     throw new Error(`Play From Here changed the position.\n  was ${before.fen}\n  now ${after.fen}`);
@@ -2968,9 +2973,15 @@ async function assertAiNewGameSwitchesToPlayWorkspace(page) {
     workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() || "",
     aiControls: Boolean(document.querySelector(".board-ai-status")),
     overflowX: document.body.scrollWidth - document.body.clientWidth,
+    orientation: document.querySelector(".xiangqi-board-container")?.getAttribute("data-orientation") || "",
   }));
   if (state.workspace !== "Play" || !state.aiControls || state.overflowX > 2) {
     throw new Error(`AI New Game did not enter Play workspace cleanly: ${JSON.stringify(state)}`);
+  }
+  // The board turns to face the person playing it. "You play Black" used to
+  // leave Red at the bottom, so the human played from the top of the board.
+  if (state.orientation !== "black") {
+    throw new Error(`Playing Black should put Black at the bottom; the board reads "${state.orientation}"`);
   }
 }
 

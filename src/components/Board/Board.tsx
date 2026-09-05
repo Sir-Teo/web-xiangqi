@@ -490,7 +490,7 @@ export const Board = React.memo(function Board({
         : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight';
 
     return (
-        <div className="xiangqi-board-container">
+        <div className="xiangqi-board-container" data-orientation={orientation}>
             <div className="xiangqi-board" onContextMenu={handleContextMenu}>
                 {/* Single SVG for all grid lines + palace diagonals.
                     ViewBox "0 0 8 9" matches piece coordinate system exactly:
