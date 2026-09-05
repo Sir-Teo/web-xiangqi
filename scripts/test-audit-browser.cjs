@@ -33,11 +33,22 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     assert.match(await page.getByTestId('cloud-book-card').innerText(), /did not answer/);
     await page.getByTestId('cloud-book-disable').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="cloud-book-card"]')?.dataset.status === 'off');
+    // A failed save must be visible and preserve damaged data for recovery.
+    await page.evaluate(() => {
+      const key = 'xiangqi:library:v1';
+      localStorage.setItem(key, '{truncated');
+      window.dispatchEvent(new StorageEvent('storage', { key }));
+    });
+    await page.locator('.hitbox[data-file="7"][data-rank="2"]').click();
+    await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+    await page.getByTestId('save-game-btn').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="save-game-btn"]')?.textContent.includes('Save Failed'));
+    assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), '{truncated');
     await page.screenshot({ path: '/tmp/xiangqi-audit-desktop.png' });
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: '/tmp/xiangqi-audit-mobile.png' });
     assert.deepEqual(errors, []);
-    console.log('PASS: distinct-game statistics, edited-result refresh, cloud timeout, opt-out, desktop/mobile layout, no page errors');
+    console.log('PASS: distinct-game statistics, edited-result refresh, failed-save preservation, cloud timeout, opt-out, desktop/mobile layout, no page errors');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
