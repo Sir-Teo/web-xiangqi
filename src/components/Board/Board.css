@@ -320,6 +320,16 @@
     z-index: 10;
 }
 
+/* The letter set. A Latin capital is narrower and plainer than a character
+   and needs the heading face rather than the serif, and a little less size
+   so it sits inside the carved ring the way the character does. */
+.piece.piece-letter {
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: clamp(1.15rem, 6.6cqi, 1.8rem);
+    letter-spacing: 0.02em;
+}
+
 /* Inner carved ring — authentic Xiangqi piece detail */
 .piece::after {
     content: '';

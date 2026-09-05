@@ -1021,6 +1021,54 @@ const LEGACY_PREFERENCES = '{"assistMode":"coach","orientation":"black","showArr
 const LEGACY_AUTO_SAVE = '{"version":1,"savedAt":1788216790137,"game":{"gameMode":"PvP","moves":["h2e2","h9g7"],"opening":"Central Cannon vs Horse Defence","finalEval":22,"result":"ongoing","id":"auto-save","savedAt":1788216790137}}';
 const LEGACY_LIBRARY = '[{"id":"f48fad07-521c-4bd6-aacf-1b0eac7a797d","savedAt":1788216787901,"gameMode":"PvP","moves":["h2e2","h9g7"],"result":"ongoing","opening":"Central Cannon vs Horse Defence"}]';
 
+/**
+ * The letter set: a setting for the reader who cannot yet tell 仕 from 士.
+ * The letters are the WXF ones the move list uses, they survive a reload,
+ * and the default is still the characters.
+ */
+async function assertThePieceStyleSettingDrawsLetters(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const glyphs = () => page.evaluate(() => {
+    const at = (file, rank) => {
+      const target = [...document.querySelectorAll(".piece")].find((piece) => {
+        const style = piece.getAttribute("style") || "";
+        return style.includes(`left: ${(file / 8) * 100}%`) && style.includes(`top: ${((9 - rank) / 9) * 100}%`);
+      });
+      return target?.textContent?.trim() ?? "";
+    };
+    return { redGeneral: at(4, 0), blackHorse: at(1, 9), redElephant: at(2, 0), letterClass: document.querySelectorAll(".piece.piece-letter").length };
+  });
+  const before = await glyphs();
+  if (before.redGeneral !== "帥" || before.blackHorse !== "馬" || before.letterClass !== 0) {
+    throw new Error(`The board did not start with the traditional set: ${JSON.stringify(before)}`);
+  }
+
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByTestId("piece-style-letters").click();
+  await page.keyboard.press("Escape");
+  const letters = await glyphs();
+  if (letters.redGeneral !== "K" || letters.blackHorse !== "H" || letters.redElephant !== "E" || letters.letterClass !== 32) {
+    throw new Error(`The letter set did not draw WXF letters: ${JSON.stringify(letters)}`);
+  }
+
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const kept = await glyphs();
+  if (kept.redGeneral !== "K" || kept.letterClass !== 32) {
+    throw new Error(`The piece style did not survive a reload: ${JSON.stringify(kept)}`);
+  }
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
+}
+
 async function assertDataFromBeforeTheKeyRenameStillArrives(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10194,6 +10242,7 @@ async function main() {
     await assertBoardMatchesThePlyItIsOn(page);
     await assertAdvertisedMoveShortcuts(page);
     await assertNotationStylesRenderDifferently(page);
+    await assertThePieceStyleSettingDrawsLetters(page);
     await assertLibraryExplorerCountsOwnGames(page);
     await assertDataFromBeforeTheKeyRenameStillArrives(page);
     await assertPlayFromHereKeepsThePosition(page);

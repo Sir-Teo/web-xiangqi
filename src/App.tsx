@@ -58,6 +58,7 @@ import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { parseDhtmlXqRecord } from './utils/dhtmlxq';
+import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, isPieceStyle, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
@@ -404,6 +405,7 @@ type StoredPreferences = {
   aiStrength?: AiStrength;
   aiSpeed?: AiSpeed;
   notationStyle?: XiangqiNotationStyle;
+  pieceStyle?: PieceStyle;
   deepSearchMode?: DeepSearchMode;
   cloudBookEnabled?: boolean;
 };
@@ -525,6 +527,7 @@ function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences 
       aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
       aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
       notationStyle: isNotationStyle(record.notationStyle) ? record.notationStyle : undefined,
+      pieceStyle: isPieceStyle(record.pieceStyle) ? record.pieceStyle : undefined,
       deepSearchMode: isDeepSearchMode(record.deepSearchMode) ? record.deepSearchMode : undefined,
       cloudBookEnabled: typeof record.cloudBookEnabled === 'boolean' ? record.cloudBookEnabled : undefined,
     };
@@ -909,6 +912,10 @@ function App() {
   const [notationStyle, setNotationStyle] = useState<XiangqiNotationStyle>(
     storedPreferences.notationStyle ?? 'wxf'
   );
+  // Characters by default: they are the game. Letters are offered for the
+  // reader who cannot yet tell 仕 from 士, and they are the WXF letters the
+  // move list already uses, so the board teaches the notation.
+  const [pieceStyle, setPieceStyle] = useState<PieceStyle>(storedPreferences.pieceStyle ?? 'traditional');
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
     height: typeof window === 'undefined' ? 800 : window.innerHeight,
@@ -1016,6 +1023,7 @@ function App() {
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
     setAiStrength(preferences.aiStrength ?? 5);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
+    setPieceStyle(preferences.pieceStyle ?? 'traditional');
     setDeepSearchMode(preferences.deepSearchMode ?? 'bounded');
     setCloudBookEnabled(preferences.cloudBookEnabled ?? false);
     handleSpeedChange(preferences.aiSpeed ?? 'normal');
@@ -1040,6 +1048,7 @@ function App() {
       aiStrength,
       aiSpeed,
       notationStyle,
+      pieceStyle,
       deepSearchMode,
       cloudBookEnabled,
     });
@@ -1055,6 +1064,7 @@ function App() {
     engineThreads,
     notationStyle,
     orientation,
+    pieceStyle,
     searchDepth,
     showArrows,
     soundEnabled,
@@ -4540,6 +4550,13 @@ function App() {
     },
     { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], shortcut: 'F', run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
+      id: 'piece-style',
+      label: pieceStyle === 'letters' ? 'Draw the pieces as characters' : 'Draw the pieces as letters',
+      hint: pieceStyle === 'letters' ? PIECE_STYLE_DESCRIPTIONS.traditional : PIECE_STYLE_DESCRIPTIONS.letters,
+      keywords: ['pieces', 'glyph', 'chinese', 'wxf', 'beginner', 'set', 'style'],
+      run: () => setPieceStyle((style) => (style === 'letters' ? 'traditional' : 'letters')),
+    },
+    {
       id: 'copy-fen',
       label: 'Copy FEN',
       keywords: ['position', 'clipboard', 'export'],
@@ -4586,7 +4603,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -5336,6 +5353,27 @@ function App() {
                 ))}
               </div>
               <p className="settings-hint">{NOTATION_STYLE_DESCRIPTIONS[notationStyle]}</p>
+            </div>
+
+            <div className="settings-group">
+              <span id="settings-piece-style-label" className="settings-label">Pieces</span>
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-piece-style-label">
+                {PIECE_STYLES.map((style) => (
+                  <button
+                    key={style}
+                    type="button"
+                    className={`pill-btn ${pieceStyle === style ? 'pill-btn-active' : ''}`}
+                    onClick={() => setPieceStyle(style)}
+                    aria-pressed={pieceStyle === style}
+                    aria-label={`Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
+                    title={PIECE_STYLE_DESCRIPTIONS[style]}
+                    data-testid={`piece-style-${style}`}
+                  >
+                    {PIECE_STYLE_LABELS[style]}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-hint">{PIECE_STYLE_DESCRIPTIONS[pieceStyle]}</p>
             </div>
 
             <div className="settings-group">
@@ -6417,6 +6455,7 @@ function App() {
                   // across the board and dropped is not the same as never
                   // offering the grab cursor.
                   draggableSide={!gameResult && !isAiTurn ? sideToMove : null}
+                  pieceStyle={pieceStyle}
                   orientation={orientation}
                   highlights={showArrows ? userHighlights : []}
                   onToggleHighlight={showArrows ? handleToggleHighlight : undefined}
@@ -7544,6 +7583,7 @@ function App() {
         <BoardEditor
           initialBoard={board}
           initialSide={sideToMove}
+          pieceStyle={pieceStyle}
           onCancel={() => setShowBoardEditor(false)}
           onApply={handleApplyEditedPosition}
         />

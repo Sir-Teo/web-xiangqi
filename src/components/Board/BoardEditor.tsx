@@ -3,16 +3,13 @@ import './Board.css';
 import './BoardEditor.css';
 import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../utils/xiangqi';
 import { describeSetupProblem, emptyBoard, setupFen } from '../../utils/positionSetup';
+import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { IconX } from '../icons';
 
 export type EditorBrush = string | 'erase';
 
 const RED_PIECES = ['K', 'A', 'B', 'N', 'R', 'C', 'P'] as const;
 const BLACK_PIECES = ['k', 'a', 'b', 'n', 'r', 'c', 'p'] as const;
-const GLYPHS: Record<string, string> = {
-    K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
-    k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
-};
 const NAMES: Record<string, string> = {
     K: 'Red general', A: 'Red advisor', B: 'Red elephant', N: 'Red horse', R: 'Red chariot', C: 'Red cannon', P: 'Red soldier',
     k: 'Black general', a: 'Black advisor', b: 'Black elephant', n: 'Black horse', r: 'Black chariot', c: 'Black cannon', p: 'Black soldier',
@@ -31,6 +28,8 @@ function topFor(rank: number) {
 interface Props {
     initialBoard: BoardState;
     initialSide: Side;
+    /** The same set the board draws, so the palette reads like the board. */
+    pieceStyle?: PieceStyle;
     onCancel: () => void;
     onApply: (fen: string) => void;
 }
@@ -46,8 +45,9 @@ interface Props {
  * game could reach. Red is always drawn at the bottom here: the editor is a
  * diagram, and diagrams are printed one way.
  */
-export function BoardEditor({ initialBoard, initialSide, onCancel, onApply }: Props) {
+export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'traditional', onCancel, onApply }: Props) {
     const [board, setBoard] = useState<BoardState>(() => initialBoard.map((row) => row.slice()));
+    const letterClass = pieceStyle === 'letters' ? ' piece-letter' : '';
     const [side, setSide] = useState<Side>(initialSide);
     const [brush, setBrush] = useState<EditorBrush>('K');
     const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -87,14 +87,14 @@ export function BoardEditor({ initialBoard, initialSide, onCancel, onApply }: Pr
         <button
             key={piece}
             type="button"
-            className={`board-editor-brush ${piece === piece.toUpperCase() ? 'board-editor-brush-red' : ''}`}
+            className={`board-editor-brush ${piece === piece.toUpperCase() ? 'board-editor-brush-red' : ''}${letterClass}`}
             onClick={() => setBrush(piece)}
             aria-pressed={brush === piece}
             aria-label={`${NAMES[piece]} brush`}
             title={NAMES[piece]}
             data-testid={`editor-brush-${piece}`}
         >
-            {GLYPHS[piece]}
+            {pieceLabel(piece, pieceStyle)}
         </button>
     );
 
@@ -157,10 +157,10 @@ export function BoardEditor({ initialBoard, initialSide, onCancel, onApply }: Pr
                                 return (
                                     <div
                                         key={`piece-${file}-${rank}`}
-                                        className={`piece ${isRed ? 'red' : 'black'}`}
+                                        className={`piece ${isRed ? 'red' : 'black'}${letterClass}`}
                                         style={{ left: leftFor(file), top: topFor(rank) }}
                                     >
-                                        {GLYPHS[piece]}
+                                        {pieceLabel(piece, pieceStyle)}
                                     </div>
                                 );
                             }))}

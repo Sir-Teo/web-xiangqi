@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
 import { nextPieceIdentityState, type PieceIdentityState } from '../../utils/pieceIdentity';
+import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { BoardArrows } from './BoardArrows';
 
 export type BoardOrientation = 'red' | 'black';
@@ -21,11 +22,6 @@ const RANKS_RED   = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0] as const;
 const RANKS_BLACK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const FILES_RED   = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
 const FILES_BLACK = [8, 7, 6, 5, 4, 3, 2, 1, 0] as const;
-
-const PIECE_LABELS: Record<string, string> = {
-    K: "帥", A: "仕", B: "相", N: "傌", R: "俥", C: "炮", P: "兵",
-    k: "將", a: "士", b: "象", n: "馬", r: "車", c: "砲", p: "卒"
-};
 
 const PIECE_NAMES: Record<string, string> = {
     K: 'red general',
@@ -125,6 +121,8 @@ interface BoardProps {
      * have to infer either.
      */
     draggableSide?: 'w' | 'b' | null;
+    /** Characters or WXF letters on the pieces; see `utils/pieceStyle`. */
+    pieceStyle?: PieceStyle;
     selected: { file: number, rank: number } | null;
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
@@ -149,6 +147,7 @@ interface BoardProps {
 export const Board = React.memo(function Board({
     board,
     draggableSide = null,
+    pieceStyle = 'traditional',
     selected,
     validTargets,
     onSquareClick,
@@ -668,7 +667,7 @@ export const Board = React.memo(function Board({
                         return (
                             <div
                                 key={id}
-                                className={`piece ${colorClass} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''} ${isDragging ? 'dragging' : ''}`}
+                                className={`piece ${colorClass} ${pieceStyle === 'letters' ? 'piece-letter' : ''} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''} ${isDragging ? 'dragging' : ''}`}
                                 style={{
                                     left: leftFor(file, orientation),
                                     top: topFor(rank, orientation),
@@ -681,7 +680,7 @@ export const Board = React.memo(function Board({
                                         : null),
                                 }}
                             >
-                                {PIECE_LABELS[piece] || piece}
+                                {pieceLabel(piece, pieceStyle)}
                             </div>
                         );
                     })}
