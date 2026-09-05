@@ -251,15 +251,24 @@ export function LibraryPanel({
     );
   }), [searchTerms, resultFilter, reviewFilter]);
 
+  // Format dates, review summaries and variation text once per library version.
+  // Populate lazily: an empty search needs none of this work.
+  const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), [savedGames]);
   const filteredSaved = useMemo(() => savedGames
     .filter((g) => {
       const isReviewed = Boolean(g.review);
       if (reviewFilter === 'reviewed' && !isReviewed) return false;
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
       if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
-      return matchesSearchTerms(getSavedGameSearchText(g), searchTerms);
+      if (searchTerms.length === 0) return true;
+      let text = savedSearchText.get(g);
+      if (text === undefined) {
+        text = getSavedGameSearchText(g);
+        savedSearchText.set(g, text);
+      }
+      return matchesSearchTerms(text, searchTerms);
     })
-    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort]);
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText]);
   const reviewInsight = useMemo(() => {
     const reviewed = filteredSaved
       .map((game) => game.review?.summary)
