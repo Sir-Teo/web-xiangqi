@@ -3962,6 +3962,18 @@ function App() {
    * The game as it stands, in the shape both the library and the auto-save
    * store. Built in one place so a recovered game matches a saved one.
    */
+  /**
+   * The live evaluation, read at the moment a snapshot is written rather than
+   * memoised into it. It used to be a dependency of the snapshot below, which
+   * meant every buffered info flush -- five a second while the engine searches
+   * -- rebuilt the snapshot, re-serialized the move tree of a study, and reset
+   * the auto-save debounce. Under an infinite search the write never landed at
+   * all. The value the stored game wants is the one that has settled, and a
+   * finished search changes the tree (`setCurrentNodeEval`), which is what
+   * rewrites the snapshot anyway.
+   */
+  const displayEvalScoreRef = useRef(displayEvalScore);
+  displayEvalScoreRef.current = displayEvalScore;
   const currentGameSnapshot = useMemo(() => {
     const saveNodeIds = reviewStatus === 'done' && reviewSummary
       ? activeLineNodeIds
@@ -3984,7 +3996,6 @@ function App() {
       gameMode,
       moves,
       opening: detectedOpening?.name,
-      finalEval: displayEvalScore ?? undefined,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
@@ -3998,10 +4009,16 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, displayEvalScore, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+
+  /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
+  const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
+    ...snapshot,
+    finalEval: displayEvalScoreRef.current ?? undefined,
+  }), []);
 
   const handleSaveGame = useCallback(() => {
-    const { gameMode: mode, moves, ...rest } = currentGameSnapshot;
+    const { gameMode: mode, moves, ...rest } = snapshotForStorage(currentGameSnapshot);
     const saved = saveGameToLibrary(mode, moves, rest);
 
     if (savedToastTimerRef.current !== null) {
@@ -4021,7 +4038,7 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, saved ? 1800 : 8000);
-  }, [currentGameSnapshot, saveGameToLibrary]);
+  }, [currentGameSnapshot, saveGameToLibrary, snapshotForStorage]);
 
 
   /**
@@ -4377,16 +4394,17 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // currentGameSnapshot is a dependency on purpose: it carries the live
-  // evaluation and the detected opening, so as those settle the stored
-  // snapshot is rewritten and a recovered game carries them.
+  // currentGameSnapshot is a dependency on purpose: it carries the detected
+  // opening and every evaluation a finished search stored on the tree, so as
+  // those settle the stored snapshot is rewritten and a recovered game carries
+  // them. The live evaluation is deliberately not in it -- see the ref above.
   useEffect(() => {
     if (!autoSaveChecked || autoSaveRecovery) return;
     const timeout = window.setTimeout(() => {
-      writeAutoSavedGame(currentGameSnapshot);
+      writeAutoSavedGame(snapshotForStorage(currentGameSnapshot));
     }, AUTO_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timeout);
-  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot]);
+  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot, snapshotForStorage]);
 
   const currentGameSnapshotRef = useRef(currentGameSnapshot);
   useEffect(() => {
@@ -4409,7 +4427,7 @@ function App() {
   useEffect(() => {
     if (!autoSaveChecked || autoSaveRecovery) return;
     const flush = () => {
-      let snapshot = currentGameSnapshotRef.current;
+      let snapshot = snapshotForStorage(currentGameSnapshotRef.current);
       const pending = moveCommentEditRef.current;
       if (pending) {
         const node = treeNodesRef.current[pending.nodeId];
@@ -4433,7 +4451,7 @@ function App() {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [autoSaveChecked, autoSaveRecovery, rootNodeId]);
+  }, [autoSaveChecked, autoSaveRecovery, rootNodeId, snapshotForStorage]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     clearAutoSavedGame();
