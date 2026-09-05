@@ -1249,6 +1249,9 @@ async function assertPlayFromHereKeepsThePosition(page) {
   // Back to Analysis: the workspace is shared with everything after this.
   await page.locator(".top-mode-pills button", { hasText: /^Analysis$/ }).first().click().catch(() => {});
   await page.waitForTimeout(600);
+  // And the flipped board is a stored preference; the keyboard checks that
+  // follow on this page walk a red-at-bottom board.
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
 }
 
 /**
@@ -3030,6 +3033,10 @@ async function assertAiNewGameSwitchesToPlayWorkspace(page) {
   if (state.orientation !== "black") {
     throw new Error(`Playing Black should put Black at the bottom; the board reads "${state.orientation}"`);
   }
+  // The orientation is a stored preference, and this page is shared with the
+  // assertions that follow; the board keyboard checks walk a red-at-bottom
+  // board and would find their arrows reversed.
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
 }
 
 async function assertBeginnerAiUsesCandidatePv(browser) {
