@@ -6411,9 +6411,18 @@ async function assertReviewBestMoveBranchAction(page) {
     variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.trim() || "").join(" "),
     selectedTab: document.querySelector('[data-testid="analysis-tab-tree"]')?.getAttribute("aria-selected") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
+    // The review used to be thrown away by this very click: trying the
+    // engine's move put the board on a different line, and a finished
+    // review only lived on the line it was run on. It stays now, with its
+    // quality dots, for as long as the reviewed moves are in the tree.
+    summaryKept: Boolean(document.querySelector('[data-testid="bottom-review-summary"]')),
+    mistakeDotKept: Boolean(document.querySelector(".mtree-chip.quality-mistake")),
   }));
   if (!state.active.includes("b0c2") || !state.variations.includes("b2e2") || state.selectedTab !== "true" || state.overflowX > 2) {
     throw new Error(`Review best-move action did not create a visible study branch: ${JSON.stringify(state)}`);
+  }
+  if (!state.summaryKept || !state.mistakeDotKept) {
+    throw new Error(`Trying the engine's move threw the finished review away: ${JSON.stringify(state)}`);
   }
 }
 

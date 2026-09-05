@@ -828,6 +828,37 @@ nothing errors, the screen just says something untrue.
   every root-changing path calls `resetReview()` first — recorded at the
   function, because it is a coupling rather than a guarantee.
 
+### A finished review outlives the line changing under it
+
+A completed review used to be cleared the moment the active line's signature
+stopped matching the one it was run on. That reads as a freshness rule and in
+practice it was a trap: playing *any* move after a review -- a variation, the
+next move of the game, or "Try best" on the review's own card -- threw the
+review away, quality dots and all. The one thing that took thirty seconds to
+compute vanished on the first attempt to learn from it.
+
+The review now lives as long as the line it describes is in the tree.
+`reviewedLineNodeIds` in `App.tsx` holds that line by node id, set when a
+review finishes and when a saved one is loaded, and the effect that used to
+compare signatures compares that list against the tree instead: a deleted
+move ends the review, a sideline does not. Three things follow from keeping
+it:
+
+- **Its figures read off the reviewed line, not the board's.** Accuracy by
+  phase, the narrative tags and the annotations that are saved come from
+  `reviewedHistory`, which is the active line while the board is on it and the
+  reviewed line once the reader has stepped into a variation.
+- **It is saved only with its own line.** `currentGameSnapshot` attaches the
+  review when the active line is the reviewed one and not otherwise: the
+  loader maps annotations onto the saved main line by index, so a review of
+  one line beside the moves of another would be read back onto the wrong
+  moves.
+- **A running review still cancels on a line change**, as before. It is
+  searching the line as it stands and cannot follow the board elsewhere.
+
+The gate for "Try best" now requires the summary and the mistake's dot to
+survive the click, which is the click that used to remove them.
+
 ### The halfmove clock is load-bearing
 
 The fifth field of a FEN — plies since the last capture — looks like the one

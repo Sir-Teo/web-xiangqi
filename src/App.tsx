@@ -16,7 +16,7 @@ import {
 } from './components/icons';
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
-import { useXiangqi, type GameResult, type MoveTreeSnapshot } from './hooks/useXiangqi';
+import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
@@ -1228,6 +1228,19 @@ function App() {
     cancelReview,
     resetReview,
   } = useGameReview();
+  /**
+   * The line a finished review is about, by node id.
+   *
+   * A review used to be thrown away the moment the active line changed --
+   * which is exactly what playing a variation does, and what "Try best" on
+   * the review's own card does -- so the thing that took thirty seconds to
+   * compute vanished on the first attempt to learn from it, quality dots and
+   * all. It now stays for as long as the line it describes is still in the
+   * tree. Its figures keep reading off that line rather than whichever line
+   * the board is on, and it is saved with a game only when that line is the
+   * one being saved.
+   */
+  const [reviewedLineNodeIds, setReviewedLineNodeIds] = useState<string[]>([]);
   const completedReviewSummaryLabel = useMemo(() => {
     if (!reviewSummary) return '';
     return [
@@ -1414,6 +1427,7 @@ function App() {
     setNodeReviewDataBulk(annotations);
     resetReviewController(false);
     completeReview(summary);
+    setReviewedLineNodeIds(activeLineNodeIds);
     setAnalysisTab('review');
     setMobileAnalysisTab('review');
   }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, reviewEngineSummary, setNodeReviewDataBulk, treeNodes]);
@@ -1836,11 +1850,29 @@ function App() {
     }
   }, [engineEnabled, mobileAnalysisTab]);
 
+  // A finished review outlives a change of line and dies with its line: it is
+  // cleared when a move it describes is no longer in the tree (deleted, or a
+  // new game loaded without going through resetReview), and not before.
   useEffect(() => {
     if (reviewStatus !== 'done' || !reviewSummary) return;
-    if (reviewSummary.lineSignature === currentLineSignature) return;
+    if (reviewedLineNodeIds.length > 0 && reviewedLineNodeIds.every((nodeId) => Boolean(treeNodes[nodeId]?.record))) return;
     clearCompletedReview();
-  }, [clearCompletedReview, currentLineSignature, reviewStatus, reviewSummary]);
+  }, [clearCompletedReview, reviewStatus, reviewSummary, reviewedLineNodeIds, treeNodes]);
+
+  /** Whether the board is on the line the review describes. */
+  const reviewMatchesActiveLine = reviewStatus === 'done' && reviewSummary?.lineSignature === currentLineSignature;
+  /**
+   * The records the review's figures are read off. The active line while the
+   * board is on it, and the reviewed line itself once the reader has stepped
+   * into a variation -- the accuracy by phase, the narrative and the saved
+   * annotations all describe the game that was reviewed, not the sideline.
+   */
+  const reviewedHistory = useMemo(() => {
+    if (reviewStatus !== 'done' || reviewMatchesActiveLine) return moveHistory;
+    return reviewedLineNodeIds
+      .map((nodeId) => treeNodes[nodeId]?.record)
+      .filter((record): record is MoveRecord => Boolean(record));
+  }, [moveHistory, reviewMatchesActiveLine, reviewStatus, reviewedLineNodeIds, treeNodes]);
 
   useEffect(() => {
     if (reviewStatus !== 'running') return;
@@ -3956,7 +3988,7 @@ function App() {
     if (reviewStatus !== 'done' || !reviewSummary) return undefined;
     return {
       summary: reviewSummary,
-      annotations: moveHistory.map((record, moveIndex) => ({
+      annotations: reviewedHistory.map((record, moveIndex) => ({
         moveIndex,
         evalScore: record.evalScore,
         bestMove: record.bestMove,
@@ -3967,7 +3999,7 @@ function App() {
         reviewNote: record.reviewNote,
       })),
     };
-  }, [moveHistory, reviewStatus, reviewSummary]);
+  }, [reviewedHistory, reviewStatus, reviewSummary]);
 
   /**
    * The game as it stands, in the shape both the library and the auto-save
@@ -3986,7 +4018,11 @@ function App() {
   const displayEvalScoreRef = useRef(displayEvalScore);
   displayEvalScoreRef.current = displayEvalScore;
   const currentGameSnapshot = useMemo(() => {
-    const saveNodeIds = reviewStatus === 'done' && reviewSummary
+    // The whole line when it is the reviewed one, so the annotations line up
+    // with it; otherwise the line as far as the cursor, and no review -- a
+    // review of one line saved beside the moves of another would be read
+    // back onto the wrong moves.
+    const saveNodeIds = reviewMatchesActiveLine
       ? activeLineNodeIds
       : activeLineNodeIds.slice(0, currentMoveIndex + 1);
     const moves = saveNodeIds
@@ -4010,7 +4046,7 @@ function App() {
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
-      review: reviewStatus === 'done' && reviewSummary
+      review: reviewMatchesActiveLine && reviewSummary
         ? {
             ...savedReviewSnapshot!,
             summary: {
@@ -4020,7 +4056,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewStatus, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -4055,7 +4091,8 @@ function App() {
   /**
    * Cutting the tree is the one edit a study needs that the board cannot
    * express. A running review is over the line as it stands, so it is cancelled
-   * first; a finished one is cleared by the line-signature effect on its own.
+   * first; a finished one goes when a move it describes does, by the effect
+   * that watches the reviewed line.
    */
   /**
    * A deletion can be taken back for a few seconds. The cross on a variation
@@ -4348,6 +4385,7 @@ function App() {
         ...rebuildSummaryFromAnnotations(game.review.annotations, game.review.summary, reviewSideFromStartFen(game.startFen)),
         lineSignature: makeReviewLineSignatureFromMoves(game.moves),
       }, loadedNodeIds));
+      setReviewedLineNodeIds(loadedNodeIds.slice(0, game.moves.length));
       setAnalysisTab('review');
       setMobileAnalysisTab('review');
     } else {
@@ -4583,9 +4621,9 @@ function App() {
 
   const reviewNarrativeTags = useMemo(
     () => (reviewStatus === 'done'
-      ? narrativeTags(moveHistory.map(record => record.evalScore), gameResult ?? null)
+      ? narrativeTags(reviewedHistory.map(record => record.evalScore), gameResult ?? null)
       : []),
-    [reviewStatus, moveHistory, gameResult],
+    [reviewStatus, reviewedHistory, gameResult],
   );
 
   /**
@@ -4597,16 +4635,16 @@ function App() {
   const reviewPhaseByMoveIndex = useMemo(() => {
     if (reviewStatus !== 'done') return [];
     const offset = plyOffsetFromRootFen(rootFen);
-    return moveHistory.map(record => (record.board
+    return reviewedHistory.map(record => (record.board
       ? getMovePhaseForRecord({ board: record.board, captured: record.captured }, record.ply + offset)
       : null));
-  }, [reviewStatus, moveHistory, rootFen]);
+  }, [reviewStatus, reviewedHistory, rootFen]);
 
   const reviewPhaseAccuracy = useMemo(
     () => (reviewStatus === 'done'
-      ? summarizeAccuracyByPhase(moveHistory, plyOffsetFromRootFen(rootFen))
+      ? summarizeAccuracyByPhase(reviewedHistory, plyOffsetFromRootFen(rootFen))
       : []),
-    [reviewStatus, moveHistory, rootFen],
+    [reviewStatus, reviewedHistory, rootFen],
   );
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
