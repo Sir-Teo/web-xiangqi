@@ -173,17 +173,10 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
     return { signature: libraryPositionSignature(games), byPosition, skipped };
 }
 
-/**
- * What the index was built from.
- *
- * Ids and move counts, not contents: the library is capped at 500 games and
- * hashing every move of every one of them to decide whether to rebuild would
- * cost a good fraction of just rebuilding. A game whose moves changed also
- * changes its move count in every case the app can produce, because a saved
- * game is written whole.
- */
+/** Include every field the index exposes, including same-length edits and renames. */
 export function libraryPositionSignature(games: SavedGame[]): string {
-    return games.map((game) => `${game.id}:${game.moves?.length ?? 0}:${game.savedAt}`).join('|');
+    return JSON.stringify(games.map(({ id, savedAt, moves, startFen, result, label, opening }) =>
+        [id, savedAt, moves, startFen, result, label, opening]));
 }
 
 function compareMoves(left: LibraryPositionMove, right: LibraryPositionMove): number {
@@ -201,8 +194,13 @@ export function lookupLibraryPosition(
     if (!hits?.length) return EMPTY_REPORT;
 
     const byMove = new Map<string, LibraryPositionMove>();
+    const countedGamesByMove = new Map<string, Set<string>>();
     for (const hit of hits) {
         if (!hit.continuation) continue;
+        const counted = countedGamesByMove.get(hit.continuation) ?? new Set<string>();
+        if (counted.has(hit.gameId)) continue;
+        counted.add(hit.gameId);
+        countedGamesByMove.set(hit.continuation, counted);
         let entry = byMove.get(hit.continuation);
         if (!entry) {
             entry = { uci: hit.continuation, games: 0, redWins: 0, blackWins: 0, draws: 0, unknown: 0 };

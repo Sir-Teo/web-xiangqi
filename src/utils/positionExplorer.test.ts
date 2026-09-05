@@ -184,3 +184,26 @@ describe('how a record reads', () => {
             .toBe('no result saved');
     });
 });
+
+
+describe('repertoire statistics remain tied to games', () => {
+    it('counts a repeated continuation and its result once per game', () => {
+        const moves = ['a0a1', 'a9a8', 'a1a0', 'a8a9', 'a0a1', 'a9a8'];
+        const index = buildLibraryPositionIndex([game('shuffle', moves, { result: 'red' })]);
+        const report = lookupLibraryPosition(index, parseFenBoard(START_FEN), 'w');
+        expect(report.hits).toHaveLength(2);
+        expect(report.moves[0]).toMatchObject({ games: 1, redWins: 1 });
+    });
+
+    it('invalidates the index for every displayed field and same-length move edits', () => {
+        const original = game('study', ['h2e2']);
+        for (const change of [
+            { label: 'Renamed study' }, { opening: 'Updated opening' },
+            { result: 'red' as const }, { moves: ['b2e2'] },
+            { startFen: START_FEN + ' b - - 0 1' },
+        ]) {
+            expect(libraryPositionSignature([{ ...original, ...change }]))
+                .not.toBe(libraryPositionSignature([original]));
+        }
+    });
+});
