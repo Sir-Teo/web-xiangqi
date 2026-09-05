@@ -24,8 +24,17 @@ describe('the width a panel opens at', () => {
     });
 
     it('never opens narrower than the minimum, however small the window', () => {
-        for (const width of [320, 375, 500, 0]) {
+        for (const width of [320, 375, 500]) {
             expect(initialPanelWidth(DEFAULT_PANEL_WIDTH, width)).toBeGreaterThanOrEqual(PANEL_MIN_WIDTH);
+        }
+    });
+
+    it('treats a window with no width as unknown rather than as narrow', () => {
+        // A tab rendered before it is shown, or an embedded pane, reports 0.
+        // Sizing to it collapsed both panels to the minimum until the next
+        // resize event, which does not always come.
+        for (const width of [0, -1, Number.NaN]) {
+            expect(initialPanelWidth(DEFAULT_PANEL_WIDTH, width)).toBe(DEFAULT_PANEL_WIDTH);
         }
     });
 

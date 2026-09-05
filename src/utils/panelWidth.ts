@@ -23,7 +23,10 @@ export const DEFAULT_PANEL_WIDTH = 320;
  */
 export function initialPanelWidth(fallback: number, viewportWidth?: number): number {
     const width = viewportWidth ?? (typeof window === 'undefined' ? undefined : window.innerWidth);
-    if (width === undefined) return fallback;
+    // A window that reports no width -- a tab rendered before it is shown, an
+    // embedded pane -- is not a narrow one. Sizing to it collapsed both panels
+    // to the minimum until the next resize event, which does not always come.
+    if (width === undefined || !Number.isFinite(width) || width <= 0) return fallback;
     return Math.max(PANEL_MIN_WIDTH, Math.min(fallback, Math.round(width * 0.26)));
 }
 
