@@ -424,9 +424,11 @@ function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {
         if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
             return { games: [], mutationBlocked: true };
         }
-        return { games: normalizeSavedGames(JSON.parse(raw)), mutationBlocked: false };
+        const parsed: unknown = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true };
+        return { games: normalizeSavedGames(parsed), mutationBlocked: false };
     } catch {
-        return { games: [], mutationBlocked: false };
+        return { games: [], mutationBlocked: true };
     }
 }
 
@@ -436,7 +438,10 @@ function readAll(): SavedGame[] {
 
 function writeAll(games: SavedGame[]): boolean {
     try {
-        localStorage.setItem(GAME_LIBRARY_STORAGE_KEY, JSON.stringify(games));
+        const serialized = JSON.stringify(games);
+        // Never report success for data the next read would refuse.
+        if (serialized.length > MAX_LIBRARY_JSON_LENGTH) return false;
+        localStorage.setItem(GAME_LIBRARY_STORAGE_KEY, serialized);
         return true;
     } catch {
         return false;

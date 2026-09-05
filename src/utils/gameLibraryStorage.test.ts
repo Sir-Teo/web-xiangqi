@@ -98,3 +98,31 @@ describe('a stored library too large to read', () => {
         expect(loadAllGames()).toHaveLength(2);
     });
 });
+
+
+describe('writes must remain readable', () => {
+    it('rejects a write crossing the read ceiling and preserves the existing library', () => {
+        const existing = Array.from({ length: 400 }, (_, i) => ({
+            id: `game-${i}`, savedAt: i + 1, gameMode: 'PvP',
+            moves: Array(1024).fill('h2e2'),
+        }));
+        const raw = JSON.stringify(existing);
+        expect(raw.length).toBeLessThan(3_000_000);
+        store.set(GAME_LIBRARY_STORAGE_KEY, raw);
+        const result = saveGame({
+            gameMode: 'PvP', moves: ['h2e2'],
+            moveTree: Array.from({ length: 1024 }, () => ({ uci: 'h2e2', comment: 'x'.repeat(500) })),
+        });
+        expect(result).toBeNull();
+        expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe(raw);
+        expect(loadAllGames()).toHaveLength(400);
+    });
+
+    it('does not overwrite a library with unreadable JSON', () => {
+        store.set(GAME_LIBRARY_STORAGE_KEY, '{truncated');
+        expect(save(['h2e2'])).toBeNull();
+        expect(deleteGame('old')).toBe(false);
+        expect(renameGame('old', 'New title')).toBe(false);
+        expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe('{truncated');
+    });
+});
