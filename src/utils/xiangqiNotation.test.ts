@@ -4,6 +4,7 @@ import {
     fileNumberFor,
     formatChineseMove,
     formatLineInStyle,
+    formatLineTokensInStyle,
     formatMoveInStyle,
     formatRecordInStyle,
     formatWxfMove,
@@ -267,6 +268,10 @@ describe('a principal variation is replayed, not formatted move by move', () => 
     it('says how many moves it left out', () => {
         const line = ['h2e2', 'h9g7', 'h0g2', 'i9h9', 'i0i1', 'b7c7', 'b2c2', 'a6a5'];
         expect(formatLineInStyle(start(), line, 'wxf', 3)).toBe('C2=5 H8+7 H2+3 +5');
+        // The token form is the same line one move at a time, with the cut
+        // reported rather than folded into the text.
+        expect(formatLineTokensInStyle(start(), line, 'wxf', 3)).toEqual({ tokens: ['C2=5', 'H8+7', 'H2+3'], remaining: 5 });
+        expect(formatLineTokensInStyle(start(), ['h2e2', 'h9g7'], 'uci')).toEqual({ tokens: ['H2E2', 'H9G7'], remaining: 0 });
     });
 
     it('keeps what it could follow when a line goes off the board', () => {

@@ -68,6 +68,7 @@ import {
   NOTATION_STYLE_LABELS,
   boardBeforeRecord,
   formatLineInStyle,
+  formatLineTokensInStyle,
   formatMoveInStyle,
   formatRecordInStyle,
   isNotationStyle,
@@ -1127,6 +1128,7 @@ function App() {
     sideToMove,
     applyUciMove,
     applyUciMoveAtNode,
+    applyUciLineAtNode,
     setCurrentNodeEval,
     setNodeEvals,
     setNodeBestMove,
@@ -2671,6 +2673,7 @@ function App() {
     [isReady, isSearchQueued, isSearching, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, searchStats]
   );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
+  const canPlayBestMove = engineEnabled && !isAiTurn && !gameResult && Boolean(topAnalysisPv?.moves[0]);
   const visibleEngineOutputLineCount = Math.min(outputLines.length, 20);
   const engineOutputTerminalLabel = visibleEngineOutputLineCount > 0
     ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
@@ -3668,6 +3671,21 @@ function App() {
     setMobileAnalysisTab('moves');
   }, [applyUciMove, clearBoardMarkers, gameResult]);
 
+  /**
+   * Play an engine line up to one of its moves, from the position on screen.
+   *
+   * An engine line is a line *into* the position, and following it to its
+   * third move to see what the engine means is how an analysis board is
+   * used; the Play button beside a line plays only its first move. The
+   * panel stays where it is, because the next line to click is the one the
+   * engine reports for the new position.
+   */
+  const handlePlayPvLine = useCallback((moves: string[], count: number) => {
+    if (gameResult || isAiTurn || count <= 0) return;
+    clearBoardMarkers();
+    applyUciLineAtNode(currentNodeId, moves.slice(0, count));
+  }, [applyUciLineAtNode, clearBoardMarkers, currentNodeId, gameResult, isAiTurn]);
+
   const handlePlayBookMove = useCallback((uci: string) => {
     if (!uci || gameResult || isAiTurn) return;
     clearBoardMarkers();
@@ -4419,6 +4437,17 @@ function App() {
       run: runHint,
     },
     {
+      id: 'play-best-move',
+      label: "Play the engine's move",
+      hint: canPlayBestMove && topAnalysisPv?.moves[0]
+        ? formatLineInStyle(board, [topAnalysisPv.moves[0]], notationStyle, 1)
+        : engineEnabled ? 'No engine move yet' : 'Analysis engine only',
+      keywords: ['best', 'engine', 'first', 'line', 'space'],
+      shortcut: 'Space',
+      disabled: !canPlayBestMove,
+      run: () => { if (topAnalysisPv) handlePlayPvLine(topAnalysisPv.moves, 1); },
+    },
+    {
       id: 'learn-from-mistakes',
       label: 'Learn from your mistakes',
       hint: canStartDrill
@@ -4491,7 +4520,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, canCopyRecord, canDeepDive, canStartDrill, drillMoments.length, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, drillMoments.length, handlePlayPvLine, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -4706,6 +4735,11 @@ function App() {
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
         return;
       }
+      // Space activates a focused button on its own; playing the engine's
+      // move as well would do two things for one press.
+      if (event.key === ' ' && (tag === 'BUTTON' || tag === 'A' || target?.closest('[role="button"]'))) {
+        return;
+      }
       const openEnginePanel = () => {
         setAnalysisTab('engine');
         setMobileAnalysisTab('engine');
@@ -4743,6 +4777,12 @@ function App() {
           if (!canHint) return;
           runHint();
           break;
+        case ' ':
+          // The lichess binding: the engine's first choice, played, with the
+          // panel left where it is so the next press walks the line on.
+          if (!canPlayBestMove || !topAnalysisPv?.moves[0]) return;
+          handlePlayPvLine(topAnalysisPv.moves, 1);
+          break;
         case 'e':
           if (!engineEnabled) return;
           openEnginePanel();
@@ -4765,9 +4805,9 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    analysisTab, autoSaveRecovery, canDeepDive, canHint, canShowThreat, deepDiveActive, engineEnabled,
-    runDeepDive, runHint, runThreatSearch, showBoardEditor, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
-    stopThreat, threatActive, visibleGameResult,
+    analysisTab, autoSaveRecovery, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
+    handlePlayPvLine, runDeepDive, runHint, runThreatSearch, showBoardEditor, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
+    stopThreat, threatActive, topAnalysisPv, visibleGameResult,
   ]);
 
   useEffect(() => {
@@ -6946,6 +6986,7 @@ function App() {
                       const firstMove = pv.moves[0];
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
                       const pvLineText = pv.moves.length ? formatLineInStyle(board, pv.moves, notationStyle, 7) : 'No moves yet';
+                      const pvTokens = formatLineTokensInStyle(board, pv.moves, notationStyle, 7);
                       const pvLineLabel = pv.moves.length ? `moves ${pvLineText}` : 'no moves yet';
                       const firstMoveText = firstMove ? formatLineInStyle(board, [firstMove], notationStyle, 1) : '';
                       // The clipboard gets the raw moves whatever the reader is
@@ -7005,7 +7046,27 @@ function App() {
                               Depth {pv.depth}
                               {lineWdlText ? <span className="pv-line-wdl" title={lineWdlText} data-testid={`engine-pv-wdl-${i}`}> · {lineWdlText}</span> : null}
                             </span>
-                            <span className="move">{formatLineInStyle(board, pv.moves, notationStyle, 7)}</span>
+                            <span className="move">
+                              {/* One control per move: click the third to play the
+                                  line up to it, which is what a strong player does
+                                  with an engine line and could not do here. */}
+                              {pvTokens.tokens.map((token, moveIndex) => (
+                                <button
+                                  key={`${i}-${moveIndex}-${pv.moves[moveIndex]}`}
+                                  type="button"
+                                  className="pv-move-btn"
+                                  onClick={() => handlePlayPvLine(pv.moves, moveIndex + 1)}
+                                  disabled={Boolean(gameResult)}
+                                  title={`Play this line up to ${token}`}
+                                  aria-label={`Play engine line ${i + 1} up to move ${moveIndex + 1}, ${token}`}
+                                  data-testid={`engine-pv-${i}-move-${moveIndex}`}
+                                >
+                                  {token}
+                                </button>
+                              ))}
+                              {pvTokens.remaining > 0 ? <span className="pv-move-rest">+{pvTokens.remaining}</span> : null}
+                              {pvTokens.tokens.length === 0 ? 'No moves yet' : null}
+                            </span>
                           </div>
                           <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
                             <button

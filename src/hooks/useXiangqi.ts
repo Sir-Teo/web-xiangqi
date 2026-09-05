@@ -792,6 +792,81 @@ export function useXiangqi() {
         return applyUciMoveAtNode(currentNodeId, uci, evalScore);
     }, [applyUciMoveAtNode, currentNodeId]);
 
+    /**
+     * Play several moves from a node in one state update, following a child
+     * that already holds a move rather than adding it twice.
+     *
+     * Calling `applyUciMoveAtNode` in a loop cannot do this: each call reads
+     * the tree from the render it closed over, so the second move would be
+     * grafted onto the tree as it was before the first. The line stops at the
+     * first move the rules refuse and keeps what was played; false means
+     * nothing was.
+     */
+    const applyUciLineAtNode = useCallback((parentNodeId: string, moves: string[]): boolean => {
+        if (!treeNodes[parentNodeId]) return false;
+        let tree = treeNodes;
+        let cursor = parentNodeId;
+        let counter = nodeCounterRef.current;
+        const parent = getPositionFromNode(tree, parentNodeId, rootPosition);
+        let board = parent.board;
+        let side = parent.sideToMove;
+        let played = 0;
+
+        for (const raw of moves) {
+            const uci = String(raw || '').trim().toLowerCase();
+            const from = uciToSquare(uci.substring(0, 2));
+            const to = uciToSquare(uci.substring(2, 4));
+            if (!from || !to) break;
+            const mv = { fromFile: from.file, fromRank: from.rank, toFile: to.file, toRank: to.rank, raw: uci };
+            const result = validatePieceMove(board, mv, side);
+            if (!result.ok) break;
+
+            const nextBoard = board.map((row) => [...row]);
+            nextBoard[to.rank][to.file] = result.piece || '';
+            nextBoard[from.rank][from.file] = '';
+            const nextSide: Side = side === 'w' ? 'b' : 'w';
+
+            const existingChildId = tree[cursor].childrenIds.find((childId) => tree[childId]?.record?.uci === uci);
+            if (existingChildId) {
+                cursor = existingChildId;
+            } else {
+                const nodeId = `n${counter++}`;
+                tree = {
+                    ...tree,
+                    [cursor]: { ...tree[cursor], childrenIds: [...tree[cursor].childrenIds, nodeId] },
+                    [nodeId]: {
+                        id: nodeId,
+                        parentId: cursor,
+                        childrenIds: [],
+                        record: {
+                            uci,
+                            piece: result.piece!,
+                            captured: result.captured || '',
+                            board: nextBoard,
+                            sideToMove: nextSide,
+                            inCheck: isInCheck(nextBoard, nextSide),
+                            ply: findPathToNode(tree, cursor).length + 1,
+                        },
+                    },
+                };
+                cursor = nodeId;
+            }
+            board = nextBoard;
+            side = nextSide;
+            played += 1;
+        }
+
+        if (played === 0) return false;
+        nodeCounterRef.current = counter;
+        const path = findPathToNode(tree, cursor);
+        setTreeNodes(tree);
+        setActiveLineNodeIds([...path, ...preferredContinuation(tree, cursor)]);
+        setCurrentMoveIndex(path.length - 1);
+        setGameResult(gameResultForPosition(board, side));
+        syncPositionForNode(tree, cursor);
+        return true;
+    }, [rootPosition, syncPositionForNode, treeNodes]);
+
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
@@ -1063,6 +1138,7 @@ export function useXiangqi() {
         resetBoard,
         applyUciMove,
         applyUciMoveAtNode,
+        applyUciLineAtNode,
         setCurrentNodeEval,
         setNodeEval,
         setNodeEvals,

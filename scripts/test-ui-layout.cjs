@@ -3473,6 +3473,74 @@ async function assertEnginePvLineControl(page) {
   }
 }
 
+/**
+ * An engine line is a line into the position: clicking its second move plays
+ * both moves, and Space plays the first choice from wherever the board is,
+ * without leaving the Engine panel. The fake engine answers every search
+ * with the line b2e2 h9g7.
+ */
+async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-restart-options" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("engine-pv-0-move-1").waitFor({ timeout: 10000 });
+    await page.getByTestId("engine-pv-0-move-1").click();
+    await page.waitForFunction(
+      () => document.querySelector(".wc-meta strong")?.textContent?.trim() === "2 / 2",
+      null, { timeout: 5000 },
+    );
+    const read = () => page.evaluate(() => ({
+      meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
+      fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
+      engineTab: document.querySelector('[data-testid="analysis-tab-engine"]')?.getAttribute("aria-selected") ?? "",
+      current: document.querySelector(".tree-breadcrumb-chip-active")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    const played = await read();
+    if (
+      !played.fen.startsWith("rnbakab1r/9/1c4nc1/p1p1p1p1p/9/9/P1P1P1P1P/4C2C1/9/RNBAKABNR w") ||
+      played.engineTab !== "true" ||
+      played.overflowX > 2
+    ) {
+      throw new Error(`Clicking the second move of an engine line did not play the line up to it: ${JSON.stringify(played)}`);
+    }
+
+    // Space from the start position plays the first move of the top line and
+    // keeps the rest of the line it already had on the board.
+    await page.evaluate(() => { (document.activeElement instanceof HTMLElement) && document.activeElement.blur(); });
+    await page.keyboard.press("ArrowUp");
+    await page.waitForFunction(
+      () => document.querySelector(".wc-meta strong")?.textContent?.trim() === "Start / 2",
+      null, { timeout: 5000 },
+    );
+    // Space plays the top line *for the position on screen*, and the lines
+    // are cleared the moment the position changes; wait for the engine to
+    // have answered for the start position before asking.
+    await page.waitForFunction(
+      // b2e2 is the cannon on Red's file 8, so C8=5 -- not the C2=5 of h2e2.
+      () => document.querySelector('[data-testid="engine-pv-0-move-0"]')?.textContent?.trim() === "C8=5",
+      null, { timeout: 5000 },
+    );
+    await page.keyboard.press("Space");
+    await page.waitForFunction(
+      () => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 2",
+      null, { timeout: 5000 },
+    );
+    const spaced = await read();
+    if (!spaced.fen.startsWith("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/4C2C1/9/RNBAKABNR b") || spaced.engineTab !== "true") {
+      throw new Error(`Space did not play the engine's move in place: ${JSON.stringify(spaced)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertEngineTelemetryDashboard(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -9978,6 +10046,7 @@ async function main() {
     await assertAnalysisResumesAfterVisibilityReturn(browser);
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
+    await assertClickingIntoAnEngineLinePlaysItUpToThere(browser);
     await assertEngineTelemetryDashboard(browser);
     await assertTheHeadingOutlineHasNoGaps(browser);
     await assertADeepSearchSurvivesAHiddenTab(browser);

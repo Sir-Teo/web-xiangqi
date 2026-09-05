@@ -313,22 +313,38 @@ export function formatLineInStyle(
     style: XiangqiNotationStyle,
     maxMoves = 7
 ): string {
+    const { tokens, remaining } = formatLineTokensInStyle(board, moves, style, maxMoves);
+    const text = tokens.join(' ');
+    return remaining > 0 ? `${text} +${remaining}` : text;
+}
+
+/**
+ * The same line, one token per move, for a panel that lets each move be
+ * clicked: the engine's line is a line into the position, and playing it up
+ * to the third move is how an analysis board is used. `remaining` is how many
+ * moves were cut by `maxMoves`, which the caller says out loud rather than
+ * pretending the line ended there.
+ */
+export function formatLineTokensInStyle(
+    board: BoardState,
+    moves: string[],
+    style: XiangqiNotationStyle,
+    maxMoves = 7
+): { tokens: string[]; remaining: number } {
     const visible = moves.slice(0, maxMoves);
-    const parts: string[] = [];
+    const tokens: string[] = [];
     let state: BoardState | null = board;
 
     for (const uci of visible) {
         if (style === 'uci' || !state) {
-            parts.push(uci.toUpperCase());
+            tokens.push(uci.toUpperCase());
             continue;
         }
-        parts.push(formatMoveInStyle(state, uci, style));
+        tokens.push(formatMoveInStyle(state, uci, style));
         state = applyMoveUnchecked(state, uci);
     }
 
-    const remaining = moves.length - visible.length;
-    const text = parts.join(' ');
-    return remaining > 0 ? `${text} +${remaining}` : text;
+    return { tokens, remaining: moves.length - visible.length };
 }
 
 /**

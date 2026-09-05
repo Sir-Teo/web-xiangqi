@@ -3599,6 +3599,43 @@ summary:active {
   font-size: 0.72rem;
   font-family: var(--font-mono);
   word-break: break-word;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.35rem;
+  align-items: baseline;
+}
+
+/* Each move of a line is a control that plays the line up to it. Styled as
+   the text it replaces, with the hover and focus to say it is clickable. */
+.pv-move-btn {
+  padding: 0 0.1rem;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pv-move-btn:hover:not(:disabled) {
+    color: var(--text-heading);
+    background: var(--accent-subtle);
+  }
+}
+
+.pv-move-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pv-move-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.pv-move-rest {
+  color: var(--text-muted);
 }
 
 .pv-line-actions {
