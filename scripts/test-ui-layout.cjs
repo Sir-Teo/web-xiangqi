@@ -6836,6 +6836,65 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
   }
 }
 
+/**
+ * A review is started by hand, like a deep search, and hiding the tab must
+ * not touch it. It used to stop the search the review was on -- grading that
+ * one node shallow -- while the nodes after it were searched in full in the
+ * background, because nothing paused the pass itself. This engine never
+ * answers `go`, so a review left alone is still waiting on its one search
+ * after the tab is hidden, with no `stop` sent.
+ */
+async function assertARunningReviewSurvivesAHiddenTab(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-review-hangs" });
+    await page.addInitScript(() => {
+      let qaDocumentHidden = false;
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => qaDocumentHidden });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (qaDocumentHidden ? "hidden" : "visible") });
+      window.__webXiangqiSetHiddenForQa = (hidden) => {
+        qaDocumentHidden = Boolean(hidden);
+        document.dispatchEvent(new Event("visibilitychange"));
+      };
+    });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2');
+    await page.getByTestId("import-uci-line-btn").click();
+    await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+    await page.getByTestId("analysis-tab-review").click();
+    await page.getByTestId("start-review-btn").click();
+    await page.getByTestId("cancel-review-bottom-btn").waitFor({ timeout: 5000 });
+    await page.waitForTimeout(400);
+    await page.evaluate(() => { window.__engineCommands.length = 0; });
+
+    await page.evaluate(() => window.__webXiangqiSetHiddenForQa(true));
+    await page.waitForTimeout(600);
+    const hidden = await page.evaluate(() => ({
+      commands: window.__engineCommands.slice(),
+      stillRunning: Boolean(document.querySelector('[data-testid="cancel-review-bottom-btn"]')),
+    }));
+    if (hidden.commands.includes("stop") || !hidden.stillRunning) {
+      throw new Error(`Hiding the tab interfered with the running review: ${JSON.stringify(hidden)}`);
+    }
+    await page.evaluate(() => window.__webXiangqiSetHiddenForQa(false));
+    await page.waitForTimeout(400);
+    const back = await page.evaluate(() => ({
+      commands: window.__engineCommands.slice(),
+      stillRunning: Boolean(document.querySelector('[data-testid="cancel-review-bottom-btn"]')),
+    }));
+    if (back.commands.includes("stop") || !back.stillRunning) {
+      throw new Error(`Coming back to the tab interfered with the running review: ${JSON.stringify(back)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertReviewMomentFiltersResetOnLoad(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -10155,6 +10214,7 @@ async function main() {
     await assertLearnFromMistakesAsksAndGrades(page);
     await assertLastMoveArrowUsesPracticalReviewQuality(page);
     await assertRunningReviewCancelsOnLineChange(browser);
+    await assertARunningReviewSurvivesAHiddenTab(browser);
     await assertReviewMomentFiltersResetOnLoad(browser);
     await assertReviewRevisitRefreshesDecisionBestMove(browser);
     await assertReviewRevisitIgnoresGoodScoreSwings(browser);

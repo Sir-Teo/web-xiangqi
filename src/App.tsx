@@ -1973,6 +1973,14 @@ function App() {
       // is left alone, and the infinite mode's own description says it runs
       // until stopped.
       if (!visible && deepDiveActiveRef.current) return;
+      // A review is started by hand for the same reason, and it used to be
+      // the odd one out: hiding the tab stopped the search it was on -- so
+      // that one node was graded shallow -- while the nodes after it were
+      // searched in full, in the background, because nothing paused the
+      // pass itself. Either the whole review pauses or none of it does, and
+      // a reader who started a thirty-second review and switched tabs
+      // expects it finished, not one move worse.
+      if (!visible && reviewControllerRef.current.active) return;
       if (!visible) {
         applyBestMoveRef.current = false;
         activeAnalysisRequestRef.current = '';
