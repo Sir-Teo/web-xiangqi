@@ -9,7 +9,7 @@ import type {
     SavedReviewAnnotation,
     SavedReviewSnapshot,
 } from './review';
-import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations } from './review';
+import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations, reviewSideFromStartFen } from './review';
 import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
 import { normalizeMoveComment } from './moveComment';
 import { bestLineForMove } from './engineBestLine';
@@ -324,7 +324,7 @@ function normalizeReviewSummary(raw: unknown, moves: string[]): ReviewSummary | 
     };
 }
 
-function normalizeSavedReview(raw: unknown, moves: string[]): SavedReviewSnapshot | undefined {
+function normalizeSavedReview(raw: unknown, moves: string[], startFen?: string): SavedReviewSnapshot | undefined {
     if (!isRecord(raw)) return undefined;
 
     const summary = normalizeReviewSummary(raw.summary ?? raw, moves);
@@ -353,7 +353,9 @@ function normalizeSavedReview(raw: unknown, moves: string[]): SavedReviewSnapsho
     // centipawn loss and the move count are not scale-dependent, and this file
     // has its own validation and fallbacks for them that a wholesale rebuild
     // would quietly override.
-    const rebuilt = rebuildSummaryFromAnnotations(annotations, summary);
+    // The first mover comes from the start position: a study set up with
+    // Black to move had its Red and Black accuracies swapped on every read.
+    const rebuilt = rebuildSummaryFromAnnotations(annotations, summary, reviewSideFromStartFen(startFen));
     return {
         summary: {
             ...summary,
@@ -399,7 +401,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         opening: asBoundedString(raw.opening, MAX_SAVED_OPENING_LENGTH),
         finalEval: asFiniteNumber(raw.finalEval),
         moveTree,
-        review: normalizeSavedReview(raw.review, moves),
+        review: normalizeSavedReview(raw.review, moves, startFen),
     };
 }
 

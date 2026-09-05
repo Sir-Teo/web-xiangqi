@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeReviewArtifacts, rebuildSummaryFromAnnotations } from './review';
+import { computeReviewArtifacts, rebuildSummaryFromAnnotations, reviewSideFromStartFen } from './review';
 import type { ReviewAnnotation, ReviewSummary, ReviewTreeNodeLike } from './review';
 
 /**
@@ -11,15 +11,16 @@ import type { ReviewAnnotation, ReviewSummary, ReviewTreeNodeLike } from './revi
  * achievable, and so the fields it *cannot* recover are named rather than
  * discovered later.
  */
-function line(evals: number[]) {
+function line(evals: number[], firstMover: 'red' | 'black' = 'red') {
     const nodes: Record<string, ReviewTreeNodeLike> = {};
     const ids: string[] = [];
     evals.forEach((evalScore, index) => {
         const id = `n${index}`;
         ids.push(id);
+        const redMoves = (index % 2 === 0) === (firstMover === 'red');
         nodes[id] = {
             parentId: index === 0 ? null : `n${index - 1}`,
-            record: { uci: 'a0a1', piece: index % 2 === 0 ? 'R' : 'r', ply: index + 1, evalScore },
+            record: { uci: 'a0a1', piece: redMoves ? 'R' : 'r', ply: index + 1, evalScore },
         };
     });
     return { nodes, ids };
@@ -100,6 +101,37 @@ describe('a stored summary computed on an older scale', () => {
         expect(rebuilt.reviewedAt).toBe(4242);
         expect(rebuilt.engine?.baseDepth).toBe(16);
         expect(rebuilt.lineSignature).toBe(summary.lineSignature);
+    });
+
+    /**
+     * A saved annotation carries no piece, so the rebuild has to be told who
+     * moved first. It assumed Red, and a study set up with Black to move --
+     * an endgame from a book, a position pasted mid-game -- came back out of
+     * the library with its Red and Black accuracies swapped.
+     */
+    it('attributes each side its own moves in a game Black began', () => {
+        const evals = [0, -30, -10, -180, -20, -60];
+        const { nodes, ids } = line(evals, 'black');
+        const { summary, annotations } = computeReviewArtifacts(ids, nodes, undefined, 1);
+        // The fixture is only worth having if the two sides really differ.
+        expect(summary.redAccuracy).not.toBe(summary.blackAccuracy);
+
+        const rebuilt = rebuildSummaryFromAnnotations(annotations, summary, 'black');
+        expect(rebuilt.redAccuracy).toBe(summary.redAccuracy);
+        expect(rebuilt.blackAccuracy).toBe(summary.blackAccuracy);
+        expect(rebuilt.redAverageCentipawnLoss).toBe(summary.redAverageCentipawnLoss);
+        expect(rebuilt.blackAverageCentipawnLoss).toBe(summary.blackAverageCentipawnLoss);
+
+        // What the old assumption produced: the same figures, on the wrong sides.
+        const assumedRed = rebuildSummaryFromAnnotations(annotations, summary);
+        expect(assumedRed.redAccuracy).toBe(summary.blackAccuracy);
+        expect(assumedRed.blackAccuracy).toBe(summary.redAccuracy);
+    });
+
+    it('reads the first mover off the start position', () => {
+        expect(reviewSideFromStartFen(undefined)).toBe('red');
+        expect(reviewSideFromStartFen('4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1')).toBe('red');
+        expect(reviewSideFromStartFen('4k4/9/9/9/9/9/9/9/9/4K4 b - - 0 12')).toBe('black');
     });
 
     it('leaves a summary alone when an annotation is missing its evidence', () => {

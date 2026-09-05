@@ -137,6 +137,7 @@ import {
   type ReviewEngineSummary,
   type ReviewMoveQuality,
   rebuildSummaryFromAnnotations,
+  reviewSideFromStartFen,
   selectRevisitNodes,
   nextCriticalSwing,
 } from './utils/review';
@@ -4316,7 +4317,7 @@ function App() {
       // saved before a scoring change would otherwise sort and average in the
       // library beside summaries computed on the current scale.
       hydrateReview(remapReviewSummaryToLine({
-        ...rebuildSummaryFromAnnotations(game.review.annotations, game.review.summary),
+        ...rebuildSummaryFromAnnotations(game.review.annotations, game.review.summary, reviewSideFromStartFen(game.startFen)),
         lineSignature: makeReviewLineSignatureFromMoves(game.moves),
       }, loadedNodeIds));
       setAnalysisTab('review');

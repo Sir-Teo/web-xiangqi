@@ -774,9 +774,22 @@ export function remapReviewSummaryToLine(
  * a scoring change therefore reads on the current scale instead of sorting and
  * averaging beside summaries that used a different one.
  */
+/** Who moved first in a saved game: the side the root FEN names, Red by default. */
+export function reviewSideFromStartFen(startFen?: string): ReviewSide {
+    return String(startFen ?? '').trim().split(/\s+/)[1] === 'b' ? 'black' : 'red';
+}
+
 export function rebuildSummaryFromAnnotations(
     annotations: SavedReviewAnnotation[],
-    stored: ReviewSummary
+    stored: ReviewSummary,
+    /**
+     * The side that played the first annotated move. A saved annotation
+     * carries no piece, so the side has to come from the position the game
+     * began in: a study set up with Black to move used to have its Red and
+     * Black accuracies swapped on every read, because the rebuild assumed
+     * the first move was Red's.
+     */
+    firstMover: ReviewSide = 'red'
 ): ReviewSummary {
     const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     const side = {
@@ -796,7 +809,8 @@ export function rebuildSummaryFromAnnotations(
         }
         if (annotation.quality) counts[annotation.quality] += 1;
 
-        const who = getReviewSideForRecord({ uci: '', ply: annotation.moveIndex + 1 }, annotation.moveIndex);
+        const evenMove = annotation.moveIndex % 2 === 0;
+        const who: ReviewSide = evenMove === (firstMover === 'red') ? 'red' : 'black';
         if (series.length === 0) series.push(getWinningChancePercent(0, 'red'));
         series.push(getWinningChancePercent(annotation.evalScore, 'red'));
 
