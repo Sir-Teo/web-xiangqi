@@ -859,6 +859,21 @@ it:
 The gate for "Try best" now requires the summary and the mistake's dot to
 survive the click, which is the click that used to remove them.
 
+### Learn from mistakes
+
+Keeping the review is what makes a drill over it possible. `utils/mistakeDrill.ts`
+orders the key moments by the game rather than worst-first, drops the ones
+with no better move recorded, and grades an attempt: the engine's move and the
+game's own move need no search, and anything else is judged with
+`classifyMoveQualityForEval` against the moment's `evalBefore` once the live
+analysis has evaluated the position it reaches -- on the review's own scale,
+because "wrong" here and "good" on the review card for the same move would be
+two answers from one app. `App.tsx` owns the sequence: it jumps to the parent
+of each moment, hides the engine and book arrows while the question is open,
+reads the attempt off `currentNodeId` changing to a child of that parent, and
+takes the evaluation from the analysis `bestmove` through a ref. Attempts are
+left in the tree as variations, which a study of the game wants anyway.
+
 ### The halfmove clock is load-bearing
 
 The fifth field of a FEN — plies since the last capture — looks like the one

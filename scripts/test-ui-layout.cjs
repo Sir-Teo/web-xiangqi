@@ -6426,6 +6426,124 @@ async function assertReviewBestMoveBranchAction(page) {
   }
 }
 
+/**
+ * Learn from mistakes: the review's key moments asked as questions. Loads a
+ * reviewed game whose one key moment is a Red mistake at ply 3 (b0c2, where
+ * the engine preferred h0g2), starts the drill, and checks that the board is
+ * put on the position before the mistake with the engine's arrows hidden,
+ * that the engine's move is recognised without a search, that the run
+ * finishes with a count, and that a move which is neither the engine's nor
+ * the game's is graded once the real engine has evaluated it. The review has
+ * to survive all of it.
+ */
+async function assertLearnFromMistakesAsksAndGrades(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const moves = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9"];
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "qa-drill",
+      savedAt: 1710000009000,
+      gameMode: "PvP",
+      moves,
+      result: "ongoing",
+      label: "Drill QA",
+      review: {
+        summary: {
+          totalMoves: 6, accuracy: 80, averageCentipawnLoss: 40, redAccuracy: 70, blackAccuracy: 90,
+          bestCount: 4, goodCount: 1, inaccuracyCount: 0, mistakeCount: 1, blunderCount: 0,
+          reviewedAt: 1710000009000, lineSignature: moves.join(" "),
+          keyMoments: [{
+            nodeId: "n3", moveIndex: 2, jumpTarget: 2, ply: 3, side: "red", quality: "mistake",
+            swing: 240, winPercentLoss: 20.7, evalBefore: 0, evalAfter: -240,
+            bestMove: "h0g2", playedMove: "b0c2", note: "Missed a stronger continuation.",
+          }],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: 0, quality: "best", swing: 0, winPercentLoss: 0, reviewNote: "Engine-approved move." },
+          { moveIndex: 1, evalScore: 0, quality: "best", swing: 0, winPercentLoss: 0, reviewNote: "Engine-approved move." },
+          { moveIndex: 2, evalScore: -240, bestMove: "h0g2", quality: "mistake", swing: 240, winPercentLoss: 20.7, reviewNote: "Missed a stronger continuation." },
+          { moveIndex: 3, evalScore: -240, quality: "best", swing: 0, winPercentLoss: 0, reviewNote: "Engine-approved move." },
+          { moveIndex: 4, evalScore: -230, quality: "good", swing: 10, winPercentLoss: 0.5, reviewNote: "Solid choice." },
+          { moveIndex: 5, evalScore: -230, quality: "best", swing: 0, winPercentLoss: 0, reviewNote: "Engine-approved move." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-qa-drill").click();
+  await page.getByTestId("learn-from-mistakes-btn").waitFor({ timeout: 5000 });
+  // The drill needs the live analysis to grade a move of its own; wait for
+  // the engine so the second half of this check is not a wait on the boot.
+  await page.waitForFunction(() => document.body.innerText.includes("Engine ready"), null, { timeout: 90000 });
+  await page.getByTestId("learn-from-mistakes-btn").click();
+  await page.getByTestId("mistake-drill").waitFor({ timeout: 5000 });
+  await page.waitForTimeout(1500);
+
+  const read = () => page.evaluate(() => ({
+    verdict: document.querySelector('[data-testid="mistake-drill"]')?.getAttribute("data-verdict") ?? null,
+    text: document.querySelector('[data-testid="mistake-drill"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    plies: document.querySelector(".wc-meta strong")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    engineArrows: document.querySelectorAll(".board-arrow-engine, .board-arrow-engine-focus, .board-arrow-book").length,
+    summary: Boolean(document.querySelector('[data-testid="bottom-review-summary"]')),
+    overflowX: document.body.scrollWidth - document.body.clientWidth,
+  }));
+
+  const asked = await read();
+  if (asked.verdict !== "asking" || asked.plies !== "2 / 6" || !/Red to move/.test(asked.text) || asked.engineArrows !== 0 || asked.overflowX > 2) {
+    throw new Error(`The drill did not ask the question from the position before the mistake: ${JSON.stringify(asked)}`);
+  }
+
+  // The engine's move is known without a search.
+  await page.getByLabel("h0, red horse").click();
+  await page.getByLabel("g2, empty, legal move").click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="mistake-drill"]')?.getAttribute("data-verdict") === "best",
+    null, { timeout: 5000 },
+  );
+  const found = await read();
+  if (!/engine's move/.test(found.text) || !found.summary) {
+    throw new Error(`The engine's move was not recognised as the answer: ${JSON.stringify(found)}`);
+  }
+  await page.getByTestId("drill-next-btn").click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="mistake-drill"]')?.getAttribute("data-verdict") === "finished",
+    null, { timeout: 5000 },
+  );
+  const finished = await read();
+  if (!/Done: 1 of 1 found/.test(finished.text)) {
+    throw new Error(`The drill did not count the answer it was given: ${JSON.stringify(finished)}`);
+  }
+  await page.getByTestId("drill-close-btn").click();
+
+  // A move of the reader's own waits for the engine and is graded on the
+  // review's scale. Moving the chariot up one is neither the game's move nor
+  // the engine's; the real engine decides which of good and wrong it is, and
+  // either answer is a graded one.
+  await page.getByTestId("learn-from-mistakes-btn").click();
+  await page.getByTestId("mistake-drill").waitFor({ timeout: 5000 });
+  await page.waitForTimeout(800);
+  await page.getByLabel("i0, red chariot").click();
+  await page.getByLabel("i1, empty, legal move").click();
+  await page.waitForFunction(
+    () => ["good", "wrong"].includes(document.querySelector('[data-testid="mistake-drill"]')?.getAttribute("data-verdict") ?? ""),
+    null, { timeout: 30000 },
+  );
+  const graded = await read();
+  if (!/winning chance/i.test(graded.text) || !graded.summary) {
+    throw new Error(`A move of the reader's own was not graded against the review: ${JSON.stringify(graded)}`);
+  }
+  await page.getByTestId("drill-stop-btn").click();
+  if (await page.getByTestId("mistake-drill").count()) {
+    throw new Error("Stop did not end the drill");
+  }
+}
+
 async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -9893,6 +10011,7 @@ async function main() {
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
+    await assertLearnFromMistakesAsksAndGrades(page);
     await assertLastMoveArrowUsesPracticalReviewQuality(page);
     await assertRunningReviewCancelsOnLineChange(browser);
     await assertReviewMomentFiltersResetOnLoad(browser);

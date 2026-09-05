@@ -56,6 +56,7 @@ import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './u
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComment';
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
+import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
@@ -128,9 +129,12 @@ import {
   computeReviewArtifacts,
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
+  formatReviewQuality,
+  formatWinPercentLoss,
   getEvalLossForMove,
   formatReviewCount,
   getReviewSideForRecord,
+  type ReviewKeyMoment,
   makeReviewLineSignature,
   makeReviewLineSignatureFromMoves,
   remapReviewSummaryToLine,
@@ -369,6 +373,20 @@ function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: 
 
 
 type ReviewPhase = 'base' | 'revisit';
+
+/**
+ * A run through the review's key moments as questions. See
+ * `utils/mistakeDrill` for the grading; this is the sequence.
+ */
+type MistakeDrillState = {
+  moments: ReviewKeyMoment[];
+  index: number;
+  /** The move the reader played from the position before the mistake. */
+  attempt: { nodeId: string; uci: string } | null;
+  verdict: DrillVerdict | null;
+  found: number;
+  finished: boolean;
+};
 
 type StoredPreferences = {
   assistMode?: AssistMode;
@@ -1256,6 +1274,13 @@ function App() {
   }, [reviewSummary]);
 
   const applyBestMoveRef = useRef(false);
+  /**
+   * Grades a drill attempt once the live analysis has an evaluation for the
+   * position it reached. Written each render, below, where the drill state
+   * is; read from the engine's bestmove callback, which runs long after the
+   * render that created it.
+   */
+  const drillJudgeRef = useRef<(evalScore: number) => void>(() => {});
   const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'deep-pending' | 'settled'>('idle');
   const analysisDeepenTimerRef = useRef<number | null>(null);
   const activeAnalysisRequestRef = useRef('');
@@ -1600,6 +1625,7 @@ function App() {
       if (currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(normalizeEvalForSide(score, sideToMove));
       }
+      drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
 
       if (analysisTag.phase === 'deep') setDeepDiveActive(false);
 
@@ -3683,6 +3709,137 @@ function App() {
     setMobileView('board');
   }, [getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
 
+  /**
+   * Learn from your mistakes.
+   *
+   * The review says which move was a mistake and which the engine preferred,
+   * and "Try best" plays the engine's move for you. Neither asks the reader
+   * to find it, which is the part that teaches. This walks the key moments
+   * in game order, puts the position before each mistake on the board with
+   * the engine's arrows hidden, and grades whatever the reader plays on the
+   * review's own scale -- the engine's move needs no search, anything else
+   * waits for the live analysis of the position it reaches. Attempts stay in
+   * the tree as variations, which is what a study of the game wants anyway.
+   */
+  const [drill, setDrill] = useState<MistakeDrillState | null>(null);
+  const drillMoments = useMemo(
+    () => (reviewStatus === 'done' && reviewSummary ? orderDrillMoments(reviewSummary.keyMoments) : []),
+    [reviewStatus, reviewSummary]
+  );
+  const canStartDrill = engineEnabled && drillMoments.length > 0;
+  const drillMoment = drill && !drill.finished ? drill.moments[drill.index] ?? null : null;
+  const drillParentNodeId = drillMoment ? treeNodes[drillMoment.nodeId]?.parentId ?? null : null;
+  const drillAsking = Boolean(drillMoment && !drill?.verdict);
+
+  const askDrillMoment = useCallback((moment: ReviewKeyMoment) => {
+    jumpToNode(treeNodes[moment.nodeId]?.parentId ?? rootNodeId);
+  }, [jumpToNode, rootNodeId, treeNodes]);
+
+  const startMistakeDrill = useCallback(() => {
+    if (drillMoments.length === 0) return;
+    setDrill({ moments: drillMoments, index: 0, attempt: null, verdict: null, found: 0, finished: false });
+    askDrillMoment(drillMoments[0]);
+    setMobileView('board');
+  }, [askDrillMoment, drillMoments]);
+
+  const stopMistakeDrill = useCallback(() => setDrill(null), []);
+
+  const retryDrillMoment = useCallback(() => {
+    if (!drill || !drillMoment) return;
+    setDrill({ ...drill, attempt: null, verdict: null });
+    askDrillMoment(drillMoment);
+  }, [askDrillMoment, drill, drillMoment]);
+
+  const nextDrillMoment = useCallback(() => {
+    if (!drill) return;
+    const found = drill.found + (isDrillSuccess(drill.verdict) ? 1 : 0);
+    const index = drill.index + 1;
+    if (index >= drill.moments.length) {
+      setDrill({ ...drill, found, index, attempt: null, verdict: null, finished: true });
+      return;
+    }
+    setDrill({ ...drill, found, index, attempt: null, verdict: null });
+    askDrillMoment(drill.moments[index]);
+  }, [askDrillMoment, drill]);
+
+  const showDrillAnswer = useCallback(() => {
+    if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
+    // The verdict is set before the move lands, so the effect below does not
+    // read the engine's own move as the reader's attempt.
+    setDrill({ ...drill, verdict: { kind: 'shown' } });
+    clearBoardMarkers();
+    applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove);
+  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId]);
+
+  // A move played from the asked position is the attempt. The engine's move
+  // and the game's move are graded at once; anything else waits for the
+  // evaluation, which arrives through drillJudgeRef.
+  useEffect(() => {
+    if (!drill || drill.finished || drill.verdict || drill.attempt || !drillMoment || !drillParentNodeId) return;
+    if (currentNodeId === drillParentNodeId) return;
+    const node = treeNodes[currentNodeId];
+    if (!node?.record || node.parentId !== drillParentNodeId) return;
+    const uci = node.record.uci;
+    setDrill({ ...drill, attempt: { nodeId: currentNodeId, uci }, verdict: judgeDrillAttempt(drillMoment, uci, null) });
+  }, [currentNodeId, drill, drillMoment, drillParentNodeId, treeNodes]);
+
+  drillJudgeRef.current = (evalScore: number) => {
+    if (!drill || drill.finished || drill.verdict || !drill.attempt || !drillMoment) return;
+    if (currentNodeId !== drill.attempt.nodeId) return;
+    const verdict = judgeDrillAttempt(drillMoment, drill.attempt.uci, evalScore);
+    if (verdict) setDrill({ ...drill, verdict });
+  };
+
+  // The drill is a reading of the review; it goes when the review does.
+  useEffect(() => {
+    if (drill && reviewStatus !== 'done') setDrill(null);
+  }, [drill, reviewStatus]);
+
+  const drillCopy = useMemo(() => {
+    if (!drill) return null;
+    if (drill.finished) {
+      return {
+        headline: `Done: ${drill.found} of ${drill.moments.length} found.`,
+        detail: 'Run it again from the review panel whenever you like.',
+      };
+    }
+    if (!drillMoment) return null;
+    const side = drillMoment.side === 'red' ? 'Red' : 'Black';
+    const bestText = drillMoment.bestMove ? formatReviewMoveText(drillMoment.nodeId, drillMoment.bestMove) : '';
+    const attemptText = drill.attempt ? formatReviewMoveText(drillMoment.nodeId, drill.attempt.uci) : '';
+    const verdict = drill.verdict;
+    if (!verdict) {
+      return drill.attempt
+        ? { headline: 'Checking with the engine…', detail: `${side} played ${attemptText}.` }
+        : {
+            headline: `${side} to move. Find a better move than the game's.`,
+            detail: `Ply ${drillMoment.ply}, where the review found a ${formatReviewQuality(drillMoment.quality).toLowerCase()}.`,
+          };
+    }
+    switch (verdict.kind) {
+      case 'best':
+        return { headline: `${attemptText} is the engine's move.`, detail: '' };
+      case 'good':
+        return {
+          headline: `${attemptText} is good enough.`,
+          detail: `Winning chance ${formatWinPercentLoss(verdict.winPercentLoss)}; the engine preferred ${bestText}.`,
+        };
+      case 'wrong':
+        return {
+          headline: `Not ${attemptText}.`,
+          detail: `${formatReviewQuality(verdict.quality)} on the review's scale, winning chance ${formatWinPercentLoss(verdict.winPercentLoss)}. Try again, or see the answer.`,
+        };
+      case 'repeat':
+        return { headline: `${attemptText} is the move from the game.`, detail: 'Look for something better.' };
+      case 'shown':
+        return { headline: `The engine's move was ${bestText}.`, detail: '' };
+    }
+  }, [drill, drillMoment, formatReviewMoveText]);
+  const drillVerdictKind = drill
+    ? drill.finished ? 'finished' : drill.verdict?.kind ?? (drill.attempt ? 'pending' : 'asking')
+    : null;
+  const drillIsLast = Boolean(drill && drill.index >= drill.moments.length - 1);
+
   const handleApplyEditedPosition = useCallback((fen: string) => {
     setShowBoardEditor(false);
     // The editor only offers Done for a legal position, so this succeeds;
@@ -4261,6 +4418,16 @@ function App() {
       run: runHint,
     },
     {
+      id: 'learn-from-mistakes',
+      label: 'Learn from your mistakes',
+      hint: canStartDrill
+        ? `${drillMoments.length} ${drillMoments.length === 1 ? 'moment' : 'moments'} to find a better move for`
+        : reviewStatus === 'done' ? 'The review found nothing to learn from' : 'Run a review first',
+      keywords: ['drill', 'quiz', 'practice', 'blunder', 'train', 'puzzle', 'find'],
+      disabled: !canStartDrill,
+      run: () => { setAnalysisTab('review'); startMistakeDrill(); },
+    },
+    {
       id: 'play-from-here',
       label: 'Play from this position',
       hint: canPlayFromHere ? 'You take the side to move' : 'Play a move or set up a position first',
@@ -4323,7 +4490,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, canCopyRecord, canDeepDive, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, runHint, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, canCopyRecord, canDeepDive, canStartDrill, drillMoments.length, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -4700,6 +4867,9 @@ function App() {
       }
     }
 
+    // A question with the answer drawn on the board is not a question.
+    if (drillAsking) return [...result, ...userArrows];
+
     const hasEngineMoveArrows = engineEnabled && Boolean(currentAnalysisPvLines.some((pv) => pv.moves[0]));
     if (!hasEngineMoveArrows && openingCandidates.length > 0) {
       const bookArrowLimit = assistMode === 'pro' ? 3 : 2;
@@ -4747,7 +4917,7 @@ function App() {
     }
 
     return [...result, ...userArrows];
-  }, [assistMode, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  }, [assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
@@ -6135,6 +6305,46 @@ function App() {
                 />
               </div>
 
+              {drill && drillCopy && drillVerdictKind ? (
+                <div
+                  className={`drill-banner drill-banner-${drillVerdictKind}`}
+                  role="status"
+                  data-testid="mistake-drill"
+                  data-verdict={drillVerdictKind}
+                >
+                  <div className="drill-banner-copy">
+                    <span className="drill-banner-kicker">
+                      Learn from mistakes · {Math.min(drill.index + 1, drill.moments.length)} / {drill.moments.length}
+                    </span>
+                    <strong>{drillCopy.headline}</strong>
+                    {drillCopy.detail ? <em>{drillCopy.detail}</em> : null}
+                  </div>
+                  <div className="drill-banner-actions">
+                    {drillVerdictKind === 'finished' ? (
+                      <button type="button" className="chip-btn chip-btn-primary" onClick={stopMistakeDrill} data-testid="drill-close-btn">Close</button>
+                    ) : (
+                      <>
+                        {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat') ? (
+                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
+                        ) : null}
+                        {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat') ? (
+                          <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={`chip-btn ${drillVerdictKind === 'best' || drillVerdictKind === 'good' || drillVerdictKind === 'shown' ? 'chip-btn-primary' : ''}`}
+                          onClick={nextDrillMoment}
+                          data-testid="drill-next-btn"
+                        >
+                          {drillVerdictKind === 'asking' || drillVerdictKind === 'pending' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
+                        </button>
+                        <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="position-dock">
                 <div className="position-stat position-stat-turn">
                   <span>Turn</span>
@@ -6521,6 +6731,8 @@ function App() {
                   onNavigateNode={jumpToNode}
                   onPlayBestMove={handlePlayReviewBestMove}
                   onPracticeMoment={handlePracticeReviewMoment}
+                  onStartDrill={startMistakeDrill}
+                  drillAvailable={canStartDrill}
                   formatMoveText={formatReviewMoveText}
                   formatLineText={formatReviewLineText}
                 />

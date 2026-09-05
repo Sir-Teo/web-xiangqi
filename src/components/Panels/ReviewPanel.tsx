@@ -41,6 +41,9 @@ type Props = {
     onNavigateNode: (nodeId: string) => void;
     onPlayBestMove?: (nodeId: string, bestMove: string) => void;
     onPracticeMoment?: (nodeId: string) => void;
+    /** Walk the key moments as questions; see `utils/mistakeDrill`. */
+    onStartDrill?: () => void;
+    drillAvailable?: boolean;
     /**
      * Writes one move of the reviewed line in the notation the reader chose.
      * A key moment carries move ids, not boards, and WXF and Chinese both need
@@ -72,6 +75,8 @@ export const ReviewPanel = memo(function ReviewPanel({
     onNavigateNode,
     onPlayBestMove,
     onPracticeMoment,
+    onStartDrill,
+    drillAvailable = false,
     formatMoveText = (_nodeId, uci) => formatUciMove(uci),
     formatLineText = (_nodeId, moves) => moves.map((uci) => formatUciMove(uci)).join(' '),
 }: Props) {
@@ -135,9 +140,23 @@ export const ReviewPanel = memo(function ReviewPanel({
                         </button>
                     ) : status === 'done' ? (
                         <>
+                            {onStartDrill ? (
+                                <button
+                                    type="button"
+                                    className="chip-btn chip-btn-primary"
+                                    onClick={onStartDrill}
+                                    disabled={!drillAvailable}
+                                    title={drillAvailable
+                                        ? 'Replay each key moment as a question: find a better move than the one played'
+                                        : 'Nothing to learn from: the review found no key moment with a better move'}
+                                    data-testid="learn-from-mistakes-btn"
+                                >
+                                    Learn from mistakes
+                                </button>
+                            ) : null}
                             <button
                                 type="button"
-                                className="chip-btn chip-btn-primary"
+                                className="chip-btn"
                                 onClick={onStart}
                                 disabled={!canStart}
                                 title={startTitle}
