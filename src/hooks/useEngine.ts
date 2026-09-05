@@ -464,6 +464,15 @@ export function useEngine(options: EngineInitOptions = {}) {
         sendCommand('stop');
     }, [sendCommand]);
 
+    /**
+     * The tag of the search now running, or null when nothing is. A ref
+     * rather than state because the caller that needs it is an effect
+     * deciding whether the running search is its own to stop; App.tsx used
+     * to answer that question with "is anything searching", and stopped the
+     * review's searches two milliseconds after each one started.
+     */
+    const getActiveSearchTag = useCallback(() => activeSearchTagRef.current, []);
+
     const clearQueuedSearch = useCallback(() => {
         pendingSearchRef.current = null;
         setIsSearchQueued(false);
@@ -1013,6 +1022,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         variant,
         startSearch,
         stopSearch,
+        getActiveSearchTag,
         queueSearch,
         clearQueuedSearch,
         clearPvLines,

@@ -1184,6 +1184,48 @@ The check asserts the search got *deeper* across the hide, which is the only
 reading that separates "kept running" from "restarted on return". It reads
 `D20/S44` and not `D22/1.5s` -- the second is the tier's budget and never moves.
 
+## The review was being stopped two milliseconds in
+
+Every figure in this document about how fast a review runs was measuring a
+bug. The live-analysis effect re-runs whenever `isSearching` changes, and when
+a review is active it takes its "this is not mine to run" branch, which ended
+with `if (isSearching && !applyBestMoveRef.current) stopSearch()`. A review
+search starting is exactly an `isSearching` change with a review active, so
+that line stopped every review search the moment it began.
+
+Measured with the real engine on the high tier, a ten-ply line, the engine
+wrapped to log every command with a timestamp:
+
+| | before | after |
+| --- | --- | --- |
+| `stop` sent after `go` | 2ms | never |
+| depth reached, per search | 5 to 10 | 16, every one (the ceiling) |
+| eleven review searches | 293ms | 4.0s |
+
+Four seconds for eleven searches is 350ms each at 3.7M nodes per second: the
+depth ceiling binds well inside the 1.5s budget on this machine, as the design
+intends. A phone reaching 400k nodes per second will spend the budget instead,
+which is the other half of the same design and is what the review's tiered
+policy was written for.
+
+The panel said `D16/1.5s` throughout, because the panel reports the budget
+that was *asked for*. A shallow review still separates engine self-play from
+random moves -- the calibration check passed the whole time -- which is why
+nothing noticed; "a 30-ply review finishes in 1.6s" reads as fast rather than
+as impossible.
+
+The same line stopped a **hint** during a game: the workspace switch puts the
+effect in the same branch, and a hint search is not the AI's, so
+`applyBestMoveRef` did not protect it. `go depth 14 movetime 900` was answered
+in a few milliseconds.
+
+The effect now asks the engine hook whose search is running --
+`getActiveSearchTag` -- and stops only a search that carries the analysis tag.
+The gate that checks a running review cancels on a line change used to pass
+by accident, because the stopped review *finished* and the finished review
+was then cleared by the old line-signature rule; it now requires that no
+`stop` follows the review's `go` before the line changes.
+
 ## Depth is a ceiling; time is the budget
 
 Every live search carries both, and stops at whichever comes first. They used to

@@ -1464,6 +1464,7 @@ function App() {
     isSearchQueued,
     variant: engineVariant,
     stopSearch,
+    getActiveSearchTag,
     queueSearch,
     clearQueuedSearch,
     clearPvLines,
@@ -2056,7 +2057,16 @@ function App() {
       clearQueuedSearch();
       clearPvLines();
       clearWdl();
-      if (isSearching && !applyBestMoveRef.current) {
+      // Only a search this effect started is this effect's to stop. This
+      // used to read `isSearching && !applyBestMoveRef.current`, which is
+      // true of a *review* search the moment it starts -- `isSearching`
+      // flipping is what re-runs the effect, and the review being active is
+      // what lands it in this branch -- so every review search was stopped
+      // two milliseconds after `go`. Measured with the real engine: eleven
+      // review searches in 293ms, reaching depth 5 to 10 against the D16 and
+      // 1.5s the panel claimed. A hint during a game had the same stop, for
+      // the same reason with the workspace switch in place of the review.
+      if (isSearching && parseAnalysisTag(getActiveSearchTag())) {
         stopSearch();
       }
       return;
@@ -2096,6 +2106,7 @@ function App() {
     clearWdl,
     currentPositionCommand,
     engineEnabled,
+    getActiveSearchTag,
     isPageVisible,
     isAiTurn,
     isReady,

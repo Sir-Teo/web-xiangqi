@@ -6514,8 +6514,25 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
     // cannot tell them apart by string any more. Reset it here and everything
     // counted from now on belongs to the review.
     await page.evaluate(() => { window.__reviewPositionCounts = {}; });
+    await page.evaluate(() => { window.__engineCommands.length = 0; });
     await page.getByTestId("start-review-btn").click();
     await page.getByTestId("cancel-review-bottom-btn").waitFor({ timeout: 5000 });
+    // The review's own search has to be left running. It was not: the
+    // analysis effect re-runs when `isSearching` flips, lands in its "not
+    // mine to run" branch because a review is active, and used to stop
+    // whatever was searching -- the review's search, two milliseconds in.
+    // This engine never answers `go`, so a review that is genuinely running
+    // has sent one `go` after its last `stop` and is waiting on it; a review
+    // that was stopped shows `stop` after `go`, and would have *finished*
+    // here rather than been cancelled below, which is what this check used
+    // to pass on.
+    await page.waitForTimeout(400);
+    const reviewCommands = await page.evaluate(() => window.__engineCommands.slice());
+    const lastGo = reviewCommands.lastIndexOf(reviewCommands.filter((command) => /^go\b/.test(command)).pop() ?? "");
+    const stopAfterGo = reviewCommands.slice(lastGo + 1).some((command) => command === "stop");
+    if (lastGo === -1 || stopAfterGo) {
+      throw new Error(`The review's search was stopped by something other than the line changing: ${JSON.stringify(reviewCommands)}`);
+    }
 
     await page.getByLabel("h9, black horse").click();
     await page.getByLabel("g7, empty, legal move").click();
