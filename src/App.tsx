@@ -4322,6 +4322,31 @@ function App() {
   }, [clearBoardMarkers, deleteUndo, dismissDeleteUndo, handleCancelReview, restoreTreeSnapshot, reviewStatus]);
   const canDeleteCurrentMove = currentNodeId !== rootNodeId && !isAiTurn;
 
+  /**
+   * Take back, in a game against the engine.
+   *
+   * The move you regret and the reply it earned, removed together so the
+   * board is yours to move on again -- or only your move, when the engine
+   * has not answered it yet, in which case its search is cancelled first.
+   * Every board a beginner has played on has this; here the only way back
+   * was to step through the moves, which leaves them in the game and hands
+   * the engine the turn. It rides the same deletion as the tree's cross,
+   * undo toast included.
+   */
+  const takeBackPlies = isAiTurn ? 1 : 2;
+  const canTakeBack = aiPlayActive && !gameResult && currentMoveIndex - takeBackPlies >= -1;
+  const handleTakeBack = useCallback(() => {
+    if (!canTakeBack) return;
+    const cutNodeId = activeLineNodeIds[currentMoveIndex - takeBackPlies + 1];
+    if (!cutNodeId) return;
+    applyBestMoveRef.current = false;
+    clearQueuedSearch();
+    stopSearch();
+    stepPendingRef.current = false;
+    setAiMoveError(null);
+    handleDeleteNode(cutNodeId);
+  }, [activeLineNodeIds, canTakeBack, clearQueuedSearch, currentMoveIndex, handleDeleteNode, stopSearch, takeBackPlies]);
+
   const paletteCommands = useMemo<Command[]>(() => [
     { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { setGameResult(null); resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
@@ -4458,6 +4483,16 @@ function App() {
       run: () => { setAnalysisTab('review'); startMistakeDrill(); },
     },
     {
+      id: 'take-back',
+      label: 'Take back',
+      hint: aiPlayActive
+        ? (canTakeBack ? (takeBackPlies === 1 ? 'Your last move, before the engine answers it' : 'Your last move and the engine\'s reply') : 'Nothing to take back')
+        : 'Only while playing against the engine',
+      keywords: ['undo', 'retract', 'oops', 'back'],
+      disabled: !canTakeBack,
+      run: handleTakeBack,
+    },
+    {
       id: 'play-from-here',
       label: 'Play from this position',
       hint: canPlayFromHere ? 'You take the side to move' : 'Play a move or set up a position first',
@@ -4520,7 +4555,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, drillMoments.length, handlePlayPvLine, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -6177,6 +6212,20 @@ function App() {
                     <span>Play from here</span>
                   </button>
                 ) : null}
+                {aiPlayActive ? (
+                  <button
+                    className="mobile-action-menu-btn"
+                    type="button"
+                    onClick={() => { setShowMobileBoardActionMenu(false); handleTakeBack(); }}
+                    disabled={!canTakeBack}
+                    role="menuitem"
+                    title={canTakeBack ? 'Take back your last move' : 'Nothing to take back'}
+                    data-testid="mobile-take-back-btn"
+                  >
+                    <IconSkipBack />
+                    <span>Take back</span>
+                  </button>
+                ) : null}
                 {/* Copying is the useful half on a phone: an exported file lands
                     in the Files app, while the clipboard is what a game gets
                     pasted into. Desktop has had both; here there was only the
@@ -7231,6 +7280,20 @@ function App() {
                   data-testid="hint-btn"
                 >
                   <IconSpark aria-hidden="true" focusable="false" /> Hint
+                </button>
+              )}
+              {aiPlayActive && (
+                <button
+                  type="button"
+                  className="gc-btn"
+                  onClick={handleTakeBack}
+                  disabled={!canTakeBack}
+                  title={canTakeBack
+                    ? (takeBackPlies === 1 ? 'Take back your last move before the engine answers it' : 'Take back your last move and the engine\'s reply')
+                    : 'Nothing to take back'}
+                  data-testid="take-back-btn"
+                >
+                  <IconSkipBack aria-hidden="true" focusable="false" /> Take back
                 </button>
               )}
               {engineEnabled && moveHistory.length > 0 && reviewStatus === 'idle' && (

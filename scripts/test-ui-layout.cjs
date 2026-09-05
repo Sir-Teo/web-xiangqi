@@ -2956,6 +2956,53 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
 }
 
+/**
+ * Take back, against the real engine: the human plays, the engine answers,
+ * and one press removes both so it is the human's move again from the
+ * position before -- and the engine does not answer a move that is no
+ * longer there. With the engine still thinking, only the human's move goes.
+ */
+async function assertTakeBackRemovesTheExchange(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /You play Red/i }).click();
+  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  await page.waitForFunction(() => document.body.innerText.includes("Engine ready"), null, { timeout: 90000 });
+
+  const meta = () => page.evaluate(() => document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "");
+  const takeBack = page.getByTestId("take-back-btn");
+  if (!(await takeBack.isDisabled())) throw new Error("Take back was offered before any move was played");
+
+  await page.getByLabel("h2, red cannon").click();
+  await page.getByLabel("e2, empty, legal move").click();
+  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "2 / 2", null, { timeout: 30000 });
+  await takeBack.click();
+  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "No moves", null, { timeout: 5000 });
+  // The engine must not answer a move that is no longer on the board.
+  await page.waitForTimeout(2500);
+  const after = await page.evaluate(() => ({
+    meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
+    toast: document.querySelector('[data-testid="delete-undo-toast"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    aiStatus: document.querySelector(".board-ai-status")?.textContent?.trim() ?? "",
+  }));
+  if (after.meta !== "No moves" || !after.fen.startsWith("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w")) {
+    throw new Error(`Take back did not remove the move and the reply: ${JSON.stringify(after)}`);
+  }
+  if (!/Removed 2 moves/.test(after.toast)) {
+    throw new Error(`Take back should offer to undo both plies: ${JSON.stringify(after)}`);
+  }
+  if (await meta() !== "No moves") {
+    throw new Error(`The engine moved after the take back: ${await meta()}`);
+  }
+}
+
 async function assertAiNewGameSwitchesToPlayWorkspace(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10038,6 +10085,7 @@ async function main() {
     await assertIllegalMoveShowsRuleHint(page);
     await assertAiPlayModeShowsEngineStatus(page);
     await assertAiNewGameSwitchesToPlayWorkspace(page);
+    await assertTakeBackRemovesTheExchange(page);
     await assertBeginnerAiUsesCandidatePv(browser);
     await assertAnalysisWorkspaceDoesNotAutoPlayAi(browser);
     await assertEngineLoaderFailureShowsNotice(browser);
