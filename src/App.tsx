@@ -148,6 +148,7 @@ import {
 import {
   AI_STRENGTH_LABELS,
   WORKER_SAFE_MAX_DEPTH,
+  buildAiGoCommand,
   chooseAiMoveFromPv,
   describeAiStrength,
   getAiSearchConfig,
@@ -2286,14 +2287,14 @@ function App() {
       applyBestMoveRef.current = true;
       queueSearch(
         currentPositionCommand,
-        `go depth ${aiSearchDepth}`,
+        buildAiGoCommand(aiSearchConfig),
         0,
         makeAiTag(currentPositionCommand, aiSearchDepth, aiStrength),
       );
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSearchConfig.depth, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
+  }, [aiSearchConfig, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
@@ -5529,7 +5530,7 @@ function App() {
               <div className="new-game-strength-section">
                 <p className="new-game-strength-label">AI Difficulty</p>
                 <div className="new-game-strength-pills">
-                  {([1, 2, 3, 4, 5] as AiStrength[]).map((lvl) => (
+                  {([1, 2, 3, 4, 5, 6] as AiStrength[]).map((lvl) => (
                     <button
                       key={lvl}
                       type="button"

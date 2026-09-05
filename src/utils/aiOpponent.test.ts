@@ -6,12 +6,17 @@ import {
     type AiStrength,
     WORKER_SAFE_MAX_DEPTH,
     chooseAiMoveFromPv,
+    FULL_STRENGTH_DEPTH,
+    FULL_STRENGTH_MOVE_TIME_MS,
+    buildAiGoCommand,
     describeAiStrength,
     getAiSearchConfig,
     isAiStrength,
 } from './aiOpponent';
 
-const STRENGTHS: AiStrength[] = [1, 2, 3, 4, 5];
+const STRENGTHS: AiStrength[] = [1, 2, 3, 4, 5, 6];
+/** The rungs held under the worker-safe depth; Full strength is budgeted by time instead. */
+const LADDER: AiStrength[] = [1, 2, 3, 4, 5];
 
 function line(move: string, score: number, multipv: number, searchTag: string | null = 'tag'): AiCandidateLine {
     return { moves: [move], score, multipv, searchTag };
@@ -29,9 +34,9 @@ function choose(strength: AiStrength, pvLines: AiCandidateLine[], random = () =>
 }
 
 describe('strength settings', () => {
-    it('recognises only the five strengths', () => {
+    it('recognises only the six strengths', () => {
         for (const value of STRENGTHS) expect(isAiStrength(value)).toBe(true);
-        for (const value of [0, 6, '3', null, undefined, 2.5]) expect(isAiStrength(value)).toBe(false);
+        for (const value of [0, 7, '3', null, undefined, 2.5]) expect(isAiStrength(value)).toBe(false);
     });
 
     it('gets harder as the strength rises', () => {
@@ -42,14 +47,14 @@ describe('strength settings', () => {
     });
 
     it('never asks for more depth than the worker can take', () => {
-        for (const strength of STRENGTHS) {
+        for (const strength of LADDER) {
             expect(getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH).depth)
                 .toBeLessThanOrEqual(WORKER_SAFE_MAX_DEPTH);
         }
     });
 
     it('respects a device that can only manage a shallow search', () => {
-        for (const strength of STRENGTHS) {
+        for (const strength of LADDER) {
             const config = getAiSearchConfig(strength, 3);
             expect(config.depth).toBeLessThanOrEqual(3);
             expect(config.depth).toBeGreaterThanOrEqual(1);
@@ -74,9 +79,33 @@ describe('strength settings', () => {
     });
 });
 
+describe('full strength', () => {
+    it('is budgeted by time, with the depth ceiling past what the time reaches', () => {
+        const config = getAiSearchConfig(6, WORKER_SAFE_MAX_DEPTH);
+        expect(config.depth).toBe(FULL_STRENGTH_DEPTH);
+        expect(config.depth).toBeGreaterThan(WORKER_SAFE_MAX_DEPTH);
+        expect(config.moveTimeMs).toBe(FULL_STRENGTH_MOVE_TIME_MS);
+        expect(config.multiPv).toBe(1);
+        expect(buildAiGoCommand(config)).toBe(`go depth ${FULL_STRENGTH_DEPTH} movetime ${FULL_STRENGTH_MOVE_TIME_MS}`);
+    });
+
+    it('is the only rung that sets a time', () => {
+        for (const strength of LADDER) {
+            const config = getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH);
+            expect(config.moveTimeMs).toBeUndefined();
+            expect(buildAiGoCommand(config)).toBe(`go depth ${config.depth}`);
+        }
+    });
+
+    it('says how long a move takes, which is what the player will notice', () => {
+        expect(describeAiStrength(6)).toContain('4s a move');
+        expect(describeAiStrength(6)).toContain('best move only');
+    });
+});
+
 describe('the strongest settings play the best move', () => {
     it('takes the engine best move without considering alternatives', () => {
-        for (const strength of [4, 5] as AiStrength[]) {
+        for (const strength of [4, 5, 6] as AiStrength[]) {
             const choice = choose(strength, [line('b0c2', 120, 1), line('b2e2', 90, 2)], () => 0.99);
             expect(choice.move).toBe('h2e2');
             expect(choice.source).toBe('bestmove');
@@ -233,7 +262,7 @@ describe('the promise the strength label makes', () => {
         { score: 0, moves: ['e3e4'], multipv: 5, searchTag: null },
     ];
 
-    const STRENGTHS: AiStrength[] = [1, 2, 3, 4, 5];
+    const STRENGTHS: AiStrength[] = [1, 2, 3, 4, 5, 6];
 
     it('plays only the best move at every level that says so, however tempting the rest', () => {
         for (const strength of STRENGTHS) {

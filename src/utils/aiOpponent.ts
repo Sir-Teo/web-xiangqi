@@ -1,4 +1,4 @@
-export type AiStrength = 1 | 2 | 3 | 4 | 5;
+export type AiStrength = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type AiCandidateLine = {
   score: number;
@@ -28,12 +28,27 @@ export type AiMoveChoice = {
  */
 export const WORKER_SAFE_MAX_DEPTH = 12;
 
+/**
+ * The one rung that is not held under `WORKER_SAFE_MAX_DEPTH`: the engine as
+ * it is, for the player who wants to know what it would do to them.
+ *
+ * Master at depth 12 is a strong club player and the right top for a ladder
+ * that beginners climb, but a strong player asks a different question of an
+ * engine opponent, and depth 12 answers it wrongly. This rung is budgeted
+ * the way live analysis is -- a depth ceiling well past what the time will
+ * reach, and the time as the binding limit -- so it takes the same few
+ * seconds a move on every machine, deeper where the machine is faster.
+ */
+export const FULL_STRENGTH_DEPTH = 30;
+export const FULL_STRENGTH_MOVE_TIME_MS = 4000;
+
 export const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
   1: 'Beginner',
   2: 'Easy',
   3: 'Medium',
   4: 'Hard',
   5: 'Master',
+  6: 'Full strength',
 };
 
 export const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
@@ -42,6 +57,7 @@ export const AI_DEPTH_LIMIT: Record<AiStrength, number> = {
   3: 6,
   4: 9,
   5: WORKER_SAFE_MAX_DEPTH,
+  6: FULL_STRENGTH_DEPTH,
 };
 
 const AI_MULTI_PV_LIMIT: Record<AiStrength, number> = {
@@ -50,6 +66,7 @@ const AI_MULTI_PV_LIMIT: Record<AiStrength, number> = {
   3: 3,
   4: 1,
   5: 1,
+  6: 1,
 };
 
 const AI_MAX_SCORE_DROP: Record<AiStrength, number> = {
@@ -58,6 +75,7 @@ const AI_MAX_SCORE_DROP: Record<AiStrength, number> = {
   3: 140,
   4: 0,
   5: 0,
+  6: 0,
 };
 
 const AI_CANDIDATE_WEIGHTS: Record<AiStrength, number[]> = {
@@ -66,23 +84,45 @@ const AI_CANDIDATE_WEIGHTS: Record<AiStrength, number[]> = {
   3: [0.84, 0.13, 0.03, 0, 0],
   4: [1, 0, 0, 0, 0],
   5: [1, 0, 0, 0, 0],
+  6: [1, 0, 0, 0, 0],
 };
 
 export function isAiStrength(value: unknown): value is AiStrength {
-  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5 || value === 6;
 }
 
-export function getAiSearchConfig(strength: AiStrength, safeDepth: number) {
+export interface AiSearchConfig {
+  depth: number;
+  multiPv: number;
+  /** Set only where time, not depth, is meant to be the limit. */
+  moveTimeMs?: number;
+}
+
+export function getAiSearchConfig(strength: AiStrength, safeDepth: number): AiSearchConfig {
+  if (strength === 6) {
+    return { depth: FULL_STRENGTH_DEPTH, multiPv: 1, moveTimeMs: FULL_STRENGTH_MOVE_TIME_MS };
+  }
   return {
     depth: Math.max(1, Math.min(safeDepth, AI_DEPTH_LIMIT[strength])),
     multiPv: AI_MULTI_PV_LIMIT[strength],
   };
 }
 
+/** The UCI `go` for a strength: a depth, and a time where the rung sets one. */
+export function buildAiGoCommand(config: AiSearchConfig): string {
+  const time = typeof config.moveTimeMs === 'number' && config.moveTimeMs > 0
+    ? ` movetime ${Math.trunc(config.moveTimeMs)}`
+    : '';
+  return `go depth ${config.depth}${time}`;
+}
+
 export function describeAiStrength(strength: AiStrength) {
   const config = getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH);
   const candidates = config.multiPv === 1 ? 'best move only' : `up to ${config.multiPv} candidate moves`;
-  return `${AI_STRENGTH_LABELS[strength]}: depth ${config.depth}, ${candidates}`;
+  const budget = typeof config.moveTimeMs === 'number'
+    ? `up to ${Math.round(config.moveTimeMs / 1000)}s a move, depth ${config.depth} at most`
+    : `depth ${config.depth}`;
+  return `${AI_STRENGTH_LABELS[strength]}: ${budget}, ${candidates}`;
 }
 
 function isUciMove(move: string) {
