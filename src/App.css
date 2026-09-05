@@ -1533,11 +1533,17 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Game Controls (pause + mode-switch pills)
    ═══════════════════════════════════════════════════ */
+/* Wraps, because a finished review adds nine chips to this row and at 1280px
+   the row measured 1470px: the mode and opening badges at its end were
+   clipped off the right of the screen, with nothing to say they were there.
+   The bar already wraps the scrubber onto a second row at that width, so a
+   third costs one more line only when the review is on screen. */
 .game-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .review-progress {

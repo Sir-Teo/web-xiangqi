@@ -5468,6 +5468,76 @@ async function assertPanelTabAccessibility(page) {
   }
 }
 
+/**
+ * A finished review adds nine chips to the bottom command bar. At 1280px the
+ * row measured 1470px and did not wrap, so the mode badge and the opening
+ * badge at its end were clipped off the right of the screen. Loads a reviewed
+ * game from the library, which is the cheap way to put the summary on screen,
+ * and requires every chip in the row to end inside the viewport.
+ */
+async function assertTheBottomBarKeepsItsBadgesAfterAReview(page) {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const moves = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9"];
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "qa-bottom-bar-review",
+      savedAt: 1710000008000,
+      gameMode: "PvP",
+      moves,
+      result: "ongoing",
+      label: "Bottom bar review QA",
+      opening: "Central Cannon vs Screen Horse — Ranked Chariot",
+      review: {
+        summary: {
+          totalMoves: moves.length,
+          accuracy: 98,
+          averageCentipawnLoss: 4,
+          redAccuracy: 98,
+          blackAccuracy: 99,
+          bestCount: 6,
+          goodCount: 0,
+          inaccuracyCount: 0,
+          mistakeCount: 0,
+          blunderCount: 0,
+          reviewedAt: 1710000008000,
+          lineSignature: moves.join(" "),
+          keyMoments: [],
+        },
+        annotations: moves.map((_, moveIndex) => ({
+          moveIndex, evalScore: 20, quality: "best", swing: 0, winPercentLoss: 0, reviewNote: "Engine-approved move.",
+        })),
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-qa-bottom-bar-review").click();
+  await page.getByTestId("bottom-review-summary").waitFor({ timeout: 5000 });
+
+  const state = await page.evaluate(() => {
+    const within = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth + 0.5;
+    };
+    const chips = [...document.querySelectorAll(".game-controls > *")];
+    return {
+      chips: chips.length,
+      clipped: chips.filter((chip) => !within(chip)).map((chip) => chip.textContent?.replace(/\s+/g, " ").trim().slice(0, 40)),
+      modeBadge: document.querySelector(".game-mode-badge")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      openingBadgeShown: Boolean(document.querySelector(".opening-badge")) && within(document.querySelector(".opening-badge")),
+      overflowX: document.body.scrollWidth - document.body.clientWidth,
+    };
+  });
+  if (state.clipped.length > 0 || !state.openingBadgeShown || state.modeBadge !== "Local board" || state.overflowX > 2) {
+    throw new Error(`The bottom bar clipped its own chips after a review: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertLibraryLoadsAnalysisWorkspace(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -9786,6 +9856,7 @@ async function main() {
     await assertDisabledControlsLookInactive(page);
     await assertPanelTabAccessibility(page);
     await assertLibraryLoadsAnalysisWorkspace(page);
+    await assertTheBottomBarKeepsItsBadgesAfterAReview(page);
     await assertNewGameDialogFocusTrap(page);
     await assertMobileNewGameStartButtonVisible(page);
     await assertBlackToMoveTreeNumbering(page);
