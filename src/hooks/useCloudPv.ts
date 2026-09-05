@@ -1,0 +1,75 @@
+import { useEffect, useState } from 'react';
+import { buildCloudPvUrl, parseCloudPvResponse, type CloudPvReading } from '../utils/cloudPv';
+
+export type CloudPvStatus = 'off' | 'loading' | 'ok' | 'unknown' | 'error';
+
+export interface CloudPvState {
+    status: CloudPvStatus;
+    line: CloudPvReading | null;
+    /** The position the reading is for, so a stale one is never drawn. */
+    fen: string;
+}
+
+const CLOUD_PV_DEBOUNCE_MS = 350;
+const CLOUD_PV_TIMEOUT_MS = 8000;
+const CACHE_LIMIT = 200;
+
+const cache = new Map<string, CloudPvReading | null>();
+
+/**
+ * The cloud book's line for `fen`, under the same switch as the book itself:
+ * `useCloudBook` sends the position, and this sends the same position to
+ * the same service, so a reader who has turned the book on has already
+ * agreed to it. Cached per FEN for the life of the page; a failed request is
+ * not cached, so it is retried on the next visit.
+ */
+export function useCloudPv(fen: string, enabled: boolean): CloudPvState {
+    const [state, setState] = useState<CloudPvState>({ status: 'off', line: null, fen });
+
+    useEffect(() => {
+        if (!enabled) {
+            setState({ status: 'off', line: null, fen });
+            return;
+        }
+        if (cache.has(fen)) {
+            const cached = cache.get(fen) ?? null;
+            setState(cached ? { status: 'ok', line: cached, fen } : { status: 'unknown', line: null, fen });
+            return;
+        }
+
+        setState({ status: 'loading', line: null, fen });
+        const controller = new AbortController();
+        let timeout: number | null = null;
+        const timer = window.setTimeout(async () => {
+            timeout = window.setTimeout(() => controller.abort(), CLOUD_PV_TIMEOUT_MS);
+            try {
+                const response = await fetch(buildCloudPvUrl(fen), { signal: controller.signal, cache: 'no-store' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = parseCloudPvResponse(await response.text());
+                if (result.status === 'unreadable') throw new Error('unreadable reply');
+                const line = result.status === 'ok' ? result.line : null;
+                cache.set(fen, line);
+                while (cache.size > CACHE_LIMIT) {
+                    const oldest = cache.keys().next().value;
+                    if (oldest === undefined) break;
+                    cache.delete(oldest);
+                }
+                if (controller.signal.aborted) return;
+                setState(line ? { status: 'ok', line, fen } : { status: 'unknown', line: null, fen });
+            } catch {
+                if (controller.signal.aborted) return;
+                setState({ status: 'error', line: null, fen });
+            } finally {
+                if (timeout !== null) window.clearTimeout(timeout);
+            }
+        }, CLOUD_PV_DEBOUNCE_MS);
+
+        return () => {
+            window.clearTimeout(timer);
+            if (timeout !== null) window.clearTimeout(timeout);
+            controller.abort();
+        };
+    }, [enabled, fen]);
+
+    return state;
+}

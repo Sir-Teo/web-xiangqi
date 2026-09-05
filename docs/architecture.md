@@ -42,6 +42,12 @@ plain cross-origin GET from a browser page; that was checked from this app
 before the hook was written, and the recorded reply for the start position is
 the parser's test fixture.
 
+`src/hooks/useCloudPv.ts` asks the same service for `querypv` -- the line the
+database would play on, with its score and depth -- under the same switch,
+because it sends the same thing. `utils/cloudPv.ts` parses the
+`score:1,depth:62,pv:c3c4|b7c7|...` reply, and its test replays the recorded
+line through the rules engine so a bar mistaken for a space cannot pass.
+
 ## Runtime Overview
 
 ```mermaid

@@ -6522,6 +6522,45 @@ summary:active {
   color: #93c5fd;
 }
 
+/* The database's own line, under the moves it ranks. */
+.cloud-pv {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.cloud-pv-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cloud-pv-head em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+}
+
+.cloud-pv-moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.35rem;
+  align-items: baseline;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
 .cloud-book-card .cloud-book-toggle {
   margin-top: 0.4rem;
   align-self: flex-start;

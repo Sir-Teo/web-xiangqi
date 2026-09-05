@@ -63,6 +63,7 @@ import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
 import { useCloudRule } from './hooks/useCloudRule';
+import { useCloudPv } from './hooks/useCloudPv';
 import { CLOUD_BOOK_SITE_NAME, formatCloudBookScore } from './utils/cloudBook';
 import {
   NOTATION_STYLES,
@@ -3034,6 +3035,16 @@ function App() {
     ? cloudBookReading
     : { status: 'loading' as const, moves: [], fen: currentFen };
   const cloudBookMoveLimit = assistMode === 'pro' ? 6 : 4;
+  // The database's own line, to a depth no browser reaches. Same switch,
+  // same position sent, same rule about a stale answer.
+  const cloudPvReading = useCloudPv(currentFen, cloudBookEnabled);
+  const cloudPv = cloudPvReading.fen === currentFen || cloudPvReading.status === 'off'
+    ? cloudPvReading
+    : { status: 'loading' as const, line: null, fen: currentFen };
+  const cloudPvTokens = useMemo(
+    () => (cloudPv.line ? formatLineTokensInStyle(board, cloudPv.line.moves, notationStyle, 8) : null),
+    [board, cloudPv.line, notationStyle]
+  );
 
   // Game library
   const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
@@ -5975,6 +5986,36 @@ function App() {
                             : 'Not in the cloud book.'}
                       </p>
                     )}
+                    {cloudBookEnabled && cloudPv.status === 'ok' && cloudPv.line && cloudPvTokens ? (
+                      <div className="cloud-pv" data-testid="cloud-pv" data-depth={cloudPv.line.depth}>
+                        <div className="cloud-pv-head">
+                          <span>Cloud line</span>
+                          <em title={`${CLOUD_BOOK_SITE_NAME} searched this position to depth ${cloudPv.line.depth}`}>
+                            depth {cloudPv.line.depth} · {formatCloudBookScore(cloudPv.line.score, sideToMove)}
+                          </em>
+                        </div>
+                        {/* Each move plays the line up to it, like an engine line;
+                            the database's line is the one a strong player wants to
+                            walk into, and it usually runs far past the engine's. */}
+                        <div className="cloud-pv-moves">
+                          {cloudPvTokens.tokens.map((token, moveIndex) => (
+                            <button
+                              key={`${moveIndex}-${cloudPv.line!.moves[moveIndex]}`}
+                              type="button"
+                              className="pv-move-btn"
+                              onClick={() => handlePlayPvLine(cloudPv.line!.moves, moveIndex + 1)}
+                              disabled={Boolean(gameResult) || isAiTurn}
+                              title={`Play the cloud line up to ${token}`}
+                              aria-label={`Play the cloud line up to move ${moveIndex + 1}, ${token}`}
+                              data-testid={`cloud-pv-move-${moveIndex}`}
+                            >
+                              {token}
+                            </button>
+                          ))}
+                          {cloudPvTokens.remaining > 0 ? <span className="pv-move-rest">+{cloudPvTokens.remaining}</span> : null}
+                        </div>
+                      </div>
+                    ) : null}
                     {cloudBookEnabled ? (
                       <button
                         type="button"
