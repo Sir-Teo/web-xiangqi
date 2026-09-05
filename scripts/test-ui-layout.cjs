@@ -5644,19 +5644,36 @@ async function assertTheBottomBarKeepsItsBadgesAfterAReview(page) {
   const state = await page.evaluate(() => {
     const within = (element) => {
       const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth + 0.5;
+      return rect.width > 0 && rect.left >= -0.5 && rect.right <= window.innerWidth + 0.5;
     };
-    const chips = [...document.querySelectorAll(".game-controls > *")];
+    const row = document.querySelector(".game-controls");
+    const chips = [...row.children];
+    // The row keeps one line and scrolls sideways rather than wrapping (a
+    // wrapped bar starves the board at large text sizes), so a chip counts
+    // as reachable when it is on screen either before or after the row is
+    // scrolled to its end -- and it must be the row that scrolls, not an
+    // ancestor that clips.
+    const clippedAtStart = new Set(chips.filter((chip) => !within(chip)));
+    row.scrollLeft = row.scrollWidth;
+    const unreachable = chips.filter((chip) => clippedAtStart.has(chip) && !within(chip));
+    const lastReachableAtEnd = within(chips[chips.length - 1]);
+    row.scrollLeft = 0;
     return {
       chips: chips.length,
-      clipped: chips.filter((chip) => !within(chip)).map((chip) => chip.textContent?.replace(/\s+/g, " ").trim().slice(0, 40)),
+      unreachable: unreachable.map((chip) => chip.textContent?.replace(/\s+/g, " ").trim().slice(0, 40)),
+      lastReachableAtEnd,
+      rowScrolls: row.scrollWidth <= row.clientWidth + 1 || /auto|scroll/.test(getComputedStyle(row).overflowX),
+      rows: Math.round(row.getBoundingClientRect().height),
       modeBadge: document.querySelector(".game-mode-badge")?.textContent?.replace(/\s+/g, " ").trim() || "",
-      openingBadgeShown: Boolean(document.querySelector(".opening-badge")) && within(document.querySelector(".opening-badge")),
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
-  if (state.clipped.length > 0 || !state.openingBadgeShown || state.modeBadge !== "Local board" || state.overflowX > 2) {
+  if (state.unreachable.length > 0 || !state.lastReachableAtEnd || !state.rowScrolls || state.modeBadge !== "Local board" || state.overflowX > 2) {
     throw new Error(`The bottom bar clipped its own chips after a review: ${JSON.stringify(state)}`);
+  }
+  // One line: the reason the row scrolls rather than wraps.
+  if (state.rows > 60) {
+    throw new Error(`The bottom bar's row wrapped onto several lines, which starves the board at large text: ${JSON.stringify(state)}`);
   }
 }
 

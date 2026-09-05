@@ -1488,6 +1488,7 @@ body.resizing * {
     justify-content: center;
     flex-wrap: wrap;
     gap: 0.4rem;
+    overflow-x: visible;
   }
 
   .resize-handle {
@@ -1533,17 +1534,33 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Game Controls (pause + mode-switch pills)
    ═══════════════════════════════════════════════════ */
-/* Wraps, because a finished review adds nine chips to this row and at 1280px
-   the row measured 1470px: the mode and opening badges at its end were
-   clipped off the right of the screen, with nothing to say they were there.
-   The bar already wraps the scrubber onto a second row at that width, so a
-   third costs one more line only when the review is on screen. */
+/* A finished review adds nine chips to this row and at 1280px it measured
+   1470px: it used to be flex-shrink: 0, so it ran past the bar and the mode
+   and opening badges at its end were clipped off the right of the screen with
+   nothing to say they were there. Wrapping was tried first and costs the
+   board: at 1024x720 with 32px text a wrapped bar is 258px tall and the board
+   falls under the floor `assertLargeTextKeepsAUsableBoard` holds it to. So the
+   row keeps one line and scrolls sideways when it must; under 900px it wraps,
+   as it always has. */
 .game-controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.4rem;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  /* The row is full-height for its chips; a strip's scrollbar must not
+     overlap them. */
+  padding-bottom: 2px;
+}
+
+/* The chips keep their size and the row does the giving way: without this
+   the flex items shrank first, and a two-line "Local board" beside a review
+   summary folded in half is worse than a row that scrolls. */
+.game-controls > * {
+  flex-shrink: 0;
 }
 
 .review-progress {
