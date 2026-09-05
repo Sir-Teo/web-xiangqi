@@ -47,11 +47,16 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
         const controller = new AbortController();
         let timeout: number | null = null;
         const timer = window.setTimeout(async () => {
-            timeout = window.setTimeout(() => controller.abort(), CLOUD_RULE_TIMEOUT_MS);
+            timeout = window.setTimeout(() => {
+                // A deadline is a visible failure; cleanup cancellation is silent.
+                controller.abort();
+                setState({ status: 'error', banned: [], drawing: [], key });
+            }, CLOUD_RULE_TIMEOUT_MS);
             try {
                 const response = await fetch(buildCloudRuleUrl(rootFen, moves), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const reading = parseCloudRuleResponse(await response.text());
+                if (controller.signal.aborted) return;
                 if (reading.status === 'unreadable') throw new Error('unreadable reply');
                 const summary = reading.status === 'ok' ? summarizeCloudRule(reading.moves) : { banned: [], drawing: [] };
                 cache.set(key, summary);

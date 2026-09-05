@@ -51,11 +51,16 @@ export function useCloudBook(fen: string, enabled: boolean): CloudBookState {
         const controller = new AbortController();
         let timeout: number | null = null;
         const timer = window.setTimeout(async () => {
-            timeout = window.setTimeout(() => controller.abort(), CLOUD_BOOK_TIMEOUT_MS);
+            timeout = window.setTimeout(() => {
+                // A deadline is a visible failure; cleanup cancellation is silent.
+                controller.abort();
+                setState({ status: 'error', moves: [], fen });
+            }, CLOUD_BOOK_TIMEOUT_MS);
             try {
                 const response = await fetch(buildCloudBookUrl(fen), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const reading = parseCloudBookResponse(await response.text());
+                if (controller.signal.aborted) return;
                 if (reading.status === 'unreadable') throw new Error('unreadable reply');
                 cache.set(fen, reading);
                 if (controller.signal.aborted) return;
