@@ -3704,6 +3704,45 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
   }
 }
 
+async function assertTwoEngineLinesFitAtLaptopHeight(page) {
+  // The Engine tab exists for its lines. At 1280x720 the diagnostics cards
+  // used to sit between the controls and the lines, so the panel showed one
+  // line of the three and the rest lived below the fold.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("analysis-tab-engine").click();
+  await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
+
+  const layout = await page.evaluate(() => {
+    const rect = (selector) => {
+      const box = document.querySelector(selector)?.getBoundingClientRect();
+      return box ? { top: Math.round(box.top), bottom: Math.round(box.bottom) } : null;
+    };
+    const panel = document.querySelector('[data-testid="engine-pv-line-1"]')?.closest(".panel-content");
+    const panelBox = panel?.getBoundingClientRect();
+    return {
+      panel: panelBox ? { top: Math.round(panelBox.top), bottom: Math.round(panelBox.bottom) } : null,
+      line0: rect('[data-testid="engine-pv-line-0"]'),
+      line1: rect('[data-testid="engine-pv-line-1"]'),
+      dashboard: rect(".engine-dashboard"),
+    };
+  });
+  if (!layout.panel || !layout.line0 || !layout.line1 || !layout.dashboard) {
+    throw new Error(`Engine tab layout could not be measured: ${JSON.stringify(layout)}`);
+  }
+  if (layout.line1.bottom > layout.panel.bottom || layout.line0.top < layout.panel.top) {
+    throw new Error(`Two engine lines do not fit at 1280x720: ${JSON.stringify(layout)}`);
+  }
+  if (layout.dashboard.top < layout.line1.bottom) {
+    throw new Error(`Engine diagnostics sit above the lines: ${JSON.stringify(layout)}`);
+  }
+  console.log(`PASS: two engine lines fit at 1280x720 (${JSON.stringify(layout)})`);
+}
+
 async function assertEngineTelemetryDashboard(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -10387,6 +10426,7 @@ async function main() {
     await assertEnginePvLineControl(page);
     await assertClickingIntoAnEngineLinePlaysItUpToThere(browser);
     await assertEngineTelemetryDashboard(browser);
+    await assertTwoEngineLinesFitAtLaptopHeight(page);
     await assertTheHeadingOutlineHasNoGaps(browser);
     await assertADeepSearchSurvivesAHiddenTab(browser);
     await assertAMoveNoteSurvivesAReload(browser);

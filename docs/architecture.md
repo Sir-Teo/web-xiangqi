@@ -1234,6 +1234,19 @@ the engine answers `bestmove`, so a hidden tab would otherwise flash
 that does not clear itself, which is why it is the only one that gets colour
 and a reason on screen.
 
+### The lines come before the diagnostics
+
+The Engine tab is ordered by what a player looks at: the line count and the
+Go Deep / Threat / Restart controls, then the engine lines, then the four
+diagnostics cards (core, tier, search, node rate) last. The cards used to sit
+between the controls and the lines, and at 1280x720, the most common laptop
+window, that left room for one line of the three; the other two lived below
+the fold of a panel most people never scroll. Moving 152px of cards to the
+bottom put the second line fully in view (lines start at 278px rather than
+453px). The cards are what you read when something is wrong, and that is
+rarer than reading a line. `assertTwoEngineLinesFitAtLaptopHeight` holds
+the order and the fit.
+
 ### A hidden tab stops live analysis, and not a deep search
 
 Hiding the page stops everything the engine is doing on its own: live analysis,

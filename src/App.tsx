@@ -7022,39 +7022,6 @@ function App() {
                 />
               ) : (
                 <>
-                  <div className="engine-dashboard" role="group" aria-label="Engine diagnostics">
-                    <div className="engine-stat" title={engineCoreDetail} aria-label={engineCoreDetail}>
-                      <span>Core</span>
-                      <strong>{engineVariant}</strong>
-                      <em>{engineBootConfig.threads}T · {engineBootConfig.hashMB}MB</em>
-                    </div>
-                    <div className="engine-stat">
-                      <span>Profile</span>
-                      <strong>{analysisEngineMode}</strong>
-                      <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
-                    </div>
-                    <div
-                      className={`engine-stat${analysisIsStalled ? ' engine-stat-stalled' : ''}`}
-                      title={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
-                      aria-label={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
-                    >
-                      <span>Search</span>
-                      {/* Depth from a search that has been stopped is stale, and
-                          reading it beside a board that is not moving is what
-                          made a backgrounded tab look broken. */}
-                      <strong>{analysisIsStalled
-                        ? formatAnalysisActivity(analysisActivity)
-                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
-                      <em>{analysisIsStalled
-                        ? 'tab in background'
-                        : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
-                    </div>
-                    <div className="engine-stat">
-                      <span>Detail</span>
-                      <strong>{`MultiPV ${analysisMultiPv}`}</strong>
-                      <em>{analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
-                    </div>
-                  </div>
                   <div className="engine-pv-controls" role="group" aria-label="Engine principal variation lines">
                     <span>PV Lines</span>
                     <div className="engine-pv-buttons">
@@ -7342,6 +7309,43 @@ function App() {
                     })}
                   </div>
                   )}
+                  {/* Diagnostics last: at 1280x720 the four cards stood between the
+                      controls and the lines and left room for one line of three. The
+                      lines are what the panel is for; the core, tier and node rate are
+                      what you look at when something is wrong. */}
+                  <div className="engine-dashboard" role="group" aria-label="Engine diagnostics">
+                    <div className="engine-stat" title={engineCoreDetail} aria-label={engineCoreDetail}>
+                      <span>Core</span>
+                      <strong>{engineVariant}</strong>
+                      <em>{engineBootConfig.threads}T · {engineBootConfig.hashMB}MB</em>
+                    </div>
+                    <div className="engine-stat">
+                      <span>Profile</span>
+                      <strong>{analysisEngineMode}</strong>
+                      <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
+                    </div>
+                    <div
+                      className={`engine-stat${analysisIsStalled ? ' engine-stat-stalled' : ''}`}
+                      title={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                      aria-label={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                    >
+                      <span>Search</span>
+                      {/* Depth from a search that has been stopped is stale, and
+                          reading it beside a board that is not moving is what
+                          made a backgrounded tab look broken. */}
+                      <strong>{analysisIsStalled
+                        ? formatAnalysisActivity(analysisActivity)
+                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
+                      <em>{analysisIsStalled
+                        ? 'tab in background'
+                        : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
+                    </div>
+                    <div className="engine-stat">
+                      <span>Detail</span>
+                      <strong>{`MultiPV ${analysisMultiPv}`}</strong>
+                      <em>{analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
+                    </div>
+                  </div>
                   {assistMode === 'pro' ? (
                     <div
                       className="engine-output-terminal mt-4"
