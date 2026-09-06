@@ -6336,6 +6336,23 @@ function App() {
                     <span>Take back</span>
                   </button>
                 ) : null}
+                {/* The bottom bar carries Hint on a desktop and is hidden on a
+                    phone, where the only way to it was the palette. The answer
+                    is the arrow on the board, which the phone can see. */}
+                {aiPlayActive ? (
+                  <button
+                    className="mobile-action-menu-btn"
+                    type="button"
+                    onClick={() => { setShowMobileBoardActionMenu(false); runHint(); }}
+                    disabled={!canHint}
+                    role="menuitem"
+                    title={canHint ? 'Ask the engine what it would play for you' : isAiTurn ? 'Wait for your turn' : 'No hint right now'}
+                    data-testid="mobile-hint-btn"
+                  >
+                    <IconSpark />
+                    <span>Hint</span>
+                  </button>
+                ) : null}
                 {/* Copying is the useful half on a phone: an exported file lands
                     in the Files app, while the clipboard is what a game gets
                     pasted into. Desktop has had both; here there was only the
