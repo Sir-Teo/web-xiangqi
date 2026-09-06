@@ -6146,6 +6146,66 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
  * record, with a note on the second, pasted into the import box: the line
  * has to load, and the note has to land on its move.
  */
+/**
+ * An XQF file through the file picker: version 10, written in the clear
+ * here so the check can say what the file holds -- h2e2 with a note, then
+ * h9g7 h0g2 as the main line and h7e7 as a variation on Black's reply.
+ * The file is binary, so it loads straight onto the board rather than into
+ * the text box.
+ */
+async function assertAnXqfFileImports(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Start new game" }).click();
+
+  const header = Buffer.alloc(0x400);
+  header.write("XQ", 0, "ascii");
+  header[2] = 0x0a;
+  const slots = [80, 70, 60, 50, 40, 30, 20, 10, 0, 72, 12, 83, 63, 43, 23, 3, 9, 19, 29, 39, 49, 59, 69, 79, 89, 17, 77, 6, 26, 46, 66, 86];
+  slots.forEach((value, index) => { header[0x10 + index] = value; });
+  header[0x50] = 3; header.write("XQF", 0x51, "ascii");
+  const at = (square) => (square.charCodeAt(0) - 97) * 10 + Number(square[1]);
+  const record = (uci, hasNext, hasVariation, comment = "") => {
+    const text = Buffer.from(comment, "utf8");
+    const length = Buffer.alloc(4);
+    length.writeUInt32LE(text.length, 0);
+    const head = uci
+      ? Buffer.from([(at(uci.slice(0, 2)) + 0x18) & 0xff, (at(uci.slice(2, 4)) + 0x20) & 0xff, (hasNext ? 0xf0 : 0) | (hasVariation ? 1 : 0), 0])
+      : Buffer.from([0x18, 0x20, hasNext ? 0xf0 : 0, 0xff]);
+    return Buffer.concat([head, length, text]);
+  };
+  const file = Buffer.concat([
+    header,
+    record(null, true, false),
+    record("h2e2", true, false, "Central cannon."),
+    record("h9g7", true, true),
+    record("h0g2", false, false),
+    record("h7e7", false, false),
+  ]);
+  await page.getByTestId("uci-line-file-input").setInputFiles({ name: "game.xqf", mimeType: "application/octet-stream", buffer: file });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  const state = await page.evaluate(() => ({
+    meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
+    variations: [...document.querySelectorAll(".mtree-variation")].map((el) => el.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+    comments: [...document.querySelectorAll(".mtree-comment")].map((el) => el.getAttribute("title") ?? ""),
+    dialogOpen: Boolean(document.querySelector(".new-game-menu")),
+  }));
+  if (state.meta !== "3 / 3" || !state.fen.startsWith("rnbakab1r/9/1c4nc1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C1N2/9/RNBAKAB1R b") || state.dialogOpen) {
+    throw new Error(`The XQF file did not load as its main line: ${JSON.stringify(state)}`);
+  }
+  if (state.variations.length !== 1 || !/C8=5|h7e7/.test(state.variations[0])) {
+    throw new Error(`The XQF file's variation was not kept: ${JSON.stringify(state)}`);
+  }
+  if (state.comments.length !== 1 || state.comments[0] !== "Central cannon.") {
+    throw new Error(`The XQF file's note did not land on its move: ${JSON.stringify(state)}`);
+  }
+}
+
 async function assertADhtmlXqRecordImports(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10295,6 +10355,7 @@ async function main() {
     await assertNotationImportSaysWhatItCouldNotRead(page);
     await assertANotationRecordCanStartFromAGivenPosition(page);
     await assertADhtmlXqRecordImports(page);
+    await assertAnXqfFileImports(page);
     await assertMoveLineImportPreservesVariations(page);
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);

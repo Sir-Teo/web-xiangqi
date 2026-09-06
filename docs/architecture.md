@@ -1137,6 +1137,21 @@ abstraction does.
   red's. The sign now comes from the score, and the parser reads it as a
   character -- `Number('-0') >= 0` is true, so a numeric test has the same bug
   in reverse.
+- **XQF**, in `utils/xqf.ts`, is the binary file of 象棋桥 and XQStudio and
+  what most records on disk are in. A 1024-byte header carries `XQ`, a
+  version, thirteen key bytes, 32 one-byte piece positions in a fixed slot
+  order (`x * 10 + y`, Red at the bottom -- this app's own frame) and the
+  GB18030 text fields; records follow from 0x400, four bytes and an optional
+  comment each, with a "next" flag for a child and a "variation" flag for a
+  sibling from the same parent position. Version 10 is written in the clear;
+  from 11 the header keys obscure the positions, the record bytes and the
+  comment lengths. The reader is this repo's own, written from the published
+  1.0 description and the behaviour of the later versions, and was checked by
+  hand against real files from both programs (versions 10 and 18, one a study
+  with twelve variations, all decoding with nothing refused); those files are
+  not ours to ship, so the committed test carries its own writer and round
+  trips the keyed versions through it. Moves are checked against the rules as
+  the tree is built and a branch stops at the first one refused.
 - **DhtmlXQ**, in `utils/dhtmlxq.ts`, is the block every dpxq.com (东萍象棋)
   game page carries and the paste a Chinese player most often has. Four
   digits a move, `x` from the left and `y` from the *top*, so `2625` is

@@ -58,6 +58,7 @@ import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { parseDhtmlXqRecord } from './utils/dhtmlxq';
+import { isXqfFile, parseXqf, type XqfRecord } from './utils/xqf';
 import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, isPieceStyle, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
@@ -3348,6 +3349,58 @@ function App() {
     moveLineFileInputRef.current?.click();
   }, []);
 
+  /**
+   * An XQF file, already read: the format most xiangqi records on disk are
+   * in. Unlike a paste it has nowhere to be shown before it is loaded, so
+   * it goes straight onto the board, variations and notes with it.
+   */
+  const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
+    showImportNotice(null);
+    if (record.moves.length === 0 && !record.startFen) {
+      setMoveLineError('This XQF file holds no moves and no position.');
+      return;
+    }
+    const treeValidation = record.moveTree.length > 0 ? validateMoveTree(record.moveTree, record.startFen) : null;
+    if (treeValidation && !treeValidation.ok) {
+      setMoveLineError(treeValidation.move ? `Move ${treeValidation.move}: ${treeValidation.reason}` : treeValidation.reason);
+      return;
+    }
+    if (record.moves.length === 0 && record.startFen) {
+      // Through the ref: the FEN loader is declared further down.
+      handleLoadFenRef.current?.(record.startFen, nextGameMode);
+      return;
+    }
+
+    stopAnalysis();
+    handleCancelReview();
+    resetReview();
+    setAiMoveError(null);
+    if (isAiGameModeValue(nextGameMode)) setWorkspaceMode('play');
+    setGameMode(nextGameMode);
+    const facing = orientationForHuman(nextGameMode);
+    if (facing) setOrientation(facing);
+
+    // A note on the position before the first move has no move to sit on;
+    // it goes at the head of the first move's note rather than being lost.
+    const tree = record.moveTree.map((node, index) => (index === 0 && record.rootComment
+      ? { ...node, comment: [record.rootComment, node.comment].filter(Boolean).join('\n') }
+      : node));
+    loadMoveTree(tree, record.moves, record.startFen);
+    if (record.refused > 0) {
+      showImportNotice(
+        `Skipped ${record.refused} ${record.refused === 1 ? 'move' : 'moves'}`,
+        `The file holds ${record.refused} ${record.refused === 1 ? 'move' : 'moves'} the rules refuse; each branch stops at the first one.`
+      );
+    }
+    setFenInput('');
+    clearFenError();
+    setMoveLineInput('');
+    setMoveLineFileName('');
+    setMoveLineError(null);
+    setGraphLoadSweepToken((token) => token + 1);
+    closeNewGameMenu();
+  }, [clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
+
   const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
@@ -3361,7 +3414,20 @@ function App() {
     }
 
     try {
-      const text = await file.text();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Binary, so it cannot go through the text box: read it and load it.
+      if (isXqfFile(bytes) || /\.xqf$/i.test(file.name)) {
+        const record = parseXqf(bytes);
+        if (!record) {
+          setMoveLineFileName('');
+          setMoveLineError('Could not read this XQF file: it is not one, or its position cannot be placed.');
+          return;
+        }
+        setMoveLineFileName(file.name);
+        handleImportXqf(record);
+        return;
+      }
+      const text = new TextDecoder().decode(bytes);
       if (isMoveImportTextTooLarge(text)) {
         setMoveLineInput('');
         setMoveLineFileName('');
@@ -3375,7 +3441,7 @@ function App() {
       setMoveLineFileName('');
       setMoveLineError('Could not read file');
     }
-  }, []);
+  }, [handleImportXqf]);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
@@ -5779,13 +5845,13 @@ function App() {
                     onClick={handlePickMoveLineFile}
                     data-testid="load-uci-file-btn"
                   >
-                    <IconUpload /> Open PGN
+                    <IconUpload /> Open PGN or XQF
                   </button>
                   <input
                     ref={moveLineFileInputRef}
                     className="new-game-file-input"
                     type="file"
-                    accept=".pgn,.txt,text/plain,application/x-chess-pgn"
+                    accept=".pgn,.txt,.xqf,text/plain,application/x-chess-pgn,application/octet-stream"
                     onChange={handleMoveLineFileChange}
                     aria-label="Open PGN file"
                     data-testid="uci-line-file-input"
