@@ -3642,6 +3642,58 @@ async function assertEnginePvLineControl(page) {
  * without leaving the Engine panel. The fake engine answers every search
  * with the line b2e2 h9g7.
  */
+/**
+ * An engine line is one tab stop, and the arrow keys walk it.
+ *
+ * Each move of a line is a button that plays the line up to it. Three lines
+ * of ten and a cloud line of ten made forty tab stops between the line
+ * controls and the actions under them; the tab order is a budget.
+ */
+async function assertAnEngineLineIsOneTabStop(browser) {
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-restart-options" });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("engine-pv-0-move-1").waitFor({ timeout: 10000 });
+
+    const stops = await page.evaluate(() => {
+      const lines = [...document.querySelectorAll('[data-testid^="engine-pv-line-"]')];
+      return {
+        lines: lines.length,
+        stopsPerLine: lines.map((line) => [...line.querySelectorAll(".pv-move-btn")].filter((b) => b.tabIndex === 0).length),
+        buttonsInFirstLine: lines[0]?.querySelectorAll(".pv-move-btn").length ?? 0,
+      };
+    });
+    if (stops.lines === 0 || stops.buttonsInFirstLine < 2 || stops.stopsPerLine.some((count) => count !== 1)) {
+      throw new Error(`An engine line did not present a single tab stop: ${JSON.stringify(stops)}`);
+    }
+
+    await page.getByTestId("engine-pv-0-move-0").focus();
+    await page.keyboard.press("ArrowRight");
+    const walked = await page.evaluate(() => ({
+      focused: document.activeElement?.getAttribute("data-testid") || "",
+      firstTab: document.querySelector('[data-testid="engine-pv-0-move-0"]')?.tabIndex,
+      secondTab: document.querySelector('[data-testid="engine-pv-0-move-1"]')?.tabIndex,
+    }));
+    if (walked.focused !== "engine-pv-0-move-1" || walked.firstTab !== -1 || walked.secondTab !== 0) {
+      throw new Error(`Right did not walk the engine line and move its tab stop: ${JSON.stringify(walked)}`);
+    }
+    await page.keyboard.press("Home");
+    const home = await page.evaluate(() => document.activeElement?.getAttribute("data-testid") || "");
+    if (home !== "engine-pv-0-move-0") {
+      throw new Error(`Home did not return to the first move of the line: ${home}`);
+    }
+    console.log(`PASS: an engine line is one tab stop (${JSON.stringify(stops)})`);
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -10548,6 +10600,7 @@ async function main() {
     await assertAiPlayPausesWhileHidden(browser);
     await assertEnginePvLineControl(page);
     await assertClickingIntoAnEngineLinePlaysItUpToThere(browser);
+    await assertAnEngineLineIsOneTabStop(browser);
     await assertEngineTelemetryDashboard(browser);
     await assertTwoEngineLinesFitAtLaptopHeight(page);
     await assertTheHeadingOutlineHasNoGaps(browser);

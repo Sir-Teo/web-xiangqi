@@ -3637,6 +3637,10 @@ summary:active {
 
 /* Each move of a line is a control that plays the line up to it. Styled as
    the text it replaces, with the hover and focus to say it is clickable. */
+.pv-move-strip {
+  display: contents;
+}
+
 .pv-move-btn {
   padding: 0 0.1rem;
   border: 0;

@@ -2210,6 +2210,13 @@ under it; Home and End reach the ends. The stop follows focus, then the
 current move, then the first. Measured on a 30-ply game the page had 61 tab
 stops after the breadcrumb change; the tree accounted for thirty of them.
 
+**The engine lines were the third.** Making each move of a line a button
+(click the third to play the line up to it) put thirty stops on the Engine
+tab and ten more on the cloud line, which undid the breadcrumb's saving
+twice over. `MoveLineStrip.tsx` presents each line as one stop, Left and
+Right along it, Home and End to its ends, with the same `rovingFocus`
+arithmetic. `assertAnEngineLineIsOneTabStop` holds it.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write

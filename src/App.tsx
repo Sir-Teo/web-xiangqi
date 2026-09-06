@@ -8,6 +8,7 @@ import { ReviewPanel } from './components/Panels/ReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
 import { MoveListTree } from './components/Controls/MoveListTree';
+import { MoveLineStrip } from './components/Controls/MoveLineStrip';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
@@ -6068,21 +6069,15 @@ function App() {
                             the database's line is the one a strong player wants to
                             walk into, and it usually runs far past the engine's. */}
                         <div className="cloud-pv-moves">
-                          {cloudPvTokens.tokens.map((token, moveIndex) => (
-                            <button
-                              key={`${moveIndex}-${cloudPv.line!.moves[moveIndex]}`}
-                              type="button"
-                              className="pv-move-btn"
-                              onClick={() => handlePlayPvLine(cloudPv.line!.moves, moveIndex + 1)}
-                              disabled={Boolean(gameResult) || isAiTurn}
-                              title={`Play the cloud line up to ${token}`}
-                              aria-label={`Play the cloud line up to move ${moveIndex + 1}, ${token}`}
-                              data-testid={`cloud-pv-move-${moveIndex}`}
-                            >
-                              {token}
-                            </button>
-                          ))}
-                          {cloudPvTokens.remaining > 0 ? <span className="pv-move-rest">+{cloudPvTokens.remaining}</span> : null}
+                          <MoveLineStrip
+                            tokens={cloudPvTokens.tokens}
+                            remaining={cloudPvTokens.remaining}
+                            disabled={Boolean(gameResult) || isAiTurn}
+                            onPlay={(count) => handlePlayPvLine(cloudPv.line!.moves, count)}
+                            title={(_, token) => `Play the cloud line up to ${token}`}
+                            ariaLabel={(moveIndex, token) => `Play the cloud line up to move ${moveIndex + 1}, ${token}`}
+                            testId={(moveIndex) => `cloud-pv-move-${moveIndex}`}
+                          />
                         </div>
                       </div>
                     ) : null}
@@ -7264,22 +7259,16 @@ function App() {
                               {/* One control per move: click the third to play the
                                   line up to it, which is what a strong player does
                                   with an engine line and could not do here. */}
-                              {pvTokens.tokens.map((token, moveIndex) => (
-                                <button
-                                  key={`${i}-${moveIndex}-${pv.moves[moveIndex]}`}
-                                  type="button"
-                                  className="pv-move-btn"
-                                  onClick={() => handlePlayPvLine(pv.moves, moveIndex + 1)}
-                                  disabled={Boolean(gameResult)}
-                                  title={`Play this line up to ${token}`}
-                                  aria-label={`Play engine line ${i + 1} up to move ${moveIndex + 1}, ${token}`}
-                                  data-testid={`engine-pv-${i}-move-${moveIndex}`}
-                                >
-                                  {token}
-                                </button>
-                              ))}
-                              {pvTokens.remaining > 0 ? <span className="pv-move-rest">+{pvTokens.remaining}</span> : null}
-                              {pvTokens.tokens.length === 0 ? 'No moves yet' : null}
+                              <MoveLineStrip
+                                tokens={pvTokens.tokens}
+                                remaining={pvTokens.remaining}
+                                disabled={Boolean(gameResult)}
+                                onPlay={(count) => handlePlayPvLine(pv.moves, count)}
+                                title={(_, token) => `Play this line up to ${token}`}
+                                ariaLabel={(moveIndex, token) => `Play engine line ${i + 1} up to move ${moveIndex + 1}, ${token}`}
+                                testId={(moveIndex) => `engine-pv-${i}-move-${moveIndex}`}
+                                emptyText="No moves yet"
+                              />
                             </span>
                           </div>
                           <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
