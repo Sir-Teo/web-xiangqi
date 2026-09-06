@@ -2161,12 +2161,17 @@ not jump from the last move back to the first). The case that bites is a
 remembered index the list has since outgrown, which happens every time someone
 steps back and plays a different move.
 
-**The move tree is the remaining half**, at one stop per ply. The same fix
-applies but it is not the same shape: the breadcrumb is a linear strip, and the
-tree is rows of red/black chips plus variation rows, so it needs two-dimensional
-movement and a decision about whether arrows enter a variation. That is a
-judgement about the primary navigation surface rather than a mechanical change,
-which is why it is written down here rather than guessed at.
+**The move tree was the remaining half**, at one stop per ply, and is done.
+It was not the same shape as the breadcrumb: the tree is rows of red/black
+chips plus variation rows, so it needed two-dimensional movement and a
+decision about whether arrows enter a variation. The decision taken in
+`MoveListTree.tsx`: Left and Right walk the chips in reading order, variation
+rows included, because that is the order the eye takes down the list; Up and
+Down move a row, to the chip nearest horizontally, so Down from a Red move
+lands on the next Red move and Down into a variation row lands on whatever is
+under it; Home and End reach the ends. The stop follows focus, then the
+current move, then the first. Measured on a 30-ply game the page had 61 tab
+stops after the breadcrumb change; the tree accounted for thirty of them.
 
 ## Project Invariants
 

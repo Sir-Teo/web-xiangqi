@@ -1492,6 +1492,67 @@ async function assertBoardAnimatesAMoveInBothDirections(page) {
  * exactly what that should say, and it is only the visible number that had to
  * agree with the list beside it.
  */
+/**
+ * The move list is one tab stop, and the arrow keys walk it: Left and Right
+ * in reading order, Up and Down by row to the nearest chip, Home and End to
+ * the ends. Every chip used to be a stop of its own, one per ply.
+ */
+async function assertTheMoveTreeIsOneTabStop(page) {
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9", "h0g2", "c6c5"];
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`http://127.0.0.1:8192/web-xiangqi/?moves=${MOVES.join("+")}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".mtree-chip", { timeout: 30000 });
+  await page.waitForTimeout(500);
+
+  const stops = await page.evaluate(() => {
+    const chips = [...document.querySelectorAll(".mtree-chip")];
+    const active = chips.filter((chip) => chip.tabIndex === 0);
+    return { chips: chips.length, stops: active.length, stopIsCurrent: active[0]?.getAttribute("aria-current") === "step" };
+  });
+  if (stops.chips !== MOVES.length || stops.stops !== 1 || !stops.stopIsCurrent) {
+    throw new Error(`The move list did not present a single tab stop on the current move: ${JSON.stringify(stops)}`);
+  }
+
+  const focusedUci = () => page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el || !el.classList.contains("mtree-chip")) return null;
+    return el.getAttribute("data-node-id");
+  });
+  const nodeOf = (index) => page.evaluate((i) => document.querySelectorAll(".mtree-chip")[i]?.getAttribute("data-node-id") ?? null, index);
+
+  await page.locator('.mtree-chip[tabindex="0"]').focus();
+  await page.keyboard.press("ArrowLeft");
+  if (await focusedUci() !== await nodeOf(6)) throw new Error("ArrowLeft did not move to the previous move");
+  await page.keyboard.press("ArrowUp");
+  // Row 4 (h0g2 c6c5) is above row 3's Red chip -> Red chip of row 3 (a0b0)? Rows are
+  // [h2e2 h9g7] [b0c2 b9c7] [a0b0 a9b9] [h0g2 c6c5]; from h0g2, Up lands on a0b0.
+  if (await focusedUci() !== await nodeOf(4)) throw new Error("ArrowUp did not move to the chip above");
+  await page.keyboard.press("ArrowRight");
+  if (await focusedUci() !== await nodeOf(5)) throw new Error("ArrowRight did not move to the next move");
+  await page.keyboard.press("ArrowDown");
+  if (await focusedUci() !== await nodeOf(7)) throw new Error("ArrowDown did not move to the chip below");
+  await page.keyboard.press("Home");
+  if (await focusedUci() !== await nodeOf(0)) throw new Error("Home did not move to the first move");
+  await page.keyboard.press("End");
+  if (await focusedUci() !== await nodeOf(7)) throw new Error("End did not move to the last move");
+
+  // The stop follows focus: the last chip is now the one Tab lands on.
+  const after = await page.evaluate(() => {
+    const active = [...document.querySelectorAll(".mtree-chip")].filter((chip) => chip.tabIndex === 0);
+    return { stops: active.length, stopNode: active[0]?.getAttribute("data-node-id") ?? null, focusNode: document.activeElement?.getAttribute("data-node-id") ?? null };
+  });
+  if (after.stops !== 1 || after.stopNode !== after.focusNode) {
+    throw new Error(`The move list's tab stop did not follow focus: ${JSON.stringify(after)}`);
+  }
+  // And Enter on a chip still navigates, since the chips are buttons.
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 8", null, { timeout: 5000 });
+}
+
 async function assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto(
@@ -10416,6 +10477,7 @@ async function main() {
     await assertPlayedMovesAreNumberedFromOne(page);
     await assertBoardAnimatesAMoveInBothDirections(page);
     await assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page);
+    await assertTheMoveTreeIsOneTabStop(page);
     await assertPiecesCanBeDraggedWithoutBreakingClicks(page);
     await assertShowThreatIsSeparateFromTheAnalysis(page);
     await assertAPlayedCaptureRecordsWhatItDid(page);

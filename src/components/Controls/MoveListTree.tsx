@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
     REVIEW_THRESHOLDS,
@@ -58,6 +58,69 @@ export const MoveListTree = memo(function MoveListTree({
     onDeleteNode,
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
+
+    /**
+     * One tab stop for the whole list, with the arrow keys inside it.
+     *
+     * Every chip was a tab stop, so a 100-ply game put a hundred presses of
+     * Tab between the toolbar and Save. The breadcrumb and the board fixed
+     * theirs; this was the half `docs/architecture.md` left open, because
+     * the list is two-dimensional -- rows of Red and Black, with variation
+     * rows between them -- and needed a decision about what Up and Down do.
+     * They move a row: to the chip nearest horizontally, so Down from a Red
+     * move lands on the next Red move and Down into a variation row lands
+     * on whatever is under it. Left and Right walk the chips in reading
+     * order, variations included, which is the order the eye takes.
+     *
+     * The stop follows focus, then the current move, then the first move,
+     * so tabbing away and back returns to where the reader was.
+     */
+    const [rovingNodeId, setRovingNodeId] = useState<string | null>(null);
+    const stopNodeId = rovingNodeId && treeNodes[rovingNodeId]?.record
+        ? rovingNodeId
+        : treeNodes[currentNodeId]?.record
+            ? currentNodeId
+            : activeLineNodeIds[0] ?? null;
+
+    const handleChipKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+        const { key } = event;
+        if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Home' && key !== 'End') return;
+        const container = scrollRef.current;
+        if (!container) return;
+        const chips = Array.from(container.querySelectorAll<HTMLButtonElement>('.mtree-chip'));
+        const index = chips.indexOf(event.currentTarget);
+        if (index === -1) return;
+
+        let target: HTMLButtonElement | undefined;
+        if (key === 'ArrowLeft') target = chips[Math.max(0, index - 1)];
+        else if (key === 'ArrowRight') target = chips[Math.min(chips.length - 1, index + 1)];
+        else if (key === 'Home') target = chips[0];
+        else if (key === 'End') target = chips[chips.length - 1];
+        else {
+            const rowOf = (chip: HTMLButtonElement) => chip.closest('.mtree-row, .mtree-variation');
+            const rows: HTMLButtonElement[][] = [];
+            for (const chip of chips) {
+                const row = rowOf(chip);
+                const last = rows[rows.length - 1];
+                if (last && rowOf(last[0]) === row) last.push(chip);
+                else rows.push([chip]);
+            }
+            const rowIndex = rows.findIndex((row) => row.includes(event.currentTarget));
+            const nextRow = rows[rowIndex + (key === 'ArrowDown' ? 1 : -1)];
+            if (!nextRow) return;
+            const x = event.currentTarget.getBoundingClientRect().left;
+            target = nextRow.reduce((best, chip) => (
+                Math.abs(chip.getBoundingClientRect().left - x) < Math.abs(best.getBoundingClientRect().left - x) ? chip : best
+            ), nextRow[0]);
+        }
+        if (!target || target === event.currentTarget) {
+            event.preventDefault();
+            return;
+        }
+        event.preventDefault();
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ block: 'nearest' });
+    }, []);
 
     const centreActiveMove = useCallback(() => {
         const container = scrollRef.current;
@@ -155,9 +218,13 @@ export const MoveListTree = memo(function MoveListTree({
                         isCurrent ? 'mtree-chip-active' : '',
                     ].filter(Boolean).join(' ')}
                     onClick={() => onNavigateNode(nodeId)}
+                    onFocus={() => setRovingNodeId(nodeId)}
+                    onKeyDown={handleChipKeyDown}
+                    tabIndex={nodeId === stopNodeId ? 0 : -1}
                     title={formatMoveTitle(record)}
                     aria-current={isCurrent ? 'step' : undefined}
                     aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle)}
+                    aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
                 >
                     {/* One authoritative reading of the move, then the raw
                         coordinates as the cross-reference -- raw, because that
@@ -263,7 +330,12 @@ export const MoveListTree = memo(function MoveListTree({
     }
 
     return (
-        <div className="mtree-scroll" ref={scrollRef}>
+        <div
+            className="mtree-scroll"
+            ref={scrollRef}
+            role="group"
+            aria-label="Move list, one tab stop; the arrow keys move between moves"
+        >
             {rows}
             {hasMoveQualityLegend ? <div className="mtree-quality-legend">
                     <span className="legend-title">Move loss</span>
