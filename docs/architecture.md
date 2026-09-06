@@ -2217,6 +2217,15 @@ twice over. `MoveLineStrip.tsx` presents each line as one stop, Left and
 Right along it, Home and End to its ends, with the same `rovingFocus`
 arithmetic. `assertAnEngineLineIsOneTabStop` holds it.
 
+**The review's moment list was the fourth**, and the only one that grows with
+how badly the game went: every critical move is a moment, uncapped, and each
+carried three stops (the card, Practice, Try best). `ReviewPanel.tsx` makes
+the list one stop: Up and Down move between cards, Home and End to the ends,
+and only the stop card's two actions are in the tab order. Left and Right
+are left alone so the page's own move stepping still works from a card. The
+stop follows focus, then the moment on the board, then the first.
+`assertTheReviewMomentsAreOneTabStop` holds it.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write

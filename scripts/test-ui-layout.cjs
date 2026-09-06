@@ -6594,6 +6594,90 @@ async function assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page) {
   console.log(`PASS: the study focus is above the fold at 1280x720 (${JSON.stringify(layout)})`);
 }
 
+async function assertTheReviewMomentsAreOneTabStop(page) {
+  // Every critical move is a moment and each carried three stops (card,
+  // Practice, Try best), so a long game's list was most of the page's tab
+  // order. One stop now: Up and Down move between cards, and only the stop
+  // card's actions are in the order.
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const savedAt = 1710000006000;
+    const moment = (moveIndex, side, quality, played, best, evalBefore, evalAfter) => ({
+      nodeId: `saved-${moveIndex}`, moveIndex, jumpTarget: moveIndex, ply: moveIndex + 1, side, quality,
+      swing: Math.abs(evalAfter - evalBefore), winPercentLoss: 12, evalBefore, evalAfter,
+      bestMove: best, playedMove: played, note: `${best} was stronger.`,
+    });
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "review-stops",
+      savedAt,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7", "h0g2"],
+      result: "ongoing",
+      label: "Review stops QA",
+      review: {
+        summary: {
+          totalMoves: 3, accuracy: 50, averageCentipawnLoss: 150,
+          redAccuracy: 40, blackAccuracy: 70, redAverageCentipawnLoss: 200, blackAverageCentipawnLoss: 100,
+          bestCount: 0, goodCount: 0, inaccuracyCount: 1, mistakeCount: 2, blunderCount: 0,
+          reviewedAt: savedAt, lineSignature: "b2e2 h9g7 h0g2",
+          engine: { tier: "high", baseDepth: 10, baseMoveTimeMs: 1500, revisitDepth: 12, revisitMoveTimeMs: 3000 },
+          keyMoments: [
+            moment(0, "red", "mistake", "b2e2", "b0c2", 0, -240),
+            moment(1, "black", "inaccuracy", "h9g7", "b9c7", -240, -140),
+            moment(2, "red", "mistake", "h0g2", "b0c2", -140, -380),
+          ],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, winPercentLoss: 12, reviewNote: "b0c2 was stronger." },
+          { moveIndex: 1, evalScore: -140, bestMove: "b9c7", quality: "inaccuracy", swing: 100, winPercentLoss: 12, reviewNote: "b9c7 was stronger." },
+          { moveIndex: 2, evalScore: -380, bestMove: "b0c2", quality: "mistake", swing: 240, winPercentLoss: 12, reviewNote: "b0c2 was stronger." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-stops").click();
+  await page.getByTestId("analysis-tab-review").click();
+  await page.waitForFunction(() => document.querySelectorAll(".review-moment-card").length >= 3, null, { timeout: 10000 });
+
+  const count = () => page.evaluate(() => {
+    const stops = (selector) => [...document.querySelectorAll(selector)].filter((el) => el.tabIndex === 0)
+      .map((el) => el.getAttribute("data-testid"));
+    return {
+      cards: document.querySelectorAll(".review-moment-card").length,
+      cardStops: stops(".review-moment-card"),
+      actionStops: stops(".review-moment-actions button"),
+      focused: document.activeElement?.getAttribute("data-testid") || "",
+    };
+  });
+  const before = await count();
+  if (before.cards < 3 || before.cardStops.length !== 1 || before.actionStops.length > 2) {
+    throw new Error(`The review moment list did not present a single tab stop: ${JSON.stringify(before)}`);
+  }
+  const firstCard = page.locator(".review-moment-card").first();
+  await firstCard.focus();
+  await page.keyboard.press("ArrowDown");
+  const after = await count();
+  const secondId = await page.locator(".review-moment-card").nth(1).getAttribute("data-testid");
+  if (after.focused !== secondId || after.cardStops.length !== 1 || after.cardStops[0] !== secondId) {
+    throw new Error(`Down did not move the review moment stop to the next card: ${JSON.stringify({ after, secondId })}`);
+  }
+  await page.keyboard.press("End");
+  const end = await page.evaluate(() => document.activeElement?.getAttribute("data-testid") || "");
+  const lastId = await page.locator(".review-moment-card").last().getAttribute("data-testid");
+  if (end !== lastId) {
+    throw new Error(`End did not reach the last review moment: ${JSON.stringify({ end, lastId })}`);
+  }
+  await page.evaluate(() => localStorage.removeItem("xiangqi:library:v1"));
+  console.log(`PASS: the review moments are one tab stop (${JSON.stringify(before)})`);
+}
+
 async function assertReviewBestMoveBranchAction(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10639,6 +10723,7 @@ async function main() {
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
     await assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page);
+    await assertTheReviewMomentsAreOneTabStop(page);
     await assertLearnFromMistakesAsksAndGrades(page);
     await assertLastMoveArrowUsesPracticalReviewQuality(page);
     await assertRunningReviewCancelsOnLineChange(browser);

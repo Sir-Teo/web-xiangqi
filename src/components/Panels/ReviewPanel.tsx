@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import type { ReviewStatus } from '../../hooks/useGameReview';
 import type { PhaseAccuracySummary, ReviewKeyMoment, ReviewSide, ReviewSummary } from '../../utils/review';
 import type { GamePhase } from '../../utils/gamePhase';
@@ -109,6 +110,16 @@ export const ReviewPanel = memo(function ReviewPanel({
         { key: 'mistake', label: 'Mistake', count: summary.mistakeCount },
         { key: 'blunder', label: 'Blunder', count: summary.blunderCount },
     ] as const : [];
+    /**
+     * The moment list is one tab stop. Every critical move is a moment and a
+     * long game has dozens; three stops each (the card, Practice, Try best)
+     * put the whole list between the summary and anything after it. The stop
+     * follows focus, then the moment on the board, then the first; Up and
+     * Down move between cards, Home and End to the ends, and only the stop
+     * card's two actions are in the tab order.
+     */
+    const [rovingMomentIndex, setRovingMomentIndex] = useState<number | null>(null);
+    const momentListRef = useRef<HTMLDivElement | null>(null);
     const filteredKeyMoments = useMemo(() => {
         if (!summary) return [];
         return filterKeyMoments(
@@ -118,6 +129,29 @@ export const ReviewPanel = memo(function ReviewPanel({
         );
     }, [momentQualityFilter, momentSideFilter, momentPhaseFilter, phaseByMoveIndex, summary]);
     const totalKeyMoments = summary?.keyMoments.length ?? 0;
+
+    const currentMomentIndex = filteredKeyMoments.findIndex((moment) => moment.nodeId === currentNodeId);
+    const momentStopIndex = rovingTabStopIndex(
+        filteredKeyMoments.length,
+        rovingMomentIndex,
+        currentMomentIndex >= 0 ? currentMomentIndex : 0
+    );
+    const handleMomentKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.classList.contains('review-moment-card')) return;
+        const from = Number(target.dataset.momentIndex);
+        if (!Number.isInteger(from)) return;
+        // A vertical list: Up and Down move between cards. Left and Right are
+        // left alone, so the page's own move stepping keeps working from here.
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') return;
+        const key = event.key === 'ArrowUp' ? 'ArrowLeft' : event.key === 'ArrowDown' ? 'ArrowRight' : event.key;
+        const next = rovingIndexForKey(key, filteredKeyMoments.length, from);
+        if (next === null) return;
+        event.preventDefault();
+        setRovingMomentIndex(next);
+        const cards = momentListRef.current?.querySelectorAll<HTMLButtonElement>('.review-moment-card');
+        cards?.[next]?.focus();
+    }, [filteredKeyMoments.length]);
 
     return (
         <div className="review-panel">
@@ -415,8 +449,8 @@ export const ReviewPanel = memo(function ReviewPanel({
                     </div>
 
                     {filteredKeyMoments.length > 0 ? (
-                        <div className="review-moment-list">
-                            {filteredKeyMoments.map((moment) => (
+                        <div className="review-moment-list" ref={momentListRef} onKeyDown={handleMomentKeyDown}>
+                            {filteredKeyMoments.map((moment, momentIndex) => (
                                 <div key={`${moment.moveIndex}-${moment.nodeId}`} className="review-moment-entry">
                                     <button
                                         type="button"
@@ -426,6 +460,10 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             currentNodeId === moment.nodeId ? 'review-moment-card-active' : '',
                                         ].join(' ')}
                                         onClick={() => onNavigateNode(moment.nodeId)}
+                                        onFocus={() => setRovingMomentIndex(momentIndex)}
+                                        tabIndex={momentIndex === momentStopIndex ? 0 : -1}
+                                        data-moment-index={momentIndex}
+                                        aria-keyshortcuts="ArrowUp ArrowDown Home End"
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
                                         aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatMoveText(moment.nodeId, moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, ${formatReviewEvalChangeLabel(moment)}${moment.bestMove ? `, engine suggested ${formatMoveText(moment.nodeId, moment.bestMove)}` : ''}`}
@@ -478,6 +516,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                                     type="button"
                                                     className="review-best-move-btn review-practice-btn"
                                                     onClick={() => onPracticeMoment(moment.nodeId)}
+                                                    tabIndex={momentIndex === momentStopIndex ? 0 : -1}
                                                     data-testid={`review-practice-${moment.moveIndex}`}
                                                     aria-label={`Practice the position before ${formatMoveText(moment.nodeId, moment.playedMove)}`}
                                                 >
@@ -489,6 +528,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                                     type="button"
                                                     className="review-best-move-btn"
                                                     onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
+                                                    tabIndex={momentIndex === momentStopIndex ? 0 : -1}
                                                     data-testid={`review-try-best-${moment.moveIndex}`}
                                                     aria-label={`Try engine suggestion ${formatMoveText(moment.nodeId, moment.bestMove)} instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
                                                 >
