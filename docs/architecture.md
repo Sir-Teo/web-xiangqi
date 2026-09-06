@@ -2226,6 +2226,14 @@ are left alone so the page's own move stepping still works from a card. The
 stop follows focus, then the moment on the board, then the first.
 `assertTheReviewMomentsAreOneTabStop` holds it.
 
+**The library was the largest of all**: a page of a hundred saved games with
+five buttons each, every one in the tab order, so the historical games under
+them were five hundred presses away. `LibraryPanel.tsx` makes the saved list
+one card's buttons (wherever focus was last, else the first card); Up and
+Down move to the same button of the card above or below, falling back to its
+Load, and Home and End reach the ends. The rename input is left alone so its
+own arrow keys still edit text. `assertTheSavedLibraryIsOneTabStop` holds it.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write

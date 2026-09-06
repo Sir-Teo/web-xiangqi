@@ -9176,6 +9176,59 @@ async function assertLibraryRespondsToStorageChanges(page) {
   }
 }
 
+async function assertTheSavedLibraryIsOneTabStop(page) {
+  // A page of the library holds a hundred games with five buttons each, all
+  // in the tab order. One card's buttons now; Up and Down move to the same
+  // button of the card above or below.
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([1, 2, 3].map((n) => ({
+      id: `qa-stop-${n}`,
+      savedAt: 1710000000000 + n * 1000,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: `Tab stop QA ${n}`,
+    }))));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-qa-stop-1").waitFor({ timeout: 5000 });
+
+  const count = () => page.evaluate(() => {
+    const cards = [...document.querySelectorAll('[data-testid="saved-game-list"] .lib-card')];
+    return {
+      cards: cards.length,
+      stopsPerCard: cards.map((card) => [...card.querySelectorAll("button")].filter((b) => b.tabIndex === 0).length),
+      focused: document.activeElement?.getAttribute("data-testid") || "",
+    };
+  });
+  const before = await count();
+  if (before.cards !== 3 || before.stopsPerCard.filter((n) => n > 0).length !== 1) {
+    throw new Error(`The saved-game list did not present a single card's buttons as tab stops: ${JSON.stringify(before)}`);
+  }
+  const firstLoad = await page.evaluate(() => document.querySelector('[data-testid="saved-game-list"] [data-testid^="load-saved-"]')?.getAttribute("data-testid"));
+  await page.getByTestId(firstLoad).focus();
+  await page.keyboard.press("ArrowDown");
+  const after = await count();
+  const secondLoad = await page.evaluate(() => document.querySelectorAll('[data-testid="saved-game-list"] [data-testid^="load-saved-"]')[1]?.getAttribute("data-testid"));
+  if (after.focused !== secondLoad || after.stopsPerCard[1] === 0 || after.stopsPerCard[0] !== 0) {
+    throw new Error(`Down did not move the library stop to the next card's Load: ${JSON.stringify({ after, secondLoad })}`);
+  }
+  await page.keyboard.press("End");
+  const end = await page.evaluate(() => document.activeElement?.getAttribute("data-testid") || "");
+  if (!end.startsWith("load-saved-") || end === secondLoad) {
+    throw new Error(`End did not reach the last card: ${end}`);
+  }
+  await page.evaluate(() => localStorage.removeItem("xiangqi:library:v1"));
+  console.log(`PASS: the saved library is one tab stop (${JSON.stringify(before)})`);
+}
+
 async function assertLibrarySavedGameSorting(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10768,6 +10821,7 @@ async function main() {
     await assertLibraryDeleteConfirmation(page);
     await assertLibraryRespondsToStorageChanges(page);
     await assertLibrarySavedGameSorting(page);
+    await assertTheSavedLibraryIsOneTabStop(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertDenseEvalGraphLimitsPointMarkers(page);
     await assertSimpleRepetitionDoesNotAutoDraw(page);

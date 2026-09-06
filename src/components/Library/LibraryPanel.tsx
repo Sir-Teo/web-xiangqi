@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import type { SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import {
@@ -218,6 +219,15 @@ export function LibraryPanel({
   const [failedActionId, setFailedActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [savedVisibleLimit, setSavedVisibleLimit] = useState(SAVED_PAGE_SIZE);
+  /**
+   * The saved-game list is one tab stop. A page of it holds a hundred games
+   * with five buttons each, and every one was in the tab order, so reaching
+   * the historical games below meant Tab five hundred times. The stop is
+   * one card (wherever focus was last, else the first); Up and Down move to
+   * the same button of the card above or below, Home and End to the ends.
+   */
+  const [rovingSavedIndex, setRovingSavedIndex] = useState<number | null>(null);
+  const savedListRef = useRef<HTMLDivElement | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
@@ -292,6 +302,28 @@ export function LibraryPanel({
     };
   }, [filteredSaved]);
   const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
+  const savedStopIndex = rovingTabStopIndex(visibleSaved.length, rovingSavedIndex, 0);
+  const handleSavedListKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || target instanceof HTMLInputElement) return;
+    const card = target.closest<HTMLElement>('.lib-card[data-card-index]');
+    if (!card) return;
+    const from = Number(card.dataset.cardIndex);
+    const key = event.key === 'ArrowUp' ? 'ArrowLeft' : event.key === 'ArrowDown' ? 'ArrowRight' : event.key;
+    const next = rovingIndexForKey(key, visibleSaved.length, from);
+    if (next === null || next === from) { event.preventDefault(); return; }
+    event.preventDefault();
+    const cards = savedListRef.current?.querySelectorAll<HTMLElement>('.lib-card[data-card-index]');
+    const nextCard = cards?.[next];
+    if (!nextCard) return;
+    // The same button of the next card when it has one, else its Load.
+    const position = [...card.querySelectorAll<HTMLElement>('button')].indexOf(target);
+    const buttons = [...nextCard.querySelectorAll<HTMLElement>('button')];
+    const load = nextCard.querySelector<HTMLElement>('[data-testid^="load-saved-"]');
+    (buttons[position] ?? load ?? buttons[0])?.focus();
+    setRovingSavedIndex(next);
+  }, [visibleSaved.length]);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
   const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
   const reviewedGameSummaryLabel = reviewInsight?.reviewedCount === 1 ? 'reviewed game' : 'reviewed games';
@@ -512,7 +544,7 @@ export function LibraryPanel({
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
-      <div className="lib-list" data-testid="saved-game-list">
+      <div className="lib-list" data-testid="saved-game-list" ref={savedListRef} onKeyDown={handleSavedListKeyDown}>
         {filteredSaved.length === 0 ? (
           <p className="lib-empty">
             {savedGames.length === 0
@@ -520,7 +552,8 @@ export function LibraryPanel({
               : 'No games match your search.'}
           </p>
         ) : (
-          visibleSaved.map((game) => {
+          visibleSaved.map((game, cardIndex) => {
+            const savedTabIndex = cardIndex === savedStopIndex ? 0 : -1;
             const studyLineLabel = formatSavedStudyLines(game);
             const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
             const reviewSummaryLabel = game.review ? formatLibraryReviewSummary(game.review.summary) : '';
@@ -537,7 +570,12 @@ export function LibraryPanel({
               { key: 'black', label: 'Black', value: game.review.summary.blackAccuracy },
             ].filter((item): item is { key: 'red' | 'black'; label: string; value: number } => typeof item.value === 'number') : [];
             return (
-              <div key={game.id} className="lib-card">
+              <div
+                key={game.id}
+                className="lib-card"
+                data-card-index={cardIndex}
+                onFocusCapture={() => setRovingSavedIndex(cardIndex)}
+              >
               <div className="lib-card-title">
                 {editingId === game.id ? (
                   <form
@@ -555,6 +593,7 @@ export function LibraryPanel({
                       aria-label={`Rename ${savedGameLabel}`}
                     />
                     <button
+                      tabIndex={savedTabIndex}
                       type="submit"
                       className="chip-btn"
                       aria-label={`Save rename for ${savedGameLabel}`}
@@ -564,6 +603,7 @@ export function LibraryPanel({
                       Save
                     </button>
                     <button
+                      tabIndex={savedTabIndex}
                       type="button"
                       className="chip-btn"
                       onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}
@@ -576,6 +616,7 @@ export function LibraryPanel({
                   </form>
                 ) : (
                   <button
+                    tabIndex={savedTabIndex}
                     type="button"
                     className="lib-game-name-button"
                     onClick={() => startEdit(game)}
@@ -586,6 +627,7 @@ export function LibraryPanel({
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
                   <button
+                    tabIndex={savedTabIndex}
                     type="button"
                     className={`chip-btn ${copiedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `copy-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => copySavedGamePgn(game)}
@@ -596,6 +638,7 @@ export function LibraryPanel({
                     {copiedId === game.id ? <><IconCheck /> Copied</> : <><IconCopy /> PGN</>}
                   </button>
                   <button
+                    tabIndex={savedTabIndex}
                     type="button"
                     className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `download-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => downloadSavedGamePgn(game)}
@@ -606,6 +649,7 @@ export function LibraryPanel({
                     {downloadedId === game.id ? <><IconCheck /> Saved</> : <><IconDownload /> File</>}
                   </button>
                   <button
+                    tabIndex={savedTabIndex}
                     type="button"
                     className={`chip-btn chip-btn-primary ${failedActionId === `load-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => loadSavedGame(game)}
@@ -617,6 +661,7 @@ export function LibraryPanel({
                   {pendingDeleteId === game.id ? (
                     <>
                       <button
+                        tabIndex={savedTabIndex}
                         type="button"
                         className="chip-btn chip-btn-danger chip-btn-danger-armed"
                         onClick={() => confirmDelete(game.id)}
@@ -627,6 +672,7 @@ export function LibraryPanel({
                         Delete
                       </button>
                       <button
+                        tabIndex={savedTabIndex}
                         type="button"
                         className="chip-btn"
                         onClick={() => { setActionError(null); setFailedActionId(null); setPendingDeleteId(null); }}
@@ -639,6 +685,7 @@ export function LibraryPanel({
                     </>
                   ) : (
                     <button
+                      tabIndex={savedTabIndex}
                       type="button"
                       className="chip-btn chip-btn-danger"
                       onClick={() => {
