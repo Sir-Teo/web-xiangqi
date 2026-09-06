@@ -6456,6 +6456,92 @@ async function assertMoveLineImportRejectsInvalidVariation(page) {
   }
 }
 
+async function assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page) {
+  // A finished review's most useful line is the study focus: the worst move
+  // and what to play instead. At 1280x720 the summary cards (stacked three
+  // deep) and the quality grid pushed its headline to 628px in a panel that
+  // ends at 592px, so the reader saw numbers and had to scroll for the point.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    const savedAt = 1710000005000;
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "review-fold",
+      savedAt,
+      gameMode: "PvP",
+      moves: ["b2e2", "h9g7"],
+      result: "ongoing",
+      label: "Review fold QA",
+      review: {
+        summary: {
+          totalMoves: 2,
+          accuracy: 66,
+          averageCentipawnLoss: 130,
+          redAccuracy: 39,
+          blackAccuracy: 93,
+          redAverageCentipawnLoss: 240,
+          blackAverageCentipawnLoss: 20,
+          bestCount: 0,
+          goodCount: 1,
+          inaccuracyCount: 0,
+          mistakeCount: 1,
+          blunderCount: 0,
+          reviewedAt: savedAt,
+          lineSignature: "b2e2 h9g7",
+          engine: { tier: "high", baseDepth: 10, baseMoveTimeMs: 1500, revisitDepth: 12, revisitMoveTimeMs: 3000 },
+          keyMoments: [{
+            nodeId: "saved-0", moveIndex: 0, jumpTarget: 0, ply: 1, side: "red", quality: "mistake",
+            swing: 240, winPercentLoss: 20.75881993130915, evalBefore: 0, evalAfter: -240,
+            bestMove: "b0c2", playedMove: "b2e2",
+            note: "Missed a stronger continuation. B0->C2 was stronger by 240cp.",
+          }],
+        },
+        annotations: [
+          { moveIndex: 0, evalScore: -240, bestMove: "b0c2", quality: "mistake", swing: 240, winPercentLoss: 20.75881993130915, reviewNote: "Missed a stronger continuation. B0->C2 was stronger by 240cp." },
+          { moveIndex: 1, evalScore: -220, quality: "good", swing: 20, winPercentLoss: 1.5, reviewNote: "Solid choice." },
+        ],
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-fold").click();
+  await page.getByTestId("analysis-tab-review").click();
+  await page.getByTestId("review-focus-card").waitFor({ timeout: 10000 });
+
+  const layout = await page.evaluate(() => {
+    const box = (el) => {
+      const rect = el?.getBoundingClientRect();
+      return rect ? { top: Math.round(rect.top), bottom: Math.round(rect.bottom) } : null;
+    };
+    const focus = document.querySelector('[data-testid="review-focus-card"]');
+    return {
+      panel: box(focus?.closest(".panel-content")),
+      focusHeadline: box(focus?.querySelector("strong")),
+      focusSuggestion: box(focus?.querySelector('[data-testid="review-focus-best-line"], .review-focus-best-line')),
+      summaryHeight: Math.round(document.querySelector(".review-summary-grid")?.getBoundingClientRect().height || 0),
+      breakdownHeight: Math.round(document.querySelector(".review-quality-breakdown")?.getBoundingClientRect().height || 0),
+      clipped: [...document.querySelectorAll(".review-summary-card, .review-quality-chip")]
+        .filter((el) => el.scrollWidth > el.clientWidth + 1).length,
+    };
+  });
+  if (!layout.panel || !layout.focusHeadline) {
+    throw new Error(`Review panel layout could not be measured: ${JSON.stringify(layout)}`);
+  }
+  if (layout.focusHeadline.bottom > layout.panel.bottom) {
+    throw new Error(`The study focus headline sits below the fold at 1280x720: ${JSON.stringify(layout)}`);
+  }
+  if (layout.clipped > 0) {
+    throw new Error(`Compact summary cards clip their text: ${JSON.stringify(layout)}`);
+  }
+  await page.evaluate(() => localStorage.removeItem("xiangqi:library:v1"));
+  console.log(`PASS: the study focus is above the fold at 1280x720 (${JSON.stringify(layout)})`);
+}
+
 async function assertReviewBestMoveBranchAction(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10499,6 +10585,7 @@ async function main() {
     await assertMoveLineImportRecoversUnclosedVariation(page);
     await assertMoveLineImportRejectsInvalidVariation(page);
     await assertReviewBestMoveBranchAction(page);
+    await assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page);
     await assertLearnFromMistakesAsksAndGrades(page);
     await assertLastMoveArrowUsesPracticalReviewQuality(page);
     await assertRunningReviewCancelsOnLineChange(browser);

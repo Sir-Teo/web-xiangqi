@@ -1247,6 +1247,19 @@ bottom put the second line fully in view (lines start at 278px rather than
 rarer than reading a line. `assertTwoEngineLinesFitAtLaptopHeight` holds
 the order and the fit.
 
+### The review's point comes before its numbers
+
+The same fold, on the Review tab. After a review the panel showed the
+summary cards (six of them, stacked label-over-value-over-detail, 226px),
+the quality counts as a grid of boxes (117px), and then the study focus --
+the worst move and what to play instead -- whose headline landed at 628px
+in a panel that ends at 592px on a 720px window. The cards are now one line
+each, label left and figures right, wrapping only where a card is too narrow
+for both; the counts are pills that wrap. Nothing was removed or reordered:
+the headline now sits at 521px, in view, with the summary still above it.
+`assertTheStudyFocusIsAboveTheFoldAtLaptopHeight` loads a saved review at
+1280x720 and holds the headline above the fold and every card unclipped.
+
 ### A hidden tab stops live analysis, and not a deep search
 
 Hiding the page stops everything the engine is doing on its own: live analysis,
