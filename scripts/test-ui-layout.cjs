@@ -4681,6 +4681,36 @@ async function assertAMoveNoteSurvivesAReload(browser) {
   }
 }
 
+async function assertACommaSeparatedShareLinkLoads(page) {
+  // The app writes share links with spaces. A person writes them with commas
+  // as often as not, and the strict token check refused those outright.
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await clearAutoSaveBetweenNavigations(page);
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b2b6", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1200);
+  for (const name of [/start fresh|keep the link/i, /restore/i]) {
+    const button = page.getByRole("button", { name });
+    if (await button.count()) { await button.first().click().catch(() => {}); break; }
+  }
+  await page.waitForFunction(
+    () => document.querySelectorAll(".mtree-chip").length >= 3,
+    null,
+    { timeout: 10000 },
+  ).catch(() => {});
+  const state = await page.evaluate(() => ({
+    moves: document.querySelectorAll(".mtree-chip").length,
+    warning: document.querySelector('[data-testid="share-link-warning"]')?.getAttribute("aria-label") || "",
+  }));
+  if (state.moves !== 3 || state.warning) {
+    throw new Error(`A comma-separated share link did not load its three moves: ${JSON.stringify(state)}`);
+  }
+  console.log("PASS: a comma-separated share link loads its moves");
+}
+
 async function assertShareLinkSaysWhyItDidNotLoad(page) {
   const expectations = [
     {
@@ -4694,6 +4724,13 @@ async function assertShareLinkSaysWhyItDidNotLoad(page) {
       what: "a token that is not a move",
       query: "?moves=h2e2+zz99+h0g2",
       says: ['"zz99"', "ask for it again"],
+    },
+    {
+      // A line typed by hand, with commas, cut short. The reason used to name
+      // the whole list ("h2e2,h9g7,b2") and blame the messaging app.
+      what: "a comma-separated line cut short",
+      query: "?moves=h2e2,h9g7,b2",
+      says: ['"b2"', "ask for it again"],
     },
     {
       what: "a starting position that cannot exist",
@@ -10434,6 +10471,7 @@ async function main() {
     await assertADiscardedTabKeepsTheLastThingDone(browser);
     await assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser);
     await assertShareLinkSaysWhyItDidNotLoad(page);
+    await assertACommaSeparatedShareLinkLoads(page);
     await assertLargeTextKeepsAUsableBoard(browser);
     await assertCrossingTheBreakpointKeepsABoard(page);
     await assertCaptureFreeCountExplainsALevelEnding(page);

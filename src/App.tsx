@@ -4215,7 +4215,11 @@ function App() {
     // machine-written bare UCI, so a token that is not a move means the link was
     // damaged in transit -- and silently dropping it handed the recipient a
     // shorter game than was sent, with nothing said.
-    const sharedMoveTokens = rawMoves.trim().split(/\s+/).filter(Boolean);
+    // Split on commas and semicolons as well as spaces. The app writes spaces,
+    // but a line typed by hand into the address bar is written with commas as
+    // often as not, and it used to be refused as "h2e2,h9g7,b2 is not a move"
+    // -- which named the whole list and blamed the messaging app.
+    const sharedMoveTokens = rawMoves.trim().split(/[\s,;|]+/).filter(Boolean);
     const unreadableToken = sharedMoveTokens.find((token) => !/^[a-i][0-9][a-i][0-9]$/i.test(token));
     if (unreadableToken !== undefined) {
       failShareLink({ kind: 'unreadable-move', token: unreadableToken.slice(0, 12) });

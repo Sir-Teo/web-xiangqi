@@ -2072,6 +2072,17 @@ argument for leaving it, that storage should be preference-independent, is
 satisfied by a note that names no move at all. The display rewriter is what
 keeps the first option's faithfulness for games already reviewed.
 
+## A share link written by hand
+
+The app writes `?moves=` with spaces between the moves. A person typing a
+line into the address bar writes commas as often as not, and the strict
+token check (whitespace only) refused `?moves=h2e2,h9g7,b2b6` with "the move
+list reads h2e2,h9g7,b2, which is not a move -- ask for it again", which
+named the whole list and blamed the messaging app. The check now splits on
+commas, semicolons and bars as well as spaces; the lenient extractor already
+did. `assertACommaSeparatedShareLinkLoads` loads such a link, and the
+failure gate checks that a comma list cut short names the short token.
+
 ## A phone was told nothing when an import went wrong (settled)
 
 **Decided: the mobile board header carries the notice**, as a full-width row
