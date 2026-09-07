@@ -10478,7 +10478,8 @@ async function assertDenseEvalGraphLimitsPointMarkers(page) {
 
 async function assertStalemateLossIsLabeled(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
-  const stalemateFen = encodeURIComponent("4k4/R8/9/9/9/4P4/9/9/9/3RKR3 b - - 0 1");
+  // Two chariots cover d9/f9; the soldier on e7 covers e8 without checking e9.
+  const stalemateFen = encodeURIComponent("4k4/9/4P4/9/9/9/9/9/9/3RKR3 b - - 0 1");
   await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${stalemateFen}`, {
     waitUntil: "domcontentloaded",
     timeout: 60000,
@@ -10515,7 +10516,7 @@ async function assertGameOverReviewPreservesResult(page) {
     localStorage.removeItem("xiangqi:library:v1");
   });
 
-  const terminalFen = "4k4/3RRR3/9/9/9/9/9/9/9/4K4 b - - 0 1";
+  const terminalFen = "R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1";
   await page.getByRole("button", { name: "Start new game" }).click();
   await page.getByLabel("FEN string").fill(terminalFen);
   await page.getByRole("button", { name: "Load" }).click();
@@ -10579,7 +10580,7 @@ async function assertGameOverReviewPreservesResult(page) {
 
 async function assertMobileGameOverReviewOpensReviewTab(page) {
   await page.setViewportSize({ width: 390, height: 844 });
-  const terminalFen = encodeURIComponent("4k4/3RRR3/9/9/9/9/9/9/9/4K4 b - - 0 1");
+  const terminalFen = encodeURIComponent("R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1");
   await page.goto(`http://127.0.0.1:8192/web-xiangqi/?fen=${terminalFen}`, {
     waitUntil: "domcontentloaded",
     timeout: 60000,

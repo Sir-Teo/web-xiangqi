@@ -37,6 +37,14 @@ async function fenValidation(browser) {
     await page.goto(base + '?fen=' + encodeURIComponent(valid));
     await page.waitForFunction(() => document.querySelectorAll('.piece').length === 3);
     assert.equal(await page.getByTestId('notice-announcement').innerText(), '');
+    for (const [fen, reason] of [
+      ['4k4/9/4P4/9/9/9/9/9/9/3RKR3 b - - 0 1', 'No legal moves - Xiangqi counts this as a loss'],
+      ['R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1', 'Checkmate'],
+    ]) {
+      await page.goto(base + '?fen=' + encodeURIComponent(fen));
+      await page.getByRole('heading', { name: 'Red Wins' }).waitFor();
+      assert.equal((await page.locator('.game-over-subtitle').textContent()).trim(), reason);
+    }
   } finally { await page.close(); }
 }
 
