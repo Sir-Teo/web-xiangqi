@@ -3049,7 +3049,7 @@ function App() {
   );
 
   // Game library
-  const { games: savedGames, save: saveGameToLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
+  const { games: savedGames, save: saveGameToLibrary, saveError: librarySaveError, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   // "Have I been here before?" over the games the player owns.
   //
@@ -7689,6 +7689,14 @@ function App() {
           onReview={dismissGameOverForReview}
         />
       )}
+
+      {saveFailedToast && librarySaveError ? (
+        <div className="save-error-notice" role="alert" data-testid="save-game-error">
+          <span>{librarySaveError}</span>
+          <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
+          <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
+        </div>
+      ) : null}
 
       {deleteUndo ? (
         <div className="undo-toast" role="status" data-testid="delete-undo-toast">

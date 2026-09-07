@@ -21,7 +21,7 @@ const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mista
 const REVIEW_ENGINE_TIERS: ReviewEngineSummary['tier'][] = ['low', 'mid', 'high'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
 const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
-const MAX_SAVED_GAMES = 500;
+export const MAX_SAVED_GAMES = 500;
 const MAX_SAVED_MOVES = 1024;
 const MAX_SAVED_TREE_NODES = MAX_SAVED_MOVES;
 const MAX_SAVED_LABEL_LENGTH = 120;
@@ -471,19 +471,28 @@ export function loadAllGames(): SavedGame[] {
     return readAll().sort((a, b) => b.savedAt - a.savedAt);
 }
 
-export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null {
-    const saved = normalizeSavedGame({
-        ...game,
-        id: createSavedGameId(),
-        savedAt: Date.now(),
-    });
-    if (!saved) return null;
+export type SaveGameResult =
+    | { game: SavedGame; error: null }
+    | { game: null; error: string };
+
+export function saveGameWithResult(game: Omit<SavedGame, 'id' | 'savedAt'>): SaveGameResult {
+    const saved = normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt: Date.now() });
+    if (!saved) return { game: null, error: 'This game could not be saved because its data is invalid.' };
     const { games, mutationBlocked } = readAllResult();
     if (mutationBlocked) {
-        return null;
+        return { game: null, error: 'Your saved library could not be read. It has been preserved; export the current game as PGN to keep it separately.' };
     }
-    games.push(saved);
-    return writeAll(games.slice(-MAX_SAVED_GAMES)) ? saved : null;
+    if (games.length >= MAX_SAVED_GAMES) {
+        return { game: null, error: `Your library is full (${MAX_SAVED_GAMES} games). Export a saved game before removing it to make room. Your existing games have been kept.` };
+    }
+    return writeAll([...games, saved])
+        ? { game: saved, error: null }
+        : { game: null, error: 'Could not save: browser storage is full, blocked, or the library is too large. Export this game as PGN to keep a copy.' };
+}
+
+/** Compatibility for callers that only need success/failure. */
+export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null {
+    return saveGameWithResult(game).game;
 }
 
 export function deleteGame(id: string): boolean {

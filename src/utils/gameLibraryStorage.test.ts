@@ -44,25 +44,17 @@ describe('how many games the library keeps', () => {
         expect(loadAllGames()).toHaveLength(40);
     });
 
-    it('caps at five hundred and drops the oldest, not the newest', () => {
-        // Each save is tagged so survivors can be named. Nothing here reads
-        // position in the returned array: `loadAllGames` sorts by `savedAt`
-        // descending, and five hundred saves inside one millisecond all carry
-        // the same stamp, so the order among them is whatever the sort happens
-        // to do. An earlier version of this asserted `games[0]` and failed
-        // about one run in five for exactly that reason.
-        for (let i = 0; i < 505; i += 1) save(['h2e2'], `game-${i}`);
-
-        const games = loadAllGames();
-        expect(games).toHaveLength(500);
-
-        const kept = new Set(games.map((game) => game.opening));
-        for (const dropped of [0, 1, 2, 3, 4]) {
-            expect(kept.has(`game-${dropped}`), `game-${dropped} should have been dropped`).toBe(false);
-        }
-        for (const survivor of [5, 6, 250, 503, 504]) {
-            expect(kept.has(`game-${survivor}`), `game-${survivor} should have been kept`).toBe(true);
-        }
+    it('refuses game 501 without evicting an existing game', () => {
+        for (let i = 0; i < 500; i += 1) expect(save(['h2e2'], `game-${i}`)).not.toBeNull();
+        const before = store.get(GAME_LIBRARY_STORAGE_KEY);
+        expect(save(['b2e2'], 'game-500')).toBeNull();
+        expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe(before);
+        expect(loadAllGames()).toHaveLength(500);
+        const oldest = loadAllGames().find(game => game.opening === 'game-0')!;
+        expect(renameGame(oldest.id, 'Keep me')).toBe(true);
+        expect(deleteGame(oldest.id)).toBe(true);
+        expect(save(['b2e2'], 'game-500')).not.toBeNull();
+        expect(loadAllGames()).toHaveLength(500);
     });
 });
 
