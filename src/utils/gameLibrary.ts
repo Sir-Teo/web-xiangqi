@@ -11,7 +11,7 @@ import type {
     SavedReviewSnapshot,
 } from './review';
 import { MAX_REPORTED_CENTIPAWN_LOSS, getWinPercentLossForMove, makeReviewLineSignatureFromMoves, rebuildSummaryFromAnnotations, reviewSideFromStartFen } from './review';
-import { GAME_LIBRARY_STORAGE_KEY, readVersionedStorage } from './storageKeys';
+import { GAME_LIBRARY_STORAGE_KEY, LEGACY_STORAGE_KEYS, readVersionedStorage } from './storageKeys';
 import { normalizeMoveComment } from './moveComment';
 import { bestLineForMove } from './engineBestLine';
 
@@ -21,7 +21,7 @@ const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy'
 const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
 const REVIEW_ENGINE_TIERS: ReviewEngineSummary['tier'][] = ['low', 'mid', 'high'];
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
-const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
+export const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
 export const MAX_SAVED_GAMES = 500;
 const MAX_SAVED_MOVES = 1024;
 const MAX_SAVED_TREE_NODES = MAX_SAVED_MOVES;
@@ -408,23 +408,37 @@ export function normalizeSavedGames(raw: unknown): SavedGame[] {
         .slice(-MAX_SAVED_GAMES);
 }
 
-function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {
+export interface LibraryState {
+    games: SavedGame[];
+    mutationBlocked: boolean;
+    raw: string | null;
+}
+
+export function loadLibraryState(): LibraryState {
+    let raw: string | null = null;
     try {
-        const raw = readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
-        if (!raw) return { games: [], mutationBlocked: false };
+        // Read directly first: the general preference reader deliberately treats
+        // inaccessible storage as absent, which is unsafe for library writes.
+        raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
+        if (raw === null) {
+            raw = localStorage.getItem(LEGACY_STORAGE_KEYS[GAME_LIBRARY_STORAGE_KEY]);
+            if (raw !== null) readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
+        }
+        if (raw === null) return { games: [], mutationBlocked: false, raw };
         if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
-            return { games: [], mutationBlocked: true };
+            return { games: [], mutationBlocked: true, raw };
         }
         const parsed: unknown = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true };
+        if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true, raw };
         const games = normalizeSavedGames(parsed);
-        // Stricter validation may exclude older records. Keep their raw data
-        // recoverable rather than silently removing them on the next mutation.
-        return { games, mutationBlocked: games.length !== parsed.length };
+        const duplicateIds = new Set(games.map(game => game.id)).size !== games.length;
+        return { games, mutationBlocked: games.length !== parsed.length || duplicateIds, raw };
     } catch {
-        return { games: [], mutationBlocked: true };
+        return { games: [], mutationBlocked: true, raw };
     }
 }
+
+const readAllResult = loadLibraryState;
 
 function readAll(): SavedGame[] {
     return readAllResult().games;
@@ -505,4 +519,61 @@ export function renameGame(id: string, label: string): boolean {
     }
     const renamed = games.map((g) => g.id === id ? { ...g, label: normalizedLabel } : g);
     return writeAll(renamed);
+}
+
+/** Versioned, portable backup. Recovery downloads use LibraryState.raw instead. */
+export function exportLibraryBackup(): string | null {
+    const state = loadLibraryState();
+    if (state.mutationBlocked) return null;
+    return JSON.stringify({ format: 'web-xiangqi-library', version: 1, games: state.games });
+}
+
+export type LibraryRestorePreview = {
+    added: number;
+    duplicates: number;
+    error: string | null;
+};
+
+function prepareLibraryRestore(text: string): LibraryRestorePreview & { games: SavedGame[] } {
+    const failure = (error: string) => ({ games: [], added: 0, duplicates: 0, error });
+    // Leave room for the versioned envelope around a maximum-size library.
+    if (text.length > MAX_LIBRARY_JSON_LENGTH + 1024) return failure('This backup is too large.');
+    let parsed: unknown;
+    try { parsed = JSON.parse(text); } catch { return failure('This file is not valid JSON.'); }
+    if (!isRecord(parsed) || parsed.format !== 'web-xiangqi-library' || parsed.version !== 1 || !Array.isArray(parsed.games)) {
+        return failure('Choose a version 1 Web Xiangqi library backup.');
+    }
+    if (parsed.games.length > MAX_SAVED_GAMES) return failure(`A library can hold at most ${MAX_SAVED_GAMES} games.`);
+    const incoming = normalizeSavedGames(parsed.games);
+    if (incoming.length !== parsed.games.length || new Set(incoming.map(game => game.id)).size !== incoming.length) {
+        return failure('This backup contains invalid games or duplicate game IDs. Nothing was restored.');
+    }
+    const current = loadLibraryState();
+    if (current.mutationBlocked) return failure('Your existing library could not be read. Download its recovery file before repairing browser storage.');
+    const byId = new Map(current.games.map(game => [game.id, game]));
+    const additions: SavedGame[] = [];
+    let duplicates = 0;
+    for (const game of incoming) {
+        const existing = byId.get(game.id);
+        if (!existing) additions.push(game);
+        else if (JSON.stringify(existing) === JSON.stringify(game)) duplicates += 1;
+        else return failure('A game in this backup conflicts with a saved game of the same ID. Nothing was restored.');
+    }
+    const games = [...current.games, ...additions];
+    if (games.length > MAX_SAVED_GAMES) return failure(`Restoring these games would exceed the ${MAX_SAVED_GAMES}-game limit.`);
+    if (JSON.stringify(games).length > MAX_LIBRARY_JSON_LENGTH) return failure('The combined library would be too large. Nothing was restored.');
+    return { games, added: additions.length, duplicates, error: null };
+}
+
+export function previewLibraryRestore(text: string): LibraryRestorePreview {
+    const { added, duplicates, error } = prepareLibraryRestore(text);
+    return { added, duplicates, error };
+}
+
+export function restoreLibraryBackup(text: string): LibraryRestorePreview {
+    // Re-read at confirmation time so a stale preview cannot replace newer data.
+    const { games, added, duplicates, error } = prepareLibraryRestore(text);
+    if (error) return { added: 0, duplicates, error };
+    if (added && !writeAll(games)) return { added: 0, duplicates, error: 'Browser storage refused the restore. Your existing library has been kept.' };
+    return { added, duplicates, error: null };
 }
