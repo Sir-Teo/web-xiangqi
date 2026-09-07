@@ -77,3 +77,21 @@ export function summarizeCloudRule(moves: CloudRuleMove[]): { banned: string[]; 
         drawing: moves.filter((move) => move.rule === 'draw').map((move) => move.uci),
     };
 }
+
+export interface CloudRuleState {
+    status: 'off' | 'loading' | 'ok' | 'error';
+    /** Moves the rules forbid here: the side to move loses by playing one. */
+    banned: string[];
+    /** Moves that would make the repetition a draw. */
+    drawing: string[];
+    /** The line the answer is for, so a stale one is never drawn. */
+    key: string;
+}
+
+
+/** Hide a previous line's verdict during the render before the request effect. */
+export function currentCloudRuleState(state: CloudRuleState, key: string, requested: boolean): CloudRuleState {
+    if (!requested) return { status: 'off', key, banned: [], drawing: [] };
+    if (state.key !== key) return { status: 'loading', key, banned: [], drawing: [] };
+    return state;
+}

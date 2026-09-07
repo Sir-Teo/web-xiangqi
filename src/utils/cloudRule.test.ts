@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCloudRuleUrl, parseCloudRuleResponse, summarizeCloudRule } from './cloudRule';
+import { currentCloudRuleState, buildCloudRuleUrl, parseCloudRuleResponse, summarizeCloudRule } from './cloudRule';
 
 // The service's own answer, recorded, to a chariot checking a bare general
 // back and forth from a0: after the fourth check the next one is forbidden.
@@ -35,5 +35,23 @@ describe('parseCloudRuleResponse', () => {
         expect(parseCloudRuleResponse('checkmate')).toEqual({ status: 'terminal' });
         expect(parseCloudRuleResponse('')).toEqual({ status: 'unreadable' });
         expect(parseCloudRuleResponse('<html>busy</html>')).toEqual({ status: 'unreadable' });
+    });
+});
+
+
+describe('verdict freshness', () => {
+    const verdict = { status: 'ok' as const, key: 'line-a', banned: ['a0a1'], drawing: ['b0c2'] };
+    it('does not expose a previous line even before the next effect runs', () => {
+        expect(currentCloudRuleState(verdict, 'line-b', true))
+            .toEqual({ status: 'loading', key: 'line-b', banned: [], drawing: [] });
+    });
+    it('hides a ruling as soon as the user opts out or repetition no longer applies', () => {
+        expect(currentCloudRuleState(verdict, 'line-a', false))
+            .toEqual({ status: 'off', key: 'line-a', banned: [], drawing: [] });
+    });
+    it('keeps the current verdict and request failures', () => {
+        expect(currentCloudRuleState(verdict, 'line-a', true)).toBe(verdict);
+        const failure = { status: 'error' as const, key: 'line-b', banned: [], drawing: [] };
+        expect(currentCloudRuleState(failure, 'line-b', true)).toBe(failure);
     });
 });

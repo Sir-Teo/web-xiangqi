@@ -40,12 +40,45 @@ async function fenValidation(browser) {
   } finally { await page.close(); }
 }
 
+async function cloudRuleFreshness(browser) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const pending = [];
+  try {
+    await page.route('**/chessdb.php*', route => {
+      if (new URL(route.request().url()).searchParams.get('action') === 'queryrule') pending.push(route);
+      else return route.fulfill({ body: 'unknown', contentType: 'text/plain' });
+    });
+    const moves = 'a0a1 a9a8 a1a0 a8a9 a0a1 a9a8 a1a0 a8a9';
+    await page.goto(base + '?moves=' + encodeURIComponent(moves));
+    await page.getByTestId('cloud-book-enable').click();
+    const ruling = page.getByTestId('repetition-cloud-rule');
+    await page.waitForFunction(() => document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent.includes('checking'));
+    const waitForRoute = async () => {
+      for (let i = 0; i < 100 && pending.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 25));
+      assert.ok(pending.length, 'Expected a cloud rule request');
+      return pending.shift();
+    };
+    await (await waitForRoute()).fulfill({ body: 'move:a0a1,rule:ban', contentType: 'text/plain' });
+    await page.waitForFunction(() => document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent.includes('forbidden'));
+    await page.locator('.hitbox[data-file="0"][data-rank="0"]').click();
+    await page.locator('.hitbox[data-file="0"][data-rank="1"]').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent.includes('checking'));
+    assert.doesNotMatch(await ruling.innerText(), /forbidden/);
+    await (await waitForRoute()).fulfill({ body: 'invalid movelist', contentType: 'text/plain' });
+    await page.waitForFunction(() => document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent.includes('unavailable'));
+    await page.screenshot({ path: '/tmp/xiangqi-cloud-rule-unavailable.png' });
+    await page.getByTestId('cloud-book-disable').click();
+    await ruling.waitFor({ state: 'detached' });
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     await fullLibrary(browser, 1440);
     await fullLibrary(browser, 390);
     await fenValidation(browser);
-    console.log('PASS: FEN validity,  full-library save preserves all games; desktop/mobile feedback and library action');
+    await cloudRuleFreshness(browser);
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

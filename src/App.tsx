@@ -2947,6 +2947,8 @@ function App() {
     [currentFen]
   );
   const cloudRuleText = useMemo(() => {
+    if (cloudRule.status === 'loading') return `${CLOUD_BOOK_SITE_NAME}: checking the repetition ruling…`;
+    if (cloudRule.status === 'error') return `${CLOUD_BOOK_SITE_NAME}: repetition ruling unavailable. Perpetual chase has not been checked.`;
     if (!cloudRuleHasVerdict) return null;
     const name = (uci: string) => formatMoveInStyle(board, uci, notationStyle);
     const parts: string[] = [];
@@ -2957,7 +2959,7 @@ function App() {
       parts.push(`${cloudRule.drawing.map(name).join(', ')} would be ruled a draw.`);
     }
     return `${CLOUD_BOOK_SITE_NAME}: ${parts.join(' ')}`;
-  }, [board, cloudRule.banned, cloudRule.drawing, cloudRuleHasVerdict, notationStyle]);
+  }, [board, cloudRule.status, cloudRule.banned, cloudRule.drawing, cloudRuleHasVerdict, notationStyle]);
 
   const canStartReview = engineEnabled && isReady && moveHistory.length > 0 && !aiMoveSearchActive;
   const engineUnavailableReviewTitle = engineNotice?.text ?? 'Engine is still loading';

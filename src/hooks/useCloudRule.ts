@@ -1,20 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
     CLOUD_RULE_MIN_MOVES,
+    currentCloudRuleState,
+    type CloudRuleState,
     buildCloudRuleUrl,
     parseCloudRuleResponse,
     summarizeCloudRule,
 } from '../utils/cloudRule';
 
-export interface CloudRuleState {
-    status: 'off' | 'loading' | 'ok' | 'error';
-    /** Moves the rules forbid here: the side to move loses by playing one. */
-    banned: string[];
-    /** Moves that would make the repetition a draw. */
-    drawing: string[];
-    /** The line the answer is for, so a stale one is never drawn. */
-    key: string;
-}
+export type { CloudRuleState } from '../utils/cloudRule';
 
 const CLOUD_RULE_DEBOUNCE_MS = 350;
 const CLOUD_RULE_TIMEOUT_MS = 8000;
@@ -57,7 +51,7 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const reading = parseCloudRuleResponse(await response.text());
                 if (controller.signal.aborted) return;
-                if (reading.status === 'unreadable') throw new Error('unreadable reply');
+                if (reading.status === 'unreadable' || reading.status === 'invalid') throw new Error('unavailable ruling');
                 const summary = reading.status === 'ok' ? summarizeCloudRule(reading.moves) : { banned: [], drawing: [] };
                 cache.set(key, summary);
                 while (cache.size > CACHE_LIMIT) {
@@ -84,5 +78,5 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, wanted, key, rootFen]);
 
-    return state;
+    return currentCloudRuleState(state, key, enabled && wanted && moves.length >= CLOUD_RULE_MIN_MOVES);
 }
