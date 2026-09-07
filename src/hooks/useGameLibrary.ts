@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { GAME_LIBRARY_STORAGE_KEY, loadAllGames, saveGameWithResult, deleteGame, renameGame } from '../utils/gameLibrary';
+import { GAME_LIBRARY_STORAGE_KEY, loadLibraryState, saveGameWithResult, deleteGame, renameGame } from '../utils/gameLibrary';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { GameMode } from '../App';
 
 export function useGameLibrary() {
     const [saveError, setSaveError] = useState<string | null>(null);
-    const [games, setGames] = useState<SavedGame[]>(() => loadAllGames());
+    const [libraryState, setLibraryState] = useState(loadLibraryState);
 
     const refresh = useCallback(() => {
-        setGames(loadAllGames());
+        setLibraryState(loadLibraryState());
     }, []);
 
     useEffect(() => {
@@ -42,21 +42,21 @@ export function useGameLibrary() {
             result: options.result ?? 'ongoing',
         });
         setSaveError(result.error);
-        if (result.game) setGames(loadAllGames());
+        if (result.game) setLibraryState(loadLibraryState());
         return result.game;
     }, []);
 
     const remove = useCallback((id: string): boolean => {
         const ok = deleteGame(id);
-        setGames(loadAllGames());
+        setLibraryState(loadLibraryState());
         return ok;
     }, []);
 
     const rename = useCallback((id: string, label: string): boolean => {
         const ok = renameGame(id, label);
-        setGames(loadAllGames());
+        setLibraryState(loadLibraryState());
         return ok;
     }, []);
 
-    return { games, save, saveError, remove, rename, refresh };
+    return { games: libraryState.games, libraryState, save, saveError, remove, rename, refresh };
 }

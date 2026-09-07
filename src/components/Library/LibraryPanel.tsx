@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
-import type { SavedGame } from '../../utils/gameLibrary';
+import { LibraryTransfer } from './LibraryTransfer';
+import type { LibraryState, SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import {
   describeReviewEngineSummary,
@@ -34,6 +35,8 @@ const SAVED_SORT_LABELS: Record<SavedSort, string> = {
 
 interface LibraryPanelProps {
   savedGames: SavedGame[];
+  libraryState: LibraryState;
+  onLibraryChange: () => void;
   onLoadSavedGame: (game: SavedGame) => boolean;
   onDeleteSavedGame: (id: string) => boolean;
   onRenameSavedGame: (id: string, label: string) => boolean;
@@ -205,6 +208,8 @@ function buildSavedGamePgn(game: SavedGame) {
 
 export function LibraryPanel({
   savedGames,
+  libraryState,
+  onLibraryChange,
   onLoadSavedGame,
   onDeleteSavedGame,
   onRenameSavedGame,
@@ -427,6 +432,7 @@ export function LibraryPanel({
 
   return (
     <div className="lib-panel">
+      <LibraryTransfer state={libraryState} onChange={onLibraryChange} />
       <div className="lib-search-wrap">
         <input
           className="lib-search"

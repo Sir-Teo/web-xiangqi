@@ -3051,7 +3051,7 @@ function App() {
   );
 
   // Game library
-  const { games: savedGames, save: saveGameToLibrary, saveError: librarySaveError, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
+  const { games: savedGames, save: saveGameToLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   // "Have I been here before?" over the games the player owns.
   //
@@ -6157,6 +6157,8 @@ function App() {
                     onLoadSavedGame={handleLoadGame}
                     onDeleteSavedGame={deleteGameFromLibrary}
                     onRenameSavedGame={renameGameInLibrary}
+                    libraryState={libraryState}
+                    onLibraryChange={refreshGameLibrary}
                     onLoadHistorical={handleLoadHistoricalGame}
                   />
                 </React.Suspense>
