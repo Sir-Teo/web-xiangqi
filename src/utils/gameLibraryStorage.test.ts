@@ -118,3 +118,12 @@ describe('writes must remain readable', () => {
         expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe('{truncated');
     });
 });
+
+
+it('preserves legacy records rejected by stricter setup validation', () => {
+    const raw = JSON.stringify([{ id: 'legacy', savedAt: 1, gameMode: 'PvP', moves: [],
+        startFen: '3k5/9/9/9/9/9/9/9/R8/R3K3R w - - 0 1' }]);
+    store.set(GAME_LIBRARY_STORAGE_KEY, raw);
+    expect(save(['h2e2'])).toBeNull();
+    expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe(raw);
+});

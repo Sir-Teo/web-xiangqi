@@ -1,3 +1,4 @@
+import { describeSetupProblem } from '../utils/positionSetup';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import type {
     BoardState,
@@ -12,12 +13,8 @@ import {
     squareToUci,
     uciToSquare,
     pieceSide,
-    findKing,
-    inPalace,
     isInCheck,
-    kingsFacing,
     hasAnyLegalMove,
-    otherSide,
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
@@ -132,19 +129,10 @@ function parseRootPositionFromFen(fen: string): RootPosition | null {
         const parts = fen.trim().split(/\s+/);
         if (parts.length < 2) return null;
         const board = parseFenBoard(parts[0]);
-        const flat = board.flat();
-        if (flat.filter((piece) => piece === 'K').length !== 1) return null;
-        if (flat.filter((piece) => piece === 'k').length !== 1) return null;
         const sideChar = parts[1];
         if (sideChar !== 'w' && sideChar !== 'b') return null;
-        const side: Side = sideChar === 'b' ? 'b' : 'w';
-        const redKing = findKing(board, 'w');
-        const blackKing = findKing(board, 'b');
-        if (!redKing || !blackKing) return null;
-        if (!inPalace('w', redKing.file, redKing.rank)) return null;
-        if (!inPalace('b', blackKing.file, blackKing.rank)) return null;
-        if (kingsFacing(board)) return null;
-        if (isInCheck(board, otherSide(side))) return null;
+        const side: Side = sideChar;
+        if (describeSetupProblem(board, side)) return null;
         const parsedFullmove = Number(parts[5]);
         const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
             ? Math.trunc(parsedFullmove)

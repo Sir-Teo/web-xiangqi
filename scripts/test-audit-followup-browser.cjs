@@ -25,11 +25,27 @@ async function fullLibrary(browser, width) {
   } finally { await page.close(); }
 }
 
+async function fenValidation(browser) {
+  const page = await browser.newPage();
+  try {
+    const invalid = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/PPP1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1';
+    await page.goto(base + '?fen=' + encodeURIComponent(invalid));
+    await page.waitForFunction(() => document.querySelector('[data-testid="notice-announcement"]')?.textContent.trim());
+    assert.equal(await page.locator('.piece').count(), 32);
+    assert.match(await page.getByTestId('notice-announcement').innerText(), /position|FEN/i);
+    const valid = '3k5/9/9/9/9/9/9/9/9/3RK4 b - - 47 32';
+    await page.goto(base + '?fen=' + encodeURIComponent(valid));
+    await page.waitForFunction(() => document.querySelectorAll('.piece').length === 3);
+    assert.equal(await page.getByTestId('notice-announcement').innerText(), '');
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     await fullLibrary(browser, 1440);
     await fullLibrary(browser, 390);
-    console.log('PASS: full-library save preserves all games; desktop/mobile feedback and library action');
+    await fenValidation(browser);
+    console.log('PASS: FEN validity,  full-library save preserves all games; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

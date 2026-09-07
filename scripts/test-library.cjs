@@ -542,11 +542,11 @@ try {
       moves: ["b0c2"],
       result: "ongoing",
     });
-    assert(cappedSave, "Saving should work when the library is at the saved-game cap.");
+    assert(cappedSave === null, "Saving must refuse a full library without removing a game.");
     const cappedStoredGames = JSON.parse(storedValues.get(libraryStorageKey) || "[]");
     assert(cappedStoredGames.length === 500, "Saving past the game cap should not grow persisted storage.");
-    assert(cappedStoredGames[0]?.id === "stored-1", "Saving past the cap should drop the oldest game.");
-    assert(cappedStoredGames.at(-1)?.id === cappedSave.id, "The newest saved game should remain after capping.");
+    assert(cappedStoredGames[0]?.id === "stored-0", "Saving past the cap must preserve the oldest game.");
+    assert(cappedStoredGames.at(-1)?.id === "stored-499", "The newest saved game should remain after capping.");
     const oversizedRawLibrary = "x".repeat(3_000_001);
     storedValues.set(libraryStorageKey, oversizedRawLibrary);
     assert(library.loadAllGames().length === 0, "Oversized raw saved-game storage should be ignored before JSON parsing.");

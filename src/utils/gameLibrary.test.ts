@@ -296,3 +296,19 @@ describe('the invariant every panel downstream relies on', () => {
         expect(nonFiniteNumbersIn({ a: 1, b: 'two' })).toEqual([]);
     });
 });
+
+
+describe('stored setups follow the board editor rules', () => {
+    it.each([
+        'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/PPP1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1',
+        '3k5/9/9/9/9/9/9/9/R8/R3K3R w - - 0 1',
+        '3k5/9/9/9/9/9/9/9/3A5/4K4 w - - 0 1',
+        '3k5/9/9/9/9/4B4/9/9/9/4K4 w - - 0 1',
+    ])('rejects impossible placement: %s', startFen => {
+        expect(normalizeSavedGame(game({ moves: [], startFen }))).toBeNull();
+    });
+    it('accepts a legal sparse ending with Black in check and preserves clocks', () => {
+        const startFen = '3k5/9/9/9/9/9/9/9/9/3RK4 b - - 47 32';
+        expect(normalizeSavedGame(game({ moves: [], startFen }))?.startFen).toBe(startFen);
+    });
+});

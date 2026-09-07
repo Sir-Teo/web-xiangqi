@@ -1,5 +1,6 @@
 import type { GameMode } from '../App';
-import { findKing, inPalace, isInCheck, kingsFacing, otherSide, parseFenBoard } from './xiangqi';
+import { parseFenBoard } from './xiangqi';
+import { describeSetupProblem } from './positionSetup';
 import type {
     ReviewCriticalQuality,
     ReviewEngineSummary,
@@ -168,18 +169,8 @@ function normalizeStartFen(value: unknown): string | undefined | null {
         const parts = fen.split(/\s+/);
         if (parts.length < 2) return null;
         const board = parseFenBoard(parts[0]);
-        const flat = board.flat();
-        if (flat.filter((piece) => piece === 'K').length !== 1) return null;
-        if (flat.filter((piece) => piece === 'k').length !== 1) return null;
         if (parts[1] !== 'w' && parts[1] !== 'b') return null;
-        const side = parts[1] === 'b' ? 'b' : 'w';
-        const redKing = findKing(board, 'w');
-        const blackKing = findKing(board, 'b');
-        if (!redKing || !blackKing) return null;
-        if (!inPalace('w', redKing.file, redKing.rank)) return null;
-        if (!inPalace('b', blackKing.file, blackKing.rank)) return null;
-        if (kingsFacing(board)) return null;
-        if (isInCheck(board, otherSide(side))) return null;
+        if (describeSetupProblem(board, parts[1])) return null;
         return fen;
     } catch {
         return null;
@@ -426,7 +417,10 @@ function readAllResult(): { games: SavedGame[]; mutationBlocked: boolean } {
         }
         const parsed: unknown = JSON.parse(raw);
         if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true };
-        return { games: normalizeSavedGames(parsed), mutationBlocked: false };
+        const games = normalizeSavedGames(parsed);
+        // Stricter validation may exclude older records. Keep their raw data
+        // recoverable rather than silently removing them on the next mutation.
+        return { games, mutationBlocked: games.length !== parsed.length };
     } catch {
         return { games: [], mutationBlocked: true };
     }
