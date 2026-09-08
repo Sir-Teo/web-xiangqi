@@ -4,6 +4,7 @@ import {
     formatExplorerRecord,
     libraryPositionSignature,
     lookupLibraryPosition,
+    selectLibraryPositionGames,
 } from './positionExplorer';
 import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 import type { SavedGame } from './gameLibrary';
@@ -218,5 +219,21 @@ describe('repertoire statistics remain tied to games', () => {
             expect(libraryPositionSignature([{ ...original, ...change }]))
                 .not.toBe(libraryPositionSignature([original]));
         }
+    });
+});
+
+
+describe('matching saved games', () => {
+    it('returns the first occurrence per game in newest-save order, bounded for transfer', () => {
+        const index = buildLibraryPositionIndex([
+            game('old', ['a0a1', 'a9a8', 'a1a0', 'a8a9'], { savedAt: 10 }),
+            game('new', ['h2e2'], { savedAt: 20 }),
+        ]);
+        const hits = lookupLibraryPosition(index, parseFenBoard(START_FEN), 'w').hits;
+        expect(hits.length).toBe(3);
+        expect(selectLibraryPositionGames(hits).map(hit => [hit.gameId, hit.ply]))
+            .toEqual([['new', 0], ['old', 0]]);
+        expect(selectLibraryPositionGames([...hits].reverse(), 1).map(hit => hit.gameId)).toEqual(['new']);
+        expect(selectLibraryPositionGames(hits, 0)).toEqual([]);
     });
 });

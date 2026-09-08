@@ -419,7 +419,7 @@ export function useXiangqi() {
         return visitChildren(moveTree, root.board, root.sideToMove, 0);
     }, []);
 
-    const loadMoves = useCallback((moves: string[], startFen?: string) => {
+    const loadMoves = useCallback((moves: string[], startFen?: string, initialPly?: number) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         let currentBoard = root.board;
         let currentSide: Side = root.sideToMove;
@@ -467,21 +467,24 @@ export function useXiangqi() {
             currentSide = nextSide;
         }
 
+        const selectedPly = Number.isFinite(initialPly)
+            ? Math.max(0, Math.min(activeLine.length, Math.trunc(initialPly!))) : activeLine.length;
+        const position = getPositionFromNode(tree, activeLine[selectedPly - 1] ?? ROOT_NODE_ID, root);
         nodeCounterRef.current = counter;
         setRootPosition(root);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
-        setCurrentMoveIndex(lastIndex);
-        setBoard(currentBoard);
-        setSideToMove(currentSide);
-        setInCheck(isInCheck(currentBoard, currentSide));
-        setGameResult(gameResultForPosition(currentBoard, currentSide));
+        setCurrentMoveIndex(selectedPly - 1);
+        setBoard(position.board);
+        setSideToMove(position.sideToMove);
+        setInCheck(position.inCheck);
+        setGameResult(gameResultForPosition(position.board, position.sideToMove));
         setSelected(null);
         setValidTargets([]);
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
-    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string) => {
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         const tree: Record<string, MoveTreeNode> = createRootTree();
         let counter = 1;
@@ -554,14 +557,15 @@ export function useXiangqi() {
         // recently explored" is a fact about a session, and a tree that has
         // just been read off disk has not had one. First child is the main
         // line, which is what the reader means by the rest of the game.
-        const cursorIndex = activeLine.length - 1;
+        const cursorIndex = (Number.isFinite(initialPly)
+            ? Math.max(0, Math.min(activeLine.length, Math.trunc(initialPly!))) : activeLine.length) - 1;
         while (tree[cursor]?.childrenIds.length) {
             const childId = tree[cursor].childrenIds[0];
             activeLine.push(childId);
             cursor = childId;
         }
 
-        const shouldKeepRootSelected = mainLineMoves.length === 0 || activeLine.length === 0;
+        const shouldKeepRootSelected = cursorIndex < 0;
         const activeNodeId = shouldKeepRootSelected ? ROOT_NODE_ID : activeLine[cursorIndex] ?? ROOT_NODE_ID;
         const position = getPositionFromNode(tree, activeNodeId, root);
         nodeCounterRef.current = counter;
@@ -1113,6 +1117,7 @@ export function useXiangqi() {
         currentMoveIndex,
         currentNodeId,
         rootNodeId: ROOT_NODE_ID,
+        gameIdentity: rootPosition,
         treeNodes,
         activeLineNodeIds,
         selected,

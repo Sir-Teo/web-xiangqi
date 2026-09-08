@@ -1,4 +1,4 @@
-import { buildLibraryPositionIndex, lookupLibraryPosition } from '../utils/positionExplorer';
+import { buildLibraryPositionIndex, lookupLibraryPosition, selectLibraryPositionGames } from '../utils/positionExplorer';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { BoardState, Side } from '../utils/xiangqi';
 import { positionKey } from '../utils/repetition';
@@ -14,7 +14,7 @@ self.onmessage = ({ data }: MessageEvent<ExplorerRequest>) => {
     return;
   }
   // Keep the potentially large index in this worker; transfer only the current
-  // position's report. The UI does not display occurrence links yet.
-  const { hits: _hits, ...report } = lookupLibraryPosition(index, data.board, data.side);
-  self.postMessage({ key: positionKey(data.board, data.side), report: { ...report, hits: [] }, skipped: index?.skipped ?? 0 });
+  // position's report and a bounded selection of matching games.
+  const { hits, ...report } = lookupLibraryPosition(index, data.board, data.side);
+  self.postMessage({ key: positionKey(data.board, data.side), report: { ...report, hits: selectLibraryPositionGames(hits) }, skipped: index?.skipped ?? 0 });
 };

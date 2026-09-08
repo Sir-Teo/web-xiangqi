@@ -12,6 +12,7 @@ const path = require('node:path');
     for (const script of [
       'test-autosave-error-browser.cjs',
       'test-explorer-browser.cjs',
+      'test-library-matches-browser.cjs',
       'test-beginner-browser.cjs',
       'test-weights-cache-browser.cjs',
       'test-library-backup-browser.cjs',

@@ -1195,7 +1195,7 @@ async function assertLibraryExplorerCountsOwnGames(page) {
       if (!card) return null;
       return {
         games: Number(card.querySelector(".opening-candidates-head strong")?.textContent?.trim() ?? "0"),
-        rows: [...card.querySelectorAll("button")].map((b) => b.textContent.replace(/\s+/g, " ").trim()),
+        rows: [...card.querySelectorAll('[data-testid^="library-continuation-"]')].map((b) => b.textContent.replace(/\s+/g, " ").trim()),
       };
     });
   };

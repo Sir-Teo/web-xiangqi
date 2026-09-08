@@ -1,3 +1,4 @@
+import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
@@ -1131,6 +1132,7 @@ function App() {
     currentMoveIndex,
     currentNodeId,
     rootNodeId,
+    gameIdentity,
     treeNodes,
     activeLineNodeIds,
     currentFen,
@@ -3488,7 +3490,7 @@ function App() {
    * cursor still in the box.
    */
   const [moveCommentDraft, setMoveCommentDraft] = useState('');
-  const moveCommentEditRef = useRef<{ nodeId: string; draft: string } | null>(null);
+  const moveCommentEditRef = useRef<{ gameIdentity: object; nodeId: string; draft: string } | null>(null);
   const moveCommentTimerRef = useRef<number | null>(null);
   const treeNodesRef = useRef(treeNodes);
   // Synced in an effect rather than during render, and declared immediately
@@ -3505,8 +3507,8 @@ function App() {
       moveCommentTimerRef.current = null;
     }
     const pending = moveCommentEditRef.current;
-    if (pending) setNodeComment(pending.nodeId, pending.draft);
-  }, [setNodeComment]);
+    if (pending?.gameIdentity === gameIdentity) setNodeComment(pending.nodeId, pending.draft);
+  }, [gameIdentity, setNodeComment]);
 
   const handleMoveCommentChange = useCallback((value: string) => {
     setMoveCommentDraft(value);
@@ -3515,9 +3517,9 @@ function App() {
     moveCommentTimerRef.current = window.setTimeout(() => {
       moveCommentTimerRef.current = null;
       const pending = moveCommentEditRef.current;
-      if (pending) setNodeComment(pending.nodeId, pending.draft);
+      if (pending?.gameIdentity === gameIdentity) setNodeComment(pending.nodeId, pending.draft);
     }, 600);
-  }, [setNodeComment]);
+  }, [gameIdentity, setNodeComment]);
 
   // Stepping to another move writes the note being edited before loading the
   // next one, so a note is never lost by navigating away from it. The tree is
@@ -3525,18 +3527,20 @@ function App() {
   // re-run -- and re-reset the draft -- while someone is typing into it.
   useEffect(() => {
     const previous = moveCommentEditRef.current;
-    if (previous && previous.nodeId !== currentNodeId) {
-      if (moveCommentTimerRef.current !== null) {
-        window.clearTimeout(moveCommentTimerRef.current);
-        moveCommentTimerRef.current = null;
-      }
+    if (moveCommentTimerRef.current !== null) {
+      window.clearTimeout(moveCommentTimerRef.current);
+      moveCommentTimerRef.current = null;
+    }
+    // Node IDs restart on load. Never write an old game's draft into a new
+    // tree, even if both games happen to select the same node ID.
+    if (previous?.gameIdentity === gameIdentity && previous.nodeId !== currentNodeId) {
       setNodeComment(previous.nodeId, previous.draft);
     }
     const editableNodeId = currentNodeId && currentNodeId !== rootNodeId ? currentNodeId : null;
     const stored = editableNodeId ? treeNodesRef.current[editableNodeId]?.record?.comment ?? '' : '';
-    moveCommentEditRef.current = editableNodeId ? { nodeId: editableNodeId, draft: stored } : null;
+    moveCommentEditRef.current = editableNodeId ? { gameIdentity, nodeId: editableNodeId, draft: stored } : null;
     setMoveCommentDraft(stored);
-  }, [currentNodeId, rootNodeId, setNodeComment]);
+  }, [currentNodeId, gameIdentity, rootNodeId, setNodeComment]);
 
   useEffect(() => () => {
     if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
@@ -4695,7 +4699,7 @@ function App() {
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
       stopSearch])
-  const handleLoadGame = useCallback((game: SavedGame) => {
+  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
@@ -4722,9 +4726,11 @@ function App() {
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen)
-      : loadMoves(game.moves, game.startFen);
-    setGameResult(savedResultToGameResult(game.result));
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly)
+      : loadMoves(game.moves, game.startFen, initialPly);
+    if (initialPly === undefined || initialPly >= game.moves.length) {
+      setGameResult(savedResultToGameResult(game.result));
+    }
     if (game.review) {
       setNodeReviewDataBulk(
         game.review.annotations
@@ -6165,6 +6171,19 @@ function App() {
                           {libraryPositionReport.games === 1 ? 'One saved game ends here.' : `${libraryPositionReport.games} saved games end here.`}
                         </p>
                       )}
+                      <LibraryMatches
+                        hits={libraryPositionReport.hits}
+                        total={libraryPositionReport.games}
+                        onOpenLibrary={openLibraryPanel}
+                        onOpen={(hit) => {
+                          const game = savedGames.find(game => game.id === hit.gameId);
+                          if (!game || !handleLoadGame(game, hit.ply)) return false;
+                          setAnalysisTab('tree');
+                          setMobileAnalysisTab('moves');
+                          if (isMobile) setMobileView('board');
+                          return true;
+                        }}
+                      />
                     </div>
                   ) : null}
                 </>

@@ -1,0 +1,7 @@
+.library-matches { border-top: 1px solid var(--border-default); padding-top: 0.5rem; margin-top: 0.5rem; font-size: 0.75rem; }
+.library-matches summary { cursor: pointer; padding: 0.25rem 0; color: var(--text-primary); }
+.library-matches p { color: var(--text-secondary); line-height: 1.5; margin: 0.5rem 0; }
+.library-matches-list { display: grid; gap: 0.375rem; margin-bottom: 0.5rem; }
+.library-matches-list button { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; min-height: 44px; padding: 0.5rem; text-align: left; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-panel); color: var(--text-primary); cursor: pointer; overflow-wrap: anywhere; }
+.library-matches-list button:hover { border-color: var(--accent); }
+.library-matches-list span { color: var(--text-secondary); font-size: 0.7rem; }

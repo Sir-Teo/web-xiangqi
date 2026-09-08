@@ -35,6 +35,7 @@ export type ExplorerResult = 'red-wins' | 'black-wins' | 'draw' | 'unknown';
 
 export interface LibraryPositionHit {
     gameId: string;
+    savedAt: number;
     label?: string;
     opening?: string;
     result: ExplorerResult;
@@ -58,7 +59,7 @@ export interface LibraryPositionReport {
     games: number;
     /** What was played from it, most played first. */
     moves: LibraryPositionMove[];
-    /** Every occurrence, newest game first, for linking back. */
+    /** Every occurrence, grouped by input game order, for linking back. */
     hits: LibraryPositionHit[];
 }
 
@@ -142,6 +143,7 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
             const move = validation?.ok ? validation.mv : null;
             const hit: LibraryPositionHit = {
                 gameId: game.id,
+                savedAt: game.savedAt,
                 label: game.label,
                 opening: game.opening,
                 result,
@@ -226,4 +228,16 @@ export function formatExplorerRecord(move: LibraryPositionMove): string {
     const decided = move.redWins + move.blackWins + move.draws;
     if (decided === 0) return 'no result saved';
     return `${move.redWins}–${move.blackWins}–${move.draws}`;
+}
+
+/** Keep one reachable occurrence per game, newest saves first, with bounded transfer. */
+export function selectLibraryPositionGames(hits: LibraryPositionHit[], limit = 8): LibraryPositionHit[] {
+    const games = new Map<string, LibraryPositionHit>();
+    for (const hit of hits) {
+        const previous = games.get(hit.gameId);
+        if (!previous || hit.ply < previous.ply) games.set(hit.gameId, hit);
+    }
+    return [...games.values()]
+        .sort((a, b) => b.savedAt - a.savedAt || a.gameId.localeCompare(b.gameId))
+        .slice(0, Math.max(0, Math.trunc(limit)));
 }
