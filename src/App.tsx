@@ -1,3 +1,6 @@
+import { readStorage, writeStorage } from './utils/storage';
+import { BeginnerGuide } from './components/BeginnerGuide';
+import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
@@ -882,6 +885,7 @@ function App() {
   const defaultSearchDepth = detectDeviceScreen().width <= 900 ? 14 : 22;
   const initialSoundEnabled = storedPreferences.soundEnabled ?? true;
   const initialAiSpeed = storedPreferences.aiSpeed ?? 'normal';
+  const [guideDismissed, setGuideDismissed] = useState(() => readStorage(BEGINNER_GUIDE_STORAGE_KEY) === 'true');
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
   const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
@@ -2541,6 +2545,18 @@ function App() {
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
   }, [currentLineMoves, handleCancelReview, loadMoves, resetReview, rootFen, sideToMove, stopAnalysis]);
+
+  const showBeginnerGuide = !guideDismissed && assistMode === 'coach' && gameMode === 'PvP'
+    && moveHistory.length === 0 && rootFen === START_POSITION_FEN;
+  const beginnerGuide = showBeginnerGuide ? (
+    <BeginnerGuide
+      compact={isMobile && viewportSize.height < 700}
+      letters={pieceStyle === 'letters'}
+      onToggleLetters={() => setPieceStyle(style => style === 'letters' ? 'traditional' : 'letters')}
+      onPlay={() => { setAiStrength(1); setAiSpeed('normal'); playFromHere(); }}
+      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
+    />
+  ) : null;
 
   const openLibraryPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
@@ -5401,6 +5417,11 @@ function App() {
                   only in `title`, which does not exist on a touch screen. The
                   words are the ones already written for the tooltip. */}
               <p className="settings-hint">{ASSIST_MODE_COPY[assistMode].title}</p>
+              <button type="button" className="chip-btn" onClick={() => {
+                setGuideDismissed(false);
+                writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'false');
+                setAssistMode('coach');
+              }}>Show first-move guide on empty boards</button>
             </div>
 
             <div className="settings-group">
@@ -6520,6 +6541,7 @@ function App() {
               </div>
             </>
           ) : null}
+          {isMobile && beginnerGuide}
           <div className="mobile-board-center">
             <div className="board-workspace">
               <div className="board-wrap">
@@ -6937,7 +6959,7 @@ function App() {
                       );
                     })}
                   </div>
-                  <MoveListTree
+                  {!isMobile && beginnerGuide ? beginnerGuide : <MoveListTree
                     treeNodes={treeNodes}
                     rootNodeId={rootNodeId}
                     rootFen={rootFen}
@@ -6947,7 +6969,7 @@ function App() {
                     notationStyle={notationStyle}
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
-                  />
+                  />}
                   {/* The thinking, beside the moves. Everything attached to a
                       move here was written by the engine -- an evaluation, a
                       best move, a review note it overwrites on every re-run --

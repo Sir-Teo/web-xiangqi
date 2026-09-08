@@ -1,0 +1,29 @@
+.beginner-guide {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.beginner-guide-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.beginner-guide-heading button { background: transparent; color: inherit; border: 0; font-size: 1.25rem; min-width: 32px; min-height: 32px; cursor: pointer; }
+.beginner-guide p { margin: 0 0 0.5rem; }
+.beginner-guide-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.beginner-guide-actions .chip-btn { min-height: 36px; white-space: normal; }
+@media (max-width: 900px) {
+  .beginner-guide { margin: 0 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.75rem; }
+}
+@media (max-width: 900px) {
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+}
+.beginner-guide summary { cursor: pointer; padding: 0.25rem 0; }
+@media (max-width: 900px) and (max-height: 699px) {
+  .beginner-guide { max-height: 30vh; overflow-y: auto; }
+}

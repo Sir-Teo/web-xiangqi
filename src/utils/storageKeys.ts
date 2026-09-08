@@ -15,6 +15,7 @@
  */
 import { readStorage, removeStorage, writeStorage, type KeyValueStorage, getLocalStorage } from './storage';
 
+export const BEGINNER_GUIDE_STORAGE_KEY = 'xiangqi:beginner-guide-dismissed:v1';
 export const PREFERENCES_STORAGE_KEY = 'xiangqi:preferences:v1';
 export const AUTO_SAVED_GAME_KEY = 'xiangqi:auto-saved-game:v1';
 export const GAME_LIBRARY_STORAGE_KEY = 'xiangqi:library:v1';
