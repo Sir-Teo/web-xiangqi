@@ -126,6 +126,7 @@ npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
 npm run test:ui:install            # once per machine
 npm run test:ui:layout             # drives a real browser
+npm run test:ui:audit              # focused regressions; starts its own server
 npm run test:ui:soak               # seeded random walk, checks invariants
 npm run test:prod:smoke            # loads the built dist/ in a browser
 npm run build                      # rebuilds the WASM; needs emsdk
@@ -143,6 +144,8 @@ Artifacts are written to `dist/`:
 - `dist/index.html` (React analysis app after `npm run build:react`; browser demo after `npm run build`)
 
 ## Docs
+
+- [September 7 audit](docs/audit-2026-09-07.md): confirmed fixes, measured responsiveness, browser QA, and priorities for professional study and beginner learning.
 
 - [Architecture](docs/architecture.md): how the React app is put together, the
   board conventions that are easy to get backwards, and where new logic belongs.
