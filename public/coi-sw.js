@@ -16,14 +16,9 @@
  *   without   single-simd, 1 thread,  479k nps, seldepth 31, hash 4%
  *   with      threaded-simd, 8 threads, 3.9M nps, seldepth 41, hash 26%
  *
- * ## This worker does not cache anything, on purpose
- *
- * The cleanup in `utils/serviceWorkerCleanup.ts` exists because an older demo
- * shipped a *caching* worker at `<base>/sw.js`, and a stale one went on serving
- * old engine artifacts after the demo was gone. That failure is the reason this
- * one only rewrites headers on responses it fetches from the network: there is
- * no cache to go stale, and no version of the app that can outlive a deploy.
- * Offline support is a separate feature with separate risks, and is not here.
+ * The app shell and engine cores use the network. Only NNUE weights are kept
+ * in Cache Storage, and a cached body requires successful server revalidation.
+ * Offline support needs a versioned core/network pair and is not implemented.
  *
  * If this worker fails, is blocked, or is never installed, every request still
  * goes to the network unchanged and the app runs single-threaded -- which is
@@ -31,8 +26,7 @@
  */
 
 self.addEventListener('install', () => {
-    // Take over as soon as possible; the page reloads once to become isolated
-    // and there is nothing cached that an older worker needs to finish serving.
+    // Take over as soon as possible; the page reloads once to become isolated.
     self.skipWaiting();
 });
 
@@ -95,26 +89,19 @@ async function serveWeights(request) {
     if (etag) validators.set('If-None-Match', etag);
     else if (lastModified) validators.set('If-Modified-Since', lastModified);
 
-    let response;
-    try {
-        // `no-cache` on the *browser* cache: it will not have stored this
-        // anyway, and the conditional headers above are the ones that matter.
-        response = await fetch(request.url, {
-            headers: validators,
-            cache: 'no-cache',
-            credentials: 'same-origin',
-        });
-    } catch (error) {
-        if (cached) return isolated(cached);
-        throw error;
-    }
+    // A failed request cannot prove that cached weights match the current
+    // core. Keep the body for a later revalidation, but surface this failure.
+    const response = await fetch(request.url, {
+        headers: validators,
+        cache: 'no-cache',
+        credentials: 'same-origin',
+    });
 
     if (response.status === 304 && cached) return isolated(cached);
 
     if (response.ok && cache && (response.headers.get('ETag') || response.headers.get('Last-Modified'))) {
         try { await cache.put(request.url, response.clone()); } catch (_) { /* over quota */ }
     }
-    if (!response.ok && cached) return isolated(cached);
     return isolated(response);
 }
 
