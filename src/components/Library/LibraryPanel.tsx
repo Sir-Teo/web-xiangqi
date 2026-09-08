@@ -192,6 +192,7 @@ function buildSavedGamePgn(game: SavedGame) {
       opening: game.opening,
       result: savedResultToGameResult(game.result),
       label: game.label,
+      metadata: game.metadata,
       startFen: game.startFen,
     });
     if (pgn) return pgn;
@@ -202,6 +203,7 @@ function buildSavedGamePgn(game: SavedGame) {
     opening: game.opening,
     result: savedResultToGameResult(game.result),
     label: game.label,
+    metadata: game.metadata,
     startFen: game.startFen,
   });
 }

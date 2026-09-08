@@ -26,6 +26,7 @@ export function useGameLibrary() {
         gameMode: GameMode,
         moves: string[],
         options: {
+            metadata?: SavedGame['metadata'];
             opening?: string;
             finalEval?: number;
             label?: string;

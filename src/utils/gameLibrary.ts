@@ -1,3 +1,4 @@
+import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { GameMode } from '../App';
 import { parseFenBoard } from './xiangqi';
 import { describeSetupProblem } from './positionSetup';
@@ -54,6 +55,7 @@ export interface SavedMoveTreeNode {
 }
 
 export interface SavedGame {
+    metadata?: GameMetadata;
     id: string;
     savedAt: number;
     gameMode: GameMode;
@@ -388,6 +390,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         moves,
         startFen,
         result,
+        metadata: normalizeGameMetadata(raw.metadata),
         label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),
         opening: asBoundedString(raw.opening, MAX_SAVED_OPENING_LENGTH),
         finalEval: asFiniteNumber(raw.finalEval),

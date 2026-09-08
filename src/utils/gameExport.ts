@@ -1,3 +1,4 @@
+import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
@@ -226,6 +227,7 @@ function savedMoveTreeToNodes(moveTree: SavedMoveTreeNode[]) {
 export function exportPgn(
     moves: MoveRecord[],
     options: {
+        metadata?: GameMetadata;
         gameMode?: GameMode;
         opening?: string;
         label?: string;
@@ -235,14 +237,18 @@ export function exportPgn(
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? formatPgnDate();
+    const metadata = normalizeGameMetadata(options.metadata);
+    const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
         tagLine('Variant', 'Xiangqi'),
         tagLine('Date', date),
-        options.gameMode ? tagLine('Event', options.gameMode) : null,
-        options.label ? tagLine('White', options.label) : null,
+        metadata?.event || options.gameMode ? tagLine('Event', metadata?.event ?? options.gameMode!) : null,
+        metadata?.redPlayer || options.label ? tagLine('White', metadata?.redPlayer ?? options.label!) : null,
+        metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
+        metadata?.site ? tagLine('Site', metadata.site) : null,
+        metadata?.round ? tagLine('Round', metadata.round) : null,
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -262,6 +268,7 @@ export function exportPgnTree(
     rootNodeId: string,
     options: {
         mainLineNodeIds?: string[];
+        metadata?: GameMetadata;
         gameMode?: GameMode;
         opening?: string;
         label?: string;
@@ -273,14 +280,18 @@ export function exportPgnTree(
     if (!hasTreeMoves(treeNodes, rootNodeId)) return null;
 
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? formatPgnDate();
+    const metadata = normalizeGameMetadata(options.metadata);
+    const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
         tagLine('Variant', 'Xiangqi'),
         tagLine('Date', date),
-        options.gameMode ? tagLine('Event', options.gameMode) : null,
-        options.label ? tagLine('White', options.label) : null,
+        metadata?.event || options.gameMode ? tagLine('Event', metadata?.event ?? options.gameMode!) : null,
+        metadata?.redPlayer || options.label ? tagLine('White', metadata?.redPlayer ?? options.label!) : null,
+        metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
+        metadata?.site ? tagLine('Site', metadata.site) : null,
+        metadata?.round ? tagLine('Round', metadata.round) : null,
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -302,6 +313,7 @@ export function exportPgnTree(
 export function exportPgnFromUci(
     uciMoves: string[],
     options: {
+        metadata?: GameMetadata;
         gameMode?: GameMode;
         opening?: string;
         result?: GameResult;
@@ -311,14 +323,18 @@ export function exportPgnFromUci(
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
-    const date = options.date ?? formatPgnDate();
+    const metadata = normalizeGameMetadata(options.metadata);
+    const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
 
     const tags = [
         tagLine('Variant', 'Xiangqi'),
         tagLine('Date', date),
-        options.gameMode ? tagLine('Event', options.gameMode) : null,
-        options.label ? tagLine('White', options.label) : null,
+        metadata?.event || options.gameMode ? tagLine('Event', metadata?.event ?? options.gameMode!) : null,
+        metadata?.redPlayer || options.label ? tagLine('White', metadata?.redPlayer ?? options.label!) : null,
+        metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
+        metadata?.site ? tagLine('Site', metadata.site) : null,
+        metadata?.round ? tagLine('Round', metadata.round) : null,
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -332,6 +348,7 @@ export function exportPgnFromMoveTree(
     moveTree: SavedMoveTreeNode[],
     options: {
         mainLineMoves?: string[];
+        metadata?: GameMetadata;
         gameMode?: GameMode;
         opening?: string;
         result?: GameResult;
@@ -353,6 +370,7 @@ export function exportPgnFromMoveTree(
 
     const pgn = exportPgnTree(treeNodes, rootNodeId, {
         mainLineNodeIds: preferredNodeIds,
+        metadata: options.metadata,
         gameMode: options.gameMode,
         opening: options.opening,
         label: options.label,
