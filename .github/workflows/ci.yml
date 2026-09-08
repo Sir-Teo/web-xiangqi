@@ -116,6 +116,9 @@ jobs:
       - name: Production build smoke
         run: npm run test:prod:smoke
 
+      - name: Focused browser audit regressions
+        run: npm run test:ui:audit
+
       - name: Browser worker parity (quick)
         # Single-threaded in the browser. The threaded build initialises fine in
         # Node here — the smoke test above runs it — and fine in a browser

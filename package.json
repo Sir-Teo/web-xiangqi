@@ -38,7 +38,8 @@
     "test:serve-demo": "node scripts/test-serve-demo.cjs",
     "test:bench:quick": "node scripts/bench-nps.cjs --variant single-simd --depth 3 --repeats 1 --warmup 0 --hash 16 --threads 1 --quiet --json",
     "bench:nps": "node scripts/bench-nps.cjs",
-    "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd"
+    "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd",
+    "test:ui:audit": "node scripts/test-ui-audit.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
