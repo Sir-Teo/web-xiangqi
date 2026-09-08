@@ -87,14 +87,14 @@ describe('the position index', () => {
 
 describe('positions that are the same position', () => {
     it('reaches the same entry by a different move order', () => {
-        // 1. C2=5 H8+7 2. H2+3 and 1. H2+3 H8+7 2. C2=5 stand in the same
+        // 1. C2=5 H8+7 2. H8+7 and 1. H8+7 H8+7 2. C2=5 stand in the same
         // place. An explorer keyed on the move list would miss that; this is
         // keyed on the position.
         const index = buildLibraryPositionIndex([
-            game('one', ['h2e2', 'h9g7', 'h0g2']),
-            game('two', ['h0g2', 'h9g7', 'h2e2']),
+            game('one', ['h2e2', 'h9g7', 'b0c2']),
+            game('two', ['b0c2', 'h9g7', 'h2e2']),
         ]);
-        const { board, sideToMove } = positionAfter(['h2e2', 'h9g7', 'h0g2']);
+        const { board, sideToMove } = positionAfter(['h2e2', 'h9g7', 'b0c2']);
         expect(lookupLibraryPosition(index, board, sideToMove).games).toBe(2);
     });
 
@@ -129,6 +129,19 @@ describe('records that do not replay', () => {
         const index = buildLibraryPositionIndex([game('bad', ['h2e2', 'a5a6'])]);
         const { board, sideToMove } = positionAfter(['h2e2']);
         expect(lookupLibraryPosition(index, board, sideToMove).games).toBe(1);
+    });
+
+    it('never recommends an illegal continuation, but retains the legal prefix', () => {
+        for (const invalid of ['h9h8', 'a9a6', 'h9z9', 'h9a:', 'h9h9']) {
+            const index = buildLibraryPositionIndex([game('bad', ['h2e2', invalid])]);
+            const { board, sideToMove } = positionAfter(['h2e2']);
+            const report = lookupLibraryPosition(index, board, sideToMove);
+            expect(index.skipped).toBe(1);
+            expect(report.games).toBe(1);
+            expect(report.moves).toEqual([]);
+            expect(report.hits[0].continuation).toBeNull();
+            expect(index.byPosition.size).toBe(2);
+        }
     });
 
     it('survives a start position that does not parse', () => {

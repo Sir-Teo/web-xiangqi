@@ -1,4 +1,4 @@
-import { START_FEN, parseFenBoard, pieceSide, type BoardState, type Side } from './xiangqi';
+import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 import { positionKey } from './repetition';
 import type { SavedGame } from './gameLibrary';
 
@@ -119,11 +119,8 @@ function startPositionOf(game: SavedGame): { board: BoardState; sideToMove: Side
  * through would be the same work over and over. This way it is paid once per
  * change to the library.
  *
- * Moves are applied without re-validating them. They were validated when the
- * game was saved and again by `normalizeSavedGame` on the way back in, and a
- * legality check here would multiply the cost of the index by the cost of move
- * generation. A move naming an empty square is treated as a corrupt record and
- * abandons that game rather than writing a position that never existed.
+ * Storage validates move syntax, not legality. Validate before publishing a
+ * continuation, retaining the reachable prefix if a damaged record stops.
  */
 export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIndex {
     const byPosition = new Map<string, LibraryPositionHit[]>();
@@ -141,13 +138,15 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
 
         for (let ply = 0; ply <= moves.length; ply += 1) {
             const key = positionKey(board, side);
+            const validation = ply < moves.length ? validateMoveStr(moves[ply], board, side) : null;
+            const move = validation?.ok ? validation.mv : null;
             const hit: LibraryPositionHit = {
                 gameId: game.id,
                 label: game.label,
                 opening: game.opening,
                 result,
                 ply,
-                continuation: ply < moves.length ? moves[ply] : null,
+                continuation: move?.raw ?? null,
             };
             const existing = byPosition.get(key);
             if (existing) existing.push(hit);
@@ -155,15 +154,9 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
 
             if (ply === moves.length) break;
 
-            const uci = String(moves[ply] || '').toLowerCase();
-            const fromFile = uci.charCodeAt(0) - 97;
-            const fromRank = uci.charCodeAt(1) - 48;
-            const toFile = uci.charCodeAt(2) - 97;
-            const toRank = uci.charCodeAt(3) - 48;
-            const piece = board[fromRank]?.[fromFile];
-            if (uci.length !== 4 || !piece || pieceSide(piece) !== side) { abandoned = true; break; }
-            board[toRank][toFile] = piece;
-            board[fromRank][fromFile] = '';
+            if (!move) { abandoned = true; break; }
+            board[move.toRank][move.toFile] = board[move.fromRank][move.fromFile];
+            board[move.fromRank][move.fromFile] = '';
             side = side === 'w' ? 'b' : 'w';
         }
 
