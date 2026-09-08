@@ -47,6 +47,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
    await page.getByTestId(width < 900 ? 'mobile-save-game-btn' : 'save-game-btn').click();
    await page.getByTestId(width < 900 ? 'mobile-open-library-btn' : 'left-panel-tab-library').click();
    await page.getByPlaceholder('Search players, openings, moves, reviews…').fill('Autumn Invitational');
+   assert.match(await page.locator('[data-testid^="metadata-saved-"]').innerText(), /Red: Alice Smith · Black: Bob/);
+   await page.screenshot({path:`/tmp/xiangqi-metadata-library-${width}.png`});
    const saved = page.locator('[data-testid^="load-saved-"]');
    assert.equal(await saved.count(),1,'Tournament search finds edited game');
    await saved.click();

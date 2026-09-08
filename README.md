@@ -21,6 +21,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Play From Here**: keep the position on screen and play it on against the engine, taking the side to move — the thing you want after a review finds your mistake
 - **Open matching games**: expand Matching games in the position explorer to open a saved game at its first visit to the current position, keeping its full line, branches, and notes.
 - **From your library**: an opening explorer over your own saved games, keyed on the position so a transposition is found, with what you played from it and how those games ended
+- Tournament details: import and edit Red/Black players, event, site, date, and round under **Game details** in the move panel. Details survive saving, autosave recovery, library backups, and PGN export; search the library by player or event.
 - PGN carries the review both ways: NAGs and `{[%eval ...]}` on export, read back on import, in the shapes other tools already parse
 - Engine hash and thread count are settable per device, held inside what the shipped core can take
 - **Show Threat**: hand the opponent the move and let the engine answer what they are threatening — the question the best move does not answer, refused only when the side to move is in check, and kept visibly apart from the position's own evaluation

@@ -490,3 +490,5 @@
 .lib-transfer .lib-action-error button { display: block; margin-top: 0.5rem; }
 .lib-transfer-status { margin-bottom: 0; }
 .lib-transfer-status:empty { display: none; }
+
+.lib-tournament-details { margin: 6px 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }

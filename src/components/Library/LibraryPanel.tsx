@@ -712,6 +712,13 @@ export function LibraryPanel({
                   )}
                 </div>
               </div>
+              {game.metadata && <div className="lib-tournament-details" data-testid={`metadata-saved-${game.id}`}>
+                {(game.metadata.redPlayer || game.metadata.blackPlayer) && <div>
+                  Red: {game.metadata.redPlayer || 'Unknown'} · Black: {game.metadata.blackPlayer || 'Unknown'}
+                </div>}
+                <div>{[game.metadata.event, game.metadata.site, game.metadata.date,
+                  game.metadata.round ? `Round ${game.metadata.round}` : undefined].filter(Boolean).join(' · ')}</div>
+              </div>}
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
                 <span className={`lib-result lib-result--${game.result ?? 'ongoing'}`}>
