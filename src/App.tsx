@@ -45,6 +45,7 @@ import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
+  type AutoSaveInput,
   clearAutoSavedGame,
   isWorthAutoSaving,
   readAutoSavedGame,
@@ -4808,6 +4809,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [autoSaveIssue, setAutoSaveIssue] = useState<'failed' | 'too-large' | null>(null);
+  const persistAutoSave = useCallback((snapshot: AutoSaveInput) => {
+    const result = writeAutoSavedGame(snapshot);
+    setAutoSaveIssue(result === 'failed' || result === 'too-large' ? result : null);
+  }, []);
+
   // currentGameSnapshot is a dependency on purpose: it carries the detected
   // opening and every evaluation a finished search stored on the tree, so as
   // those settle the stored snapshot is rewritten and a recovered game carries
@@ -4815,10 +4822,10 @@ function App() {
   useEffect(() => {
     if (!autoSaveChecked || autoSaveRecovery) return;
     const timeout = window.setTimeout(() => {
-      writeAutoSavedGame(snapshotForStorage(currentGameSnapshot));
+      persistAutoSave(snapshotForStorage(currentGameSnapshot));
     }, AUTO_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timeout);
-  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot, snapshotForStorage]);
+  }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot, persistAutoSave, snapshotForStorage]);
 
   const currentGameSnapshotRef = useRef(currentGameSnapshot);
   useEffect(() => {
@@ -4854,7 +4861,7 @@ function App() {
           snapshot = { ...snapshot, moveTree: serializeSavedMoveTree(patched, rootNodeId) };
         }
       }
-      writeAutoSavedGame(snapshot);
+      persistAutoSave(snapshot);
     };
     const onHidden = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -4865,7 +4872,7 @@ function App() {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [autoSaveChecked, autoSaveRecovery, rootNodeId, snapshotForStorage]);
+  }, [autoSaveChecked, autoSaveRecovery, persistAutoSave, rootNodeId, snapshotForStorage]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     clearAutoSavedGame();
@@ -7713,6 +7720,18 @@ function App() {
           <span>{librarySaveError}</span>
           <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
           <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
+        </div>
+      ) : null}
+
+      {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
+        <div className="save-error-notice" role="alert" data-testid="auto-save-error">
+          <span>{autoSaveIssue === 'too-large'
+            ? 'This study is too large for automatic recovery. Download a PGN before leaving.'
+            : 'Automatic recovery could not save your latest changes. Download a PGN before leaving.'}</span>
+          <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
+            {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
+          </button>
+          <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
         </div>
       ) : null}
 
