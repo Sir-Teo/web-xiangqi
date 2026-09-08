@@ -16,6 +16,8 @@ export function normalizeGameMetadata(value: unknown): GameMetadata | undefined 
   const metadata: GameMetadata = {};
   for (const field of GAME_METADATA_FIELDS) {
     if (typeof record[field] !== 'string') continue;
+    // Strip control characters from untrusted PGN and backup fields.
+    // eslint-disable-next-line no-control-regex
     const text = record[field].replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, MAX_METADATA_FIELD_LENGTH);
     if (text) metadata[field] = text;
   }

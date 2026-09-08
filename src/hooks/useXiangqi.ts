@@ -1,3 +1,4 @@
+import type { GameMetadata } from '../utils/gameMetadata';
 import { describeSetupProblem } from '../utils/positionSetup';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import type {
@@ -241,6 +242,7 @@ function gameResultForPosition(board: BoardState, sideToMove: Side): GameResult 
 
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
+    const [gameMetadata, setGameMetadata] = useState<GameMetadata>();
     const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
     const [activeLineNodeIds, setActiveLineNodeIds] = useState<string[]>([]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(-1);
@@ -286,6 +288,7 @@ export function useXiangqi() {
         const root = createStartRootPosition();
         setTreeNodes(rootTree);
         setRootPosition(root);
+        setGameMetadata(undefined);
         setActiveLineNodeIds([]);
         setCurrentMoveIndex(-1);
         setBoard(root.board);
@@ -304,6 +307,7 @@ export function useXiangqi() {
         const nextGameResult = gameResultForPosition(root.board, root.sideToMove);
         setTreeNodes(rootTree);
         setRootPosition(root);
+        setGameMetadata(undefined);
         setActiveLineNodeIds([]);
         setCurrentMoveIndex(-1);
         setBoard(root.board);
@@ -472,6 +476,7 @@ export function useXiangqi() {
         const position = getPositionFromNode(tree, activeLine[selectedPly - 1] ?? ROOT_NODE_ID, root);
         nodeCounterRef.current = counter;
         setRootPosition(root);
+        setGameMetadata(undefined);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(selectedPly - 1);
@@ -570,6 +575,7 @@ export function useXiangqi() {
         const position = getPositionFromNode(tree, activeNodeId, root);
         nodeCounterRef.current = counter;
         setRootPosition(root);
+        setGameMetadata(undefined);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(shouldKeepRootSelected ? -1 : cursorIndex);
@@ -1118,6 +1124,8 @@ export function useXiangqi() {
         currentNodeId,
         rootNodeId: ROOT_NODE_ID,
         gameIdentity: rootPosition,
+        gameMetadata,
+        setGameMetadata,
         treeNodes,
         activeLineNodeIds,
         selected,

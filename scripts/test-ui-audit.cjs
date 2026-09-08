@@ -10,6 +10,7 @@ const path = require('node:path');
     await server.listen();
     const env = { ...process.env, XIANGQI_QA_URL: server.resolvedUrls.local[0] };
     for (const script of [
+      'test-metadata-browser.cjs',
       'test-autosave-error-browser.cjs',
       'test-explorer-browser.cjs',
       'test-library-matches-browser.cjs',

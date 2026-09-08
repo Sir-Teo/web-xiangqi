@@ -112,6 +112,7 @@ function getSavedGameSearchText(game: SavedGame) {
 
   const parts = [
     game.label,
+    ...Object.values(game.metadata ?? {}),
     game.opening,
     game.gameMode,
     resultLabel(game.result ?? 'ongoing'),

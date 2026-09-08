@@ -1,3 +1,5 @@
+import { GameMetadataEditor } from './components/GameMetadataEditor';
+import { extractPgnMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
@@ -1133,6 +1135,8 @@ function App() {
     currentNodeId,
     rootNodeId,
     gameIdentity,
+    gameMetadata,
+    setGameMetadata,
     treeNodes,
     activeLineNodeIds,
     currentFen,
@@ -2545,9 +2549,10 @@ function App() {
     setOrientation(sideToMove === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
     loadMoves(currentLineMoves, rootFen);
+    setGameMetadata(gameMetadata);
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
-  }, [currentLineMoves, handleCancelReview, loadMoves, resetReview, rootFen, sideToMove, stopAnalysis]);
+  }, [currentLineMoves, gameMetadata, setGameMetadata, handleCancelReview, loadMoves, resetReview, rootFen, sideToMove, stopAnalysis]);
 
   const showBeginnerGuide = !guideDismissed && assistMode === 'coach' && gameMode === 'PvP'
     && moveHistory.length === 0 && rootFen === START_POSITION_FEN;
@@ -3254,6 +3259,7 @@ function App() {
       return exportPgnTree(treeNodes, rootNodeId, {
         mainLineNodeIds: activeLineNodeIds,
         gameMode,
+        metadata: gameMetadata,
         opening: detectedOpening?.name,
         result: gameResult,
         startFen: rootFen,
@@ -3267,11 +3273,12 @@ function App() {
     if (moves.length === 0) return null;
     return exportPgn(moves, {
       gameMode,
+      metadata: gameMetadata,
       opening: detectedOpening?.name,
       result: gameResult,
       startFen: rootFen,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMode, detectedOpening, gameResult, rootFen, hasMoveTreeMoves, hasStudyBranches]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, detectedOpening, gameResult, rootFen, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -3827,11 +3834,12 @@ function App() {
     setOrientation(practiceSide === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
     loadMoves(practiceMoves, rootFen);
+    setGameMetadata(gameMetadata);
     setAnalysisTab('tree');
     setMobileAnalysisTab('moves');
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
-  }, [getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
+  }, [gameMetadata, setGameMetadata, getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
 
   /**
    * Learn from your mistakes.
@@ -4105,6 +4113,7 @@ function App() {
     const loadedNodeIds = hasVariations
       ? loadMoveTree(importedLine.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
+    setGameMetadata(extractPgnMetadata(text));
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
       // file was left, this one says part of *this* game was.
@@ -4178,7 +4187,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -4348,6 +4357,7 @@ function App() {
       : undefined;
     return {
       gameMode,
+      metadata: gameMetadata,
       moves,
       opening: detectedOpening?.name,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
@@ -4363,7 +4373,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -4728,6 +4738,7 @@ function App() {
     const loadedNodeIds = game.moveTree?.length
       ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly)
       : loadMoves(game.moves, game.startFen, initialPly);
+    setGameMetadata(game.metadata);
     if (initialPly === undefined || initialPly >= game.moves.length) {
       setGameResult(savedResultToGameResult(game.result));
     }
@@ -4767,7 +4778,7 @@ function App() {
     setMobileView('analysis');
     setGraphLoadSweepToken((token) => token + 1);
     return true;
-  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameMetadata, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   // ── Auto-save ────────────────────────────────────────
   // Offer whatever was in progress when the tab last closed, then keep the
@@ -7002,6 +7013,7 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
+                  {(hasMoveTreeMoves || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
                   <div className="move-comment">
                     <label className="move-comment-label" htmlFor="move-comment-input">
                       <span>Note</span>
