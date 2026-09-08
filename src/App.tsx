@@ -35,7 +35,8 @@ import {
   stepPanelWidth,
 } from './utils/panelWidth';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
-import { buildLibraryPositionIndex, formatExplorerRecord, libraryPositionSignature, lookupLibraryPosition } from './utils/positionExplorer';
+import { formatExplorerRecord } from './utils/positionExplorer';
+import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
@@ -3053,24 +3054,8 @@ function App() {
   // Game library
   const { games: savedGames, save: saveGameToLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
-  // "Have I been here before?" over the games the player owns.
-  //
-  // Built once per change to the library rather than searched per position:
-  // measured at 24ms for 200 games of 120 plies and 267ms for a full 500-game
-  // library of 1024-move games, against a 9-microsecond lookup. Doing it the
-  // other way round would pay the whole cost on every position stepped through.
-  const librarySignature = useMemo(() => libraryPositionSignature(savedGames), [savedGames]);
-  const libraryPositionIndex = useMemo(
-    () => buildLibraryPositionIndex(savedGames),
-    // Keyed on the signature, so re-reading storage into an equal array does
-    // not rebuild the whole index.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [librarySignature]
-  );
-  const libraryPositionReport = useMemo(
-    () => lookupLibraryPosition(libraryPositionIndex, board, sideToMove),
-    [libraryPositionIndex, board, sideToMove]
-  );
+  const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped } =
+    useLibraryExplorer(savedGames, board, sideToMove);
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
@@ -6112,6 +6097,13 @@ function App() {
                   <p className="panel-copy small">
                     Active ply: <strong>{viewedPly}</strong> / {moveHistory.length}
                   </p>
+                  {libraryExplorerStatus !== 'ready' || libraryExplorerSkipped > 0 ? (
+                    <p className="library-explorer-note" role="status" data-testid="library-explorer-status">
+                      {libraryExplorerStatus === 'loading' ? 'Checking your saved games…'
+                        : libraryExplorerStatus === 'error' ? 'Library explorer unavailable. Reload to try again; your saved games are unchanged.'
+                          : `${libraryExplorerSkipped} saved ${libraryExplorerSkipped === 1 ? 'game contains' : 'games contain'} invalid moves. Only reachable positions are shown.`}
+                    </p>
+                  ) : null}
                   {libraryPositionReport.games > 0 ? (
                     <div className="opening-candidates-card library-explorer-card">
                       <div className="opening-candidates-head">
