@@ -181,9 +181,43 @@ async function actionMenuClearsHeader(browser, width, height) {
   }
 }
 
+// `text-overflow: ellipsis` renders only on the box whose own inline content
+// overflows. The opening badge is a flex container, so the name inside it is a
+// flex item and the badge's ellipsis never applied: the name was cut mid-word
+// at the badge's edge, past its right border, with nothing to say there was
+// more of it. Assert the drawn name stays inside the badge rather than
+// asserting the property, so any future flex/limit change is caught as well.
+async function openingBadgeTruncation(browser, width) {
+  const page = await browser.newPage({ viewport: { width, height: 900 } });
+  try {
+    await page.goto(base + '?moves=h2e2%20h9g7%20b0c2%20b9c7%20b2b6%20a9b9');
+    await page.waitForSelector('.opening-badge-name');
+    const box = await page.evaluate(() => {
+      const badge = document.querySelector('.opening-badge');
+      const name = document.querySelector('.opening-badge-name');
+      const chinese = document.querySelector('.opening-badge-chinese');
+      const b = badge.getBoundingClientRect();
+      return {
+        overhang: name.getBoundingClientRect().right - b.right,
+        chineseOverhang: chinese.getBoundingClientRect().right - b.right,
+        chineseWhole: chinese.scrollWidth <= chinese.clientWidth + 1,
+        ellipsis: getComputedStyle(name).textOverflow,
+        title: badge.getAttribute('title'),
+      };
+    });
+    assert.ok(box.overhang <= 0, `The opening name is cut ${box.overhang.toFixed(1)}px past the badge`);
+    assert.ok(box.chineseOverhang <= 0, `The Chinese opening name is cut past the badge`);
+    assert.equal(box.chineseWhole, true, 'The Chinese opening name gave way instead of holding its width');
+    assert.equal(box.ellipsis, 'ellipsis', 'The opening name truncates without an ellipsis');
+    assert.match(box.title || '', /Screen Horse/, 'The badge does not carry the full name for a reader');
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await openingBadgeTruncation(browser, 1440);
+    await openingBadgeTruncation(browser, 1280);
     await fullLibrary(browser, 1440);
     await fullLibrary(browser, 390);
     await fenValidation(browser);
@@ -194,6 +228,6 @@ async function actionMenuClearsHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

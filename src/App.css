@@ -1214,16 +1214,33 @@ body.resizing * {
   letter-spacing: 0.02em;
   animation: badge-pop 280ms cubic-bezier(0.22, 1, 0.36, 1);
   white-space: nowrap;
-  max-width: 240px;
+  /* Enough for the Chinese name plus an English one of about 38 characters,
+     which is most of the book; the row this sits in is built to scroll when
+     its chips do not fit, and starts doing so at 1150px rather than 1024px
+     for the extra width. Longer names still ellipsis, and the full one is on
+     the badge's title. */
+  max-width: 320px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+.opening-badge-chinese {
+  flex: 0 0 auto;
+}
+
+/* The badge caps its width and sets `text-overflow: ellipsis`, but ellipsis
+   only renders on the box whose own inline content overflows -- and the badge
+   is a flex container, so its text belongs to the items inside it. The name
+   was cut off mid-word with no ellipsis and no sign there was more of it:
+   "Central Cannon vs Screen H". The property has to live here, on the box that
+   holds the text, with a `min-width` that lets a flex item shrink at all. */
 .opening-badge-name {
   font-size: 0.65rem;
   font-weight: 500;
   color: var(--text-secondary);
   font-family: var(--font-body);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes badge-pop {

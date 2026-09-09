@@ -7659,7 +7659,11 @@ function App() {
               </span>
               {detectedOpening && (
                 <span className="opening-badge" title={detectedOpening.name}>
-                  {detectedOpening.chinese}
+                  {/* Wrapped rather than left as a bare text node: as a bare
+                      node it is an anonymous flex item, which cannot be given
+                      a flex-shrink of its own, and it gave way alongside the
+                      English name instead of holding its ground. */}
+                  <span className="opening-badge-chinese">{detectedOpening.chinese}</span>
                   <span className="opening-badge-name">{detectedOpening.name}</span>
                 </span>
               )}
