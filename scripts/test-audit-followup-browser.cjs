@@ -140,6 +140,47 @@ async function mobileHeaderRows(browser, width, height) {
   } finally { await page.close(); }
 }
 
+// The board action menu and its backdrop were positioned at a fixed 56px and
+// 40px from the top of the stage -- the header's height when the header is one
+// row. It is 57px with an opening name and 73px carrying a request notice, so
+// the menu covered the second row, and a "Shared link not loaded" notice was
+// hidden by it entirely. Both now take the stage grid's second row, which
+// begins wherever the header ends. Check the states that make it wrap.
+async function actionMenuClearsHeader(browser, width, height) {
+  for (const [state, query, settled] of [
+    ['one row', '', '.mobile-board-turn-info'],
+    ['an opening name', '?moves=h2e2%20h9g7%20b0c2%20b9c7', '.mobile-opening-pill'],
+    ['a request notice', '?moves=h2e2%20zzzz', '.mobile-request-notice'],
+  ]) {
+    // A page each: the moves one state plays are autosaved, and the recovery
+    // offer they raise in the next state covers the header with its backdrop.
+    const page = await browser.newPage({ viewport: { width, height }, isMobile: true, hasTouch: true });
+    try {
+      await page.goto(base + query);
+      // The row that makes the header wrap arrives after the first paint, and
+      // clicking into a header still reflowing under the cursor is what this
+      // waits out -- not the menu itself.
+      await page.locator(settled).waitFor();
+      await page.getByTestId('mobile-more-actions-btn').click();
+      await page.locator('.mobile-board-action-menu').waitFor();
+      const box = await page.evaluate(() => {
+        const rect = s => document.querySelector(s).getBoundingClientRect();
+        const header = rect('.mobile-board-header');
+        const menu = rect('.mobile-board-action-menu');
+        return {
+          gap: menu.top - header.bottom,
+          backdropGap: rect('.mobile-board-action-backdrop').top - header.bottom,
+          offRight: menu.right - innerWidth,
+          offLeft: -menu.left,
+        };
+      });
+      assert.ok(box.gap >= 0, `The action menu covers the header by ${(-box.gap).toFixed(1)}px with ${state} at ${width}px`);
+      assert.ok(box.backdropGap >= 0, `The backdrop covers the header by ${(-box.backdropGap).toFixed(1)}px with ${state} at ${width}px`);
+      assert.ok(box.offRight <= 0 && box.offLeft <= 0, `The action menu runs off screen with ${state} at ${width}px`);
+    } finally { await page.close(); }
+  }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -150,7 +191,9 @@ async function mobileHeaderRows(browser, width, height) {
     await evalGraphAxisLabels(browser, 1100);
     await mobileHeaderRows(browser, 390, 844);
     await mobileHeaderRows(browser, 320, 568);
+    await actionMenuClearsHeader(browser, 390, 844);
+    await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

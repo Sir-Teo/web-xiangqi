@@ -3973,7 +3973,10 @@ summary:active {
   [data-mobile-view="board"] .board-stage {
     flex: 1;
     min-height: 0;
-    padding: 8px 14px 10px;
+    /* The action menu below the header lines up with this inset, and reads it
+       from here rather than repeating the number. */
+    --mobile-stage-pad-x: 14px;
+    padding: 8px var(--mobile-stage-pad-x) 10px;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -4076,9 +4079,23 @@ summary:active {
   display: none;
 }
 
+/* `top: 40px` was the header's height when the header was one row. It grows to
+   57px with an opening name and 73px with a request notice, so the backdrop
+   started partway *up* the header and the menu below covered the rest of it --
+   the notice, entirely, at 390px. Both are absolutely positioned children of
+   the board stage, which is a grid on a phone, so giving them an explicit grid
+   area anchors them to it: row 2 begins exactly where the header ends, at
+   whatever height the header turns out to be. The 100vw/100vh bleed reaches
+   past the stage's padding, which the stage clips. */
 .mobile-board-action-backdrop {
   position: absolute;
-  inset: 40px 0 0;
+  grid-column: 1;
+  grid-row: 2 / -1;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  height: 100vh;
+  transform: translateX(-50%);
   z-index: 34;
   cursor: default;
 }
@@ -4125,10 +4142,19 @@ summary:active {
 
 .mobile-board-action-menu {
   position: absolute;
-  top: 56px;
-  right: 14px;
+  /* Same grid area as the backdrop: under the header, whatever it now stands
+     at. `right`/`width` are against the stage's content box rather than its
+     padding box, so the 14px inset and the 28px it subtracted are the stage's
+     own padding now. */
+  grid-column: 1;
+  grid-row: 2;
+  top: 6px;
+  /* A grid area's end edge is the container's *padding* edge, so `right: 0`
+     put the menu against the screen. Inset it by the stage's own padding, and
+     cap the width so the far edge keeps the same margin on a narrow phone. */
+  right: var(--mobile-stage-pad-x, 14px);
   z-index: 35;
-  width: min(286px, calc(100% - 28px));
+  width: min(286px, calc(100% - var(--mobile-stage-pad-x, 14px)));
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -4384,7 +4410,8 @@ summary:active {
 
 @media (max-width: 900px) and (max-height: 500px) {
   [data-mobile-view="board"] .board-stage {
-    padding: 4px 10px 6px;
+    --mobile-stage-pad-x: 10px;
+    padding: 4px var(--mobile-stage-pad-x) 6px;
   }
 
   .mobile-board-header {
