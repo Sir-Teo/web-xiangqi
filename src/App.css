@@ -6038,6 +6038,23 @@ summary:active {
        up the file, which is what used to swallow the excess. */
     overflow-y: auto;
     overflow-x: hidden;
+
+    /* And this is what keeps that true. The stage is a flex item with
+       `min-width: 0`, so it shrinks to nothing while the panels beside it keep
+       their dragged width, and neither panel knows the board has a floor. Drag
+       both out and the stage is squeezed to a sliver, the floor holds the board
+       at 272px inside it, and the excess goes sideways -- where `overflow-x:
+       hidden` cannot reach it and the panels are painted on top. Measured with
+       both panels dragged to their maximum: 20 of the 90 intersections covered
+       at 1440x900, 80 at 1280x800, and **all 90 at 1024x768** -- the board
+       entirely behind the panels, with no scroll to recover it.
+       Claiming the floor here is enough: the panels are `flex: 0 1 auto` and
+       the stage's flex base is 0, so the negative space comes out of the panels
+       and the board keeps a column it fits in. Room for the board's own floor,
+       the eval bar's footprint on both sides, and the stage's padding. */
+    min-width: calc(
+      var(--board-min-width) + 2 * var(--eval-bar-room) + 2 * var(--space-lg)
+    );
   }
 }
 

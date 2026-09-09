@@ -598,6 +598,61 @@ async function evalBarFitsBesideTheBoard(browser, width, height) {
   } finally { await page.close(); }
 }
 
+// The side panels are dragged to whatever width the reader wants and neither
+// of them knows the board has a floor. The stage between them is a flex item
+// with `min-width: 0`, so it was squeezed to a sliver while the floor held the
+// board at 272px inside it, and the excess went sideways -- the one direction
+// `overflow-x: hidden` cannot recover. Both panels at maximum: 20 of the 90
+// intersections covered at 1440x900, 80 at 1280x800 and all 90 at 1024x768,
+// the board entirely behind the panels. Drive it with the keyboard rather than
+// a synthetic drag, because that is also the path a keyboard user takes.
+async function panelsCannotEraseTheBoard(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.xiangqi-board').waitFor();
+    for (const [handle, key] of [
+      ['left-panel-resize-handle', 'ArrowRight'],
+      ['right-panel-resize-handle', 'ArrowLeft'],
+    ]) {
+      await page.getByTestId(handle).focus();
+      // Comfortably more presses than PANEL_MAX_WIDTH / PANEL_KEYBOARD_STEP.
+      for (let i = 0; i < 40; i += 1) await page.keyboard.press(key);
+    }
+    await page.waitForTimeout(400);
+    const box = await page.evaluate(() => {
+      const board = document.querySelector('.xiangqi-board').getBoundingClientRect();
+      const stage = document.querySelector('.board-stage').getBoundingClientRect();
+      const covered = [];
+      for (const el of document.querySelectorAll('.hitboxes-layer .hitbox')) {
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        const x = Math.round(r.x + r.width / 2);
+        const y = Math.round(r.y + r.height / 2);
+        const hit = (x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight)
+          ? document.elementFromPoint(x, y)
+          : null;
+        if (!hit || !hit.closest('.xiangqi-board')) covered.push(el.getAttribute('aria-label'));
+      }
+      return {
+        covered: covered.length,
+        inside: board.left >= stage.left - 1 && board.right <= stage.right + 1,
+        boardWidth: Math.round(board.width),
+        ratio: board.width / board.height,
+      };
+    });
+    assert.equal(box.covered, 0,
+      `${box.covered} intersections are behind the panels at ${width}x${height} with both dragged out`);
+    assert.equal(box.inside, true,
+      `The board overhangs its stage at ${width}x${height} with both panels dragged out`);
+    assert.ok(Math.abs(box.ratio - 0.9) < 0.02,
+      `The board is not 9:10 at ${width}x${height} with both panels dragged out`);
+    // The floor is what it is allowed to shrink to, not a size it may go under.
+    assert.ok(box.boardWidth >= 270,
+      `The board fell under its floor at ${width}x${height}: ${box.boardWidth}px`);
+  } finally { await page.close(); }
+}
+
 // The board is derived from its row's height, which is only safe while the
 // column is wider than 0.9 of that row. On a narrow, tall desktop window it is
 // not: at 901x900 the board came out 515px wide in a 433px stage and painted
@@ -756,6 +811,10 @@ async function landscapeNavRidesHeader(browser, width, height) {
     // width past it that was always correct.
     // The band where the board fills its stage, so the bar has only the stage's
     // own padding to stand in, and one width past it where it never did.
+    await panelsCannotEraseTheBoard(browser, 1440, 900);
+    await panelsCannotEraseTheBoard(browser, 1280, 800);
+    await panelsCannotEraseTheBoard(browser, 1024, 768);
+    await panelsCannotEraseTheBoard(browser, 901, 900);
     await evalBarFitsBesideTheBoard(browser, 901, 900);
     await evalBarFitsBesideTheBoard(browser, 1024, 768);
     await evalBarFitsBesideTheBoard(browser, 1200, 900);
@@ -817,6 +876,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: the eval bar stays inside the stage beside the board, the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: dragging both panels out cannot erase the board, the eval bar stays inside the stage beside the board, the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
