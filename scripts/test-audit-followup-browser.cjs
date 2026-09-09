@@ -555,9 +555,64 @@ async function everyIntersectionReachable(browser, width, height, note) {
   } finally { await page.close(); }
 }
 
+// A landscape phone is short and wide, and the move nav spent the scarce axis:
+// a full-width bar under the board, 38px plus a 12px gap, while 375px of the
+// stage sat empty beside the board and its status column. It rides the header's
+// row now. Check the board actually got the height -- against the same board in
+// portrait at the same area, which is the only figure that cannot drift with the
+// rest of the layout -- and that the action menu followed the buttons it hangs
+// off, which moved with the header into a column of their own.
+async function landscapeNavRidesHeader(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.mobile-board-nav').waitFor();
+    await page.getByTestId('mobile-more-actions-btn').click();
+    await page.locator('.mobile-board-action-menu').waitFor();
+    const box = await page.evaluate(() => {
+      const r = s => document.querySelector(s).getBoundingClientRect();
+      const header = r('.mobile-board-header');
+      const nav = r('.mobile-board-nav');
+      const board = r('.xiangqi-board');
+      const menu = r('.mobile-board-action-menu');
+      let coveredMenuItems = 0;
+      for (const el of document.querySelectorAll('.mobile-action-menu-btn')) {
+        const b = el.getBoundingClientRect();
+        const top = document.elementFromPoint(Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2));
+        if (!top || !top.closest('.mobile-board-action-menu')) coveredMenuItems += 1;
+      }
+      return {
+        onHeaderRow: Math.abs(nav.top - header.top) < 4 && nav.left >= header.right - 1,
+        boardBelow: board.top >= Math.max(header.bottom, nav.bottom) - 1,
+        boardHeight: board.height,
+        menuFollowsButtons: Math.abs(menu.right - header.right) < 2,
+        menuBelowHeader: menu.top >= header.bottom - 1,
+        menuOnScreen: menu.left >= 0 && menu.right <= innerWidth && menu.bottom <= innerHeight,
+        coveredMenuItems,
+        hscroll: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    assert.equal(box.onHeaderRow, true, `The move nav is not beside the header at ${width}x${height}`);
+    assert.equal(box.boardBelow, true, `The board runs under the top bar at ${width}x${height}`);
+    assert.equal(box.menuFollowsButtons, true,
+      `The action menu did not follow the header's right edge at ${width}x${height}`);
+    assert.equal(box.menuBelowHeader, true, `The action menu covers the header at ${width}x${height}`);
+    assert.equal(box.menuOnScreen, true, `The action menu runs off screen at ${width}x${height}`);
+    assert.equal(box.coveredMenuItems, 0, `An action menu item is covered at ${width}x${height}`);
+    assert.equal(box.hscroll, false, `The landscape stage scrolls sideways at ${width}x${height}`);
+    // The nav's own bar was 38px plus a 12px gap. Anything less than most of it
+    // back means the row it left is being spent somewhere else again.
+    const floor = height >= 390 ? 270 : 200;
+    assert.ok(box.boardHeight >= floor,
+      `The board did not take the row the nav left at ${width}x${height}: ${box.boardHeight.toFixed(0)}px < ${floor}px`);
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await landscapeNavRidesHeader(browser, 844, 390);
+    await landscapeNavRidesHeader(browser, 667, 375);
     // Before the side rail's height bound: 9 covered at 1440x650 and 45 at
     // 1920x650 -- the rule capped `.board-wrap` and left the container inside
     // it at its own 9:10, so the board grew with the window's width while its
@@ -597,6 +652,6 @@ async function everyIntersectionReachable(browser, width, height, note) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
