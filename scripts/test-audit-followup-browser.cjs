@@ -468,9 +468,62 @@ async function undoToastClearsChrome(browser, width, height, mobile) {
   } finally { await page.close(); }
 }
 
+// A short desktop window is wide and short the way a landscape phone is, and
+// the stacked dock answers it the way a portrait phone is answered: the board
+// is sized by the height the dock leaves, so at 1440x700 it came out 330px
+// with 470px of the stage empty beside it. Below 700px tall the dock moves to
+// the board's side, as the landscape-phone rule does under 900px wide. Check
+// both sides of the threshold, so the rule cannot quietly widen to every
+// desktop height -- or to a window too narrow to pay for a side rail, where it
+// costs the board more than the stacked dock does (283px against 188px at
+// 1024x600).
+async function shortDesktopDock(browser, width, height, expected) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.position-dock').waitFor();
+    const box = await page.evaluate(() => {
+      const rectOf = s => document.querySelector(s).getBoundingClientRect();
+      const board = rectOf('.xiangqi-board');
+      const dock = rectOf('.position-dock');
+      const stage = document.querySelector('.board-stage');
+      // The stage is allowed to scroll -- that is where a floored board's
+      // overflow goes, by design. What must hold is that the board never paints
+      // over the dock, and that every rank stays reachable by scrolling.
+      stage.scrollTop = 0;
+      const top = rectOf('.xiangqi-board').top >= -1;
+      stage.scrollTop = stage.scrollHeight;
+      const bottom = rectOf('.xiangqi-board').bottom <= innerHeight + 1;
+      stage.scrollTop = 0;
+      return {
+        beside: dock.left >= board.right - 1,
+        below: dock.top >= board.bottom - 1,
+        boardWidth: board.width,
+        ratio: board.width / board.height,
+        overlapsDock: Math.min(board.bottom, dock.bottom) - Math.max(board.top, dock.top) > 1
+          && Math.min(board.right, dock.right) - Math.max(board.left, dock.left) > 1,
+        reachable: top && bottom,
+        hscroll: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    assert.equal(box[expected], true,
+      `At ${width}x${height} the dock is not ${expected} the board (beside=${box.beside} below=${box.below})`);
+    assert.equal(box.overlapsDock, false, `The board paints over the dock at ${width}x${height}`);
+    assert.equal(box.reachable, true, `A rank of the board is unreachable at ${width}x${height}`);
+    assert.ok(Math.abs(box.ratio - 0.9) < 0.02, `The board is not 9:10 at ${width}x${height}: ${box.ratio.toFixed(3)}`);
+    assert.equal(box.hscroll, false, `The stage pushed the page into horizontal scroll at ${width}x${height}`);
+    if (expected === 'beside') {
+      assert.ok(box.boardWidth > 340, `The side dock did not buy the board room: ${box.boardWidth.toFixed(0)}px at ${width}x${height}`);
+    }
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await shortDesktopDock(browser, 1440, 650, 'beside');
+    await shortDesktopDock(browser, 1440, 800, 'below');   // too tall to need it
+    await shortDesktopDock(browser, 1100, 650, 'below');   // too narrow to pay for it
     await undoToastClearsChrome(browser, 1440, 900, false);
     await undoToastClearsChrome(browser, 390, 844, true);
     await strengthRungLabels(browser, 1440, 900, false);
@@ -494,6 +547,6 @@ async function undoToastClearsChrome(browser, width, height, mobile) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
