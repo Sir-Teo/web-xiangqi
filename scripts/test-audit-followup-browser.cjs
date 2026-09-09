@@ -343,9 +343,68 @@ async function commandPaletteRows(browser, width, height, mobile) {
   } finally { await page.close(); }
 }
 
+// A reviewed move is marked in the tree by a 5px disc whose only difference
+// between the grades is its background colour, so forced colours left every
+// reviewed move looking the same -- and unlike the review panel's chips the
+// disc has no label beside it. Under forced colours the three grades worth
+// answering for carry the glyph this app's PGN export already writes.
+//
+// The markup is built here rather than driven through a real review: what can
+// regress is the stylesheet, and a full engine review costs a minute for the
+// same three declarations. That the classes reach real moves is covered by
+// MoveListTreeQuality.test.tsx, and the structure below mirrors the tree's.
+async function reviewGradesUnderForcedColors(browser) {
+  const build = () => {
+    const host = document.createElement('div');
+    host.id = 'qa-quality-probe';
+    for (const grade of ['best', 'good', 'inaccuracy', 'mistake', 'blunder']) {
+      const row = document.createElement('span');
+      row.className = `quality-${grade}`;
+      const dot = document.createElement('span');
+      dot.className = 'mtree-quality-dot';
+      row.appendChild(dot);
+      host.appendChild(row);
+    }
+    document.querySelector('.app-shell').appendChild(host);
+    const read = {};
+    for (const row of host.children) {
+      const grade = row.className.replace('quality-', '');
+      read[grade] = getComputedStyle(row.firstChild, '::after').content;
+    }
+    host.remove();
+    return read;
+  };
+
+  const forced = await browser.newPage({ viewport: { width: 1440, height: 900 }, forcedColors: 'active' });
+  try {
+    await forced.goto(base + '?moves=h2e2');
+    await forced.locator('.app-shell').waitFor();
+    assert.equal(await forced.evaluate(() => matchMedia('(forced-colors: active)').matches), true);
+    const marks = await forced.evaluate(build);
+    assert.match(marks.inaccuracy, /\?!/, `An inaccuracy is marked ${marks.inaccuracy} under forced colours`);
+    assert.match(marks.mistake, /"\?"/, `A mistake is marked ${marks.mistake} under forced colours`);
+    assert.match(marks.blunder, /\?\?/, `A blunder is marked ${marks.blunder} under forced colours`);
+    const distinct = new Set([marks.inaccuracy, marks.mistake, marks.blunder, marks.best]);
+    assert.equal(distinct.size, 4, `Review grades are not told apart under forced colours: ${JSON.stringify(marks)}`);
+  } finally { await forced.close(); }
+
+  // And nothing changes for everyone else: the glyphs are a forced-colours
+  // fallback, not a new mark on the default board.
+  const plain = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await plain.goto(base + '?moves=h2e2');
+    await plain.locator('.app-shell').waitFor();
+    const marks = await plain.evaluate(build);
+    for (const [grade, content] of Object.entries(marks)) {
+      assert.equal(content, 'none', `A ${grade} move grew a ${content} glyph outside forced colours`);
+    }
+  } finally { await plain.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await reviewGradesUnderForcedColors(browser);
     await commandPaletteRows(browser, 1440, 900, false);
     await commandPaletteRows(browser, 390, 844, true);
     await libraryCardHeight(browser, 1440, 900, false);
@@ -363,6 +422,6 @@ async function commandPaletteRows(browser, width, height, mobile) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

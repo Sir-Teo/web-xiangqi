@@ -2008,6 +2008,38 @@ body.resizing * {
   background: var(--quality-blunder);
 }
 
+/* The dot is a 5px disc, and the only thing separating the five review grades
+   is its background colour -- which forced colours flattens to one system
+   colour, leaving every reviewed move in the tree marked identically. Unlike
+   the review panel's chips, the dot has no label beside it to fall back on.
+   (The move's own aria-label names the grade, so this is a visual gap rather
+   than a screen-reader one.)
+
+   Carry the grade in a glyph instead, the same way the board carries a piece's
+   side in the shape of its ring. The glyphs are the ones this app's own PGN
+   export writes -- pgnAnnotations.ts maps inaccuracy/mistake/blunder to
+   $6/$2/$4 -- and, as the convention it records there says, a good or best
+   move gets none: those keep the plain disc, which still reads as "reviewed,
+   nothing to answer for". */
+@media (forced-colors: active) {
+  .quality-inaccuracy .mtree-quality-dot,
+  .quality-mistake .mtree-quality-dot,
+  .quality-blunder .mtree-quality-dot {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .quality-inaccuracy .mtree-quality-dot::after { content: '?!'; }
+  .quality-mistake .mtree-quality-dot::after { content: '?'; }
+  .quality-blunder .mtree-quality-dot::after { content: '??'; }
+}
+
 /* Move quality legend */
 .mtree-quality-legend {
   margin-top: var(--space-lg, 1rem);
