@@ -4124,7 +4124,7 @@ function App() {
     } else if (importedLine.hadMoreGames) {
       showImportNotice(
         'Imported first game',
-        'Imported the first game only. The paste held more than one game.'
+        'Imported the first game only. To save several games, open Library → Import PGN collection.'
       );
     }
 

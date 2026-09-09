@@ -13,7 +13,7 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       page.on('pageerror', e => errors.push(e.message));
       await page.goto(base);
       await page.getByTestId(width < 900 ? 'mobile-open-library-btn' : 'left-panel-tab-library').click();
-      await page.locator('.lib-transfer summary').click();
+      await page.locator('.lib-transfer summary').filter({ hasText: 'Backup and restore' }).click();
       const input = page.getByLabel('Restore library backup', { exact: true });
       const payload = JSON.stringify({ format: 'web-xiangqi-library', version: 1, games: [game] });
       const upload = text => input.setInputFiles({ name: 'library.json', mimeType: 'application/json', buffer: Buffer.from(text) });

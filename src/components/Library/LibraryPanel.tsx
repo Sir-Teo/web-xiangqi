@@ -1,3 +1,4 @@
+import { LibraryPgnImport } from './LibraryPgnImport';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
@@ -436,6 +437,7 @@ export function LibraryPanel({
   return (
     <div className="lib-panel">
       <LibraryTransfer state={libraryState} onChange={onLibraryChange} />
+      <LibraryPgnImport state={libraryState} onChange={onLibraryChange} />
       <div className="lib-search-wrap">
         <input
           className="lib-search"

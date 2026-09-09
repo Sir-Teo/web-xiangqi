@@ -1,0 +1,65 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { chromium } = require('playwright');
+const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
+const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
+(async () => {
+ const browser = await chromium.launch();
+ try {
+  for (const width of [1440,390]) {
+   const page = await browser.newPage({viewport:{width,height:900},acceptDownloads:true});
+   const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+   await page.goto(base+'?moves=h2e2');
+   const beforeFen = await page.locator('.bottombar-fen').getAttribute('title');
+   await page.getByTestId(width<900 ? 'mobile-open-library-btn':'left-panel-tab-library').click();
+   const panel=page.getByTestId('pgn-collection-import');
+   await panel.locator('summary').click();
+   const file=panel.getByLabel('Choose PGN collection');
+   const upload=text=>file.setInputFiles({name:'collection.pgn',mimeType:'application/x-chess-pgn',buffer:Buffer.from(text)});
+   const raw=()=>page.evaluate(()=>localStorage.getItem('xiangqi:library:v1'));
+   const before=await raw();
+   await upload(source+'\n1.h2e2 h9h8 *');
+   await panel.getByRole('alert').waitFor();
+   assert.match(await panel.getByRole('alert').innerText(), /Game 3: Illegal move h9h8/);
+   assert.equal(await raw(),before);
+   await upload(source);
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
+   assert.equal(await raw(),before,'Preview does not save');
+   assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen);
+   await panel.getByRole('checkbox').last().uncheck();
+   assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true);
+   await panel.getByRole('button',{name:'Select none',exact:true}).click();
+   assert.equal(await panel.getByRole('button',{name:'Import 0 games',exact:true}).isDisabled(),true);
+   await panel.getByRole('button',{name:'Select all',exact:true}).click();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).scrollIntoViewIfNeeded();
+   await page.screenshot({path:`/tmp/xiangqi-collection-preview-${width}.png`});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('status').filter({hasText:'Imported 2 games.'}).waitFor();
+   const games=JSON.parse(await raw());
+   assert.equal(games.length,2);
+   const alice=games.find(game=>game.metadata.redPlayer==='Alice');
+   assert.equal(alice.result,'red');
+   assert.equal(alice.moveTree[1].comment,'Branch note');
+   assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen,'Saving leaves board untouched');
+   const download=page.waitForEvent('download');
+   await page.getByTestId(`download-pgn-saved-${alice.id}`).click();
+   const pgn=fs.readFileSync(await (await download).path(),'utf8');
+   assert.ok(pgn.includes('Branch note') && pgn.includes('(') && pgn.includes('[White "Alice"]'));
+   // Failed writes preserve the current library and leave the preview available.
+   await upload(source);
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
+   await page.evaluate(()=>{ const original=Storage.prototype.setItem; Storage.prototype.setItem=function(key,value){if(key==='xiangqi:library:v1')throw new Error('Quota'); return original.call(this,key,value);}; });
+   const original=await raw();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('alert').waitFor();
+   assert.equal(await raw(),original);
+   assert.equal(await panel.getByRole('checkbox').count(),2);
+   await panel.getByRole('button',{name:'Cancel import',exact:true}).click();
+   assert.equal(await panel.getByRole('checkbox').count(),0);
+   assert.deepEqual(errors,[]);
+   await page.close();
+  }
+  console.log('PASS: desktop/mobile collection worker preview, selection, illegal-game rejection, atomic save, metadata/branch export, unchanged board and quota protection');
+ } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

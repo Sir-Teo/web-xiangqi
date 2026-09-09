@@ -1146,7 +1146,7 @@ async function assertDataFromBeforeTheKeyRenameStillArrives(page) {
       .waitForFunction(() => document.querySelectorAll(".lib-card").length > 0, null, { timeout: 5000 })
       .then(() => true)
       .catch(() => false);
-    const text = await page.evaluate(() => document.body.innerText.slice(0, 400));
+    const text = await page.locator(".lib-card").allInnerTexts().then(cards => cards.join("\n"));
     if (!found || !/Central Cannon/.test(text)) {
       throw new Error("A library saved before the rename did not survive it.");
     }
