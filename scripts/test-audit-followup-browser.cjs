@@ -555,6 +555,57 @@ async function everyIntersectionReachable(browser, width, height, note) {
   } finally { await page.close(); }
 }
 
+// Every safe-area rule in this stylesheet has been argued rather than measured
+// -- the audit that added the last one said so -- because a display cutout is a
+// device property and the harness had no way to produce one. It does:
+// `Emulation.setSafeAreaInsetsOverride` makes `env(safe-area-inset-*)` report
+// whatever is asked for, so the insets can be turned on and the app measured
+// under them like any other layout.
+//
+// What that found: on a phone the board stage is the topmost content -- the
+// toolbar carrying the left/right insets is the desktop one, hidden here -- so
+// nothing cleared the cutout. In landscape at 59px/34px the turn readout
+// started under it, the last move-nav button ended under it, and the analysis
+// view's first and last tabs sat under both. Asymmetric on purpose: a cutout is
+// on one side, and a rule that reads only one inset passes a symmetric test.
+async function cutoutClearance(browser, width, height, view) {
+  const insets = { left: 59, right: 34, top: 0, bottom: 21 };
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+  try {
+    const cdp = await page.context().newCDPSession(page);
+    await page.goto(base + '?moves=h2e2%20b9c7');
+    await page.locator('.mobile-tab-bar').waitFor();
+    if (view === 'analysis') {
+      await page.getByTestId('mobile-view-analysis').click();
+      await page.locator('.mobile-analysis-tabs').waitFor();
+    }
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
+    // The override is asynchronous in the renderer, so wait for it to land
+    // rather than for a fixed delay -- and this doubles as the check that the
+    // emulation did anything at all.
+    await page.waitForFunction(
+      left => getComputedStyle(document.querySelector('.mobile-tab-bar')).paddingLeft === `${left}px`,
+      insets.left,
+    );
+    const covered = await page.evaluate(inset => {
+      const out = [];
+      const selector = 'button, input, select, a, [role="tab"], .mobile-turn-label, .mobile-eval-chip, .position-stat';
+      for (const el of document.querySelectorAll(selector)) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        if (getComputedStyle(el).visibility === 'hidden') continue;
+        if (r.left >= inset.left - 0.5 && r.right <= innerWidth - inset.right + 0.5) continue;
+        const name = el.getAttribute('data-testid') || el.getAttribute('aria-label')
+          || (el.textContent || '').trim() || el.className.toString();
+        out.push(`${name.slice(0, 30)} [${Math.round(r.left)},${Math.round(r.right)}]`);
+      }
+      return out;
+    }, insets);
+    assert.deepEqual(covered, [],
+      `${covered.length} controls sit under the display cutout at ${width}x${height} (${view}): ${covered.slice(0, 4).join('; ')}`);
+  } finally { await page.close(); }
+}
+
 // A landscape phone is short and wide, and the move nav spent the scarce axis:
 // a full-width bar under the board, 38px plus a 12px gap, while 375px of the
 // stage sat empty beside the board and its status column. It rides the header's
@@ -611,6 +662,9 @@ async function landscapeNavRidesHeader(browser, width, height) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await cutoutClearance(browser, 844, 390, 'board');
+    await cutoutClearance(browser, 844, 390, 'analysis');
+    await cutoutClearance(browser, 390, 844, 'board');
     await landscapeNavRidesHeader(browser, 844, 390);
     await landscapeNavRidesHeader(browser, 667, 375);
     // Before the side rail's height bound: 9 covered at 1440x650 and 45 at
@@ -652,6 +706,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

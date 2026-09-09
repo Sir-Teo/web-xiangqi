@@ -4029,7 +4029,17 @@ summary:active {
     /* The action menu below the header lines up with this inset, and reads it
        from here rather than repeating the number. */
     --mobile-stage-pad-x: 14px;
-    padding: 8px var(--mobile-stage-pad-x) 10px;
+    /* On a phone this stage is the topmost content: the toolbar that carries
+       `env(safe-area-inset-left/right)` is the desktop one, and it is hidden
+       here. So the cutout is this element's to clear, and in landscape it eats
+       the side the header's turn readout starts at and the side the move nav
+       ends at -- both measured under the notch at a 59px/34px inset before
+       these terms existed. Left and right separately because a cutout is on one
+       side; the two derived values are what the landscape padding below and the
+       action menu's own inset read, so the number stays in one place. */
+    --mobile-stage-pad-left: calc(var(--mobile-stage-pad-x) + env(safe-area-inset-left, 0px));
+    --mobile-stage-pad-right: calc(var(--mobile-stage-pad-x) + env(safe-area-inset-right, 0px));
+    padding: 8px var(--mobile-stage-pad-right) 10px var(--mobile-stage-pad-left);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -4205,9 +4215,9 @@ summary:active {
   /* A grid area's end edge is the container's *padding* edge, so `right: 0`
      put the menu against the screen. Inset it by the stage's own padding, and
      cap the width so the far edge keeps the same margin on a narrow phone. */
-  right: var(--mobile-stage-pad-x, 14px);
+  right: var(--mobile-stage-pad-right, 14px);
   z-index: 35;
-  width: min(286px, calc(100% - var(--mobile-stage-pad-x, 14px)));
+  width: min(286px, calc(100% - var(--mobile-stage-pad-left, 14px)));
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -4340,7 +4350,10 @@ summary:active {
     flex: 0 0 48px;
     order: 0;
     width: 100%;
-    padding: 0 6px;
+    /* The tab bar under this one already clears the cutout; this strip is the
+       top of the analysis view and has to as well, or the first and last tabs
+       sit under it. */
+    padding: 0 calc(6px + env(safe-area-inset-right, 0px)) 0 calc(6px + env(safe-area-inset-left, 0px));
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -4381,7 +4394,8 @@ summary:active {
      their controls stranded at the far edge. Cap the measure and centre it —
      padding rather than max-width so the scrollbar stays on the panel edge. */
   [data-mobile-view="analysis"] .panel-content {
-    padding-inline: max(var(--space-md), calc((100% - 620px) / 2));
+    padding-left: max(calc(var(--space-md) + env(safe-area-inset-left, 0px)), calc((100% - 620px) / 2));
+    padding-right: max(calc(var(--space-md) + env(safe-area-inset-right, 0px)), calc((100% - 620px) / 2));
   }
 
   .mobile-tab-btn {
@@ -4530,7 +4544,7 @@ summary:active {
 @media (max-width: 900px) and (max-height: 500px) {
   [data-mobile-view="board"] .board-stage {
     --mobile-stage-pad-x: 10px;
-    padding: 4px var(--mobile-stage-pad-x) 6px;
+    padding: 4px var(--mobile-stage-pad-right) 6px var(--mobile-stage-pad-left);
   }
 
   .mobile-board-header {
@@ -6848,7 +6862,9 @@ summary:active {
    order, which is the one thing it exists to be in. */
 .skip-link {
   position: absolute;
-  left: 0.5rem;
+  /* The first thing a keyboard reaches, so it has to land somewhere visible on
+     a phone held sideways, where a cutout takes the left edge. */
+  left: calc(0.5rem + env(safe-area-inset-left, 0px));
   top: -3rem;
   z-index: 100;
   padding: 0.5rem 0.9rem;
