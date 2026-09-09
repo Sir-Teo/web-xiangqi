@@ -580,3 +580,18 @@ export function restoreLibraryBackup(text: string): LibraryRestorePreview {
     if (added && !writeAll(games)) return { added: 0, duplicates, error: 'Browser storage refused the restore. Your existing library has been kept.' };
     return { added, duplicates, error: null };
 }
+
+/** Append a reviewed collection in one write, re-reading storage at confirmation. */
+export function saveGameCollection(incoming: Omit<SavedGame, 'id' | 'savedAt'>[]): { added: number; error: string | null } {
+    const fail = (error: string) => ({ added: 0, error });
+    if (!incoming.length || incoming.length > MAX_SAVED_GAMES) return fail(`Choose between 1 and ${MAX_SAVED_GAMES} games.`);
+    const current = loadLibraryState();
+    if (current.mutationBlocked) return fail('Your existing library could not be read. Download its recovery file before importing.');
+    if (current.games.length + incoming.length > MAX_SAVED_GAMES) return fail(`These games would exceed the ${MAX_SAVED_GAMES}-game library limit. Nothing was imported.`);
+    const savedAt = Date.now();
+    const additions = incoming.map(game => normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt }));
+    if (additions.some(game => !game)) return fail('The collection contains invalid game data. Nothing was imported.');
+    const games = [...current.games, ...additions as SavedGame[]];
+    if (!writeAll(games)) return fail('Browser storage is full, blocked, or the combined library is too large. Nothing was imported.');
+    return { added: additions.length, error: null };
+}
