@@ -6786,3 +6786,27 @@ summary:active {
   line-height: 1.5;
 }
 .save-error-notice > span { flex-basis: 100%; }
+
+/* Touch targets in the analysis panels.
+   ------------------------------------
+   These controls are sized for a mouse: `min-height: 1.55rem` puts them at
+   25px, and on a phone the analysis panel hands the same 25px to a thumb --
+   `Go Deep`, `Threat`, the per-line `Play`, the PV-count buttons. 24px is the
+   floor WCAG 2.5.8 asks for and they are barely over it; 44px is what Apple's
+   HIG and WCAG 2.5.5 ask for, and what this raises them to.
+
+   `pointer: coarse` is the primary pointer being a finger, so a touchscreen
+   laptop driven by its trackpad keeps the dense sizing -- the counterpart to
+   the `(hover: hover) and (pointer: fine)` this file already guards its hover
+   states with, and the same query analysisProfile.ts reads for device tier.
+   Only these few buttons are covered: the move list is a long list where row
+   height is also scroll length, and is worth judging on its own. */
+@media (pointer: coarse) {
+  .engine-cache-btn,
+  .engine-pv-btn,
+  .pv-action-btn,
+  .review-best-move-btn,
+  .chip-btn {
+    min-height: 44px;
+  }
+}

@@ -213,9 +213,57 @@ async function openingBadgeTruncation(browser, width) {
   } finally { await page.close(); }
 }
 
+// The analysis panel's buttons are sized for a mouse and a phone was handed
+// the same 25px. Check both halves of the fix: a finger gets the 44px Apple's
+// HIG and WCAG 2.5.5 ask for, and a mouse keeps the dense sizing -- a rule
+// that leaked to `pointer: fine` would quietly loosen every desktop panel.
+async function analysisTouchTargets(browser) {
+  const selectors = ['.engine-cache-btn', '.engine-pv-btn', '.pv-action-btn'];
+  const moves = '?moves=h2e2%20h9g7%20b0c2%20b9c7%20b2b6%20a9b9';
+  const heights = async (page, open) => {
+    await page.goto(base + moves);
+    await open(page);
+    // `.pv-action-btn` only exists once the engine has returned a line, so wait
+    // for each selector rather than assuming they arrive together.
+    for (const selector of selectors) await page.locator(selector).first().waitFor();
+    return page.evaluate(list => {
+      const found = {};
+      for (const selector of list) {
+        for (const el of document.querySelectorAll(selector)) {
+          const box = el.getBoundingClientRect();
+          if (box.height > 0) found[selector] = Math.min(found[selector] ?? Infinity, box.height);
+        }
+      }
+      return found;
+    }, selectors);
+  };
+
+  const touch = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  try {
+    const box = await heights(touch, async page => {
+      await page.getByTestId('mobile-view-analysis').click();
+      await page.getByTestId('mobile-analysis-tab-engine').click();
+    });
+    assert.equal(await touch.evaluate(() => matchMedia('(pointer: coarse)').matches), true);
+    for (const selector of selectors) {
+      assert.ok(box[selector] >= 44, `${selector} is ${box[selector]}px to a finger, under the 44px minimum`);
+    }
+  } finally { await touch.close(); }
+
+  const mouse = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    const box = await heights(mouse, page => page.getByTestId('analysis-tab-engine').click());
+    assert.equal(await mouse.evaluate(() => matchMedia('(pointer: fine)').matches), true);
+    for (const selector of selectors) {
+      assert.ok(box[selector] < 40, `${selector} grew to ${box[selector]}px on a mouse; the touch rule is leaking`);
+    }
+  } finally { await mouse.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await analysisTouchTargets(browser);
     await openingBadgeTruncation(browser, 1440);
     await openingBadgeTruncation(browser, 1280);
     await fullLibrary(browser, 1440);
@@ -228,6 +276,6 @@ async function openingBadgeTruncation(browser, width) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
