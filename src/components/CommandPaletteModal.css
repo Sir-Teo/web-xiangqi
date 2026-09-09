@@ -70,14 +70,31 @@
     opacity: 0.55;
 }
 
+/* `flex-basis: 0` rather than `auto`, so the hint asks for none of the row and
+   grows into whatever the label leaves. With `auto` both items entered flex
+   layout at their full text widths, the row overflowed by a hair, and both
+   shrank in proportion -- which left the label a fraction of a pixel under
+   what its own text needs (206.78 against 207) and wrapped it. That is why
+   "Write a note on this move" stood 63px tall in a list of 39px rows, and 87px
+   at 320px wide, while its one-line description sat beside it. The name is
+   what a palette is read for, so the description is the one that gives way. */
 .command-palette-hint {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.75rem;
     opacity: 0.7;
+}
+
+/* Shrinks only after the hint has nothing left to give, and wraps rather than
+   truncating when even the whole row cannot hold it -- a command's name is
+   what the list is read for, so losing the end of one is worse than a taller
+   row on the narrowest phone. */
+.command-palette-label {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 /* Pushes the key to the right even when there is no hint to fill the gap. */

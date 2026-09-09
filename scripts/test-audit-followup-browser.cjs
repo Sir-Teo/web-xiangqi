@@ -311,9 +311,43 @@ async function libraryCardHeight(browser, width, height, mobile) {
   } finally { await page.close(); }
 }
 
+// A palette row is a command name beside its description. Both entered flex
+// layout at their full text widths, so a row that overflowed by a hair shrank
+// both -- leaving the name a fraction of a pixel under what its own text needs
+// and wrapping it. "Write a note on this move" stood 63px tall in a list of
+// 39px rows while its one-line description sat beside it. The description now
+// asks for none of the row and grows into what the name leaves.
+async function commandPaletteRows(browser, width, height, mobile) {
+  const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  try {
+    await page.goto(base + '?moves=h2e2%20h9g7%20b0c2%20b9c7');
+    await page.keyboard.press('Control+k');
+    await page.locator('.command-palette-button').first().waitFor();
+    const rows = await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('.command-palette-button')];
+      const truncated = [...document.querySelectorAll('.command-palette-label')]
+        .filter(label => label.scrollWidth > label.clientWidth + 1)
+        .map(label => label.textContent.trim());
+      return {
+        count: buttons.length,
+        heights: [...new Set(buttons.map(b => Math.round(b.getBoundingClientRect().height)))],
+        truncated,
+      };
+    });
+    assert.ok(rows.count > 20, `Expected the palette's commands, saw ${rows.count}`);
+    assert.deepEqual(rows.heights.length, 1,
+      `Palette rows are ${rows.heights.sort((a, b) => a - b).join('/')}px at ${width}px; a command name is wrapping beside a one-line description`);
+    // A name is what the list is read for -- it wraps when a row genuinely
+    // cannot hold it, but it is never cut off.
+    assert.deepEqual(rows.truncated, [], `Palette command names are truncated at ${width}px`);
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await commandPaletteRows(browser, 1440, 900, false);
+    await commandPaletteRows(browser, 390, 844, true);
     await libraryCardHeight(browser, 1440, 900, false);
     await libraryCardHeight(browser, 390, 844, true);
     await analysisTouchTargets(browser);
@@ -329,6 +363,6 @@ async function libraryCardHeight(browser, width, height, mobile) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
