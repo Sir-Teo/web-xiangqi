@@ -7440,6 +7440,24 @@ function App() {
             </div>
           </div>
         </aside>
+        {/* Inside the workspace, not beside it: the toast used to be a sibling
+            of the bottom bar and the phone's tab bar both, held off the bottom
+            of the window by a flat 76px. That is not the height of either --
+            it sat 47px *over* the desktop bar, covering New Game, Save and
+            Copy PGN for the ten seconds the Undo lasts, and on a phone it
+            clears the 56px tab bar by 20px only while the safe-area inset is
+            zero; an iPhone's 34px inset takes that back. In here it is
+            positioned against the workspace, which ends exactly where the
+            chrome below it begins, on both. */}
+        {deleteUndo ? (
+          <div className="undo-toast" role="status" data-testid="delete-undo-toast">
+            <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
+            <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
+            <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
+              <IconX />
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* ── Bottom bar ── */}
@@ -7775,16 +7793,6 @@ function App() {
             {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
           </button>
           <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
-        </div>
-      ) : null}
-
-      {deleteUndo ? (
-        <div className="undo-toast" role="status" data-testid="delete-undo-toast">
-          <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
-          <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
-          <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
-            <IconX />
-          </button>
         </div>
       ) : null}
 

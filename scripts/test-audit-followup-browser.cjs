@@ -429,9 +429,50 @@ async function strengthRungLabels(browser, width, height, mobile) {
   } finally { await page.close(); }
 }
 
+// The undo toast was held off the bottom of the window by a flat 76px, which
+// is the height of neither thing it has to clear: it sat 47px over the desktop
+// bottom bar, covering New Game, Save and Copy PGN for the ten seconds the
+// Undo is offered, and it cleared the phone's tab bar by 20px only while the
+// safe-area inset is zero. It is positioned inside the workspace now, whose
+// bottom edge is where that chrome begins on both.
+async function undoToastClearsChrome(browser, width, height, mobile) {
+  const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  try {
+    await page.goto(base + '?moves=h2e2%20h9g7%20b0c2');
+    // The board is on screen in both layouts; the move tree is not -- a phone
+    // opens on the board view and keeps the tree behind the Analysis tab.
+    await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('Control+k');
+    await page.locator('.command-palette-button').first().waitFor();
+    await page.keyboard.type('Delete this move');
+    await page.keyboard.press('Enter');
+    const toast = page.getByTestId('delete-undo-toast');
+    await toast.waitFor();
+    const box = await page.evaluate(() => {
+      const t = document.querySelector('.undo-toast').getBoundingClientRect();
+      // whichever bottom chrome this layout has
+      const bar = document.querySelector('.mobile-tab-bar')?.getBoundingClientRect()
+        ?? document.querySelector('.panel.bottom')?.getBoundingClientRect();
+      const undo = document.querySelector('[data-testid="delete-undo-btn"]').getBoundingClientRect();
+      const onTop = document.elementFromPoint(undo.left + undo.width / 2, undo.top + undo.height / 2);
+      return {
+        gap: bar ? bar.top - t.bottom : null,
+        offScreen: t.bottom - innerHeight,
+        undoReachable: !!onTop?.closest('[data-testid="delete-undo-btn"]'),
+      };
+    });
+    assert.ok(box.gap !== null, 'Found no bottom chrome to measure the toast against');
+    assert.ok(box.gap >= 0, `The undo toast covers the bottom chrome by ${(-box.gap).toFixed(0)}px at ${width}x${height}`);
+    assert.ok(box.offScreen <= 0, `The undo toast runs off the bottom at ${width}x${height}`);
+    assert.equal(box.undoReachable, true, `Nothing is on top of the Undo button at ${width}x${height}`);
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await undoToastClearsChrome(browser, 1440, 900, false);
+    await undoToastClearsChrome(browser, 390, 844, true);
     await strengthRungLabels(browser, 1440, 900, false);
     await strengthRungLabels(browser, 390, 844, true);
     await strengthRungLabels(browser, 320, 568, true);
@@ -453,6 +494,6 @@ async function strengthRungLabels(browser, width, height, mobile) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
