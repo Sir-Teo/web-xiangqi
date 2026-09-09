@@ -555,6 +555,49 @@ async function everyIntersectionReachable(browser, width, height, note) {
   } finally { await page.close(); }
 }
 
+// The eval bar is absolutely positioned beside the board, on the stated
+// assumption that it "lives in the stage padding beside the board, which is
+// empty at every viewport this renders at". That holds only while the board is
+// narrower than its stage. Once the board fills the column the bar is drawn
+// outside the stage, which clips its overflow and lets the left panel's resize
+// handle paint over it -- 19px of its 22px past the stage's edge at 901x900,
+// still 6px at 1024x768. Measure the bar against the stage rather than against
+// the board: it is the board it is aligned to and the stage it has to fit.
+async function evalBarFitsBesideTheBoard(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.eval-bar').waitFor();
+    const box = await page.evaluate(() => {
+      const bar = document.querySelector('.eval-bar').getBoundingClientRect();
+      const stage = document.querySelector('.board-stage').getBoundingClientRect();
+      const board = document.querySelector('.xiangqi-board').getBoundingClientRect();
+      const centre = document.elementFromPoint(
+        Math.round(bar.x + bar.width / 2),
+        Math.round(bar.y + bar.height / 2),
+      );
+      return {
+        insideStage: bar.left >= stage.left - 0.5 && bar.right <= stage.right + 0.5,
+        outside: Math.round(stage.left - bar.left),
+        besideBoard: bar.right <= board.left + 0.5,
+        matchesBoardHeight: Math.abs(bar.height - board.height) < 2,
+        // Nothing of the surrounding chrome may be on top of it. The stage's own
+        // boxes are fine -- the bar is inside them.
+        coveredBy: centre && !centre.closest('.board-stage')
+          ? (centre.className.baseVal ?? centre.className).toString().trim()
+          : null,
+      };
+    });
+    assert.equal(box.insideStage, true,
+      `The eval bar is drawn ${box.outside}px outside the board stage at ${width}x${height}`);
+    assert.equal(box.besideBoard, true, `The eval bar overlaps the board at ${width}x${height}`);
+    assert.equal(box.matchesBoardHeight, true,
+      `The eval bar is not the board's height at ${width}x${height}`);
+    assert.equal(box.coveredBy, null,
+      `The eval bar is covered by ${box.coveredBy} at ${width}x${height}`);
+  } finally { await page.close(); }
+}
+
 // The board is derived from its row's height, which is only safe while the
 // column is wider than 0.9 of that row. On a narrow, tall desktop window it is
 // not: at 901x900 the board came out 515px wide in a 433px stage and painted
@@ -711,6 +754,12 @@ async function landscapeNavRidesHeader(browser, width, height) {
   try {
     // The narrow-and-tall desktop band, both edges and the middle, plus one
     // width past it that was always correct.
+    // The band where the board fills its stage, so the bar has only the stage's
+    // own padding to stand in, and one width past it where it never did.
+    await evalBarFitsBesideTheBoard(browser, 901, 900);
+    await evalBarFitsBesideTheBoard(browser, 1024, 768);
+    await evalBarFitsBesideTheBoard(browser, 1200, 900);
+    await evalBarFitsBesideTheBoard(browser, 1440, 900);
     await boardFitsItsColumn(browser, 901, 900);
     await boardFitsItsColumn(browser, 1000, 900);
     await boardFitsItsColumn(browser, 1100, 900);
@@ -768,6 +817,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: the eval bar stays inside the stage beside the board, the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

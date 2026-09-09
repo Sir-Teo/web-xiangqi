@@ -5923,6 +5923,10 @@ summary:active {
    184px at 2560x1440, and 495px when the cap was 580. Bounding the wrap by the
    same box keeps the assumption true. */
 :root { --board-max-width: 860px; }
+/* What the eval bar needs beside the board: its own 1.35rem plus the 0.85rem it
+   stands off by. Named here so the board's width bound can subtract it and the
+   bar's own rule can spend it, rather than the two agreeing by coincidence. */
+:root { --eval-bar-room: calc(1.35rem + 0.85rem); }
 /* The smallest board the desktop layout may shrink to before the stage scrolls
    instead. A width, like --board-max-width, so the two read against each other;
    the floor is applied as a height because that is the axis this board is sized
@@ -5960,8 +5964,19 @@ summary:active {
      height, clamping the width does not re-derive the height, so the box
      distorts instead of shrinking. Cap the height by what the column allows and
      let the ratio above derive the width from that. `.board-workspace` is a
-     size container, so `100cqw` is the column this box has to fit. */
-  height: min(100%, calc(100cqw * 10 / 9));
+     size container, so `100cqw` is the column this box has to fit.
+
+     The column is the eval bar's too. The bar is absolutely positioned beside
+     the wrap, on the stated assumption that it "lives in the stage padding
+     beside the board, which is empty at every viewport this renders at" -- and
+     that is only true while the board is narrower than its stage. Once the
+     board fills the column the bar is drawn *outside* the stage, which clips
+     its overflow and lets the left panel's resize handle paint over it: 19px of
+     its 22px past the stage's edge at 901x900, and still 6px at 1024x768. The
+     engine's evaluation, invisible. So take the bar's own footprint out of the
+     column before deriving the board from it, on both sides, since the board is
+     centred in what is left. */
+  height: min(100%, calc((100cqw - 2 * var(--eval-bar-room)) * 10 / 9));
   max-width: var(--board-max-width);
   /* 9:10, so the widest board implies its own tallest. Without this the wrap
      stays as tall as its row after the width has stopped growing. */
