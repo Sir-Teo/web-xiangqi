@@ -498,3 +498,5 @@
 .lib-pgn-game > span { min-width: 0; overflow-wrap: anywhere; }
 .lib-pgn-game span span { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .lib-pgn-game input { flex: 0 0 auto; width: 20px; height: 20px; }
+
+.lib-pgn-filename { overflow-wrap: anywhere; }

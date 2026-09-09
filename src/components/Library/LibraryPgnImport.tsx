@@ -65,7 +65,7 @@ export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onC
       </label>
       {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview">
-        <p><strong>{fileName}</strong><br />{games.length} games checked. Select the games to add. Existing games will be kept; importing the same file again creates new copies.</p>
+        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Select the games to add. Existing games will be kept; importing the same file again creates new copies.</p>
         <p>Players, tournament details, results, variations, and move notes are retained. Engine annotations are kept as note text, not review scores. Other PGN tags are not retained.</p>
         <div className="lib-transfer-actions">
           <button type="button" onClick={() => setSelected(new Set(games.map((_, index) => index)))}>Select all</button>

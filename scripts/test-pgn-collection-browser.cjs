@@ -15,7 +15,7 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    const panel=page.getByTestId('pgn-collection-import');
    await panel.locator('summary').click();
    const file=panel.getByLabel('Choose PGN collection');
-   const upload=text=>file.setInputFiles({name:'collection.pgn',mimeType:'application/x-chess-pgn',buffer:Buffer.from(text)});
+   const upload=text=>file.setInputFiles({name:'Tournament'.repeat(20)+'.pgn',mimeType:'application/x-chess-pgn',buffer:Buffer.from(text)});
    const raw=()=>page.evaluate(()=>localStorage.getItem('xiangqi:library:v1'));
    const before=await raw();
    await upload(source+'\n1.h2e2 h9h8 *');
@@ -34,6 +34,7 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).scrollIntoViewIfNeeded();
    await page.screenshot({path:`/tmp/xiangqi-collection-preview-${width}.png`});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   assert.equal(await panel.evaluate(el=>el.scrollWidth>el.clientWidth),false,'Long filenames must wrap inside the panel');
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
    await panel.getByRole('status').filter({hasText:'Imported 2 games.'}).waitFor();
    const games=JSON.parse(await raw());
