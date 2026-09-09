@@ -80,13 +80,41 @@ async function cloudRuleFreshness(browser) {
   } finally { await page.close(); }
 }
 
+// The y-axis labels are right-aligned inside a fixed gutter, so a label wider
+// than the gutter does not wrap or shrink -- it runs off the left of the
+// viewBox and SVG clips it. `R+10` and `B+10` lost their first stroke that way
+// on every desktop width and read as `Я+10` and `3+10`. Measure the drawn boxes
+// rather than the padding constant, so a font or font-size change is caught too.
+async function evalGraphAxisLabels(browser, width) {
+  const page = await browser.newPage({ viewport: { width, height: 1000 } });
+  try {
+    await page.goto(base + '?moves=h2e2');
+    await page.waitForSelector('text.graph-grid-text');
+    const labels = await page.evaluate(() => {
+      const svg = document.querySelector('text.graph-grid-text').ownerSVGElement;
+      const [, , viewWidth] = svg.getAttribute('viewBox').split(' ').map(Number);
+      return Array.from(svg.querySelectorAll('text.graph-grid-text')).map(text => {
+        const box = text.getBBox();
+        return { label: text.textContent, left: box.x, right: box.x + box.width, viewWidth };
+      });
+    });
+    assert.ok(labels.length >= 5, `Expected the eval graph axis labels, saw ${labels.length}`);
+    for (const { label, left, right, viewWidth } of labels) {
+      assert.ok(left >= 0, `Axis label ${label} is clipped by ${(-left).toFixed(1)}px at the left edge`);
+      assert.ok(right <= viewWidth, `Axis label ${label} runs past the right edge`);
+    }
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     await fullLibrary(browser, 1440);
     await fullLibrary(browser, 390);
     await fenValidation(browser);
+    await evalGraphAxisLabels(browser, 1440);
+    await evalGraphAxisLabels(browser, 1100);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

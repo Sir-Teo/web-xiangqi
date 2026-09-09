@@ -32,7 +32,13 @@ interface EvalGraphProps {
     onNavigate?: (index: number) => void;
 }
 
-const PADDING = { top: 18, right: 20, bottom: 44, left: 42 } as const;
+// `left` is the y-axis label gutter: the labels are drawn right-aligned at
+// `left - 8`, so everything they need has to fit in that much space. The widest
+// of the fixed set below is `R+10`, which measures 36.5px at the 13px UI sans
+// -- 2.5px past the 34px a 42 gutter left it, so on every desktop width the R
+// and the B of the outer two rendered with their left stroke sliced off. 50
+// leaves 42px, enough headroom for the metric spread across system UI fonts.
+const PADDING = { top: 18, right: 20, bottom: 44, left: 50 } as const;
 const MIN_POINT_MARKER_GAP_PX = 7;
 
 type EvalPoint = {
