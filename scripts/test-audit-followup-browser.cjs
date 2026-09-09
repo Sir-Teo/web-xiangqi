@@ -518,9 +518,59 @@ async function shortDesktopDock(browser, width, height, expected) {
   } finally { await page.close(); }
 }
 
+// `shortDesktopDock` asks whether the board's box fits the *window*, and that
+// is not the same question as whether a rank can be played. The chrome that
+// covers the board is drawn over the stage rather than beside it, so a board
+// hanging out through the bottom of the stage still measured `bottom <=
+// innerHeight` while the bottom bar sat on top of Red's back rank. Ask the
+// board itself instead: every intersection has a hitbox, so hit-test each one
+// and require the board to answer. The board is 9x10, so 90 is the whole of it,
+// and the sweep runs at the scroll position the reader lands on, which is where
+// a game is played.
+async function everyIntersectionReachable(browser, width, height, note) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.hitboxes-layer').waitFor();
+    const covered = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('.hitboxes-layer .hitbox')) {
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        const x = Math.round(r.x + r.width / 2);
+        const y = Math.round(r.y + r.height / 2);
+        const hit = (x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight)
+          ? document.elementFromPoint(x, y)
+          : null;
+        if (hit && hit.closest('.xiangqi-board')) continue;
+        const on = hit ? (hit.className.baseVal ?? hit.className).toString().trim() : 'off screen';
+        out.push(`${el.getAttribute('aria-label') || `${x},${y}`} -> ${on || hit.tagName}`);
+      }
+      return out;
+    });
+    assert.deepEqual(covered, [],
+      `${covered.length} board intersections are covered at ${width}x${height} (${note}): ${covered.slice(0, 4).join('; ')}`);
+    assert.equal(await page.locator('.hitboxes-layer .hitbox').count(), 90,
+      'The sweep did not see all 9x10 intersections');
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    // Before the side rail's height bound: 9 covered at 1440x650 and 45 at
+    // 1920x650 -- the rule capped `.board-wrap` and left the container inside
+    // it at its own 9:10, so the board grew with the window's width while its
+    // height stayed the window's. Both sides of each threshold are checked, so
+    // the bound cannot come back off, and the phone layouts are here because
+    // this is the sweep the whole board should pass everywhere.
+    await everyIntersectionReachable(browser, 1440, 650, 'dock beside, shortest');
+    await everyIntersectionReachable(browser, 1440, 700, 'dock beside, at the threshold');
+    await everyIntersectionReachable(browser, 1280, 660, 'dock beside, narrowest');
+    await everyIntersectionReachable(browser, 1920, 650, 'dock beside, wide');
+    await everyIntersectionReachable(browser, 1440, 900, 'dock below');
+    await everyIntersectionReachable(browser, 390, 844, 'phone, portrait');
+    await everyIntersectionReachable(browser, 844, 390, 'phone, landscape');
     await shortDesktopDock(browser, 1440, 650, 'beside');
     await shortDesktopDock(browser, 1440, 800, 'below');   // too tall to need it
     await shortDesktopDock(browser, 1100, 650, 'below');   // too narrow to pay for it
@@ -547,6 +597,6 @@ async function shortDesktopDock(browser, width, height, expected) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
