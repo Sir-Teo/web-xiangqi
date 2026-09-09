@@ -493,6 +493,18 @@
 
 .lib-tournament-details { margin: 6px 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
 
+/* Players and tournament are stored bounded at 256 characters each, and a card
+   laid them out in full: one saved game ran past the height of the panel, so
+   the list it belongs to could not be scanned at all. Two rows each, with the
+   rest on the title. */
+.lib-detail-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
 .lib-pgn-games { max-height: 260px; overflow-y: auto; margin: 10px 0; }
 .lib-pgn-game { display: flex; align-items: flex-start; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }
 .lib-pgn-game > span { min-width: 0; overflow-wrap: anywhere; }

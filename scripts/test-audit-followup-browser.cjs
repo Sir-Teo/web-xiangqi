@@ -260,9 +260,62 @@ async function analysisTouchTargets(browser) {
   } finally { await mouse.close(); }
 }
 
+// A saved game's imported players and event are bounded at 256 characters
+// apiece and were laid out in full, so one imported game could stand taller
+// than the panel and push every other saved game out of view -- the list stops
+// being a list. Both lines are clamped to two rows now, with the rest on a
+// title. The *label* is deliberately not clamped: gameLibrary bounds it to 120
+// characters at the storage boundary, and test-ui-layout asserts a label that
+// long is shown whole. Compare against an ordinary card rather than a pixel
+// count, so the check says "cards stay comparable" and survives restyling.
+async function libraryCardHeight(browser, width, height, mobile) {
+  const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  try {
+    await page.addInitScript(([long, nospace]) => {
+      localStorage.setItem('xiangqi:library:v1', JSON.stringify([
+        { id: 'long', savedAt: 2, gameMode: 'PvP', moves: ['h2e2'], label: nospace,
+          metadata: { redPlayer: long, blackPlayer: nospace, event: long, site: nospace, date: '2026.??.??', round: '1' } },
+        { id: 'plain', savedAt: 1, gameMode: 'PvP', moves: ['h2e2'], label: 'Ordinary game',
+          metadata: { redPlayer: 'Hu Ronghua', blackPlayer: 'Yang Guanlin', event: 'National Championship', site: 'Beijing', date: '2026.03.01', round: '4' } },
+      ]));
+      // Within the library's own 120-character label bound, and worded the way
+      // a real long label is, so the card measured here is one the app can
+      // actually hold rather than an unreachable worst case.
+    }, ['Wang '.repeat(52).slice(0, 256), 'Long saved game label '.repeat(5).slice(0, 120)]);
+    await page.goto(base + '?moves=h2e2');
+    if (mobile) {
+      await page.getByTestId('mobile-view-analysis').click();
+      await page.getByTestId('mobile-analysis-tab-library').click();
+    } else {
+      await page.getByTestId('left-panel-tab-library').click();
+    }
+    await page.getByTestId('metadata-saved-plain').waitFor();
+    const box = await page.evaluate(() => {
+      const card = id => document.querySelector(`[data-testid="metadata-saved-${id}"]`).closest('.lib-card').getBoundingClientRect().height;
+      const label = document.querySelector('.lib-game-name-button');
+      const line = document.querySelector('.lib-detail-line');
+      return {
+        long: card('long'), plain: card('plain'),
+        labelWhole: label.scrollHeight <= label.clientHeight + 1,
+        lineClamped: line.scrollHeight > line.clientHeight + 1,
+        lineTitled: !!line.getAttribute('title'),
+        hscroll: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    const ratio = box.long / box.plain;
+    assert.ok(ratio < 1.6, `A long-metadata card is ${ratio.toFixed(1)}x an ordinary one at ${width}px; it is not clamped`);
+    assert.equal(box.labelWhole, true, 'The saved-game label is being clipped; it is bounded at 120 characters and meant to be read whole');
+    assert.equal(box.lineClamped, true, 'The players line is not clamped');
+    assert.equal(box.lineTitled, true, 'The clamped players line does not carry the full text on a title');
+    assert.equal(box.hscroll, false, 'A long label pushed the page into horizontal scroll');
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await libraryCardHeight(browser, 1440, 900, false);
+    await libraryCardHeight(browser, 390, 844, true);
     await analysisTouchTargets(browser);
     await openingBadgeTruncation(browser, 1440);
     await openingBadgeTruncation(browser, 1280);
@@ -276,6 +329,6 @@ async function analysisTouchTargets(browser) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
