@@ -221,3 +221,16 @@ describe('the date a game is stamped with', () => {
         expect(tag(pgn, 'Date')).toBe(formatPgnDate());
     });
 });
+
+
+describe('saved study note export', () => {
+    it('keeps notes attached to main-line and alternative moves', () => {
+        const pgn = exportPgnFromMoveTree([
+            { uci: 'h2e2', comment: 'Main note', children: [{ uci: 'h9g7', comment: 'Reply note' }] },
+            { uci: 'b2e2', comment: 'Branch note' },
+        ], { mainLineMoves: ['h2e2', 'h9g7'] });
+        expect(pgn).toContain('h2e2 { Main note }');
+        expect(pgn).toContain('(1. b2e2 { Branch note })');
+        expect(pgn).toContain('h9g7 { Reply note }');
+    });
+});
