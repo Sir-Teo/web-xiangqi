@@ -715,6 +715,15 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await boardFitsItsColumn(browser, 1000, 900);
     await boardFitsItsColumn(browser, 1100, 900);
     await boardFitsItsColumn(browser, 1200, 900);
+    // The same question on a landscape phone, where the answer is the dock rail
+    // rather than a side panel. Sizing the board from the row alone was enough
+    // while a full-width move nav kept the row short; with the nav on the
+    // header's row it is not, and 480x400 and 600x500 drew a board that was not
+    // 9:10 at all. 320 and 390px handsets never reach that height, which is why
+    // the landscape checks below do not catch it.
+    await boardFitsItsColumn(browser, 480, 400);
+    await boardFitsItsColumn(browser, 600, 500);
+    await boardFitsItsColumn(browser, 540, 450);
     await cutoutClearance(browser, 844, 390, 'board');
     await cutoutClearance(browser, 844, 390, 'analysis');
     await cutoutClearance(browser, 390, 844, 'board');
@@ -759,6 +768,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: the board fits its column on a narrow tall desktop, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

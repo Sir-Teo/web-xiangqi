@@ -4460,11 +4460,14 @@ summary:active {
      column next to the board instead, so the board is sized by height. */
   [data-mobile-view="board"] .board-workspace {
     max-width: none;
-    grid-template-columns: minmax(0, auto) minmax(116px, 232px);
+    /* Named so the board's own sizing below can subtract them. */
+    --landscape-dock-rail: 232px;
+    --landscape-dock-gap: 12px;
+    grid-template-columns: minmax(0, auto) minmax(116px, var(--landscape-dock-rail));
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     justify-content: center;
-    column-gap: 12px;
+    column-gap: var(--landscape-dock-gap);
   }
 
   [data-mobile-view="board"] .board-workspace .position-dock {
@@ -6582,8 +6585,44 @@ summary:active {
   }
 }
 
-/* Portrait phones and tablets only — landscape sizes the board from the row
-   height into an auto-width grid column, which works correctly already.
+/* The landscape counterpart of the portrait sizing below, and it lives here
+   rather than up in the landscape block because the rule it has to beat --
+   `[data-mobile-view="board"] .board-workspace .board-wrap` in the plain
+   `max-width: 900px` block -- carries the same specificity and comes after it.
+
+   Landscape used to size the board from its row's height into an auto-width
+   column and that was enough, because a full-width move nav under the board
+   kept the row short enough that height always ran out first. With the nav on
+   the header's row the board is tall enough to ask for more width than its
+   column has, and `width: auto` with `max-width: 100%` cannot both be honoured
+   by an aspect-ratio box: the grid clamped the width, the height it was derived
+   from stayed, and 9:10 broke. 216x266 at 480x400, 336x388 at 600x500 -- and
+   the grid SVG is drawn `preserveAspectRatio="none"`, so a wrong box is a wrong
+   board rather than a letterboxed one. It binds from about 399px tall; 320 and
+   390px handsets never reach it.
+
+   So bound the height by what the column allows, and let the ratio derive the
+   width. The column is the workspace less the dock rail and the gap, both named
+   in the landscape block above; the rail's *ceiling* is subtracted rather than
+   its used width, so the board is only ever sized against a column at least as
+   wide as the one it gets. `!important` on the width because the declaration it
+   overrides carries one. */
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+  [data-mobile-view="board"] .board-workspace .board-wrap {
+    width: min(
+      calc(100cqw - var(--landscape-dock-rail) - var(--landscape-dock-gap)),
+      90cqh
+    ) !important;
+    height: min(
+      100cqh,
+      calc((100cqw - var(--landscape-dock-rail) - var(--landscape-dock-gap)) * 10 / 9)
+    );
+    max-width: none;
+    max-height: none;
+  }
+}
+
+/* Portrait phones and tablets only.
    In portrait the row is taller than 9:10 allows, and `height: 100%` with
    `max-width: 100%` cannot both be honoured by an aspect-ratio box: the board
    filled the height, clamped the width, and the grid SVG (preserveAspectRatio
