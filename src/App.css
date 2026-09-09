@@ -5946,7 +5946,19 @@ summary:active {
      all match to the pixel -- and every rank stays reachable as the text grows. */
   aspect-ratio: 9 / 10;
   width: auto;
-  height: 100%;
+  /* The row's height, until the *column* is the thing that runs out. Deriving
+     width from height alone is only safe while the column is wider than 0.9 of
+     the row, and on a narrow, tall desktop window it is not: at 901x900 the
+     board came out 515px wide in a 433px stage and painted over both side
+     panels, with twenty of the ninety intersections answering a panel rather
+     than the board. It held from 901 through about 1150 -- ten still covered at
+     1100x900 -- and only came right where the stage finally outgrew the board.
+     `max-width` cannot fix it: with `width: auto` derived from a definite
+     height, clamping the width does not re-derive the height, so the box
+     distorts instead of shrinking. Cap the height by what the column allows and
+     let the ratio above derive the width from that. `.board-workspace` is a
+     size container, so `100cqw` is the column this box has to fit. */
+  height: min(100%, calc(100cqw * 10 / 9));
   max-width: var(--board-max-width);
   /* 9:10, so the widest board implies its own tallest. Without this the wrap
      stays as tall as its row after the width has stopped growing. */

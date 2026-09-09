@@ -555,6 +555,53 @@ async function everyIntersectionReachable(browser, width, height, note) {
   } finally { await page.close(); }
 }
 
+// The board is derived from its row's height, which is only safe while the
+// column is wider than 0.9 of that row. On a narrow, tall desktop window it is
+// not: at 901x900 the board came out 515px wide in a 433px stage and painted
+// over both side panels, twenty of the ninety intersections answering a panel
+// rather than the board. It held from 901 through about 1150 and came right on
+// its own only where the stage finally outgrew the board, which is why every
+// viewport the suite already checked missed it -- they are all wide.
+//
+// Two assertions, because either alone passes the bug in some form: the board
+// has to stay inside the stage it is centred in, and it has to keep 9:10 while
+// doing it. Clamping the width without re-deriving the height satisfies the
+// first by distorting the board, which is the trap the fix had to avoid.
+async function boardFitsItsColumn(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.xiangqi-board').waitFor();
+    const box = await page.evaluate(() => {
+      const board = document.querySelector('.xiangqi-board').getBoundingClientRect();
+      const stage = document.querySelector('.board-stage').getBoundingClientRect();
+      const covered = [];
+      for (const el of document.querySelectorAll('.hitboxes-layer .hitbox')) {
+        const r = el.getBoundingClientRect();
+        if (!r.width) continue;
+        const x = Math.round(r.x + r.width / 2);
+        const y = Math.round(r.y + r.height / 2);
+        const hit = (x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight)
+          ? document.elementFromPoint(x, y)
+          : null;
+        if (!hit || !hit.closest('.xiangqi-board')) covered.push(el.getAttribute('aria-label'));
+      }
+      return {
+        inside: board.left >= stage.left - 1 && board.right <= stage.right + 1,
+        ratio: board.width / board.height,
+        overhang: Math.round(Math.max(stage.left - board.left, board.right - stage.right)),
+        covered: covered.length,
+      };
+    });
+    assert.equal(box.inside, true,
+      `The board overhangs its stage by ${box.overhang}px at ${width}x${height}`);
+    assert.ok(Math.abs(box.ratio - 0.9) < 0.02,
+      `The board is not 9:10 at ${width}x${height}: ${box.ratio.toFixed(3)}`);
+    assert.equal(box.covered, 0,
+      `${box.covered} board intersections are covered at ${width}x${height}`);
+  } finally { await page.close(); }
+}
+
 // Every safe-area rule in this stylesheet has been argued rather than measured
 // -- the audit that added the last one said so -- because a display cutout is a
 // device property and the harness had no way to produce one. It does:
@@ -662,6 +709,12 @@ async function landscapeNavRidesHeader(browser, width, height) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    // The narrow-and-tall desktop band, both edges and the middle, plus one
+    // width past it that was always correct.
+    await boardFitsItsColumn(browser, 901, 900);
+    await boardFitsItsColumn(browser, 1000, 900);
+    await boardFitsItsColumn(browser, 1100, 900);
+    await boardFitsItsColumn(browser, 1200, 900);
     await cutoutClearance(browser, 844, 390, 'board');
     await cutoutClearance(browser, 844, 390, 'analysis');
     await cutoutClearance(browser, 390, 844, 'board');
@@ -706,6 +759,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: the board fits its column on a narrow tall desktop, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
