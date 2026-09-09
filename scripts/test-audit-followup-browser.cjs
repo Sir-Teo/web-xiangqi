@@ -401,9 +401,40 @@ async function reviewGradesUnderForcedColors(browser) {
   } finally { await plain.close(); }
 }
 
+// The six AI strength rungs took an equal share of their row whatever their
+// labels weigh -- a zero flex basis, with a min-width that let the share fall
+// under the label and `white-space: nowrap` to push the excess out of the
+// button. "Full strength" was cut at every width, and at 320px so were
+// Beginner, Medium and Master. They size from their text now and the row wraps.
+async function strengthRungLabels(browser, width, height, mobile) {
+  const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
+  try {
+    await page.goto(base);
+    await page.getByRole('button', { name: mobile ? /Open new game menu/i : /Start new game/i }).first().click();
+    await page.getByRole('button', { name: /You play Red/i }).click();
+    await page.locator('.new-game-strength-pills .new-game-strength-btn').first().waitFor();
+    const row = await page.evaluate(() => {
+      const chips = [...document.querySelectorAll('.new-game-strength-pills .new-game-strength-btn')];
+      const list = document.querySelector('.new-game-strength-pills');
+      return {
+        count: chips.length,
+        cut: chips.filter(c => c.scrollWidth > c.clientWidth + 1)
+          .map(c => `${c.textContent.trim()} (needs ${c.scrollWidth}px, has ${c.clientWidth}px)`),
+        overflow: list.scrollWidth - list.clientWidth,
+      };
+    });
+    assert.equal(row.count, 6, `Expected six strength rungs, saw ${row.count}`);
+    assert.deepEqual(row.cut, [], `Strength labels are cut off at ${width}px`);
+    assert.ok(row.overflow <= 1, `The strength row overflows by ${row.overflow}px at ${width}px`);
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
+    await strengthRungLabels(browser, 1440, 900, false);
+    await strengthRungLabels(browser, 390, 844, true);
+    await strengthRungLabels(browser, 320, 568, true);
     await reviewGradesUnderForcedColors(browser);
     await commandPaletteRows(browser, 1440, 900, false);
     await commandPaletteRows(browser, 390, 844, true);
@@ -422,6 +453,6 @@ async function reviewGradesUnderForcedColors(browser) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

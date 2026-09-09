@@ -5094,6 +5094,20 @@ summary:active {
   flex-wrap: wrap;
 }
 
+/* The base rule is `flex: 1`, a zero basis, so the six rungs took an equal
+   share of the row whatever their labels weigh, and its `min-width: 0` let
+   that share fall under the label itself -- with `white-space: nowrap`, the
+   excess simply ran out of the button. "Full strength" was cut at every width,
+   and at 320px so were Beginner, Medium and Master: 38px of button for 73px of
+   word. Size them from their text and let them grow into what is left, never
+   shrink under it; the row already wraps, and that is the give -- the same
+   bargain `.game-controls > *` strikes. Scoped here rather than changed on the
+   base rule, which the Load and Import buttons share for their looks alone. */
+.new-game-strength-pills .new-game-strength-btn {
+  flex: 1 0 auto;
+  min-width: auto;
+}
+
 .new-game-strength-btn {
   flex: 1;
   min-width: 0;
