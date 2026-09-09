@@ -106,6 +106,40 @@ async function evalGraphAxisLabels(browser, width) {
   } finally { await page.close(); }
 }
 
+// The phone header wraps, and what lands on the second row is decided by the
+// order of its children. With the opening name inside the turn info, the name
+// kept the first row and pushed the five action buttons onto the second one,
+// left-aligned -- the buttons moved on the first move played and never moved
+// back. The name belongs on the row of its own instead, so the controls stay
+// where they were before the move.
+async function mobileHeaderRows(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height }, isMobile: true, hasTouch: true });
+  try {
+    await page.goto(base + '?moves=h2e2%20h9g7%20b0c2%20b9c7');
+    await page.waitForSelector('.mobile-opening-pill');
+    const box = await page.evaluate(() => {
+      const rect = selector => {
+        const found = document.querySelector(selector);
+        const b = found.getBoundingClientRect();
+        return { top: b.top, bottom: b.bottom, right: b.right, width: b.width };
+      };
+      return {
+        header: rect('.mobile-board-header'),
+        info: rect('.mobile-board-turn-info'),
+        actions: rect('.mobile-board-actions'),
+        pill: rect('.mobile-opening-pill'),
+        pillTruncated: (() => { const p = document.querySelector('.mobile-opening-pill'); return p.scrollWidth > p.clientWidth + 1; })(),
+        hscroll: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    assert.ok(box.actions.top < box.info.bottom, 'The action buttons dropped below the turn info');
+    assert.ok(box.pill.top >= box.actions.bottom - 1, 'The opening name is sharing the row with the buttons');
+    assert.ok(box.header.right - box.actions.right < 20, 'The action row is no longer right-aligned');
+    assert.equal(box.pillTruncated, false, 'The opening name is truncated on its own row');
+    assert.equal(box.hscroll, false, 'The header pushed the page into horizontal scroll');
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -114,7 +148,9 @@ async function evalGraphAxisLabels(browser, width) {
     await fenValidation(browser);
     await evalGraphAxisLabels(browser, 1440);
     await evalGraphAxisLabels(browser, 1100);
+    await mobileHeaderRows(browser, 390, 844);
+    await mobileHeaderRows(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole; desktop/mobile feedback and library action');
+    console.log('PASS: current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

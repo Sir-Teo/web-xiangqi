@@ -4011,7 +4011,7 @@ summary:active {
   min-height: 40px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; align-content: center;
-  padding: 0 10px; gap: 8px; overflow: hidden;
+  padding: 0 10px; column-gap: 8px; row-gap: 3px; overflow: hidden;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -4052,7 +4052,14 @@ summary:active {
   border-color: rgba(239, 68, 68, 0.32); background: rgba(239, 68, 68, 0.08); color: var(--danger);
 }
 
-.mobile-opening-pill { font-size: 0.68rem; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Its own row in the wrapped header, the same way .mobile-request-notice above
+   takes one. `flex: 1 0 100%` is what puts it there; the ellipsis is the
+   fallback for a name longer than the narrowest phone. */
+.mobile-opening-pill {
+  flex: 1 0 100%;
+  font-size: 0.68rem; color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
 
 .mobile-board-actions {
   display: flex;

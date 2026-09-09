@@ -6326,11 +6326,6 @@ function App() {
                     {engineDownloadShortText ?? 'Loading'}
                   </span>
                 ) : null}
-                {detectedOpening && (
-                  <span className="mobile-opening-pill" title={detectedOpening.name}>
-                    {detectedOpening.name}
-                  </span>
-                )}
               </div>
               <div className="mobile-board-actions" role="group" aria-label="Board actions">
                 <button
@@ -6409,6 +6404,19 @@ function App() {
                   <span>{importNotice?.text ?? shareLinkNotice?.text}</span>
                 </div>
               ) : null}
+              {/* A row of its own, like the notice above it, rather than a
+                  fourth item in the turn info. Inside that group the name was
+                  what pushed the header onto a second row -- the one the engine
+                  status a few lines up is worded tersely to avoid -- and it
+                  pushed the *buttons* down there, left-aligned, while the name
+                  kept the line the buttons had. An opening name is too long to
+                  share a 390px row with five controls at any useful length, so
+                  give it the row instead of a truncation to "C...". */}
+              {detectedOpening && (
+                <span className="mobile-opening-pill" title={detectedOpening.name}>
+                  {detectedOpening.name}
+                </span>
+              )}
             </div>
           )}
           {isMobile && mobileView === 'board' && showMobileBoardActionMenu ? (
