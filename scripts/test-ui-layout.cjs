@@ -8986,6 +8986,61 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
  * `base` or a stray leading slash would leave a manifest that parses perfectly
  * and installs nothing.
  */
+/**
+ * Every control the app gives a single-letter shortcut says so on itself: Flip
+ * carries `aria-keyshortcuts="F"`, deep dive "D", the threat "X", the hint "H".
+ * The three analysis tabs had the shortcuts -- T, R and E switch them from
+ * anywhere, and the palette lists all three -- and were the only ones not
+ * saying it, so a reader who tabs to one was told less than a reader who tabs
+ * to Flip.
+ *
+ * Checked as a pair, because the attribute is only worth anything if the key
+ * works: each tab is opened by pressing its letter, and each button is asked
+ * whether it advertises that letter.
+ */
+async function assertTheAnalysisTabsAdvertiseTheirShortcuts(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const tabs = [
+    ["analysis-tab-tree", "T", "tree"],
+    ["analysis-tab-review", "R", "review"],
+    ["analysis-tab-engine", "E", "engine"],
+  ];
+
+  for (const [testid, key, panel] of tabs) {
+    const advertised = await page.evaluate((id) => {
+      const button = document.querySelector(`[data-testid="${id}"]`);
+      return button
+        ? { keyshortcuts: button.getAttribute("aria-keyshortcuts"), title: button.getAttribute("title") }
+        : null;
+    }, testid);
+    if (!advertised) throw new Error(`No ${testid} button to check.`);
+    if (advertised.keyshortcuts !== key) {
+      throw new Error(`${testid} should carry aria-keyshortcuts="${key}"; it carried ${JSON.stringify(advertised.keyshortcuts)}.`);
+    }
+    if (!String(advertised.title || "").includes(`(${key})`)) {
+      throw new Error(`${testid}'s title should name the ${key} shortcut; it read ${JSON.stringify(advertised.title)}.`);
+    }
+
+    // And the key it advertises actually opens that panel.
+    await page.getByTestId("analysis-tab-tree").click();
+    await page.waitForTimeout(150);
+    await page.locator("body").press(key);
+    await page.waitForFunction(
+      (id) => document.querySelector(`[data-testid="${id}"]`)?.getAttribute("aria-selected") === "true",
+      testid,
+      { timeout: 5000 },
+    ).catch(() => {
+      throw new Error(`Pressing ${key} did not open the ${panel} panel, so advertising it would be a lie.`);
+    });
+  }
+}
+
 async function assertTheAppIsInstallable(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
@@ -11883,6 +11938,7 @@ async function main() {
     await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
     await assertTheAppIsInstallable(browser);
+    await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);

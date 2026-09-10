@@ -6696,6 +6696,10 @@ function App() {
             <header className="panel-header panel-header-tabs">
               <h2 id="right-panel-heading">Analysis</h2>
               <div className="analysis-tab-strip" role="tablist" aria-label="Analysis panels" onKeyDown={handleTablistKeyDown}>
+                {/* T, R and E switch these tabs from anywhere, and the palette
+                    lists all three as shortcuts -- but only the buttons for F,
+                    D, X and H were saying so. A reader who tabs to one now hears
+                    the key, the way they already do on Flip. */}
                 <button
                   type="button"
                   role="tab"
@@ -6705,8 +6709,9 @@ function App() {
                     setAnalysisTab('tree');
                     setMobileAnalysisTab('moves');
                   }}
-                  title="Game tree"
+                  title="Game tree (T)"
                   aria-label="Open game tree"
+                  aria-keyshortcuts="T"
                   aria-selected={analysisTab === 'tree'}
                   aria-controls="right-analysis-content"
                   data-testid="analysis-tab-tree"
@@ -6722,6 +6727,9 @@ function App() {
                     setAnalysisTab('review');
                     setMobileAnalysisTab('review');
                   }}
+                  title="Game review (R)"
+                  aria-label="Open game review"
+                  aria-keyshortcuts="R"
                   aria-selected={analysisTab === 'review'}
                   aria-controls="right-analysis-content"
                   data-testid="analysis-tab-review"
@@ -6738,6 +6746,9 @@ function App() {
                       setAnalysisTab('engine');
                       setMobileAnalysisTab('engine');
                     }}
+                    title="Engine panel (E)"
+                    aria-label="Open engine panel"
+                    aria-keyshortcuts="E"
                     aria-selected={analysisTab === 'engine'}
                     aria-controls="right-analysis-content"
                     data-testid="analysis-tab-engine"
