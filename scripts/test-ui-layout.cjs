@@ -9070,7 +9070,10 @@ async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
       return route.continue();
     });
 
-    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+    // A line that shuffles back to a position it has already been in, so the
+    // repetition ruling fires as well as the two position lookups. That is the
+    // half of the promise that sends moves, and it is the half worth watching.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,e2h2,g7h9,h2e2,h9g7,e2h2,g7h9", {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
@@ -9112,14 +9115,31 @@ async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
     if (attempted.length === 0) {
       throw new Error("Turning the cloud book on sent nothing, so the promise below is untested.");
     }
+    /**
+     * The promise has two halves and so does this. A position lookup carries the
+     * position and nothing else; the repetition ruling is the "once a position
+     * repeats, the moves that led to it" clause, and carries `movelist` as well.
+     * Anything beyond those is a parameter the reader was not told about.
+     */
+    const actions = new Set();
     for (const url of attempted) {
       const parsed = new URL(url);
+      const action = parsed.searchParams.get("action");
+      actions.add(action);
+      const allowed = action === "queryrule"
+        ? ["action", "board", "movelist"]
+        : ["action", "board"];
       const keys = [...parsed.searchParams.keys()].sort();
-      if (JSON.stringify(keys) !== JSON.stringify(["action", "board"])) {
+      if (JSON.stringify(keys) !== JSON.stringify(allowed)) {
         throw new Error(
-          `The cloud book promises it sends the position "and nothing else"; this carried ${JSON.stringify(keys)} (${parsed.origin}${parsed.pathname}).`
+          `The cloud book promises it sends the position "and nothing else"; ${action} carried ${JSON.stringify(keys)}, expected ${JSON.stringify(allowed)}.`
         );
       }
+    }
+    if (!actions.has("queryrule")) {
+      throw new Error(
+        `This line repeats, so the ruling should have been asked for -- the clause that sends moves is otherwise untested. Saw ${JSON.stringify([...actions])}.`
+      );
     }
   } finally {
     await context.close();
