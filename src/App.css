@@ -206,29 +206,6 @@ body.resizing * {
   outline: none;
 }
 
-/* Primary button.
-   --accent on --accent-muted measures 3.83:1, under the AA floor for button
-   text; --accent-hover on the same ground is 5.05:1 and stays in family. */
-.btn-primary {
-  background: var(--accent-muted) !important;
-  color: var(--accent-hover) !important;
-  border-color: var(--accent-subtle) !important;
-  font-weight: 600 !important;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .btn-primary:hover {
-    background: rgba(63, 185, 80, 0.22) !important;
-    border-color: var(--border-accent) !important;
-    box-shadow: 0 0 12px var(--accent-glow) !important;
-    color: #7ee787 !important;
-  }
-}
-
-.btn-primary:active {
-  background: rgba(63, 185, 80, 0.14) !important;
-}
-
 /* ═══════════════════════════════════════════════════
    Top bar
    ═══════════════════════════════════════════════════ */
@@ -308,7 +285,11 @@ body.resizing * {
   min-height: unset;
 }
 
-.top .compact-grid button:not(.btn-icon-only) {
+/* No `:not(.btn-icon-only)` here any more: nothing in the app ever carried that
+   class, so the exclusion never excluded anything and read as an opt-out that
+   did not exist. Computed styles for every button at 1440x900, 1024x720 and
+   1920x1200 are unchanged by dropping it, specificity included. */
+.top .compact-grid button {
   min-height: unset;
   height: 2.2rem;
   padding: 0 0.8rem;
