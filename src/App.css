@@ -3146,9 +3146,14 @@ summary:active {
   font-size: 0.68rem;
 }
 
-.review-chance-loss strong {
-  color: var(--accent);
-}
+/* No accent colour here any more. `formatWinPercentLoss` returns "0%" or a
+   figure with a leading minus and nothing else -- the value is a loss by
+   construction, and the accessible label beside it says "winning chance dropped
+   by N percentage points". Painting that in --accent put the cost of a blunder
+   in the same green as the engine's suggested move directly under it. It now
+   takes the neutral colour of the rule above, which is what the eval transition
+   sitting next to it uses: both are statements of what happened, and the
+   severity is already carried by the quality badge. */
 
 .review-eval-transition em,
 .review-moment-eval em {

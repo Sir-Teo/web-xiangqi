@@ -6822,6 +6822,24 @@ async function assertReviewBestMoveBranchAction(page) {
     focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
     focusChance: document.querySelector('[data-testid="review-focus-chance"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     focusChanceLabel: document.querySelector('[data-testid="review-focus-chance"]')?.getAttribute("aria-label") || "",
+    /**
+     * The chance figure is a loss by construction -- "0%" or a leading minus,
+     * never anything else -- and its own label says the winning chance dropped.
+     * It used to be painted in --accent, which is the green the engine's
+     * suggested move wears two lines below it: the cost of a blunder in the
+     * colour of a good thing. Compared against the eval transition beside it
+     * rather than against a literal, so a theme change moves both together.
+     */
+    focusChanceColour: getComputedStyle(document.querySelector('[data-testid="review-focus-chance"] strong')).color,
+    evalTransitionColour: getComputedStyle(document.querySelector(".review-eval-transition strong")).color,
+    accentColour: (() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--accent)";
+      document.body.appendChild(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    })(),
     redAccuracy: document.querySelector('[data-testid="review-red-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     redAccuracyLabel: document.querySelector('[data-testid="review-red-accuracy"]')?.getAttribute("aria-label") || "",
     blackAccuracy: document.querySelector('[data-testid="review-black-accuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -6880,6 +6898,8 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
     reviewReadout.focusChance !== "Chance-21%" ||
     reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
+    reviewReadout.focusChanceColour === reviewReadout.accentColour ||
+    reviewReadout.focusChanceColour !== reviewReadout.evalTransitionColour ||
     reviewReadout.redAccuracy !== "Red39%240cp loss" ||
     reviewReadout.redAccuracyLabel !== "Red accuracy 39%, average centipawn loss 240cp" ||
     reviewReadout.blackAccuracy !== "Black93%20cp loss" ||
