@@ -8903,6 +8903,99 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
   }
 }
 
+/**
+ * Sound is on by default, and its only control was a row inside the settings
+ * dialog. Muting is the preference a reader reaches for in a hurry, so it is
+ * now in the palette too. Gated on the three things that make that worth
+ * having: the command is what "mute" finds, it actually silences the app rather
+ * than only relabelling itself, and it survives a reload -- a mute that comes
+ * undone on the next visit is worse than no mute at all.
+ *
+ * The settings row is checked alongside, because two controls for one
+ * preference are only an improvement while they agree.
+ */
+async function assertSoundCanBeMutedFromThePalette(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const storedSound = () => page.evaluate(() => {
+    try {
+      const raw = localStorage.getItem("xiangqi:preferences:v1");
+      return raw ? JSON.parse(raw).soundEnabled : undefined;
+    } catch {
+      return "(unreadable)";
+    }
+  });
+  const settingsRow = async () => {
+    await page.getByRole("button", { name: "Open settings" }).click();
+    await page.waitForTimeout(250);
+    const state = await page.evaluate(() => {
+      const group = document.querySelector('[aria-labelledby="settings-sound-label"]');
+      if (!group) return null;
+      return [...group.querySelectorAll("button")].map((button) => ({
+        label: button.textContent.trim(),
+        pressed: button.getAttribute("aria-pressed"),
+      }));
+    });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    return state;
+  };
+
+  const runSoundCommand = async (expectedLabel) => {
+    await page.getByTestId("command-palette-btn").click();
+    await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+    await page.fill("[data-command-input]", "mute");
+    await page.waitForSelector('.command-palette-list [role="option"]', { timeout: 5000 });
+    const ranked = await page.$$eval('.command-palette-list [role="option"]', (nodes) =>
+      nodes.map((node) => node.textContent.trim())
+    );
+    if (!ranked.length || !ranked[0].startsWith(expectedLabel)) {
+      throw new Error(`Typing "mute" ranked: ${JSON.stringify(ranked)} (wanted "${expectedLabel}" first)`);
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForSelector("[data-command-input]", { state: "detached", timeout: 5000 });
+  };
+
+  await runSoundCommand("Turn sound off");
+  await page.waitForFunction(() => {
+    try {
+      return JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}").soundEnabled === false;
+    } catch {
+      return false;
+    }
+  }, null, { timeout: 5000 });
+
+  const mutedRow = await settingsRow();
+  if (!mutedRow || mutedRow.find((button) => button.label === "Off")?.pressed !== "true") {
+    throw new Error(`The settings row disagrees with the palette after muting: ${JSON.stringify(mutedRow)}`);
+  }
+
+  // A reload, because a preference that does not survive one has not been set.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  if ((await storedSound()) !== false) {
+    throw new Error("Muting did not survive a reload.");
+  }
+
+  await runSoundCommand("Turn sound on");
+  await page.waitForFunction(() => {
+    try {
+      return JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}").soundEnabled === true;
+    } catch {
+      return false;
+    }
+  }, null, { timeout: 5000 });
+  const restoredRow = await settingsRow();
+  if (!restoredRow || restoredRow.find((button) => button.label === "On")?.pressed !== "true") {
+    throw new Error(`The settings row disagrees with the palette after unmuting: ${JSON.stringify(restoredRow)}`);
+  }
+}
+
 async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
@@ -11486,6 +11579,7 @@ async function main() {
     await assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page);
     await assertPaletteImportsAGameRecord(page);
     await assertArrowsCanBeTurnedOffOnAPhone(page);
+    await assertSoundCanBeMutedFromThePalette(page);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);

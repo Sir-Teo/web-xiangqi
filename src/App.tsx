@@ -4630,6 +4630,23 @@ function App() {
       run: () => setPieceStyle((style) => (style === 'letters' ? 'traditional' : 'letters')),
     },
     {
+      /**
+       * Sound is on by default and its only control was inside the settings
+       * dialog. Muting is the one preference a reader reaches for in a hurry --
+       * usually because someone else is in the room -- and "open settings,
+       * find the row, press Off" is three steps too many for it. Running a
+       * palette command is itself a gesture, so `handleSoundToggle` can still
+       * unlock the audio device on the way back on.
+       */
+      id: 'toggle-sound',
+      label: soundEnabled ? 'Turn sound off' : 'Turn sound on',
+      hint: soundEnabled
+        ? 'Moves, captures and checks stop making a noise'
+        : 'A click for a move, a knock for a capture, a chime for check',
+      keywords: ['sound', 'audio', 'mute', 'unmute', 'silence', 'quiet', 'volume', 'effects', '\u58f0\u97f3'],
+      run: () => handleSoundToggle(!soundEnabled),
+    },
+    {
       id: 'copy-fen',
       label: 'Copy FEN',
       keywords: ['position', 'clipboard', 'export'],
@@ -4676,7 +4693,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, board, canCopyRecord, showArrows, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
