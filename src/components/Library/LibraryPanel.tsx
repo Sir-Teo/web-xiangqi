@@ -270,9 +270,13 @@ export function LibraryPanel({
     );
   }), [searchTerms, resultFilter, reviewFilter]);
 
-  // Format dates, review summaries and variation text once per library version.
-  // Populate lazily: an empty search needs none of this work.
-  const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), [savedGames]);
+  // Format dates, review summaries and variation text once per game, so that
+  // typing re-filters without re-deriving. Populated lazily: an empty search
+  // needs none of this work. Keyed on the game object rather than its id, which
+  // is what makes one map enough for the life of the panel -- every library
+  // mutation re-reads storage and hands back fresh objects, so a game that
+  // changed cannot be read back through a stale entry.
+  const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), []);
   const filteredSaved = useMemo(() => savedGames
     .filter((g) => {
       const isReviewed = Boolean(g.review);
