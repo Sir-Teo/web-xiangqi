@@ -7164,7 +7164,7 @@ function App() {
                   </div>
                   {assistMode === 'pro' ? (
                     <div
-                      className="engine-output-terminal mt-4"
+                      className="engine-output-terminal"
                       ref={engineOutputRef}
                       role="log"
                       aria-label={engineOutputTerminalLabel}
