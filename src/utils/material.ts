@@ -51,6 +51,50 @@ export interface MaterialSummary {
     deltaTenths: number;
 }
 
+/**
+ * A piece named in words, side included, for the places a glyph will not do:
+ * the capture tray's accessible label, where 車 alone tells a screen-reader
+ * reader nothing about whose it was.
+ */
+export const PIECE_NAMES: Record<PieceCode, string> = {
+    K: 'Red general',
+    A: 'Red advisor',
+    B: 'Red elephant',
+    N: 'Red horse',
+    R: 'Red chariot',
+    C: 'Red cannon',
+    P: 'Red soldier',
+    k: 'Black general',
+    a: 'Black advisor',
+    b: 'Black elephant',
+    n: 'Black horse',
+    r: 'Black chariot',
+    c: 'Black cannon',
+    p: 'Black soldier',
+};
+
+/** Tenths of a pawn as the board shows them: whole numbers plain, the rest to one place. */
+export function formatMaterialValue(valueTenths: number) {
+    const value = valueTenths / 10;
+    return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
+}
+
+/**
+ * What one side has taken, spelled out. The tray shows glyphs, and the
+ * per-piece title is a mouse-only tooltip on a generic span, so without this
+ * the names never reach the accessibility tree at all.
+ */
+export function formatCapturedTrayLabel(
+    side: 'Red' | 'Black',
+    captured: Array<{ piece: PieceCode; count: number }>,
+) {
+    if (captured.length === 0) return `Pieces captured by ${side}: none`;
+    const pieces = captured.map(({ piece, count }) => (
+        count > 1 ? `${count} ${PIECE_NAMES[piece]}s` : PIECE_NAMES[piece]
+    ));
+    return `Pieces captured by ${side}: ${pieces.join(', ')}`;
+}
+
 export function isPieceCode(value: string): value is PieceCode {
     return Object.prototype.hasOwnProperty.call(PIECE_VALUES_TENTHS, value);
 }

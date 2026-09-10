@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeMaterial } from './material';
+import { summarizeMaterial,
+    PIECE_NAMES,
+    formatCapturedTrayLabel,
+    formatMaterialValue,
+} from './material';
 import { START_FEN, parseFenBoard, type BoardState } from './xiangqi';
 
 const start = () => parseFenBoard(START_FEN);
@@ -104,5 +108,66 @@ describe('the balance is symmetric', () => {
     it('gives the generals no value, so a bare-kings ending is even', () => {
         const bare = parseFenBoard('4k4/9/9/9/9/9/9/9/9/4K4');
         expect(summarizeMaterial(bare, bare).deltaTenths).toBe(0);
+    });
+});
+
+describe('what the tray says out loud', () => {
+    /**
+     * The tray draws glyphs. 車 alone tells a screen-reader reader nothing about
+     * whose piece it was, and the per-piece tooltip is mouse-only, so this label
+     * is the only place the names reach the accessibility tree.
+     */
+    it('names the side and the piece, not just the piece', () => {
+        expect(formatCapturedTrayLabel('Red', [{ piece: 'r', count: 1 }]))
+            .toBe('Pieces captured by Red: Black chariot');
+        expect(formatCapturedTrayLabel('Black', [{ piece: 'R', count: 1 }]))
+            .toBe('Pieces captured by Black: Red chariot');
+    });
+
+    it('says none rather than trailing off', () => {
+        expect(formatCapturedTrayLabel('Red', [])).toBe('Pieces captured by Red: none');
+    });
+
+    it('counts and pluralises, and does not pluralise one', () => {
+        expect(formatCapturedTrayLabel('Red', [{ piece: 'p', count: 3 }]))
+            .toBe('Pieces captured by Red: 3 Black soldiers');
+        expect(formatCapturedTrayLabel('Red', [{ piece: 'p', count: 1 }]))
+            .toBe('Pieces captured by Red: Black soldier');
+    });
+
+    it('joins a mixed haul with commas', () => {
+        expect(formatCapturedTrayLabel('Black', [{ piece: 'R', count: 1 }, { piece: 'P', count: 2 }]))
+            .toBe('Pieces captured by Black: Red chariot, 2 Red soldiers');
+    });
+
+    /**
+     * Every name is regular, so appending "s" is enough -- pinned because the
+     * plural above is a bare "s" and a name ending in one would break it.
+     */
+    it('has a name for every piece, each safe to pluralise that way', () => {
+        const codes = ['K', 'A', 'B', 'N', 'R', 'C', 'P', 'k', 'a', 'b', 'n', 'r', 'c', 'p'] as const;
+        for (const code of codes) {
+            expect(PIECE_NAMES[code]).toMatch(/^(Red|Black) [a-z]+$/);
+            expect(PIECE_NAMES[code].endsWith('s')).toBe(false);
+        }
+        expect(new Set(Object.values(PIECE_NAMES)).size).toBe(codes.length);
+    });
+});
+
+describe('material as a number on the board', () => {
+    it.each([
+        [0, '0'],
+        [10, '1'],
+        [90, '9'],
+        [15, '1.5'],
+        [-15, '-1.5'],
+        [-30, '-3'],
+    ])('writes %d tenths as %s', (tenths, expected) => {
+        expect(formatMaterialValue(tenths)).toBe(expected);
+    });
+
+    it('spends a decimal place only when there is something to say', () => {
+        expect(formatMaterialValue(20)).not.toContain('.');
+        expect(formatMaterialValue(25)).toContain('.');
     });
 });

@@ -28,7 +28,7 @@ import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSid
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
-import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
+import { PIECE_NAMES, formatCapturedTrayLabel, formatMaterialValue, isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
 import { rovingIndexForKey, rovingTabStopIndex } from './utils/rovingFocus';
 import { pgnDownloadFilename } from './utils/pgnFilename';
@@ -317,22 +317,6 @@ const PIECE_SYMBOLS: Record<PieceCode, string> = {
   K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
   k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
 };
-const PIECE_NAMES: Record<PieceCode, string> = {
-  K: 'Red general',
-  A: 'Red advisor',
-  B: 'Red elephant',
-  N: 'Red horse',
-  R: 'Red chariot',
-  C: 'Red cannon',
-  P: 'Red soldier',
-  k: 'Black general',
-  a: 'Black advisor',
-  b: 'Black elephant',
-  n: 'Black horse',
-  r: 'Black chariot',
-  c: 'Black cannon',
-  p: 'Black soldier',
-};
 /**
  * One line about the piece a beginner just picked up, in coach mode.
  *
@@ -514,11 +498,6 @@ function formatSquare(square: BoardSquare | null) {
   return `${FILE_LABELS[square.file]}${square.rank}`;
 }
 
-function formatMaterialValue(valueTenths: number) {
-  const value = valueTenths / 10;
-  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
-}
-
 
 /** Long enough that a fast sequence of moves writes once, not per move. */
 const AUTO_SAVE_DEBOUNCE_MS = 600;
@@ -545,20 +524,6 @@ function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
       const style = window.getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden';
     });
-}
-
-function formatCapturedTrayLabel(
-  side: 'Red' | 'Black',
-  captured: Array<{ piece: PieceCode; count: number }>
-) {
-  // The tray shows glyphs, and the per-piece title is a mouse-only tooltip on a
-  // generic span, so the names never reached the accessibility tree. Spell the
-  // haul out in the label the tray already carries.
-  if (captured.length === 0) return `Pieces captured by ${side}: none`;
-  const pieces = captured.map(({ piece, count }) => (
-    count > 1 ? `${count} ${PIECE_NAMES[piece]}s` : PIECE_NAMES[piece]
-  ));
-  return `Pieces captured by ${side}: ${pieces.join(', ')}`;
 }
 
 function App() {
