@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { START_FEN } from './xiangqi';
 import {
   AI_TAG_PREFIX,
   ANALYSIS_TAG_PREFIX,
@@ -6,6 +7,7 @@ import {
   REVIEW_TAG_PREFIX,
   THREAT_TAG_PREFIX,
   makeAiTag,
+  makeEnginePositionCommand,
   makeAnalysisTag,
   makeHintTag,
   makeReviewTag,
@@ -150,4 +152,45 @@ describe('a malformed tag is refused, not half-read', () => {
       positionCommand: 'position startpos',
     });
   });
+});
+
+describe('the position command', () => {
+    const OPENING = `${START_FEN} w - - 0 1`;
+
+    /**
+     * `startpos` is what every engine expects for the opening position, and what
+     * its logs and books are keyed on -- but only when the position really is
+     * the opening one *with Red to move*. The same board with Black to move is a
+     * different position, and sending `startpos` for it would have the engine
+     * analyse the wrong side's turn.
+     */
+    it('says startpos for the opening position', () => {
+        expect(makeEnginePositionCommand(OPENING, [])).toBe('position startpos');
+    });
+
+    it('sends a FEN for the same board with the other side to move', () => {
+        const blackToMove = `${START_FEN} b - - 0 1`;
+        expect(makeEnginePositionCommand(blackToMove, [])).toBe(`position fen ${blackToMove}`);
+    });
+
+    it('sends a FEN for a position that is not the opening one', () => {
+        const custom = '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
+        expect(makeEnginePositionCommand(custom, [])).toBe(`position fen ${custom}`);
+    });
+
+    it('appends the moves to either form, space separated', () => {
+        expect(makeEnginePositionCommand(OPENING, ['h2e2', 'h9g7']))
+            .toBe('position startpos moves h2e2 h9g7');
+        const custom = '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
+        expect(makeEnginePositionCommand(custom, ['e0e1']))
+            .toBe(`position fen ${custom} moves e0e1`);
+    });
+
+    it('writes no trailing "moves" when there are none', () => {
+        expect(makeEnginePositionCommand(OPENING, [])).not.toMatch(/moves/);
+    });
+
+    it('reads the opening position through the whitespace a hand-typed FEN carries', () => {
+        expect(makeEnginePositionCommand(`  ${START_FEN}   w - - 0 1  `, [])).toBe('position startpos');
+    });
 });

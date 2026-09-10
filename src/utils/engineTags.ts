@@ -14,6 +14,7 @@
  * labelled as the position's own.
  */
 import { isAiStrength, type AiStrength } from './aiOpponent';
+import { START_FEN } from './xiangqi';
 
 export const ANALYSIS_TAG_PREFIX = 'analysis';
 export const AI_TAG_PREFIX = 'ai';
@@ -88,6 +89,26 @@ export function parseHintTag(tag: string | null) {
 
 export function makeAiTag(positionCommand: string, depth: number, strength: AiStrength) {
   return `${AI_TAG_PREFIX}|${depth}|${strength}|${positionCommand}`;
+}
+
+/**
+ * The `position` command that tells the engine which board to think about.
+ *
+ * `startpos` rather than the full FEN whenever the root really is the opening
+ * position with Red to move, because that is what every engine expects to see
+ * and what its own logs and books are keyed on. Anything else -- a set-up
+ * position, a loaded FEN, or the opening position with *Black* to move, which
+ * is a different position -- goes as `position fen`.
+ *
+ * It lives beside the tags because the two travel together: this says which
+ * position, the tag says which request, and getting either wrong shows a
+ * reader an evaluation of a board that is not on their screen.
+ */
+export function makeEnginePositionCommand(rootFen: string, moves: string[]) {
+  const rootParts = rootFen.trim().split(/\s+/);
+  const isDefaultStart = rootParts[0] === START_FEN && rootParts[1] === 'w';
+  const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
+  return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
 }
 
 export function parseAiTag(tag: string | null) {

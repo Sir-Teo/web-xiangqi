@@ -58,6 +58,7 @@ import { decodeSavedMoveTreeParam } from './utils/shareTree';
 import {
   makeAiTag,
   makeAnalysisTag,
+  makeEnginePositionCommand,
   makeHintTag,
   makeReviewTag,
   makeThreatTag,
@@ -518,13 +519,6 @@ function formatMaterialValue(valueTenths: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
 }
 
-
-function makeEnginePositionCommand(rootFen: string, moves: string[]) {
-  const rootParts = rootFen.trim().split(/\s+/);
-  const isDefaultStart = rootParts[0] === START_FEN && rootParts[1] === 'w';
-  const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
-  return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
-}
 
 /** Long enough that a fast sequence of moves writes once, not per move. */
 const AUTO_SAVE_DEBOUNCE_MS = 600;
