@@ -6220,53 +6220,14 @@ function App() {
 
         {/* ── Board stage ── */}
         <section className="board-stage" aria-label="Xiangqi board">
-          {!isMobile && (
-            <div className="board-stage-header">
-              <div className="board-stage-copy">
-                <span className="board-stage-kicker">
-                  {workspaceMode === 'analysis' ? 'Analysis board' : 'Play board'}
-                </span>
-                <h1>{currentModeLabel}</h1>
-                <p>
-                  {detectedOpening
-                    ? `${detectedOpening.name} is on the board. ${engineEnabled && redPerspectiveEvalText ? `Live eval ${redPerspectiveEvalText}.` : 'Keep exploring variations and review notes.'}`
-                    : workspaceMode === 'analysis'
-                      ? `${currentModeMeta.description} Engine lines and review stay synced with the current position.`
-                      : currentModeMeta.description}
-                </p>
-              </div>
-              <div className="board-stage-chips">
-                <span className={`board-stage-chip board-stage-chip-turn ${sideToMove === 'w' ? 'turn-red' : 'turn-black'}`}>
-                  <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
-                  {sideToMoveLabel} to move
-                </span>
-                <span className="board-stage-chip">Ply {viewedPly} / {moveHistory.length}</span>
-                {redPerspectiveEvalText ? (
-                  <span
-                    className={`board-stage-chip board-stage-chip-eval ${displayEvalClass}`}
-                    aria-label={liveEvalLabel}
-                    title={liveEvalLabel}
-                  >
-                    {redPerspectiveEvalText}
-                  </span>
-                ) : null}
-                {detectedOpening ? (
-                  <span className="board-stage-chip board-stage-chip-opening">
-                    {detectedOpening.chinese} · {detectedOpening.name}
-                  </span>
-                ) : (
-                  <span className="board-stage-chip board-stage-chip-muted">
-                    {engineEnabled ? 'Engine live' : 'Engine off'}
-                  </span>
-                )}
-                {aiPlayActive ? (
-                  <span className="board-stage-chip board-stage-chip-muted">
-                    {paused ? 'AI paused' : `${AI_STRENGTH_LABELS[aiStrength]} · ${aiSpeed === 'step' ? 'step' : aiSpeed}`}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          )}
+          {/* The board stage header -- a kicker, the mode as a heading, a
+              description, and turn/ply/eval/opening chips -- was removed here.
+              A top-level `.board-stage-header { display: none }` had hidden it at
+              every width since 8f8f897 ("Polish xiangqi board UX"), so it had
+              been built on every render and painted on none. Everything it said
+              is still on screen elsewhere: the mode in the bottom bar badge,
+              turn and ply in the position dock, the evaluation in the eval bar
+              beside the board, and the opening in its own pill. */}
           {isMobile && mobileView === 'board' && (
             <div className="mobile-board-header">
               <div className="mobile-board-turn-info">

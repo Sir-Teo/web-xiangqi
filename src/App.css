@@ -5467,100 +5467,6 @@ summary:active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 42%);
 }
 
-.board-stage-header {
-  width: min(100%, 760px);
-  display: grid;
-  gap: 0.8rem;
-  padding-top: 0.15rem;
-}
-
-.board-stage-copy {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.board-stage-kicker {
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--warning);
-}
-
-.board-stage-copy h1 {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: 1.7rem;
-  font-weight: 700;
-  color: var(--text-heading);
-  letter-spacing: 0;
-}
-
-.board-stage-copy p {
-  margin: 0;
-  max-width: 54rem;
-  color: var(--text-secondary);
-  font-size: 0.84rem;
-  line-height: 1.65;
-}
-
-.board-stage-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.board-stage-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 2rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.board-stage-chip-turn {
-  color: var(--text-primary);
-}
-
-.board-stage-chip-turn.turn-red {
-  border-color: rgba(239, 68, 68, 0.28);
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.board-stage-chip-turn.turn-black {
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.board-stage-chip-eval.eval-positive {
-  color: var(--success);
-  border-color: rgba(16, 185, 129, 0.28);
-  background: rgba(16, 185, 129, 0.1);
-}
-
-.board-stage-chip-eval.eval-negative {
-  color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.28);
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.board-stage-chip-opening {
-  color: var(--warning);
-  border-color: rgba(245, 158, 11, 0.22);
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.board-stage-chip-muted {
-  color: var(--text-tertiary);
-}
-
 .board-wrap {
   width: min(100cqw, 90cqh, 620px);
   max-width: 100%;
@@ -5693,10 +5599,6 @@ summary:active {
 @media (max-width: 900px) {
   .board-stage {
     gap: 0.75rem;
-  }
-
-  .board-stage-header {
-    display: none;
   }
 
   .new-game-menu {
@@ -5917,18 +5819,6 @@ summary:active {
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.board-stage-copy h1 {
-  letter-spacing: 0;
-}
-
-.board-stage-copy p {
-  max-width: 48rem;
-}
-
-.board-stage-header {
-  display: none;
 }
 
 .board-workspace {
