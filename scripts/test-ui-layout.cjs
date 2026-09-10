@@ -9071,6 +9071,31 @@ async function assertNotationCanBeChosenFromThePalette(page) {
     throw new Error(`Expected all three notations to be offered: ${JSON.stringify(all)}`);
   }
   await page.keyboard.press("Escape");
+  await page.waitForSelector("[data-command-input]", { state: "detached", timeout: 5000 });
+
+  /**
+   * Back to WXF, which is both the third leg of the round trip and the reason
+   * this assertion can share a page with the rest of the suite. Notation is a
+   * *persisted* preference: leaving it on UCI followed the shared page into
+   * every later assertion, and `assertMobileSaveLibraryActions` failed a
+   * hundred lines further down reading a move list as "1.\u70ae B2\u2192E2".
+   * An assertion that changes a stored preference has to put it back.
+   */
+  await pick("wxf letters", "Write moves in WXF letters");
+  await page.waitForFunction(() => {
+    const row = document.querySelector('[data-testid="move-tree-row-label-0"]')?.parentElement;
+    return /C2=5/.test(row?.textContent || "");
+  }, null, { timeout: 5000 });
+  const restored = await page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}").notationStyle;
+    } catch {
+      return "(unreadable)";
+    }
+  });
+  if (restored !== "wxf") {
+    throw new Error(`This assertion must leave the notation preference on wxf; it left "${restored}".`);
+  }
 }
 
 async function assertSoundCanBeMutedFromThePalette(page) {
