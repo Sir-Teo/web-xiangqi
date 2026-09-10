@@ -60,6 +60,35 @@ describe('strict Xiangqi PGN collections', () => {
    * that heading, and the reader would have no way to tell.
    */
   /**
+   * The last of the panel's four clauses: "Other PGN tags are not retained."
+   * A PGN can carry anything -- an Annotator, a rating, a note someone left in
+   * a tag of their own invention -- and a reader importing a file from a
+   * stranger is told none of it is kept. Listed exhaustively rather than by
+   * spot-check, because the failure this guards is a *new* field appearing,
+   * which no assertion about the six known ones would notice.
+   *
+   * Two layers enforce this, which is why neither can be mutation-tested alone:
+   * `extractPgnMetadata` builds an object literal of exactly the six, and
+   * `normalizeGameMetadata` copies only `GAME_METADATA_FIELDS` out of whatever
+   * it is handed. Opening either one on its own leaks nothing and this test
+   * stays green -- the other still closes it. Opening both reports
+   * "expected [ 'annotator', 'blackPlayer', …(7) ] to deeply equal [ Array(6) ]".
+   * So this guards the pair, not either half, and a regression in one layer is
+   * caught by the *other layer* rather than by this assertion.
+   */
+  it('keeps the six headers it names and drops every other tag', () => {
+    const [game] = parsePgnCollection(
+      '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Round "3"] [Date "2026.01.02"] ' +
+      '[Site "Beijing"] [Annotator "Someone"] [TimeControl "40/7200"] [WhiteElo "2500"] [SecretNote "keep me"]\n' +
+      '1.h2e2 h9g7 *'
+    );
+    expect(Object.keys(game.metadata ?? {}).sort())
+      .toEqual(['blackPlayer', 'date', 'event', 'redPlayer', 'round', 'site']);
+    expect(JSON.stringify(game)).not.toContain('keep me');
+    expect(JSON.stringify(game)).not.toContain('2500');
+  });
+
+  /**
    * Mutation-tested at the return site -- adding a `review` to what
    * `parseGame` returns makes this report "expected { …(2) } to be undefined".
    * Not at `base`: a review put there is dropped by `normalizeSavedGame`
