@@ -3,7 +3,36 @@ const fs = require('node:fs/promises');
 const { chromium } = require('playwright');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 const key = 'xiangqi:library:v1';
-const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', result: 'ongoing', moves: ['h2e2'], label: 'Cannon study', moveTree: [{ uci: 'h2e2', comment: 'Central cannon', children: [{ uci: 'h9g7' }] }] };
+/**
+ * The panel promises a backup keeps "all saved games, variations, notes, and
+ * reviews". Variations and notes are the `moveTree` with its comment; the
+ * review is here because it was the one of the four nothing checked, and it is
+ * the one a reader cannot simply retype -- a review is minutes of engine time.
+ *
+ * The download half was already general (it compares the whole stored array),
+ * so only restore could drop a field: with no review in the fixture, a restore
+ * that discarded reviews would have stored none, downloaded none, and passed.
+ */
+/**
+ * Restore recomputes the accuracy figures from the annotations rather than
+ * trusting the ones in the file, and drops a side's accuracy when that side has
+ * no annotated move -- so a hand-edited backup cannot claim a score its own
+ * moves do not support. Learned here: a first draft of this fixture said 98%
+ * for a single best move and came back as 100, with `blackAccuracy` gone.
+ *
+ * The fixture is therefore self-consistent, and what the assertion really pins
+ * is the part that cannot be recomputed: the annotation, its note, the
+ * timestamp and the line signature.
+ */
+const review = {
+  summary: {
+    totalMoves: 1, accuracy: 100, averageCentipawnLoss: 0, redAccuracy: 100,
+    bestCount: 1, goodCount: 0, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+    reviewedAt: 1700000001000, lineSignature: 'h2e2', keyMoments: [],
+  },
+  annotations: [{ moveIndex: 0, evalScore: 20, quality: 'best', swing: 0, winPercentLoss: 0, reviewNote: 'Engine-approved move.' }],
+};
+const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', result: 'ongoing', moves: ['h2e2'], label: 'Cannon study', moveTree: [{ uci: 'h2e2', comment: 'Central cannon', children: [{ uci: 'h9g7' }] }], review };
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -24,6 +53,7 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       await page.getByText('Restored 1 games. Skipped 0 identical games.', { exact: true }).waitFor();
       const saved = await page.evaluate(k => localStorage.getItem(k), key);
       assert.deepEqual(JSON.parse(saved)[0].moveTree, game.moveTree);
+      assert.deepEqual(JSON.parse(saved)[0].review, game.review, 'a restored backup should still carry its review');
       const downloadEvent = page.waitForEvent('download');
       await page.getByRole('button', { name: 'Download library backup', exact: true }).click();
       const downloaded = JSON.parse(await fs.readFile(await (await downloadEvent).path(), 'utf8'));
@@ -46,6 +76,6 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       assert.deepEqual(errors, []);
       await page.close();
     }
-    console.log('PASS: desktop/mobile backup download, restore preview, branch/comment preservation, duplicate/conflict protection, exact damaged-data recovery, no overflow or page errors');
+    console.log('PASS: desktop/mobile backup download, restore preview, branch/comment/review preservation, duplicate/conflict protection, exact damaged-data recovery, no overflow or page errors');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
