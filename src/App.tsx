@@ -264,6 +264,34 @@ const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
 const DEFAULT_RIGHT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
+/**
+ * Palette labels for the notations, spelled out rather than reusing the
+ * settings pills. A pill sits under a heading that says "Move Notation" and
+ * beside its two siblings, so "UCI" and "\u4e2d\u6587" are clear enough there. A
+ * palette row has none of that: "Write moves in \u4e2d\u6587" is opaque to a
+ * reader who does not read Chinese -- which is exactly the reader deciding
+ * whether they want it -- and the ranking never surfaced it for "chinese",
+ * because that word appeared only in the hint, which put it behind two
+ * commands that merely mention Chinese in passing.
+ */
+const NOTATION_PALETTE_LABELS: Record<XiangqiNotationStyle, string> = {
+  uci: 'Write moves in coordinates (UCI)',
+  wxf: 'Write moves in WXF letters',
+  chinese: 'Write moves in Chinese (\u4e2d\u6587)',
+};
+
+/**
+ * Words a reader might reach for beyond those labels. A style's description
+ * doubles as a haystack while it is not in use, but the in-use one says so
+ * instead, and a command should not become harder to find by being the one you
+ * are already on.
+ */
+const NOTATION_STYLE_KEYWORDS: Record<XiangqiNotationStyle, string[]> = {
+  uci: ['coordinates', 'engine', 'h2e2', 'uci', 'algebraic'],
+  wxf: ['letters', 'wxf', 'federation', 'english', 'c2=5'],
+  chinese: ['chinese', 'characters', 'hanzi', '\u4e2d\u6587', '\u70ae\u4e8c\u5e73\u4e94'],
+};
+
 const PIECE_SYMBOLS: Record<PieceCode, string> = {
   K: '帥', A: '仕', B: '相', N: '傌', R: '俥', C: '炮', P: '兵',
   k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
@@ -4622,6 +4650,23 @@ function App() {
       keywords: ['arrow', 'marker', 'overlay', 'highlight', 'draw', 'annotation', 'clutter', 'clean', '\u7bad\u5934'],
       run: () => setShowArrows((shown) => !shown),
     },
+    /**
+     * One command per notation, rather than one that cycles: a reader who wants
+     * Chinese should not have to pass through WXF to get there, and naming each
+     * style makes it findable by the word they would actually type. The one in
+     * use is listed but disabled, so the palette answers "which am I on?" as
+     * well as "how do I change it?".
+     */
+    ...NOTATION_STYLES.map((style) => ({
+      id: `notation-${style}`,
+      label: NOTATION_PALETTE_LABELS[style],
+      hint: notationStyle === style
+        ? `Already in use. ${NOTATION_STYLE_DESCRIPTIONS[style]}`
+        : NOTATION_STYLE_DESCRIPTIONS[style],
+      keywords: ['notation', 'moves', 'record', 'style', 'write', ...NOTATION_STYLE_KEYWORDS[style]],
+      disabled: notationStyle === style,
+      run: () => setNotationStyle(style),
+    })),
     {
       id: 'piece-style',
       label: pieceStyle === 'letters' ? 'Draw the pieces as characters' : 'Draw the pieces as letters',

@@ -8993,6 +8993,86 @@ async function assertAPhoneCanPinchTheBoard(browser) {
   }
 }
 
+/**
+ * Notation is the setting a bilingual audience changes most, and it lived only
+ * in the settings dialog. Three commands rather than one that cycles, so
+ * Chinese does not have to be reached through WXF, and so each is findable by
+ * the word a reader would type -- "chinese", "coordinates", "wxf" -- rather
+ * than by the label alone. The style in use is listed but disabled, which is
+ * how the palette answers "which am I on?".
+ *
+ * Gated on the move list actually changing, not on the command's own label: a
+ * command that relabels itself and does nothing would pass the latter.
+ */
+async function assertNotationCanBeChosenFromThePalette(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 10000 });
+
+  const firstMove = () => page.evaluate(() => {
+    const row = document.querySelector('[data-testid="move-tree-row-label-0"]')?.parentElement;
+    return (row?.textContent || "").replace(/\s+/g, " ").trim();
+  });
+
+  const pick = async (query, expectedLabel) => {
+    await page.getByTestId("command-palette-btn").click();
+    await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+    await page.fill("[data-command-input]", query);
+    await page.waitForSelector('.command-palette-list [role="option"]', { timeout: 5000 });
+    const ranked = await page.$$eval('.command-palette-list [role="option"]', (nodes) =>
+      nodes.map((node) => ({ text: node.textContent.trim(), disabled: node.getAttribute("aria-disabled") }))
+    );
+    if (!ranked.length || !ranked[0].text.startsWith(expectedLabel)) {
+      throw new Error(`Typing "${query}" ranked: ${JSON.stringify(ranked.map((r) => r.text))}`);
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForSelector("[data-command-input]", { state: "detached", timeout: 5000 });
+    return ranked;
+  };
+
+  // WXF is the default, so the Chinese command is live and the WXF one is not.
+  const started = await firstMove();
+  if (!/C2=5/.test(started)) throw new Error(`Expected WXF to start; the first move read "${started}".`);
+
+  await pick("chinese", "Write moves in Chinese");
+  await page.waitForFunction(() => {
+    const row = document.querySelector('[data-testid="move-tree-row-label-0"]')?.parentElement;
+    // The whole move, not just the piece: the piece glyph is a column of its
+    // own and stays put in every notation, so matching \u70ae alone would pass
+    // in UCI too.
+    return /\u70ae\u4e8c\u5e73\u4e94/.test(row?.textContent || "");
+  }, null, { timeout: 5000 });
+
+  await pick("coordinates", "Write moves in coordinates");
+  await page.waitForFunction(() => {
+    const row = document.querySelector('[data-testid="move-tree-row-label-0"]')?.parentElement;
+    // The move list renders UCI as an arrow pair, not as the raw `h2e2` a
+    // share link carries.
+    return /H2\u2192E2/.test(row?.textContent || "");
+  }, null, { timeout: 5000 });
+
+  // The one in use is offered and refused, rather than quietly absent.
+  await page.getByTestId("command-palette-btn").click();
+  await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+  await page.fill("[data-command-input]", "write moves");
+  await page.waitForSelector('.command-palette-list [role="option"]', { timeout: 5000 });
+  const all = await page.$$eval('.command-palette-list [role="option"]', (nodes) =>
+    nodes.map((node) => ({ text: node.textContent.trim(), disabled: node.getAttribute("aria-disabled") }))
+  );
+  const inUse = all.find((row) => row.text.startsWith("Write moves in coordinates"));
+  if (!inUse || inUse.disabled !== "true") {
+    throw new Error(`The notation in use should be listed and disabled: ${JSON.stringify(all)}`);
+  }
+  if (all.filter((row) => row.text.startsWith("Write moves in")).length !== 3) {
+    throw new Error(`Expected all three notations to be offered: ${JSON.stringify(all)}`);
+  }
+  await page.keyboard.press("Escape");
+}
+
 async function assertSoundCanBeMutedFromThePalette(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11659,6 +11739,7 @@ async function main() {
     await assertPaletteImportsAGameRecord(page);
     await assertArrowsCanBeTurnedOffOnAPhone(page);
     await assertSoundCanBeMutedFromThePalette(page);
+    await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
