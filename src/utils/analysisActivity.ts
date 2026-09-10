@@ -17,7 +17,7 @@
  * tab as hidden all reach it.
  */
 export type AnalysisActivity =
-    | 'engine-off'
+    | 'analysis-off'
     | 'loading'
     | 'background'
     | 'queued'
@@ -56,7 +56,7 @@ export interface AnalysisActivityInput {
  * truth, and "Paused" would be the lie.
  */
 export function resolveAnalysisActivity(input: AnalysisActivityInput): AnalysisActivity {
-    if (!input.engineEnabled) return 'engine-off';
+    if (!input.engineEnabled) return 'analysis-off';
     if (!input.isReady) return 'loading';
     if (!input.pageVisible) return input.deepSearchRunning ? 'searching' : 'background';
     if (input.isSearchQueued) return 'queued';
@@ -65,7 +65,16 @@ export function resolveAnalysisActivity(input: AnalysisActivityInput): AnalysisA
 }
 
 const ACTIVITY_LABELS: Record<AnalysisActivity, string> = {
-    'engine-off': 'Engine off',
+    /**
+     * "Analysis off", not "Engine off". In Play mode the engine is running --
+     * it is the thing playing the moves, and the top bar says "Engine ready"
+     * two hundred pixels above this card. What is off is the live evaluation of
+     * the position on screen, which is what this state has always meant: the
+     * input is named `engineEnabled` but its own comment says "Play mode runs
+     * without the engine", and the hint below already says "Switch to Analysis".
+     * The label was the only part still claiming the engine was off.
+     */
+    'analysis-off': 'Analysis off',
     loading: 'Loading engine',
     background: 'Paused',
     queued: 'Queued',
@@ -79,7 +88,7 @@ export function formatAnalysisActivity(activity: AnalysisActivity): string {
 }
 
 const ACTIVITY_HINTS: Record<AnalysisActivity, string> = {
-    'engine-off': 'Switch to Analysis to evaluate this position.',
+    'analysis-off': 'Switch to Analysis to evaluate this position.',
     loading: 'The engine is still starting up.',
     background: 'Analysis pauses while this tab is in the background, and resumes when you come back.',
     queued: 'A search is waiting for the engine.',

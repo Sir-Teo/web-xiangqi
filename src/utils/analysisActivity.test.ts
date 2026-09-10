@@ -32,7 +32,7 @@ describe('resolveAnalysisActivity', () => {
     });
 
     it('says the engine is off before anything else', () => {
-        expect(resolveAnalysisActivity({ ...running, engineEnabled: false, isReady: false })).toBe('engine-off');
+        expect(resolveAnalysisActivity({ ...running, engineEnabled: false, isReady: false })).toBe('analysis-off');
     });
 
     /**
@@ -73,7 +73,7 @@ describe('resolveAnalysisActivity', () => {
 
 describe('what the user is told', () => {
     it('gives every state a word and a sentence', () => {
-        const states = ['engine-off', 'loading', 'background', 'queued', 'searching', 'idle'] as const;
+        const states = ['analysis-off', 'loading', 'background', 'queued', 'searching', 'idle'] as const;
         for (const state of states) {
             expect(formatAnalysisActivity(state)).toBeTruthy();
             expect(describeAnalysisActivity(state)).toBeTruthy();
@@ -91,5 +91,29 @@ describe('what the user is told', () => {
         expect(isAnalysisActivityStalled('queued')).toBe(false);
         expect(isAnalysisActivityStalled('idle')).toBe(false);
         expect(isAnalysisActivityStalled('loading')).toBe(false);
+    });
+});
+
+describe('the words the states are shown as', () => {
+    /**
+     * Play mode runs the engine -- it is what plays the moves, and the top bar
+     * reads "Engine ready" while this card is on screen. Only the live
+     * evaluation is off. A label claiming otherwise put two contradictory
+     * sentences about the engine on one screen.
+     */
+    it('does not say the engine is off while the engine is playing', () => {
+        expect(formatAnalysisActivity('analysis-off')).toBe('Analysis off');
+        expect(formatAnalysisActivity('analysis-off')).not.toMatch(/engine/i);
+    });
+
+    it('agrees with the hint underneath it, which sends the reader to Analysis', () => {
+        expect(describeAnalysisActivity('analysis-off')).toMatch(/Analysis/);
+    });
+
+    it('gives every state a word and a sentence', () => {
+        for (const activity of ['analysis-off', 'loading', 'background', 'queued', 'searching', 'idle'] as const) {
+            expect(formatAnalysisActivity(activity)).toBeTruthy();
+            expect(describeAnalysisActivity(activity)).toMatch(/\.$/);
+        }
     });
 });
