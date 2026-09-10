@@ -68,7 +68,7 @@ import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { parseDhtmlXqRecord } from './utils/dhtmlxq';
 import { isXqfFile, parseXqf, type XqfRecord } from './utils/xqf';
-import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, isPieceStyle, type PieceStyle } from './utils/pieceStyle';
+import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
@@ -84,14 +84,24 @@ import {
   formatLineTokensInStyle,
   formatMoveInStyle,
   formatRecordInStyle,
-  isNotationStyle,
   parseNotationRecord,
   type XiangqiNotationStyle,
 } from './utils/xiangqiNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
 import { LazyPanelBoundary } from './components/LazyPanelBoundary';
 import { QaForcedRenderError } from './components/QaForcedRenderError';
-import { PREFERENCES_STORAGE_KEY, readVersionedStorage } from './utils/storageKeys';
+import { PREFERENCES_STORAGE_KEY } from './utils/storageKeys';
+import {
+  clearStoredPreferences,
+  normalizeStoredPreferencesValue,
+  readStoredPreferences,
+  writeStoredPreferences,
+  type AnalysisEngineMode,
+  type AssistMode,
+  type DeepSearchMode,
+  type PvLineCount,
+  type StoredPreferences,
+} from './utils/preferences';
 import {
   describeRepetition,
   formatRepetitionHeadline,
@@ -184,11 +194,6 @@ const MOBILE_LAYOUT_QUERY = '(max-width: 900px)';
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
-type AssistMode = 'coach' | 'pro';
-type AnalysisEngineMode = 'stable' | 'optimized';
-type PvLineCount = 1 | 3 | 5;
-/** How long a deep search runs: the tier's bounded budget, or until stopped. */
-type DeepSearchMode = 'bounded' | 'infinite';
 type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
@@ -316,7 +321,6 @@ const qaForcePanelError = import.meta.env.DEV
   && new URLSearchParams(window.location.search).has('qa-panel-boundary');
 
 
-const MAX_PREFERENCES_JSON_LENGTH = 4096;
 const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 
@@ -403,24 +407,6 @@ type MistakeDrillState = {
   finished: boolean;
 };
 
-type StoredPreferences = {
-  assistMode?: AssistMode;
-  orientation?: BoardOrientation;
-  showArrows?: boolean;
-  soundEnabled?: boolean;
-  searchDepth?: number;
-  engineHashMB?: number;
-  engineThreads?: number;
-  analysisEngineMode?: AnalysisEngineMode;
-  enginePvLineCount?: PvLineCount;
-  aiStrength?: AiStrength;
-  aiSpeed?: AiSpeed;
-  notationStyle?: XiangqiNotationStyle;
-  pieceStyle?: PieceStyle;
-  deepSearchMode?: DeepSearchMode;
-  cloudBookEnabled?: boolean;
-};
-
 type ReviewController = {
   active: boolean;
   phase: ReviewPhase;
@@ -488,92 +474,6 @@ function nodeTitle(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typ
 // utils/analysisProfile, beside the tier they feed. They were here while
 // useEngine kept a second copy of the same judgement that read the window
 // instead of the machine; one of the two had to be the only one.
-
-function isAssistMode(value: unknown): value is AssistMode {
-  return value === 'coach' || value === 'pro';
-}
-
-function isBoardOrientation(value: unknown): value is BoardOrientation {
-  return value === 'red' || value === 'black';
-}
-
-function isAnalysisEngineMode(value: unknown): value is AnalysisEngineMode {
-  return value === 'stable' || value === 'optimized';
-}
-
-function isAiSpeed(value: unknown): value is AiSpeed {
-  return value === 'slow' || value === 'normal' || value === 'fast' || value === 'step';
-}
-
-function isDeepSearchMode(value: unknown): value is DeepSearchMode {
-  return value === 'bounded' || value === 'infinite';
-}
-
-function isPvLineCount(value: unknown): value is PvLineCount {
-  return value === 1 || value === 3 || value === 5;
-}
-
-function normalizeStoredPreferencesValue(raw: string | null): StoredPreferences {
-  if (!raw) return {};
-  try {
-    if (raw.length > MAX_PREFERENCES_JSON_LENGTH) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const record = parsed as Record<string, unknown>;
-    const searchDepth = Number(record.searchDepth);
-    return {
-      assistMode: isAssistMode(record.assistMode) ? record.assistMode : undefined,
-      orientation: isBoardOrientation(record.orientation) ? record.orientation : undefined,
-      showArrows: typeof record.showArrows === 'boolean' ? record.showArrows : undefined,
-      soundEnabled: typeof record.soundEnabled === 'boolean' ? record.soundEnabled : undefined,
-      searchDepth: Number.isFinite(searchDepth) ? Math.max(1, Math.min(24, Math.trunc(searchDepth))) : undefined,
-      // Not clamped here: which sizes are allowed is the tier's business, and
-      // resolveEngineBootConfig drops anything off this machine's ladder back
-      // to its own default. A value saved on another machine is a statement
-      // about that machine.
-      engineHashMB: Number.isFinite(Number(record.engineHashMB)) ? Math.trunc(Number(record.engineHashMB)) : undefined,
-      engineThreads: Number.isFinite(Number(record.engineThreads)) ? Math.trunc(Number(record.engineThreads)) : undefined,
-      analysisEngineMode: isAnalysisEngineMode(record.analysisEngineMode) ? record.analysisEngineMode : undefined,
-      enginePvLineCount: isPvLineCount(record.enginePvLineCount) ? record.enginePvLineCount : undefined,
-      aiStrength: isAiStrength(record.aiStrength) ? record.aiStrength : undefined,
-      aiSpeed: isAiSpeed(record.aiSpeed) ? record.aiSpeed : undefined,
-      notationStyle: isNotationStyle(record.notationStyle) ? record.notationStyle : undefined,
-      pieceStyle: isPieceStyle(record.pieceStyle) ? record.pieceStyle : undefined,
-      deepSearchMode: isDeepSearchMode(record.deepSearchMode) ? record.deepSearchMode : undefined,
-      cloudBookEnabled: typeof record.cloudBookEnabled === 'boolean' ? record.cloudBookEnabled : undefined,
-    };
-  } catch {
-    return {};
-  }
-}
-
-function readStoredPreferences(): StoredPreferences {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = readVersionedStorage(PREFERENCES_STORAGE_KEY);
-    return normalizeStoredPreferencesValue(raw);
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredPreferences(preferences: StoredPreferences) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
-  } catch {
-    // Preferences are a convenience; storage failures should never interrupt play.
-  }
-}
-
-function clearStoredPreferences() {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(PREFERENCES_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures for the same reason.
-  }
-}
 
 function logDiagnosticWarning(message: string, ...details: unknown[]) {
   if (import.meta.env.DEV) {
