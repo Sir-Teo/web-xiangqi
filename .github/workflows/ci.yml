@@ -119,7 +119,15 @@ jobs:
       - name: Focused browser audit regressions
         run: npm run test:ui:audit
 
-      - name: Browser worker parity (quick)
+      - name: Browser suites (review fixtures, layout, worker parity)
+        # The step name used to say only "Browser worker parity", which is the
+        # last of the five commands below; `test:ui:layout` is the big one and
+        # a reader looking for where it runs in CI would not have found it here.
+        #
+        # PIKAFISH_BROWSER_VARIANT is read by `test-worker-parity-browser.cjs`
+        # and by nothing else in this list — the other four ignore it — so the
+        # note below is about that command alone:
+        #
         # Single-threaded in the browser. The threaded build initialises fine in
         # Node here — the smoke test above runs it — and fine in a browser
         # locally, but the worker never reports ready on a runner and init times
