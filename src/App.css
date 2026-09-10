@@ -2578,8 +2578,17 @@ summary:active {
   font-weight: 700;
 }
 
+/* This carried `color: var(--accent)`, which never applied: `.graph-tooltip em`
+   above is (0,1,1) against this rule's (0,1,0), so the more specific sibling
+   won whatever the order. Measured identical -- rgb(161, 161, 170) -- with the
+   declaration and without it.
+
+   Removed rather than made effective. The intent it recorded was the same one
+   the review panel's chance figure had, and that one was wrong for the same
+   reason: this line sits directly under `.graph-tooltip-quality`, which is
+   coloured by severity, so a blunder would have read "Blunder" in red and
+   "Chance -42%" in the success green about the same move. The weight stays. */
 .graph-tooltip-chance {
-  color: var(--accent);
   font-weight: 700;
 }
 

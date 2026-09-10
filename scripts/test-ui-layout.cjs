@@ -6885,6 +6885,27 @@ async function assertReviewBestMoveBranchAction(page) {
     bottomClearLabel: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("aria-label") || "",
     bottomClearTitle: document.querySelector('[data-testid="clear-review-bottom-btn"]')?.getAttribute("title") || "",
     graphTooltip: document.querySelector(".graph-tooltip")?.textContent?.replace(/\s+/g, " ").trim() || "",
+    // The tooltip's own chance figure, which sits directly under a quality line
+    // coloured by severity. Unlike the review panel's, this one was never green:
+    // its rule asked for --accent and was outranked by `.graph-tooltip em`.
+    // So this guards a property that already holds rather than one just fixed --
+    // it goes red only if that declaration is ever given the specificity to
+    // win, which was checked by giving it exactly that.
+    tooltipChanceColour: (() => {
+      const el = document.querySelector(".graph-tooltip-chance");
+      return el ? getComputedStyle(el).color : "";
+    })(),
+    // Against the token rather than a sibling: the tooltip's only unclassed
+    // <em> is the "Engine: ..." line, which this fixture does not produce,
+    // so there is nothing beside it to compare with.
+    tooltipSecondaryColour: (() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--text-secondary)";
+      document.body.appendChild(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    })(),
     graphValueText: document.querySelector(".winrate-graph")?.getAttribute("aria-valuetext") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
@@ -6900,6 +6921,8 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
     reviewReadout.focusChanceColour === reviewReadout.accentColour ||
     reviewReadout.focusChanceColour !== reviewReadout.evalTransitionColour ||
+    reviewReadout.tooltipChanceColour === reviewReadout.accentColour ||
+    reviewReadout.tooltipChanceColour !== reviewReadout.tooltipSecondaryColour ||
     reviewReadout.redAccuracy !== "Red39%240cp loss" ||
     reviewReadout.redAccuracyLabel !== "Red accuracy 39%, average centipawn loss 240cp" ||
     reviewReadout.blackAccuracy !== "Black93%20cp loss" ||
