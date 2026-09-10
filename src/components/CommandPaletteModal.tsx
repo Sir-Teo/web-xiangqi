@@ -53,6 +53,26 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
         };
     }, [open]);
 
+    /**
+     * Escape is handled on the dialog below, which only sees keys that bubble
+     * out of it -- so it stopped working the moment focus was not inside. That
+     * is reachable: focus can be blurred to `body` by a click on the palette's
+     * own chrome, and a dialog that will not close on Escape and cannot be
+     * typed into is a trap with only one way out, the backdrop. The mousedown
+     * handler below keeps focus in the field; this makes Escape true whether
+     * it does or not.
+     */
+    useEffect(() => {
+        if (!open) return undefined;
+        const onEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            event.preventDefault();
+            onClose();
+        };
+        document.addEventListener('keydown', onEscape);
+        return () => document.removeEventListener('keydown', onEscape);
+    }, [open, onClose]);
+
     const ranked = useMemo(() => rankCommands(commands, query, recentIds), [commands, query, recentIds]);
 
     // The query changing can leave the highlight past the end of a shorter list.
@@ -105,6 +125,17 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                 aria-modal="true"
                 aria-label="Commands"
                 onClick={(event) => event.stopPropagation()}
+                onMouseDown={(event) => {
+                    // A click on the palette's own chrome -- the count line,
+                    // the padding, the gap beside a row -- is a click on
+                    // something unfocusable, which blurs the field to `body`.
+                    // The palette stayed open and went deaf: nothing to type
+                    // into, and its key handling reaches nothing from `body`.
+                    // Hold the focus rather than chase it back afterwards.
+                    if (event.target instanceof HTMLElement
+                        && event.target.closest('input, button, [role="option"]')) return;
+                    event.preventDefault();
+                }}
                 onKeyDown={onKeyDown}
             >
                 {/*

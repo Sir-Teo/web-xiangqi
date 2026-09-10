@@ -4772,6 +4772,22 @@ function App() {
   }, []);
 
   const [autoSaveRecovery, setAutoSaveRecovery] = useState<AutoSavedGame | null>(null);
+  /**
+   * One list, because there were two. Every keyboard shortcut that moves
+   * through the game is held off while a dialog is up, and that condition was
+   * written out twice -- once for the letter shortcuts below, once as
+   * WatchControls' `shortcutsEnabled` prop -- and the second copy was missing
+   * the command palette and this modal.
+   *
+   * Both handlers also ignore a key aimed inside a `[role="dialog"]`, which is
+   * what hid the gap: it only opens when focus is *not* inside one. Clicking
+   * the palette's own count line -- ordinary text, not focusable -- blurs to
+   * `body`, and the next arrow key stepped the game to the start position
+   * behind the open palette, losing the reader's place in the analysis.
+   */
+  const aDialogIsOpen = Boolean(
+    showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor
+  );
   const [autoSaveChecked, setAutoSaveChecked] = useState(false);
 
   useEffect(() => {
@@ -4885,7 +4901,7 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor) return;
+      if (aDialogIsOpen) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
@@ -4961,9 +4977,9 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    analysisTab, autoSaveRecovery, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
-    handlePlayPvLine, runDeepDive, runHint, runThreatSearch, showBoardEditor, showCommandPalette, showNewGameMenu, showSettings, stopSearch,
-    stopThreat, threatActive, topAnalysisPv, visibleGameResult,
+    aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
+    handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopSearch,
+    stopThreat, threatActive, topAnalysisPv,
   ]);
 
   useEffect(() => {
@@ -7677,7 +7693,7 @@ function App() {
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
               onScrub={jumpToMove}
-              shortcutsEnabled={!showSettings && !showNewGameMenu && !visibleGameResult && !showBoardEditor}
+              shortcutsEnabled={!aDialogIsOpen}
             />
           </div>
 

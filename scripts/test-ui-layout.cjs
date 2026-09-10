@@ -9177,6 +9177,93 @@ async function assertDialogsBlockMoveShortcuts(page) {
   }
 }
 
+/**
+ * A dialog is open and the reader has clicked something inside it that is not
+ * focusable -- the palette prints its match count as ordinary text, and a click
+ * there blurs to `body`. The arrow keys then reached the global move-navigation
+ * handler, which stepped the game to the start position behind the open dialog,
+ * losing the reader's place in the analysis.
+ *
+ * The handlers had a guard: ignore a key aimed inside a `[role="dialog"]`. It
+ * only helps while focus is inside one, which is exactly what a click on plain
+ * text ends. The real gate is the dialog's own open state, and this asserts it
+ * from all three sides -- the shortcut works with nothing open, does nothing
+ * with the palette up and focus on `body`, and works again once it closes, so
+ * the fix cannot be "shortcuts are off now".
+ */
+async function assertAnOpenDialogHoldsTheMoveShortcuts(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,h0g2,i9h9", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const point = async () =>
+    String((await page.getByTestId("graph-current-point").textContent()) || "").trim();
+
+  const atLatest = await point();
+  if (!/Ply 4/.test(atLatest)) throw new Error(`Setup did not land on ply 4: ${atLatest}`);
+
+  // With nothing open the shortcut must work, or the rest of this proves nothing.
+  await page.keyboard.press("ArrowUp");
+  await page.waitForFunction(() => /Start/i.test(
+    document.querySelector('[data-testid="graph-current-point"]')?.textContent || ""
+  ), null, { timeout: 5000 });
+  await page.keyboard.press("ArrowDown");
+  await page.waitForFunction(() => /Ply 4/.test(
+    document.querySelector('[data-testid="graph-current-point"]')?.textContent || ""
+  ), null, { timeout: 5000 });
+
+  await page.getByTestId("command-palette-btn").click();
+  await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+
+  // A click on the palette's own chrome must not cost it the focus, because a
+  // palette that cannot be typed into is the whole point of one gone.
+  await page.locator("[data-command-count]").click();
+  const afterClick = await page.evaluate(() => ({
+    tag: document.activeElement ? document.activeElement.tagName : "(none)",
+    isField: document.activeElement === document.querySelector("[data-command-input]"),
+  }));
+  if (!afterClick.isField) {
+    throw new Error(`Clicking the palette's count line moved focus to ${JSON.stringify(afterClick)}.`);
+  }
+
+  // Then force the condition the guard is actually for: focus outside the
+  // dialog, however it got there.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
+  const focus = await page.evaluate(() => ({
+    tag: document.activeElement ? document.activeElement.tagName : "(none)",
+    inDialog: Boolean(document.activeElement && document.activeElement.closest('[role="dialog"]')),
+  }));
+  if (focus.inDialog) {
+    throw new Error(
+      `This gate needs focus outside the dialog to mean anything; blurring left it on ${JSON.stringify(focus)}.`
+    );
+  }
+
+  const beforeArrows = await point();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(250);
+  const afterArrows = await point();
+  if (afterArrows !== beforeArrows) {
+    throw new Error(
+      `Arrow keys moved the game behind the open command palette. Before: ${beforeArrows}; after: ${afterArrows}`
+    );
+  }
+
+  // Escape closes it from outside the dialog too, and the shortcut comes back
+  // rather than the dialog having turned it off for good.
+  await page.keyboard.press("Escape");
+  await page.waitForSelector("[data-command-input]", { state: "detached", timeout: 5000 });
+  await page.keyboard.press("ArrowUp");
+  await page.waitForFunction(() => /Start/i.test(
+    document.querySelector('[data-testid="graph-current-point"]')?.textContent || ""
+  ), null, { timeout: 5000 });
+}
+
 async function assertBoardMarkersSurviveSelection(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11281,6 +11368,7 @@ async function main() {
     await assertOversizedMoveLinePasteRejected(page);
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
+    await assertAnOpenDialogHoldsTheMoveShortcuts(page);
     await assertBoardMarkersSurviveSelection(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
