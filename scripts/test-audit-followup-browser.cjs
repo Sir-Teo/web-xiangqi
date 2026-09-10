@@ -598,6 +598,87 @@ async function evalBarFitsBesideTheBoard(browser, width, height) {
   } finally { await page.close(); }
 }
 
+// `.panel.left` falls back to 320px until the app sets `--left-panel-w`, and
+// `.panel` transitions its width, so whatever width the window actually calls
+// for used to arrive as a 220ms slide on every load -- 320 to 266 at 1024, on
+// both panels at once, measured with a `transitionstart` listener ~790ms in.
+// A width transition is for a reader dragging a panel; the first paint should
+// already be right. Assert both halves: nothing animates on load, and a
+// deliberate collapse afterwards still does.
+async function panelsDoNotAnimateOnLoad(browser, width, height) {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.addInitScript(() => {
+      window.__panelTransitions = [];
+      document.addEventListener('transitionstart', event => {
+        const target = event.target;
+        if (target instanceof Element && target.classList.contains('panel')) {
+          window.__panelTransitions.push(`${target.className} ${event.propertyName}`);
+        }
+      }, true);
+    });
+    await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.locator('.xiangqi-board').waitFor();
+    // Tolerant on purpose: against the unfixed code the attribute never appears,
+    // and the point of this check is to report the animation it was added to
+    // stop, not to time out on a missing attribute.
+    await page.waitForFunction(
+      () => document.documentElement.hasAttribute('data-panels-ready'),
+      null,
+      { timeout: 4000 },
+    ).catch(() => {});
+    await page.waitForTimeout(900);
+    const onLoad = await page.evaluate(() => window.__panelTransitions.slice());
+    assert.deepEqual(onLoad, [],
+      `A panel animated on load at ${width}x${height}: ${onLoad.join(', ')}`);
+
+    await page.evaluate(() => { window.__panelTransitions.length = 0; });
+    await page.getByTestId('left-panel-resize-handle').focus();
+    await page.keyboard.press('Home');
+    // Wait for the event rather than for a delay: the React update that starts
+    // the transition is not instant, and a flat wait raced it in both
+    // directions -- once reporting no animation, once measuring the grip three
+    // quarters of the way through its own.
+    await page.waitForFunction(
+      () => window.__panelTransitions.some(entry => entry.endsWith('width')),
+      null,
+      { timeout: 5000 },
+    ).catch(() => {
+      throw new assert.AssertionError({
+        message: `Collapsing a panel by hand no longer animates at ${width}x${height}`,
+        actual: 'no width transition within 5s', expected: 'a width transition', operator: '===',
+      });
+    });
+
+    // And the grip that is now the only way back says so, and is big enough to
+    // find: 3x32px in 15% grey was a scratch on the window edge. Wait for the
+    // pill to finish growing rather than for a fixed delay -- it transitions
+    // over 200ms and the React update that starts it is not instant, so a flat
+    // wait measured it three quarters of the way there.
+    await page.waitForFunction(() => {
+      const pill = document.querySelector('[data-testid="left-panel-resize-handle"] .resize-pill');
+      return pill && pill.getBoundingClientRect().height >= 46;
+    });
+    const grip = await page.evaluate(() => {
+      const handle = document.querySelector('[data-testid="left-panel-resize-handle"]');
+      const pill = handle.querySelector('.resize-pill').getBoundingClientRect();
+      const box = handle.getBoundingClientRect();
+      const at = document.elementFromPoint(
+        Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2));
+      return {
+        collapsed: handle.getAttribute('data-collapsed'),
+        area: Math.round(pill.width * pill.height),
+        reachable: at === handle || handle.contains(at),
+        name: handle.getAttribute('aria-label'),
+      };
+    });
+    assert.equal(grip.collapsed, 'true', `The grip does not report its state at ${width}x${height}`);
+    assert.ok(grip.area >= 180, `The collapsed grip is too faint to find: ${grip.area}px2`);
+    assert.equal(grip.reachable, true, `Something covers the collapsed grip at ${width}x${height}`);
+    assert.match(grip.name, /expand/i, 'The collapsed grip does not say what it does');
+  } finally { await page.close(); }
+}
+
 // The side panels are dragged to whatever width the reader wants and neither
 // of them knows the board has a floor. The stage between them is a flex item
 // with `min-width: 0`, so it was squeezed to a sliver while the floor held the
@@ -811,6 +892,8 @@ async function landscapeNavRidesHeader(browser, width, height) {
     // width past it that was always correct.
     // The band where the board fills its stage, so the bar has only the stage's
     // own padding to stand in, and one width past it where it never did.
+    await panelsDoNotAnimateOnLoad(browser, 1024, 768);
+    await panelsDoNotAnimateOnLoad(browser, 1440, 900);
     await panelsCannotEraseTheBoard(browser, 1440, 900);
     await panelsCannotEraseTheBoard(browser, 1280, 800);
     await panelsCannotEraseTheBoard(browser, 1024, 768);
@@ -876,6 +959,6 @@ async function landscapeNavRidesHeader(browser, width, height) {
     await actionMenuClearsHeader(browser, 390, 844);
     await actionMenuClearsHeader(browser, 320, 568);
     await cloudRuleFreshness(browser);
-    console.log('PASS: dragging both panels out cannot erase the board, the eval bar stays inside the stage beside the board, the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
+    console.log('PASS: the panels do not animate to their opening width on load and a collapsed grip is findable, dragging both panels out cannot erase the board, the eval bar stays inside the stage beside the board, the board fits its column on a narrow tall desktop and a tall landscape phone, nothing sits under a display cutout on a phone, a landscape phone puts the move nav on the header row and the board takes the height, every board intersection is reachable at seven viewports, current cloud verdicts and failures, FEN validity, full-library save preserves all games, eval-graph axis labels are drawn whole, the phone header keeps its buttons on the turn row and its action menu clears it, the opening badge truncates inside itself, analysis buttons are 44px to a finger and dense to a mouse, a long-metadata library card stays comparable to an ordinary one, palette rows are one height, review grades survive forced colours, every AI strength rung is legible, the undo toast clears the bottom chrome, a short desktop window docks beside the board; desktop/mobile feedback and library action');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

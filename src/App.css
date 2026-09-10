@@ -47,6 +47,12 @@ body.resizing * {
   overflow: visible;
 }
 
+/* Until the app has put the real widths on screen, a panel has no width worth
+   animating from -- see the layout effects that set `--left-panel-w`. */
+:root:not([data-panels-ready]) .panel {
+  transition: none;
+}
+
 .panel-inner {
   width: 100%;
   height: 100%;
@@ -676,15 +682,31 @@ body.resizing * {
   box-shadow: 0 0 0 3px rgba(214, 179, 95, 0.18);
 }
 
-/* A collapsed bar's handle is the only way to get it back, so it cannot rest at
-   the same 1.2:1 as the side resizers, whose panels are visible either way. */
+/* A collapsed handle is the only way to get its panel back, so it cannot rest
+   at the same 1.2:1 as one whose panel is visible either way.
+
+   This used to be the bars' rule alone, on the stated grounds that "the side
+   resizers['] panels are visible either way". That stopped being true when the
+   graph panel began opening collapsed under 1280px: below that width its grip
+   is the first thing a reader has to find, and at 3x32px in 15% grey it was a
+   scratch on the window edge. The bars say it with `aria-expanded`; a side
+   handle is a `separator` carrying `aria-valuenow`, which does not take that
+   attribute, so it says it with `data-collapsed` instead. */
 .resize-handle[aria-expanded="false"] .resize-pill {
   width: 46px;
   background: rgba(214, 179, 95, 0.7);
 }
 
+.resize-handle[data-collapsed="true"] .resize-pill {
+  /* The side handles are vertical, so the long axis is the other one. */
+  height: 46px;
+  width: 4px;
+  background: rgba(214, 179, 95, 0.7);
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .resize-handle[aria-expanded="false"]:hover .resize-pill {
+  .resize-handle[aria-expanded="false"]:hover .resize-pill,
+  .resize-handle[data-collapsed="true"]:hover .resize-pill {
     background: rgba(230, 198, 120, 0.9);
   }
 }

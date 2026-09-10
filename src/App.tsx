@@ -4,7 +4,7 @@ import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
 import { EvalBar } from './components/Board/EvalBar';
@@ -1834,13 +1834,36 @@ function App() {
   const rightPanelOpen = rightWidth > 0;
 
   // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
-  useEffect(() => {
+  //
+  // Layout effects, not ordinary ones: `.panel.left` falls back to `320px`
+  // until the property exists, and `.panel` transitions its width. An ordinary
+  // effect runs after the first paint, so the panel was painted at 320px and
+  // then animated to the width it should have opened at -- a 220ms slide on
+  // every load, and a 320px one under 1280px where the graph panel now opens
+  // collapsed. A layout effect runs before that paint, so the first frame is
+  // already right and there is nothing to animate away from.
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty('--left-panel-w', leftWidth + 'px');
   }, [leftWidth]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty('--right-panel-w', rightWidth + 'px');
   }, [rightWidth]);
+
+  // ...and the transition itself is for a reader dragging a panel, not for the
+  // first paint. `.panel.left` falls back to 320px until the property above
+  // exists, and the panels mount inside a lazy boundary, so the width the
+  // window actually calls for arrived as a 220ms slide on every load -- 320px
+  // to 0 under 1280px, where the graph panel opens collapsed, and 320 to 266 on
+  // the other side at 1024. Measured with a `transitionstart` listener: both
+  // panels animated their width ~790ms into the load. Turn the transition on a
+  // frame after the first paint, once the real widths are on screen.
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      document.documentElement.setAttribute('data-panels-ready', '');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const stopAnalysis = useCallback(() => {
     applyBestMoveRef.current = false;
@@ -5945,6 +5968,11 @@ function App() {
             aria-valuemax={PANEL_MAX_WIDTH}
             aria-valuenow={Math.round(leftWidth)}
             title={leftPanelOpen ? 'Drag to resize. Press arrow keys to adjust, Home to collapse, End to restore.' : 'Click, press Enter, or press End to expand the left panel.'}
+            /* The grip is the only visible way back to a collapsed panel, and
+               under 1280px this one starts collapsed. `aria-expanded` is not
+               available on a separator that carries a value, so the state is
+               carried here for the stylesheet to read. */
+            data-collapsed={leftPanelOpen ? undefined : 'true'}
             data-testid="left-panel-resize-handle"
           >
             <span className="resize-pill" />
@@ -6899,6 +6927,9 @@ function App() {
             aria-valuemax={PANEL_MAX_WIDTH}
             aria-valuenow={Math.round(rightWidth)}
             title={rightPanelOpen ? 'Drag to resize. Press arrow keys to adjust, Home to collapse, End to restore.' : 'Click, press Enter, or press End to expand the right panel.'}
+            /* Same as its twin: this one is never collapsed by default, but a
+               reader who collapses it has the same one grip to find. */
+            data-collapsed={rightPanelOpen ? undefined : 'true'}
             data-testid="right-panel-resize-handle"
           >
             <span className="resize-pill" />
