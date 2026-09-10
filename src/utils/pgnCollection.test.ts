@@ -49,4 +49,28 @@ describe('strict Xiangqi PGN collections', () => {
     expect(() => parsePgnCollection(' '.repeat(MAX_COLLECTION_TEXT_LENGTH+1))).toThrow('exceeds');
     expect(parsePgnCollection('1.h2e2 $2 {[%eval 0.42]} *')[0].moveTree?.[0].comment).toBe('$2 [%eval 0.42]');
   });
+
+  /**
+   * The import panel promises "Engine annotations are kept as note text, not
+   * review scores." The first half is the assertion above; this is the second.
+   *
+   * It matters because a review is a claim that *this* app's engine analysed the
+   * game -- the panel prints the tier, the depths and a date beside the numbers.
+   * Turning a stranger's `%eval` into one would put someone else's figures under
+   * that heading, and the reader would have no way to tell.
+   */
+  /**
+   * Mutation-tested at the return site -- adding a `review` to what
+   * `parseGame` returns makes this report "expected { …(2) } to be undefined".
+   * Not at `base`: a review put there is dropped by `normalizeSavedGame`
+   * before it can reach the output, so that mutation passes and proves
+   * nothing. The assertion watches what leaves the parser, which is what the
+   * promise is about.
+   */
+  it('does not turn a file\'s annotations into a review of its own', () => {
+    const annotated = parsePgnCollection('1.h2e2 $4 {[%eval -3.00] A blunder} h9g7 {[%eval 0.10]} *')[0];
+    expect(annotated.review).toBeUndefined();
+    expect(annotated.moveTree?.[0].comment).toContain('%eval -3.00');
+    expect(parsePgnCollection('1.h2e2 *')[0].review).toBeUndefined();
+  });
 });
