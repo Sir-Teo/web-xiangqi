@@ -8931,6 +8931,64 @@ async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   );
 }
 
+/**
+ * The palette is a combobox, and a combobox that lies about its popup is worse
+ * than one with no ARIA at all. The listbox element is not rendered when
+ * nothing matches, so aria-expanded="true" was announcing a popup that had left
+ * the document and aria-controls was naming its id -- while the live region an
+ * inch below said "No commands match". Gated in both states, and on the
+ * aria-autocomplete that says typing filters a list rather than completes a
+ * word.
+ */
+async function assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByTestId("command-palette-btn").click();
+  await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+
+  const comboboxState = () => page.evaluate(() => {
+    const input = document.querySelector("[data-command-input]");
+    const controls = input.getAttribute("aria-controls");
+    return {
+      expanded: input.getAttribute("aria-expanded"),
+      autocomplete: input.getAttribute("aria-autocomplete"),
+      controls,
+      controlsResolves: controls ? Boolean(document.getElementById(controls)) : null,
+      options: document.querySelectorAll('.command-palette-list [role="option"]').length,
+      count: document.querySelector("[data-command-count]")?.textContent?.trim() ?? "",
+    };
+  });
+
+  const withMatches = await comboboxState();
+  if (withMatches.autocomplete !== "list") {
+    throw new Error(`The command input should say aria-autocomplete="list"; it said ${withMatches.autocomplete}.`);
+  }
+  if (withMatches.expanded !== "true" || withMatches.controlsResolves !== true || withMatches.options === 0) {
+    throw new Error(`A palette with matches should be an expanded combobox: ${JSON.stringify(withMatches)}`);
+  }
+
+  await page.fill("[data-command-input]", "zzzznotacommand");
+  await page.waitForFunction(
+    () => document.querySelectorAll('.command-palette-list [role="option"]').length === 0,
+    null,
+    { timeout: 5000 }
+  );
+  const empty = await comboboxState();
+  if (empty.expanded !== "false") {
+    throw new Error(`With no matches the combobox still claimed to be expanded: ${JSON.stringify(empty)}`);
+  }
+  if (empty.controls !== null && empty.controlsResolves !== true) {
+    throw new Error(`aria-controls named an element that is not in the document: ${JSON.stringify(empty)}`);
+  }
+  if (!/no commands match/i.test(empty.count)) {
+    throw new Error(`The live region should say what happened; it said "${empty.count}".`);
+  }
+}
+
 async function assertPaletteImportsAGameRecord(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11215,6 +11273,7 @@ async function main() {
     await assertMismatchedShareTreeFallsBackToMainline(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
+    await assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page);
     await assertPaletteImportsAGameRecord(page);
     await assertArrowsCanBeTurnedOffOnAPhone(page);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);

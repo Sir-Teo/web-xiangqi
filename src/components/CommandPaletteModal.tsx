@@ -107,14 +107,24 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={onKeyDown}
             >
+                {/*
+                  * aria-expanded and aria-controls follow the list rather than
+                  * assert it. The listbox is not rendered at all when nothing
+                  * matches, so a fixed aria-expanded="true" told a screen
+                  * reader a popup was open and aria-controls named an element
+                  * that had left the document -- while the live region below it
+                  * said "No commands match". The activedescendant already took
+                  * care to go undefined in that state; these two did not.
+                  */}
                 <input
                     ref={inputRef}
                     data-command-input
                     className="command-palette-input"
                     type="text"
                     role="combobox"
-                    aria-expanded="true"
-                    aria-controls="command-palette-list"
+                    aria-autocomplete="list"
+                    aria-expanded={ranked.length > 0}
+                    aria-controls={ranked.length > 0 ? "command-palette-list" : undefined}
                     aria-activedescendant={ranked[activeIndex] ? `command-${ranked[activeIndex].id}` : undefined}
                     aria-label="Search commands"
                     autoComplete="off"
