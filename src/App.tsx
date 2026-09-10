@@ -4610,12 +4610,9 @@ function App() {
     { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], shortcut: 'F', run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
       /**
-       * Arrows are a persisted preference with, until now, one control: a top
-       * bar button, and MOBILE_LAYOUT_QUERY drops that bar at 900px. A phone
-       * could be handed a board covered in engine suggestions with no way to
-       * clear it -- not in settings, not in the board menu, nowhere -- and the
-       * preference persists, so one desktop session set every later visit.
-       * The palette is on every viewport, so the toggle now is too.
+       * The same toggle the top bar carries, and the board menu's "Hide arrows"
+       * on touch -- reachable here by name rather than by knowing which of the
+       * two places it lives in at this width, the way Flip board already is.
        */
       id: 'toggle-arrows',
       label: showArrows ? 'Hide arrows and markers' : 'Show arrows and markers',

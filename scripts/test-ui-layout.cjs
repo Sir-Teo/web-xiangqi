@@ -8807,11 +8807,17 @@ async function assertMoveLineFileImport(page) {
  * that merely opens the panel hands focus back to the toolbar button.
  */
 /**
- * Arrows and markers are a persisted preference whose only control was a top
- * bar button, and MOBILE_LAYOUT_QUERY drops that bar at 900px. A phone could
- * be handed a board covered in engine suggestions with nothing anywhere to
- * clear it. The palette command is the fix, so the gate is the phone: the
- * button is gone, the command is what "arrows" finds, and it goes both ways.
+ * Arrows and markers are a persisted preference, so a board left covered in
+ * engine suggestions stays that way across visits and the control that clears
+ * it has to be findable. At 390px the top bar carrying it is gone --
+ * MOBILE_LAYOUT_QUERY drops that bar at 900px -- and the phone has two other
+ * routes instead: "Hide arrows" in the board's More menu, and the palette.
+ *
+ * Both are gated here, because the More menu had no coverage at all and the
+ * palette command was added on the mistaken belief that it was the only way.
+ * It is not; it is the searchable one. Each route is checked both ways, since
+ * a preference a reader cannot restore is a worse trap than one they cannot
+ * reach.
  */
 /**
  * The analysis tabs cut their own labels once a reader scales their text up:
@@ -8884,8 +8890,8 @@ async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.waitForSelector(".board-arrow-group", { timeout: 10000 });
 
-  // Stated rather than assumed: if the phone layout ever grows its own Arrows
-  // button, this gate is testing a gap that no longer exists and should say so.
+  // The top bar's own Arrows button is not what a phone uses; state that rather
+  // than assume it, so this gate cannot end up testing a layout that changed.
   const toolbarToggle = await page.evaluate(() => {
     const el = document.querySelector('[aria-label="Toggle board arrows and markers"]');
     if (!el) return "absent";
@@ -8893,12 +8899,39 @@ async function assertArrowsCanBeTurnedOffOnAPhone(page) {
     return rect.width > 0 && rect.height > 0 ? "visible" : "hidden";
   });
   if (toolbarToggle === "visible") {
-    throw new Error("The 390px layout now shows the Arrows button; this gate's premise is stale.");
+    throw new Error("The 390px layout now shows the top bar Arrows button; this gate's premise is stale.");
   }
+
+  // Route one: the board's More menu, which is the control a phone reader
+  // actually reaches for.
+  // Toggling arrows leaves the menu open -- it is a setting, not a command --
+  // so opening it unconditionally would close it again on the second pass.
+  const openBoardMenu = async () => {
+    const more = page.getByTestId("mobile-more-actions-btn");
+    if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+  };
+  const runMenuItem = async (name) => {
+    await openBoardMenu();
+    await page.getByRole("menuitem", { name }).click({ timeout: 5000 });
+  };
+  await runMenuItem(/^Hide arrows$/);
+  await page.waitForFunction(
+    () => document.querySelectorAll(".board-arrow-group").length === 0,
+    null,
+    { timeout: 5000 }
+  );
+  await runMenuItem(/^Show arrows$/);
+  await page.waitForFunction(
+    () => document.querySelectorAll(".board-arrow-group").length > 0,
+    null,
+    { timeout: 5000 }
+  );
+
+  // Route two: the palette, by name.
 
   const runArrowCommand = async (expectedLabel) => {
     // Two taps on a phone: the palette lives behind the board's More menu.
-    await page.getByTestId("mobile-more-actions-btn").click();
+    await openBoardMenu();
     await page.getByTestId("mobile-command-palette-btn").click();
     await page.waitForSelector("[data-command-input]", { timeout: 5000 });
     await page.fill("[data-command-input]", "arrows");

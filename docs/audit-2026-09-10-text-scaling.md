@@ -68,13 +68,16 @@ Recorded so the next pass does not repeat them.
 
 ## Two gaps found along the way, both now closed
 
-- `cb533ea` — arrows and markers are a persisted preference whose only control
-  was a top bar button, and `MOBILE_LAYOUT_QUERY` drops that bar at 900px.
-  Measured at 390x844, 596x668 and 768x1024, the button is not in the document
-  at all, and nothing in settings or the board's More menu replaces it. A phone
-  could be handed a board covered in engine suggestions with no way anywhere to
-  clear it — and because the preference persists, one desktop session set every
-  later visit. The palette is on every viewport, so the toggle now is too.
+- `cb533ea` — the arrows toggle reached the palette, so it can be found by name
+  at any width rather than by knowing which of two places carries it. **The
+  claim originally made for this commit was wrong** and is corrected in
+  `<pending>`: the top bar button really is dropped at `MOBILE_LAYOUT_QUERY`'s
+  900px, but the board's More menu has carried "Hide arrows" on touch all
+  along. The probe that "proved" the gap searched for the toolbar button's
+  `aria-label`, and the menu item deliberately has none — its visible text
+  carries the state instead. Enumerate what is present before believing a null.
+  The command is a convenience, not a missing control, and the gate now covers
+  both routes, which is a real gain: the More menu had no coverage at all.
 - `30230fd` — the command palette's combobox claimed `aria-expanded="true"`
   with `aria-controls` naming a listbox that is not rendered when nothing
   matches, while the live region beside it said "No commands match". Both
