@@ -5,6 +5,16 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Ccircle cx='32' cy='32' r='22' fill='%23d6b35f' stroke='%236b4218' stroke-width='4'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='serif' font-size='19' font-weight='700' fill='%23b81515'%3EXQ%3C/text%3E%3C/svg%3E" />
   <link rel="preload" href="./pikafish.js" as="script" />
+  <!-- Installable, because this is a board people use on a phone: launched from
+       the home screen it opens standalone, and the vertical space the browser
+       chrome gives back is space the board gets. `start_url` and `scope` are
+       relative so they resolve against the manifest wherever it is served from,
+       which is a /web-xiangqi/ subpath in production and the root in the demo.
+       The icons are SVG rather than a ladder of PNGs, with a separate maskable
+       one because a platform may crop to a circle and only the middle 80% of an
+       icon is guaranteed to survive. -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
   <!-- viewport-fit=cover is required for env(safe-area-inset-*) to report real
        values; without it they resolve to 0 and the safe-area padding on the top
        bar, bottom panel, mobile tab bar and modals never takes effect. -->
@@ -12,6 +22,12 @@
   <meta name="description" content="A fast Xiangqi analysis board with Pikafish engine lines, game review, openings, saved studies, PGN/FEN import, and shareable variations." />
   <meta name="application-name" content="Web Xiangqi" />
   <meta name="apple-mobile-web-app-title" content="Web Xiangqi" />
+  <!-- Safari does not read the manifest's `display`; this is what makes an
+       iOS home-screen launch standalone. `black` rather than
+       `black-translucent`, which would push the page up under the status bar
+       and is a layout change this has not been tested on a device for. -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#050505" />
   <meta property="og:title" content="Web Xiangqi" />

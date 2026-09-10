@@ -8931,6 +8931,79 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
  * `Input.dispatchTouchEvent` goes through hit testing and honours touch-action;
  * measured 1 -> 5 with the fix and 1 -> 1 without it.
  */
+/**
+ * The app is installable, which for a board people use on a phone is worth
+ * having: launched from the home screen it opens standalone, and the vertical
+ * space the browser chrome gives back is space the board gets.
+ *
+ * Checked through Chrome's own manifest parser rather than by reading the JSON,
+ * because JSON parsing is the part least likely to be wrong. What breaks is
+ * resolution: `start_url` and `scope` are relative so they work at the
+ * /web-xiangqi/ subpath and at the demo's root alike, and a change to vite's
+ * `base` or a stray leading slash would leave a manifest that parses perfectly
+ * and installs nothing.
+ */
+async function assertTheAppIsInstallable(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+    const cdp = await context.newCDPSession(page);
+    const manifest = await cdp.send("Page.getAppManifest");
+    if (manifest.errors && manifest.errors.length) {
+      throw new Error(`Chrome reported manifest errors: ${JSON.stringify(manifest.errors)}`);
+    }
+    if (!manifest.data) {
+      throw new Error(`No manifest was fetched from ${manifest.url || "(no url)"}.`);
+    }
+    const parsed = JSON.parse(manifest.data);
+    if (parsed.display !== "standalone") {
+      throw new Error(`The manifest should ask for a standalone display; it asked for "${parsed.display}".`);
+    }
+    if (!(parsed.icons || []).some((icon) => icon.purpose === "maskable")) {
+      throw new Error("The manifest has no maskable icon, so a platform that crops will crop the piece.");
+    }
+
+    // Every URL the manifest names has to resolve from where the manifest is,
+    // which is the half a JSON check cannot see.
+    const base = new URL(manifest.url);
+    const targets = [parsed.start_url, ...parsed.icons.map((icon) => icon.src)];
+    const results = await page.evaluate(async (urls) => {
+      const out = [];
+      for (const url of urls) {
+        try {
+          const response = await fetch(url);
+          out.push({ url, status: response.status, type: response.headers.get("content-type") });
+        } catch (error) {
+          out.push({ url, error: String(error) });
+        }
+      }
+      return out;
+    }, targets.map((relative) => new URL(relative, base).href));
+    const broken = results.filter((row) => row.status !== 200);
+    if (broken.length) {
+      throw new Error(`The manifest names URLs that do not resolve: ${JSON.stringify(broken)}`);
+    }
+
+    // Safari ignores the manifest's display, so the iOS half is its own check.
+    const appleCapable = await page.evaluate(() => {
+      const meta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+      return meta ? meta.getAttribute("content") : null;
+    });
+    if (appleCapable !== "yes") {
+      throw new Error(`iOS needs apple-mobile-web-app-capable="yes" to launch standalone; found ${JSON.stringify(appleCapable)}.`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertAPhoneCanPinchTheBoard(browser) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -11766,6 +11839,7 @@ async function main() {
     await assertSoundCanBeMutedFromThePalette(page);
     await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
+    await assertTheAppIsInstallable(browser);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);
