@@ -38,7 +38,16 @@
  * plain static server with no isolation headers, and checks that the app both
  * works there and says so honestly.
  *
- * Run after `build:react`, which is why `verify` calls it last.
+ * Needs `build:react` to have run, because it loads what that produced.
+ *
+ * Not part of `verify`, deliberately: that command is browser-free so it works
+ * offline, and the README lists this one under "Not in `verify`" for exactly
+ * that reason. Both CI workflows run it after the build -- `ci.yml` and
+ * `deploy-pages.yml`, the latter being the only job upstream of a publish.
+ *
+ * So a green local `verify` has *not* opened the bundle. That is the gap this
+ * file exists to describe, and saying otherwise here would have been the same
+ * mistake one level up.
  */
 
 const path = require("node:path");
