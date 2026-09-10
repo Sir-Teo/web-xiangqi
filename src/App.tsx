@@ -21,10 +21,10 @@ import {
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
-import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
+import { useEngine, type EngineSearchStats } from './hooks/useEngine';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
-import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
+import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
@@ -69,6 +69,12 @@ import {
   type ReviewPhase,
 } from './utils/engineTags';
 import { buildShareUrl, moveTreeContainsLine } from './utils/shareUrl';
+import {
+  formatRedPovEngineScore,
+  normalizeEvalForFen,
+  normalizeEvalForSide,
+  normalizeWdlForSide,
+} from './utils/engineScore';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -480,52 +486,6 @@ function logDiagnosticError(message: string, ...details: unknown[]) {
 
 /** Enough to be right about the obvious and quick enough to feel like an answer. */
 const HINT_GO_CMD = 'go depth 14 movetime 900';
-
-function sideFromFen(fen: string): Side {
-  return fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
-}
-
-function normalizeEvalForSide(score: number, side: Side) {
-  return side === 'b' ? -score : score;
-}
-
-function normalizeEvalForFen(score: number, fen: string) {
-  return normalizeEvalForSide(score, sideFromFen(fen));
-}
-
-function normalizeWdlForSide(stats: WdlStats | null, side: Side): WdlStats | null {
-  if (!stats || side === 'w') return stats;
-  return {
-    win: stats.loss,
-    draw: stats.draw,
-    loss: stats.win,
-  };
-}
-
-function formatEvalScore(score: number, decimals = 1) {
-  return `${score > 0 ? '+' : ''}${(score / 100).toFixed(decimals)}`;
-}
-
-function parseMateScoreText(scoreStr: string | undefined) {
-  const match = scoreStr?.match(/^([+-])M(\d+)$/);
-  if (!match) return null;
-  const distance = Number(match[2]);
-  if (!Number.isFinite(distance)) return null;
-  return match[1] === '-' ? -distance : distance;
-}
-
-function formatMateScoreText(distance: number) {
-  return distance >= 0 ? `+M${distance}` : `-M${Math.abs(distance)}`;
-}
-
-function formatRedPovEngineScore(pv: Pick<PvLine, 'score' | 'scoreStr'>, side: Side, decimals = 1) {
-  const mateDistance = parseMateScoreText(pv.scoreStr);
-  if (mateDistance !== null) {
-    const redPovMateDistance = side === 'b' ? -mateDistance : mateDistance;
-    return formatMateScoreText(redPovMateDistance);
-  }
-  return formatEvalScore(normalizeEvalForSide(pv.score, side), decimals);
-}
 
 function formatCompactCount(value: number) {
   const normalized = Math.max(0, Math.trunc(value));
