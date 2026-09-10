@@ -10788,6 +10788,124 @@ async function assertSoundUnlockIsNotOnTheFirstTap(browser) {
   }
 }
 
+/**
+ * The eval graph's tooltip is not re-measured on every move.
+ *
+ * The tooltip is positioned from its own rendered box, so the box has to be
+ * measured. It used to be measured in a layout effect keyed on the point --
+ * and `points` is rebuilt from `currentEval`, so a streaming engine hands the
+ * tooltip a new point several times a second. Each of those read geometry
+ * straight after React mutated the DOM, forcing a layout, for a box that
+ * barely ever changes: across a load it takes two sizes, 96x48 and 103x48, in
+ * seven measurements, and a single move step measured five times for the same
+ * two.
+ *
+ * Now it is measured once when it appears and a ResizeObserver reports the
+ * rest -- ten move steps on a phone went from 72 forced reads costing 36ms to
+ * 60 costing 32ms, the tooltip's own twelve going to none. Two things have to
+ * hold. Stepping through moves must not read the box from anywhere but an
+ * observer callback: that callback runs after the browser's own layout, so it
+ * is free, while the same read straight after React mutated the DOM is the
+ * forced one. And the size in use must still be the real one: at the first
+ * point the clamp always binds, pinning the tooltip's left edge to the y-axis
+ * gutter, which it can only reach if the half-width it subtracted matches the
+ * box that rendered. A stale size misses by half the difference -- 3.28px
+ * between those two widths -- so this fails if the observer is dropped and
+ * only the mount measurement is left.
+ *
+ * The gutter is read from the labels rather than written down: they are drawn
+ * with textAnchor="end" at exactly the x the clamp reserves, so their right
+ * edge is that x, and a change to the padding moves both together.
+ */
+async function assertEvalGraphTooltipIsNotMeasuredPerMove(browser) {
+  const MOVES = ["h0i2", "b7g7", "h2h0", "i9i8", "f0e1", "h7h6", "b2a2", "i8d8",
+                 "h0h1", "g9i7", "h1h2", "d8a8", "h2h3", "a8g8", "e3e4", "d9e8"];
+  const page = await browser.newPage();
+  await clearAutoSaveBetweenNavigations(page);
+  try {
+    // Split the tooltip's own measurements by where they are called from. A
+    // ResizeObserver callback runs after the browser's own layout, so reading
+    // the box there is free; anywhere else it is read straight after React
+    // mutated the DOM, which forces a layout. V8 names the observer frame
+    // "ResizeObserver.<fn>", so the receiver is in the stack whatever the
+    // function is called.
+    await page.addInitScript(() => {
+      window.__tip = { measured: 0, forced: 0 };
+      const native = Element.prototype.getBoundingClientRect;
+      Element.prototype.getBoundingClientRect = function (...args) {
+        if (this.classList && this.classList.contains("graph-tooltip")) {
+          window.__tip.measured += 1;
+          if (!/ResizeObserver/.test(new Error().stack || "")) window.__tip.forced += 1;
+        }
+        return native.apply(this, args);
+      };
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      `http://127.0.0.1:8192/web-xiangqi/?moves=${MOVES.join("+")}`,
+      { waitUntil: "domcontentloaded", timeout: 60000 }
+    );
+    await page.waitForSelector(".graph-tooltip", { timeout: 20000 });
+    // The engine streams evals into the tooltip for a while after the board is
+    // up; let that settle so what follows is measuring the click and not the
+    // tail of the load.
+    await page.waitForTimeout(2500);
+
+    const mounted = await page.evaluate(() => window.__tip.measured);
+    if (mounted < 1) {
+      throw new Error("The eval graph tooltip is never measured, so it cannot be placed");
+    }
+
+    await page.evaluate(() => { window.__tip = { measured: 0, forced: 0 }; });
+    for (let step = 0; step < 4; step += 1) {
+      await page.click('[aria-label="Go to previous move"]:not([disabled])');
+      await page.waitForTimeout(180);
+    }
+    await page.waitForTimeout(600);
+
+    // Four steps produce two observer callbacks, one for each size the box
+    // takes. The layout effect this replaced measured five times per step.
+    const stepping = await page.evaluate(() => window.__tip);
+    if (stepping.forced !== 0) {
+      throw new Error(
+        "Stepping through moves forced " + stepping.forced +
+        " synchronous layout(s) to measure the eval graph tooltip: " + JSON.stringify(stepping)
+      );
+    }
+
+    await page.click('[aria-label="Go to first position"]:not([disabled])');
+    await page.waitForTimeout(1600);
+
+    const placement = await page.evaluate(() => {
+      const svg = document.querySelector(".graph-wrap svg");
+      const tip = document.querySelector(".graph-tooltip");
+      if (!svg || !tip) return null;
+      const labels = [...svg.querySelectorAll("text")]
+        .filter((t) => t.getAttribute("text-anchor") === "end");
+      if (labels.length === 0) return null;
+      const chart = svg.getBoundingClientRect();
+      const gutter = Math.max(...labels.map((t) => t.getBoundingClientRect().right));
+      return {
+        gutterFromChart: Math.round((gutter - chart.left) * 100) / 100,
+        tooltipLeftFromChart: Math.round((tip.getBoundingClientRect().left - chart.left) * 100) / 100,
+        width: Math.round(tip.getBoundingClientRect().width * 100) / 100,
+      };
+    });
+    if (!placement) {
+      throw new Error("Could not find the eval graph tooltip and its y-axis labels");
+    }
+    if (Math.abs(placement.tooltipLeftFromChart - placement.gutterFromChart) > 1) {
+      throw new Error(
+        "The eval graph tooltip is placed from a stale measurement of itself: " +
+        JSON.stringify(placement)
+      );
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   let playwright;
   try {
@@ -10963,6 +11081,7 @@ async function main() {
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
     await assertSoundUnlockIsNotOnTheFirstTap(browser);
+    await assertEvalGraphTooltipIsNotMeasuredPerMove(browser);
 
     // This shared page is navigated some eighty times over the run and boots
     // the real engine on each one, and every console error from any of them
@@ -10983,7 +11102,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, idle sound priming, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, idle sound priming, eval graph tooltip measurement, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
