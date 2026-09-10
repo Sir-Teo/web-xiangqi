@@ -8808,10 +8808,10 @@ async function assertMoveLineFileImport(page) {
  */
 /**
  * Arrows and markers are a persisted preference whose only control was a top
- * bar button, and the layout drops that button below 1024px. A phone could be
- * handed a board covered in engine suggestions with nothing anywhere to clear
- * it. The palette command is the fix, so the gate is the phone: the button is
- * gone, the command is what "arrows" finds, and it goes both ways.
+ * bar button, and MOBILE_LAYOUT_QUERY drops that bar at 900px. A phone could
+ * be handed a board covered in engine suggestions with nothing anywhere to
+ * clear it. The palette command is the fix, so the gate is the phone: the
+ * button is gone, the command is what "arrows" finds, and it goes both ways.
  */
 async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   await page.setViewportSize({ width: 390, height: 844 });

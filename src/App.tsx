@@ -4699,10 +4699,11 @@ function App() {
     {
       /**
        * Arrows are a persisted preference with, until now, one control: a top
-       * bar button that the layout drops below 1024px. A phone could be handed
-       * a board covered in engine suggestions and had no way to clear it --
-       * not in settings, not in the board menu, nowhere. The palette is on
-       * every viewport, so the toggle now is too.
+       * bar button, and MOBILE_LAYOUT_QUERY drops that bar at 900px. A phone
+       * could be handed a board covered in engine suggestions with no way to
+       * clear it -- not in settings, not in the board menu, nowhere -- and the
+       * preference persists, so one desktop session set every later visit.
+       * The palette is on every viewport, so the toggle now is too.
        */
       id: 'toggle-arrows',
       label: showArrows ? 'Hide arrows and markers' : 'Show arrows and markers',
