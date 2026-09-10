@@ -55,6 +55,19 @@ import {
   writeAutoSavedGame,
 } from './utils/autoSave';
 import { decodeSavedMoveTreeParam } from './utils/shareTree';
+import {
+  makeAiTag,
+  makeAnalysisTag,
+  makeHintTag,
+  makeReviewTag,
+  makeThreatTag,
+  parseAiTag,
+  parseAnalysisTag,
+  parseHintTag,
+  parseReviewTag,
+  parseThreatTag,
+  type ReviewPhase,
+} from './utils/engineTags';
 import { buildShareUrl, moveTreeContainsLine } from './utils/shareUrl';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
@@ -177,7 +190,6 @@ import {
   chooseAiMoveFromPv,
   describeAiStrength,
   getAiSearchConfig,
-  isAiStrength,
   type AiStrength,
 } from './utils/aiOpponent';
 
@@ -256,11 +268,6 @@ const ASSIST_MODE_COPY: Record<AssistMode, { ariaLabel: string; title: string }>
     title: 'Pro interface: compact analysis with fewer teaching prompts.',
   },
 };
-const ANALYSIS_TAG_PREFIX = 'analysis';
-const AI_TAG_PREFIX = 'ai';
-const REVIEW_TAG_PREFIX = 'review';
-const THREAT_TAG_PREFIX = 'threat';
-const HINT_TAG_PREFIX = 'hint';
 const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
@@ -376,7 +383,6 @@ function orientationForHuman(mode: GameMode): BoardOrientation | null {
 
 
 
-type ReviewPhase = 'base' | 'revisit';
 
 /**
  * A run through the review's key moments as questions. See
@@ -472,84 +478,8 @@ function logDiagnosticError(message: string, ...details: unknown[]) {
   }
 }
 
-type AnalysisPhase = 'primary' | 'deepen' | 'deep';
-
-function makeAnalysisTag(phase: AnalysisPhase, requestKey: string) {
-  return `${ANALYSIS_TAG_PREFIX}|${phase}|${requestKey}`;
-}
-
-function parseAnalysisTag(tag: string | null) {
-  if (!tag || !tag.startsWith(`${ANALYSIS_TAG_PREFIX}|`)) return null;
-  const [, phase, ...rest] = tag.split('|');
-  if ((phase !== 'primary' && phase !== 'deepen' && phase !== 'deep') || rest.length === 0) return null;
-  return { phase: phase as AnalysisPhase, requestKey: rest.join('|') };
-}
-
-function makeReviewTag(phase: ReviewPhase, nodeId: string) {
-  return `${REVIEW_TAG_PREFIX}|${phase}|${nodeId}`;
-}
-
-/**
- * A threat search carries its own prefix so it cannot be mistaken for the
- * analysis of the position on screen.
- *
- * It is a search of a *different* position -- the same board with the other
- * side to move -- and everything the analysis panel shows is filtered on
- * `parseAnalysisTag`. Reusing that prefix would put the opponent's evaluation
- * on the eval bar and the opponent's move at the top of the candidate list,
- * both labelled as the position's own. The request key inside it is still the
- * analysis one, so a threat is dropped by the same navigation that drops an
- * analysis.
- */
-function makeThreatTag(requestKey: string) {
-  return `${THREAT_TAG_PREFIX}|${requestKey}`;
-}
-
-function parseThreatTag(tag: string | null) {
-  if (!tag || !tag.startsWith(`${THREAT_TAG_PREFIX}|`)) return null;
-  const requestKey = tag.slice(THREAT_TAG_PREFIX.length + 1);
-  return requestKey ? { requestKey } : null;
-}
-
-/**
- * A hint is a search of the position the human is about to move in, during a
- * game against the engine -- where analysis is off, so nothing else is
- * looking at it. It carries the position command so a reply that arrives
- * after the position has changed is dropped rather than drawn.
- */
-function makeHintTag(positionCommand: string) {
-  return `${HINT_TAG_PREFIX}|${positionCommand}`;
-}
-
-function parseHintTag(tag: string | null) {
-  if (!tag || !tag.startsWith(`${HINT_TAG_PREFIX}|`)) return null;
-  const positionCommand = tag.slice(HINT_TAG_PREFIX.length + 1);
-  return positionCommand ? { positionCommand } : null;
-}
-
 /** Enough to be right about the obvious and quick enough to feel like an answer. */
 const HINT_GO_CMD = 'go depth 14 movetime 900';
-
-function makeAiTag(positionCommand: string, depth: number, strength: AiStrength) {
-  return `${AI_TAG_PREFIX}|${depth}|${strength}|${positionCommand}`;
-}
-
-function parseAiTag(tag: string | null) {
-  if (!tag || !tag.startsWith(`${AI_TAG_PREFIX}|`)) return null;
-  const [, depthText, strengthText, ...rest] = tag.split('|');
-  const depth = Number(depthText);
-  const strength = Number(strengthText);
-  const positionCommand = rest.join('|');
-  if (!Number.isFinite(depth) || !isAiStrength(strength) || !positionCommand) return null;
-  return { depth, strength, positionCommand };
-}
-
-function parseReviewTag(tag: string | null) {
-  if (!tag || !tag.startsWith(`${REVIEW_TAG_PREFIX}|`)) return null;
-  const [, phase, nodeId] = tag.split('|');
-  if ((phase !== 'base' && phase !== 'revisit') || !nodeId) return null;
-  return { phase, nodeId };
-}
 
 function sideFromFen(fen: string): Side {
   return fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
