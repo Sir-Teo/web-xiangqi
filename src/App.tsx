@@ -4697,6 +4697,22 @@ function App() {
     },
     { id: 'flip-board', label: 'Flip board', keywords: ['orientation', 'turn', 'rotate', 'side'], shortcut: 'F', run: () => setOrientation((side) => side === 'red' ? 'black' : 'red') },
     {
+      /**
+       * Arrows are a persisted preference with, until now, one control: a top
+       * bar button that the layout drops below 1024px. A phone could be handed
+       * a board covered in engine suggestions and had no way to clear it --
+       * not in settings, not in the board menu, nowhere. The palette is on
+       * every viewport, so the toggle now is too.
+       */
+      id: 'toggle-arrows',
+      label: showArrows ? 'Hide arrows and markers' : 'Show arrows and markers',
+      hint: showArrows
+        ? 'Leaves the board bare: no engine suggestions, no last move, none of your own drawings'
+        : 'The engine\'s suggestions, the last move, and anything you have drawn',
+      keywords: ['arrow', 'marker', 'overlay', 'highlight', 'draw', 'annotation', 'clutter', 'clean', '\u7bad\u5934'],
+      run: () => setShowArrows((shown) => !shown),
+    },
+    {
       id: 'piece-style',
       label: pieceStyle === 'letters' ? 'Draw the pieces as characters' : 'Draw the pieces as letters',
       hint: pieceStyle === 'letters' ? PIECE_STYLE_DESCRIPTIONS.traditional : PIECE_STYLE_DESCRIPTIONS.letters,
@@ -4750,7 +4766,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, board, canCopyRecord, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [aiPlayActive, board, canCopyRecord, showArrows, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,

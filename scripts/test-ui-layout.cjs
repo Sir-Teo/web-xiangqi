@@ -8806,6 +8806,69 @@ async function assertMoveLineFileImport(page) {
  * the palette restores focus to whatever opened it as it closes, so a command
  * that merely opens the panel hands focus back to the toolbar button.
  */
+/**
+ * Arrows and markers are a persisted preference whose only control was a top
+ * bar button, and the layout drops that button below 1024px. A phone could be
+ * handed a board covered in engine suggestions with nothing anywhere to clear
+ * it. The palette command is the fix, so the gate is the phone: the button is
+ * gone, the command is what "arrows" finds, and it goes both ways.
+ */
+async function assertArrowsCanBeTurnedOffOnAPhone(page) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForSelector(".board-arrow-group", { timeout: 10000 });
+
+  // Stated rather than assumed: if the phone layout ever grows its own Arrows
+  // button, this gate is testing a gap that no longer exists and should say so.
+  const toolbarToggle = await page.evaluate(() => {
+    const el = document.querySelector('[aria-label="Toggle board arrows and markers"]');
+    if (!el) return "absent";
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? "visible" : "hidden";
+  });
+  if (toolbarToggle === "visible") {
+    throw new Error("The 390px layout now shows the Arrows button; this gate's premise is stale.");
+  }
+
+  const runArrowCommand = async (expectedLabel) => {
+    // Two taps on a phone: the palette lives behind the board's More menu.
+    await page.getByTestId("mobile-more-actions-btn").click();
+    await page.getByTestId("mobile-command-palette-btn").click();
+    await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+    await page.fill("[data-command-input]", "arrows");
+    await page.waitForSelector('.command-palette-list [role="option"]', { timeout: 5000 });
+    const ranked = await page.$$eval('.command-palette-list [role="option"]', (nodes) =>
+      nodes.map((node) => node.textContent.trim())
+    );
+    if (!ranked.length || !ranked[0].startsWith(expectedLabel)) {
+      throw new Error(
+        `Typing "arrows" on a phone ranked: ${JSON.stringify(ranked)} (wanted "${expectedLabel}" first)`
+      );
+    }
+    await page.keyboard.press("Enter");
+  };
+
+  await runArrowCommand("Hide arrows and markers");
+  await page.waitForFunction(
+    () => document.querySelectorAll(".board-arrow-group").length === 0,
+    null,
+    { timeout: 5000 }
+  );
+
+  // Both ways: a preference a reader cannot restore is a worse trap than one
+  // they cannot reach.
+  await runArrowCommand("Show arrows and markers");
+  await page.waitForFunction(
+    () => document.querySelectorAll(".board-arrow-group").length > 0,
+    null,
+    { timeout: 5000 }
+  );
+}
+
 async function assertPaletteImportsAGameRecord(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11091,6 +11154,7 @@ async function main() {
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
     await assertPaletteImportsAGameRecord(page);
+    await assertArrowsCanBeTurnedOffOnAPhone(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);
     await assertFenTaggedMoveLineImport(page);
