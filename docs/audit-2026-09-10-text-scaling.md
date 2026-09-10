@@ -71,7 +71,7 @@ Recorded so the next pass does not repeat them.
 - `cb533ea` — the arrows toggle reached the palette, so it can be found by name
   at any width rather than by knowing which of two places carries it. **The
   claim originally made for this commit was wrong** and is corrected in
-  `<pending>`: the top bar button really is dropped at `MOBILE_LAYOUT_QUERY`'s
+  `8f72099`: the top bar button really is dropped at `MOBILE_LAYOUT_QUERY`'s
   900px, but the board's More menu has carried "Hide arrows" on touch all
   along. The probe that "proved" the gap searched for the toolbar button's
   `aria-label`, and the menu item deliberately has none — its visible text
