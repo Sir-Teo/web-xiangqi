@@ -3835,8 +3835,18 @@ async function assertEngineTelemetryDashboard(browser) {
         firstScoreLabel: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("aria-label") || "",
         firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
         firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
-        stageEvalText: document.querySelector(".board-stage-chip-eval")?.textContent?.replace(/\s+/g, " ").trim() || "",
-        stageEvalLabel: document.querySelector(".board-stage-chip-eval")?.getAttribute("aria-label") || "",
+        // The eval bar beside the board, not `.board-stage-chip-eval`: that chip sits
+        // inside `.board-stage-header`, which the stylesheet hides at every width,
+        // so the old check passed on a number nobody could read. The bar's label
+        // carries the same figure and, in the winning-chances percentage, the
+        // direction its fill actually shows.
+        evalBarLabel: document.querySelector('[data-testid="eval-bar"]')?.getAttribute("aria-label") || "",
+        evalBarPainted: (() => {
+          const bar = document.querySelector('[data-testid="eval-bar"]');
+          if (!bar) return false;
+          const rect = bar.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })(),
         firstLineActionsLabel: document.querySelector(".pv-line-actions")?.getAttribute("aria-label") || "",
         playLineLabel: document.querySelector('[data-testid="play-engine-pv-0"]')?.getAttribute("aria-label") || "",
         playLineTitle: document.querySelector('[data-testid="play-engine-pv-0"]')?.getAttribute("title") || "",
@@ -3864,8 +3874,8 @@ async function assertEngineTelemetryDashboard(browser) {
       // +0.4 evaluation: at zero decimals the badge could not separate a
       // half-pawn from level, which is most of an opening.
       telemetry.firstScoreText !== "+0.4Red POV" ||
-      telemetry.stageEvalText !== "Red POV +0.4" ||
-      telemetry.stageEvalLabel !== "Live engine evaluation, Red POV +0.4" ||
+      !telemetry.evalBarPainted ||
+      telemetry.evalBarLabel !== "Engine evaluation, Red POV +0.4, red winning chances 54%" ||
       !telemetry.firstLineLabel.includes("depth 8") ||
       !telemetry.firstLineLabel.includes("moves C8=5 H8+7") ||
       telemetry.firstLineActionsLabel !== "Actions for engine line 1, depth 8, moves C8=5 H8+7" ||
@@ -5022,7 +5032,7 @@ async function assertEngineMateScoresRenderAsMate(browser) {
     await page.getByTestId("analysis-tab-engine").click();
     await page.waitForFunction(() => {
       return document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.includes("+M3") &&
-        document.querySelector(".board-stage-chip-eval")?.textContent?.includes("Red POV +M3");
+        document.querySelector('[data-testid="eval-bar"]')?.getAttribute("aria-label")?.includes("Red POV +M3");
     }, null, { timeout: 15000 });
 
     const state = await page.evaluate(() => {
@@ -5036,9 +5046,16 @@ async function assertEngineMateScoresRenderAsMate(browser) {
         firstScoreLabel: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("aria-label") || "",
         firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
         firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
-        stageEvalText: document.querySelector(".board-stage-chip-eval")?.textContent?.replace(/\s+/g, " ").trim() || "",
-        stageEvalLabel: document.querySelector(".board-stage-chip-eval")?.getAttribute("aria-label") || "",
-        stageEvalClass: document.querySelector(".board-stage-chip-eval")?.className || "",
+        // Same substitution as the telemetry gate above, and for the same reason.
+        // "red winning chances 100%" is what `eval-positive` was asserting, said
+        // in terms of the fill a reader can see.
+        evalBarLabel: document.querySelector('[data-testid="eval-bar"]')?.getAttribute("aria-label") || "",
+        evalBarPainted: (() => {
+          const bar = document.querySelector('[data-testid="eval-bar"]');
+          if (!bar) return false;
+          const rect = bar.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })(),
         graphCurrent: summaryCard("Current"),
         graphSwing: summaryCard("Swing"),
         graphLegend: document.querySelector(".graph-legend strong")?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -5052,9 +5069,8 @@ async function assertEngineMateScoresRenderAsMate(browser) {
       state.firstScoreLabel !== "Red POV score +M3" ||
       state.firstScoreTitle !== "Red POV score +M3" ||
       state.firstScoreText !== "+M3Red POV" ||
-      state.stageEvalText !== "Red POV +M3" ||
-      state.stageEvalLabel !== "Live engine evaluation, Red POV +M3" ||
-      !state.stageEvalClass.includes("eval-positive") ||
+      !state.evalBarPainted ||
+      state.evalBarLabel !== "Engine evaluation, Red POV +M3, red winning chances 100%" ||
       state.overflowX > 2
     ) {
       throw new Error(`Engine mate score did not render as mate on desktop: ${JSON.stringify(state)}`);
