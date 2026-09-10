@@ -9041,6 +9041,91 @@ async function assertTheAnalysisTabsAdvertiseTheirShortcuts(page) {
   }
 }
 
+/**
+ * The cloud book is the one feature that sends anything anywhere, and its own
+ * copy makes a promise about it: "Sends this position -- and, once a position
+ * repeats, the moves that led to it -- and nothing else, to chessdb.cn." This
+ * gates that promise, and the failure the reader sees when the answer never
+ * comes.
+ *
+ * Both halves matter and neither is covered elsewhere. A stray parameter would
+ * quietly break a privacy claim the reader was shown before agreeing to turn it
+ * on; and a request that fails with no reply must not leave the card saying
+ * "Asking chessdb.cn..." for ever, because the reader would be waiting on
+ * something that is never coming.
+ */
+async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+
+    const attempted = [];
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.includes("chessdb.cn")) {
+        attempted.push(url);
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(800);
+
+    const card = () => page.evaluate(() => {
+      const el = document.querySelector('[data-testid="cloud-book-card"]');
+      return el
+        ? { status: el.getAttribute("data-status"), text: el.textContent.replace(/\s+/g, " ").trim() }
+        : null;
+    });
+
+    const before = await card();
+    if (!before || before.status !== "off") {
+      throw new Error(`The cloud book should start off: ${JSON.stringify(before)}`);
+    }
+    if (attempted.length !== 0) {
+      throw new Error(`Nothing should reach chessdb.cn before the reader turns it on: ${JSON.stringify(attempted)}`);
+    }
+
+    await page.getByTestId("cloud-book-enable").click();
+
+    // It has to stop asking. A card stuck on "Asking..." is a reader waiting on
+    // something that is never coming.
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="cloud-book-card"]')?.getAttribute("data-status") === "error",
+      null,
+      { timeout: 20000 },
+    ).catch(async () => {
+      throw new Error(`The cloud book never reported the failure: ${JSON.stringify(await card())}`);
+    });
+
+    const failed = await card();
+    if (!/did not answer/.test(failed.text) || !/asked again/.test(failed.text)) {
+      throw new Error(`The failure should say what happened and what happens next: ${JSON.stringify(failed.text)}`);
+    }
+
+    if (attempted.length === 0) {
+      throw new Error("Turning the cloud book on sent nothing, so the promise below is untested.");
+    }
+    for (const url of attempted) {
+      const parsed = new URL(url);
+      const keys = [...parsed.searchParams.keys()].sort();
+      if (JSON.stringify(keys) !== JSON.stringify(["action", "board"])) {
+        throw new Error(
+          `The cloud book promises it sends the position "and nothing else"; this carried ${JSON.stringify(keys)} (${parsed.origin}${parsed.pathname}).`
+        );
+      }
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertTheAppIsInstallable(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
@@ -11938,6 +12023,7 @@ async function main() {
     await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
     await assertTheAppIsInstallable(browser);
+    await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
