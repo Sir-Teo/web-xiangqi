@@ -19,6 +19,8 @@ import {
     getWinPercentLossForMove,
     getWinningChancePercent,
     isCriticalReviewQuality,
+    formatReviewQuality,
+    formatReviewQualityWithArticle,
 } from './review';
 
 describe('winning chance conversion', () => {
@@ -190,5 +192,30 @@ describe('evaluation overrides', () => {
         expect(getEvalOverride('node-1', null)).toBeUndefined();
         expect(getEvalOverride('node-1', undefined)).toBeUndefined();
         expect(getEvalOverride('missing', new Map([['node-1', 120]]))).toBeUndefined();
+    });
+});
+
+describe('naming a quality in prose', () => {
+    /**
+     * "the review found a inaccuracy" shipped in the mistake drill's banner.
+     * Only "inaccuracy" of the five words takes "an", so the whole set is
+     * listed rather than the one that was wrong -- the point is that adding a
+     * sixth quality cannot reintroduce this.
+     */
+    it.each([
+        ['best', 'a best'],
+        ['good', 'a good'],
+        ['inaccuracy', 'an inaccuracy'],
+        ['mistake', 'a mistake'],
+        ['blunder', 'a blunder'],
+    ] as const)('writes %s as "%s"', (quality, expected) => {
+        expect(formatReviewQualityWithArticle(quality)).toBe(expected);
+    });
+
+    it('agrees with the bare label it is built from', () => {
+        for (const quality of ['best', 'good', 'inaccuracy', 'mistake', 'blunder'] as const) {
+            expect(formatReviewQualityWithArticle(quality))
+                .toMatch(new RegExp(`^an? ${formatReviewQuality(quality).toLowerCase()}$`));
+        }
     });
 });

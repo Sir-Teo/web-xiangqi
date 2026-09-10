@@ -179,6 +179,7 @@ import {
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
   formatReviewQuality,
+  formatReviewQualityWithArticle,
   formatWinPercentLoss,
   getEvalLossForMove,
   formatReviewCount,
@@ -3676,7 +3677,7 @@ function App() {
         ? { headline: 'Checking with the engine…', detail: `${side} played ${attemptText}.` }
         : {
             headline: `${side} to move. Find a better move than the game's.`,
-            detail: `Ply ${drillMoment.ply}, where the review found a ${formatReviewQuality(drillMoment.quality).toLowerCase()}.`,
+            detail: `Ply ${drillMoment.ply}, where the review found ${formatReviewQualityWithArticle(drillMoment.quality)}.`,
           };
     }
     switch (verdict.kind) {

@@ -261,6 +261,18 @@ export function getMoveQualityClassName(quality?: ReviewMoveQuality): string {
     return quality ? `quality-${quality}` : 'quality-pending';
 }
 
+/**
+ * The quality with the article that fits it, for prose like "the review found
+ * an inaccuracy". Only "inaccuracy" of the five words begins with a vowel, and
+ * this is a letter test rather than a sound test -- the wrong tool for English
+ * in general ("an hour", "a unicorn"), and exactly right for a closed set of
+ * five words nobody is going to add "hour" to.
+ */
+export function formatReviewQualityWithArticle(quality: ReviewMoveQuality): string {
+    const word = formatReviewQuality(quality).toLowerCase();
+    return `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`;
+}
+
 export function formatReviewQuality(quality: ReviewMoveQuality): string {
     switch (quality) {
         case 'best':
