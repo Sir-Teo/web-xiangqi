@@ -10669,6 +10669,125 @@ async function assertAppErrorBoundaryFallback(browser) {
   }
 }
 
+/**
+ * The audio device is not built on the reader's first tap.
+ *
+ * Sound is on by default, and unlocking it used to mean calling
+ * `new AudioContext()` from the `pointerdown` listener that arms it. That
+ * constructor starts the audio device, which is ~125ms of blocked main thread
+ * and stays ~125ms under 4x CPU throttling because it is device startup rather
+ * than script. So it landed, in full, on the first tap of every visit -- the
+ * frame answering it ran 131ms unthrottled and 186ms at 4x, against 0ms for
+ * every tap after. That is the one interaction a reader judges the app by.
+ *
+ * The context is built at idle instead, leaving the gesture with `resume()`.
+ * Three things have to hold, and the first two are what a regression would
+ * break: a context must exist *before* the tap, or the cost has only been
+ * deferred to some later tap rather than moved off the interaction path; none
+ * may be built *during* the tap; and the tap must still unlock the one that is
+ * there, because moving the work must not cost the sound.
+ *
+ * The wrapper suspends each context as it is built. Under a real browser's
+ * autoplay policy that is already its state -- a context built without user
+ * activation cannot start -- but Playwright's own page evaluations grant the
+ * document activation, so a context built after one starts "running" and the
+ * resume path would never be exercised here. Forcing the state makes the third
+ * check test the app rather than the harness.
+ */
+async function assertSoundUnlockIsNotOnTheFirstTap(browser) {
+  const page = await browser.newPage();
+  await clearAutoSaveBetweenNavigations(page);
+  try {
+    // Count AudioContext constructions and resumes, and note which of them
+    // happen inside the task an input event is dispatched in. The capture-phase
+    // listeners are installed before any of the app's code runs, so they see
+    // the event first; the flag is cleared in a task of its own, once every
+    // synchronous listener for that event has returned.
+    await page.addInitScript(() => {
+      window.__audio = { built: 0, builtDuringInput: 0, resumedDuringInput: 0, last: null };
+      let inInput = false;
+      const mark = () => {
+        inInput = true;
+        setTimeout(() => { inInput = false; }, 0);
+      };
+      window.addEventListener("pointerdown", mark, true);
+      window.addEventListener("keydown", mark, true);
+      const Native = window.AudioContext;
+      if (!Native) return;
+      const nativeResume = Native.prototype.resume;
+      Native.prototype.resume = function (...args) {
+        if (inInput) window.__audio.resumedDuringInput += 1;
+        return nativeResume.apply(this, args);
+      };
+      function Counted(...args) {
+        window.__audio.built += 1;
+        if (inInput) window.__audio.builtDuringInput += 1;
+        const instance = new Native(...args);
+        window.__audio.last = instance;
+        instance.suspend().catch(() => {});
+        return instance;
+      }
+      Counted.prototype = Native.prototype;
+      window.AudioContext = Counted;
+    });
+
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector('[aria-label="Flip board orientation"]', { timeout: 20000 });
+    // The prime is scheduled with requestIdleCallback, so it lands once the
+    // load stops competing for the thread rather than at a fixed moment.
+    // Waited for rather than assumed, and the timeout is the failure that
+    // matters: code that builds the context on the gesture never gets here.
+    await page.waitForFunction(
+      () => window.__audio.built > 0 && window.__audio.last.state === "suspended",
+      null,
+      { timeout: 20000 }
+    ).catch(() => {});
+
+    const before = await page.evaluate(() => ({
+      built: window.__audio.built,
+      builtDuringInput: window.__audio.builtDuringInput,
+      resumedDuringInput: window.__audio.resumedDuringInput,
+      state: window.__audio.last ? window.__audio.last.state : null,
+    }));
+    if (before.built !== 1 || before.builtDuringInput !== 0 || before.resumedDuringInput !== 0) {
+      throw new Error(
+        "Sound is not primed at idle before the first tap, so the first tap pays " +
+        "for the audio device: " + JSON.stringify(before)
+      );
+    }
+
+    await page.click('[aria-label="Flip board orientation"]');
+    await page.waitForFunction(
+      () => window.__audio.last.state === "running",
+      null,
+      { timeout: 10000 }
+    ).catch(() => {});
+
+    const after = await page.evaluate(() => ({
+      built: window.__audio.built,
+      builtDuringInput: window.__audio.builtDuringInput,
+      resumedDuringInput: window.__audio.resumedDuringInput,
+      state: window.__audio.last ? window.__audio.last.state : null,
+    }));
+    if (after.builtDuringInput !== 0) {
+      throw new Error(
+        "The first tap built the audio device instead of resuming one: " + JSON.stringify(after)
+      );
+    }
+    if (after.resumedDuringInput < 1 || after.state !== "running") {
+      throw new Error(
+        "The first tap left sound locked: " + JSON.stringify(after)
+      );
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   let playwright;
   try {
@@ -10843,6 +10962,7 @@ async function main() {
     await assertGameOverReviewPreservesResult(page);
     await assertMobileGameOverReviewOpensReviewTab(page);
     await assertAppErrorBoundaryFallback(browser);
+    await assertSoundUnlockIsNotOnTheFirstTap(browser);
 
     // This shared page is navigated some eighty times over the run and boots
     // the real engine on each one, and every console error from any of them
@@ -10863,7 +10983,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, and library delete checks passed.");
+    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, idle sound priming, and library delete checks passed.");
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +

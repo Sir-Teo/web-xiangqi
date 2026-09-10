@@ -14,7 +14,35 @@ function createCtx(): AudioContext | null {
     return ctx;
 }
 
+/**
+ * Build the AudioContext before the reader touches anything.
+ *
+ * `new AudioContext()` starts the audio device, and that is a fixed cost --
+ * ~125ms of blocked main thread here, essentially unchanged under 4x CPU
+ * throttling, because it is device startup rather than script. Spent inside the
+ * `pointerdown` listener that unlocks sound it lands on the reader's very first
+ * tap: measured, the frame answering that tap ran 131ms unthrottled and 186ms
+ * at 4x, against 0ms for every tap after it. Spent at idle it costs them
+ * nothing, and the gesture is left with `resume()`, which is under a
+ * millisecond.
+ *
+ * Returns a cancel function; the context is only wanted while sound is on.
+ */
+export function prepareSoundEffects(): () => void {
+    if (typeof window === 'undefined' || ctx) return () => {};
+    if (typeof window.requestIdleCallback === 'function') {
+        const handle = window.requestIdleCallback(() => { createCtx(); });
+        return () => window.cancelIdleCallback?.(handle);
+    }
+    // Safari before 16.4 has no requestIdleCallback. A timer once the load has
+    // settled is not idle, but it is still off the interaction path.
+    const timer = window.setTimeout(() => { createCtx(); }, 1000);
+    return () => window.clearTimeout(timer);
+}
+
 export function unlockSoundEffects() {
+    // Still creates the context if the idle prime above has not run yet, so
+    // this is never worse than doing the work here -- only usually free.
     const ac = createCtx();
     if (!ac) return;
     if (ac.state === 'suspended') {

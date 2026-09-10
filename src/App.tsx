@@ -26,7 +26,7 @@ import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineA
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
-import { playMoveSound, playCaptureSound, playCheckSound, unlockSoundEffects } from './utils/sounds';
+import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
@@ -952,7 +952,12 @@ function App() {
     const unlock = () => unlockSoundEffects();
     window.addEventListener('pointerdown', unlock, { once: true, passive: true });
     window.addEventListener('keydown', unlock, { once: true });
+    // Build the audio device while the main thread is free, so the gesture
+    // above is left with resume() rather than ~125ms of device startup on the
+    // reader's first tap. See prepareSoundEffects.
+    const cancelPrepare = prepareSoundEffects();
     return () => {
+      cancelPrepare();
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
