@@ -4552,6 +4552,25 @@ function App() {
       run: handleDownloadPgn,
     },
     {
+      /**
+       * The palette could take a record *out* five ways -- PGN, WXF, FEN, a
+       * file, a share link -- and bring one back in by none of them. Pasting
+       * a game meant knowing the field lives under New game, which is where a
+       * reader goes to throw the current game away, not to open one.
+       */
+      id: 'import-record',
+      label: 'Import a game record',
+      hint: 'Paste WXF, Chinese or coordinate moves',
+      keywords: ['paste', 'load', 'open', 'pgn', 'wxf', 'uci', 'record', 'moves', 'line', 'notation', '\u68cb\u8c31'],
+      run: () => {
+        openNewGameMenu();
+        // After the panel is up, or the field is not in the document yet.
+        window.setTimeout(() => {
+          document.getElementById('new-game-line-input')?.focus();
+        }, 0);
+      },
+    },
+    {
       id: 'setup-position',
       label: 'Set up a position',
       hint: 'Place the pieces by hand',
@@ -4735,7 +4754,7 @@ function App() {
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
-      handleSaveGame, isReady, openLibraryPanel, resetGame, runDeepDive, setGameResult, startGameReview,
+      handleSaveGame, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
       stopSearch])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
@@ -5883,6 +5902,7 @@ function App() {
                 onSubmit={(e) => { e.preventDefault(); handleImportMoveLine(moveLineInput, pendingGameMode); }}
               >
                 <textarea
+                  id="new-game-line-input"
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
                   onChange={(e) => {

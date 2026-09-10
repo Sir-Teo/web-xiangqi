@@ -8797,6 +8797,55 @@ async function assertMoveLineFileImport(page) {
   }
 }
 
+/**
+ * The palette takes a record *out* five ways and, until this command, brought
+ * one back in by none: the paste field lives inside New game, which is where a
+ * reader goes to throw a game away rather than to open one. Gated on three
+ * things -- the command exists, "import" is the word that finds it, and
+ * running it leaves the caret in the field. That last one is the fragile part:
+ * the palette restores focus to whatever opened it as it closes, so a command
+ * that merely opens the panel hands focus back to the toolbar button.
+ */
+async function assertPaletteImportsAGameRecord(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByTestId("command-palette-btn").click();
+  await page.waitForSelector("[data-command-input]", { timeout: 5000 });
+  await page.fill("[data-command-input]", "import");
+
+  const ranked = await page.$$eval(".command-palette-list [role=\"option\"]", (nodes) =>
+    nodes.map((node) => node.textContent.trim())
+  );
+  if (!ranked.length || !ranked[0].startsWith("Import a game record")) {
+    throw new Error(
+      `Typing "import" in the command palette ranked: ${JSON.stringify(ranked)}`
+    );
+  }
+
+  await page.keyboard.press("Enter");
+  await page.waitForSelector('[data-testid="uci-line-input"]', { timeout: 5000 });
+  await page.waitForFunction(
+    () => document.activeElement === document.getElementById("new-game-line-input"),
+    null,
+    { timeout: 5000 }
+  );
+
+  // Focus is worth gating only because it makes the field live: a record on the
+  // clipboard goes in without the mouse ever moving.
+  await page.keyboard.type("1. b2e2 h9g7 2. b0c2");
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-1").waitFor({ timeout: 5000 });
+  const landed = await page.getByTestId("graph-current-point").textContent();
+  if (!String(landed || "").includes("Red H8+7")) {
+    throw new Error(`Palette-imported line did not land on its final move: ${String(landed || "").trim()}`);
+  }
+}
+
 async function assertOversizedMoveLineFileRejected(page) {
   const importPath = path.resolve(__dirname, "..", ".move-line-oversized-test.pgn");
   fs.writeFileSync(importPath, "b2e2 ".repeat(42000));
@@ -11041,6 +11090,7 @@ async function main() {
     await assertMismatchedShareTreeFallsBackToMainline(page);
     await assertInvalidShareLinkFeedback(page);
     await assertMoveLineFileImport(page);
+    await assertPaletteImportsAGameRecord(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);
     await assertFenTaggedMoveLineImport(page);
