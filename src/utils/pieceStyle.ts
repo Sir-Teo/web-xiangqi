@@ -31,6 +31,15 @@ const TRADITIONAL: Record<string, string> = {
     k: '將', a: '士', b: '象', n: '馬', r: '車', c: '砲', p: '卒',
 };
 
+/**
+ * The two generals, named rather than repeated. They are easy to swap by eye --
+ * 帥 is Red's and 將 is Black's, and the Game Over modal had them the wrong way
+ * round for long enough to ship -- so anything outside the board that needs one
+ * takes it from here, where it sits beside the set it belongs to.
+ */
+export const RED_GENERAL_GLYPH = TRADITIONAL.K;
+export const BLACK_GENERAL_GLYPH = TRADITIONAL.k;
+
 /** WXF: E for elephant and H for horse, matching `xiangqiNotation`. */
 const LETTERS: Record<string, string> = {
     K: 'K', A: 'A', B: 'E', N: 'H', R: 'R', C: 'C', P: 'P',

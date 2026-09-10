@@ -1,3 +1,4 @@
+import { BLACK_GENERAL_GLYPH, RED_GENERAL_GLYPH } from '../utils/pieceStyle';
 import { useEffect, useRef } from 'react';
 import type { GameResult } from '../hooks/useXiangqi';
 
@@ -93,7 +94,11 @@ export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverM
         aria-describedby="game-over-subtitle"
       >
         <div className="game-over-icon" style={{ background: cfg.color }} aria-hidden="true">
-          {result === 'red-wins' ? '將' : result === 'black-wins' ? '帥' : '＝'}
+          {/* The winner's own general, on the winner's colour. These were
+              swapped: "Red Wins" showed 將, which is Black's. */}
+          {result === 'red-wins'
+            ? RED_GENERAL_GLYPH
+            : result === 'black-wins' ? BLACK_GENERAL_GLYPH : '＝'}
         </div>
         <h2 className="game-over-title" id="game-over-title">{cfg.title}</h2>
         <p className="game-over-subtitle" id="game-over-subtitle">{subtitle}</p>

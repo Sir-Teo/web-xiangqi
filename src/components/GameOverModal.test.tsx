@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { GameOverModal } from './GameOverModal';
+import { BLACK_GENERAL_GLYPH, RED_GENERAL_GLYPH, pieceLabel } from '../utils/pieceStyle';
 
 const noop = vi.fn();
 
@@ -21,6 +22,29 @@ describe('GameOverModal', () => {
         expect(html).toContain('aria-modal="true"');
         expect(html).toContain('aria-labelledby="game-over-title"');
         expect(html).toContain('aria-describedby="game-over-subtitle"');
+    });
+
+    /**
+     * The disc showed the *loser's* general on the winner's colour: "Red Wins"
+     * with 將, which is Black's, on a red disc. Both glyphs are taken from
+     * `pieceStyle`'s traditional set now, so this compares against the same
+     * source the board draws from rather than against a second copy that could
+     * be swapped the same way.
+     */
+    it('shows the winner their own general', () => {
+        const red = render({ result: 'red-wins' });
+        expect(red).toContain(RED_GENERAL_GLYPH);
+        expect(red).not.toContain(BLACK_GENERAL_GLYPH);
+
+        const black = render({ result: 'black-wins' });
+        expect(black).toContain(BLACK_GENERAL_GLYPH);
+        expect(black).not.toContain(RED_GENERAL_GLYPH);
+    });
+
+    it('keeps the two generals distinct, which is the whole point of the check above', () => {
+        expect(RED_GENERAL_GLYPH).not.toBe(BLACK_GENERAL_GLYPH);
+        expect(pieceLabel('K', 'traditional')).toBe(RED_GENERAL_GLYPH);
+        expect(pieceLabel('k', 'traditional')).toBe(BLACK_GENERAL_GLYPH);
     });
 
     it('names each result', () => {
