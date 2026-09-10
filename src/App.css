@@ -4126,10 +4126,21 @@ summary:active {
    scaled up the status row keeps its intrinsic width and moves to its own line
    instead of the eval chip being sliced in half by the overflow below. */
 .mobile-board-header {
+  /* The one number behind every tap target in this header: the row below
+     pads by it, the buttons bleed by it, and this rule lets it through. */
+  --tap-bleed: 4px;
   min-height: 40px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; align-content: center;
-  padding: 0 10px; column-gap: 8px; row-gap: 3px; overflow: hidden;
+  padding: 0 10px; column-gap: 8px; row-gap: 3px;
+  /* `clip` rather than `hidden`, with a margin the width of the tap bleed.
+     The clip is still wanted -- a long opening name must not spill onto the
+     board -- but `hidden` cut the bleed off at the header's edge, which is
+     where the buttons sit, so the hit areas below ended up 44x36 instead of
+     the 44x44 they are written to be. A browser without
+     `overflow-clip-margin` clips at the padding edge, which is today. */
+  overflow: clip;
+  overflow-clip-margin: var(--tap-bleed);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -4188,6 +4199,14 @@ summary:active {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  /* `overflow-x: auto` computes overflow-y to `auto` as well -- one axis
+     cannot scroll while the other overflows visibly -- so this box clipped
+     the vertical half of every hit area below and the buttons answered to
+     44x36. Overflow is clipped at the *padding* box, so padding by the bleed
+     moves the clip edge out to where the bleed ends; the negative margin
+     hands the space back, and the header is the height it always was. */
+  padding-block: var(--tap-bleed);
+  margin-block: calc(-1 * var(--tap-bleed));
 }
 
 .mobile-board-actions::-webkit-scrollbar {
@@ -4216,7 +4235,6 @@ summary:active {
 }
 
 .mobile-action-btn {
-  --tap-bleed: 4px;
   /* The bleed below is absolutely positioned, so the button must be its
      containing block — otherwise it anchors to a positioned ancestor and the
      last button in the row blankets the ones before it. */
@@ -4624,6 +4642,9 @@ summary:active {
   }
 
   .mobile-board-header {
+    /* 28px of button and a 2px gap tile at a 1px bleed, and a landscape phone
+       has no spare height to give one anyway. */
+    --tap-bleed: 1px;
     min-height: 34px;
     padding: 0 8px;
     gap: 6px;
@@ -4652,7 +4673,6 @@ summary:active {
   }
 
   .mobile-action-btn {
-    --tap-bleed: 1px;
     width: 28px;
     height: 28px;
   }
@@ -4681,12 +4701,16 @@ summary:active {
    single painted pixel -- the engine's evaluation, invisible. Borrow just the
    compact button sizing (not the landscape re-stacking) so the row fits. */
 @media (max-width: 360px) {
+  .mobile-board-header {
+    /* Same tiling as landscape: 28px buttons, a 2px gap, a 1px bleed. */
+    --tap-bleed: 1px;
+  }
+
   .mobile-board-actions {
     gap: 2px;
   }
 
   .mobile-action-btn {
-    --tap-bleed: 1px;
     width: 28px;
     height: 28px;
   }

@@ -9270,6 +9270,74 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 }
 
 /**
+ * The board actions answer to a thumb, not to their own chrome.
+ *
+ * They are drawn 36px so five of them read right in a 40px header, and each
+ * carries a `::after` bleeding the hit area out to 44x44. The bleed was being
+ * clipped away vertically: the row is `overflow-x: auto`, which computes
+ * overflow-y to `auto` as well, and the header above it was `overflow: hidden`
+ * -- so the buttons answered to 44x36, four pixels short on the axis a thumb
+ * on a top bar misses on.
+ *
+ * Gated by clicking three pixels *above* the painted button and asking whether
+ * the button fired. The point is asserted to be outside the button's own box
+ * first, so a pass cannot come from having hit the chrome; and the chrome is
+ * asserted to still be 36px, so the bleed cannot be "fixed" by growing the
+ * button and taking the header's height with it. Loaded with no moves, which
+ * is the header at its shortest and the tightest the clip gets.
+ */
+async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 375, height: 812 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 2,
+  });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(600);
+
+    const box = await page.evaluate(() => {
+      const el = [...document.querySelectorAll(".mobile-board-actions .mobile-action-btn")]
+        .find((candidate) => /settings/i.test(candidate.getAttribute("aria-label") || ""));
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    if (!box) {
+      throw new Error("The phone header has no settings button to tap.");
+    }
+    if (Math.round(box.height) !== 36 || Math.round(box.width) !== 36) {
+      throw new Error(
+        `The board action chrome is meant to stay 36x36 and bleed its hit area; found ${JSON.stringify(box)}.`
+      );
+    }
+
+    const point = { x: Math.round(box.x + box.width / 2), y: Math.round(box.y) - 3 };
+    if (point.y >= box.y) {
+      throw new Error(`The tap point ${JSON.stringify(point)} is inside the button, so it proves nothing.`);
+    }
+
+    await page.mouse.click(point.x, point.y);
+    await page.waitForTimeout(500);
+    const opened = await page.evaluate(() => Boolean(document.querySelector('.settings-body[role="dialog"]')));
+    if (!opened) {
+      throw new Error(
+        `A tap ${Math.round(box.y) - point.y}px above the settings button missed it: the 44x44 hit area is being clipped back to the 36px chrome. Tapped ${JSON.stringify(point)} for a button at ${JSON.stringify(box)}.`
+      );
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+/**
  * Notation is the setting a bilingual audience changes most, and it lived only
  * in the settings dialog. Three commands rather than one that cycles, so
  * Chinese does not have to be reached through WXF, and so each is findable by
@@ -12042,6 +12110,7 @@ async function main() {
     await assertSoundCanBeMutedFromThePalette(page);
     await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
+    await assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
