@@ -7017,23 +7017,29 @@ async function assertReviewBestMoveBranchAction(page) {
   }
 
   await page.getByTestId("review-practice-0").click();
+  // Was the `.board-stage-kicker`, which reads "Play board" inside a container
+  // the stylesheet hides at every width -- so this waited on text the reader
+  // could never see, and would have gone on passing if the board stage rendered
+  // nothing at all. The workspace pill carries the same state, visibly.
   await page.waitForFunction(
-    () => document.querySelector(".board-stage-kicker")?.textContent?.trim() === "Play board",
+    () => [...document.querySelectorAll(".top-mode-pills button")]
+      .find((button) => button.textContent?.trim() === "Play")?.getAttribute("aria-pressed") === "true",
     null,
     { timeout: 5000 },
   );
   const practiceState = await page.evaluate(() => ({
     workspace: [...document.querySelectorAll(".top-mode-pills button")]
       .find((button) => button.textContent?.trim() === "Play")?.getAttribute("aria-pressed") || "",
-    stage: document.querySelector(".board-stage-kicker")?.textContent?.trim() || "",
-    mode: document.querySelector(".board-stage-copy h1")?.textContent?.trim() || "",
+    stage: [...document.querySelectorAll(".top-mode-pills button")]
+      .find((button) => button.textContent?.trim() === "Analysis")?.getAttribute("aria-pressed") || "",
+    mode: document.querySelector(".game-mode-badge")?.textContent?.trim() || "",
     plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || "",
     reviewVisible: Boolean(document.querySelector(".review-panel")),
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
     practiceState.workspace !== "true" ||
-    practiceState.stage !== "Play board" ||
+    practiceState.stage !== "false" ||
     !practiceState.mode.includes("Red") ||
     practiceState.plies !== "0 / 0" ||
     practiceState.reviewVisible ||
@@ -9316,8 +9322,11 @@ async function assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  // The bottom bar badge, not the board stage heading: that heading lives
+  // inside `.board-stage-header`, which the stylesheet hides at every width, so
+  // reading it asserts on text no reader can see.
   const modeHeading = async () =>
-    String((await page.locator(".board-stage h1, .mobile-board-center h1").first().textContent()) || "").trim();
+    String((await page.locator(".game-mode-badge").first().textContent()) || "").trim();
   if ((await modeHeading()) !== "Local board") {
     throw new Error(`Expected to start on the local board; the heading read "${await modeHeading()}".`);
   }
@@ -9355,8 +9364,8 @@ async function assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) {
   // The whole reason the menu used to stay open. If closing it lost the choice,
   // this reads "Local board" and the fix traded one bug for a worse one.
   await page.waitForFunction(() => {
-    const heading = document.querySelector(".board-stage h1, .mobile-board-center h1");
-    return heading && heading.textContent.trim() === "You play Red";
+    const badge = document.querySelector(".game-mode-badge");
+    return badge && badge.textContent.trim() === "You play Red";
   }, null, { timeout: 5000 }).catch(async () => {
     throw new Error(`The mode chosen in New Game did not survive the editor; the heading reads "${await modeHeading()}".`);
   });
