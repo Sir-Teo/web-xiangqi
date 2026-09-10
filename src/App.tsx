@@ -24,7 +24,7 @@ import {
 import { useEngine, type EngineSearchStats, type PvLine, type WdlStats } from './hooks/useEngine';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
-import { START_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
+import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove, type Side } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
@@ -44,7 +44,7 @@ import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { formatExplorerRecord } from './utils/positionExplorer';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import type { SavedGame, SavedMoveTreeNode } from './utils/gameLibrary';
+import type { SavedGame } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
@@ -54,7 +54,8 @@ import {
   readAutoSavedGame,
   writeAutoSavedGame,
 } from './utils/autoSave';
-import { decodeSavedMoveTreeParam, encodeSavedMoveTreeParam } from './utils/shareTree';
+import { decodeSavedMoveTreeParam } from './utils/shareTree';
+import { buildShareUrl, moveTreeContainsLine } from './utils/shareUrl';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -349,7 +350,6 @@ const qaForcePanelError = import.meta.env.DEV
   && new URLSearchParams(window.location.search).has('qa-panel-boundary');
 
 
-const START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
 
 function isGameMode(value: unknown): value is GameMode {
@@ -374,49 +374,6 @@ function orientationForHuman(mode: GameMode): BoardOrientation | null {
   return null;
 }
 
-type ShareUrlBuildResult = {
-  url: string;
-  treeOmitted: boolean;
-};
-
-function buildShareUrl(rootFen: string, moves: string[], mode: GameMode, moveTree?: SavedMoveTreeNode[]): ShareUrlBuildResult | null {
-  if (typeof window === 'undefined') return null;
-  const url = new URL(window.location.href);
-  url.search = '';
-  url.hash = '';
-  if (rootFen !== START_POSITION_FEN) {
-    url.searchParams.set('fen', rootFen);
-  }
-  if (moves.length > 0) {
-    url.searchParams.set('moves', moves.join(' '));
-  }
-  let treeIncluded = false;
-  if (moveTree?.length) {
-    const encodedTree = encodeSavedMoveTreeParam(moveTree);
-    if (encodedTree) {
-      url.searchParams.set('tree', encodedTree);
-      treeIncluded = true;
-    }
-  }
-  if (mode !== 'PvP') {
-    url.searchParams.set('mode', mode);
-  }
-  return {
-    url: url.toString(),
-    treeOmitted: Boolean(moveTree?.length) && !treeIncluded,
-  };
-}
-
-function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: string[]) {
-  if (moves.length === 0) return true;
-  let siblings = moveTree ?? [];
-  for (const move of moves) {
-    const child = siblings.find((node) => node.uci === move);
-    if (!child) return false;
-    siblings = child.children ?? [];
-  }
-  return true;
-}
 
 
 type ReviewPhase = 'base' | 'revisit';
@@ -3299,7 +3256,7 @@ function App() {
     const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const share = buildShareUrl(rootFen, currentLineMoves, gameMode, moveTree);
+    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree);
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
     if (!ok) {
