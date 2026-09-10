@@ -392,7 +392,16 @@ body.resizing * {
   z-index: 2;
   border-radius: 14px;
   transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
-  touch-action: none;
+  /* `none` arrived with the web-chess layout in df1a233, where a touch drag
+     needed it. This board has no touch drag -- Board.tsx says so explicitly,
+     and gives `touch-action: none` on the squares as the reason it was not
+     built -- so all the value did here was take pinch-zoom away from the one
+     part of a phone screen a reader would most want to magnify, on a page whose
+     viewport meta deliberately allows zooming. `manipulation` gives pinch-zoom
+     and the panning that has to follow it back, and still suppresses double-tap
+     zoom, which matters on a surface where tapping two squares in quick
+     succession is the primary interaction. */
+  touch-action: manipulation;
   width: min-content;
   /* Force width to match chessboard's calculated style */
   max-width: 100%;

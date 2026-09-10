@@ -8914,6 +8914,85 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
  * The settings row is checked alongside, because two controls for one
  * preference are only an improvement while they agree.
  */
+/**
+ * A phone reader must be able to pinch the board. It is the densest thing on
+ * the screen and the one part of it worth magnifying, the viewport meta
+ * deliberately permits zooming, and the board covers 30-53% of a phone
+ * viewport -- so a rule that opts it out of zooming takes the gesture away
+ * exactly where it is wanted. `.board-wrap` carried `touch-action: none`,
+ * inherited from the web-chess layout in df1a233 where a touch drag needed it;
+ * this board has no touch drag, and Board.tsx names that exact CSS value as the
+ * reason it was never built.
+ *
+ * Gated on the behaviour rather than the declaration, because the declaration
+ * is a proxy and this needed a real two-finger gesture to settle. Note the
+ * instrument: `Input.synthesizePinchGesture` zooms whatever the CSS says, so it
+ * passes identically before and after the fix and proves nothing. Raw
+ * `Input.dispatchTouchEvent` goes through hit testing and honours touch-action;
+ * measured 1 -> 5 with the fix and 1 -> 1 without it.
+ */
+async function assertAPhoneCanPinchTheBoard(browser) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 2,
+  });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(600);
+
+    const centre = await page.evaluate(() => {
+      const box = document.querySelector(".xiangqi-board").getBoundingClientRect();
+      return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+    });
+    const cdp = await context.newCDPSession(page);
+    const scale = () => page.evaluate(() => window.visualViewport.scale);
+    const before = await scale();
+
+    const touch = (type, spread) => cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: type === "touchEnd" ? [] : [
+        { x: centre.x - spread, y: centre.y, id: 1 },
+        { x: centre.x + spread, y: centre.y, id: 2 },
+      ],
+    });
+    await touch("touchStart", 30);
+    for (let spread = 40; spread <= 120; spread += 10) {
+      await touch("touchMove", spread);
+      await page.waitForTimeout(30);
+    }
+    await touch("touchEnd", 120);
+    await page.waitForTimeout(700);
+
+    const after = await scale();
+    if (!(after > before + 0.2)) {
+      const declared = await page.evaluate(() => {
+        const hit = document.querySelector(".hitbox");
+        const restricting = [];
+        let el = hit;
+        while (el && el !== document.documentElement) {
+          const value = getComputedStyle(el).touchAction;
+          if (value !== "auto") restricting.push(`${el.tagName.toLowerCase()}.${String(el.className || "").split(/\s+/)[0]}=${value}`);
+          el = el.parentElement;
+        }
+        return restricting;
+      });
+      throw new Error(
+        `Two fingers on the board did not zoom it: scale ${before} -> ${after}. touch-action on the way up from a square: ${JSON.stringify(declared)}`
+      );
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertSoundCanBeMutedFromThePalette(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11580,6 +11659,7 @@ async function main() {
     await assertPaletteImportsAGameRecord(page);
     await assertArrowsCanBeTurnedOffOnAPhone(page);
     await assertSoundCanBeMutedFromThePalette(page);
+    await assertAPhoneCanPinchTheBoard(browser);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);
