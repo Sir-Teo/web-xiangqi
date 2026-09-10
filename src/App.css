@@ -814,6 +814,32 @@ body.resizing * {
   color: var(--accent);
 }
 
+/* Second step, once the heading has already gone and the three labels still do
+   not fit: the icons go too. They are decoration that repeats the word beside
+   them, and dropping them frees more than the shortfall -- measured on the
+   right panel, "Review" and "Engine" are cut by 2px at a 20px root font on a
+   1024px window and by 11px at 24px, against roughly a rem freed per tab.
+   Cutting a word with no ellipsis to show for it is the worse trade.
+
+   In rem for the same reason the heading rule above is: what decides this is
+   the ratio of label size to panel width, not the panel width alone. Every
+   combination that fits sits at 16rem of panel per root em or wider, every one
+   that does not at 13.3rem or narrower, so the step goes between them. */
+@container panel-col (max-width: 15rem) {
+  .analysis-tab-btn > svg {
+    display: none;
+  }
+
+  .analysis-tab-btn {
+    /* The side padding goes with them, which is another 0.44rem a tab, and an
+       ellipsis takes over past the point where even that is not enough -- a
+       reader who has pushed their text size far enough should see that a word
+       has been shortened rather than read a confidently wrong one. */
+    padding-inline: 0.24rem;
+    text-overflow: ellipsis;
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    Move list
    ═══════════════════════════════════════════════════ */

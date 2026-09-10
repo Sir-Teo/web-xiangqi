@@ -8813,6 +8813,68 @@ async function assertMoveLineFileImport(page) {
  * clear it. The palette command is the fix, so the gate is the phone: the
  * button is gone, the command is what "arrows" finds, and it goes both ways.
  */
+/**
+ * The analysis tabs cut their own labels once a reader scales their text up:
+ * at a 24px root font on a 1024px window the right panel gave "Review" and
+ * "Engine" 47px of box for 56px of word, and the icons beside them had already
+ * been squeezed from 16px to 7px trying to make room. A container step at 15rem
+ * of panel per root em drops the icons and tightens the padding, which is what
+ * this gate pins -- from both sides, since a step that fires at the default
+ * size would be its own regression.
+ *
+ * It gates the mechanism, not the pixels. Nothing in the DOM tells the truth
+ * about clipped text here: scrollWidth reports overflow that is not painted,
+ * and a Range measured with the clip lifted re-lays the text out wider than it
+ * renders. Both were tried; the visual claim was settled by screenshot instead,
+ * and this assertion holds the rule that produced it.
+ */
+async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
+  const tabState = async (rootPx) => {
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    // Through the cascade rather than an inline style: a container query in rem
+    // is re-evaluated on a style recalculation, and a stylesheet is what
+    // reliably triggers one here.
+    await page.addStyleTag({ content: `html { font-size: ${rootPx}px; }` });
+    await page.waitForTimeout(200);
+    return page.evaluate(() => {
+      const strip = [...document.querySelectorAll(".analysis-tab-strip")].pop();
+      const tabs = [...strip.querySelectorAll(".analysis-tab-btn")];
+      const rows = new Set(tabs.map((b) => Math.round(b.getBoundingClientRect().top)));
+      return {
+        tabs: tabs.length,
+        rows: rows.size,
+        iconsShown: tabs.filter((b) => {
+          const icon = b.querySelector("svg");
+          return icon ? getComputedStyle(icon).display !== "none" : false;
+        }).length,
+        padding: [...new Set(tabs.map((b) => getComputedStyle(b).paddingLeft))],
+        rootPx: getComputedStyle(document.documentElement).fontSize,
+      };
+    });
+  };
+
+  const plain = await tabState(16);
+  if (plain.tabs < 2) throw new Error("The analysis tab strip lost its tabs.");
+  if (plain.iconsShown !== plain.tabs) {
+    throw new Error(`At the default text size every tab should keep its icon; ${plain.iconsShown} of ${plain.tabs} did.`);
+  }
+  if (plain.rows !== 1) throw new Error(`The tab strip wrapped to ${plain.rows} rows at the default text size.`);
+
+  const scaled = await tabState(24);
+  if (scaled.iconsShown !== 0) {
+    throw new Error(`At a 24px root font the tab icons should give up their space; ${scaled.iconsShown} still held it.`);
+  }
+  if (scaled.rows !== 1) throw new Error(`The tab strip wrapped to ${scaled.rows} rows at a 24px root font.`);
+  if (JSON.stringify(scaled.padding) === JSON.stringify(plain.padding)) {
+    throw new Error(`The tabs kept their full side padding (${plain.padding.join(", ")}) at a 24px root font.`);
+  }
+}
+
 async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
@@ -11155,6 +11217,7 @@ async function main() {
     await assertMoveLineFileImport(page);
     await assertPaletteImportsAGameRecord(page);
     await assertArrowsCanBeTurnedOffOnAPhone(page);
+    await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);
     await assertOversizedMoveLinePasteRejected(page);
     await assertFenTaggedMoveLineImport(page);
