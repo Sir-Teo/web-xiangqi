@@ -808,6 +808,18 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [showBoardEditor, setShowBoardEditor] = useState(false);
+  /**
+   * The mode a position built by hand should start in, decided when the editor
+   * opens rather than read off a dialog's visibility when it closes. It used to
+   * be `showNewGameMenu ? pendingGameMode : gameMode`, which made the New Game
+   * menu's *being open* the carrier of the reader's choice -- so the menu had
+   * to stay open behind the editor, and two `aria-modal` dialogs were on screen
+   * at once. A screen reader told to ignore everything outside one dialog has
+   * no answer for two, and one Tab out of the editor landed on the close button
+   * of the menu hidden behind it. Null means the editor was opened from the
+   * palette, where the current game's mode is the right answer.
+   */
+  const [editorGameMode, setEditorGameMode] = useState<GameMode | null>(null);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -3905,8 +3917,8 @@ function App() {
     // The editor only offers Done for a legal position, so this succeeds;
     // the mode is the one picked in the New Game dialog, or the current one
     // when the editor was opened from the palette.
-    handleLoadFenRef.current?.(fen, showNewGameMenu ? pendingGameMode : gameMode);
-  }, [gameMode, pendingGameMode, showNewGameMenu]);
+    handleLoadFenRef.current?.(fen, editorGameMode ?? gameMode);
+  }, [editorGameMode, gameMode]);
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
     const ok = loadFen(fen.trim());
@@ -4475,7 +4487,7 @@ function App() {
       label: 'Set up a position',
       hint: 'Place the pieces by hand',
       keywords: ['editor', 'board', 'compose', 'endgame', 'fen', 'edit'],
-      run: () => { setShowSettings(false); setShowBoardEditor(true); },
+      run: () => { setShowSettings(false); setEditorGameMode(null); setShowBoardEditor(true); },
     },
     {
       id: 'write-note',
@@ -5822,7 +5834,11 @@ function App() {
                 type="button"
                 className="new-game-file-btn"
                 style={{ marginTop: '0.5rem' }}
-                onClick={() => setShowBoardEditor(true)}
+                onClick={() => {
+                  setEditorGameMode(pendingGameMode);
+                  closeNewGameMenu();
+                  setShowBoardEditor(true);
+                }}
                 data-testid="open-board-editor-btn"
               >
                 Set up the board by hand

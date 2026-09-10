@@ -9264,6 +9264,71 @@ async function assertAnOpenDialogHoldsTheMoveShortcuts(page) {
   ), null, { timeout: 5000 });
 }
 
+/**
+ * "Set up the board by hand" is reached from inside the New Game menu, and the
+ * menu used to stay open behind the editor -- two `aria-modal` dialogs at once,
+ * which is a state a screen reader has no answer for, and one Tab out of the
+ * editor landed on the close button of the menu it could not see.
+ *
+ * The menu was open for a reason: the mode a hand-built position starts in was
+ * read as `showNewGameMenu ? pendingGameMode : gameMode`, so a dialog's
+ * visibility was carrying the reader's choice. The choice is now captured when
+ * the editor opens, which is what lets the menu close -- and which is why this
+ * gate ends by checking the choice actually survives.
+ */
+async function assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const modeHeading = async () =>
+    String((await page.locator(".board-stage h1, .mobile-board-center h1").first().textContent()) || "").trim();
+  if ((await modeHeading()) !== "Local board") {
+    throw new Error(`Expected to start on the local board; the heading read "${await modeHeading()}".`);
+  }
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /^You play Red\./ }).click();
+  await page.getByTestId("open-board-editor-btn").click();
+  await page.waitForSelector("[data-testid=\"board-editor\"]", { timeout: 5000 });
+
+  const modals = await page.$$eval('[aria-modal="true"]', (nodes) =>
+    nodes.map((node) => node.getAttribute("aria-label") || node.className)
+  );
+  if (modals.length !== 1 || modals[0] !== "Set up a position") {
+    throw new Error(`The editor should be the only modal on screen; found ${JSON.stringify(modals)}.`);
+  }
+
+  // One Tab is all it took to fall out of the editor into the menu behind it.
+  await page.keyboard.press("Tab");
+  const held = await page.evaluate(() => {
+    const editor = document.querySelector('[data-testid="board-editor"]');
+    const active = document.activeElement;
+    return {
+      inside: Boolean(editor && active && editor.contains(active)),
+      landedOn: active ? active.tagName + "." + String(active.className || "").split(/\s+/)[0] : "(none)",
+    };
+  });
+  if (!held.inside) {
+    throw new Error(`Tab left the board editor and landed on ${held.landedOn}.`);
+  }
+
+  await page.getByTestId("editor-start").click();
+  await page.getByTestId("editor-done").click();
+  await page.waitForSelector("[data-testid=\"board-editor\"]", { state: "detached", timeout: 5000 });
+
+  // The whole reason the menu used to stay open. If closing it lost the choice,
+  // this reads "Local board" and the fix traded one bug for a worse one.
+  await page.waitForFunction(() => {
+    const heading = document.querySelector(".board-stage h1, .mobile-board-center h1");
+    return heading && heading.textContent.trim() === "You play Red";
+  }, null, { timeout: 5000 }).catch(async () => {
+    throw new Error(`The mode chosen in New Game did not survive the editor; the heading reads "${await modeHeading()}".`);
+  });
+}
+
 async function assertBoardMarkersSurviveSelection(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -11369,6 +11434,7 @@ async function main() {
     await assertFenTaggedMoveLineImport(page);
     await assertDialogsBlockMoveShortcuts(page);
     await assertAnOpenDialogHoldsTheMoveShortcuts(page);
+    await assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page);
     await assertBoardMarkersSurviveSelection(page);
     await assertMobileBoardLayout(page, { width: 596, height: 668 });
     await assertMobileBoardLayout(page, { width: 390, height: 844 });
