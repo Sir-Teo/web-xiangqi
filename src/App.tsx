@@ -21,7 +21,7 @@ import {
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
   IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
-import { useEngine, type EngineSearchStats } from './hooks/useEngine';
+import { useEngine } from './hooks/useEngine';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove } from './utils/xiangqi';
@@ -75,6 +75,11 @@ import {
   normalizeEvalForSide,
   normalizeWdlForSide,
 } from './utils/engineScore';
+import {
+  formatEngineDepthLabel,
+  formatEngineTelemetry,
+  formatEngineTelemetryDetail,
+} from './utils/engineTelemetry';
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -486,95 +491,6 @@ function logDiagnosticError(message: string, ...details: unknown[]) {
 
 /** Enough to be right about the obvious and quick enough to feel like an answer. */
 const HINT_GO_CMD = 'go depth 14 movetime 900';
-
-function formatCompactCount(value: number) {
-  const normalized = Math.max(0, Math.trunc(value));
-  if (normalized >= 1_000_000) {
-    return `${(normalized / 1_000_000).toFixed(normalized >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`;
-  }
-  if (normalized >= 1_000) {
-    return `${(normalized / 1_000).toFixed(normalized >= 100_000 ? 0 : 1).replace(/\.0$/, '')}k`;
-  }
-  return `${normalized}`;
-}
-
-function formatEngineDepthLabel(
-  stats: EngineSearchStats | null,
-  fallbackDepth: number,
-  isSearchQueued: boolean,
-  isSearching: boolean,
-  isReady: boolean,
-) {
-  if (!stats) {
-    if (isSearchQueued) return 'Queued';
-    if (isSearching) return 'Pending';
-    return isReady ? 'Idle' : 'Booting';
-  }
-
-  const depth = stats.depth ?? fallbackDepth;
-  const seldepth = stats?.seldepth;
-  if (seldepth && seldepth > depth) {
-    return `D${depth}/S${seldepth}`;
-  }
-  return `D${depth}`;
-}
-
-function formatEngineTelemetry(
-  stats: EngineSearchStats | null,
-  fallbackDepth: number,
-  fallbackMoveTimeMs: number,
-  isSearchQueued: boolean,
-  isSearching: boolean,
-) {
-  if (!stats) {
-    const target = `target D${fallbackDepth}`;
-    if (isSearchQueued) return `${target} · queued`;
-    return isSearching ? `${target} · ${fallbackMoveTimeMs}ms` : target;
-  }
-
-  const parts: string[] = [];
-  if (typeof stats.nps === 'number') {
-    parts.push(`${formatCompactCount(stats.nps)} nps`);
-  } else if (typeof stats.nodes === 'number') {
-    parts.push(`${formatCompactCount(stats.nodes)} nodes`);
-  }
-  if (typeof stats.hashfull === 'number') {
-    parts.push(`hash ${Math.round(stats.hashfull / 10)}%`);
-  }
-  if (parts.length === 0 && typeof stats.timeMs === 'number') {
-    parts.push(`${stats.timeMs}ms`);
-  }
-
-  return parts.length > 0 ? parts.slice(0, 2).join(' · ') : `${fallbackMoveTimeMs}ms primary`;
-}
-
-function formatEngineTelemetryDetail(
-  stats: EngineSearchStats | null,
-  fallbackDepth: number,
-  fallbackMoveTimeMs: number,
-  isSearchQueued: boolean,
-  isSearching: boolean,
-  isReady: boolean,
-) {
-  if (!stats) {
-    return `Search ${formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)}; ${formatEngineTelemetry(stats, fallbackDepth, fallbackMoveTimeMs, isSearchQueued, isSearching)}`;
-  }
-
-  const parts = [formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)];
-  if (typeof stats.nodes === 'number') {
-    parts.push(`${formatCompactCount(stats.nodes)} nodes`);
-  }
-  if (typeof stats.nps === 'number') {
-    parts.push(`${formatCompactCount(stats.nps)} nps`);
-  }
-  if (typeof stats.hashfull === 'number') {
-    parts.push(`hash ${Math.round(stats.hashfull / 10)}%`);
-  }
-  if (typeof stats.timeMs === 'number') {
-    parts.push(`${stats.timeMs}ms`);
-  }
-  return `Search ${parts.join(' · ')}`;
-}
 
 function getQualityArrowColor(quality: ReviewMoveQuality) {
   switch (quality) {
