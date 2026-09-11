@@ -1,0 +1,231 @@
+import { describe, expect, it } from 'vitest';
+import { planMoveLineImport, type MoveLineImportValidators } from './moveLineImportPlan';
+import { MAX_MOVE_IMPORT_UCI_MOVES } from './moveImport';
+import { DHTMLXQ_START_BINIT } from './dhtmlxq';
+
+/**
+ * The planner decides what a paste *is* and what to say about it. Whether a
+ * move is legal is the board's job, so the validators are handed in — stubbed
+ * here so a phrasing test cannot fail because the rules changed, with two
+ * cases using rejections shaped like the real ones.
+ */
+const accepts: MoveLineImportValidators = {
+    validateMoveSequence: () => ({ ok: true }),
+    validateMoveTree: () => ({ ok: true }),
+};
+const rejectsAt = (failedIndex: number, move: string, reason: string): MoveLineImportValidators => ({
+    validateMoveSequence: () => ({ ok: false, failedIndex, move, reason }),
+    validateMoveTree: () => ({ ok: true }),
+});
+
+const plan = (text: string, fen = '', validators = accepts) => planMoveLineImport(text, fen, validators);
+
+describe('planning an import', () => {
+    it('reads plain coordinates', () => {
+        const result = plan('h2e2 h9g7 b0c2');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.moves).toEqual(['h2e2', 'h9g7', 'b0c2']);
+        expect(result.importedFromNotation).toBe(false);
+        expect(result.hasVariations).toBe(false);
+    });
+
+    it('reads a record written in WXF', () => {
+        const result = plan('1. C2=5 H8+7 2. H2+3');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.importedFromNotation).toBe(true);
+        expect(result.moves[0]).toBe('h2e2');
+    });
+
+    it('reads a record written in Chinese', () => {
+        const result = plan('1. 炮二平五 马8进7');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.importedFromNotation).toBe(true);
+        expect(result.moves[0]).toBe('h2e2');
+    });
+
+    it('still reads a PGN as a PGN when it happens to carry a Chinese comment', () => {
+        // The notation reader runs only when no coordinates were found. If it
+        // ran anyway it would re-read the comment and import a different game.
+        const result = plan('1. h2e2 {炮二平五 is the central cannon} h9g7');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.importedFromNotation).toBe(false);
+        expect(result.moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('keeps the variations a PGN carries, and reports them', () => {
+        const result = plan('1. h2e2 (1. b0c2 h9g7) h9g7 2. b0c2');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.hasVariations).toBe(true);
+        expect(result.moveTree.length).toBeGreaterThan(0);
+    });
+
+    it('never claims variations from a notation record, which has no way to write them', () => {
+        const result = plan('1. C2=5 H8+7');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.hasVariations).toBe(false);
+    });
+
+    it('takes the FEN the reader typed over the one in the record', () => {
+        const withTag = '[FEN "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"]\n1. h2e2';
+        const typed = '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
+        const result = plan(withTag, typed);
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.startFen).toBe(typed);
+    });
+});
+
+describe('what the reader is told when it will not import', () => {
+    it('refuses a paste too large to walk, and names the limit', () => {
+        const huge = 'h2e2 '.repeat(60_000);
+        const result = plan(huge);
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toContain(String(MAX_MOVE_IMPORT_UCI_MOVES));
+    });
+
+    it('refuses a line longer than the cap', () => {
+        const long = Array.from({ length: MAX_MOVE_IMPORT_UCI_MOVES + 40 }, () => 'h2e2').join(' ');
+        const result = plan(long);
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toContain('too large');
+    });
+
+    it('names the three formats it accepts when it found no moves at all', () => {
+        const result = plan('this is not a game record');
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toContain('b2e2');
+        expect(result.message).toContain('C2=5');
+        expect(result.message).toContain('炮二平五');
+    });
+
+    it('sends a reader to the FEN box, not the format docs, when the moves read but the position is wrong', () => {
+        // A handicap or set-up game reaches here every time: the notation was
+        // understood, it just names nothing legal from the opening array.
+        const result = plan('1. C2+5');
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toContain('paste its FEN first');
+        expect(result.message).not.toContain('No moves found');
+    });
+
+    it('counts the failing move from one, the way the record is numbered', () => {
+        const result = plan('h2e2 h9g7 a0a9', '', rejectsAt(2, 'a0a9', 'rook path blocked'));
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toBe('Move 3 a0a9: rook path blocked');
+    });
+
+    it('gives the reason alone when the failure names no move', () => {
+        const bad: MoveLineImportValidators = {
+            validateMoveSequence: () => ({ ok: false, failedIndex: 0, move: '', reason: 'Invalid start FEN' }),
+            validateMoveTree: () => ({ ok: true }),
+        };
+        const result = plan('h2e2', '', bad);
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toBe('Invalid start FEN');
+    });
+
+    it('says a variation is the problem when it is the variation that fails', () => {
+        const badTree: MoveLineImportValidators = {
+            validateMoveSequence: () => ({ ok: true }),
+            validateMoveTree: () => ({ ok: false, move: 'a0a9', reason: 'rook path blocked' }),
+        };
+        const result = plan('1. h2e2 (1. a0a9) h9g7', '', badTree);
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toBe('Variation a0a9: rook path blocked');
+    });
+
+    it('does not consult the tree validator when the record has no variations', () => {
+        let asked = false;
+        const watching: MoveLineImportValidators = {
+            validateMoveSequence: () => ({ ok: true }),
+            validateMoveTree: () => { asked = true; return { ok: false, reason: 'should not be asked' }; },
+        };
+        expect(plan('h2e2 h9g7', '', watching).kind).toBe('line');
+        expect(asked).toBe(false);
+    });
+});
+
+describe('a DhtmlXQ record, which is read before anything else', () => {
+    // Its digits look like coordinates to one reader and like notation to the
+    // other, so whichever ran first would claim it and import a different game.
+    const wrap = (...parts: string[]) => ['[DhtmlXQ]', ...parts, '[/DhtmlXQ]'].join('\n');
+
+    /** A set-up position: two generals and a chariot each, nothing else. */
+    const customBinit = (() => {
+        const digits = Array(32).fill('99');
+        digits[0] = '89';   // red chariot i0
+        digits[4] = '49';   // red general e0
+        digits[16] = '00';  // black chariot a9
+        digits[20] = '30';  // black general d9, off Red's file
+        return digits.join('');
+    })();
+
+    it('is a diagram when it carries a set-up position and no moves', () => {
+        const result = plan(wrap(`[DhtmlXQ_binit]${customBinit}[/DhtmlXQ_binit]`));
+        expect(result.kind).toBe('diagram');
+        if (result.kind !== 'diagram') return;
+        expect(result.startFen).toMatch(/ w - - 0 1$/);
+    });
+
+    it('is not a diagram when the position is just the opening array', () => {
+        // A block saying "standard position, no moves" carries nothing to load.
+        const result = plan(wrap(`[DhtmlXQ_binit]${DHTMLXQ_START_BINIT}[/DhtmlXQ_binit]`));
+        expect(result.kind).toBe('error');
+    });
+
+    it('carries its own notes across, numbered from the move they sit on', () => {
+        const result = plan(wrap(
+            `[DhtmlXQ_binit]${DHTMLXQ_START_BINIT}[/DhtmlXQ_binit]`,
+            '[DhtmlXQ_movelist]7747[/DhtmlXQ_movelist]',
+            '[DhtmlXQ_comment1]The central cannon.[/DhtmlXQ_comment1]',
+        ));
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.dhtmlComments).toEqual([[1, 'The central cannon.']]);
+        expect(result.importedFromNotation).toBe(false);
+    });
+
+    it('leaves the notes empty for every other kind of record', () => {
+        const result = plan('h2e2 h9g7');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.dhtmlComments).toEqual([]);
+    });
+});
+
+describe('a paste holding more than one game', () => {
+    it('says so, so the caller can offer the collection importer', () => {
+        const two = '[Event "A"]\n1. h2e2 h9g7 *\n\n[Event "B"]\n1. b0c2 b9c7 *\n';
+        const result = plan(two);
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.hadMoreGames).toBe(true);
+        expect(result.moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('says nothing of the sort for a single game', () => {
+        const result = plan('[Event "A"]\n1. h2e2 h9g7 *\n');
+        expect(result.kind).toBe('line');
+        if (result.kind !== 'line') return;
+        expect(result.hadMoreGames).toBe(false);
+    });
+});
+
+describe('the plan touches nothing', () => {
+    it('is decided from the text alone, so the same paste plans the same way twice', () => {
+        const text = '1. h2e2 h9g7 2. b0c2 b9c7';
+        expect(JSON.stringify(plan(text))).toBe(JSON.stringify(plan(text)));
+    });
+});

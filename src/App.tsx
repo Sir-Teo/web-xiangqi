@@ -92,7 +92,6 @@ import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComme
 import { describeMoveNumber } from './utils/moveNumbering';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
-import { parseDhtmlXqRecord } from './utils/dhtmlxq';
 import { isXqfFile, parseXqf, type XqfRecord } from './utils/xqf';
 import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
@@ -110,7 +109,6 @@ import {
   formatLineTokensInStyle,
   formatMoveInStyle,
   formatRecordInStyle,
-  parseNotationRecord,
   type XiangqiNotationStyle,
 } from './utils/xiangqiNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
@@ -129,6 +127,7 @@ import {
   type StoredPreferences,
 } from './utils/preferences';
 import { buildBoardArrows, type BoardArrow, type BoardSquare } from './utils/boardArrows';
+import { planMoveLineImport } from './utils/moveLineImportPlan';
 import {
   describeRepetition,
   formatRepetitionHeadline,
@@ -152,12 +151,9 @@ import { CommandPaletteModal } from './components/CommandPaletteModal';
 import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
 import {
-  extractFenTag,
   extractAnnotatedMainLine,
   extractUciMoveLine,
   hasTooManyUciMoves,
-  extractUciMoveTree,
-  stripRecordMetadata,
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
   MAX_MOVE_IMPORT_UCI_MOVES,
@@ -3699,92 +3695,19 @@ function App() {
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
-    if (isMoveImportTextTooLarge(text)) {
-      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+    // Reading the record and deciding what it is happens in one place, with no
+    // state touched until the decision is made: see `planMoveLineImport` for
+    // why the parsers are tried in the order they are.
+    const plan = planMoveLineImport(text, fenInput, { validateMoveSequence, validateMoveTree });
+    if (plan.kind === 'error') {
+      setMoveLineError(plan.message);
       return;
     }
-
-    // A DhtmlXQ record -- the block every dpxq.com game page carries, and
-    // the paste a Chinese player most often has -- holds no coordinates the
-    // UCI extractor knows and no notation the reader knows. Read first, so
-    // its digits are not mistaken for either.
-    const dhtml = parseDhtmlXqRecord(text);
-    if (dhtml && dhtml.moves.length === 0 && dhtml.startFen) {
-      // A diagram: a position and nothing played from it.
-      handleLoadFen(dhtml.startFen, nextGameMode);
+    if (plan.kind === 'diagram') {
+      handleLoadFen(plan.startFen, nextGameMode);
       return;
     }
-    const importedLine = dhtml
-      ? { moves: dhtml.moves, moveTree: [], hasVariations: false, tooLarge: false, hadMoreGames: false }
-      : extractUciMoveTree(text);
-    const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(text) || undefined;
-    let moves = importedLine.moves;
-    /**
-     * A record written in WXF or Chinese carries no coordinates at all, so the
-     * UCI extractor finds nothing in it. Fall back to reading the notation --
-     * only when there were no coordinates, so a PGN that happens to contain a
-     * Chinese comment is still read as a PGN.
-     *
-     * Variations are not followed on this path: the parenthetical form is a
-     * PGN convention and a notation record does not use it, so this imports the
-     * line and says so rather than guessing at a tree.
-     */
-    let importedFromNotation = false;
-    /**
-     * Tokens the notation reader understood as moves and could not place.
-     *
-     * Kept because the reader skips them and carries on, so a record it can
-     * only half-follow imports as the part it managed -- which looks exactly
-     * like a complete import. Saying so is the same call the first-game notice
-     * makes below.
-     */
-    let notationRejected: string[] = [];
-    if (moves.length === 0 && !dhtml) {
-      const parsed = parseNotationRecord(startFen, stripRecordMetadata(text), MAX_MOVE_IMPORT_UCI_MOVES);
-      notationRejected = parsed.rejected;
-      if (parsed.moves.length > 0) {
-        moves = parsed.moves;
-        importedFromNotation = true;
-      }
-    }
-
-    if (importedLine.tooLarge || moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
-      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
-      return;
-    }
-    if (moves.length === 0) {
-      // Telling someone the format is wrong when it was read fine and the
-      // *position* is wrong sends them to fix the thing that already works.
-      // A record for a handicap or a set-up game reaches here every time.
-      setMoveLineError(
-        notationRejected.length > 0
-          ? `Read ${notationRejected[0]} as a move, but it names no legal move in the starting position. If this record does not start from the opening, paste its FEN first.`
-          : 'No moves found. Paste coordinates (b2e2 h9g7), WXF (C2=5 H8+7) or Chinese (炮二平五 马8进7).'
-      );
-      return;
-    }
-
-    const validation = validateMoveSequence(moves, startFen);
-    if (!validation.ok) {
-      setMoveLineError(
-        validation.move
-          ? `Move ${validation.failedIndex + 1} ${validation.move}: ${validation.reason}`
-          : validation.reason
-      );
-      return;
-    }
-    const hasVariations = importedLine.hasVariations && !importedFromNotation;
-    if (hasVariations) {
-      const treeValidation = validateMoveTree(importedLine.moveTree, startFen);
-      if (!treeValidation.ok) {
-        setMoveLineError(
-          treeValidation.move
-            ? `Variation ${treeValidation.move}: ${treeValidation.reason}`
-            : treeValidation.reason
-        );
-        return;
-      }
-    }
+    const { moves, startFen, hasVariations, importedFromNotation, notationRejected } = plan;
 
     stopAnalysis();
     handleCancelReview();
@@ -3797,7 +3720,7 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
     const loadedNodeIds = hasVariations
-      ? loadMoveTree(importedLine.moveTree, moves, startFen)
+      ? loadMoveTree(plan.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
     setGameMetadata(extractPgnMetadata(text));
     if (notationRejected.length > 0) {
@@ -3807,7 +3730,7 @@ function App() {
         `Stopped at ${notationRejected[0]}`,
         `Imported ${moves.length} ${moves.length === 1 ? 'move' : 'moves'}. The record then reads ${notationRejected[0]}, which names no legal move in the position it had reached, so the rest was not imported.`
       );
-    } else if (importedLine.hadMoreGames) {
+    } else if (plan.hadMoreGames) {
       showImportNotice(
         'Imported first game',
         'Imported the first game only. To save several games, open Library → Import PGN collection.'
@@ -3827,10 +3750,8 @@ function App() {
      * A notation record has no coordinates and takes the other import path, so
      * there is nothing to align to; skipped there.
      */
-    if (dhtml) {
-      // The record's own notes, numbered by move from one; zero is about the
-      // position before the game and has no move to sit on.
-      const comments = Array.from(dhtml.comments.entries())
+    if (plan.dhtmlComments.length > 0) {
+      const comments = plan.dhtmlComments
         .map(([moveNumber, comment]) => {
           const nodeId = loadedNodeIds[moveNumber - 1];
           return moveNumber >= 1 && nodeId ? { nodeId, comment } : null;
