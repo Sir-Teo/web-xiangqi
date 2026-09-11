@@ -96,9 +96,9 @@ import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
 import { BoardEditor } from './components/Board/BoardEditor';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
-import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
+import { formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComment';
-import { describeMoveNumber } from './utils/moveNumbering';
+import { formatBreadcrumbLabel } from './utils/moveBreadcrumb';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { isXqfFile, parseXqf, type XqfRecord } from './utils/xqf';
@@ -117,7 +117,6 @@ import {
   formatLineInStyle,
   formatLineTokensInStyle,
   formatMoveInStyle,
-  formatRecordInStyle,
   type XiangqiNotationStyle,
 } from './utils/xiangqiNotation';
 import { getMovePhaseForRecord, plyOffsetFromRootFen } from './utils/gamePhase';
@@ -431,30 +430,7 @@ function nodeLabel(
   notationStyle: XiangqiNotationStyle,
   rootFen: string
 ) {
-  if (nodeId === rootNodeId) return 'Start';
-  const record = treeNodes[nodeId]?.record;
-  if (!record) return 'Node';
-  // The breadcrumb sits directly above the move list on a phone. Writing the
-  // same move two ways six pixels apart -- "俥 E1→F1" over "R5=4" -- reads as
-  // two different moves.
-  //
-  // The number had the same problem and it was not fixed with the notation.
-  // This read `${record.ply}.`, which is a ply index punctuated as a move
-  // number: on a 40-ply game the last chip said "39. C8-6" while the move list
-  // immediately below it called that same move "20. C8-6". `describeMoveNumber`
-  // is the move list's own rule, so the two now agree by construction. The
-  // chip's `aria-label` still says "Ply 39", which is the honest reading of a
-  // strip carrying one chip per ply.
-  const { label } = describeMoveNumber(rootFen, record.ply);
-  if (notationStyle !== 'uci') return `${label} ${formatRecordInStyle(record, notationStyle)}`;
-  return `${label} ${formatMoveRecordLabel(record)}`;
-}
-
-function nodeTitle(nodeId: string, rootNodeId: string, treeNodes: ReturnType<typeof useXiangqi>['treeNodes']) {
-  if (nodeId === rootNodeId) return 'Start position';
-  const record = treeNodes[nodeId]?.record;
-  if (!record) return 'Move node';
-  return `Ply ${record.ply}: ${formatMoveRecordTitle(record)}`;
+  return formatBreadcrumbLabel(treeNodes[nodeId]?.record, rootFen, notationStyle, nodeId === rootNodeId);
 }
 
 // detectCoarsePointer, detectDeviceScreen and detectSimdSupport now live in
@@ -1388,11 +1364,6 @@ function App() {
     return [rootNodeId, ...path];
   }, [currentNodeId, rootNodeId, treeNodes]);
 
-  // Labels depend on the study and notation, not on where the cursor stands.
-  const breadcrumbLabels = useMemo(() => new Map(Object.keys(treeNodes).map(nodeId => [nodeId, {
-    label: nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle, rootFen),
-    title: nodeTitle(nodeId, rootNodeId, treeNodes),
-  }])), [treeNodes, rootNodeId, notationStyle, rootFen]);
 
   useEffect(() => {
     const container = treeBreadcrumbRef.current;
@@ -6769,13 +6740,19 @@ function App() {
                     aria-label="Current line, one chip per move"
                     aria-orientation="horizontal"
                     aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+                    onClick={event => {
+                      const chip = event.target instanceof Element
+                        ? event.target.closest<HTMLButtonElement>('.tree-breadcrumb-chip') : null;
+                      const nodeId = chip?.dataset.breadcrumbNodeId;
+                      if (chip && nodeId && event.currentTarget.contains(chip)) jumpToNode(nodeId);
+                    }}
                   >
                     {breadcrumbNodeIds.map((nodeId, index) => {
-                      const { label, title } = breadcrumbLabels.get(nodeId) ?? { label: 'Node', title: 'Move node' };
                       return <BreadcrumbChip key={nodeId} nodeId={nodeId} index={index}
-                        label={label} title={title} isCurrent={nodeId === currentNodeId}
+                        record={treeNodes[nodeId]?.record} rootFen={rootFen} notationStyle={notationStyle}
+                        isRoot={nodeId === rootNodeId} isCurrent={nodeId === currentNodeId}
                         isTabStop={index === breadcrumbTabStopIndex} hasNext={index < breadcrumbNodeIds.length - 1}
-                        onNavigate={jumpToNode} onFocusIndex={setRovingBreadcrumbIndex}
+                        onFocusIndex={setRovingBreadcrumbIndex}
                         onKeyDown={handleBreadcrumbKeyDown} />;
                     })}
                   </div>

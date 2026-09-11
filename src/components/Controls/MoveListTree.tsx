@@ -58,7 +58,11 @@ export const MoveListTree = memo(function MoveListTree({
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const pendingVariationFocus = useRef<{ nodeId: string; element: Element } | null>(null);
 
-    const handleNavigateNode = useCallback((nodeId: string) => {
+    const handleNavigateClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        const chip = event.target instanceof Element
+            ? event.target.closest<HTMLButtonElement>('.mtree-chip') : null;
+        const nodeId = chip?.dataset.nodeId;
+        if (!chip || !nodeId || !event.currentTarget.contains(chip)) return;
         const focused = document.activeElement;
         // Opening a side line reparents its chips into main-line rows. Remember
         // focus only when activation came from the variation being replaced.
@@ -223,7 +227,7 @@ export const MoveListTree = memo(function MoveListTree({
         }
         return <MoveChip key={nodeId} nodeId={nodeId} record={record} quality={quality}
             compact={compact} isCurrent={currentNodeId === nodeId} isTabStop={nodeId === stopNodeId}
-            notationStyle={notationStyle} onNavigateNode={handleNavigateNode}
+            notationStyle={notationStyle}
             onRovingFocus={setRovingNodeId} onKeyDown={handleChipKeyDown} />;
     };
 
@@ -310,6 +314,7 @@ export const MoveListTree = memo(function MoveListTree({
     return (
         <div
             className="mtree-scroll"
+            onClick={handleNavigateClick}
             ref={scrollRef}
             role="group"
             aria-label="Move list, one tab stop; the arrow keys move between moves"
@@ -347,7 +352,6 @@ type MoveChipProps = {
     isCurrent: boolean;
     isTabStop: boolean;
     notationStyle: XiangqiNotationStyle;
-    onNavigateNode: (nodeId: string) => void;
     onRovingFocus: (nodeId: string) => void;
     onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>;
 };
@@ -355,7 +359,7 @@ type MoveChipProps = {
 // Records are immutable. Cursor and focus changes only need to redraw the
 // affected chips, not rebuild every notation label and annotation in the study.
 const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCurrent,
-    isTabStop, notationStyle, onNavigateNode, onRovingFocus, onKeyDown }: MoveChipProps) {
+    isTabStop, notationStyle, onRovingFocus, onKeyDown }: MoveChipProps) {
     const qualityClass = getMoveQualityClassName(quality);
     // Coach hint: engine's best alternative (stored on this node from review)
     const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
@@ -379,7 +383,6 @@ const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCu
                     compact ? 'mtree-chip-compact' : '',
                     isCurrent ? 'mtree-chip-active' : '',
                 ].filter(Boolean).join(' ')}
-                onClick={() => onNavigateNode(nodeId)}
                 onFocus={() => onRovingFocus(nodeId)}
                 onKeyDown={onKeyDown}
                 tabIndex={isTabStop ? 0 : -1}

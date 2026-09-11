@@ -182,3 +182,15 @@ the selected continuation when restoring an off-line deletion at the root.
 The final saved-library tree must contain every retained annotation and move.
 Pair with `test-study-undo-browser.cjs` for ordinary restoration, touch targets,
 and isolation after loading another study or starting a new game.
+
+## Completed analysis and memoized move entries
+
+`test-analysis-move-render-browser.cjs` holds a controlled engine search until
+the 1,024-ply move list is visible, then completes one position evaluation. A
+React commit probe requires only the changed move/breadcrumb entries to render
+and verifies unchanged breadcrumb text. It also checks limited redraws after a
+note edit, navigation through nested notation/separator spans, keyboard return
+to the root, and horizontal fit at 1440/390/320px. The initial production baseline
+rendered 2,049 entries; the changed implementation renders two in Chromium.
+Pair with the existing move-render and variation-focus regressions to cover
+notation changes, fresh imports, inferred grades, and keyboard focus transfer.
