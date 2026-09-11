@@ -639,11 +639,13 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         createEnginePromise
             .then((engineInstance: any) => {
-                clearEngineBootTimer();
                 if (initToken !== initTokenRef.current) {
                     terminateEngineInstance(engineInstance);
                     return;
                 }
+                // A late constructor belongs to the abandoned attempt; it
+                // must not clear the replacement attempt's shared watchdog.
+                clearEngineBootTimer();
 
                 engineRef.current = engineInstance;
                 setVariant(String(engineInstance?.variant || options.variant || 'auto'));
