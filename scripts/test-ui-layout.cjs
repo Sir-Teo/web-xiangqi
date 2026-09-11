@@ -10797,6 +10797,97 @@ async function assertTheSavedLibraryIsOneTabStop(page) {
  * and the run asserts red's order as well, so the check carries its own proof
  * that the two sorts are distinguishable on this data.
  */
+/**
+ * A finished review says when the board has left the line it covers.
+ *
+ * The figures stay on screen once a reader steps into a variation, and that is
+ * deliberate -- `reviewedHistory` keeps reading the reviewed line's records so
+ * the key moments and phase accuracy still describe the game that was
+ * reviewed, which is what a reader jumping between moments needs. But the
+ * panel said nothing about it, so "Accuracy 94%" sat above a line the review
+ * had never seen. The app already knew: `reviewMatchesActiveLine` was computed
+ * and used for saving, and never reached the UI.
+ *
+ * Both directions in one run. A notice that is always on would pass the first
+ * half of this on its own.
+ */
+async function assertAReviewSaysWhenTheBoardHasLeftItsLine(page) {
+  await page.setViewportSize({ width: 1440, height: 950 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.evaluate(() => {
+    const moves = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9"];
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "qa-offline-review",
+      savedAt: 1710000009000,
+      gameMode: "PvP",
+      moves,
+      result: "ongoing",
+      label: "Off-line review QA",
+      review: {
+        summary: {
+          totalMoves: 6, accuracy: 94, averageCentipawnLoss: 20, redAccuracy: 97, blackAccuracy: 91,
+          bestCount: 5, goodCount: 1, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+          reviewedAt: 1710000009000, lineSignature: moves.join(" "), keyMoments: [],
+        },
+        annotations: moves.map((_uci, index) => ({
+          moveIndex: index, evalScore: 10, quality: "best", swing: 0, winPercentLoss: 0,
+          reviewNote: "Engine-approved move.",
+        })),
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(800);
+  await page.locator('button[aria-label="Open game library"]').first().click();
+  await page.getByTestId("load-saved-qa-offline-review").click();
+  await page.waitForTimeout(1500);
+  await page.getByTestId("analysis-tab-review").click();
+  await page.waitForTimeout(700);
+
+  const state = async () => page.evaluate(() => ({
+    notice: Boolean(document.querySelector('[data-testid="review-off-line"]')),
+    accuracyShown: /accuracy/i.test(document.querySelector(".panel.right")?.textContent || ""),
+    plies: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
+  }));
+
+  const onLine = await state();
+  if (onLine.notice) {
+    throw new Error(`The review is on its own line and should say nothing: ${JSON.stringify(onLine)}`);
+  }
+  if (!onLine.accuracyShown) {
+    throw new Error(`The review never rendered, so the half below proves nothing: ${JSON.stringify(onLine)}`);
+  }
+
+  // Step back with the buttons, not the arrow keys: focus is on the Review tab
+  // after the click above, and a tab strip claims Left and Right to move
+  // between tabs -- which walks off this panel instead of back through the
+  // game, and then the move below extends the reviewed line rather than
+  // leaving it.
+  await page.locator('button[aria-label="Go to previous move"]').first().click();
+  await page.waitForTimeout(350);
+  await page.locator('button[aria-label="Go to previous move"]').first().click();
+  await page.waitForTimeout(500);
+  await page.locator('.hitbox[data-file="8"][data-rank="0"]').click();
+  await page.waitForTimeout(250);
+  await page.locator('.hitbox[data-file="8"][data-rank="1"]').click();
+  await page.waitForTimeout(1200);
+
+  const offLine = await state();
+  if (offLine.plies === onLine.plies) {
+    throw new Error(`The board never left the line, so this check proves nothing: ${JSON.stringify({ onLine, offLine })}`);
+  }
+  if (!offLine.notice) {
+    throw new Error(
+      `The board is on a different line and the review still claims its figures without saying so: ${JSON.stringify(offLine)}`
+    );
+  }
+  if (!offLine.accuracyShown) {
+    throw new Error(`The figures should stay -- they are the reviewed game's: ${JSON.stringify(offLine)}`);
+  }
+}
+
 async function assertLibrarySortsByBlackAccuracyAndByAge(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -12702,6 +12793,7 @@ async function main() {
     await assertLibraryRespondsToStorageChanges(page);
     await assertLibrarySavedGameSorting(page);
     await assertLibrarySortsByBlackAccuracyAndByAge(page);
+    await assertAReviewSaysWhenTheBoardHasLeftItsLine(page);
     await assertTheSavedLibraryIsOneTabStop(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertDenseEvalGraphLimitsPointMarkers(page);

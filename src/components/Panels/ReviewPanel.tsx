@@ -37,6 +37,14 @@ type Props = {
     /** The phase each move belongs to, by move index. Empty before a review. */
     phaseByMoveIndex?: Array<GamePhase | null>;
     currentNodeId: string;
+    /**
+     * Whether the board is standing on the line this review describes. False
+     * once the reader steps into a variation or plays a different move -- the
+     * figures below stay, because they are the reviewed game's and that is
+     * what a reader jumping between key moments needs, but they stop
+     * describing what is on the board and have to say so.
+     */
+    onReviewedLine?: boolean;
     canStart: boolean;
     startLabel?: string;
     startTitle?: string;
@@ -73,6 +81,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     phaseByMoveIndex = [],
     summary,
     currentNodeId,
+    onReviewedLine = true,
     canStart,
     startLabel,
     startTitle,
@@ -260,6 +269,12 @@ export const ReviewPanel = memo(function ReviewPanel({
 
             {status === 'done' && summary ? (
                 <>
+                    {onReviewedLine ? null : (
+                        <p className="review-off-line" data-testid="review-off-line">
+                            The board has left the line this review covers. Everything below is still
+                            the reviewed game's — re-run the review to score the line you are on now.
+                        </p>
+                    )}
                     <div className="review-summary-grid">
                         <div className="review-summary-card">
                             <span>Accuracy</span>

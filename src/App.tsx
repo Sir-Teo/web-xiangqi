@@ -6646,6 +6646,7 @@ function App() {
                   progress={reviewProgress}
                   progressCompleted={reviewCompletedSteps}
                   progressTotal={reviewTotalSteps}
+                  onReviewedLine={reviewMatchesActiveLine}
                   summary={reviewSummary}
                   narrativeTags={reviewNarrativeTags}
                   phaseAccuracy={reviewPhaseAccuracy}

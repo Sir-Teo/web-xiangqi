@@ -2872,6 +2872,19 @@ summary:active {
   max-width: 100%;
 }
 
+/* Said before the numbers rather than after them, and in the warning colour
+   the rest of the app uses for "this is not what you think it is". */
+.review-off-line {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .review-progress-card {
   display: grid;
   gap: 0.5rem;

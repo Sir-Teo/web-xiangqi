@@ -63,3 +63,63 @@ describe('a running review', () => {
         expect(html).not.toContain('of 241 positions');
     });
 });
+
+describe('a review of a line the board has left', () => {
+    const done = (props: Record<string, unknown>) =>
+        renderToStaticMarkup(
+            <ReviewPanel
+                status="done"
+                progress={1}
+                summary={{
+                    totalMoves: 6, accuracy: 94, averageCentipawnLoss: 20,
+                    bestCount: 5, goodCount: 1, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+                    reviewedAt: 1710000009000, lineSignature: 'h2e2 h9g7', keyMoments: [],
+                }}
+                currentNodeId="n1"
+                canStart
+                onStart={() => {}}
+                onCancel={() => {}}
+                onClear={() => {}}
+                onNavigateNode={() => {}}
+                {...props}
+            />
+        );
+
+    it('says so, because the figures no longer describe what is on the board', () => {
+        const html = done({ onReviewedLine: false });
+        expect(html).toContain('review-off-line');
+        expect(html).toContain('has left the line');
+    });
+
+    it('keeps the figures anyway -- they are the reviewed game\'s, and still wanted', () => {
+        const html = done({ onReviewedLine: false });
+        expect(html).toContain('94%');
+    });
+
+    it('says nothing when the board is on the reviewed line', () => {
+        expect(done({ onReviewedLine: true })).not.toContain('review-off-line');
+    });
+
+    it('assumes it is on the line when nobody says otherwise', () => {
+        // An omitted prop must not turn the notice on for every existing caller.
+        expect(done({})).not.toContain('review-off-line');
+    });
+
+    it('says nothing before a review has run', () => {
+        const html = renderToStaticMarkup(
+            <ReviewPanel
+                status="idle"
+                progress={0}
+                summary={null}
+                currentNodeId="n1"
+                canStart
+                onReviewedLine={false}
+                onStart={() => {}}
+                onCancel={() => {}}
+                onClear={() => {}}
+                onNavigateNode={() => {}}
+            />
+        );
+        expect(html).not.toContain('review-off-line');
+    });
+});
