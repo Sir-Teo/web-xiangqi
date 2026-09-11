@@ -13,7 +13,7 @@ try {
  });
  await page.goto(process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/');
  await page.getByTestId('left-panel-tab-library').click();
- const input=page.getByPlaceholder('Search players, openings, moves, reviews…');
+ const input=page.getByRole('searchbox', { name: 'Search library' });
  await input.fill('zz');
  await page.waitForTimeout(150);
  await page.evaluate(()=>{window.__dateCalls=0});

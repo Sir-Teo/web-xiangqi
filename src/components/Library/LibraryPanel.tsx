@@ -20,6 +20,7 @@ import { resultLabel } from '../../utils/savedGameLabels';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
+import { evaluationSearchText, savedTreeSearchText } from '../../utils/savedStudySearch';
 
 const SAVED_PAGE_SIZE = 100;
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
@@ -97,19 +98,9 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
-function collectSavedMoveTreeMoves(nodes: SavedGame['moveTree'], moves: string[] = []) {
-  if (!nodes?.length) return moves;
-  for (const node of nodes) {
-    moves.push(node.uci);
-    collectSavedMoveTreeMoves(node.children, moves);
-  }
-  return moves;
-}
-
 function getSavedGameSearchText(game: SavedGame) {
   const summary = game.review?.summary;
   const annotations = game.review?.annotations ?? [];
-  const treeMoves = collectSavedMoveTreeMoves(game.moveTree);
 
   const parts = [
     game.label,
@@ -122,9 +113,9 @@ function getSavedGameSearchText(game: SavedGame) {
     formatSavedStudyLines(game),
     game.startFen,
     game.moves.join(' '),
-    treeMoves.join(' '),
+    savedTreeSearchText(game.moveTree),
     typeof game.finalEval === 'number'
-      ? `${game.finalEval}cp final evaluation ${formatEvaluationText(game.finalEval, 2, game.finalEvalKind) ?? 'n/a'}`
+      ? `${evaluationSearchText(game.finalEval, game.finalEvalKind)} final`
       : '',
     summary ? formatLibraryReviewSummary(summary) : '',
     summary?.lineSignature,
@@ -141,7 +132,7 @@ function getSavedGameSearchText(game: SavedGame) {
       annotation.bestMove,
       annotation.quality,
       annotation.reviewNote,
-      typeof annotation.evalScore === 'number' ? `${annotation.evalScore}cp evaluation` : '',
+      evaluationSearchText(annotation.evalScore, annotation.evalScoreKind),
       typeof annotation.swing === 'number' ? `${annotation.swing}cp swing` : '',
     ]),
   ];
@@ -446,7 +437,7 @@ export function LibraryPanel({
         <input
           className="lib-search"
           type="search"
-          placeholder="Search players, openings, moves, reviews…"
+          placeholder="Search players, openings, moves, notes…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search library"
