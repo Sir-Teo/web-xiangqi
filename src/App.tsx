@@ -1184,7 +1184,6 @@ function App() {
     setOption,
     outputLines,
     pvLines,
-    wdl,
     searchStats,
     assetProgress,
   } = useEngine({
@@ -2402,15 +2401,13 @@ function App() {
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
     [liveEvalScore, sideToMove]
   );
-  // `wdl` comes straight off the engine and carries no search tag, unlike the
-  // PV lines. While a threat is showing, the running search is of a different
-  // position with the other side to move, so those numbers describe neither the
-  // position nor the side this bar is drawn for -- they would arrive inverted
-  // and labelled as the position's own. There is no win/draw/loss reading for
-  // the board while the question on screen is about a passed move.
+  // Use the same position-tagged PV as the evaluation. An old search may emit
+  // WDL after navigation has cleared the bar, and an untagged reading would
+  // assign its chances to the new side. This also keeps WDL consistent when an
+  // exact PV is retained over a later bounded score.
   const displayWdl = useMemo(
-    () => (threatActive ? null : normalizeWdlForSide(wdl, sideToMove)),
-    [sideToMove, threatActive, wdl]
+    () => (threatActive ? null : normalizeWdlForSide(topAnalysisPv?.wdl ?? null, sideToMove)),
+    [sideToMove, threatActive, topAnalysisPv]
   );
   const shouldShowWdlBar = engineEnabled && (engineDetailEnabled || displayWdl !== null);
   const currentEvalText = topAnalysisPv
