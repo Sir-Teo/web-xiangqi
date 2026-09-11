@@ -187,6 +187,7 @@ compares the three and tracks what is worth moving between them.
 - The React app unregisters legacy demo service workers and clears `pikafish-demo-*` caches at startup so older cached demo shells do not keep serving stale engine/app assets.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
 - Local Node benchmark helper: `npm run bench:nps -- --variant threaded-simd --depth 8 --repeats 3 --out /tmp/pika-before.json` (and `--compare <file>` for before/after deltas). Benchmark runs fail if they do not return a best move, usable NPS, or the requested depth; use `--min-median-nps`, `--max-median-wall-ms`, or `--max-cold-start-ms` for machine-specific performance gates.
+- Study serialization benchmark: `node scripts/bench-study-serialization.mjs` compares the current traversal with the former algorithm on 128-, 512-, and 1,024-move chains. It verifies matching output and reports medians/p95 from interleaved samples; measurements exclude rendering, JSON encoding, storage, and engine search.
 
 ## Demo defaults (performance-first)
 

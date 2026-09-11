@@ -15,10 +15,11 @@ import { normalizeMoveComment } from './moveComment';
  *
  * The tree is a `Record` of nodes referring to each other by id, not a nested
  * object, so nothing in the type stops a cycle -- and a cycle here is infinite
- * recursion during a save, which takes the tab with it. `seen` is copied per
- * branch rather than shared, so a node reachable down two different branches is
- * written under both, which is what a move that transposes should do. A single
- * shared set would silently drop the second branch's whole subtree.
+ * traversal during a save, which takes the tab with it. Track only ancestors
+ * on the current path, removing each on exit, so shared subtrees are written
+ * under every branch. A global visited set would silently lose variations.
+ * An explicit stack avoids recursive call limits and copying the entire path
+ * for every node in a long study.
  *
  * A childless node is written as `{ uci }` with no `children` key, which is
  * what the reader treats as equivalent to an empty array and what keeps a
@@ -34,22 +35,33 @@ export function serializeSavedMoveTree(
     const parent = treeNodes[parentId];
     if (!parent || seen.has(parentId)) return [];
 
-    const nextSeen = new Set(seen);
-    nextSeen.add(parentId);
-    return parent.childrenIds
-        .map((childId): SavedMoveTreeNode | null => {
-            const child = treeNodes[childId];
-            const uci = child?.record?.uci;
-            if (!child || !uci) return null;
-            const children = serializeSavedMoveTree(treeNodes, childId, nextSeen);
-            // Normalised on the way out as well as in: a comment is stored, and
-            // a store written by an older build is read by this one.
-            const comment = normalizeMoveComment(child.record?.comment);
-            return {
-                uci,
-                ...(comment ? { comment } : {}),
-                ...(children.length > 0 ? { children } : {}),
-            };
-        })
-        .filter((node): node is SavedMoveTreeNode => Boolean(node));
+    const output: SavedMoveTreeNode[] = [];
+    const ancestors = new Set(seen);
+    ancestors.add(parentId);
+    const stack: Array<{ id: string; index: number; output: SavedMoveTreeNode[]; owner?: SavedMoveTreeNode }> = [
+        { id: parentId, index: 0, output },
+    ];
+    while (stack.length) {
+        const frame = stack[stack.length - 1];
+        const childrenIds = treeNodes[frame.id].childrenIds;
+        if (frame.index === childrenIds.length) {
+            if (frame.owner && frame.output.length) frame.owner.children = frame.output;
+            ancestors.delete(frame.id);
+            stack.pop();
+            continue;
+        }
+        const childId = childrenIds[frame.index++];
+        const child = treeNodes[childId];
+        const uci = child?.record?.uci;
+        if (!uci) continue;
+        const comment = normalizeMoveComment(child.record?.comment);
+        const saved: SavedMoveTreeNode = { uci, ...(comment ? { comment } : {}) };
+        frame.output.push(saved);
+        // Retain the repeated move itself, matching the existing cycle guard,
+        // but do not follow its children a second time along this path.
+        if (ancestors.has(childId) || child.childrenIds.length === 0) continue;
+        ancestors.add(childId);
+        stack.push({ id: childId, index: 0, output: [], owner: saved });
+    }
+    return output;
 }

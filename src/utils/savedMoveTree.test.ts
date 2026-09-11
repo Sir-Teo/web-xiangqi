@@ -88,7 +88,28 @@ describe('the cycle guard', () => {
 
     it('survives a deep chain without blowing the stack', () => {
         const shape: Record<string, string[]> = { root: ['n0'] };
-        for (let i = 0; i < 900; i += 1) shape[`n${i}`] = i === 899 ? [] : [`n${i + 1}`];
-        expect(() => serializeSavedMoveTree(tree(shape), 'root')).not.toThrow();
+        const length = 10_000;
+        for (let i = 0; i < length; i += 1) shape[`n${i}`] = i === length - 1 ? [] : [`n${i + 1}`];
+        let children = serializeSavedMoveTree(tree(shape), 'root');
+        let count = 0;
+        while (children.length) {
+            expect(children.length).toBe(1);
+            expect(children[0].uci).toBe(`n${count++}`);
+            children = children[0].children ?? [];
+        }
+        expect(count).toBe(length);
+    });
+
+    it('preserves the supplied ancestry guard and normalizes notes without changing the source', () => {
+        const nodes = tree({ root: ['a', 'b'], a: ['shared'], b: ['shared'], shared: ['end'], end: [] });
+        nodes.a.record!.comment = '  中炮\n {注释} 🐎  ';
+        const seen = new Set(['shared']);
+        const before = JSON.stringify(nodes);
+        expect(serializeSavedMoveTree(nodes, 'root', seen)).toEqual([
+            { uci: 'a', comment: '中炮 注释 🐎', children: [{ uci: 'shared' }] },
+            { uci: 'b', children: [{ uci: 'shared' }] },
+        ]);
+        expect([...seen]).toEqual(['shared']);
+        expect(JSON.stringify(nodes)).toBe(before);
     });
 });
