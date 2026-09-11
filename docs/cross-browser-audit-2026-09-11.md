@@ -154,3 +154,12 @@ node IDs, WXF/Chinese labels and current-line copying, note edits, changes to a
 child's inferred quality after its parent score changes, and branch selection.
 The performance benchmark runs separately from these work-count assertions so
 CPU scheduling is not a correctness threshold.
+
+## Shortened variation keyboard entry
+
+`test-variation-focus-browser.cjs` focuses the final move of a 128-ply line and
+then creates a different first move through the board. The old line becomes an
+80-chip variation with a +48 indicator. The test requires exactly one visible
+move-list Tab stop, native keyboard entry at the current move, retained focus on
+visible variation entries, and navigation through the reopened full line at
+1440/390/320px. macOS WebKit uses Option-Tab for Safari's full control sequence.

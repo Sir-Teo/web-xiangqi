@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
     REVIEW_THRESHOLDS,
@@ -10,6 +10,7 @@ import {
     type ReviewMoveQuality,
 } from '../../utils/review';
 import { getMoveListQuality } from '../../utils/moveListQuality';
+import { isMoveListNodeVisible, MAX_VISIBLE_VARIATION_PLIES } from '../../utils/moveListVisibility';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveNumber } from '../../utils/moveNumbering';
@@ -43,8 +44,6 @@ type MoveListEntry = {
     side: MoveSide;
 };
 
-const MAX_VISIBLE_VARIATION_PLIES = 80;
-
 export const MoveListTree = memo(function MoveListTree({
     treeNodes,
     rootNodeId,
@@ -75,7 +74,10 @@ export const MoveListTree = memo(function MoveListTree({
      * so tabbing away and back returns to where the reader was.
      */
     const [rovingNodeId, setRovingNodeId] = useState<string | null>(null);
-    const stopNodeId = rovingNodeId && treeNodes[rovingNodeId]?.record
+    const rovingNodeIsVisible = useMemo(() => rovingNodeId !== null
+        && isMoveListNodeVisible(treeNodes, rootNodeId, activeLineNodeIds, rovingNodeId),
+    [treeNodes, rootNodeId, activeLineNodeIds, rovingNodeId]);
+    const stopNodeId = rovingNodeIsVisible
         ? rovingNodeId
         : treeNodes[currentNodeId]?.record
             ? currentNodeId
