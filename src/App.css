@@ -2520,6 +2520,13 @@ summary:active {
   fill: #ffffff;
 }
 
+/* An open marker keeps an unscored move reachable without depicting a score. */
+.graph-point.graph-point-unknown {
+  fill: var(--bg-base);
+  stroke: var(--text-secondary);
+  stroke-dasharray: 2 2;
+}
+
 .graph-review-marker {
   fill: transparent;
   stroke-width: 1.7;

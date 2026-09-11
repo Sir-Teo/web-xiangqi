@@ -19,6 +19,7 @@ const path = require('node:path');
       'test-library-matches-browser.cjs',
       'test-beginner-browser.cjs',
       'test-rule-lessons-browser.cjs',
+      'test-graph-gaps-browser.cjs',
       'test-weights-cache-browser.cjs',
       'test-cloud-pv-browser.cjs',
       'test-search-queue-browser.cjs',

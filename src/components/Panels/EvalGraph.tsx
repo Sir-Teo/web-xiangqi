@@ -44,7 +44,7 @@ const MIN_POINT_MARKER_GAP_PX = 7;
 
 type EvalPoint = {
     moveIndex: number;
-    eval: number;
+    eval: number | null;
     evalKind?: EvaluationScoreKind;
     ply: number;
     uci: string | null;
@@ -88,7 +88,7 @@ function extremePoint(points: EvalPoint[], direction: 1 | -1): EvalPoint | undef
     let best: EvalPoint | undefined;
     for (const point of points) {
         if (!isFiniteEval(point.eval)) continue;
-        if (!best || direction * compareEvaluationScores(point.eval, best.eval, point.evalKind, best.evalKind) > 0) best = point;
+        if (!best || best.eval === null || direction * compareEvaluationScores(point.eval, best.eval, point.evalKind, best.evalKind) > 0) best = point;
     }
     return best;
 }
@@ -116,11 +116,9 @@ export const EvalGraph = React.memo(function EvalGraph({
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const points = useMemo<EvalPoint[]>(() => {
-        let previous = 0;
-        let previousKind: EvaluationScoreKind | undefined;
         const next: EvalPoint[] = [{
             moveIndex: -1,
-            eval: 0,
+            eval: null,
             ply: 0,
             uci: null,
             notation: null,
@@ -129,12 +127,11 @@ export const EvalGraph = React.memo(function EvalGraph({
             branchCount: rootBranchCount,
         }];
         history.forEach((move, index) => {
-            if (isFiniteEval(move.evalScore)) { previous = move.evalScore; previousKind = move.evalScoreKind; }
             const before = notationStyle === 'uci' ? null : boardBeforeRecord(move);
             next.push({
                 moveIndex: index,
-                eval: previous,
-                evalKind: previousKind,
+                eval: isFiniteEval(move.evalScore) ? move.evalScore : null,
+                evalKind: move.evalScoreKind,
                 ply: index + 1,
                 uci: move.uci,
                 notation: before ? formatMoveInStyle(before, move.uci, notationStyle) : formatUciMove(move.uci),
@@ -186,7 +183,7 @@ export const EvalGraph = React.memo(function EvalGraph({
         return Math.max(-maxEvalClamp, Math.min(maxEvalClamp, evalScore));
     }, [maxEvalClamp]);
 
-    const yFor = useCallback((evalScore: number) => {
+    const yFor = useCallback((evalScore: number | null) => {
         // Math.max(-limit, Math.min(limit, NaN)) is NaN, so the clamp does not
         // strip a bad value -- it carries it into the path and takes out the
         // whole line.
@@ -203,22 +200,30 @@ export const EvalGraph = React.memo(function EvalGraph({
         [points, xFor, yFor]
     );
 
-    const linePath = useMemo(() => {
-        if (computedPoints.length === 0) return '';
-        return computedPoints.map((pt, index) => `${index === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
-    }, [computedPoints]);
-
-    const fillPath = useMemo(() => {
-        if (computedPoints.length === 0) return '';
-        const lastX = computedPoints[computedPoints.length - 1].x;
-        return `${linePath} L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${computedPoints[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
-    }, [computedPoints, linePath, baselineY]);
+    const { linePath, fillPath } = useMemo(() => {
+        const line: string[] = [], fill: string[] = [];
+        let firstX: number | null = null, lastX = 0;
+        const closeSegment = () => {
+            if (firstX !== null) fill.push(`L ${lastX.toFixed(2)} ${baselineY.toFixed(2)} L ${firstX.toFixed(2)} ${baselineY.toFixed(2)} Z`);
+            firstX = null;
+        };
+        for (const point of computedPoints) {
+            // Neither a connecting line nor shading may imply scores for the
+            // unsearched positions between two genuine readings.
+            if (point.eval === null) { closeSegment(); continue; }
+            const part = `${firstX === null ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+            firstX ??= point.x; lastX = point.x;
+            line.push(part); fill.push(part);
+        }
+        closeSegment();
+        return { linePath: line.join(' '), fillPath: fill.join(' ') };
+    }, [computedPoints, baselineY]);
 
     // points[0] is the start position, so a move index maps one slot to its right.
     const pointIndexForMove = (moveIndex: number) => Math.max(0, Math.min(points.length - 1, moveIndex + 1));
     const currentPointIndex = pointIndexForMove(currentMoveIndex);
     const currentPoint = points[currentPointIndex];
-    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? 0, currentPoint?.evalKind);
+    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? null, currentPoint?.evalKind);
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
     const pointRenderStep = pixelsPerPoint >= MIN_POINT_MARKER_GAP_PX
@@ -249,8 +254,8 @@ export const EvalGraph = React.memo(function EvalGraph({
     }, [currentPointIndex, points.length, xTickStep]);
     const highestPoint = useMemo(() => extremePoint(points, 1), [points]);
     const lowestPoint = useMemo(() => extremePoint(points, -1), [points]);
-    const highestEval = highestPoint?.eval ?? 0;
-    const lowestEval = lowestPoint?.eval ?? 0;
+    const highestEval = highestPoint?.eval ?? null;
+    const lowestEval = lowestPoint?.eval ?? null;
     const highestKind = highestPoint?.evalKind;
     const lowestKind = lowestPoint?.evalKind;
     const currentBranchCount = currentPoint?.branchCount ?? 0;
@@ -259,7 +264,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     // over the clamped extremes, so the number says what the chart shows: a
     // game that reached mate swung the full height of the plot, not three
     // hundred pawns.
-    const swing = clampToPlot(highestEval) - clampToPlot(lowestEval);
+    const swing = highestEval === null || lowestEval === null ? null : clampToPlot(highestEval) - clampToPlot(lowestEval);
     const shouldCompressBadges = pixelsPerPoint < 26;
 
     const nearestPointForEvent = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
@@ -656,7 +661,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                                 />
                                             ) : null}
                                             <circle
-                                                className={`graph-point ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
+                                                className={`graph-point ${pt.eval === null ? 'graph-point-unknown' : ''} ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
                                                 cx={pt.x}
                                                 cy={pt.y}
                                                 r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
@@ -738,7 +743,7 @@ export const EvalGraph = React.memo(function EvalGraph({
             </div>
             <div className="graph-extrema">
                 <span>Peak Red {formatEval(highestEval, highestKind)}</span>
-                <span>Peak Black {formatEval(-lowestEval, lowestKind)}</span>
+                <span>Peak Black {formatEval(lowestEval === null ? null : -lowestEval, lowestKind)}</span>
             </div>
         </div>
     );
@@ -746,12 +751,12 @@ export const EvalGraph = React.memo(function EvalGraph({
 
 EvalGraph.displayName = 'EvalGraph';
 
-function formatEval(score: number, kind?: EvaluationScoreKind): string {
-    return formatEvaluationText(score, 2, kind) ?? 'n/a';
+function formatEval(score: number | null, kind?: EvaluationScoreKind): string {
+    return score === null ? 'n/a' : formatEvaluationText(score, 2, kind) ?? 'n/a';
 }
 
-function formatRedPovEval(score: number, kind?: EvaluationScoreKind): string {
-    return `Red POV ${formatEval(score, kind)}`;
+function formatRedPovEval(score: number | null, kind?: EvaluationScoreKind): string {
+    return score === null ? 'Not evaluated' : `Red POV ${formatEval(score, kind)}`;
 }
 
 function formatPointLabel(point: EvalPoint): string {
@@ -764,7 +769,7 @@ function formatPointLabel(point: EvalPoint): string {
 function formatGraphValueText(point: EvalPoint): string {
     const parts = [
         point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
-        `Red POV evaluation ${formatEval(point.eval, point.evalKind)}`,
+        point.eval === null ? 'Not evaluated' : `Red POV evaluation ${formatEval(point.eval, point.evalKind)}`,
         point.quality ? formatReviewQuality(point.quality) : '',
         typeof point.winPercentLoss === 'number' && point.mover !== 'start'
             ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)

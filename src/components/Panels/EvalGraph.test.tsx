@@ -61,11 +61,10 @@ describe('EvalGraph and a score that is not a number', () => {
         expect(html).not.toContain('NaN');
     });
 
-    it('does not let a bad score become the value carried forward', () => {
-        // The ply with no usable score reads as the one before it, which is
-        // what the graph already does for a ply nothing has evaluated.
+    it('does not assign the previous score to an invalid reading', () => {
         const html = render({ history: withNaN, currentMoveIndex: 1, currentEval: null });
-        expect(html).toContain('+0.40');
+        expect(html).toContain('<strong>Not evaluated</strong>');
+        expect(html).toContain('ply 2, Not evaluated');
     });
 
     it('ignores a non-finite live evaluation too', () => {
@@ -86,5 +85,44 @@ describe('EvalGraph and a score that is not a number', () => {
             currentEval: null,
         });
         expect(html).not.toContain('NaN');
+    });
+});
+
+describe('unevaluated graph positions', () => {
+    it('does not call an unscored move equal or reuse the preceding evaluation', () => {
+        const html = render({ history: [move('h2e2', 1, 400), move('h9g7', 2)], currentMoveIndex: 1, currentEval: null });
+        expect(html).toContain('<strong>Not evaluated</strong>');
+        expect(html).toContain('ply 2, Not evaluated');
+        expect(html).not.toContain('ply 2, Red POV evaluation +4.00');
+    });
+    it('does not invent zero at an unknown root or include it in the extrema', () => {
+        const html = render({ history: [move('h2e2', 1, 400)], currentMoveIndex: -1, currentEval: null });
+        expect(html).toContain('Start position, Not evaluated');
+        expect(html).toContain('Peak Black -4.00');
+        expect(html).not.toContain('Red POV 0.00');
+    });
+    it('has no score peaks or graph line when every position is unknown', () => {
+        const html = render({ history: [move('h2e2', 1), move('h9g7', 2)], currentMoveIndex: 1, currentEval: null });
+        expect(html).toContain('Peak Red n/a');
+        expect(html).toContain('Peak Black n/a');
+        expect(html).toContain('class="graph-line" d=""');
+    });
+    it('breaks the drawn line and shaded area at missing scores', () => {
+        const html = render({ history: [move('h2e2', 1, 40), move('h9g7', 2), move('b0c2', 3, -50)], currentMoveIndex: 1, currentEval: null });
+        const line = html.match(/class="graph-line" d="([^"]*)"/)?.[1] ?? '';
+        expect(line.match(/M /g)).toHaveLength(2);
+        expect(line).not.toContain('L ');
+        const fill = html.match(/class="graph-area" d="([^"]*)"/)?.[1] ?? '';
+        expect(fill.match(/M /g)).toHaveLength(2);
+        expect(fill.match(/Z/g)).toHaveLength(2);
+    });
+    it('shows a real zero and allows a live score to fill the active gap only', () => {
+        const history = [move('h2e2', 1, 0), move('h9g7', 2)];
+        const zero = render({ history, currentMoveIndex: 0, currentEval: null });
+        expect(zero).toContain('<strong>Red POV 0.00</strong>');
+        const live = render({ history, currentMoveIndex: 1, currentEval: 75, isSearching: true });
+        expect(live).toContain('<strong>Red POV +0.75</strong>');
+        expect(live).toContain('Start');
+        expect(live).not.toContain('NaN');
     });
 });

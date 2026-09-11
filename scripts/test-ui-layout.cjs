@@ -5298,7 +5298,7 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
     if (
       !state.rows.includes("b0c2") ||
       !state.graphPoint.includes("Red H8+7") ||
-      state.graphEval !== "Red POV 0.00" ||
+      state.graphEval !== "Not evaluated" ||
       state.goCount < 1 ||
       state.overflowX > 2
     ) {
