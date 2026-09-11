@@ -36,6 +36,16 @@ describe('strict Xiangqi PGN collections', () => {
   it('accepts a self-delimiting result without spaces', () => {
     expect(parsePgnCollection('1.h2e2*1.b2e2*')).toHaveLength(2);
   });
+  it('keeps unclosed analysis commands as prose and removes only closed commands', () => {
+    const [game] = parsePgnCollection('h2e2 {before[%xqanalysis invalid]after [%eval 0.42] [%xqanalysis unfinished} *');
+    expect(game.moveTree?.[0].comment).toBe('beforeafter [%eval 0.42] [%xqanalysis unfinished');
+    expect(game.moveTree?.[0].analysis).toBeUndefined();
+  });
+  it('rejects a near-limit malformed analysis note without truncating it', () => {
+    const source = `h2e2 {${'[%xqanalysis '.repeat(74000)}} *`;
+    expect(source.length).toBeLessThan(MAX_COLLECTION_TEXT_LENGTH);
+    expect(() => parsePgnCollection(source)).toThrow('Game 1: A move note exceeds 500 characters.');
+  });
   it('bounds games and total moves per game without truncating', () => {
     expect(() => parsePgnCollection('1.h2e2 * '.repeat(501))).toThrow('at most 500');
     expect(() => parsePgnCollection('a0a1 a9a8 a1a0 a8a9 '.repeat(257) + '*')).toThrow('1,024 moves');

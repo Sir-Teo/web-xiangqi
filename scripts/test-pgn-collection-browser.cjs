@@ -1,12 +1,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
 const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
 (async () => {
- const browser = await chromium.launch();
+ const browser = await browserType.launch();
  try {
-  for (const width of [1440,390]) {
+  for (const width of [1440,390,320]) {
    const page = await browser.newPage({viewport:{width,height:900},acceptDownloads:true});
    const errors=[]; page.on('pageerror',error=>errors.push(error.message));
    await page.goto(base+'?moves=h2e2');
@@ -18,6 +18,11 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    const upload=text=>file.setInputFiles({name:'Tournament'.repeat(20)+'.pgn',mimeType:'application/x-chess-pgn',buffer:Buffer.from(text)});
    const raw=()=>page.evaluate(()=>localStorage.getItem('xiangqi:library:v1'));
    const before=await raw();
+   const started = Date.now();
+   await upload('h2e2 {' + '[%xqanalysis '.repeat(74000) + '} *');
+   await panel.getByRole('alert').filter({hasText:'A move note exceeds 500 characters.'}).waitFor({timeout:5000});
+   assert.equal(await raw(),before, 'Rejecting the malformed note changed saved games');
+   console.log(`${browserType.name()}: 962 KB malformed note rejected at ${width}px in ${Date.now()-started}ms (file selection through visible error)`);
    await upload(source+'\n1.h2e2 h9h8 *');
    await panel.getByRole('alert').waitFor();
    assert.match(await panel.getByRole('alert').innerText(), /Game 3: Illegal move h9h8/);
@@ -32,7 +37,7 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    assert.equal(await panel.getByRole('button',{name:'Import 0 games',exact:true}).isDisabled(),true);
    await panel.getByRole('button',{name:'Select all',exact:true}).click();
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).scrollIntoViewIfNeeded();
-   await page.screenshot({path:`/tmp/xiangqi-collection-preview-${width}.png`});
+   await page.screenshot({path:`/tmp/xiangqi-collection-preview-${browserType.name()}-${width}.png`});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    assert.equal(await panel.evaluate(el=>el.scrollWidth>el.clientWidth),false,'Long filenames must wrap inside the panel');
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
