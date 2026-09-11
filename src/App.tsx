@@ -4910,7 +4910,7 @@ function App() {
   }, [gameOverKey]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
-  const boardArrows = useMemo(() => buildBoardArrows({
+  const boardArrows = useMemo(() => !showArrows ? undefined : buildBoardArrows({
     showArrows,
     lastMove: lastMoveFrom && lastMoveTo ? { from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor } : null,
     threatMove,
@@ -6407,7 +6407,7 @@ function App() {
                   draggableSide={!gameResult && !isAiTurn ? sideToMove : null}
                   pieceStyle={pieceStyle}
                   orientation={orientation}
-                  highlights={showArrows ? userHighlights : []}
+                  highlights={showArrows ? userHighlights : undefined}
                   onToggleHighlight={showArrows ? handleToggleHighlight : undefined}
                   onAddArrow={showArrows ? handleAddUserArrow : undefined}
                   arrows={boardArrows}
