@@ -44,7 +44,7 @@ export function parseMateScoreText(scoreStr: string | undefined) {
 }
 
 export function formatMateScoreText(distance: number) {
-  return distance >= 0 ? `+M${distance}` : `-M${Math.abs(distance)}`;
+  return distance < 0 || Object.is(distance, -0) ? `-M${Math.abs(distance)}` : `+M${distance}`;
 }
 
 /**

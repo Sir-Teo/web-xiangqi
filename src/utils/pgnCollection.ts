@@ -1,3 +1,4 @@
+import { readStudyAnalysisPgn } from './studyAnalysis';
 import { normalizeSavedGame, type SavedGame, type SavedMoveTreeNode, MAX_SAVED_GAMES } from './gameLibrary';
 import { extractPgnMetadata } from './gameMetadata';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './moveComment';
@@ -63,7 +64,10 @@ function parseGame(input: Token[]): CollectionGame {
     function addComment(text: string) {
         if (!text.trim()) return;
         if (!cursor.node) throw new Error('Notes before the first move are not supported. Attach the note to a move before importing.');
-        const joined = [cursor.node.comment, text.trim()].filter(Boolean).join(' ');
+        const analysis = readStudyAnalysisPgn(text);
+        if (analysis && analysis.move === cursor.node.uci) cursor.node.analysis = analysis;
+        const prose = text.replace(/\[%xqanalysis [^\]]*\]/g, '').trim();
+        const joined = [cursor.node.comment, prose].filter(Boolean).join(' ');
         if (joined.length > MAX_MOVE_COMMENT_LENGTH) throw new Error(`A move note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
         cursor.node.comment = normalizeMoveComment(joined);
     }

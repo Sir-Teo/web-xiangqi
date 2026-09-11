@@ -132,7 +132,10 @@ async function compare(browser, width, real = false) {
       assert.deepEqual(saved.moves, ['h2e2']);
       const treeLine = node => [node.uci, ...(node.children?.length ? treeLine(node.children[0]) : [])];
       assert.deepEqual(saved.moveTree[0].children.map(treeLine), [['a9a8', 'a0a1', 'i9i8'], ['i9i8', 'i0i1', 'a9a8']]);
-      assert.equal(JSON.stringify(saved).includes('9999'), false, 'Restricted score persisted');
+      assert.notEqual(Math.abs(saved.finalEval || 0), 9999, 'Restricted score became the position evaluation');
+      assert.equal(saved.moveTree[0].children[0].evalScore, undefined, 'Snapshot became a move evaluation');
+      assert.equal(saved.moveTree[0].children[0].analysis.score, -9999);
+      assert.deepEqual(saved.moveTree[0].children[0].analysis.candidates, ['a9a8', 'i9i8']);
     }
     await page.getByTestId('deep-dive-btn').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'), null, { timeout: 60000 });

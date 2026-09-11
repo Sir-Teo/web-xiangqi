@@ -27,6 +27,7 @@ type Props = {
   onPlay: (moves: string[], count: number) => void;
   onKeep: (moves: string[]) => void;
   isKept: (moves: string[]) => boolean;
+  hasLine: (moves: string[]) => boolean;
 };
 
 export function CandidatePanel(props: Props) {
@@ -92,7 +93,7 @@ export function CandidatePanel(props: Props) {
             testId={index => `candidate-${root}-move-${index}`} />
           <div className="candidate-actions">
             <button type="button" disabled={!props.canPlay || props.isKept(pv.moves)} onClick={() => props.onKeep(pv.moves)}
-              data-testid={`keep-candidate-${root}`}>{props.isKept(pv.moves) ? 'Kept' : 'Keep line'}</button>
+              data-testid={`keep-candidate-${root}`}>{props.isKept(pv.moves) ? 'Kept' : props.hasLine(pv.moves) ? 'Update analysis' : 'Keep line'}</button>
             <button type="button" onClick={() => void copy(pv.moves)} title="Copy this continuation as UCI moves"
               data-testid={`copy-candidate-${root}`}>{copied ? copied.ok ? 'Copied' : 'Copy failed' : 'Copy line'}</button>
           </div>

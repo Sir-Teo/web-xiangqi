@@ -1,3 +1,4 @@
+import { studyAnalysisPgn, type StudyAnalysis } from './studyAnalysis';
 import { mateDistanceFromScore } from './engineEvalReading';
 import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
@@ -43,6 +44,7 @@ export interface MoveAnnotationInput {
     uci?: string;
     /** The reader's own note, which is the last thing in the comment. */
     comment?: string;
+    analysis?: StudyAnalysis;
 }
 
 /**
@@ -77,6 +79,8 @@ export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     if (nag) tokens.push(nag);
 
     const comment: string[] = [];
+    const analysis = studyAnalysisPgn(input.analysis);
+    if (analysis) comment.push(analysis);
     if (typeof input.evalScore === 'number') {
         const command = formatEvalCommand(input.evalScore);
         if (command) comment.push(command);

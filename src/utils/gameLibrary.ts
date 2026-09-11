@@ -1,3 +1,4 @@
+import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { GameMode } from '../App';
 import { parseFenBoard } from './xiangqi';
@@ -51,6 +52,7 @@ export interface SavedMoveTreeNode {
     uci: string;
     /** The reader's note on this move; see `utils/moveComment`. */
     comment?: string;
+    analysis?: StudyAnalysis;
     children?: SavedMoveTreeNode[];
 }
 
@@ -148,9 +150,11 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
     // dropped rather than failing the node, since losing a sentence is better
     // than losing the variation it sits on.
     const comment = normalizeMoveComment(raw.comment);
+    const analysis = normalizeStudyAnalysis(raw.analysis, undefined, uci);
     return {
         uci,
         ...(comment ? { comment } : {}),
+        ...(analysis ? { analysis } : {}),
         ...(normalizedChildren.length > 0 ? { children: normalizedChildren } : {}),
     };
 }

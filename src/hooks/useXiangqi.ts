@@ -1,3 +1,5 @@
+import { makeEnginePositionCommand } from '../utils/engineTags';
+import { normalizeStudyAnalysis, type StudyAnalysis } from '../utils/studyAnalysis';
 import type { GameMetadata } from '../utils/gameMetadata';
 import { describeSetupProblem } from '../utils/positionSetup';
 import { useMemo, useRef, useState, useCallback } from 'react';
@@ -48,6 +50,7 @@ export interface MoveRecord {
      * writes and overwrites on every re-run. See `utils/moveComment`.
      */
     comment?: string;
+    analysis?: StudyAnalysis;
     board: BoardState;
     sideToMove: Side;
     inCheck: boolean;
@@ -77,6 +80,7 @@ export type SerializableMoveTreeNode = {
     uci: string;
     /** The reader's note on this move, when they wrote one. */
     comment?: string;
+    analysis?: StudyAnalysis;
     children?: SerializableMoveTreeNode[];
 };
 
@@ -496,6 +500,7 @@ export function useXiangqi() {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         const tree: Record<string, MoveTreeNode> = createRootTree();
         let counter = 1;
+        const sourceRootFen = boardToFen(root.board, root.sideToMove, root.fullmove, root.halfmove);
 
         const appendChildren = (
             children: SerializableMoveTreeNode[] | undefined,
@@ -536,6 +541,8 @@ export function useXiangqi() {
                         inCheck: nextInCheck,
                         ply: plyIndex + 1,
                         ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),
+                        ...(child.analysis ? { analysis: normalizeStudyAnalysis(child.analysis,
+                            makeEnginePositionCommand(sourceRootFen, getMovesToNode(tree, parentNodeId, ROOT_NODE_ID)), uci) } : {}),
                     },
                 };
 
@@ -821,20 +828,26 @@ export function useXiangqi() {
     }, [rootPosition, syncPositionForNode, treeNodes]);
 
     /** Keep the entire line atomically, preserving the board and chosen future. */
-    const keepUciLineAtNode = useCallback((parentNodeId: string, moves: string[]): 'kept' | 'invalid' | 'full' => {
+    const keepUciLineAtNode = useCallback((parentNodeId: string, moves: string[], analysis?: StudyAnalysis): 'kept' | 'invalid' | 'full' => {
         const result = appendMoveTreeLine(treeNodes, parentNodeId, moves,
             rootPosition.board, rootPosition.sideToMove, nodeCounterRef.current);
         if (!result.played || result.played !== moves.length) return 'invalid';
         // The root is not serialized. Never claim to keep a line that storage
         // would reject on the next reload because the study is too large.
         if (Object.keys(result.tree).length - 1 > MAX_SAVED_TREE_NODES) return 'full';
+        const snapshot = normalizeStudyAnalysis(analysis,
+            makeEnginePositionCommand(rootFen, getMovesToNode(treeNodes, parentNodeId, ROOT_NODE_ID)), moves[0]);
+        if (analysis && !snapshot) return 'invalid';
+        const firstId = result.tree[parentNodeId].childrenIds.find(id => result.tree[id]?.record?.uci === moves[0])!;
+        const nextTree = snapshot && result.tree === treeNodes ? { ...result.tree } : result.tree;
+        if (snapshot) nextTree[firstId] = { ...nextTree[firstId], record: { ...nextTree[firstId].record!, analysis: snapshot } };
         nodeCounterRef.current = result.nextNodeId;
-        setTreeNodes(result.tree);
+        setTreeNodes(nextTree);
         if (parentNodeId === currentNodeId && currentMoveIndex === activeLineNodeIds.length - 1) {
             setActiveLineNodeIds([...activeLineNodeIds, ...preferredContinuation(result.tree, currentNodeId)]);
         }
         return 'kept';
-    }, [activeLineNodeIds, currentMoveIndex, currentNodeId, rootPosition, treeNodes]);
+    }, [activeLineNodeIds, currentMoveIndex, currentNodeId, rootFen, rootPosition, treeNodes]);
 
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;

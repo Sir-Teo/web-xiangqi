@@ -1,3 +1,4 @@
+import { markStudyAnalysisComments } from './studyAnalysis';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { ReviewMoveQuality } from './review';
 import { MATE_SCORE_BASE } from './engineEvalReading';
@@ -192,14 +193,23 @@ export function extractUciMoveTree(text: string): {
     hadMoreGames: boolean;
 } {
     const hadMoreGames = firstGameOnly(text).truncated;
-    const cleaned = stripPgnMetadata(text);
+    const marked = text.includes('[%xqanalysis ')
+        ? markStudyAnalysisComments(firstGameOnly(text).text) : { text: '', snapshots: [] };
+    const cleaned = marked.snapshots.length ? stripPgnMetadata(marked.text) : stripPgnMetadata(text);
+    const treeTokens = new RegExp(`${UCI_TREE_TOKEN_PATTERN.source}|@xqa:(\\d+)@`, 'gi');
     const root: SavedMoveTreeNode[] = [];
     const stack: SavedMoveTreeNode[][] = [];
     let currentLine: SavedMoveTreeNode[] = [];
     let nodeCount = 0;
     let tooLarge = false;
 
-    for (const match of cleaned.matchAll(UCI_TREE_TOKEN_PATTERN)) {
+    for (const match of cleaned.matchAll(treeTokens)) {
+        if (match[5] !== undefined) {
+            const snapshot = marked.snapshots[Number(match[5])];
+            const node = currentLine[currentLine.length - 1];
+            if (snapshot && node?.uci === snapshot.move) node.analysis = snapshot;
+            continue;
+        }
         const token = match[0];
         if (token === '(') {
             stack.push(currentLine);

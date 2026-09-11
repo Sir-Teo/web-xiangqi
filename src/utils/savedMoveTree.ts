@@ -1,3 +1,4 @@
+import { normalizeStudyAnalysis } from './studyAnalysis';
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { normalizeMoveComment } from './moveComment';
@@ -55,7 +56,8 @@ export function serializeSavedMoveTree(
         const uci = child?.record?.uci;
         if (!uci) continue;
         const comment = normalizeMoveComment(child.record?.comment);
-        const saved: SavedMoveTreeNode = { uci, ...(comment ? { comment } : {}) };
+        const analysis = normalizeStudyAnalysis(child.record?.analysis, undefined, uci);
+        const saved: SavedMoveTreeNode = { uci, ...(comment ? { comment } : {}), ...(analysis ? { analysis } : {}) };
         frame.output.push(saved);
         // Retain the repeated move itself, matching the existing cycle guard,
         // but do not follow its children a second time along this path.

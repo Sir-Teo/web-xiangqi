@@ -17,6 +17,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - React app includes legal move validation, a move tree, review annotations, WDL/eval views, saved games, and opening-book continuations
 - React app auto-saves the game in progress, so a reload offers to pick it up where you left off
 - Evaluation bar beside the board, on the same winning-chance curve the review scores with, so the two cannot disagree
+- **Saved analysis snapshots**: keeping an engine line also saves its source position and history, Red-perspective score, depth, search scope, and reported engine/runtime settings. Inspect it in Tree and use Update analysis to replace it explicitly. Snapshots travel in library saves, backups, share links within their size limit, and a custom PGN comment; other PGN tools may ignore that comment. Engine/network artifact hashes are not captured.
 - **Compare candidate moves**: choose one to five legal moves in Engine → Compare. Compare only those continuations, extend them with Go Deep or infinite analysis, and keep, copy, or follow a line. Restricted scores are labeled separately and never replace the position evaluation.
 - **Go Deep**: one bounded search on the position you are looking at, far past what live analysis has time for (depth 36 / 30s on a high tier)
 - **Play From Here**: keep the position on screen and play it on against the engine, taking the side to move — the thing you want after a review finds your mistake

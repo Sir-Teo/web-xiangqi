@@ -23,6 +23,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-engine-line-browser.cjs',
         'test-candidate-browser.cjs',
         'test-deep-result-browser.cjs',
+        'test-study-analysis-browser.cjs',
         'test-autosave-limit-browser.cjs',
       ]) {
         console.log(`[${browser}] ${script}`);

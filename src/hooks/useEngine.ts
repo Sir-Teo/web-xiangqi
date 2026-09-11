@@ -193,6 +193,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     // A fast replacement can become ready within the same React batch that
     // marked its predecessor unready. Session identity must still change.
     const [readySessionId, setReadySessionId] = useState(0);
+    const [engineName, setEngineName] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [variant, setVariant] = useState<string>('unknown');
     const [outputLines, setOutputLines] = useState<string[]>([]);
@@ -590,6 +591,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         setIsSearching(false);
         setSearchStats(null);
         setVariant('unknown');
+        setEngineName(null);
 
         // Boot engine using the wrapper component
         const readyTimeoutMs = getEngineReadyTimeoutMs();
@@ -835,6 +837,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
         if (!msg) return;
+        if (msg.startsWith('id name ')) setEngineName(msg.slice(8).trim().slice(0, 120) || null);
 
         if (msg === 'uciok') {
             appendOutputLine(msg);
@@ -1034,6 +1037,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     return {
         isReady,
         readySessionId,
+        engineName,
         isSearching,
         isSearchQueued,
         variant,

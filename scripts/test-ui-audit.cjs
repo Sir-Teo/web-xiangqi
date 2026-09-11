@@ -29,6 +29,7 @@ const path = require('node:path');
       'test-engine-line-browser.cjs',
       'test-candidate-browser.cjs',
       'test-deep-result-browser.cjs',
+      'test-study-analysis-browser.cjs',
       'test-unicode-share-browser.cjs',
       'test-study-undo-browser.cjs',
       'test-wdl-freshness-browser.cjs',

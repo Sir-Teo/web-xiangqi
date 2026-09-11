@@ -210,7 +210,7 @@ function savedMoveTreeToNodes(moveTree: SavedMoveTreeNode[]) {
                 id: nodeId,
                 parentId,
                 childrenIds: [],
-                record: { uci: child.uci, comment: child.comment } as MoveRecord,
+                record: { uci: child.uci, comment: child.comment, analysis: child.analysis } as MoveRecord,
             };
             appendChildren(child.children ?? [], nodeId);
         }

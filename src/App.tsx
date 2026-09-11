@@ -1,3 +1,5 @@
+import { captureStudyAnalysis, hasStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
+import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
 import { extractPgnMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
@@ -898,10 +900,11 @@ function App() {
    * A straight line is stored as a list of moves, which is compact and cannot
    * carry anything else. A note is attached to a move, so a game holding one
    * has to be stored as a tree even when it has no variations -- otherwise the
-   * note is written, shown, and silently dropped by the next save.
+   * note is written, shown, and silently dropped by the next save. Saved
+   * analysis has the same requirement even when the line has no written note.
    */
-  const hasCommentedMoves = useMemo(() => (
-    Object.values(treeNodes).some((node) => Boolean(node.record?.comment))
+  const hasAnnotatedStudyMoves = useMemo(() => (
+    Object.values(treeNodes).some((node) => Boolean(node.record?.comment || node.record?.analysis))
   ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
@@ -1187,6 +1190,7 @@ function App() {
   const {
     isReady,
     readySessionId,
+    engineName,
     isSearching,
     isSearchQueued,
     variant: engineVariant,
@@ -2431,8 +2435,22 @@ function App() {
   );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const canPlayBestMove = engineEnabled && !isAiTurn && !gameResult && Boolean(topAnalysisPv?.moves[0]);
-  const canKeepBestLine = canPlayBestMove && reviewStatus !== 'running'
-    && !hasMoveTreeLine(treeNodes, currentNodeId, topAnalysisPv?.moves ?? []);
+  const analysisForLine = useCallback((moves: string[]) => {
+    const lines = candidateActive ? candidatePvLines : currentAnalysisPvLines;
+    const pv = lines.find(line => line.moves.length === moves.length && line.moves.every((move, i) => move === moves[i]));
+    if (!pv) return undefined;
+    return captureStudyAnalysis(pv, sideToMove, currentPositionCommand, {
+      name: engineName || 'Pikafish (version not reported)', variant: engineVariant,
+      threads: engineVariant.startsWith('single') ? 1 : engineBootConfig.threads, hashMB: engineBootConfig.hashMB,
+    }, candidateActive ? candidateSearch!.moves.length : analysisMultiPv, candidateActive ? candidateSearch!.moves : undefined);
+  }, [analysisMultiPv, candidateActive, candidatePvLines, candidateSearch, currentAnalysisPvLines, currentPositionCommand,
+    engineBootConfig.hashMB, engineBootConfig.threads, engineName, engineVariant, sideToMove]);
+  const isAnalysisLineKept = useCallback((moves: string[]) => {
+    if (!hasMoveTreeLine(treeNodes, currentNodeId, moves)) return false;
+    const first = treeNodes[currentNodeId]?.childrenIds.find(id => treeNodes[id]?.record?.uci === moves[0]);
+    return sameStudyAnalysis(first ? treeNodes[first]?.record?.analysis : undefined, analysisForLine(moves));
+  }, [analysisForLine, currentNodeId, treeNodes]);
+  const canKeepBestLine = isReady && canPlayBestMove && reviewStatus !== 'running' && !isAnalysisLineKept(topAnalysisPv?.moves ?? []);
   const visibleEngineOutputLineCount = Math.min(outputLines.length, 20);
   const engineOutputTerminalLabel = visibleEngineOutputLineCount > 0
     ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
@@ -3046,7 +3064,7 @@ function App() {
     // being shared is a study, not a move list. They spend the same 8000
     // characters of tree budget, and a link that outgrows it already falls back
     // to the main line with "Variations omitted" said out loud.
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || currentLineMoves.length === 0)
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree);
@@ -3062,7 +3080,7 @@ function App() {
       ? {
           tone: 'warning',
           text: 'Variations omitted',
-          detail: 'The link was copied. This study is larger than a link can hold, so only the line on screen went with it -- its variations, and any notes written on them, stayed behind.',
+          detail: 'The link was copied. This study is larger than a link can hold, so only the line on screen went with it -- its variations, notes, and saved analysis stayed behind.',
           positionKey: shareNoticePositionKey,
         }
       : null
@@ -3075,7 +3093,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3600,14 +3618,14 @@ function App() {
   }, [applyUciLineAtNode, clearBoardMarkers, currentNodeId, gameResult, isAiTurn]);
 
   const handleKeepPvLine = useCallback((moves: string[]) => {
-    if (gameResult || isAiTurn || reviewStatus === 'running') return;
-    const result = keepUciLineAtNode(currentNodeId, moves);
+    if (!isReady || gameResult || isAiTurn || reviewStatus === 'running') return;
+    const result = keepUciLineAtNode(currentNodeId, moves, analysisForLine(moves));
     showImportNotice(result === 'kept'
       ? 'Engine line kept in the move tree.'
       : result === 'full'
         ? `Study limit reached (${MAX_SAVED_TREE_NODES.toLocaleString('en-US')} moves). Remove a variation before keeping another line.`
         : 'The complete engine line is not legal here. Nothing was added.');
-  }, [currentNodeId, gameResult, isAiTurn, keepUciLineAtNode, reviewStatus, showImportNotice]);
+  }, [analysisForLine, currentNodeId, gameResult, isAiTurn, isReady, keepUciLineAtNode, reviewStatus, showImportNotice]);
 
   const handlePlayBookMove = useCallback((uci: string) => {
     if (!uci || gameResult || isAiTurn) return;
@@ -3848,7 +3866,7 @@ function App() {
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
-    const loadedNodeIds = hasVariations
+    const loadedNodeIds = (hasVariations || hasStudyAnalysis(plan.moveTree))
       ? loadMoveTree(plan.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
     setGameMetadata(extractPgnMetadata(text));
@@ -4088,7 +4106,7 @@ function App() {
     // dropped. The `=== 0` case is the same bug at the root, where it was
     // noticed first.
     const holdsMoreThanTheSavedLine = moves.length === 0 || moves.length < activeLineNodeIds.length;
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasCommentedMoves || holdsMoreThanTheSavedLine)
+    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasAnnotatedStudyMoves || holdsMoreThanTheSavedLine)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     return {
@@ -4109,7 +4127,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasCommentedMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -6798,6 +6816,13 @@ function App() {
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
                   {(hasMoveTreeMoves || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
+                  {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
+                    const node = treeNodes[id];
+                    const analysis = node?.record?.analysis;
+                    return analysis ? <StudyAnalysisCard key={id} analysis={analysis}
+                      move={nodeLabel(id, rootNodeId, treeNodes, notationStyle, rootFen)}
+                      onSource={() => jumpToNode(node.parentId!)} /> : null;
+                  })}
                   <div className="move-comment">
                     <label className="move-comment-label" htmlFor="move-comment-input">
                       <span>Note</span>
@@ -7010,7 +7035,7 @@ function App() {
                       onCompare={compareCandidateMoves} onEdit={leaveCandidateSearch} onClose={closeCandidatePicker}
                       onStop={stopDeepDive}
                       onPlay={handlePlayPvLine} onKeep={handleKeepPvLine}
-                      isKept={moves => hasMoveTreeLine(treeNodes, currentNodeId, moves)}
+                      isKept={isAnalysisLineKept} hasLine={moves => hasMoveTreeLine(treeNodes, currentNodeId, moves)}
                     />
                   ) : null}
                   {/* The threat replaces the candidate list rather than sitting
@@ -7075,7 +7100,8 @@ function App() {
                       const pvScoreLabel = `Red POV score ${pvScoreText}`;
                       const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
-                      const lineKept = hasMoveTreeLine(treeNodes, currentNodeId, pv.moves);
+                      const lineExists = hasMoveTreeLine(treeNodes, currentNodeId, pv.moves);
+                      const lineKept = isAnalysisLineKept(pv.moves);
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
                       const pvLineText = pv.moves.length ? formatLineInStyle(board, pv.moves, notationStyle, 7) : 'No moves yet';
                       const pvTokens = formatLineTokensInStyle(board, pv.moves, notationStyle, 7);
@@ -7183,13 +7209,13 @@ function App() {
                               type="button"
                               className="pv-action-btn"
                               onClick={() => handleKeepPvLine(pv.moves)}
-                              disabled={lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
-                              title={lineKept ? 'This complete line is already in the move tree' : 'Add the complete line to the move tree and keep the board on this position'}
+                              disabled={!isReady || lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
+                              title={lineKept ? 'This line and analysis are saved' : 'Keep the complete line and save this analysis snapshot without moving the board'}
                               aria-label={lineKept ? `Engine line ${i + 1} already kept` : `Keep engine line ${i + 1} in the move tree`}
                               data-testid={`keep-engine-pv-${i}`}
                             >
                               {lineKept ? <IconCheck /> : <IconSave />}
-                              <span>{lineKept ? 'Kept' : 'Keep line'}</span>
+                              <span>{lineKept ? 'Kept' : lineExists ? 'Update analysis' : 'Keep line'}</span>
                             </button>
                           </div>
                         </div>
