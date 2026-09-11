@@ -214,7 +214,7 @@ function preferredContinuation(treeNodes: Record<string, MoveTreeNode>, startNod
     let cursor = startNodeId;
     while (treeNodes[cursor]?.childrenIds.length) {
         const children = treeNodes[cursor].childrenIds;
-        // Follow the most recently explored branch.
+        // Outside the selected line, follow the most recently added branch.
         const preferredChild = children[children.length - 1];
         continuation.push(preferredChild);
         cursor = preferredChild;
@@ -579,10 +579,9 @@ export function useXiangqi() {
         // loading was the one path that did not -- so a game stepped back
         // through and then reloaded came back cut off at the cursor.
         //
-        // First child rather than `preferredContinuation`'s last: "most
-        // recently explored" is a fact about a session, and a tree that has
-        // just been read off disk has not had one. First child is the main
-        // line, which is what the reader means by the rest of the game.
+        // First child rather than the latest-added-child fallback: a fresh
+        // load has no selected continuation beyond the saved cursor. First
+        // child is the main line in the stored tree.
         const cursorIndex = (Number.isFinite(initialPly)
             ? Math.max(0, Math.min(activeLine.length, Math.trunc(initialPly!))) : activeLine.length) - 1;
         while (tree[cursor]?.childrenIds.length) {
@@ -611,17 +610,24 @@ export function useXiangqi() {
 
     const jumpToNode = useCallback((nodeId: string) => {
         const targetId = nodeId && treeNodes[nodeId] ? nodeId : ROOT_NODE_ID;
-        const path = findPathToNode(treeNodes, targetId);
-        const continuation = preferredContinuation(treeNodes, targetId);
-        const nextActiveLine = [...path, ...continuation];
-        const nextIndex = path.length - 1;
+        const activeIndex = targetId === ROOT_NODE_ID ? -1 : activeLineNodeIds.indexOf(targetId);
+        const isOnActiveLine = activeLineNodeIds.length > 0 && (targetId === ROOT_NODE_ID || activeIndex >= 0);
+        // Reading an earlier position must not pick a different child at its
+        // fork. Only an explicit jump outside the selected line changes it.
+        let nextActiveLine = activeLineNodeIds;
+        let nextIndex = activeIndex;
+        if (!isOnActiveLine) {
+            const path = findPathToNode(treeNodes, targetId);
+            nextActiveLine = [...path, ...preferredContinuation(treeNodes, targetId)];
+            nextIndex = path.length - 1;
+        }
 
         setActiveLineNodeIds(nextActiveLine);
         setCurrentMoveIndex(nextIndex);
         const position = getPositionFromNode(treeNodes, targetId, rootPosition);
         setGameResult(gameResultForPosition(position.board, position.sideToMove));
         syncPositionForNode(treeNodes, targetId);
-    }, [rootPosition, treeNodes, syncPositionForNode]);
+    }, [activeLineNodeIds, rootPosition, treeNodes, syncPositionForNode]);
 
     /**
      * Remove a move and every move after it, on every branch under it.

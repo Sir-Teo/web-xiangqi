@@ -194,3 +194,13 @@ to the root, and horizontal fit at 1440/390/320px. The initial production baseli
 rendered 2,049 entries; the changed implementation renders two in Chromium.
 Pair with the existing move-render and variation-focus regressions to cover
 notation changes, fresh imports, inferred grades, and keyboard focus transfer.
+
+## Ancestor navigation and selected continuations
+
+`test-active-continuation-browser.cjs` imports a five-move study with shared and
+nested forks. It requires ancestor and Start clicks to retain the selected line,
+allows explicit branch switching, checks breadcrumb Enter activation, and verifies
+identical PGN before and after returning through ancestors. All five moves remain
+present and the page fits 1440/390/320px. The baseline changed a three-ply line to
+a two-ply alternative merely by clicking its first move; the Chromium pre-commit
+regression now passes along with variation focus and large-study render checks.

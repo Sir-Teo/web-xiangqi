@@ -25,6 +25,7 @@ const path = require('node:path');
       'test-move-render-browser.cjs',
       'test-analysis-move-render-browser.cjs',
       'test-variation-focus-browser.cjs',
+      'test-active-continuation-browser.cjs',
       'test-library-annotations-browser.cjs',
       'test-dhtmlxq-browser.cjs',
       'test-root-notes-browser.cjs',
