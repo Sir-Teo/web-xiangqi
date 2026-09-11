@@ -10782,6 +10782,77 @@ async function assertTheSavedLibraryIsOneTabStop(page) {
   console.log(`PASS: the saved library is one tab stop (${JSON.stringify(before)})`);
 }
 
+/**
+ * The two saved-game sorts the sorting gate does not reach, on data that can
+ * tell them apart.
+ *
+ * `assertLibrarySavedGameSorting` covers five of the seven. `oldest` and
+ * `black-accuracy-high` are not among them -- and its fixture could not have
+ * covered the second one usefully anyway: its three reviewed games rank
+ * 90/88/35 by red and 99/95/70 by black, which is the same order, so a
+ * `black-accuracy-high` that read `redAccuracy` by a copy-paste slip would
+ * sort identically and pass.
+ *
+ * Here the two are deliberately opposed -- red ascends as black descends --
+ * and the run asserts red's order as well, so the check carries its own proof
+ * that the two sorts are distinguishable on this data.
+ */
+async function assertLibrarySortsByBlackAccuracyAndByAge(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    const review = (redAccuracy, blackAccuracy) => ({
+      summary: {
+        totalMoves: 1, accuracy: 70, averageCentipawnLoss: 40,
+        redAccuracy, blackAccuracy,
+        bestCount: 0, goodCount: 1, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
+        reviewedAt: 1710000000000, lineSignature: "b2e2", keyMoments: [],
+      },
+      annotations: [],
+    });
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([
+      { id: "qa-side-a", savedAt: 1710000001000, gameMode: "PvP", moves: ["b2e2"], result: "ongoing", label: "Side Sort A QA", review: review(90, 40) },
+      { id: "qa-side-b", savedAt: 1710000002000, gameMode: "PvP", moves: ["b2e2"], result: "ongoing", label: "Side Sort B QA", review: review(60, 60) },
+      { id: "qa-side-c", savedAt: 1710000003000, gameMode: "PvP", moves: ["b2e2"], result: "ongoing", label: "Side Sort C QA", review: review(30, 90) },
+    ]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').first().click();
+  await page.waitForTimeout(600);
+
+  const orderFor = async (sortValue) => {
+    await page.getByLabel("Sort saved games").selectOption(sortValue);
+    await page.waitForTimeout(350);
+    return page.evaluate(() => [...document.querySelectorAll('[data-testid^="load-saved-qa-side-"]')]
+      .map((el) => (el.getAttribute("data-testid") || "").replace("load-saved-qa-side-", "")));
+  };
+
+  const expected = {
+    oldest: ["a", "b", "c"],
+    recent: ["c", "b", "a"],
+    "red-accuracy-high": ["a", "b", "c"],
+    "black-accuracy-high": ["c", "b", "a"],
+  };
+  const got = {};
+  for (const sortValue of Object.keys(expected)) got[sortValue] = await orderFor(sortValue);
+
+  if (got.length === 0) {
+    throw new Error("The three sort fixtures never rendered.");
+  }
+  // The proof that this fixture separates the two side sorts at all.
+  if (JSON.stringify(got["red-accuracy-high"]) === JSON.stringify(got["black-accuracy-high"])) {
+    throw new Error(
+      `Red and black accuracy sorted the same way, so this check cannot tell them apart: ${JSON.stringify(got)}`
+    );
+  }
+  for (const [sortValue, want] of Object.entries(expected)) {
+    if (JSON.stringify(got[sortValue]) !== JSON.stringify(want)) {
+      throw new Error(`Saved-game sort ${sortValue} gave ${JSON.stringify(got[sortValue])}, expected ${JSON.stringify(want)}.`);
+    }
+  }
+}
+
 async function assertLibrarySavedGameSorting(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -12630,6 +12701,7 @@ async function main() {
     await assertLibraryDeleteConfirmation(page);
     await assertLibraryRespondsToStorageChanges(page);
     await assertLibrarySavedGameSorting(page);
+    await assertLibrarySortsByBlackAccuracyAndByAge(page);
     await assertTheSavedLibraryIsOneTabStop(page);
     await assertLargeLibraryRendersProgressively(page);
     await assertDenseEvalGraphLimitsPointMarkers(page);
