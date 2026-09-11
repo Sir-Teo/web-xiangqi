@@ -8,6 +8,50 @@ import {
 } from './dhtmlxq';
 import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
+describe('DhtmlXQ tag boundaries', () => {
+    const line = '[DhtmlXQ_movelist]7774[/DhtmlXQ_movelist]';
+    it('ignores repeated unfinished tags at the import size boundary', () => {
+        expect(parseDhtmlXqRecord('[DhtmlXQ_movelist]'.repeat(11000))).toBeNull();
+        const result = parseDhtmlXqRecord(line + '[DhtmlXQ_comment1]'.repeat(11000));
+        expect(result?.moves).toEqual(['h2h5']);
+        expect(result?.comments.size).toBe(0);
+    });
+    it('keeps mixed-case tags and Unicode text without changing string offsets', () => {
+        const result = parseDhtmlXqRecord('İ 龙 ' + line + '[dHtMlXq_TiTlE]İ Study 龙[/DHTMLXQ_TITLE][dhtmlxq_COMMENT1]İ Cannon||炮[/DhtmlXQ_comment1]');
+        expect(result?.title).toBe('İ Study 龙');
+        expect(result?.comments.get(1)).toBe('İ Cannon\n炮');
+    });
+    it('preserves outer comment precedence, exact numeric spellings and later duplicates', () => {
+        const result = parseDhtmlXqRecord(line + '[DhtmlXQ_comment1]Outer [DhtmlXQ_comment2]inner[/DhtmlXQ_comment2] end[/DhtmlXQ_comment1]'
+            + '[DhtmlXQ_comment01]Leading zero[/DhtmlXQ_comment01]'
+            + '[DhtmlXQ_comment3]First[/DhtmlXQ_comment3][DhtmlXQ_comment3]Last[/DhtmlXQ_comment3]');
+        expect([...result!.comments]).toEqual([[1, 'Leading zero'], [3, 'Last']]);
+        const outer = parseDhtmlXqRecord(line + '[DhtmlXQ_comment1]Outer [DhtmlXQ_comment2]inner[/DhtmlXQ_comment2] end[/DhtmlXQ_comment1]');
+        expect(outer?.comments.get(1)).toBe('Outer [DhtmlXQ_comment2]inner[/DhtmlXQ_comment2] end');
+        expect(outer?.comments.has(2)).toBe(false);
+    });
+    it('skips an unclosed outer tag so a later complete comment can still be read', () => {
+        const result = parseDhtmlXqRecord(line + '[DhtmlXQ_comment999]unfinished [DhtmlXQ_comment2]Kept[/DhtmlXQ_comment2]');
+        expect([...result!.comments]).toEqual([[2, 'Kept']]);
+    });
+    it('preserves legacy matching across fragmented and overlapping comment tags', () => {
+        const tokens = ['[DhtmlXQ_comment1]', '[DhtmlXQ_comment2]', '[DhtmlXQ_comment01]',
+            '[/DhtmlXQ_comment1]', '[/DhtmlXQ_comment2]', '[/DhtmlXQ_comment01]',
+            ' note İ||炮 ', '[DHTMLXQ_COMMENT99]', '[/dhtmlxq_comment99]'];
+        let seed = 71;
+        for (let sample = 0; sample < 150; sample++) {
+            let source = line;
+            for (let i = 0; i < 32; i++) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; source += tokens[seed % tokens.length]; }
+            const expected = new Map<number, string>();
+            for (const match of source.matchAll(/\[DhtmlXQ_comment(\d+)\]([\s\S]*?)\[\/DhtmlXQ_comment\1\]/gi)) {
+                const body = match[2].replace(/\|\|/g, '\n').trim();
+                if (body) expected.set(Number(match[1]), body);
+            }
+            expect([...parseDhtmlXqRecord(source)!.comments]).toEqual([...expected]);
+        }
+    });
+});
+
 /**
  * The movelist a dpxq.com game page carries, quoted from one. Replaying it
  * through the rules engine is the only test worth having: a wrong axis, a

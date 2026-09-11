@@ -34,6 +34,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-graph-gaps-browser.cjs',
         'test-board-render-browser.cjs',
         'test-library-annotations-browser.cjs',
+        'test-dhtmlxq-browser.cjs',
         'test-library-worker-browser.cjs',
         'test-explorer-browser.cjs',
         'test-autosave-limit-browser.cjs',

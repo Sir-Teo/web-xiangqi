@@ -22,6 +22,7 @@ const path = require('node:path');
       'test-graph-gaps-browser.cjs',
       'test-board-render-browser.cjs',
       'test-library-annotations-browser.cjs',
+      'test-dhtmlxq-browser.cjs',
       'test-weights-cache-browser.cjs',
       'test-cloud-pv-browser.cjs',
       'test-search-queue-browser.cjs',

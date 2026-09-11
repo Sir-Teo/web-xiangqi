@@ -48,8 +48,15 @@ export interface DhtmlXqRecord {
 const FILES = 'abcdefghi';
 
 function tagValue(text: string, name: string): string | null {
-    const match = text.match(new RegExp(`\\[DhtmlXQ_${name}\\]([\\s\\S]*?)\\[/DhtmlXQ_${name}\\]`, 'i'));
-    return match ? match[1].trim() : null;
+    const opening = new RegExp(`\\[DhtmlXQ_${name}\\]`, 'i').exec(text);
+    if (!opening) return null;
+    const contentStart = opening.index + opening[0].length;
+    const closing = new RegExp(`\\[/DhtmlXQ_${name}\\]`, 'gi');
+    closing.lastIndex = contentStart;
+    const end = closing.exec(text);
+    // Searching for the closer once avoids retrying the entire suffix at every
+    // opener. Regex case matching also preserves offsets around Unicode text.
+    return end ? text.slice(contentStart, end.index).trim() : null;
 }
 
 /** `xy` in the record's frame to a UCI square, or null off the board. */
@@ -105,10 +112,27 @@ export function movesFromMovelist(movelist: string): string[] {
 /** Notes, with the site's `||` line breaks folded back to newlines. */
 function commentsFromRecord(text: string): Map<number, string> {
     const comments = new Map<number, string>();
-    const pattern = /\[DhtmlXQ_comment(\d+)\]([\s\S]*?)\[\/DhtmlXQ_comment\1\]/gi;
-    for (const match of text.matchAll(pattern)) {
-        const body = match[2].replace(/\|\|/g, '\n').trim();
+    // Index closers once. A missing closer must not cause a fresh suffix scan
+    // for every opening comment, including openings with different numbers.
+    const closers = new Map<string, { cursor: number; positions: Array<{ start: number; end: number }> }>();
+    for (const match of text.matchAll(/\[\/DhtmlXQ_comment(\d+)\]/gi)) {
+        let entries = closers.get(match[1]);
+        if (!entries) { entries = { cursor: 0, positions: [] }; closers.set(match[1], entries); }
+        entries.positions.push({ start: match.index, end: match.index + match[0].length });
+    }
+    const opening = /\[DhtmlXQ_comment(\d+)\]/gi;
+    let match: RegExpExecArray | null;
+    while ((match = opening.exec(text))) {
+        const entries = closers.get(match[1]);
+        if (!entries) continue;
+        while (entries.cursor < entries.positions.length && entries.positions[entries.cursor].start < opening.lastIndex) entries.cursor++;
+        const end = entries.positions[entries.cursor];
+        if (!end) continue;
+        const body = text.slice(opening.lastIndex, end.start).replace(/\|\|/g, '\n').trim();
         if (body) comments.set(Number(match[1]), body);
+        // Preserve the old non-overlapping, outer-first matching behavior.
+        opening.lastIndex = end.end;
+        entries.cursor++;
     }
     return comments;
 }
