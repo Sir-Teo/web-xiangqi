@@ -2444,7 +2444,7 @@ async function assertDesktopBoardLayout(page, viewport) {
     layout.graphValueMax !== "0" ||
     layout.graphValueNow !== "0" ||
     !layout.graphValueText.includes("Start position") ||
-    !layout.graphValueText.includes("Red POV evaluation 0.00") ||
+    !layout.graphValueText.includes("Start position, Not evaluated") ||
     layout.graphOrientation !== "horizontal" ||
     !layout.graphKeyshortcuts.includes("Home") ||
     layout.graphVisualsHidden !== "true" ||
