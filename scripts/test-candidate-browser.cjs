@@ -96,6 +96,20 @@ async function compare(browser, width, real = false) {
       assert.equal(commands.slice(0, go).findLast(command => command.startsWith('setoption name MultiPV')), 'setoption name MultiPV value 2');
       await page.getByTestId('copy-candidate-a9a8').click();
       assert.equal(await page.evaluate(() => window.__copied), 'a9a8 a0a1 i9i8');
+      // Clipboard denial must not report success; a later retry can recover.
+      await page.evaluate(() => {
+        window.__writeClipboard = navigator.clipboard.writeText;
+        navigator.clipboard.writeText = async () => { throw new Error('Clipboard denied'); };
+        document.execCommand = () => false;
+        window.__copied = '';
+      });
+      await page.getByTestId('copy-candidate-a9a8').click();
+      assert.equal(await page.getByTestId('copy-candidate-a9a8').innerText(), 'Copy failed');
+      assert.equal(await page.evaluate(() => window.__copied), '');
+      await page.evaluate(() => { navigator.clipboard.writeText = window.__writeClipboard; });
+      await page.getByTestId('copy-candidate-a9a8').click();
+      assert.equal(await page.getByTestId('copy-candidate-a9a8').innerText(), 'Copied');
+      assert.equal(await page.evaluate(() => window.__copied), 'a9a8 a0a1 i9i8');
     }
     for (const move of ['a9a8', 'i9i8']) {
       const keep = page.getByTestId(`keep-candidate-${move}`);

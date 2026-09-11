@@ -44,7 +44,7 @@ export function CandidatePanel(props: Props) {
   }), [board, side, notation]);
   const copy = async (moves: string[]) => {
     const line = moves.join(' ');
-    try { await copyToClipboard(line); setCopyStatus({ line, ok: true }); }
+    try { const ok = await copyToClipboard(line); setCopyStatus({ line, ok }); }
     catch { setCopyStatus({ line, ok: false }); }
   };
 
