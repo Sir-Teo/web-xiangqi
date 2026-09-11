@@ -128,6 +128,7 @@ import {
   type PvLineCount,
   type StoredPreferences,
 } from './utils/preferences';
+import { buildBoardArrows, type BoardArrow, type BoardSquare } from './utils/boardArrows';
 import {
   describeRepetition,
   formatRepetitionHeadline,
@@ -224,15 +225,6 @@ type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
-type BoardSquare = { file: number; rank: number };
-type BoardArrow = {
-  from: BoardSquare;
-  to: BoardSquare;
-  color: string;
-  kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'threat' | 'user';
-  opacity?: number;
-  strokeWidth?: number;
-};
 
 const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; description: string }> = [
   { mode: 'PvP', label: 'Local board', shortLabel: 'Local', description: 'Two players, one board, no engine moves.' },
@@ -4847,84 +4839,20 @@ function App() {
   }, [gameOverKey]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
-  const boardArrows = useMemo(() => {
-    if (!showArrows) return [];
-    const result: BoardArrow[] = [];
-
-    // Last played move — color encodes quality (green=good … red=blunder)
-    if (lastMoveFrom && lastMoveTo) {
-      result.push({ from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor, kind: 'last', opacity: 0.82, strokeWidth: 5 });
-    }
-
-    // The threat is what the reader asked to see, so it is drawn even though
-    // the engine arrows for the real position are gone while it is showing.
-    if (threatMove) {
-      const from = uciToSquare(threatMove.substring(0, 2));
-      const to = uciToSquare(threatMove.substring(2, 4));
-      if (from && to) {
-        result.push({ from, to, color: '#f43f5e', kind: 'threat', opacity: 0.92, strokeWidth: 6 });
-      }
-    }
-
-    if (hintMove) {
-      const from = uciToSquare(hintMove.substring(0, 2));
-      const to = uciToSquare(hintMove.substring(2, 4));
-      if (from && to) {
-        result.push({ from, to, color: '#38bdf8', kind: 'engine-focus', opacity: 0.95, strokeWidth: 7 });
-      }
-    }
-
-    // A question with the answer drawn on the board is not a question.
-    if (drillAsking) return [...result, ...userArrows];
-
-    const hasEngineMoveArrows = engineEnabled && Boolean(currentAnalysisPvLines.some((pv) => pv.moves[0]));
-    if (!hasEngineMoveArrows && openingCandidates.length > 0) {
-      const bookArrowLimit = assistMode === 'pro' ? 3 : 2;
-      openingCandidates.slice(0, bookArrowLimit).forEach((candidate, index) => {
-        const from = uciToSquare(candidate.move.substring(0, 2));
-        const to = uciToSquare(candidate.move.substring(2, 4));
-        if (from && to) {
-          result.push({
-            from,
-            to,
-            color: index === 0 ? '#f59e0b' : '#fbbf24',
-            kind: 'book',
-            opacity: index === 0 ? 0.72 : 0.48,
-            strokeWidth: index === 0 ? 4.5 : 3.25,
-          });
-        }
-      });
-    }
-
-    // Engine best move (green)
-    if (engineEnabled && spotlightPvIndex !== 0 && currentAnalysisPvLines[0]?.moves[0]) {
-      const uci = currentAnalysisPvLines[0].moves[0];
-      const from = uciToSquare(uci.substring(0, 2));
-      const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#10b981', kind: 'engine', opacity: 0.88, strokeWidth: 6 });
-    }
-
-    // Alternative engine lines (muted green)
-    for (let idx = 1; idx <= 2; idx++) {
-      if (spotlightPvIndex === idx) continue;
-      const uci = currentAnalysisPvLines[idx]?.moves[0];
-      if (!uci) continue;
-      const from = uciToSquare(uci.substring(0, 2));
-      const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) result.push({ from, to, color: '#6ee7b7', kind: 'engine', opacity: 0.55, strokeWidth: 3.5 });
-    }
-
-    if (engineEnabled && spotlightPvLine?.moves[0]) {
-      const uci = spotlightPvLine.moves[0];
-      const from = uciToSquare(uci.substring(0, 2));
-      const to = uciToSquare(uci.substring(2, 4));
-      if (from && to) {
-        result.push({ from, to, color: '#38bdf8', kind: 'engine-focus', opacity: 0.95, strokeWidth: 7 });
-      }
-    }
-
-    return [...result, ...userArrows];
-  }, [assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  const boardArrows = useMemo(() => buildBoardArrows({
+    showArrows,
+    lastMove: lastMoveFrom && lastMoveTo ? { from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor } : null,
+    threatMove,
+    hintMove,
+    drillAsking,
+    engineEnabled,
+    analysisPvLines: currentAnalysisPvLines,
+    spotlightPvIndex,
+    spotlightPvLine,
+    openingCandidates,
+    assistMode,
+    userArrows,
+  }), [assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
