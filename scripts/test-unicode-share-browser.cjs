@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 const study = [{ uci: 'h2e2', comment: '中炮：先出車 🐎', children: [
   { uci: 'h9g7', comment: 'Défense — 将军' },
@@ -13,7 +13,7 @@ async function command(page, label) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
     for (const width of [1440, 390, 320]) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: width < 900 });
@@ -50,7 +50,7 @@ async function command(page, label) {
         const saved = await recipient.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.deepEqual(saved.moveTree, study, 'Opening the share link lost a branch or changed its note');
         assert.equal(await recipient.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-        await recipient.screenshot({ path: `/tmp/xiangqi-unicode-share-${width}.png` });
+        await recipient.screenshot({ path: `/tmp/xiangqi-unicode-share-${browserType.name()}-${width}.png` });
         assert.deepEqual(errors, []);
         console.log(`Chinese/emoji study sharing, recipient notes, branches, save and layout passed at ${width}px`);
       } finally { await context.close(); }

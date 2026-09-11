@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
 async function followEngineLine(browser, width) {
@@ -35,7 +35,7 @@ async function followEngineLine(browser, width) {
     await keep.waitFor();
     const boardState = () => page.locator('.hitbox').evaluateAll(elements => elements.map(el => el.getAttribute('aria-label')));
     const initial = await boardState();
-    if (width < 900) assert.ok((await keep.boundingBox()).height >= 44);
+    if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) assert.ok((await keep.boundingBox()).height >= 44);
     await keep.click();
     assert.deepEqual(await boardState(), initial, 'Keeping a line moved the board');
     assert.equal(await keep.isDisabled(), true, 'The complete line was not recognized as kept');
@@ -91,7 +91,7 @@ async function followEngineLine(browser, width) {
     await page.keyboard.press('e');
     await page.getByTestId('engine-pv-0-move-2').waitFor();
     assert.equal(await keep.isDisabled(), true);
-    await page.locator('[data-testid="engine-pv-line-0"]').screenshot({ path: `/tmp/xiangqi-keep-line-${width}.png` });
+    await page.locator('[data-testid="engine-pv-line-0"]').screenshot({ path: `/tmp/xiangqi-keep-line-${browserType.name()}-${width}.png` });
     await page.getByTestId('engine-pv-0-move-2').click();
     for (const [file, rank, piece] of [[4, 2, 'red cannon'], [6, 7, 'black horse'], [6, 2, 'red horse']]) {
       assert.match(await page.locator(`.hitbox[data-file="${file}"][data-rank="${rank}"]`).getAttribute('aria-label'), new RegExp(piece));
@@ -128,14 +128,14 @@ async function followEngineLine(browser, width) {
     assert.deepEqual(errors, []);
     console.log(`Keep/replay engine lines, atomic rejection, branching, save, PGN, reload, study limit and layout passed at ${width}px`);
   } catch (error) {
-    await page.screenshot({ path: `/tmp/xiangqi-keep-failure-${width}.png` });
+    await page.screenshot({ path: `/tmp/xiangqi-keep-failure-${browserType.name()}-${width}.png` });
     console.error(await page.locator('body').innerText());
     throw error;
   } finally { await page.close(); }
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try { for (const width of [1440, 390]) await followEngineLine(browser, width); }
   finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

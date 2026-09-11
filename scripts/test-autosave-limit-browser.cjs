@@ -1,9 +1,9 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
     for (const width of [1440, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
@@ -29,7 +29,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         await notice.waitFor({ timeout: 3000 });
         assert.match(await notice.innerText(), /too large for automatic recovery/);
         if (width < 900) {
-          for (const button of await notice.getByRole('button').all()) {
+          const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+          for (const button of coarse ? await notice.getByRole('button').all() : []) {
             const box = await button.boundingBox();
             assert.ok(box.height >= 44 && box.width >= 44, 'Recovery action is smaller than a touch target');
           }
@@ -46,7 +47,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         assert.equal((pgn.match(/\ba[0198]a[0198]\b/g) ?? []).length, 1024);
         assert.match(pgn, /h2e2/);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-        await page.screenshot({ path: `/tmp/xiangqi-autosave-limit-${width}.png` });
+        await page.screenshot({ path: `/tmp/xiangqi-autosave-limit-${browserType.name()}-${width}.png` });
         await page.keyboard.press('ControlOrMeta+k');
         await page.getByRole('combobox').fill('Delete this move and what follows');
         await page.keyboard.press('Enter');

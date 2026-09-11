@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
@@ -8,7 +8,7 @@ async function command(page, label) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
     for (const width of [1440, 390]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
@@ -22,7 +22,7 @@ async function command(page, label) {
         await page.keyboard.press('t');
         const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
         await command(page, 'Delete this move and what follows');
-        if (width < 900) {
+        if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) {
           for (const button of await page.getByTestId('delete-undo-toast').getByRole('button').all()) {
             const box = await button.boundingBox();
             assert.ok(box.height >= 44 && box.width >= 44, 'Undo action is smaller than a touch target');

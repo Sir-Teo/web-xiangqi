@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
     for (const [width, height] of [[1440, 1000], [390, 844], [320, 568], [844, 390]]) {
       const page = await browser.newPage({ viewport: { width, height } });
@@ -18,7 +18,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       await guide.getByRole('button', { name: 'Letter pieces' }).click();
       assert.equal(await guide.getByRole('button', { name: 'Letter pieces' }).getAttribute('aria-pressed'), 'true');
       assert.ok(await page.locator('.piece').filter({ hasText: /^K$/ }).count());
-      await page.screenshot({ path: `/tmp/xiangqi-beginner-${width}.png` });
+      await page.screenshot({ path: `/tmp/xiangqi-beginner-${browserType.name()}-${width}.png` });
       await guide.getByRole('button', { name: 'Dismiss first-move guide' }).click();
       await page.reload();
       await page.locator('.piece').first().waitFor();
