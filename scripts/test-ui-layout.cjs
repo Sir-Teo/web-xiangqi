@@ -9279,6 +9279,152 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 }
 
 /**
+ * The bottom bar's chips stay reachable once a review fills it.
+ *
+ * A finished review adds a long summary to that row -- accuracy, average loss,
+ * per-side accuracy, three issue counts, and two buttons -- and it pushes the
+ * game-mode badge and the detected opening past the right edge: 84px of the
+ * opening name at 1440, 158px at 1366, and at 1280 the whole name plus part of
+ * "Local board". `.game-controls` is `overflow-x: auto` precisely so that is a
+ * scroll rather than a loss, and its comment says so; nothing checked it.
+ *
+ * Checked the way a reader would find out: scroll the row to its end and ask
+ * whether the badge is inside the row's own box. A rect that pokes past the
+ * viewport proves nothing on its own -- a child of a scroller reports its
+ * position in the scrolled frame, so it looks identical whether the row
+ * scrolls or the content is simply clipped away.
+ *
+ * The no-review case is measured in the same run, because a row that never
+ * overflows would pass the reachability check while proving nothing at all.
+ */
+async function assertTheBottomBarChipsSurviveAReview(browser) {
+  const withReview = (moves) => ({
+    id: "qa-bar-overflow",
+    savedAt: 1710000009000,
+    gameMode: "PvP",
+    moves,
+    result: "ongoing",
+    label: "Bottom bar QA",
+    review: {
+      summary: {
+        totalMoves: moves.length, accuracy: 41, averageCentipawnLoss: 120,
+        redAccuracy: 38, blackAccuracy: 44,
+        bestCount: 10, goodCount: 12, inaccuracyCount: 13, mistakeCount: 13, blunderCount: 14,
+        reviewedAt: 1710000009000, lineSignature: moves.join(" "),
+        keyMoments: moves.slice(0, 3).map((uci, index) => ({
+          nodeId: `n${index + 1}`, moveIndex: index, jumpTarget: index, ply: index + 1,
+          side: index % 2 === 0 ? "red" : "black", quality: "blunder", swing: 300,
+          winPercentLoss: 22, evalBefore: 10, evalAfter: -290,
+          bestMove: moves[0], playedMove: uci, note: "A stronger continuation was available.",
+        })),
+      },
+      annotations: moves.map((_uci, index) => ({
+        moveIndex: index, evalScore: 10, quality: "best", swing: 0, winPercentLoss: 0,
+        reviewNote: "Engine-approved move.",
+      })),
+    },
+  });
+
+  // A line the opening book names, so there is a badge at the end of the row.
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7", "a0b0", "a9b9"];
+
+  /**
+   * Scrolled by a wheel, not by assignment.
+   *
+   * `row.scrollLeft = row.scrollWidth` moves an `overflow: hidden` box just as
+   * happily as an `auto` one -- `hidden` blocks the *user*, not script -- so a
+   * check built on it stays green when the scrollbar is taken away, which is
+   * the regression worth catching. A wheel is what a reader has.
+   */
+  const read = async (page, cdp) => {
+    const before = await page.evaluate(() => {
+      const row = document.querySelector(".game-controls");
+      const badge = document.querySelector(".opening-badge");
+      if (!row || !badge) return { row: Boolean(row), badge: Boolean(badge) };
+      const rowBox = row.getBoundingClientRect();
+      row.scrollLeft = 0;
+      return {
+        row: true, badge: true,
+        canScroll: row.scrollWidth > row.clientWidth + 1,
+        hiddenAtRest: Math.round(Math.max(0, badge.getBoundingClientRect().right - Math.min(rowBox.right, window.innerWidth))),
+        hasTitle: Boolean(badge.getAttribute("title")),
+        at: { x: Math.round(rowBox.left + rowBox.width / 2), y: Math.round(rowBox.top + rowBox.height / 2) },
+      };
+    });
+    if (!before.row || !before.badge) return before;
+    for (let i = 0; i < 12; i++) {
+      await cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel", x: before.at.x, y: before.at.y, deltaX: 240, deltaY: 0,
+      });
+    }
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => {
+      const row = document.querySelector(".game-controls");
+      const badge = document.querySelector(".opening-badge");
+      const rowBox = row.getBoundingClientRect();
+      return {
+        scrolled: row.scrollLeft > 1,
+        reachable: badge.getBoundingClientRect().right <= Math.min(rowBox.right, window.innerWidth) + 2,
+      };
+    });
+    return { ...before, ...after };
+  };
+
+  for (const width of [1280, 1440]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
+    try {
+      const page = await context.newPage();
+      await clearAutoSaveBetweenNavigations(page);
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.evaluate((game) => {
+        localStorage.setItem("xiangqi:library:v1", JSON.stringify([game]));
+      }, withReview(MOVES));
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForTimeout(900);
+      await page.locator('button[aria-label="Open game library"]').first().click();
+      await page.getByTestId("load-saved-qa-bar-overflow").click();
+      await page.waitForTimeout(1600);
+
+      const loaded = await page.evaluate(() => {
+        const fen = (document.body.textContent.match(/FEN:\s*(\S+)/) || [])[1] || "";
+        return !fen.startsWith("rnbakabnr/9/1c5c1");
+      });
+      if (!loaded) {
+        throw new Error(`The saved game did not load at ${width}px, so nothing below is a reading of it.`);
+      }
+
+      const cdp = await context.newCDPSession(page);
+      const state = await read(page, cdp);
+      if (!state.row || !state.badge) {
+        throw new Error(`The bottom bar needs its control row and an opening badge to check: ${JSON.stringify(state)}`);
+      }
+      if (!state.canScroll) {
+        throw new Error(
+          `At ${width}px a review is meant to overflow the bottom control row, and it did not: ${JSON.stringify(state)}. Either the row grew a way to fit, in which case this check has nothing left to prove, or it is clipping instead of scrolling.`
+        );
+      }
+      if (!state.scrolled) {
+        throw new Error(
+          `At ${width}px a wheel over the bottom control row moved nothing: ${JSON.stringify(state)}. \`.game-controls\` must keep \`overflow-x: auto\` -- with \`hidden\` the row still scrolls to a script and not to a reader, so the review summary silently eats the end of it.`
+        );
+      }
+      if (!state.reachable) {
+        throw new Error(
+          `At ${width}px the opening badge never came into the control row even scrolled to its end: ${JSON.stringify(state)}.`
+        );
+      }
+      if (!state.hasTitle) {
+        throw new Error("The opening badge must carry its full name in a title; it is the first thing the row hides.");
+      }
+    } finally {
+      await context.close();
+    }
+  }
+}
+
+/**
  * The board editor's brushes are sized by the hand using them.
  *
  * The palette is the editor's most tap-heavy control: pick a piece, tap the
@@ -12214,6 +12360,7 @@ async function main() {
     await assertAPhoneCanPinchTheBoard(browser);
     await assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser);
     await assertTheBoardEditorBrushesAreThumbSized(browser);
+    await assertTheBottomBarChipsSurviveAReview(browser);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
