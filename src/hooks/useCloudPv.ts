@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { buildCloudPvUrl, parseCloudPvResponse, type CloudPvReading } from '../utils/cloudPv';
+import { BoundedLruCache } from '../utils/boundedCache';
 
 export type CloudPvStatus = 'off' | 'loading' | 'ok' | 'unknown' | 'error';
 
@@ -12,9 +13,7 @@ export interface CloudPvState {
 
 const CLOUD_PV_DEBOUNCE_MS = 350;
 const CLOUD_PV_TIMEOUT_MS = 8000;
-const CACHE_LIMIT = 200;
-
-const cache = new Map<string, CloudPvReading | null>();
+const cache = new BoundedLruCache<CloudPvReading | null>(200);
 
 /**
  * The cloud book's line for `fen`, under the same switch as the book itself:
@@ -49,11 +48,6 @@ export function useCloudPv(fen: string, enabled: boolean): CloudPvState {
                 if (result.status === 'unreadable') throw new Error('unreadable reply');
                 const line = result.status === 'ok' ? result.line : null;
                 cache.set(fen, line);
-                while (cache.size > CACHE_LIMIT) {
-                    const oldest = cache.keys().next().value;
-                    if (oldest === undefined) break;
-                    cache.delete(oldest);
-                }
                 if (controller.signal.aborted) return;
                 setState(line ? { status: 'ok', line, fen } : { status: 'unknown', line: null, fen });
             } catch {

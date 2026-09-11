@@ -7,14 +7,14 @@ import {
     parseCloudRuleResponse,
     summarizeCloudRule,
 } from '../utils/cloudRule';
+import { BoundedLruCache } from '../utils/boundedCache';
 
 export type { CloudRuleState } from '../utils/cloudRule';
 
 const CLOUD_RULE_DEBOUNCE_MS = 350;
 const CLOUD_RULE_TIMEOUT_MS = 8000;
 
-const cache = new Map<string, { banned: string[]; drawing: string[] }>();
-const CACHE_LIMIT = 200;
+const cache = new BoundedLruCache<{ banned: string[]; drawing: string[] }>(200);
 
 /**
  * What chessdb.cn rules about the moves of the position on screen, asked only
@@ -54,11 +54,6 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
                 if (reading.status === 'unreadable' || reading.status === 'invalid') throw new Error('unavailable ruling');
                 const summary = reading.status === 'ok' ? summarizeCloudRule(reading.moves) : { banned: [], drawing: [] };
                 cache.set(key, summary);
-                while (cache.size > CACHE_LIMIT) {
-                    const oldest = cache.keys().next().value;
-                    if (oldest === undefined) break;
-                    cache.delete(oldest);
-                }
                 if (controller.signal.aborted) return;
                 setState({ status: 'ok', ...summary, key });
             } catch {

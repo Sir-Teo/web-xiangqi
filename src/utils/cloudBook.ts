@@ -1,3 +1,4 @@
+import { BoundedLruCache } from './boundedCache';
 /**
  * The chessdb.cn xiangqi cloud book (象棋云库): what it says about a position,
  * read into a shape the app can draw.
@@ -110,34 +111,8 @@ export function formatCloudBookScore(score: number, sideToMove: 'w' | 'b'): stri
 }
 
 /** A bounded most-recently-used cache, keyed on the FEN as sent. */
-export class CloudBookCache {
-    private readonly entries = new Map<string, CloudBookReading>();
-    private readonly limit: number;
-
-    constructor(limit = 200) {
-        this.limit = limit;
-    }
-
-    get(fen: string): CloudBookReading | undefined {
-        const hit = this.entries.get(fen);
-        if (hit === undefined) return undefined;
-        // Re-insert so the most recently read entry is the last evicted.
-        this.entries.delete(fen);
-        this.entries.set(fen, hit);
-        return hit;
-    }
-
-    set(fen: string, reading: CloudBookReading) {
-        this.entries.delete(fen);
-        this.entries.set(fen, reading);
-        while (this.entries.size > this.limit) {
-            const oldest = this.entries.keys().next().value;
-            if (oldest === undefined) break;
-            this.entries.delete(oldest);
-        }
-    }
-
-    get size() {
-        return this.entries.size;
-    }
-}
+/**
+ * Kept as a name rather than a class: `BoundedLruCache` is the same cache the
+ * other two cloud hooks now share, and this is what the book calls it.
+ */
+export class CloudBookCache extends BoundedLruCache<CloudBookReading> {}
