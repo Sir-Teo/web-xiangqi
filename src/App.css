@@ -2897,6 +2897,14 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+/* The count sits beside the percentage rather than under it: it is the same
+   fact at a different resolution, not a second fact. Dimmer, because the
+   percentage is what a glance is for. */
+.review-progress-detail {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .review-progress-track {
   height: 7px;
   border-radius: 999px;

@@ -858,3 +858,22 @@ export function rebuildSummaryFromAnnotations(
         blunderCount: counts.blunder,
     };
 }
+
+/**
+ * How far a running review has got, in the units it actually counts.
+ *
+ * A review searches one position per move plus the starting position, so the
+ * total is `moves + 1` and the unit is positions rather than moves — calling
+ * it moves would be off by one, and on a long game the reader is watching the
+ * number to work out how long this will take.
+ *
+ * A percentage on its own says nothing about the scale, and the scale is the
+ * point: at roughly a second a position, a 240-move game is nearly four
+ * minutes of waiting. Returns null when there is no scale to report.
+ */
+export function formatReviewProgressDetail(completed: number, total: number): string | null {
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const cap = Math.floor(total);
+    const done = Math.min(cap, Math.max(0, Math.floor(Number.isFinite(completed) ? completed : 0)));
+    return `${done} of ${cap} ${cap === 1 ? 'position' : 'positions'}`;
+}

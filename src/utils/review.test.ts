@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    formatReviewProgressDetail,
     REVIEW_DECISIVE_ADVANTAGE_CP,
     REVIEW_THRESHOLDS,
     REVIEW_WIN_PERCENT_LOSS_THRESHOLDS,
@@ -217,5 +218,29 @@ describe('naming a quality in prose', () => {
             expect(formatReviewQualityWithArticle(quality))
                 .toMatch(new RegExp(`^an? ${formatReviewQuality(quality).toLowerCase()}$`));
         }
+    });
+});
+
+describe('formatReviewProgressDetail', () => {
+    it('counts positions, because a review searches one per move plus the start', () => {
+        // A 240-move game is 241 searches; calling them moves would be off by one.
+        expect(formatReviewProgressDetail(104, 241)).toBe('104 of 241 positions');
+    });
+
+    it('says nothing when there is no scale to report', () => {
+        expect(formatReviewProgressDetail(0, 0)).toBeNull();
+        expect(formatReviewProgressDetail(3, -1)).toBeNull();
+        expect(formatReviewProgressDetail(3, Number.NaN)).toBeNull();
+    });
+
+    it('agrees with itself about one', () => {
+        expect(formatReviewProgressDetail(0, 1)).toBe('0 of 1 position');
+        expect(formatReviewProgressDetail(1, 1)).toBe('1 of 1 position');
+    });
+
+    it('never claims more work done than there is', () => {
+        expect(formatReviewProgressDetail(999, 241)).toBe('241 of 241 positions');
+        expect(formatReviewProgressDetail(-5, 241)).toBe('0 of 241 positions');
+        expect(formatReviewProgressDetail(Number.NaN, 8)).toBe('0 of 8 positions');
     });
 });

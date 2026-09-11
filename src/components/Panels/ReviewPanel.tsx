@@ -14,6 +14,7 @@ import {
     formatReviewQuality,
     formatReviewQualityCount,
     formatAverageCentipawnLoss,
+    formatReviewProgressDetail,
     getWinPercentLossForMove,
     getMoveQualityClassName,
     isFiniteNumber,
@@ -25,6 +26,9 @@ import { formatUciMove } from '../../utils/moveNotation';
 type Props = {
     status: ReviewStatus;
     progress: number;
+    /** The same progress in positions searched, for a reader watching a long game. */
+    progressCompleted?: number;
+    progressTotal?: number;
     summary: ReviewSummary | null;
     /** Describes the shape of the game; empty when there is nothing to say. */
     narrativeTags?: NarrativeTag[];
@@ -62,6 +66,8 @@ type ReviewMomentQualityFilter = 'all' | 'inaccuracy' | 'mistake' | 'blunder';
 export const ReviewPanel = memo(function ReviewPanel({
     status,
     progress,
+    progressCompleted = 0,
+    progressTotal = 0,
     narrativeTags = [],
     phaseAccuracy = [],
     phaseByMoveIndex = [],
@@ -91,6 +97,7 @@ export const ReviewPanel = memo(function ReviewPanel({
     }, [status, summary?.lineSignature, summary?.reviewedAt]);
 
     const progressPercent = Math.max(0, Math.min(100, Math.round(progress * 100)));
+    const progressDetail = formatReviewProgressDetail(progressCompleted, progressTotal);
     const focusMoment = summary?.keyMoments[0] ?? null;
     const reviewEngineLabel = formatReviewEngineSummary(summary?.engine);
     const reviewEngineDetail = `Review engine: ${describeReviewEngineSummary(summary?.engine)}`;
@@ -232,7 +239,10 @@ export const ReviewPanel = memo(function ReviewPanel({
                 <div className="review-progress-card">
                     <div className="review-progress-copy">
                         <strong>Reviewing line…</strong>
-                        <span>{progressPercent}% complete</span>
+                        <span>
+                            {progressPercent}% complete
+                            {progressDetail ? <span className="review-progress-detail"> · {progressDetail}</span> : null}
+                        </span>
                     </div>
                     <div
                         className="review-progress-track"
@@ -241,7 +251,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={progressPercent}
-                        aria-valuetext={`${progressPercent}% complete`}
+                        aria-valuetext={progressDetail ? `${progressPercent}% complete, ${progressDetail}` : `${progressPercent}% complete`}
                     >
                         <div className="review-progress-fill" style={{ width: `${progressPercent}%` }} />
                     </div>

@@ -181,6 +181,7 @@ import {
   describeReviewEngineSummary,
   formatAverageCentipawnLoss,
   formatReviewQuality,
+  formatReviewProgressDetail,
   formatReviewQualityWithArticle,
   formatWinPercentLoss,
   getEvalLossForMove,
@@ -927,6 +928,8 @@ function App() {
   const {
     status: reviewStatus,
     progress: reviewProgress,
+    completedSteps: reviewCompletedSteps,
+    totalSteps: reviewTotalSteps,
     summary: reviewSummary,
     startReview,
     updateReviewProgress,
@@ -6751,6 +6754,8 @@ function App() {
                 <ReviewPanel
                   status={reviewStatus}
                   progress={reviewProgress}
+                  progressCompleted={reviewCompletedSteps}
+                  progressTotal={reviewTotalSteps}
                   summary={reviewSummary}
                   narrativeTags={reviewNarrativeTags}
                   phaseAccuracy={reviewPhaseAccuracy}
@@ -7272,7 +7277,13 @@ function App() {
                 </button>
               )}
               {reviewStatus === 'running' && (
-                <span className="review-progress">
+                // The bar is the glance and the panel is the detail: there is no
+                // room here for a count beside a cancel button on a phone. The
+                // title carries it for anyone who asks.
+                <span
+                  className="review-progress"
+                  title={formatReviewProgressDetail(reviewCompletedSteps, reviewTotalSteps) ?? undefined}
+                >
                   Reviewing… {Math.round(reviewProgress * 100)}%
                   <button
                     type="button"

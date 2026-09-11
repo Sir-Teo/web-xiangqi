@@ -11,6 +11,13 @@ export function useGameReview() {
     const [status, setStatus] = useState<ReviewStatus>('idle');
     const [progress, setProgress] = useState(0);
     const [summary, setSummary] = useState<ReviewSummary | null>(null);
+    /**
+     * The same progress in the units it is counted in. A percentage cannot say
+     * how much work is left, and on a long game that is what a reader wants:
+     * see `formatReviewProgressDetail`.
+     */
+    const [completedSteps, setCompletedSteps] = useState(0);
+    const [totalSteps, setTotalSteps] = useState(0);
 
     const totalRef = useRef(0);
 
@@ -18,21 +25,26 @@ export function useGameReview() {
         totalRef.current = Math.max(0, totalSteps);
         setStatus('running');
         setProgress(0);
+        setCompletedSteps(0);
+        setTotalSteps(totalRef.current);
         setSummary(null);
         return totalRef.current > 0;
     }, []);
 
-    const updateReviewProgress = useCallback((completedSteps: number, totalSteps?: number) => {
-        if (typeof totalSteps === 'number') {
-            totalRef.current = Math.max(0, totalSteps);
+    const updateReviewProgress = useCallback((completed: number, total?: number) => {
+        if (typeof total === 'number') {
+            totalRef.current = Math.max(0, total);
+            setTotalSteps(totalRef.current);
         }
-        setProgress(totalRef.current > 0 ? completedSteps / totalRef.current : 1);
+        setCompletedSteps(completed);
+        setProgress(totalRef.current > 0 ? completed / totalRef.current : 1);
     }, []);
 
     const completeReview = useCallback((nextSummary: ReviewSummary) => {
         setSummary(nextSummary);
         setStatus('done');
         setProgress(1);
+        setCompletedSteps(totalRef.current);
     }, []);
 
     const hydrateReview = useCallback((nextSummary: ReviewSummary | null) => {
@@ -44,18 +56,24 @@ export function useGameReview() {
     const cancelReview = useCallback(() => {
         setStatus('idle');
         setProgress(0);
+        setCompletedSteps(0);
+        setTotalSteps(0);
         setSummary(null);
     }, []);
 
     const resetReview = useCallback(() => {
         setStatus('idle');
         setProgress(0);
+        setCompletedSteps(0);
+        setTotalSteps(0);
         setSummary(null);
     }, []);
 
     return {
         status,
         progress,
+        completedSteps,
+        totalSteps,
         summary,
         startReview,
         updateReviewProgress,
