@@ -42,6 +42,15 @@ describe('saved study analysis', () => {
     expect(sameStudyAnalysis(a, { ...a, depth: 20 })).toBe(false);
     expect(sameStudyAnalysis(a, { ...a, candidates: undefined })).toBe(false);
   });
+  it('retains deep-search snapshots throughout the pinned engine depth range', () => {
+    // The pinned Pikafish has MAX_PLY 246, allowing root searches through 245.
+    for (const depth of [129, 245, 256]) {
+      const a = captureStudyAnalysis({ ...pv, depth: String(depth) }, 'b', 'position startpos', engine, 1)!;
+      expect(a.depth).toBe(depth);
+      expect(readStudyAnalysisPgn(studyAnalysisPgn(a)!)).toEqual(a);
+    }
+    expect(normalizeStudyAnalysis({ ...snapshot(), depth: 257 })).toBeUndefined();
+  });
   it('round-trips the snapshot through PGN comments without creating an eval command', () => {
     const a = snapshot();
     const command = studyAnalysisPgn(a)!;

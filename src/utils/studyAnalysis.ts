@@ -17,6 +17,9 @@ export type StudyAnalysis = {
   candidates?: string[];
 };
 const MOVE = /^[a-i][0-9][a-i][0-9]$/;
+// Storage bound, not a search setting. The pinned engine's MAX_PLY is 246;
+// its iterative deepening can legitimately report depths above 128.
+const MAX_SNAPSHOT_DEPTH = 256;
 const POSITION = /^position (?:startpos|fen [^\r\n]{10,120}?)(?: moves(?: [a-i][0-9][a-i][0-9]){1,1024})?$/;
 const integer = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
@@ -30,7 +33,7 @@ export function normalizeStudyAnalysis(value: unknown, position?: string, move?:
     || !text(a.move, 4) || !MOVE.test(a.move) || (position !== undefined && a.position !== position)
     || (move !== undefined && a.move !== move) || !integer(a.score, -1000000, 1000000)
     || (a.scoreKind !== 'cp' && a.scoreKind !== 'mate') || typeof a.bounded !== 'boolean'
-    || !integer(a.depth, 1, 128) || !integer(a.savedAt, 0, 8640000000000000)
+    || !integer(a.depth, 1, MAX_SNAPSHOT_DEPTH) || !integer(a.savedAt, 0, 8640000000000000)
     || !integer(a.multiPv, 1, 5) || !a.engine || typeof a.engine !== 'object'
     || !text(a.engine.name, 120) || !text(a.engine.variant, 32)
     || !integer(a.engine.threads, 1, 128) || !integer(a.engine.hashMB, 1, 65536)) return undefined;

@@ -3,7 +3,10 @@ const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
-  await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
+  await page.getByRole('combobox', { name: 'Search commands' }).fill(label).catch(async error => {
+    console.error('Dialogs at command failure:', await page.getByRole('dialog').allTextContents());
+    throw error;
+  });
   await page.keyboard.press('Enter');
 }
 const fake = `
@@ -88,9 +91,13 @@ async function check(browser, width) {
     await command(page, 'Copy link');
     const url = await page.evaluate(() => window.__copied);
     assert.ok(new URL(url).searchParams.has('tree'));
+    // This recipient shares browser storage with the sender. Wait for the
+    // autosave explicitly so the recovery choice cannot depend on timing.
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moves.length === 3);
     const recipient = await context.newPage();
     recipient.on('pageerror', error => errors.push(error.message));
     await recipient.goto(url);
+    await recipient.getByRole('button', { name: "Keep the link's game", exact: true }).click();
     await command(recipient, 'Go to start');
     await recipient.keyboard.press('t');
     assert.match(await recipient.getByTestId('saved-analysis-card').innerText(), /D26/);
@@ -121,6 +128,29 @@ async function check(browser, width) {
     assert.match(await card.innerText(), /D26/);
     assert.deepEqual(await boardState(), root);
 
+    // Infinite searches may exceed depth 128. Updating that snapshot must
+    // preserve the user's note and retain the depth through recovery.
+    const note = 'Keep pressure on the centre. 保留计划。';
+    await page.locator('.mtree-chip').first().click();
+    await page.getByTestId('move-comment-input').fill(note);
+    await command(page, 'Go to start');
+    await page.keyboard.press('e');
+    await page.evaluate(() => { window.__depth = 245; window.__score = 100; });
+    await page.getByTestId('deep-dive-btn').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="keep-engine-pv-0"]')?.textContent.includes('Update analysis'));
+    await keep.click();
+    await page.keyboard.press('t');
+    assert.match(await card.innerText(), /D245/);
+    await page.locator('.mtree-chip').first().click();
+    assert.equal(await page.getByTestId('move-comment-input').inputValue(), note);
+    await command(page, 'Go to start');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.[0]?.analysis?.depth === 245);
+    await page.reload();
+    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('t');
+    assert.match(await card.innerText(), /D245/);
+    assert.deepEqual(await boardState(), root);
+
     // Same placement without the stored history is not the same source search.
     await page.addInitScript(() => {
       const saved = JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1'));
@@ -133,7 +163,7 @@ async function check(browser, width) {
     assert.equal(await card.count(), 0, 'A snapshot from different history was assigned to this source');
     assert.equal(await page.locator('.mtree-chip').count(), 3, 'Rejecting metadata discarded legal study moves');
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()}: analysis snapshot capture/update, source history, save/share/PGN/reload and layout passed at ${width}px`);
+    console.log(`${browserType.name()}: analysis snapshot capture/update, deep-search depth, notes, source history, save/share/PGN/reload and layout passed at ${width}px`);
   } finally { await context.close(); }
 }
 async function checkRealEngine(browser, width) {

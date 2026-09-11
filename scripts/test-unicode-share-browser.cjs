@@ -36,11 +36,13 @@ async function command(page, label) {
         assert.ok(copied, 'Sharing a small Unicode study failed');
         assert.ok(new URL(copied).searchParams.has('tree'), 'The shared URL lost the annotated tree');
         const fen = await page.locator('.bottombar-fen').getAttribute('title');
+        await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moves.length === 1);
 
         // A new page consumes only the URL; it has no in-memory study to fall back to.
         const recipient = await context.newPage();
         recipient.on('pageerror', error => errors.push(error.message));
         await recipient.goto(copied);
+        await recipient.getByRole('button', { name: "Keep the link's game", exact: true }).click();
         await recipient.keyboard.press('t');
         await recipient.waitForFunction(note => document.querySelector('[data-testid="move-comment-input"]')?.value === note, study[0].comment);
         assert.equal(await recipient.getByTestId('move-comment-input').inputValue(), study[0].comment);
