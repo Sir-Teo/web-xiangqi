@@ -7047,8 +7047,8 @@ function App() {
                     {currentAnalysisPvLines.length === 0 ? (
                       <div className="pv-empty">No PV available yet.</div>
                     ) : currentAnalysisPvLines.map((pv, i) => {
-                      const bestRawScore = currentAnalysisPvLines[0]?.score ?? pv.score;
-                      const lineStanding = describePvStanding(bestRawScore, pv.score, i);
+                      const bestReading = currentAnalysisPvLines[0] ?? pv;
+                      const lineStanding = describePvStanding(bestReading, pv, i);
                       const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
                       // One decimal, like every other evaluation in the app.
                       // At zero this badge could not tell a half-pawn from
@@ -7118,7 +7118,13 @@ function App() {
                           <div className="pv-moves">
                             <div className="pv-line-heading">
                               <span className="pv-line-rank">Line {i + 1}</span>
-                              <span className={`pv-line-standing ${i === 0 ? 'pv-line-standing-best' : ''}`}>
+                              <span
+                                className={`pv-line-standing ${i === 0 ? 'pv-line-standing-best' : ''}`}
+                                title={lineStanding === 'Not exact'
+                                  ? 'At least one score is a bound, so an exact comparison is not available yet.'
+                                  : i === 0 ? 'The engine’s first principal variation.'
+                                  : 'Compared with Line 1 from the side to move’s perspective. Live scores can update at different times.'}
+                              >
                                 {lineStanding}
                               </span>
                             </div>
