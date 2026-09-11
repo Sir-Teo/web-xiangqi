@@ -1583,6 +1583,17 @@ function App() {
   /** Whether the board is on the line the review describes. */
   const reviewMatchesActiveLine = reviewStatus === 'done' && reviewSummary?.lineSignature === currentLineSignature;
   /**
+   * A finished review that a save will not carry.
+   *
+   * `currentGameSnapshot` attaches the review only while the board is on the
+   * line it describes -- a review of one line stored beside the moves of
+   * another would be read back onto the wrong moves. The moves themselves do
+   * survive, in the serialized tree. Worth saying rather than leaving the
+   * reader to discover it when they load the game back and the figures are
+   * gone.
+   */
+  const savingWouldDropTheReview = reviewStatus === 'done' && Boolean(reviewSummary) && !reviewMatchesActiveLine;
+  /**
    * The records the review's figures are read off. The active line while the
    * board is on it, and the reviewed line itself once the reader has stepped
    * into a variation -- the accuracy by phase, the narrative and the saved
@@ -5911,7 +5922,7 @@ function App() {
                   type="button"
                   onClick={handleSaveGame}
                   disabled={!canSaveCurrentPosition}
-                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : 'Save current game'}
+                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
                   aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
                   data-testid="mobile-save-game-btn"
                 >
@@ -7074,7 +7085,11 @@ function App() {
                 className={`gc-btn ${saveFailedToast ? 'gc-btn-warning' : ''}`}
                 onClick={handleSaveGame}
                 disabled={!canSaveCurrentPosition}
-                title={saveFailedToast ? 'Could not save to local storage' : 'Save current game or custom position to library'}
+                title={saveFailedToast
+                  ? 'Could not save to local storage'
+                  : savingWouldDropTheReview
+                    ? 'Save current game or custom position to library. The review covers a different line, so the moves are saved without it.'
+                    : 'Save current game or custom position to library'}
                 data-testid="save-game-btn"
               >
                 {saveFailedToast ? <><IconX /> Save Failed</> : savedToast ? <><IconCheck /> Saved</> : <><IconSave /> Save</>}

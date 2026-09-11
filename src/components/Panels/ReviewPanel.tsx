@@ -273,6 +273,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         <p className="review-off-line" data-testid="review-off-line">
                             The board has left the line this review covers. Everything below is still
                             the reviewed game's — re-run the review to score the line you are on now.
+                            Saving from here keeps the moves, not the review.
                         </p>
                     )}
                     <div className="review-summary-grid">

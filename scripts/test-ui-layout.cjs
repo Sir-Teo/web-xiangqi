@@ -10886,6 +10886,36 @@ async function assertAReviewSaysWhenTheBoardHasLeftItsLine(page) {
   if (!offLine.accuracyShown) {
     throw new Error(`The figures should stay -- they are the reviewed game's: ${JSON.stringify(offLine)}`);
   }
+
+  /**
+   * And what a save from here will do with it. Verified against the library
+   * rather than taken from the copy: the moves are written, the review is not.
+   * A promise on screen that the storage does not keep is worse than silence.
+   */
+  const saveTitle = await page.locator('[data-testid="save-game-btn"]').getAttribute("title");
+  if (!/different line/i.test(saveTitle || "")) {
+    throw new Error(`The Save button should say the review will not go with the moves: ${JSON.stringify(saveTitle)}`);
+  }
+
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]").length);
+  await page.getByTestId("save-game-btn").click();
+  await page.waitForTimeout(1200);
+  const written = await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]");
+    const last = all[all.length - 1] || {};
+    return { count: all.length, moves: (last.moves || []).length, hasReview: Boolean(last.review), hasTree: Boolean(last.moveTree) };
+  });
+  if (written.count !== before + 1) {
+    throw new Error(`Saving from the new line wrote nothing: ${JSON.stringify(written)}`);
+  }
+  if (written.hasReview) {
+    throw new Error(
+      `A review of another line was saved beside these moves, which is how it gets read back onto the wrong ones: ${JSON.stringify(written)}`
+    );
+  }
+  if (!written.hasTree) {
+    throw new Error(`The moves must survive the save even when the review does not: ${JSON.stringify(written)}`);
+  }
 }
 
 async function assertLibrarySortsByBlackAccuracyAndByAge(page) {
