@@ -14,11 +14,26 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
         const input = page.getByTestId('uci-line-input');
         await input.fill('[DhtmlXQ_movelist]'.repeat(11000));
-        const start = performance.now();
+        await page.evaluate(() => {
+          window.__dhtmlTiming = { ready: performance.now() };
+          const clicked = event => {
+            if (!event.target.closest('[data-testid="import-uci-line-btn"]')) return;
+            window.__dhtmlTiming.clicked = performance.now();
+            document.removeEventListener('click', clicked, true);
+          };
+          document.addEventListener('click', clicked, true);
+          const observer = new MutationObserver(() => {
+            if (!document.querySelector('#new-game-line-error') || !window.__dhtmlTiming.clicked) return;
+            window.__dhtmlTiming.error = performance.now(); observer.disconnect();
+          });
+          observer.observe(document.body, { subtree: true, childList: true });
+        });
         await page.getByTestId('import-uci-line-btn').click();
         await page.locator('#new-game-line-error').waitFor({ timeout: 5000 });
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), before, 'A malformed record changed the board');
-        console.log(`${browserType.name()} ${width}px: malformed DhtmlXQ rejected in ${Math.round(performance.now() - start)} ms including UI work`);
+        await page.waitForFunction(() => window.__dhtmlTiming.error);
+        const timing = await page.evaluate(() => ({ clickToErrorDomMs: window.__dhtmlTiming.error - window.__dhtmlTiming.clicked, beforeClickMs: window.__dhtmlTiming.clicked - window.__dhtmlTiming.ready }));
+        console.log(`${browserType.name()} ${width}px: malformed DhtmlXQ rejected; timing ${JSON.stringify(timing)}`);
         const record = 'İ [DhtmlXQ_movelist]77747062[/DhtmlXQ_movelist]'
           + '[DhtmlXQ_comment999]'.repeat(9800)
           + '[dhtmlxq_comment2]Xiangqi plan İ||炮[/DHTMLXQ_COMMENT2]';
