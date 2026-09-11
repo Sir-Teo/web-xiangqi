@@ -1,23 +1,13 @@
-/**
- * Keeping Tab inside a dialog, written once.
- *
- * There were three of these: one in `App.tsx` for the settings and new-game
- * dialogs, and a hand-rolled copy in each of the game-over and auto-save
- * modals. They had already drifted — the copies looked only at
- * `button:not(:disabled)`, so a dialog that ever grew a link, an input or a
- * button hidden by CSS rather than unmounted would have cycled through the
- * wrong set and dropped focus at the wrong edge. Neither modal holds anything
- * but two buttons today, so this changes no behaviour; it removes the way it
- * would have gone wrong quietly.
- */
+/** Shared keyboard focus handling for the app's dialogs. */
 
-/** Everything the browser will hand a Tab press, disabled controls aside. */
+/** Candidate controls; visibility and actual tab stops are checked below. */
 export const DIALOG_FOCUSABLE_SELECTOR = [
     'button:not([disabled])',
     'input:not([disabled])',
     'select:not([disabled])',
     'textarea:not([disabled])',
     'a[href]',
+    'summary',
     '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
@@ -30,8 +20,12 @@ export const DIALOG_FOCUSABLE_SELECTOR = [
 export function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
     return Array.from(container.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR))
         .filter((element) => {
+            if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
+            // Own computed display does not reveal a hidden ancestor or a
+            // closed details element. Those descendants have no layout boxes.
+            if (!element.getClientRects().length) return false;
             const style = window.getComputedStyle(element);
-            return style.display !== 'none' && style.visibility !== 'hidden';
+            return style.visibility !== 'hidden' && style.visibility !== 'collapse';
         });
 }
 
@@ -58,9 +52,11 @@ export function keepTabWithin(container: HTMLElement | null, event: KeyboardEven
     const outside = !active || !container.contains(active);
     if (event.shiftKey && (outside || active === first)) {
         event.preventDefault();
-        last.focus({ preventScroll: true });
+        // Let the dialog scroll to the destination, especially when its board
+        // and last control cannot both fit on a small screen.
+        last.focus();
     } else if (!event.shiftKey && (outside || active === last)) {
         event.preventDefault();
-        first.focus({ preventScroll: true });
+        first.focus();
     }
 }

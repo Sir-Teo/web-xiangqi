@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import './Board.css';
 import './BoardEditor.css';
 import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../utils/xiangqi';
@@ -52,6 +52,8 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     const [side, setSide] = useState<Side>(initialSide);
     const [brush, setBrush] = useState<EditorBrush>('K');
     const dialogRef = useRef<HTMLDivElement | null>(null);
+    const [focusedSquare, setFocusedSquare] = useState({ file: 0, rank: 9 });
+    const keyboardHelpId = useId();
 
     const problem = useMemo(() => describeSetupProblem(board, side), [board, side]);
     const fen = useMemo(() => setupFen(board, side), [board, side]);
@@ -93,6 +95,26 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         if (!target) return;
         paint(Number(target.dataset.file), Number(target.dataset.rank));
     }, [paint]);
+
+    const handleSquareKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.altKey || event.metaKey || (event.ctrlKey && event.key !== 'Home' && event.key !== 'End')) return;
+        let nextFile = file;
+        let nextRank = rank;
+        switch (event.key) {
+            case 'ArrowLeft': nextFile--; break;
+            case 'ArrowRight': nextFile++; break;
+            case 'ArrowUp': nextRank++; break;
+            case 'ArrowDown': nextRank--; break;
+            case 'Home': nextFile = 0; if (event.ctrlKey) nextRank = 9; break;
+            case 'End': nextFile = 8; if (event.ctrlKey) nextRank = 0; break;
+            default: return; // Native Enter/Space clicks apply the brush once.
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        dialogRef.current?.querySelector<HTMLButtonElement>(
+            `.hitbox[data-file="${Math.max(0, Math.min(8, nextFile))}"][data-rank="${Math.max(0, Math.min(9, nextRank))}"]`
+        )?.focus();
+    };
 
     const brushButton = (piece: string) => (
         <button
@@ -143,22 +165,25 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             <span className="river-text">楚{'　'}河</span>
                             <span className="river-text river-text-flipped">漢{'　'}界</span>
                         </div>
-                        <div className="hitboxes-layer" onClick={handleBoardClick}>
-                            {RANKS_TOP_DOWN.map((rank) => FILES.map((file) => {
+                        <div className="hitboxes-layer" onClick={handleBoardClick} role="grid" aria-label="Position board" aria-describedby={keyboardHelpId}>
+                            {RANKS_TOP_DOWN.map((rank) => <div role="row" key={rank}>{FILES.map((file) => {
                                 const piece = board[rank][file];
                                 return (
-                                    <button
-                                        key={`edit-${file}-${rank}`}
+                                    <div role="gridcell" key={file}><button
                                         type="button"
                                         className="hitbox"
                                         style={{ left: leftFor(file), top: topFor(rank) }}
                                         data-file={file}
                                         data-rank={rank}
                                         data-brush={brush === 'erase' ? 'erase' : undefined}
-                                        aria-label={`${FILE_LABELS[file]}${rank}, ${piece ? NAMES[piece] : 'empty'}. ${brush === 'erase' ? 'Clear' : `Place ${NAMES[brush]}`}`}
-                                    />
+                                        aria-label={`${FILE_LABELS[file]}${rank}, ${piece ? NAMES[piece] : 'empty'}. ${brush === 'erase' || piece === brush ? 'Clear' : `Place ${NAMES[brush]}`}`}
+                                        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End Control+Home Control+End Enter Space"
+                                        tabIndex={focusedSquare.file === file && focusedSquare.rank === rank ? 0 : -1}
+                                        onFocus={() => setFocusedSquare({ file, rank })}
+                                        onKeyDown={event => handleSquareKeyDown(event, file, rank)}
+                                    /></div>
                                 );
-                            }))}
+                            })}</div>)}
                         </div>
                         <div className="pieces-layer" aria-hidden="true">
                             {RANKS_TOP_DOWN.map((rank) => FILES.map((file) => {
@@ -202,6 +227,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                         </button>
                         {BLACK_PIECES.map(brushButton)}
                     </div>
+                    <p id={keyboardHelpId} className="board-editor-keyboard-help">Arrow keys move between squares. Enter or Space places or removes a piece. Tab moves to the controls.</p>
                     <div className="board-editor-row" role="group" aria-label="Side to move">
                         <button type="button" className={`pill-btn ${side === 'w' ? 'pill-btn-active' : ''}`} onClick={() => setSide('w')} aria-pressed={side === 'w'} data-testid="editor-side-red">Red to move</button>
                         <button type="button" className={`pill-btn ${side === 'b' ? 'pill-btn-active' : ''}`} onClick={() => setSide('b')} aria-pressed={side === 'b'} data-testid="editor-side-black">Black to move</button>

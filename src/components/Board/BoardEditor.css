@@ -109,6 +109,13 @@
   color: var(--danger, #f87171);
 }
 
+.board-editor-keyboard-help {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
 .board-editor-problem[data-ok="true"] {
   color: var(--text-secondary);
 }
