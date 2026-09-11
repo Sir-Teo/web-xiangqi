@@ -2548,6 +2548,10 @@ function App() {
   const bottomEngineStatus = !isReady
     ? engineNotice?.text ?? formatAnalysisActivity(analysisActivity)
     : formatAnalysisActivity(analysisActivity);
+  const engineRecoveryNotice = !isReady ? engineNotice : null;
+  const engineRecoveryHint = engineRecoveryNotice?.tone === 'danger'
+    ? 'Select Restart to try again.'
+    : 'Analysis resumes when the engine is ready.';
   /**
    * The engine's weights are 53MB and the whole app waits on them, so "Loading
    * engine" used to stand alone for a minute or more on a phone connection --
@@ -6832,6 +6836,16 @@ function App() {
                       </button>
                     </div>
                   </div>
+                  {engineRecoveryNotice ? (
+                    <div
+                      className={`engine-recovery-notice engine-recovery-notice-${engineRecoveryNotice.tone}`}
+                      role="status"
+                      data-testid="engine-recovery-notice"
+                    >
+                      <strong>{engineRecoveryNotice.text}</strong>
+                      <span>{engineRecoveryHint}</span>
+                    </div>
+                  ) : null}
                   {/* The threat replaces the candidate list rather than sitting
                       beside it, because the two are evaluations of different
                       positions and a reader comparing them side by side would be
@@ -7033,17 +7047,17 @@ function App() {
                     </div>
                     <div
                       className={`engine-stat${analysisIsStalled ? ' engine-stat-stalled' : ''}`}
-                      title={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
-                      aria-label={analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                      title={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
+                      aria-label={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
                     >
                       <span>Search</span>
                       {/* Depth from a search that has been stopped is stale, and
                           reading it beside a board that is not moving is what
                           made a backgrounded tab look broken. */}
-                      <strong>{analysisIsStalled
+                      <strong data-testid="engine-search-status">{engineRecoveryNotice?.text ?? (analysisIsStalled
                         ? formatAnalysisActivity(analysisActivity)
-                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady)}</strong>
-                      <em>{analysisIsStalled
+                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady))}</strong>
+                      <em>{engineRecoveryNotice ? engineRecoveryHint : analysisIsStalled
                         ? 'tab in background'
                         : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
                     </div>
@@ -7077,7 +7091,7 @@ function App() {
                       </div>
                       <div className="engine-coach-item">
                         <span>Depth</span>
-                        <strong>{topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearchQueued ? 'Queued' : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
+                        <strong>{!isReady ? '—' : topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearchQueued ? 'Queued' : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
                       </div>
                       <div className="engine-coach-item engine-coach-line">
                         <span>Line</span>

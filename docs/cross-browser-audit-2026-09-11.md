@@ -98,8 +98,19 @@ are part of this fix.
 
 `test-engine-recovery-navigation-browser.cjs` checks the grace period, simulated
 pagehide/pageshow, manual restart and disable ownership, resumed PV output, and
-bounded repeated failures in all three browsers at desktop and phone widths.
+bounded repeated failures in all three browsers at 1440, 390, and 320 pixels.
 The lifecycle simulation is not certification of hardware back/forward-cache
 behavior. Existing startup cancellation and late-constructor watchdog regressions
 remain covered. The expanded matrix runs eight workflows per browser and remains
 an optional local audit; required CI retains its existing Chromium coverage.
+
+## Engine-tab recovery feedback
+
+The mobile Engine tab hid the Board view's crash notice and continued displaying
+“Booting” after automatic recovery had stopped. A visible status message now
+explains recovery or the crash pause alongside the existing Restart control.
+Search diagnostics carry the same status and action, and the beginner depth
+card shows no depth while the engine is unavailable. The notice clears after a
+successful restart. Browser coverage keeps the Engine tab open, checks the
+message and diagnostics, measures coarse-pointer Restart targets, verifies
+horizontal fit, and restarts successfully at 1440, 390, and 320 pixels.

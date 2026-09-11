@@ -5,8 +5,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const width of [1440, 390]) {
-      const page = await browser.newPage({ viewport: { width, height: 900 } });
+    for (const width of [1440, 390, 320]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       try {
@@ -85,10 +85,23 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         // Recovery callbacks have a one-second cooldown; React can commit the
         // resulting worker creation at the end of a 300ms clock step.
         assert.ok(attempts[1] - attempts[0] >= 700 && attempts[2] - attempts[1] >= 700, `Repeated recovery ignored its cooldown: ${JSON.stringify(attempts)}`);
-        if (width < 900) await page.getByTestId('mobile-view-board').click();
-        assert.match(await page.locator('body').innerText(), /Engine paused after crashes/);
+        const notice = page.getByTestId('engine-recovery-notice');
+        await notice.waitFor({ state: 'visible' });
+        assert.match(await notice.innerText(), /Engine paused after crashes\s+Select Restart to try again/);
+        assert.equal(await page.getByTestId('engine-search-status').innerText(), 'Engine paused after crashes');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) {
+          const restart = await page.getByTestId('restart-engine-btn').boundingBox();
+          assert.ok(restart.height >= 44 && restart.width >= 44, 'Restart is smaller than a touch target');
+        }
+        await page.screenshot({ path: `/tmp/xiangqi-engine-recovery-${browserType.name()}-${width}.png` });
         await page.clock.runFor(5000);
         assert.equal(await page.evaluate(() => window.__boots), 8, 'The crash budget did not stop recovery');
+        await page.evaluate(() => { window.__failAllBoots = false; });
+        await page.getByTestId('restart-engine-btn').click();
+        await page.clock.resume();
+        await page.getByTestId('engine-pv-0-move-0').waitFor();
+        await notice.waitFor({ state: 'detached' });
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()}: navigation, return, manual restart, disable and bounded crash recovery passed at ${width}px`);
       } catch (error) {
