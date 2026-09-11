@@ -120,6 +120,9 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
         if (event.key === 'Home') { event.preventDefault(); setActiveIndex(0); }
         if (event.key === 'End') { event.preventDefault(); setActiveIndex(ranked.length - 1); }
         if (event.key === 'Enter') {
+            // A hovered row can differ from the keyboard-focused button.
+            // Let that button's native activation run its own onClick.
+            if (event.target instanceof HTMLButtonElement) return;
             event.preventDefault();
             runCommand(ranked[activeIndex]);
         }

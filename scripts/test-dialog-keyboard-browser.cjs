@@ -27,6 +27,8 @@ async function paletteKeyboard(browser, viewport) {
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.closest('[data-command-id]')?.dataset.commandId), 'library');
+    // Moving the pointer must not redirect Enter away from the focused button.
+    await page.locator('[data-command-id="new-game"] button').hover();
     await page.keyboard.press('Enter');
     await page.getByTestId('saved-game-list').waitFor();
     assert.equal(await page.getByRole('dialog').count(), 0);
