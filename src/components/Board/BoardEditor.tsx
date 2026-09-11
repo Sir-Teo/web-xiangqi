@@ -5,6 +5,7 @@ import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../util
 import { describeSetupProblem, emptyBoard, setupFen } from '../../utils/positionSetup';
 import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { IconX } from '../icons';
+import { keepTabWithin } from '../../utils/focusTrap';
 
 export type EditorBrush = string | 'erase';
 
@@ -56,8 +57,18 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     const fen = useMemo(() => setupFen(board, side), [board, side]);
 
     useEffect(() => {
+        const previouslyFocused = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
         dialogRef.current?.querySelector<HTMLElement>('[data-editor-first]')?.focus({ preventScroll: true });
+        return () => {
+            if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+        };
+    }, []);
+
+    useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            keepTabWithin(dialogRef.current, event);
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
