@@ -5,7 +5,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -28,6 +28,15 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         const notice = page.getByTestId('auto-save-error');
         await notice.waitFor({ timeout: 3000 });
         assert.match(await notice.innerText(), /too large for automatic recovery/);
+        if (width < 900) {
+          for (const button of await notice.getByRole('button').all()) {
+            const box = await button.boundingBox();
+            assert.ok(box.height >= 44 && box.width >= 44, 'Recovery action is smaller than a touch target');
+          }
+          const warningBox = await notice.boundingBox();
+          const navBox = await page.locator('.mobile-board-nav').boundingBox();
+          assert.ok(warningBox.y + warningBox.height + 8 <= navBox.y, 'Recovery warning overlaps move navigation');
+        }
         assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:auto-saved-game:v1')), null);
         const pending = page.waitForEvent('download');
         await notice.getByRole('button', { name: 'Download PGN', exact: true }).click();

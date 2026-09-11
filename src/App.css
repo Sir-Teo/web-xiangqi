@@ -7100,6 +7100,13 @@ summary:active {
 }
 .save-error-notice > span { flex-basis: 100%; }
 
+@media (max-width: 900px) and (orientation: portrait) {
+  [data-mobile-view="board"] .save-error-notice {
+    /* Clear the 56px tab bar, 44px move strip, stage spacing and a gap. */
+    bottom: calc(56px + 44px + 1rem + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Touch targets in the analysis panels.
    ------------------------------------
    These controls are sized for a mouse: `min-height: 1.55rem` puts them at
@@ -7115,6 +7122,17 @@ summary:active {
    Only these few buttons are covered: the move list is a long list where row
    height is also scroll length, and is worth judging on its own. */
 @media (pointer: coarse) {
+  .undo-toast-btn,
+  .undo-toast-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .undo-toast-dismiss {
+    align-items: center;
+    justify-content: center;
+  }
+
   .engine-cache-btn,
   .engine-pv-btn,
   .pv-action-btn,

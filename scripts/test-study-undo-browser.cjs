@@ -22,6 +22,13 @@ async function command(page, label) {
         await page.keyboard.press('t');
         const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
         await command(page, 'Delete this move and what follows');
+        if (width < 900) {
+          for (const button of await page.getByTestId('delete-undo-toast').getByRole('button').all()) {
+            const box = await button.boundingBox();
+            assert.ok(box.height >= 44 && box.width >= 44, 'Undo action is smaller than a touch target');
+          }
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        }
         await page.getByRole('button', { name: 'Undo', exact: true }).click();
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
         assert.equal(await page.locator('.mtree-chip').count(), 3);
