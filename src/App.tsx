@@ -1186,6 +1186,7 @@ function App() {
 
   const {
     isReady,
+    readySessionId,
     isSearching,
     isSearchQueued,
     variant: engineVariant,
@@ -1341,12 +1342,23 @@ function App() {
   });
 
   useEffect(() => {
+    if (!readySessionId) return;
+    // The replacement starts with UCI defaults even if React never rendered
+    // isReady=false. Invalidate old analysis before options/search effects run.
+    currentMultiPvRef.current = 1;
+    currentShowWdlRef.current = false;
+    activeAnalysisRequestRef.current = '';
+    analysisStageRef.current = 'idle';
+    setDeepDiveActive(false);
+  }, [readySessionId, setDeepDiveActive]);
+
+  useEffect(() => {
     if (!isReady) return;
     setEngineNotice(engineSafetyBootLevel > 0
       ? { tone: 'warning', text: 'Safe engine mode' }
       : null
     );
-  }, [engineSafetyBootLevel, isReady]);
+  }, [engineSafetyBootLevel, isReady, readySessionId]);
 
   const reviewRevisitGoCmd = reviewPolicy.revisit?.goCmd ?? null;
   const aiSearchConfig = useMemo(
@@ -1819,7 +1831,7 @@ function App() {
         clearWdl();
       }
     }
-  }, [aiSearchConfig.multiPv, analysisMultiPv, analysisWdlEnabled, candidateActive, candidateSearch, clearPvLines, clearWdl, engineDetailEnabled, engineRequired, isAiTurn, isReady, reviewStatus, setOption, trimPvLines]);
+  }, [aiSearchConfig.multiPv, analysisMultiPv, analysisWdlEnabled, candidateActive, candidateSearch, clearPvLines, clearWdl, engineDetailEnabled, engineRequired, isAiTurn, isReady, readySessionId, reviewStatus, setOption, trimPvLines]);
 
   // Analysis engine effect
   useEffect(() => {
@@ -1904,6 +1916,7 @@ function App() {
     candidateActive,
     retainCandidateInBackground,
     hasCurrentDeepResult,
+    readySessionId,
   ]);
 
   useEffect(() => {
@@ -2023,7 +2036,7 @@ function App() {
     }, delayMs);
 
     return () => clearTimeout(timer);
-  }, [aiSearchConfig, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
+  }, [aiSearchConfig, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, readySessionId, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
 
   // Review engine drive: when review is running and engine is idle, fire next search
   useEffect(() => {
@@ -2073,7 +2086,7 @@ function App() {
     // different evaluation depending on whether it was reviewed or hovered.
     const positionCommand = makeEnginePositionCommand(rootFen, getNodeMoves(nodeId));
     queueSearch(positionCommand, goCmd, 0, makeReviewTag(controller.phase, nodeId));
-  }, [finalizeReview, getNodeMoves, isReady, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, rootFen, updateReviewProgress]);
+  }, [finalizeReview, getNodeMoves, isReady, readySessionId, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, rootFen, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
@@ -3451,7 +3464,7 @@ function App() {
   useEffect(() => {
     candidateActiveKeyRef.current = '';
     setCandidateSearch(null);
-  }, [analysisRequestKey, engineRestartToken]);
+  }, [analysisRequestKey, engineRestartToken, readySessionId]);
   useEffect(() => { setCandidatePickerOpen(false); }, [currentPositionCommand]);
   useEffect(() => {
     if (!engineEnabled || !isReady || isAiTurn || gameResult || reviewStatus === 'running' || (!isPageVisible && !retainCandidateInBackground)) {
@@ -4840,7 +4853,7 @@ function App() {
     } else {
       pendingShortcutRef.current = null;
     }
-  }, [analysisTab, canDeepDive, canShowThreat, isReady, runDeepDive, runThreatSearch]);
+  }, [analysisTab, canDeepDive, canShowThreat, isReady, readySessionId, runDeepDive, runThreatSearch]);
 
   const reviewNarrativeTags = useMemo(
     () => (reviewStatus === 'done'

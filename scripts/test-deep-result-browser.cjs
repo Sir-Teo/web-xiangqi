@@ -24,6 +24,7 @@ async function check(browser, width) {
         const listeners = [];
         const emit = line => listeners.forEach(listener => listener(line));
         let position = '', deep = false;
+        window.__readyAgain = () => emit('readyok');
         window.__finishDeep = () => {
           if (!deep) throw new Error('No deep search is running');
           emit('info depth 28 multipv 1 score cp 120 wdl 700 200 100 pv b9c7 a0a1');
@@ -85,6 +86,25 @@ async function check(browser, width) {
     await waitDepth(28);
     await pv.screenshot({ path: `/tmp/xiangqi-deep-result-${browserType.name()}-${width}.png` });
 
+    // Restart at the retained position must invalidate the old result.
+    // Extra readiness acknowledgements belong to the same engine session.
+    const beforeReady = await goCount();
+    await page.evaluate(() => window.__readyAgain());
+    await page.waitForTimeout(120);
+    assert.equal(await goCount(), beforeReady);
+    await waitDepth(28);
+    const boots = await page.evaluate(() => window.__boots);
+    const oldCommands = await page.evaluate(() => window.__commands.length);
+    await page.getByTestId('restart-engine-btn').click();
+    await page.waitForFunction(previous => window.__boots === previous + 1, boots);
+    await waitDepth(8);
+    const restarted = await page.evaluate(index => window.__commands.slice(index), oldCommands);
+    assert.ok(restarted.some(command => command.startsWith('go ')), 'Replacement never started fresh analysis');
+    assert.equal(restarted.findLast(command => command.startsWith('setoption name MultiPV ')), 'setoption name MultiPV value 3');
+    assert.equal(restarted.findLast(command => command.startsWith('setoption name UCI_ShowWDL ')), 'setoption name UCI_ShowWDL value true');
+    assert.equal(restarted.findLast(command => command.startsWith('position ')), 'position startpos moves h2e2');
+    assert.doesNotMatch(await page.locator('.top-engine-state').innerText(), /Restarting engine/);
+
     // Stopping an infinite search keeps its last completed iteration too.
     await page.getByTestId('deep-infinite-toggle').click();
     await startDeep();
@@ -107,7 +127,7 @@ async function check(browser, width) {
     await waitDepth(8);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()}: completed/stopped deep results, background completion and navigation passed at ${width}px`);
+    console.log(`${browserType.name()}: completed/stopped deep results, background completion, navigation and restart passed at ${width}px`);
   } catch (error) {
     await page.screenshot({ path: `/tmp/xiangqi-deep-result-failure-${browserType.name()}-${width}.png` });
     console.error(await page.locator('body').innerText());

@@ -190,6 +190,9 @@ export function parsePvUciMoves(value: string) {
 
 export function useEngine(options: EngineInitOptions = {}) {
     const [isReady, setIsReady] = useState(false);
+    // A fast replacement can become ready within the same React batch that
+    // marked its predecessor unready. Session identity must still change.
+    const [readySessionId, setReadySessionId] = useState(0);
     const [isSearching, setIsSearching] = useState(false);
     const [variant, setVariant] = useState<string>('unknown');
     const [outputLines, setOutputLines] = useState<string[]>([]);
@@ -844,6 +847,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             }
             sendCommand('isready');
         } else if (msg === 'readyok') {
+            setReadySessionId(initTokenRef.current);
             clearEngineReadyTimer();
             appendOutputLine(msg);
             setIsReady(true);
@@ -1029,6 +1033,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     return {
         isReady,
+        readySessionId,
         isSearching,
         isSearchQueued,
         variant,
