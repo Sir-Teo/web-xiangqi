@@ -1,4 +1,4 @@
-import { markStudyAnalysisComments } from './studyAnalysis';
+import { readStudyAnalysisPgn } from './studyAnalysis';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { ReviewMoveQuality } from './review';
 import { MATE_SCORE_BASE } from './engineEvalReading';
@@ -184,6 +184,30 @@ export function extractUciMoveLine(text: string): string[] {
     return moves;
 }
 
+/** Read comments separately so their parentheses/coordinates cannot become moves. */
+function* uciTreeTokens(source: string): Generator<{ comment: string } | { match: RegExpMatchArray }> {
+    const delimiters = /[[{;]/g;
+    const missingClosers = new Set<string>();
+    let cursor = 0;
+    for (let delimiter = delimiters.exec(source); delimiter; delimiter = delimiters.exec(source)) {
+        const start = delimiter.index;
+        const opener = delimiter[0];
+        const close = opener === '[' ? ']' : opener === '{' ? '}' : '\n';
+        const end = missingClosers.has(close) ? -1 : source.indexOf(close, start + 1);
+        if (end < 0 && opener !== ';') {
+            // Preserve the coordinate reader's existing incomplete-delimiter
+            // recovery without repeatedly scanning the remaining suffix.
+            missingClosers.add(close);
+            continue;
+        }
+        for (const match of source.slice(cursor, start).matchAll(UCI_TREE_TOKEN_PATTERN)) yield { match };
+        if (opener !== '[') yield { comment: source.slice(start + 1, end < 0 ? source.length : end) };
+        cursor = end < 0 ? source.length : end + 1;
+        delimiters.lastIndex = cursor;
+    }
+    for (const match of source.slice(cursor).matchAll(UCI_TREE_TOKEN_PATTERN)) yield { match };
+}
+
 export function extractUciMoveTree(text: string): {
     moves: string[];
     moveTree: SavedMoveTreeNode[];
@@ -192,32 +216,34 @@ export function extractUciMoveTree(text: string): {
     /** The paste held more than one game and only the first was read. */
     hadMoreGames: boolean;
 } {
-    const hadMoreGames = firstGameOnly(text).truncated;
-    const marked = text.includes('[%xqanalysis ')
-        ? markStudyAnalysisComments(firstGameOnly(text).text) : { text: '', snapshots: [] };
-    const cleaned = marked.snapshots.length ? stripPgnMetadata(marked.text) : stripPgnMetadata(text);
-    const treeTokens = new RegExp(`${UCI_TREE_TOKEN_PATTERN.source}|@xqa:(\\d+)@`, 'gi');
+    const firstGame = firstGameOnly(text);
     const root: SavedMoveTreeNode[] = [];
     const stack: SavedMoveTreeNode[][] = [];
     let currentLine: SavedMoveTreeNode[] = [];
     let nodeCount = 0;
     let tooLarge = false;
+    let commentTarget: SavedMoveTreeNode | undefined;
 
-    for (const match of cleaned.matchAll(treeTokens)) {
-        if (match[5] !== undefined) {
-            const snapshot = marked.snapshots[Number(match[5])];
-            const node = currentLine[currentLine.length - 1];
-            if (snapshot && node?.uci === snapshot.move) node.analysis = snapshot;
+    for (const entry of uciTreeTokens(firstGame.text)) {
+        if ('comment' in entry) {
+            if (!commentTarget) continue;
+            const snapshot = readStudyAnalysisPgn(entry.comment);
+            if (snapshot?.move === commentTarget.uci) commentTarget.analysis = snapshot;
+            const note = parseFreeTextComment(entry.comment);
+            if (note) commentTarget.comment = normalizeMoveComment([commentTarget.comment, note].filter(Boolean).join(' '));
             continue;
         }
+        const match = entry.match;
         const token = match[0];
         if (token === '(') {
             stack.push(currentLine);
             currentLine = currentLine.slice(0, -1);
+            commentTarget = undefined;
             continue;
         }
         if (token === ')') {
             currentLine = stack.pop() ?? currentLine;
+            commentTarget = currentLine[currentLine.length - 1];
             continue;
         }
 
@@ -231,6 +257,7 @@ export function extractUciMoveTree(text: string): {
 
         nodeCount += 1;
         const node: SavedMoveTreeNode = { uci: `${from}${to}`.toLowerCase() };
+        commentTarget = node;
         const parent = currentLine[currentLine.length - 1];
         if (parent) {
             if (!parent.children) parent.children = [];
@@ -246,7 +273,7 @@ export function extractUciMoveTree(text: string): {
         moveTree: root,
         hasVariations: root.length > 1 || hasBranch(root),
         tooLarge,
-        hadMoreGames,
+        hadMoreGames: firstGame.truncated,
     };
 }
 
@@ -348,14 +375,16 @@ export function extractAnnotatedMainLine(text: string): {
 
     const annotate = (patch: ImportedMoveAnnotation) => {
         if (depth > 0 || annotations.length === 0) return;
-        Object.assign(annotations[annotations.length - 1], patch);
+        const current = annotations[annotations.length - 1];
+        if (patch.comment && current.comment) patch.comment = normalizeMoveComment(`${current.comment} ${patch.comment}`);
+        Object.assign(current, patch);
     };
 
     while (index < source.length) {
         const ch = source[index];
 
-        if (ch === '{') {
-            const end = source.indexOf('}', index + 1);
+        if (ch === '{' || ch === ';') {
+            const end = source.indexOf(ch === '{' ? '}' : '\n', index + 1);
             const comment = source.slice(index + 1, end < 0 ? source.length : end);
             const evalScore = parseEvalCommand(comment);
             if (evalScore !== undefined) annotate({ evalScore });
@@ -366,11 +395,6 @@ export function extractAnnotatedMainLine(text: string): {
         }
         if (ch === '[') {
             const end = source.indexOf(']', index + 1);
-            index = end < 0 ? source.length : end + 1;
-            continue;
-        }
-        if (ch === ';') {
-            const end = source.indexOf('\n', index + 1);
             index = end < 0 ? source.length : end + 1;
             continue;
         }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { annotationTokensForMove } from './pgnAnnotations';
-import { extractAnnotatedMainLine } from './moveImport';
+import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
+import { exportPgnFromMoveTree } from './gameExport';
 import { MAX_MOVE_COMMENT_LENGTH } from './moveComment';
 
 /**
@@ -85,5 +86,32 @@ describe('a note through a PGN and back', () => {
         expect(read.moves).toEqual(['b2e2', 'h9g7']);
         expect(read.annotations[0].comment).toBe('main note');
         expect(read.annotations[1].comment).toBeUndefined();
+    });
+
+    it('round-trips every nested variation note through the normal tree importer', () => {
+        const tree = [
+            { uci: 'h2e2', comment: 'Main cannon', children: [{ uci: 'h9g7', comment: 'Main horse' }] },
+            { uci: 'b2e2', comment: 'Side cannon 中炮 🐎', children: [
+                { uci: 'a9a8', comment: 'Side rook', children: [{ uci: 'h0g2', comment: 'Side horse' }] },
+                { uci: 'i9i8', comment: 'Nested rook' },
+            ] },
+        ];
+        expect(extractUciMoveTree(exportPgnFromMoveTree(tree)!).moveTree).toEqual(tree);
+    });
+
+    it('joins successive brace and semicolon notes on the correct branch', () => {
+        const source = 'h2e2 {First} {second} (b2e2 {Side} ; continuation with h9g7 (not moves)\n a9a8 {Rook}) {third} h9g7 ; Last note\n*';
+        const parsed = extractUciMoveTree(source);
+        expect(parsed.moveTree).toEqual([
+            { uci: 'h2e2', comment: 'First second third', children: [{ uci: 'h9g7', comment: 'Last note' }] },
+            { uci: 'b2e2', comment: 'Side continuation with h9g7 (not moves)', children: [{ uci: 'a9a8', comment: 'Rook' }] },
+        ]);
+        expect(extractAnnotatedMainLine(source).annotations.map(a => a.comment)).toEqual(['First second third', 'Last note']);
+    });
+
+    it('does not assign a variation preface to its parent move', () => {
+        const tree = extractUciMoveTree('h2e2 h9g7 ({Before the alternative} b9c7 {Side note})').moveTree;
+        expect(tree[0].comment).toBeUndefined();
+        expect(tree[0].children?.[1].comment).toBe('Side note');
     });
 });

@@ -86,22 +86,3 @@ export function hasStudyAnalysis(tree: Array<{ analysis?: StudyAnalysis; childre
   }
   return false;
 }
-
-/** Preserve snapshot comments as inert markers while the coordinate parser walks branches. */
-export function markStudyAnalysisComments(source: string): { text: string; snapshots: StudyAnalysis[] } {
-  const snapshots: StudyAnalysis[] = [];
-  const parts: string[] = [];
-  let cursor = 0;
-  while (cursor < source.length) {
-    const start = source.indexOf('{', cursor);
-    if (start < 0) { parts.push(source.slice(cursor)); break; }
-    parts.push(source.slice(cursor, start));
-    const end = source.indexOf('}', start + 1);
-    if (end < 0) { parts.push(source.slice(start)); break; }
-    const snapshot = readStudyAnalysisPgn(source.slice(start + 1, end));
-    if (snapshot) { snapshots.push(snapshot); parts.push(` @xqa:${snapshots.length - 1}@ `); }
-    else parts.push(' ');
-    cursor = end + 1;
-  }
-  return { text: parts.join(''), snapshots };
-}
