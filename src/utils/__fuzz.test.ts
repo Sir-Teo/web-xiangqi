@@ -13,6 +13,13 @@ import { normalizeSavedGames, normalizeSavedMoveTree } from './gameLibrary';
 import { parseFenBoard, parseMove } from './xiangqi';
 import { toSearchTerms, matchesSearchTerms } from './searchTerms';
 import { canonicaliseNotationToken, parseNotationRecord } from './xiangqiNotation';
+import { parseDhtmlXqRecord } from './dhtmlxq';
+import { parseCloudBookResponse } from './cloudBook';
+import { parseCloudPvResponse } from './cloudPv';
+import { parseCloudRuleResponse } from './cloudRule';
+import { normalizeStoredPreferencesValue } from './preferences';
+import { readAutoSavedGame } from './autoSave';
+import { planMoveLineImport } from './moveLineImportPlan';
 
 /**
  * Every entry point here reads text the app did not write: a paste, a share
@@ -28,6 +35,20 @@ import { canonicaliseNotationToken, parseNotationRecord } from './xiangqiNotatio
  * comes back. Deep nesting is included because a JSON tree from a backup is
  * normalized by a function that recurses per node -- web-katrain overflowed
  * its stack on exactly that shape.
+ *
+ * Four families were missing from the list the rationale above describes, and
+ * are here now:
+ *
+ * - **`parseDhtmlXqRecord`**, which is not merely *an* entry point for a paste
+ *   but the *first* one: `planMoveLineImport` tries it before the coordinate
+ *   and notation readers, so whatever it costs, every paste pays.
+ * - **`planMoveLineImport`** itself, which is what the import box now calls.
+ * - **The three cloud parsers.** Text the app did not write is exactly what a
+ *   reply from a third-party server is, and a reply that never finishes
+ *   parsing hangs the tab of a reader who only turned the book on.
+ * - **The two storage readers.** `localStorage` is shared with every other tab
+ *   on the origin and with anything the reader has installed; the app is not
+ *   the only writer of what it reads back.
  */
 const NASTY: Array<[string, string]> = [
     ['empty', ''],
@@ -54,6 +75,20 @@ const NASTY: Array<[string, string]> = [
     ['many wxf move tokens', 'C2=5 '.repeat(40_000)],
     ['many move-shaped tokens naming nothing', 'C9=9 '.repeat(40_000)],
     ['many numbered notation lines', Array.from({ length: 20_000 }, (_, i) => `${i}. C2=5 C8=5`).join('\n')],
+    // Shaped for the readers added below. A sweep only sweeps a parser once
+    // the input looks like the thing that parser is looking for: PGN-shaped
+    // junk is discarded by a DhtmlXQ or cloud reader in one test.
+    ['dhtmlxq with many tags', '[DhtmlXQ]' + '[DhtmlXQ_comment1]note[/DhtmlXQ_comment1]'.repeat(20_000) + '[/DhtmlXQ]'],
+    ['dhtmlxq unclosed tag', '[DhtmlXQ][DhtmlXQ_movelist]' + '0'.repeat(200_000)],
+    ['dhtmlxq huge binit', `[DhtmlXQ][DhtmlXQ_binit]${'9'.repeat(200_000)}[/DhtmlXQ_binit][/DhtmlXQ]`],
+    ['dhtmlxq nested open tags', '[DhtmlXQ]'.repeat(20_000)],
+    ['cloud reply, many moves', Array.from({ length: 40_000 }, () => 'move:h2e2,score:1,rank:0,note:x,winrate:50').join('|')],
+    ['cloud reply, one huge note', `move:h2e2,score:1,rank:0,note:${'a,'.repeat(80_000)},winrate:50`],
+    ['cloud reply, bars only', '|'.repeat(200_000)],
+    ['cloud reply, key-shaped commas', 'move:h2e2,' + 'score:1,'.repeat(25_000)],
+    ['cloud reply, long pv', `score:1,depth:1,pv:${Array.from({ length: 40_000 }, () => 'h2e2').join('|')}`],
+    ['stored json, wide object', `{${Array.from({ length: 40_000 }, (_, i) => `"k${i}":1`).join(',')}}`],
+    ['stored json, huge array', `[${Array.from({ length: 100_000 }, () => '1').join(',')}]`],
 ];
 
 for (const [name, input] of NASTY) {
@@ -74,6 +109,16 @@ for (const [name, input] of NASTY) {
         matchesSearchTerms(input, toSearchTerms(input));
         canonicaliseNotationToken(input);
         parseNotationRecord(undefined, input);
+        parseDhtmlXqRecord(input);
+        parseCloudBookResponse(input);
+        parseCloudPvResponse(input);
+        parseCloudRuleResponse(input);
+        normalizeStoredPreferencesValue(input);
+        readAutoSavedGame({ getItem: () => input, setItem: () => {}, removeItem: () => {} });
+        planMoveLineImport(input, input, {
+            validateMoveSequence: () => ({ ok: true }),
+            validateMoveTree: () => ({ ok: true }),
+        });
 
         const elapsed = performance.now() - started;
         expect(elapsed, `${name} took ${elapsed.toFixed(0)}ms`).toBeLessThan(1000);
