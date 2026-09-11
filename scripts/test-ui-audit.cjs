@@ -20,6 +20,7 @@ const path = require('node:path');
       'test-library-backup-browser.cjs',
       'test-audit-browser.cjs',
       'test-audit-followup-browser.cjs',
+      'test-dialog-keyboard-browser.cjs',
     ]) {
       await new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [path.join(__dirname, script)], { env, stdio: 'inherit' });

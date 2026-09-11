@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Command, rankCommands, readRecentCommandIds, rememberCommandId } from '../utils/commandPalette';
 import { MAX_SEARCH_QUERY_LENGTH } from '../utils/searchTerms';
+import { keepTabWithin } from '../utils/focusTrap';
 import './CommandPaletteModal.css';
 
 interface CommandPaletteModalProps {
@@ -20,6 +21,7 @@ interface CommandPaletteModalProps {
 export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteModalProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
     const [query, setQuery] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -65,6 +67,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     useEffect(() => {
         if (!open) return undefined;
         const onEscape = (event: KeyboardEvent) => {
+            keepTabWithin(dialogRef.current, event);
             if (event.key !== 'Escape' || event.defaultPrevented) return;
             event.preventDefault();
             onClose();
@@ -101,6 +104,11 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
             return;
         }
         if (ranked.length === 0) return;
+        // Arrow navigation uses aria-activedescendant on the search field.
+        // Leave a tabbed-to button before changing the highlighted command.
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            inputRef.current?.focus({ preventScroll: true });
+        }
         if (event.key === 'ArrowDown') {
             event.preventDefault();
             setActiveIndex((index) => (index + 1) % ranked.length);
@@ -121,6 +129,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
         <div className="command-palette-backdrop" onClick={onClose} data-command-palette="true">
             <div
                 className="command-palette-modal"
+                ref={dialogRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Commands"
@@ -194,6 +203,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                                     type="button"
                                     className="command-palette-button"
                                     disabled={command.disabled}
+                                    onFocus={() => setActiveIndex(index)}
                                     onMouseEnter={() => setActiveIndex(index)}
                                     onClick={() => runCommand(command)}
                                 >
