@@ -63,6 +63,10 @@ export interface MoveRecord extends MoveEvaluation {
 }
 
 export interface MoveTreeNode {
+    /** Root only: first children define an explicitly chosen study main line. */
+    mainLinePinned?: true;
+    /** Session-local revision distinguishes a later promotion from deletion Undo. */
+    mainLineRevision?: number;
     /** Prose about the starting position; move notes live on record. */
     comment?: string;
     id: string;
