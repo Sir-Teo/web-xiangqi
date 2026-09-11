@@ -1053,6 +1053,7 @@ function App() {
   );
   currentAnalysisRequestKeyRef.current = analysisRequestKey;
   const candidateActive = candidateSearch?.requestKey === analysisRequestKey;
+  const retainCandidateInBackground = Boolean(candidateActive && (candidateSearch?.completed || candidateSearch?.backgroundAllowed));
 
   const clearAnalysisDeepenTimer = useCallback(() => {
     if (analysisDeepenTimerRef.current !== null) {
@@ -1825,7 +1826,7 @@ function App() {
     // the teardown clears the stage the search is holding. Coming back finds
     // the stage still `deep-pending` and queues nothing, which is the same
     // thing that happens when the tab was never hidden at all.
-    if (!isPageVisible && deepDiveActiveRef.current) return;
+    if (!isPageVisible && (deepDiveActiveRef.current || retainCandidateInBackground)) return;
     if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || !isPageVisible) {
       activeAnalysisRequestRef.current = '';
       analysisStageRef.current = 'idle';
@@ -1895,6 +1896,7 @@ function App() {
     stopSearch,
     threatActive,
     candidateActive,
+    retainCandidateInBackground,
   ]);
 
   useEffect(() => {
@@ -3428,7 +3430,7 @@ function App() {
     const budgetLabel = deep
       ? deepSearchMode === 'infinite' ? 'Until stopped' : `Up to ${deepDiveBudget.moveTimeMs / 1000}s · target depth ${deepDiveBudget.depth}`
       : candidateBudgetLabel;
-    setCandidateSearch({ requestKey: analysisRequestKey, key, moves: [...moves], completed: false, budgetLabel });
+    setCandidateSearch({ requestKey: analysisRequestKey, key, moves: [...moves], completed: false, backgroundAllowed: deep, budgetLabel });
     // Queue options before the search so a running predecessor stops before
     // MultiPV changes, and all selected roots receive a line.
     currentMultiPvRef.current = moves.length;
@@ -3445,10 +3447,10 @@ function App() {
   }, [analysisRequestKey, engineRestartToken]);
   useEffect(() => { setCandidatePickerOpen(false); }, [currentPositionCommand]);
   useEffect(() => {
-    if (!engineEnabled || !isReady || isAiTurn || gameResult || reviewStatus === 'running' || (!isPageVisible && !deepDiveActive)) {
+    if (!engineEnabled || !isReady || isAiTurn || gameResult || reviewStatus === 'running' || (!isPageVisible && !retainCandidateInBackground)) {
       leaveCandidateSearch();
     }
-  }, [deepDiveActive, engineEnabled, gameResult, isAiTurn, isPageVisible, isReady, leaveCandidateSearch, reviewStatus]);
+  }, [engineEnabled, gameResult, isAiTurn, isPageVisible, isReady, leaveCandidateSearch, retainCandidateInBackground, reviewStatus]);
 
   const stopDeepDive = useCallback(() => {
     // Stop must also cancel a search waiting for its predecessor's bestmove.

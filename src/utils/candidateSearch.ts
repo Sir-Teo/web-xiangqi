@@ -32,5 +32,6 @@ export type CandidateSearch = {
   key: string;
   moves: string[];
   completed: boolean;
+  backgroundAllowed: boolean;
   budgetLabel: string;
 };

@@ -2,6 +2,15 @@ const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
+async function setHidden(page, hidden) {
+  await page.evaluate(value => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+  await page.waitForTimeout(100);
+}
+
 async function compare(browser, width, real = false) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
   const errors = [];
@@ -71,6 +80,11 @@ async function compare(browser, width, real = false) {
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'), null, { timeout: 60000 });
     assert.equal(await page.locator('[data-testid="engine-pv-line-0"]').count(), 0);
     assert.deepEqual(await boardState(), initial);
+    if (!real) {
+      await setHidden(page, true);
+      await setHidden(page, false);
+      assert.equal(await page.getByTestId('candidate-line-a9a8').count(), 1, 'Hiding discarded a finished comparison');
+    }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     if (!real) {
       assert.match(await panel.innerText(), /-100\.0 Red POV/);
@@ -124,6 +138,33 @@ async function compare(browser, width, real = false) {
       await page.evaluate(() => { window.__holdStop = false; window.__emit('bestmove a9a8'); });
       await page.waitForTimeout(250);
       assert.equal(await page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length), beforeRelease, 'Cancelled queued comparison started after Stop');
+    }
+    if (!real) {
+      await page.evaluate(() => { window.__holdStop = true; });
+      await page.getByTestId('deep-dive-btn').click();
+      await panel.getByRole('button', { name: 'Stop comparison', exact: true }).waitFor();
+      const beforeHidden = await page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length);
+      await setHidden(page, true);
+      await page.evaluate(() => { window.__holdStop = false; window.__emit('bestmove a9a8'); });
+      await page.waitForTimeout(100);
+      await setHidden(page, false);
+      assert.equal(await page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length), beforeHidden, 'Returning replaced the completed deep search');
+      assert.equal(await page.getByTestId('candidate-line-a9a8').count(), 1, 'A deep comparison finishing in the background lost its result');
+    }
+    if (!real) {
+      // Live comparisons stop when hidden, including a delayed stop acknowledgement.
+      await page.evaluate(() => { window.__holdStop = true; });
+      await panel.getByTestId('compare-candidates').click();
+      await panel.getByRole('button', { name: 'Stop comparison', exact: true }).waitFor();
+      const stopCount = await page.evaluate(() => window.__commands.filter(command => command === 'stop').length);
+      await setHidden(page, true);
+      assert.equal(await page.evaluate(() => window.__commands.filter(command => command === 'stop').length), stopCount + 1);
+      await page.evaluate(() => { window.__holdStop = false; window.__emit('bestmove a9a8'); });
+      await setHidden(page, false);
+      assert.equal(await page.getByTestId('candidate-results').count(), 0);
+      await page.getByTestId('engine-pv-line-0').waitFor();
+      await panel.getByTestId('compare-candidates').click();
+      await page.getByTestId('candidate-line-a9a8').waitFor();
     }
     await page.getByTestId('deep-infinite-toggle').click();
     await page.getByTestId('deep-dive-btn').click();
