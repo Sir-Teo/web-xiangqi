@@ -59,14 +59,22 @@ async function command(page, label) {
           await page.locator('.mtree-chip').filter({ hasText: move }).click();
         };
         const expectGraph = async label => {
-          await page.keyboard.press('g');
+          await page.getByTestId(width < 900 ? 'mobile-analysis-tab-graph' : 'left-panel-tab-graph').click();
+          await page.waitForFunction(id => document.querySelector('[data-testid="' + id + '"]')?.getAttribute('aria-selected') === 'true', width < 900 ? 'mobile-analysis-tab-graph' : 'left-panel-tab-graph');
+          await page.locator('.graph-wrap').waitFor({ state: 'visible' });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          await page.getByTestId('graph-load-sweep').waitFor({ state: 'hidden' });
+          await page.evaluate(async () => {
+            const animations = document.querySelector('.mobile-analysis-tabs')?.getAnimations({ subtree: true }) ?? [];
+            await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
+          });
           await page.waitForFunction(label => document.querySelector('.graph-legend strong')?.textContent === 'Red POV ' + label, label);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         };
         await selectMove('h2e2'); await expectGraph('+200.00');
         await selectMove('h9g7'); await expectGraph('+M10000');
         await selectMove('b9c7'); await expectGraph('-300.00');
-        await page.screenshot({ path: `/tmp/xiangqi-eval-kind-${browserType.name()}-${width}.png` });
+        await page.screenshot({ path: `/tmp/xiangqi-eval-kind-visible-${browserType.name()}-${width}.png` });
         await selectMove('h2e2');
         await command(page, 'Save game');
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.[0]?.evalScoreKind === 'cp');
