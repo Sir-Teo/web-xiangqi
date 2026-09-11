@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));

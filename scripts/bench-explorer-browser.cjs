@@ -23,7 +23,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         worker.onerror = error => { worker.terminate(); reject(new Error(error.message)); };
         worker.onmessage = ({ data }) => { worker.terminate(); resolve(data); };
         worker.postMessage({ type: 'build', games });
-        worker.postMessage({ type: 'lookup', board: parseFenBoard(START_FEN), side: 'w' });
+        worker.postMessage({ type: 'lookup', requestId: 1, board: parseFenBoard(START_FEN), side: 'w' });
       });
       done = true;
       return { synchronousMs, workerWallMs: performance.now() - workerStart, framesWhileIndexing: frames, report };
