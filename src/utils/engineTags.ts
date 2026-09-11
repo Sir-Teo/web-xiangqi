@@ -95,7 +95,7 @@ export function makeAiTag(positionCommand: string, depth: number, strength: AiSt
  * The `position` command that tells the engine which board to think about.
  *
  * `startpos` rather than the full FEN whenever the root really is the opening
- * position with Red to move, because that is what every engine expects to see
+ * position with Red to move and the default counters, because that is what every engine expects to see
  * and what its own logs and books are keyed on. Anything else -- a set-up
  * position, a loaded FEN, or the opening position with *Black* to move, which
  * is a different position -- goes as `position fen`.
@@ -106,7 +106,9 @@ export function makeAiTag(positionCommand: string, depth: number, strength: AiSt
  */
 export function makeEnginePositionCommand(rootFen: string, moves: string[]) {
   const rootParts = rootFen.trim().split(/\s+/);
-  const isDefaultStart = rootParts[0] === START_FEN && rootParts[1] === 'w';
+  // Returning to the starting arrangement does not reset the capture-free
+  // clock. `startpos` resets all FEN fields, so it is only an exact shortcut.
+  const isDefaultStart = rootParts.join(' ') === `${START_FEN} w - - 0 1`;
   const baseCommand = isDefaultStart ? 'position startpos' : `position fen ${rootFen}`;
   return moves.length > 0 ? `${baseCommand} moves ${moves.join(' ')}` : baseCommand;
 }

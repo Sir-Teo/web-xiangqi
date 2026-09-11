@@ -173,6 +173,17 @@ describe('the position command', () => {
         expect(makeEnginePositionCommand(blackToMove, [])).toBe(`position fen ${blackToMove}`);
     });
 
+    it.each([
+        ['capture-free clock', '47 1'],
+        ['move number', '0 32'],
+        ['both counters', '47 32'],
+    ])('preserves a custom %s even on the starting arrangement', (_label, counters) => {
+        const custom = `${START_FEN} w - - ${counters}`;
+        expect(makeEnginePositionCommand(custom, [])).toBe(`position fen ${custom}`);
+        expect(makeEnginePositionCommand(custom, ['h2e2', 'h9g7']))
+            .toBe(`position fen ${custom} moves h2e2 h9g7`);
+    });
+
     it('sends a FEN for a position that is not the opening one', () => {
         const custom = '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
         expect(makeEnginePositionCommand(custom, [])).toBe(`position fen ${custom}`);
