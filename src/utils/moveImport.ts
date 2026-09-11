@@ -1,10 +1,9 @@
 import { stripDelimited } from './stripDelimited';
-import { evaluationKindOverride } from './engineEvalReading';
+import { parseEvalCommand, parsePgnMoveQuality } from './pgnEvaluation';
 import { readStudyAnalysisPgn } from './studyAnalysis';
-import { normalizeEvalDepth, type MoveEvaluation } from './moveEvaluation';
+import type { MoveEvaluation } from './moveEvaluation';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { ReviewMoveQuality } from './review';
-import { MATE_SCORE_BASE } from './engineEvalReading';
 import { normalizeMoveComment } from './moveComment';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
@@ -221,7 +220,7 @@ export function extractUciMoveTree(text: string): {
         const match = entry.match;
         const token = match[0];
         if (token.startsWith('$') || /^[!?]+$/.test(token)) {
-            const quality = QUALITY_FOR_NAG[token] ?? QUALITY_FOR_SUFFIX[token];
+            const quality = parsePgnMoveQuality(token);
             if (quality && commentTarget) commentTarget.quality = quality;
             continue;
         }
@@ -278,26 +277,6 @@ export interface ImportedMoveAnnotation extends MoveEvaluation {
 }
 
 /**
- * The standard glyphs, read back. `formatEvalCommand`'s counterparts live in
- * `pgnAnnotations.ts`; only the three this app writes are mapped, because the
- * rest of the NAG table is not a quality scale -- $3 is "very good move" and
- * $5 is "interesting", and guessing at a grade for them would put a label on a
- * move nobody graded.
- */
-const QUALITY_FOR_NAG: Record<string, ReviewMoveQuality> = {
-    $6: 'inaccuracy',
-    $2: 'mistake',
-    $4: 'blunder',
-};
-
-/** The same three as suffix symbols, which many records use instead. */
-const QUALITY_FOR_SUFFIX: Record<string, ReviewMoveQuality> = {
-    '?!': 'inaccuracy',
-    '?': 'mistake',
-    '??': 'blunder',
-};
-
-/**
  * The prose left in a PGN comment once the machine-readable parts are removed.
  *
  * A comment written by this app reads `{ [%eval 0.42] Better was b2e2 Note }`,
@@ -315,30 +294,6 @@ function parseFreeTextComment(comment: string): string | undefined {
     const prose = stripDelimited(comment, '[%', ']')
         .replace(/\bBetter was\s+[a-i][0-9][a-i][0-9]\b/gi, ' ');
     return normalizeMoveComment(prose);
-}
-
-function parseEvalCommand(comment: string): Pick<MoveEvaluation, 'evalScore' | 'evalDepth' | 'evalScoreKind'> | undefined {
-    // python-chess also writes a comma-separated depth and accepts signed
-    // decimal shorthand. The depth is not a score and must not prevent the
-    // evaluation from being read. Walk in source order across both score kinds.
-    const commands = /\[%eval\s+(?:#([+-]?\d+)|([+-]?(?:\d+(?:\.\d*)?|\.\d+)))(?:,(\d+))?\s*\]/gi;
-    for (const match of comment.matchAll(commands)) {
-        const evalDepth = match[3] === undefined ? undefined : normalizeEvalDepth(Number(match[3]));
-        const depth = evalDepth === undefined ? {} : { evalDepth };
-        if (match[1] !== undefined) {
-            const distance = Math.abs(Number(match[1]));
-            // Larger distances cannot fit this app's existing mate sentinel.
-            // In particular, subtracting an arbitrary distance can flip sides.
-            if (!Number.isSafeInteger(distance) || distance > MATE_SCORE_BASE / 2) continue;
-            return { evalScore: match[1].startsWith('-') ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance, ...depth };
-        }
-        const score = Math.round(Number(match[2]) * 100);
-        if (Number.isSafeInteger(score)) {
-            const evalScoreKind = evaluationKindOverride(score, 'cp');
-            return { evalScore: score, ...depth, ...(evalScoreKind ? { evalScoreKind } : {}) };
-        }
-    }
-    return undefined;
 }
 
 /**
@@ -402,7 +357,7 @@ export function extractAnnotatedMainLine(text: string): {
         if (ch === '$') {
             const nag = source.slice(index).match(/^\$\d+/);
             if (nag) {
-                const quality = QUALITY_FOR_NAG[nag[0]];
+                const quality = parsePgnMoveQuality(nag[0]);
                 if (quality) annotate({ quality });
                 index += nag[0].length;
                 continue;
@@ -411,7 +366,7 @@ export function extractAnnotatedMainLine(text: string): {
         if (ch === '?' || ch === '!') {
             const suffix = source.slice(index).match(/^(\?\?|\?!|\?)/);
             if (suffix) {
-                const quality = QUALITY_FOR_SUFFIX[suffix[0]];
+                const quality = parsePgnMoveQuality(suffix[0]);
                 if (quality) annotate({ quality });
                 index += suffix[0].length;
                 continue;

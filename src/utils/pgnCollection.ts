@@ -1,4 +1,5 @@
 import { stripDelimited } from './stripDelimited';
+import { extractPgnEvalCommands, parsePgnMoveQuality } from './pgnEvaluation';
 import { readStudyAnalysisPgn } from './studyAnalysis';
 import { normalizeSavedGame, type SavedGame, type SavedMoveTreeNode, MAX_SAVED_GAMES } from './gameLibrary';
 import { extractPgnMetadata } from './gameMetadata';
@@ -67,8 +68,13 @@ function parseGame(input: Token[]): CollectionGame {
         if (!cursor.node) throw new Error('Notes before the first move are not supported. Attach the note to a move before importing.');
         const analysis = readStudyAnalysisPgn(text);
         if (analysis && analysis.move === cursor.node.uci) cursor.node.analysis = analysis;
-        const prose = stripDelimited(text, '[%xqanalysis ', ']', '').trim();
-        const joined = [cursor.node.comment, prose].filter(Boolean).join(' ');
+        const { evaluation, prose } = extractPgnEvalCommands(stripDelimited(text, '[%xqanalysis ', ']', ''));
+        if (evaluation) {
+            cursor.node.evalScore = evaluation.evalScore;
+            cursor.node.evalDepth = evaluation.evalDepth;
+            cursor.node.evalScoreKind = evaluation.evalScoreKind;
+        }
+        const joined = [cursor.node.comment, prose].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
         if (joined.length > MAX_MOVE_COMMENT_LENGTH) throw new Error(`A move note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
         cursor.node.comment = normalizeMoveComment(joined);
     }
@@ -77,7 +83,12 @@ function parseGame(input: Token[]): CollectionGame {
         if (token.kind === 'comment') { addComment(token.value); continue; }
         const value = token.value;
         if (/^\d+\.+$/.test(value)) continue;
-        if (/^(\$\d+|[!?]+)$/.test(value)) { addComment(value); continue; }
+        if (/^(\$\d+|[!?]+)$/.test(value)) {
+            const quality = parsePgnMoveQuality(value);
+            if (quality && cursor.node) cursor.node.quality = quality;
+            else addComment(value);
+            continue;
+        }
         if (value === '(') {
             if (!cursor.parent) throw new Error('A variation has no preceding move.');
             stack.push(cursor); cursor = cursor.parent; continue;
@@ -109,9 +120,11 @@ function parseGame(input: Token[]): CollectionGame {
     if (!nodes) throw new Error('No moves found.');
     if (result && tags.result && result !== tags.result) throw new Error('The Result header disagrees with the final result marker.');
     const moves: string[] = [];
-    for (let node = root[0]; node; node = node.children?.[0] as SavedMoveTreeNode) moves.push(node.uci);
+    let finalNode = root[0];
+    for (let node = root[0]; node; node = node.children?.[0] as SavedMoveTreeNode) { moves.push(node.uci); finalNode = node; }
     return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen,
         metadata: extractPgnMetadata(headers), opening: tags.opening,
+        ...(finalNode.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
         result: RESULTS[result || tags.result || '*'] };
 }
 

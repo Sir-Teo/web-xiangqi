@@ -1,7 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { parsePgnCollection, MAX_COLLECTION_TEXT_LENGTH } from './pgnCollection';
+import { exportPgnFromMoveTree } from './gameExport';
+import { normalizeSavedGame } from './gameLibrary';
 
 describe('strict Xiangqi PGN collections', () => {
+  it('round-trips typed scores, depths, and quality on the main line and alternatives', () => {
+    const [game] = parsePgnCollection('h2e2 $2 {[%eval +200.00,18] Main note} h9g7?! {[%eval #10000,20]} (b9c7?? {[%eval -300.00,21] Branch note}) *');
+    expect(game.moveTree?.[0]).toMatchObject({ evalScore: 20000, evalScoreKind: 'cp', evalDepth: 18, quality: 'mistake', comment: 'Main note' });
+    expect(game.moveTree?.[0].children?.[0]).toMatchObject({ evalScore: 20000, evalDepth: 20, quality: 'inaccuracy' });
+    expect(game.moveTree?.[0].children?.[0].evalScoreKind).toBeUndefined();
+    expect(game.moveTree?.[0].children?.[1]).toMatchObject({ evalScore: -30000, evalScoreKind: 'cp', evalDepth: 21, quality: 'blunder', comment: 'Branch note' });
+    const saved = normalizeSavedGame({ ...game, id: 'roundtrip', savedAt: 1 })!;
+    const exported = exportPgnFromMoveTree(saved.moveTree!)!;
+    for (const annotation of ['[%eval 200.00,18]', '[%eval #10000,20]', '[%eval -300.00,21]', '$2', '$6', '$4']) expect(exported).toContain(annotation);
+    expect(parsePgnCollection(exported)[0].moveTree).toEqual(game.moveTree);
+    expect(saved.review).toBeUndefined();
+  });
+  it('keeps unsupported annotations as notes and reserves note space for prose', () => {
+    const note = 'n'.repeat(500);
+    const [game] = parsePgnCollection(`h2e2 {[%eval .42,18] ${note}} h9g7 $3 {[%eval invalid] [%clk 1:00:00]} *`);
+    expect(game.moveTree?.[0]).toMatchObject({ evalScore: 42, evalDepth: 18, comment: note });
+    expect(game.moveTree?.[0].children?.[0].comment).toBe('$3 [%eval invalid] [%clk 1:00:00]');
+    expect(game.moveTree?.[0].children?.[0].quality).toBeUndefined();
+    const splitNote = `${'a'.repeat(250)} [%eval .42] ${'b'.repeat(249)}`;
+    expect(parsePgnCollection(`h2e2 {${splitNote}} *`)[0].moveTree?.[0].comment).toBe(`${'a'.repeat(250)} ${'b'.repeat(249)}`);
+  });
+  it('keeps mate zero and first-valid ordering, and clears replaced score metadata', () => {
+    const [game] = parsePgnCollection('h2e2 {[%eval invalid] [%eval #-0,24] [%eval .42]} h9g7 {[%eval 200.00,20]} {[%eval #10000]} *');
+    expect(game.moveTree?.[0]).toMatchObject({ evalScore: -30000, evalDepth: 24, comment: '[%eval invalid]' });
+    const replaced = game.moveTree?.[0].children?.[0];
+    expect(replaced?.evalScore).toBe(20000);
+    expect(replaced?.evalScoreKind).toBeUndefined();
+    expect(replaced?.evalDepth).toBeUndefined();
+    const [black] = parsePgnCollection('[FEN "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 20"] h7e7 {[%eval -.75,21]} *');
+    expect(black.moveTree?.[0]).toMatchObject({ evalScore: -75, evalDepth: 21 });
+    expect(black.finalEval).toBe(-75);
+    expect(parsePgnCollection('h2e2 {[%eval 200.00]} *')[0]).toMatchObject({ finalEval: 20000, finalEvalKind: 'cp' });
+    expect(parsePgnCollection('h2e2 {[%eval 200.00]} h9g7 *')[0].finalEval).toBeUndefined();
+  });
   it('separates inline games and preserves metadata, results, branches and comments', () => {
     const games = parsePgnCollection('[White "Alice"] [Result "1-0"] 1.h2e2 {a [tag] and 0-1} (1.b2e2 {branch}) h9g7 1-0 [White "Bob"] 1.b2e2 *');
     expect(games).toHaveLength(2);
@@ -38,7 +74,7 @@ describe('strict Xiangqi PGN collections', () => {
   });
   it('keeps unclosed analysis commands as prose and removes only closed commands', () => {
     const [game] = parsePgnCollection('h2e2 {before[%xqanalysis invalid]after [%eval 0.42] [%xqanalysis unfinished} *');
-    expect(game.moveTree?.[0].comment).toBe('beforeafter [%eval 0.42] [%xqanalysis unfinished');
+    expect(game.moveTree?.[0].comment).toBe('beforeafter [%xqanalysis unfinished');
     expect(game.moveTree?.[0].analysis).toBeUndefined();
   });
   it('rejects a near-limit malformed analysis note without truncating it', () => {
@@ -55,20 +91,11 @@ describe('strict Xiangqi PGN collections', () => {
     expect(parsePgnCollection(`[FEN "${fen}"] 20...h7e7 *`)[0].startFen).toBe(fen);
     expect(() => parsePgnCollection('[FEN "bad"] 1.h2e2 *')).toThrow('Invalid starting FEN');
   });
-  it('rejects overlarge text and preserves annotation text as move notes', () => {
+  it('rejects overlarge text and imports supported annotation fields', () => {
     expect(() => parsePgnCollection(' '.repeat(MAX_COLLECTION_TEXT_LENGTH+1))).toThrow('exceeds');
-    expect(parsePgnCollection('1.h2e2 $2 {[%eval 0.42]} *')[0].moveTree?.[0].comment).toBe('$2 [%eval 0.42]');
+    expect(parsePgnCollection('1.h2e2 $2 {[%eval 0.42]} *')[0].moveTree?.[0]).toMatchObject({ evalScore: 42, quality: 'mistake', comment: undefined });
   });
 
-  /**
-   * The import panel promises "Engine annotations are kept as note text, not
-   * review scores." The first half is the assertion above; this is the second.
-   *
-   * It matters because a review is a claim that *this* app's engine analysed the
-   * game -- the panel prints the tier, the depths and a date beside the numbers.
-   * Turning a stranger's `%eval` into one would put someone else's figures under
-   * that heading, and the reader would have no way to tell.
-   */
   /**
    * The last of the panel's four clauses: "Other PGN tags are not retained."
    * A PGN can carry anything -- an Annotator, a rating, a note someone left in
@@ -109,7 +136,7 @@ describe('strict Xiangqi PGN collections', () => {
   it('does not turn a file\'s annotations into a review of its own', () => {
     const annotated = parsePgnCollection('1.h2e2 $4 {[%eval -3.00] A blunder} h9g7 {[%eval 0.10]} *')[0];
     expect(annotated.review).toBeUndefined();
-    expect(annotated.moveTree?.[0].comment).toContain('%eval -3.00');
+    expect(annotated.moveTree?.[0]).toMatchObject({ evalScore: -300, quality: 'blunder', comment: 'A blunder' });
     expect(parsePgnCollection('1.h2e2 *')[0].review).toBeUndefined();
   });
 });

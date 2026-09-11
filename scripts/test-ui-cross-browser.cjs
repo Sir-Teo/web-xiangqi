@@ -28,6 +28,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-study-analysis-browser.cjs',
         'test-pgn-notes-browser.cjs',
         'test-pgn-collection-browser.cjs',
+        'test-collection-evals-browser.cjs',
         'test-eval-kind-browser.cjs',
         'test-library-worker-browser.cjs',
         'test-explorer-browser.cjs',
