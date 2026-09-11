@@ -87,13 +87,56 @@ async function editorKeyboard(browser, viewport) {
   } finally { await page.close(); }
 }
 
+async function modalShortcutGuard(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(10000);
+  try {
+    const assertPaletteBlocked = async () => {
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor();
+      for (const shortcut of ['Control+k', 'Meta+k']) {
+        await page.keyboard.press(shortcut);
+        assert.equal(await dialog.count(), 1, `${shortcut} opened a second modal`);
+        assert.equal(await page.getByRole('combobox', { name: 'Search commands' }).count(), 0);
+        assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true);
+      }
+    };
+    await page.goto(base);
+    for (const command of ['Settings', 'Set up a position']) {
+      await page.keyboard.press('ControlOrMeta+k');
+      await page.getByRole('combobox').fill(command);
+      await page.keyboard.press('Enter');
+      await assertPaletteBlocked();
+      await page.keyboard.press('Escape');
+      assert.equal(await page.getByRole('dialog').count(), 0);
+    }
+    await page.getByRole('button', { name: viewport.width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
+    await assertPaletteBlocked();
+    await page.keyboard.press('Escape');
+
+    const mate = 'R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1';
+    await page.goto(base + '?fen=' + encodeURIComponent(mate));
+    await page.getByRole('heading', { name: 'Red Wins' }).waitFor();
+    await assertPaletteBlocked();
+    await page.keyboard.press('Escape');
+    // Clear recovery so the terminal position does not raise an extra prompt.
+    await page.evaluate(() => localStorage.removeItem('xiangqi:auto-saved-game:v1'));
+    await page.goto(base + '?moves=h2e2');
+    await page.waitForFunction(() => localStorage.getItem('xiangqi:auto-saved-game:v1'));
+    await page.reload();
+    await page.getByRole('heading', { name: 'Unfinished game' }).waitFor();
+    await assertPaletteBlocked();
+  } finally { await page.close(); }
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }]) {
       await paletteKeyboard(browser, viewport);
       await editorKeyboard(browser, viewport);
+      await modalShortcutGuard(browser, viewport);
     }
-    console.log('PASS: palette activates the focused command; palette/editor contain focus; editor preserves focus on resize and restores the opener; desktop/mobile');
+    console.log('PASS: palette activates the focused command; palette/editor contain focus; editor preserves focus on resize and restores the opener; shortcuts respect all five other modals; desktop/mobile');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

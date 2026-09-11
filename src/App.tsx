@@ -1643,6 +1643,10 @@ function App() {
       // text field too, which is where a reader often is when they reach for it.
       if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
+        // A second modal would sit behind the editor/settings while stealing
+        // keyboard input. Finish the current dialog before opening commands.
+        const activeDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+        if (activeDialog && !activeDialog.closest('[data-command-palette]')) return;
         setShowCommandPalette((open) => !open);
         return;
       }
