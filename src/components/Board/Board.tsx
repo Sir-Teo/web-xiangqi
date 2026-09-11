@@ -4,6 +4,7 @@ import type { BoardState } from '../../utils/xiangqi';
 import { nextPieceIdentityState, type PieceIdentityState } from '../../utils/pieceIdentity';
 import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { BoardArrows } from './BoardArrows';
+import type { BoardArrow } from '../../utils/boardArrows';
 
 export type BoardOrientation = 'red' | 'black';
 
@@ -134,14 +135,15 @@ interface BoardProps {
         from: { file: number; rank: number },
         to: { file: number; rank: number }
     ) => void;
-    arrows?: Array<{
-        from: { file: number; rank: number };
-        to: { file: number; rank: number };
-        color: string;
-        kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'threat' | 'user';
-        opacity?: number;
-        strokeWidth?: number;
-    }>;
+    /* The one declaration of this shape lives with the function that builds
+       them. It was written out three times -- here, in `BoardArrows`, and in
+       `utils/boardArrows` -- with the six-member `kind` union spelled out in
+       each. Nothing was unsound about that: adding a seventh kind failed the
+       build, checked rather than assumed, with a TS2322 at the call site in
+       `App.tsx` comparing two structural types member by member. It just made
+       the compiler explain a mismatch between two copies of one idea instead
+       of naming the thing that changed. */
+    arrows?: BoardArrow[];
 }
 
 export const Board = React.memo(function Board({

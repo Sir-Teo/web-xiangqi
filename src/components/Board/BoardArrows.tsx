@@ -1,16 +1,8 @@
 import type { CSSProperties } from 'react';
-
-interface ArrowDef {
-    from: { file: number; rank: number };
-    to: { file: number; rank: number };
-    color: string;
-    kind?: 'last' | 'engine' | 'engine-focus' | 'book' | 'threat' | 'user';
-    opacity?: number;
-    strokeWidth?: number;
-}
+import type { BoardArrow } from '../../utils/boardArrows';
 
 interface BoardArrowsProps {
-    arrows: ArrowDef[];
+    arrows: BoardArrow[];
     orientation: 'red' | 'black';
 }
 
