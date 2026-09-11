@@ -69,6 +69,16 @@ describe('a note through a PGN and back', () => {
         expect(read.annotations[0].comment).toHaveLength(MAX_MOVE_COMMENT_LENGTH);
     });
 
+    it('handles a full-size note with unclosed annotation commands without backtracking', () => {
+        const source = `h2e2 {${'[%'.repeat(99_000)}} h9g7`;
+        const started = performance.now();
+        const read = extractAnnotatedMainLine(source);
+        expect(performance.now() - started).toBeLessThan(1000);
+        expect(read.moves).toEqual(['h2e2', 'h9g7']);
+        expect(read.annotations[0].comment).toBe('[%'.repeat(MAX_MOVE_COMMENT_LENGTH / 2));
+        expect(read.annotations[1].comment).toBeUndefined();
+    });
+
     /** A variation's comment must not land on the main line's last move. */
     it('leaves a note inside a variation where it was', () => {
         const read = extractAnnotatedMainLine('b2e2 { main note } (b0c2 { side note }) h9g7');

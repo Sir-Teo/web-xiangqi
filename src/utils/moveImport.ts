@@ -49,7 +49,7 @@ function stripDelimited(text: string, open: string, close: string): string {
     for (;;) {
         const start = text.indexOf(open, index);
         if (start < 0) return out + text.slice(index);
-        const end = text.indexOf(close, start + 1);
+        const end = text.indexOf(close, start + open.length);
         if (end < 0) return out + text.slice(index);
         out += `${text.slice(index, start)} `;
         index = end + 1;
@@ -293,8 +293,9 @@ const QUALITY_FOR_SUFFIX: Record<string, ReviewMoveQuality> = {
  * has to produce no note rather than an empty one.
  */
 function parseFreeTextComment(comment: string): string | undefined {
-    const prose = comment
-        .replace(/\[%[^\]]*\]/g, ' ')
+    // An unclosed command repeated through a large note makes a greedy
+    // bracket regex rescan the suffix at every opener. Scan each run once.
+    const prose = stripDelimited(comment, '[%', ']')
         .replace(/\bBetter was\s+[a-i][0-9][a-i][0-9]\b/gi, ' ');
     return normalizeMoveComment(prose);
 }
