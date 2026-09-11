@@ -20,6 +20,7 @@ const path = require('node:path');
       'test-cloud-pv-browser.cjs',
       'test-search-queue-browser.cjs',
       'test-engine-position-browser.cjs',
+      'test-engine-line-browser.cjs',
       'test-wdl-freshness-browser.cjs',
       'test-library-backup-browser.cjs',
       'test-audit-browser.cjs',
