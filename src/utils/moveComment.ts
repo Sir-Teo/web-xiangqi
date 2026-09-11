@@ -1,3 +1,5 @@
+import { truncateText } from './truncateText';
+
 /**
  * A note a person writes on a move.
  *
@@ -47,7 +49,7 @@ export function normalizeMoveComment(value: unknown): string | undefined {
         .replace(/\s+/g, ' ')
         .trim();
     if (!folded) return undefined;
-    return folded.slice(0, MAX_MOVE_COMMENT_LENGTH);
+    return truncateText(folded, MAX_MOVE_COMMENT_LENGTH);
 }
 
 /** Whether an edit changes what is stored, so an unchanged edit writes nothing. */
@@ -62,7 +64,7 @@ export function isSameMoveComment(current: string | undefined, next: string | un
 export function summarizeMoveComment(comment: string, maxLength = 48): string {
     const normalized = normalizeMoveComment(comment) ?? '';
     if (normalized.length <= maxLength) return normalized;
-    const cut = normalized.slice(0, maxLength);
+    const cut = truncateText(normalized, maxLength);
     const lastSpace = cut.lastIndexOf(' ');
     return `${(lastSpace > maxLength * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }

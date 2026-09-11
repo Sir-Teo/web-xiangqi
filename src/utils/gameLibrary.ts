@@ -1,3 +1,5 @@
+import { truncateText } from './truncateText';
+
 import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
 import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
 import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
@@ -113,7 +115,7 @@ function asString(value: unknown) {
 function asBoundedString(value: unknown, maxLength: number) {
     const text = asString(value);
     if (typeof text !== 'string') return undefined;
-    return text.trim().slice(0, maxLength);
+    return truncateText(text.trim(), maxLength);
 }
 
 function normalizeSavedMove(value: unknown): string | null {

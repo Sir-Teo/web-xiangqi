@@ -125,3 +125,12 @@ move/variation comments, PGN and share-link round trips, library search/loading,
 unfinished-draft recovery, XQF game/diagram file imports, DhtmlXQ diagrams,
 clearing the sole note, and PGN collection download. It also checks horizontal
 fit and page errors. The script runs in the Chromium/WebKit/Firefox matrix.
+
+
+## Unicode limits
+
+`test-unicode-limits-browser.cjs` covers long Chinese/emoji notes, player names,
+move previews, downloaded PGN bytes, root-note and variation sharing, and
+recovery at 1440/390/320px. Characters crossing a storage or preview limit are
+omitted intact; characters that fit keep both UTF-16 units. The matrix checks
+source and recipient page errors and responsive horizontal fit.
