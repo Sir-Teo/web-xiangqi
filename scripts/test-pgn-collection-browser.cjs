@@ -10,6 +10,10 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    const page = await browser.newPage({viewport:{width,height:900},acceptDownloads:true});
    const errors=[]; page.on('pageerror',error=>errors.push(error.message));
    await page.goto(base+'?moves=h2e2');
+   // Link hydration runs after the first render; compare with the requested
+   // position, not the initial board briefly rendered before it loads.
+   await page.waitForFunction(() => document.querySelector('.bottombar-fen')?.getAttribute('title') ===
+     'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b - - 1 1');
    const beforeFen = await page.locator('.bottombar-fen').getAttribute('title');
    await page.getByTestId(width<900 ? 'mobile-open-library-btn':'left-panel-tab-library').click();
    const panel=page.getByTestId('pgn-collection-import');
