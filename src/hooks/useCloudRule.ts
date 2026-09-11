@@ -14,7 +14,8 @@ export type { CloudRuleState } from '../utils/cloudRule';
 const CLOUD_RULE_DEBOUNCE_MS = 350;
 const CLOUD_RULE_TIMEOUT_MS = 8000;
 
-const cache = new BoundedLruCache<{ banned: string[]; drawing: string[] }>(200);
+/** `null` is a cached "chessdb has no ruling for this line". */
+const cache = new BoundedLruCache<{ banned: string[]; drawing: string[] } | null>(200);
 
 /**
  * What chessdb.cn rules about the moves of the position on screen, asked only
@@ -31,9 +32,11 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
             setState({ status: 'off', banned: [], drawing: [], key });
             return;
         }
-        const cached = cache.get(key);
-        if (cached) {
-            setState({ status: 'ok', ...cached, key });
+        if (cache.has(key)) {
+            const cached = cache.get(key) ?? null;
+            setState(cached
+                ? { status: 'ok', ...cached, key }
+                : { status: 'unknown', banned: [], drawing: [], key });
             return;
         }
 
@@ -52,10 +55,17 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
                 const reading = parseCloudRuleResponse(await response.text());
                 if (controller.signal.aborted) return;
                 if (reading.status === 'unreadable' || reading.status === 'invalid') throw new Error('unavailable ruling');
-                const summary = reading.status === 'ok' ? summarizeCloudRule(reading.moves) : { banned: [], drawing: [] };
+                // `unknown` is cached as `null`: the service answered, so asking
+                // again on every return to this line would buy nothing and send
+                // the moves off the machine again for it.
+                const summary = reading.status === 'ok' ? summarizeCloudRule(reading.moves)
+                    : reading.status === 'unknown' ? null
+                        : { banned: [], drawing: [] };
                 cache.set(key, summary);
                 if (controller.signal.aborted) return;
-                setState({ status: 'ok', ...summary, key });
+                setState(summary
+                    ? { status: 'ok', ...summary, key }
+                    : { status: 'unknown', banned: [], drawing: [], key });
             } catch {
                 if (controller.signal.aborted) return;
                 setState({ status: 'error', banned: [], drawing: [], key });

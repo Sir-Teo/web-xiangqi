@@ -9063,6 +9063,95 @@ async function assertTheAnalysisTabsAdvertiseTheirShortcuts(page) {
  * "Asking chessdb.cn..." for ever, because the reader would be waiting on
  * something that is never coming.
  */
+/**
+ * "chessdb has no ruling" is an answer, not a failure.
+ *
+ * The service says `unknown` for a position it does not hold. Two of the three
+ * parsers reading its replies have always understood that; `parseCloudRuleResponse`
+ * did not, so an `unknown` fell through to `unreadable`, the hook threw on it,
+ * and the reader was told the ruling was "unavailable" -- as though the request
+ * had failed. Worse, the throw skipped the cache, so every return to that line
+ * asked again, and every ask sent the moves off the machine.
+ *
+ * Both halves are checked here: the wording, and the asking. The count is the
+ * one that would have caught the old behaviour on its own.
+ */
+async function assertACloudRulingItDoesNotHaveIsNotAFailure(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+
+    const ruleAsks = [];
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (!url.includes("chessdb.cn")) return route.continue();
+      if (new URL(url).searchParams.get("action") === "queryrule") ruleAsks.push(url);
+      // Everything answers the way the service answers for a position it does
+      // not hold, so nothing here is an error path.
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "unknown" });
+    });
+
+    // Shuffles back onto a position it has already stood on, which is what
+    // makes the app ask for a ruling at all.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,e2h2,g7h9,h2e2,h9g7,e2h2,g7h9", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(600);
+    await page.getByTestId("cloud-book-enable").click();
+
+    // Settled, not merely present: "checking the repetition ruling..." is text
+    // too, and reading it would pass this check on a request still in flight.
+    await page.waitForFunction(
+      () => {
+        const said = document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent?.trim() ?? "";
+        return said.length > 0 && !/checking/i.test(said);
+      },
+      null,
+      { timeout: 20000 },
+    ).catch(() => { throw new Error("The repetition ruling never settled on anything."); });
+
+    const said = await page.evaluate(() =>
+      document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "");
+    if (/unavailable/i.test(said)) {
+      throw new Error(`A clean "unknown" was reported as a failed request: ${JSON.stringify(said)}`);
+    }
+    if (!/no ruling/i.test(said) || !/has not been checked/i.test(said)) {
+      throw new Error(
+        `An unheld position must say chessdb has no ruling AND that chase went unchecked -- silence there reads as "no ruling means legal": ${JSON.stringify(said)}`
+      );
+    }
+    if (ruleAsks.length === 0) {
+      throw new Error("No ruling was ever requested, so this check proves nothing.");
+    }
+
+    // Step away from the repeated position and back onto it, twice. Counting
+    // requests will not do: the position one ply back repeats as well, so
+    // stepping there is a legitimately different query. The claim is that no
+    // *identical* query is sent twice -- that is what the cache is for.
+    for (let lap = 0; lap < 2; lap++) {
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForTimeout(700);
+      await page.keyboard.press("ArrowRight");
+      await page.waitForTimeout(1200);
+    }
+    const seen = new Set();
+    const repeated = ruleAsks.filter((url) => (seen.has(url) ? true : (seen.add(url), false)));
+    if (repeated.length > 0) {
+      throw new Error(
+        `chessdb.cn was asked the same ruling twice (${ruleAsks.length} requests, ${seen.size} distinct). An answer of "unknown" is an answer and belongs in the cache: ${repeated[0]}`
+      );
+    }
+    if (seen.size < 2) {
+      throw new Error(`Stepping back and forth should have asked about more than one line; it asked ${seen.size}.`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   try {
@@ -12448,6 +12537,7 @@ async function main() {
     await assertTheRecoveryModalHoldsTheKeyboard(browser);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
+    await assertACloudRulingItDoesNotHaveIsNotAFailure(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
     await assertScaledUpTextDoesNotCutTheTabLabels(page);
     await assertOversizedMoveLineFileRejected(page);

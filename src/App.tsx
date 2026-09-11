@@ -2621,6 +2621,10 @@ function App() {
   const cloudRuleText = useMemo(() => {
     if (cloudRule.status === 'loading') return `${CLOUD_BOOK_SITE_NAME}: checking the repetition ruling…`;
     if (cloudRule.status === 'error') return `${CLOUD_BOOK_SITE_NAME}: repetition ruling unavailable. Perpetual chase has not been checked.`;
+    // Answered, with nothing to say. The reader still needs telling that chase
+    // went unchecked -- silence there reads as "no ruling means legal" -- but
+    // not that something failed, because nothing did.
+    if (cloudRule.status === 'unknown') return `${CLOUD_BOOK_SITE_NAME} has no ruling for this repetition. Perpetual chase has not been checked.`;
     if (!cloudRuleHasVerdict) return null;
     const name = (uci: string) => formatMoveInStyle(board, uci, notationStyle);
     const parts: string[] = [];

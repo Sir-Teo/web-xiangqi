@@ -30,6 +30,12 @@ export interface CloudRuleMove {
 
 export type CloudRuleReading =
     | { status: 'ok'; moves: CloudRuleMove[] }
+    /**
+     * The service answered, and has no ruling for this line. A clean answer,
+     * not a failure: it is worth caching, and it is worth telling the reader
+     * apart from a request that never arrived.
+     */
+    | { status: 'unknown' }
     /** The service refused the board or the moves. */
     | { status: 'invalid' }
     /** The game is over here: checkmate or stalemate. */
@@ -54,6 +60,10 @@ export function parseCloudRuleResponse(text: string): CloudRuleReading {
     const body = String(text ?? '').trim();
     if (!body) return { status: 'unreadable' };
     const lowered = body.toLowerCase();
+    // The same replies its two siblings read, which this parser did not: a
+    // service that says "unknown" has answered, and reading that as a broken
+    // reply cost a retry on every visit to a position it does not hold.
+    if (lowered === 'unknown' || lowered === 'nobestmove') return { status: 'unknown' };
     if (lowered.startsWith('invalid')) return { status: 'invalid' };
     if (lowered === 'checkmate' || lowered === 'stalemate') return { status: 'terminal' };
     if (!lowered.startsWith('move:')) return { status: 'unreadable' };
@@ -79,7 +89,8 @@ export function summarizeCloudRule(moves: CloudRuleMove[]): { banned: string[]; 
 }
 
 export interface CloudRuleState {
-    status: 'off' | 'loading' | 'ok' | 'error';
+    /** `unknown` is "asked, and chessdb has no ruling"; `error` is "never got an answer". */
+    status: 'off' | 'loading' | 'ok' | 'unknown' | 'error';
     /** Moves the rules forbid here: the side to move loses by playing one. */
     banned: string[];
     /** Moves that would make the repetition a draw. */

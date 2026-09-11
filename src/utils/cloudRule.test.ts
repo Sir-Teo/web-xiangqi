@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseCloudBookResponse } from './cloudBook';
 import { currentCloudRuleState, buildCloudRuleUrl, parseCloudRuleResponse, summarizeCloudRule } from './cloudRule';
 
 // The service's own answer, recorded, to a chariot checking a bare general
@@ -53,5 +54,36 @@ describe('verdict freshness', () => {
         expect(currentCloudRuleState(verdict, 'line-a', true)).toBe(verdict);
         const failure = { status: 'error' as const, key: 'line-b', banned: [], drawing: [] };
         expect(currentCloudRuleState(failure, 'line-b', true)).toBe(failure);
+    });
+});
+
+describe('a reply the service means as an answer', () => {
+    // Its two siblings, `parseCloudBookResponse` and `parseCloudPvResponse`,
+    // have always read these as answers. This parser did not, so "unknown"
+    // fell through to `unreadable` -- which the hook throws on, so a line
+    // chessdb simply does not hold was reported as a failed request and, worse,
+    // never cached, and asked again on every return to it.
+    it('reads "unknown" as having no ruling rather than as a broken reply', () => {
+        expect(parseCloudRuleResponse('unknown')).toEqual({ status: 'unknown' });
+        expect(parseCloudRuleResponse('UNKNOWN')).toEqual({ status: 'unknown' });
+        expect(parseCloudRuleResponse('  unknown  ')).toEqual({ status: 'unknown' });
+    });
+
+    it('reads "nobestmove" the same way', () => {
+        expect(parseCloudRuleResponse('nobestmove')).toEqual({ status: 'unknown' });
+    });
+
+    it('agrees with the book parser about every non-move reply', () => {
+        // One service, one vocabulary. Whatever the three parsers do with these,
+        // they have to do the same thing, which is the property that broke.
+        for (const reply of ['unknown', 'nobestmove', 'invalid board', 'checkmate', 'stalemate', '']) {
+            expect(parseCloudRuleResponse(reply).status, reply)
+                .toBe(parseCloudBookResponse(reply).status);
+        }
+    });
+
+    it('still calls a reply it cannot parse unreadable', () => {
+        expect(parseCloudRuleResponse('something else entirely').status).toBe('unreadable');
+        expect(parseCloudRuleResponse('unknowns').status).toBe('unreadable');
     });
 });
