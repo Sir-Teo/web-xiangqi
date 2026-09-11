@@ -1,0 +1,40 @@
+.candidate-panel {
+  min-width: 0;
+  margin-bottom: .65rem;
+  padding: .65rem;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  font-size: .78rem;
+}
+.candidate-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; }
+.candidate-heading h3, .candidate-results h4 { margin: 0; font-size: .85rem; }
+.candidate-panel p { color: var(--text-secondary); line-height: 1.5; margin: .6rem 0; }
+.candidate-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem; }
+.candidate-picker label { grid-column: 1 / -1; }
+.candidate-panel select, .candidate-panel button {
+  min-width: 0;
+  min-height: 32px;
+  padding: .35rem .5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+}
+.candidate-panel select { width: 100%; }
+.candidate-panel button { cursor: pointer; }
+.candidate-panel button:disabled, .candidate-panel select:disabled { opacity: .5; cursor: default; }
+.candidate-panel button:focus-visible, .candidate-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.candidate-selections { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; padding: 0; }
+.candidate-selections li { display: flex; align-items: center; gap: .25rem; border-radius: var(--radius-xs); background: var(--accent-subtle); padding-left: .4rem; }
+.candidate-count, .candidate-budget { color: var(--text-muted); font-size: .72rem; }
+.candidate-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+.candidate-results { border-top: 1px solid var(--border-subtle); padding-top: .6rem; margin-top: .6rem; }
+.candidate-line { min-width: 0; padding: .55rem 0; border-top: 1px solid var(--border-subtle); }
+.candidate-line .candidate-heading { margin-bottom: .4rem; }
+.candidate-line .candidate-heading span { color: var(--text-secondary); font-size: .72rem; }
+@media (pointer: coarse) {
+  .candidate-panel button, .candidate-panel select { min-height: 44px; }
+  .candidate-panel button { min-width: 44px; }
+}

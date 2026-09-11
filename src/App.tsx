@@ -24,6 +24,8 @@ import {
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
+import { CandidatePanel } from './components/CandidatePanel';
+import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove } from './utils/xiangqi';
@@ -649,6 +651,12 @@ function App() {
    * it is turned off.
    */
   const [threatActive, setThreatActive] = useState(false);
+  const [candidatePickerOpen, setCandidatePickerOpen] = useState(false);
+  const [candidateSearch, setCandidateSearch] = useState<CandidateSearch | null>(null);
+  const candidateRunRef = useRef(0);
+  const candidateActiveKeyRef = useRef('');
+  const candidateRequestKeyRef = useRef('');
+  const candidateButtonRef = useRef<HTMLButtonElement>(null);
   /**
    * The move the engine would play for the human, when they asked. Cleared on
    * every position change, so a hint is only ever drawn where it was asked.
@@ -1044,6 +1052,7 @@ function App() {
     [analysisEngineMode, analysisMultiPv, currentPositionCommand, engineDetailEnabled, liveAnalysisPolicy.signature]
   );
   currentAnalysisRequestKeyRef.current = analysisRequestKey;
+  const candidateActive = candidateSearch?.requestKey === analysisRequestKey;
 
   const clearAnalysisDeepenTimer = useCallback(() => {
     if (analysisDeepenTimerRef.current !== null) {
@@ -1280,6 +1289,15 @@ function App() {
           stepPendingRef.current = false;
           pausedRef.current = true;
           setPaused(true);
+        }
+        return;
+      }
+
+      const candidateTag = parseCandidateTag(searchTag);
+      if (candidateTag) {
+        if (candidateTag === candidateActiveKeyRef.current && candidateRequestKeyRef.current === currentAnalysisRequestKeyRef.current) {
+          setCandidateSearch(previous => previous?.key === candidateTag ? { ...previous, completed: true } : previous);
+          setDeepDiveActive(false);
         }
         return;
       }
@@ -1778,8 +1796,8 @@ function App() {
       ? 1
       : isAiTurn
         ? aiSearchConfig.multiPv
-        : analysisMultiPv;
-    const showWdl = engineDetailEnabled && analysisWdlEnabled;
+        : candidateActive ? candidateSearch!.moves.length : analysisMultiPv;
+    const showWdl = engineDetailEnabled && analysisWdlEnabled && !candidateActive;
 
     if (currentMultiPvRef.current !== targetMultiPv) {
       currentMultiPvRef.current = targetMultiPv;
@@ -1798,7 +1816,7 @@ function App() {
         clearWdl();
       }
     }
-  }, [aiSearchConfig.multiPv, analysisMultiPv, analysisWdlEnabled, clearPvLines, clearWdl, engineDetailEnabled, engineRequired, isAiTurn, isReady, reviewStatus, setOption, trimPvLines]);
+  }, [aiSearchConfig.multiPv, analysisMultiPv, analysisWdlEnabled, candidateActive, candidateSearch, clearPvLines, clearWdl, engineDetailEnabled, engineRequired, isAiTurn, isReady, reviewStatus, setOption, trimPvLines]);
 
   // Analysis engine effect
   useEffect(() => {
@@ -1833,7 +1851,7 @@ function App() {
 
     // A threat search is running or its result is on screen. Restarting live
     // analysis here would overwrite the one thing the reader asked to see.
-    if (threatActive) return;
+    if (threatActive || candidateActive) return;
 
     if (activeAnalysisRequestRef.current !== analysisRequestKey) {
       activeAnalysisRequestRef.current = analysisRequestKey;
@@ -1876,6 +1894,7 @@ function App() {
     setDeepDiveActive,
     stopSearch,
     threatActive,
+    candidateActive,
   ]);
 
   useEffect(() => {
@@ -1894,7 +1913,7 @@ function App() {
       // effect, which is exactly the kind of coupling worth stating in code.
       // Toggling a threat now also re-runs this effect, whose cleanup cancels
       // any deepen already scheduled.
-      threatActive ||
+      threatActive || candidateActive ||
       reviewControllerRef.current.active ||
       !isPageVisible ||
       !engineDetailEnabled
@@ -1942,6 +1961,7 @@ function App() {
     liveAnalysisPolicy.deepen,
     queueSearch,
     threatActive,
+    candidateActive,
   ]);
 
   // AI move effect
@@ -2357,6 +2377,10 @@ function App() {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
   }, [analysisRequestKey, engineEnabled, pvLines]);
+  const candidatePvLines = useMemo(() => {
+    if (!engineEnabled || !candidateActive || !candidateSearch) return [];
+    return pvLines.filter(pv => parseCandidateTag(pv.searchTag) === candidateSearch.key && candidateSearch.moves.includes(pv.moves[0]));
+  }, [candidateActive, candidateSearch, engineEnabled, pvLines]);
   /**
    * The engine's answer to the threat question, kept apart from the analysis of
    * the position on screen -- they are evaluations of two different positions
@@ -2411,10 +2435,10 @@ function App() {
   // assign its chances to the new side. This also keeps WDL consistent when an
   // exact PV is retained over a later bounded score.
   const displayWdl = useMemo(
-    () => (threatActive ? null : normalizeWdlForSide(topAnalysisPv?.wdl ?? null, sideToMove)),
-    [sideToMove, threatActive, topAnalysisPv]
+    () => (threatActive || candidateActive ? null : normalizeWdlForSide(topAnalysisPv?.wdl ?? null, sideToMove)),
+    [candidateActive, sideToMove, threatActive, topAnalysisPv]
   );
-  const shouldShowWdlBar = engineEnabled && (engineDetailEnabled || displayWdl !== null);
+  const shouldShowWdlBar = engineEnabled && !candidateActive && (engineDetailEnabled || displayWdl !== null);
   const currentEvalText = topAnalysisPv
     ? formatRedPovEngineScore(topAnalysisPv, sideToMove)
     : null;
@@ -3282,7 +3306,7 @@ function App() {
   // two are mutually exclusive in both directions instead: `canShowThreat`
   // carries `!deepDiveActive` for the same reason from the other side.
   const canDeepDive = isReady && engineEnabled && !isAiTurn
-    && reviewStatus !== 'running' && !threatActive;
+    && reviewStatus !== 'running' && !threatActive && (!candidatePickerOpen || candidateActive);
 
   /**
    * Give the opponent the move and let the engine answer: what is the threat?
@@ -3310,7 +3334,7 @@ function App() {
   // before it began. The guard effect below then takes the card away rather
   // than leaving it lying about what the engine is doing.
   const canShowThreat = isReady && engineEnabled && !isAiTurn && isPageVisible
-    && reviewStatus !== 'running' && !deepDiveActive && Boolean(threatFen);
+    && reviewStatus !== 'running' && !deepDiveActive && !candidatePickerOpen && Boolean(threatFen);
 
   const stopThreat = useCallback(() => {
     // Live analysis restarts only from `idle`, and the threat search left the
@@ -3355,8 +3379,92 @@ function App() {
     if (threatActive && !canShowThreat) stopThreat();
   }, [canShowThreat, stopThreat, threatActive]);
 
+  const canCompareCandidates = isReady && engineEnabled && !isAiTurn && !gameResult && isPageVisible
+    && reviewStatus !== 'running' && !deepDiveActive && !threatActive;
+  const candidateBudgetLabel = `Up to ${liveAnalysisPolicy.primary.moveTimeMs / 1000}s · target depth ${liveAnalysisPolicy.primary.depth}`;
+
+  const leaveCandidateSearch = useCallback(() => {
+    if (!candidateActiveKeyRef.current) return;
+    candidateActiveKeyRef.current = '';
+    setCandidateSearch(null);
+    setDeepDiveActive(false);
+    analysisStageRef.current = 'idle';
+    activeAnalysisRequestRef.current = '';
+    clearAnalysisDeepenTimer();
+    clearQueuedSearch();
+    clearPvLines();
+    if (parseCandidateTag(getActiveSearchTag())) stopSearch();
+  }, [clearAnalysisDeepenTimer, clearPvLines, clearQueuedSearch, getActiveSearchTag, setDeepDiveActive, stopSearch]);
+
+  const closeCandidatePicker = useCallback(() => {
+    leaveCandidateSearch();
+    setCandidatePickerOpen(false);
+    candidateButtonRef.current?.focus({ preventScroll: true });
+  }, [leaveCandidateSearch]);
+
+  const openCandidatePicker = useCallback(() => {
+    if (!canCompareCandidates) return;
+    setAnalysisTab('engine');
+    setMobileAnalysisTab('engine');
+    setMobileView('analysis');
+    setCandidatePickerOpen(true);
+  }, [canCompareCandidates]);
+
+  const compareCandidateMoves = useCallback((moves: string[], deep = false) => {
+    if (!canCompareCandidates) return;
+    const go = deep ? deepSearchMode === 'infinite' ? 'go infinite' : deepDiveBudget.goCmd : liveAnalysisPolicy.primary.goCmd;
+    const goCmd = candidateGoCommand(go, moves, board, sideToMove);
+    if (!goCmd) return;
+    const key = `${analysisRequestKey}::candidates:${moves.join(',')}::run:${++candidateRunRef.current}`;
+    candidateActiveKeyRef.current = key;
+    candidateRequestKeyRef.current = analysisRequestKey;
+    activeAnalysisRequestRef.current = '';
+    analysisStageRef.current = 'settled';
+    applyBestMoveRef.current = false;
+    clearAnalysisDeepenTimer();
+    clearPvLines();
+    clearWdl();
+    setDeepDiveActive(deep);
+    const budgetLabel = deep
+      ? deepSearchMode === 'infinite' ? 'Until stopped' : `Up to ${deepDiveBudget.moveTimeMs / 1000}s · target depth ${deepDiveBudget.depth}`
+      : candidateBudgetLabel;
+    setCandidateSearch({ requestKey: analysisRequestKey, key, moves: [...moves], completed: false, budgetLabel });
+    // Queue options before the search so a running predecessor stops before
+    // MultiPV changes, and all selected roots receive a line.
+    currentMultiPvRef.current = moves.length;
+    currentShowWdlRef.current = false;
+    setOption('MultiPV', moves.length);
+    setOption('UCI_ShowWDL', false);
+    queueSearch(currentPositionCommand, goCmd, 0, makeCandidateTag(key));
+  }, [analysisRequestKey, board, canCompareCandidates, candidateBudgetLabel, clearAnalysisDeepenTimer, clearPvLines, clearWdl,
+    currentPositionCommand, deepDiveBudget, deepSearchMode, liveAnalysisPolicy.primary.goCmd, queueSearch, setDeepDiveActive, setOption, sideToMove]);
+
+  useEffect(() => {
+    candidateActiveKeyRef.current = '';
+    setCandidateSearch(null);
+  }, [analysisRequestKey, engineRestartToken]);
+  useEffect(() => { setCandidatePickerOpen(false); }, [currentPositionCommand]);
+  useEffect(() => {
+    if (!engineEnabled || !isReady || isAiTurn || gameResult || reviewStatus === 'running' || (!isPageVisible && !deepDiveActive)) {
+      leaveCandidateSearch();
+    }
+  }, [deepDiveActive, engineEnabled, gameResult, isAiTurn, isPageVisible, isReady, leaveCandidateSearch, reviewStatus]);
+
+  const stopDeepDive = useCallback(() => {
+    // Stop must also cancel a search waiting for its predecessor's bestmove.
+    clearQueuedSearch();
+    stopSearch();
+    setDeepDiveActive(false);
+    analysisStageRef.current = 'settled';
+    setCandidateSearch(previous => previous ? { ...previous, completed: true } : previous);
+  }, [clearQueuedSearch, setDeepDiveActive, stopSearch]);
+
   const runDeepDive = useCallback(() => {
     if (!isReady || !engineEnabled || isAiTurn || reviewControllerRef.current.active) return;
+    if (candidateActive && candidateSearch) {
+      compareCandidateMoves(candidateSearch.moves, true);
+      return;
+    }
     analysisStageRef.current = 'deep-pending';
     setDeepDiveActive(true);
     queueSearch(
@@ -3365,7 +3473,7 @@ function App() {
       0,
       makeAnalysisTag('deep', analysisRequestKey),
     );
-  }, [analysisRequestKey, currentPositionCommand, deepDiveBudget.goCmd, deepSearchMode, engineEnabled, isAiTurn, isReady, queueSearch, setDeepDiveActive]);
+  }, [analysisRequestKey, candidateActive, candidateSearch, compareCandidateMoves, currentPositionCommand, deepDiveBudget.goCmd, deepSearchMode, engineEnabled, isAiTurn, isReady, queueSearch, setDeepDiveActive]);
   const deepSearchLimitText = deepSearchMode === 'infinite'
     ? 'until stopped'
     : `for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s`;
@@ -4210,7 +4318,15 @@ function App() {
       keywords: ['deep', 'search', 'think', 'analyse', 'analyze', 'depth', 'infinite'],
       shortcut: 'D',
       disabled: !deepDiveActive && !canDeepDive,
-      run: () => { if (deepDiveActive) stopSearch(); else runDeepDive(); },
+      run: () => { if (deepDiveActive) stopDeepDive(); else runDeepDive(); },
+    },
+    {
+      id: 'compare-candidates',
+      label: 'Compare candidate moves',
+      hint: canCompareCandidates ? 'Choose up to five legal moves to analyze' : 'Available with the analysis engine ready',
+      keywords: ['candidate', 'compare', 'searchmoves', 'what if', 'analysis'],
+      disabled: !canCompareCandidates,
+      run: openCandidatePicker,
     },
     {
       id: 'show-threat',
@@ -4385,12 +4501,12 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
-      stopSearch])
+      stopDeepDive])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
@@ -4653,7 +4769,7 @@ function App() {
           break;
         case 'd':
           if (deepDiveActive) {
-            stopSearch();
+            stopDeepDive();
           } else if (!canDeepDive) {
             return;
           } else if (analysisTab === 'engine') {
@@ -4696,7 +4812,7 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
-    handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopSearch,
+    handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopDeepDive,
     stopThreat, threatActive, topAnalysisPv,
   ]);
 
@@ -4778,13 +4894,13 @@ function App() {
     hintMove,
     drillAsking,
     engineEnabled,
-    analysisPvLines: currentAnalysisPvLines,
+    analysisPvLines: candidateActive ? candidatePvLines : currentAnalysisPvLines,
     spotlightPvIndex,
     spotlightPvLine,
     openingCandidates,
     assistMode,
     userArrows,
-  }), [assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  }), [candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
@@ -6755,7 +6871,7 @@ function App() {
                       <button
                         type="button"
                         className={`engine-cache-btn ${deepDiveActive ? 'engine-pv-btn-active' : ''}`}
-                        onClick={deepDiveActive ? stopSearch : runDeepDive}
+                        onClick={deepDiveActive ? stopDeepDive : runDeepDive}
                         disabled={!deepDiveActive && !canDeepDive}
                         title={deepDiveActive
                           ? 'Stop the deep search and keep what it has found (D)'
@@ -6814,6 +6930,19 @@ function App() {
                       </button>
                       <button
                         type="button"
+                        ref={candidateButtonRef}
+                        className={`engine-cache-btn ${candidatePickerOpen ? 'engine-pv-btn-active' : ''}`}
+                        onClick={candidatePickerOpen ? closeCandidatePicker : openCandidatePicker}
+                        disabled={!candidatePickerOpen && !canCompareCandidates}
+                        aria-expanded={candidatePickerOpen}
+                        aria-controls={candidatePickerOpen ? 'candidate-comparison' : undefined}
+                        title="Choose legal moves and compare only their continuations"
+                        data-testid="open-candidate-comparison"
+                      >
+                        <IconBarChart aria-hidden="true" /> Compare
+                      </button>
+                      <button
+                        type="button"
                         className="engine-cache-btn"
                         onClick={handleRestartEngine}
                         disabled={!engineRequired}
@@ -6846,11 +6975,27 @@ function App() {
                       <span>{engineRecoveryHint}</span>
                     </div>
                   ) : null}
+                  {candidatePickerOpen ? (
+                    <CandidatePanel
+                      key={currentPositionCommand}
+                      board={board} side={sideToMove} notation={notationStyle}
+                      active={candidateActive} completed={candidateSearch?.completed ?? false}
+                      searching={candidateActive && (isSearching || isSearchQueued)}
+                      canCompare={canCompareCandidates}
+                      canPlay={isReady && !gameResult && !isAiTurn && reviewStatus !== 'running'}
+                      budgetLabel={candidateActive ? candidateSearch!.budgetLabel : candidateBudgetLabel}
+                      lines={candidatePvLines}
+                      onCompare={compareCandidateMoves} onEdit={leaveCandidateSearch} onClose={closeCandidatePicker}
+                      onStop={stopDeepDive}
+                      onPlay={handlePlayPvLine} onKeep={handleKeepPvLine}
+                      isKept={moves => hasMoveTreeLine(treeNodes, currentNodeId, moves)}
+                    />
+                  ) : null}
                   {/* The threat replaces the candidate list rather than sitting
                       beside it, because the two are evaluations of different
                       positions and a reader comparing them side by side would be
                       comparing nothing. The card says whose move it is showing. */}
-                  {threatActive ? (
+                  {candidateActive ? null : threatActive ? (
                     <div className="pv-lines-container">
                       <div className="pv-line premium-card threat-card" data-testid="threat-card">
                         <div className="pv-line-heading">
@@ -7057,14 +7202,14 @@ function App() {
                       <strong data-testid="engine-search-status">{engineRecoveryNotice?.text ?? (analysisIsStalled
                         ? formatAnalysisActivity(analysisActivity)
                         : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady))}</strong>
-                      <em>{engineRecoveryNotice ? engineRecoveryHint : analysisIsStalled
+                      <em>{engineRecoveryNotice ? engineRecoveryHint : candidateActive ? candidateSearch!.budgetLabel : analysisIsStalled
                         ? 'tab in background'
                         : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>
-                      <strong>{`MultiPV ${analysisMultiPv}`}</strong>
-                      <em>{analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
+                      <strong>{`MultiPV ${candidateActive ? candidateSearch!.moves.length : analysisMultiPv}`}</strong>
+                      <em>{candidateActive ? 'Selected moves · WDL off' : analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
                     </div>
                   </div>
                   {assistMode === 'pro' ? (
@@ -7083,7 +7228,7 @@ function App() {
                       ))}
                       {outputLines.length === 0 && <div>Waiting for engine output...</div>}
                     </div>
-                  ) : (
+                  ) : candidateActive ? null : (
                     <div className="engine-coach-summary">
                       <div className="engine-coach-item">
                         <span>Best</span>
