@@ -142,6 +142,7 @@ async function check(browser, width) {
     await page.keyboard.press('t');
     assert.match(await card.innerText(), /D245/);
     await page.locator('.mtree-chip').first().click();
+    await page.waitForFunction(note => document.querySelector('[data-testid="move-comment-input"]')?.value === note, note);
     assert.equal(await page.getByTestId('move-comment-input').inputValue(), note);
     await command(page, 'Go to start');
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.[0]?.analysis?.depth === 245);
