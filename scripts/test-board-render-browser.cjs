@@ -73,6 +73,23 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         if (width < 900) await page.getByTestId('mobile-view-board').click();
         assert.match(await square.getAttribute('aria-label'), /highlighted/);
         await page.waitForFunction(() => document.querySelectorAll('.board-arrow-group').length > 0);
+        await page.keyboard.press('e');
+        const previousArrow = await page.locator('.board-arrow-engine').first().innerHTML();
+        await page.evaluate(() => { window.__boardWork = []; });
+        for (let n = 12; n <= 21; n++) {
+          await page.evaluate(n => window.__pulse(n), n);
+          await page.waitForFunction(n => document.querySelector('[data-testid="engine-pv-score-0"] strong')?.textContent === '+' + n + '.0', n);
+        }
+        const visibleWork = await page.evaluate(() => window.__boardWork);
+        assert.ok(visibleWork.length >= 10);
+        const visibleRenders = visibleWork.filter(item => item.rendered);
+        console.log(`${browserType.name()} ${width}px: arrows visible, ten score updates, ${visibleRenders.length} unchanged-board renders; changed props ${JSON.stringify([...new Set(visibleRenders.flatMap(item => item.changed))])}`);
+        assert.equal(visibleRenders.length, 0, 'Unchanged visible arrows caused a board render');
+        assert.equal(await page.locator('.board-arrow-engine').first().innerHTML(), previousArrow);
+        await page.evaluate(() => window.__pulse(22, 'b2e2'));
+        await page.waitForFunction(previous => document.querySelector('.board-arrow-engine')?.innerHTML !== previous, previousArrow);
+        assert.ok(await page.evaluate(() => window.__boardWork.some(item => item.rendered)), 'A changed recommendation must redraw the arrow');
+        if (width < 900) await page.getByTestId('mobile-view-board').click();
         assert.equal(await page.locator('.xiangqi-board .piece').count(), 32);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);

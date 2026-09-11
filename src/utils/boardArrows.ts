@@ -133,3 +133,20 @@ export function buildBoardArrows(input: BoardArrowInput): BoardArrow[] {
 
     return [...result, ...input.userArrows];
 }
+
+/**
+ * A per-board, one-result cache. Engine scores and PV tails can change without
+ * changing any drawn arrow. Compare the complete drawing data so new colors,
+ * styles, ordering, and endpoints still reach the board. Forgetting this cache
+ * only costs a render; it never changes the result of the pure builder.
+ */
+export function createBoardArrowSelector() {
+    let previousKey: string | undefined;
+    let previous: BoardArrow[] = [];
+    return (input: BoardArrowInput): BoardArrow[] => {
+        const next = buildBoardArrows(input);
+        const key = JSON.stringify(next);
+        if (key !== previousKey) { previousKey = key; previous = next; }
+        return previous;
+    };
+}

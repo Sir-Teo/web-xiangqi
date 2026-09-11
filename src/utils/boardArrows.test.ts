@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBoardArrows, type BoardArrow, type BoardArrowInput } from './boardArrows';
+import { buildBoardArrows, createBoardArrowSelector, type BoardArrow, type BoardArrowInput } from './boardArrows';
 
 const sq = (file: number, rank: number) => ({ file, rank });
 const userArrow: BoardArrow = { from: sq(0, 0), to: sq(0, 1), color: '#60a5fa', kind: 'user' };
@@ -23,6 +23,42 @@ function input(overrides: Partial<BoardArrowInput> = {}): BoardArrowInput {
 }
 
 const kinds = (arrows: BoardArrow[]) => arrows.map((a) => a.kind);
+
+describe('stable board-arrow selection', () => {
+    it('reuses drawings across score updates and changes deeper in the PV', () => {
+        const select = createBoardArrowSelector();
+        const first = select(input({ analysisPvLines: [{ moves: ['h2e2', 'h9g7'] }] }));
+        expect(select(input({ analysisPvLines: [{ moves: ['h2e2', 'b9c7', 'h0g2'] }] }))).toBe(first);
+        expect(select(input({ analysisPvLines: [{ moves: ['b2e2'] }] }))).not.toBe(first);
+    });
+    it.each([
+        { color: '#ff0000' }, { opacity: 0.3 }, { strokeWidth: 8 }, { kind: 'threat' as const },
+        { from: sq(1, 0) }, { to: sq(1, 1) },
+    ])('redraws changes in user-arrow appearance: %j', change => {
+        const select = createBoardArrowSelector();
+        const first = select(input({ userArrows: [userArrow] }));
+        expect(select(input({ userArrows: [{ ...userArrow, ...change }] }))).not.toBe(first);
+    });
+    it('preserves paint order and refreshes spotlight styling', () => {
+        const select = createBoardArrowSelector();
+        const secondArrow = { ...userArrow, color: '#ff0000' };
+        const first = select(input({ userArrows: [userArrow, secondArrow] }));
+        expect(select(input({ userArrows: [secondArrow, userArrow] }))).not.toBe(first);
+        const normal = select(input({ analysisPvLines: [{ moves: ['h2e2'] }] }));
+        const focused = select(input({ analysisPvLines: [{ moves: ['h2e2'] }], spotlightPvIndex: 0, spotlightPvLine: { moves: ['h2e2'] } }));
+        expect(focused).not.toBe(normal);
+        expect(focused[0].kind).toBe('engine-focus');
+    });
+    it('keeps caches independent and does not mutate a previous drawing', () => {
+        const select = createBoardArrowSelector(), other = createBoardArrowSelector();
+        const first = select(input({ analysisPvLines: [{ moves: ['h2e2'] }] }));
+        first.forEach(arrow => { Object.freeze(arrow.from); Object.freeze(arrow.to); Object.freeze(arrow); }); Object.freeze(first);
+        expect(other(input({ analysisPvLines: [{ moves: ['h2e2'] }] }))).not.toBe(first);
+        expect(select(input({ showArrows: false }))).toEqual([]);
+        expect(select(input({ analysisPvLines: [{ moves: ['b2e2'] }] }))[0].from.file).toBe(1);
+        expect(first[0].from.file).toBe(7);
+    });
+});
 
 describe('buildBoardArrows', () => {
     it('draws nothing at all when arrows are off, the reader own arrows included', () => {

@@ -134,7 +134,7 @@ import {
   type PvLineCount,
   type StoredPreferences,
 } from './utils/preferences';
-import { buildBoardArrows, type BoardArrow, type BoardSquare } from './utils/boardArrows';
+import { createBoardArrowSelector, type BoardArrow, type BoardSquare } from './utils/boardArrows';
 import { planMoveLineImport } from './utils/moveLineImportPlan';
 import { getDialogFocusableElements, keepTabWithin } from './utils/focusTrap';
 import {
@@ -4910,7 +4910,8 @@ function App() {
   }, [gameOverKey]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
-  const boardArrows = useMemo(() => !showArrows ? undefined : buildBoardArrows({
+  const selectBoardArrows = useMemo(createBoardArrowSelector, []);
+  const boardArrows = useMemo(() => !showArrows ? undefined : selectBoardArrows({
     showArrows,
     lastMove: lastMoveFrom && lastMoveTo ? { from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor } : null,
     threatMove,
@@ -4923,7 +4924,7 @@ function App() {
     openingCandidates,
     assistMode,
     userArrows,
-  }), [candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  }), [selectBoardArrows, candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
 
   return (
     <main
