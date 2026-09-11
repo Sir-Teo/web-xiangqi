@@ -50,7 +50,7 @@ function getSerializedByteLength(value: string): number {
 export function isWorthAutoSaving(game: AutoSaveInput): boolean {
     if (game.moves.length > 0) return true;
     if (game.moveTree?.length) return true;
-    return Boolean(game.startFen);
+    return Boolean(game.startFen || game.rootComment?.trim());
 }
 
 export function readAutoSavedGame(

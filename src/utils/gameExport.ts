@@ -1,3 +1,4 @@
+import { normalizeMoveComment } from './moveComment';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import { normalizeMoveEvaluation } from './moveEvaluation';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
@@ -6,6 +7,11 @@ import type { GameMode } from '../App';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_FEN } from './xiangqi';
 import { annotationTokensForMove, type MoveAnnotationInput } from './pgnAnnotations';
+
+function rootCommentText(comment?: string): string {
+    const note = normalizeMoveComment(comment);
+    return note ? `{ ${note} }\n` : '';
+}
 
 const RESULT_TAG: Record<NonNullable<GameResult>, string> = {
     'red-wins':   '1-0',
@@ -235,6 +241,7 @@ export function exportPgn(
         result?: GameResult;
         date?: string;
         startFen?: string;
+        rootComment?: string;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
@@ -256,7 +263,7 @@ export function exportPgn(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${buildMoveText(moves, startPosition, result)}\n`;
+    return `${tags}\n\n${rootCommentText(options.rootComment)}${buildMoveText(moves, startPosition, result)}\n`;
 }
 
 /**
@@ -276,6 +283,7 @@ export function exportPgnTree(
         result?: GameResult;
         date?: string;
         startFen?: string;
+        rootComment?: string;
     } = {}
 ): string | null {
     if (!hasTreeMoves(treeNodes, rootNodeId)) return null;
@@ -299,7 +307,7 @@ export function exportPgnTree(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${buildTreeMoveText(
+    return `${tags}\n\n${rootCommentText(options.rootComment ?? treeNodes[rootNodeId]?.comment)}${buildTreeMoveText(
         treeNodes,
         rootNodeId,
         startPosition,
@@ -321,6 +329,7 @@ export function exportPgnFromUci(
         label?: string;
         date?: string;
         startFen?: string;
+        rootComment?: string;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
@@ -342,7 +351,7 @@ export function exportPgnFromUci(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${buildMoveText(uciMoves.map((uci) => ({ uci })), startPosition, result)}\n`;
+    return `${tags}\n\n${rootCommentText(options.rootComment)}${buildMoveText(uciMoves.map((uci) => ({ uci })), startPosition, result)}\n`;
 }
 
 export function exportPgnFromMoveTree(
@@ -356,6 +365,7 @@ export function exportPgnFromMoveTree(
         label?: string;
         date?: string;
         startFen?: string;
+        rootComment?: string;
     } = {}
 ): string | null {
     const { rootNodeId, treeNodes } = savedMoveTreeToNodes(moveTree);
@@ -378,6 +388,7 @@ export function exportPgnFromMoveTree(
         result: options.result,
         date: options.date,
         startFen: options.startFen,
+        rootComment: options.rootComment,
     });
     return pgn;
 }

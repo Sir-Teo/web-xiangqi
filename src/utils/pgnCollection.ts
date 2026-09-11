@@ -63,9 +63,17 @@ function parseGame(input: Token[]): CollectionGame {
     const stack: Cursor[] = [];
     let nodes = 0;
     let result: string | undefined;
+    let rootComment: string | undefined;
     function addComment(text: string) {
         if (!text.trim()) return;
-        if (!cursor.node) throw new Error('Notes before the first move are not supported. Attach the note to a move before importing.');
+        if (!cursor.node) {
+            if (nodes > 0 || stack.length > 0) throw new Error('Attach a variation note to its first move.');
+            const { prose } = extractPgnEvalCommands(stripDelimited(text, '[%xqanalysis ', ']', ''));
+            const joined = [rootComment, prose].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+            if (joined.length > MAX_MOVE_COMMENT_LENGTH) throw new Error(`A starting-position note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
+            rootComment = normalizeMoveComment(joined);
+            return;
+        }
         const analysis = readStudyAnalysisPgn(text);
         if (analysis && analysis.move === cursor.node.uci) cursor.node.analysis = analysis;
         const { evaluation, prose } = extractPgnEvalCommands(stripDelimited(text, '[%xqanalysis ', ']', ''));
@@ -117,14 +125,14 @@ function parseGame(input: Token[]): CollectionGame {
         cursor = { board, side: cursor.side === 'w' ? 'b' : 'w', node, parent: cursor, children: node.children! };
     }
     if (stack.length) throw new Error('Unclosed variation.');
-    if (!nodes) throw new Error('No moves found.');
+    if (!nodes && !rootComment && !tags.fen) throw new Error('No moves found.');
     if (result && tags.result && result !== tags.result) throw new Error('The Result header disagrees with the final result marker.');
     const moves: string[] = [];
     let finalNode = root[0];
     for (let node = root[0]; node; node = node.children?.[0] as SavedMoveTreeNode) { moves.push(node.uci); finalNode = node; }
-    return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen,
+    return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment,
         metadata: extractPgnMetadata(headers), opening: tags.opening,
-        ...(finalNode.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
+        ...(finalNode?.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
         result: RESULTS[result || tags.result || '*'] };
 }
 

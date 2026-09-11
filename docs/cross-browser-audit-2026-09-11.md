@@ -115,3 +115,13 @@ card shows no depth while the engine is unavailable. The notice clears after a
 successful restart. Browser coverage keeps the Engine tab open, checks the
 message and diagnostics, measures coarse-pointer Restart targets, verifies
 horizontal fit, and restarts successfully at 1440, 390, and 320 pixels.
+
+
+## Starting-position notes
+
+`test-root-notes-browser.cjs` covers the root note editor on desktop and touch
+widths of 1440, 390, and 320 pixels. It checks a study with no moves, independent
+move/variation comments, PGN and share-link round trips, library search/loading,
+unfinished-draft recovery, XQF game/diagram file imports, DhtmlXQ diagrams,
+clearing the sole note, and PGN collection download. It also checks horizontal
+fit and page errors. The script runs in the Chromium/WebKit/Firefox matrix.

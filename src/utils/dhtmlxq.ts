@@ -162,7 +162,8 @@ export function parseDhtmlXqRecord(text: string): DhtmlXqRecord | null {
     } else {
         board = parseFenBoard(START_FEN);
     }
-    if (moves.length === 0 && !custom) return null;
+    const comments = commentsFromRecord(text);
+    if (moves.length === 0 && !custom && !comments.get(0)?.trim()) return null;
 
     let sideToMove: Side = 'w';
     if (moves.length > 0) {
@@ -176,7 +177,7 @@ export function parseDhtmlXqRecord(text: string): DhtmlXqRecord | null {
     return {
         moves,
         ...(custom ? { startFen: boardToFen(board, sideToMove) } : {}),
-        comments: commentsFromRecord(text),
+        comments,
         ...(title ? { title } : {}),
     };
 }

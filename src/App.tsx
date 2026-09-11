@@ -2228,11 +2228,11 @@ function App() {
     setGameMode(sideToMove === 'w' ? 'PvAI-Black' : 'PvAI-Red');
     setOrientation(sideToMove === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
-    loadMoves(currentLineMoves, rootFen);
+    loadMoves(currentLineMoves, rootFen, undefined, treeNodes[rootNodeId]?.comment);
     setGameMetadata(gameMetadata);
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
-  }, [currentLineMoves, gameMetadata, setGameMetadata, handleCancelReview, loadMoves, resetReview, rootFen, sideToMove, stopAnalysis]);
+  }, [currentLineMoves, gameMetadata, setGameMetadata, handleCancelReview, loadMoves, resetReview, rootFen, rootNodeId, treeNodes, sideToMove, stopAnalysis]);
 
   const showBeginnerGuide = !guideDismissed && assistMode === 'coach' && gameMode === 'PvP'
     && moveHistory.length === 0 && rootFen === START_POSITION_FEN;
@@ -2542,8 +2542,9 @@ function App() {
       // The card is already labelled Material; repeating the word here made the
       // level case read differently from "Red +1.4" for no reason.
       : 'Even';
-  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves;
-  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves;
+  const rootComment = treeNodes[rootNodeId]?.comment;
+  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment);
+  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment) || rootFen !== START_POSITION_FEN;
   // A finished game has nothing to play on from, and the starting position is
   // already what "New game" gives you.
   const canPlayFromHere = !gameResult && (currentMoveIndex >= 0 || rootFen !== START_POSITION_FEN);
@@ -2979,15 +2980,16 @@ function App() {
       .slice(0, currentMoveIndex + 1)
       .map(id => treeNodes[id]?.record)
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    if (moves.length === 0) return null;
+    if (moves.length === 0 && !rootComment && rootFen === START_POSITION_FEN) return null;
     return exportPgn(moves, {
       gameMode,
       metadata: gameMetadata,
       opening: detectedOpening?.name,
       result: gameResult,
       startFen: rootFen,
+      rootComment,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, detectedOpening, gameResult, rootFen, hasMoveTreeMoves, hasStudyBranches]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, detectedOpening, gameResult, rootFen, rootComment, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -3034,13 +3036,12 @@ function App() {
 
   const handleCopyShareLink = useCallback(async () => {
     // Notes travel with the link for the same reason variations do: what is
-    // being shared is a study, not a move list. They spend the same 8000
-    // characters of tree budget, and a link that outgrows it already falls back
-    // to the main line with "Variations omitted" said out loud.
+    // being shared is a study. Move notes share the tree's 8000-character
+    // budget; the bounded starting-position note has its own URL parameter.
     const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree);
+    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment);
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
     if (!ok) {
@@ -3053,7 +3054,7 @@ function App() {
       ? {
           tone: 'warning',
           text: 'Variations omitted',
-          detail: 'The link was copied. This study is larger than a link can hold, so only the line on screen went with it -- its variations, notes, and saved analysis stayed behind.',
+          detail: 'The link was copied. This study is larger than a link can hold, so only the line on screen went with it -- its variations, move notes, and saved analysis stayed behind.',
           positionKey: shareNoticePositionKey,
         }
       : null
@@ -3066,7 +3067,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3079,7 +3080,7 @@ function App() {
    */
   const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
-    if (record.moves.length === 0 && !record.startFen) {
+    if (record.moves.length === 0 && !record.startFen && !normalizeMoveComment(record.rootComment)) {
       setMoveLineError('This XQF file holds no moves and no position.');
       return;
     }
@@ -3088,9 +3089,9 @@ function App() {
       setMoveLineError(treeValidation.move ? `Move ${treeValidation.move}: ${treeValidation.reason}` : treeValidation.reason);
       return;
     }
-    if (record.moves.length === 0 && record.startFen) {
+    if (record.moves.length === 0 && (record.startFen || record.rootComment)) {
       // Through the ref: the FEN loader is declared further down.
-      handleLoadFenRef.current?.(record.startFen, nextGameMode);
+      handleLoadFenRef.current?.(record.startFen || START_POSITION_FEN, nextGameMode, record.rootComment);
       return;
     }
 
@@ -3103,12 +3104,7 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
 
-    // A note on the position before the first move has no move to sit on;
-    // it goes at the head of the first move's note rather than being lost.
-    const tree = record.moveTree.map((node, index) => (index === 0 && record.rootComment
-      ? { ...node, comment: [record.rootComment, node.comment].filter(Boolean).join('\n') }
-      : node));
-    loadMoveTree(tree, record.moves, record.startFen);
+    loadMoveTree(record.moveTree, record.moves, record.startFen, undefined, record.rootComment);
     if (record.refused > 0) {
       showImportNotice(
         `Skipped ${record.refused} ${record.refused === 1 ? 'move' : 'moves'}`,
@@ -3252,8 +3248,9 @@ function App() {
     if (previous?.gameIdentity === gameIdentity && previous.nodeId !== currentNodeId) {
       setNodeComment(previous.nodeId, previous.draft);
     }
-    const editableNodeId = currentNodeId && currentNodeId !== rootNodeId ? currentNodeId : null;
-    const stored = editableNodeId ? treeNodesRef.current[editableNodeId]?.record?.comment ?? '' : '';
+    const editableNodeId = currentNodeId;
+    const stored = editableNodeId === rootNodeId ? treeNodesRef.current[rootNodeId]?.comment ?? ''
+      : editableNodeId ? treeNodesRef.current[editableNodeId]?.record?.comment ?? '' : '';
     moveCommentEditRef.current = editableNodeId ? { gameIdentity, nodeId: editableNodeId, draft: stored } : null;
     setMoveCommentDraft(stored);
   }, [currentNodeId, gameIdentity, rootNodeId, setNodeComment]);
@@ -3262,9 +3259,8 @@ function App() {
     if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
   }, []);
 
-  const moveCommentTarget = currentNodeId && currentNodeId !== rootNodeId
-    ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen)
-    : null;
+  const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
+    : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const handleCopyRecord = useCallback(async () => {
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
@@ -3635,13 +3631,13 @@ function App() {
     setGameMode(practiceSide === 'w' ? 'PvAI-Black' : 'PvAI-Red');
     setOrientation(practiceSide === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
-    loadMoves(practiceMoves, rootFen);
+    loadMoves(practiceMoves, rootFen, undefined, treeNodes[rootNodeId]?.comment);
     setGameMetadata(gameMetadata);
     setAnalysisTab('tree');
     setMobileAnalysisTab('moves');
     setGraphLoadSweepToken((token) => token + 1);
     setMobileView('board');
-  }, [gameMetadata, setGameMetadata, getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, setGameResult, stopAnalysis, treeNodes]);
+  }, [gameMetadata, setGameMetadata, getNodeFen, getNodeMoves, handleCancelReview, loadMoves, resetReview, rootFen, rootNodeId, setGameResult, stopAnalysis, treeNodes]);
 
   /**
    * Learn from your mistakes.
@@ -3782,8 +3778,8 @@ function App() {
     handleLoadFenRef.current?.(fen, editorGameMode ?? gameMode);
   }, [editorGameMode, gameMode]);
 
-  const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode) => {
-    const ok = loadFen(fen.trim());
+  const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode, note?: string) => {
+    const ok = loadFen(fen.trim(), note);
     if (!ok) {
       if (fenErrorTimerRef.current !== null) {
         window.clearTimeout(fenErrorTimerRef.current);
@@ -3793,7 +3789,7 @@ function App() {
         fenErrorTimerRef.current = null;
         setFenError(null);
       }, 2000);
-      return;
+      return false;
     }
     stopAnalysis();
     handleCancelReview();
@@ -3808,6 +3804,7 @@ function App() {
     setFenInput('');
     clearFenError();
     closeNewGameMenu();
+    return true;
   }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
 
   const handleLoadFenRef = useRef<typeof handleLoadFen | null>(null);
@@ -3824,7 +3821,7 @@ function App() {
       return;
     }
     if (plan.kind === 'diagram') {
-      handleLoadFen(plan.startFen, nextGameMode);
+      if (handleLoadFen(plan.startFen, nextGameMode, plan.rootComment)) setGameMetadata(extractPgnMetadata(text));
       return;
     }
     const { moves, startFen, importedFromNotation, notationRejected } = plan;
@@ -3840,8 +3837,8 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
     const loadedNodeIds = (!importedFromNotation && plan.moveTree.length > 0)
-      ? loadMoveTree(plan.moveTree, moves, startFen)
-      : loadMoves(moves, startFen);
+      ? loadMoveTree(plan.moveTree, moves, startFen, undefined, plan.rootComment)
+      : loadMoves(moves, startFen, undefined, plan.rootComment);
     setGameMetadata(extractPgnMetadata(text));
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
@@ -3940,6 +3937,7 @@ function App() {
     const rawTree = params.get('tree');
     const sharedMoveTree = decodeSavedMoveTreeParam(rawTree);
     const rawMode = params.get('mode');
+    const sharedRootComment = normalizeMoveComment(params.get('note'));
     if (isMoveImportTextTooLarge(rawMoves)) {
       failShareLink({ kind: 'too-long' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
@@ -3971,7 +3969,7 @@ function App() {
       logDiagnosticWarning('Ignored shared Xiangqi link with unreadable moves:', rawMoves.slice(0, 80));
       return;
     }
-    if (!rawFen && moves.length === 0 && !sharedMoveTree?.length) {
+    if (!rawFen && moves.length === 0 && !sharedMoveTree?.length && !sharedRootComment) {
       // Every move token read as a move above, so an empty line here means the
       // `tree` parameter was the only content and it did not decode.
       if (rawTree || rawMoves.trim()) {
@@ -4014,11 +4012,11 @@ function App() {
     setAiMoveError(null);
     setGameMode(mode);
     if (sharedMoveTree?.length && canLoadSharedTree) {
-      loadMoveTree(sharedMoveTree, moves, rawFen);
+      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment);
     } else if (moves.length > 0) {
-      loadMoves(moves, rawFen);
-    } else if (rawFen) {
-      loadFen(rawFen);
+      loadMoves(moves, rawFen, undefined, sharedRootComment);
+    } else if (rawFen || sharedRootComment) {
+      loadFen(rawFen || START_POSITION_FEN, sharedRootComment);
     }
     setWorkspaceMode('analysis');
     setAnalysisTab('tree');
@@ -4088,6 +4086,7 @@ function App() {
     return {
       gameMode,
       metadata: gameMetadata,
+      rootComment,
       moves,
       opening: detectedOpening?.name,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
@@ -4103,7 +4102,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -4556,8 +4555,8 @@ function App() {
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly)
-      : loadMoves(game.moves, game.startFen, initialPly);
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment)
+      : loadMoves(game.moves, game.startFen, initialPly, game.rootComment);
     setGameMetadata(game.metadata);
     if (initialPly === undefined || initialPly >= game.moves.length) {
       setGameResult(savedResultToGameResult(game.result));
@@ -4623,7 +4622,7 @@ function App() {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     const rawMoves = params.get('moves') ?? '';
-    const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen'));
+    const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen') || params.get('note'));
     if (!hasLink) return null;
     return { moveCount: extractUciMoveLine(rawMoves).length };
   }, []);
@@ -4707,7 +4706,9 @@ function App() {
       if (pending) {
         const node = treeNodesRef.current[pending.nodeId];
         const normalized = normalizeMoveComment(pending.draft);
-        if (node?.record && normalized !== (node.record.comment ?? '')) {
+        if (pending.nodeId === rootNodeId) {
+          snapshot = { ...snapshot, rootComment: normalized };
+        } else if (node?.record && normalized !== (node.record.comment ?? '')) {
           const record = { ...node.record };
           if (normalized) record.comment = normalized;
           else delete record.comment;
@@ -6800,7 +6801,7 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
-                  {(hasMoveTreeMoves || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
+                  {(hasMoveTreeMoves || rootComment || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;
@@ -6824,7 +6825,7 @@ function App() {
                       maxLength={MAX_MOVE_COMMENT_LENGTH}
                       rows={2}
                       spellCheck
-                      placeholder={moveCommentTarget ? 'Why this move' : ''}
+                      placeholder={currentNodeId === rootNodeId ? 'Plans, themes, or questions about this position' : moveCommentTarget ? 'Why this move' : ''}
                       aria-label={moveCommentTarget ? `Note on ${moveCommentTarget}` : 'Note on the current move'}
                     />
                   </div>

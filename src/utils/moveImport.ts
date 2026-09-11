@@ -187,6 +187,7 @@ function* uciTreeTokens(source: string): Generator<{ comment: string } | { match
 }
 
 export function extractUciMoveTree(text: string): {
+    rootComment?: string;
     moves: string[];
     moveTree: SavedMoveTreeNode[];
     hasVariations: boolean;
@@ -201,10 +202,17 @@ export function extractUciMoveTree(text: string): {
     let nodeCount = 0;
     let tooLarge = false;
     let commentTarget: SavedMoveTreeNode | undefined;
+    let rootComment: string | undefined;
 
     for (const entry of uciTreeTokens(firstGame.text)) {
         if ('comment' in entry) {
-            if (!commentTarget) continue;
+            if (!commentTarget) {
+                if (nodeCount === 0 && stack.length === 0) {
+                    const note = parseFreeTextComment(entry.comment);
+                    rootComment = normalizeMoveComment([rootComment, note].filter(Boolean).join(' '));
+                }
+                continue;
+            }
             const snapshot = readStudyAnalysisPgn(entry.comment);
             if (snapshot?.move === commentTarget.uci) commentTarget.analysis = snapshot;
             const evaluation = parseEvalCommand(entry.comment);
@@ -263,6 +271,7 @@ export function extractUciMoveTree(text: string): {
         hasVariations: root.length > 1 || hasBranch(root),
         tooLarge,
         hadMoreGames: firstGame.truncated,
+        ...(rootComment ? { rootComment } : {}),
     };
 }
 

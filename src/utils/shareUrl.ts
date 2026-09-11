@@ -9,6 +9,7 @@
  * does not fit the encoder's budget -- a caller that ignores `treeOmitted`
  * hands someone a link quietly missing their variations.
  */
+import { normalizeMoveComment } from './moveComment';
 import { encodeSavedMoveTreeParam } from './shareTree';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_POSITION_FEN } from './xiangqi';
@@ -26,10 +27,13 @@ export function buildShareUrl(
   moves: string[],
   mode: GameMode,
   moveTree?: SavedMoveTreeNode[],
+  rootComment?: string,
 ): ShareUrlBuildResult {
   const url = new URL(currentHref);
   url.search = '';
   url.hash = '';
+  const note = normalizeMoveComment(rootComment);
+  if (note) url.searchParams.set('note', note);
   if (rootFen !== START_POSITION_FEN) {
     url.searchParams.set('fen', rootFen);
   }

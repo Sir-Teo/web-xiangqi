@@ -62,6 +62,8 @@ export interface MoveRecord extends MoveEvaluation {
 }
 
 export interface MoveTreeNode {
+    /** Prose about the starting position; move notes live on record. */
+    comment?: string;
     id: string;
     parentId: string | null;
     childrenIds: string[];
@@ -116,10 +118,11 @@ interface RootPosition {
 
 const ROOT_NODE_ID = 'root';
 
-function createRootTree(): Record<string, MoveTreeNode> {
+function createRootTree(comment?: string): Record<string, MoveTreeNode> {
     return {
         [ROOT_NODE_ID]: {
             id: ROOT_NODE_ID,
+            comment: normalizeMoveComment(comment),
             parentId: null,
             childrenIds: [],
         },
@@ -311,10 +314,10 @@ export function useXiangqi() {
         nodeCounterRef.current = 1;
     }, []);
 
-    const loadFen = useCallback((fen: string): boolean => {
+    const loadFen = useCallback((fen: string, rootComment?: string): boolean => {
         const root = parseRootPositionFromFen(fen);
         if (!root) return false;
-        const rootTree = createRootTree();
+        const rootTree = createRootTree(rootComment);
         const nextGameResult = gameResultForPosition(root.board, root.sideToMove);
         setTreeNodes(rootTree);
         setRootPosition(root);
@@ -434,11 +437,11 @@ export function useXiangqi() {
         return visitChildren(moveTree, root.board, root.sideToMove, 0);
     }, []);
 
-    const loadMoves = useCallback((moves: string[], startFen?: string, initialPly?: number) => {
+    const loadMoves = useCallback((moves: string[], startFen?: string, initialPly?: number, rootComment?: string) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         let currentBoard = root.board;
         let currentSide: Side = root.sideToMove;
-        const tree: Record<string, MoveTreeNode> = createRootTree();
+        const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
         let parentNodeId = ROOT_NODE_ID;
         const activeLine: string[] = [];
         let counter = 1;
@@ -500,9 +503,9 @@ export function useXiangqi() {
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
-    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number) => {
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
-        const tree: Record<string, MoveTreeNode> = createRootTree();
+        const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
         let counter = 1;
         const sourceRootFen = boardToFen(root.board, root.sideToMove, root.fullmove, root.halfmove);
 
@@ -940,10 +943,13 @@ export function useXiangqi() {
      * "cleared" and "never written" end up the same stored state.
      */
     const setNodeComment = useCallback((nodeId: string, comment: string) => {
-        if (nodeId === ROOT_NODE_ID) return;
         const normalized = normalizeMoveComment(comment);
         setTreeNodes((prevTree) => {
             const node = prevTree[nodeId];
+            if (nodeId === ROOT_NODE_ID && node) {
+                if (isSameMoveComment(node.comment, normalized)) return prevTree;
+                return { ...prevTree, [nodeId]: { ...node, comment: normalized } };
+            }
             if (!node?.record || isSameMoveComment(node.record.comment, normalized)) return prevTree;
             const record = { ...node.record };
             if (normalized) record.comment = normalized;

@@ -60,6 +60,7 @@ export interface SavedMoveTreeNode extends MoveEvaluation {
 
 export interface SavedGame {
     metadata?: GameMetadata;
+    rootComment?: string;
     id: string;
     savedAt: number;
     gameMode: GameMode;
@@ -383,10 +384,11 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     const moves = normalizeSavedMoves(raw.moves);
     const moveTree = normalizeSavedMoveTree(raw.moveTree);
     const startFen = normalizeStartFen(raw.startFen);
+    const rootComment = normalizeMoveComment(raw.rootComment);
     if (!moves || moveTree === null || startFen === null) {
         return null;
     }
-    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length)) {
+    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length && !rootComment)) {
         return null;
     }
 
@@ -400,6 +402,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         gameMode,
         moves,
         startFen,
+        rootComment,
         result,
         metadata: normalizeGameMetadata(raw.metadata),
         label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),

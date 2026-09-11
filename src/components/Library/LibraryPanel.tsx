@@ -104,6 +104,7 @@ function getSavedGameSearchText(game: SavedGame) {
 
   const parts = [
     game.label,
+    game.rootComment,
     ...Object.values(game.metadata ?? {}),
     game.opening,
     game.gameMode,
@@ -187,6 +188,7 @@ function buildSavedGamePgn(game: SavedGame) {
       label: game.label,
       metadata: game.metadata,
       startFen: game.startFen,
+      rootComment: game.rootComment,
     });
     if (pgn) return pgn;
   }
@@ -198,6 +200,7 @@ function buildSavedGamePgn(game: SavedGame) {
     label: game.label,
     metadata: game.metadata,
     startFen: game.startFen,
+      rootComment: game.rootComment,
   });
 }
 

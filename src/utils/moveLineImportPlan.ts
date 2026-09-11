@@ -5,6 +5,8 @@ import {
     isMoveImportTextTooLarge,
     stripRecordMetadata,
 } from './moveImport';
+import { normalizeMoveComment } from './moveComment';
+import { START_POSITION_FEN } from './xiangqi';
 import { parseDhtmlXqRecord } from './dhtmlxq';
 import { parseNotationRecord } from './xiangqiNotation';
 import type { SavedMoveTreeNode } from './gameLibrary';
@@ -12,11 +14,12 @@ import type { SavedMoveTreeNode } from './gameLibrary';
 /** What the app should do with a pasted record, decided before anything is touched. */
 export type MoveLineImportPlan =
     /** A position and nothing played from it. */
-    | { kind: 'diagram'; startFen: string }
+    | { kind: 'diagram'; startFen: string; rootComment?: string }
     /** Nothing usable; `message` is what the reader is told, and why. */
     | { kind: 'error'; message: string }
     | {
         kind: 'line';
+        rootComment?: string;
         moves: string[];
         startFen: string | undefined;
         moveTree: SavedMoveTreeNode[];
@@ -29,8 +32,8 @@ export type MoveLineImportPlan =
         hadMoreGames: boolean;
         /**
          * A DhtmlXQ record's own notes, `[moveNumber, text]`, numbered from
-         * one -- zero is about the position before the game and has no move to
-         * sit on. Empty for every other kind of record. Carried as pairs
+         * one; the starting-position note (zero) is also carried as rootComment.
+         * Empty for other formats. Carried as pairs
          * rather than a Map so the plan stays plain data.
          */
         dhtmlComments: [number, string][];
@@ -75,14 +78,15 @@ export function planMoveLineImport(
 
     const dhtml = parseDhtmlXqRecord(text);
     if (dhtml && dhtml.moves.length === 0 && dhtml.startFen) {
-        return { kind: 'diagram', startFen: dhtml.startFen };
+        return { kind: 'diagram', startFen: dhtml.startFen, rootComment: normalizeMoveComment(dhtml.comments.get(0)) };
     }
 
     const importedLine = dhtml
-        ? { moves: dhtml.moves, moveTree: [] as SavedMoveTreeNode[], hasVariations: false, tooLarge: false, hadMoreGames: false }
+        ? { moves: dhtml.moves, moveTree: [] as SavedMoveTreeNode[], hasVariations: false, tooLarge: false, hadMoreGames: false, rootComment: undefined }
         : extractUciMoveTree(text);
     const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(text) || undefined;
 
+    const rootComment = dhtml ? normalizeMoveComment(dhtml.comments.get(0)) : importedLine.rootComment;
     let moves = importedLine.moves;
     let importedFromNotation = false;
     let notationRejected: string[] = [];
@@ -97,6 +101,11 @@ export function planMoveLineImport(
 
     if (importedLine.tooLarge || moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
         return { kind: 'error', message: `Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.` };
+    }
+
+    const isDiagramText = moves.length === 0 && (dhtml || /^(?:\s*(?:1-0|0-1|1\/2-1\/2|\*))?\s*$/.test(stripRecordMetadata(text)));
+    if (moves.length === 0 && notationRejected.length === 0 && isDiagramText && (rootComment || startFen)) {
+        return { kind: 'diagram', startFen: startFen || START_POSITION_FEN, rootComment };
     }
 
     if (moves.length === 0) {
@@ -138,6 +147,7 @@ export function planMoveLineImport(
 
     return {
         kind: 'line',
+        rootComment,
         moves,
         startFen,
         moveTree: importedLine.moveTree,
