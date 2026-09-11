@@ -1,0 +1,22 @@
+.rule-lessons-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 12, .78); z-index: 9200; }
+.rule-lessons { position: fixed; inset: 3vh auto auto 50%; transform: translateX(-50%); width: min(96vw, 900px); max-height: 94vh; overflow: auto; padding: 1rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 14px; z-index: 9201; }
+.rule-lessons header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.rule-lessons h2 { margin: 0; font-size: 1.15rem; }
+.rule-lessons header span { font-size: .8rem; color: var(--text-secondary); }
+.rule-lessons-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(240px, 1fr); grid-template-areas: "board intro" "board feedback"; gap: 0 1.5rem; align-content: start; }
+.rule-lessons-board { grid-area: board; min-width: 0; align-self: start; padding: 12px; }
+.rule-lessons-board .xiangqi-board-container { --board-max-width: 460px; }
+.rule-lessons-intro, .rule-lessons-content { min-width: 0; font-size: .85rem; line-height: 1.5; }
+.rule-lessons-intro { grid-area: intro; }
+.rule-lessons-content { grid-area: feedback; }
+.rule-lessons-intro label { display: grid; gap: .3rem; }
+.rule-lessons select { width: 100%; min-width: 0; min-height: 44px; background: var(--bg-input); color: inherit; border: 1px solid var(--border-default); border-radius: 6px; padding: .4rem; }
+.rule-lessons button:not(.hitbox) { min-width: 44px; min-height: 44px; padding: .5rem .75rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
+.rule-lessons button[aria-pressed="true"] { border-color: var(--accent); }
+.rule-lessons-task { font-weight: 650; }
+.rule-lessons-feedback { min-height: 4.5em; padding: .65rem; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 8px; }
+.rule-lessons-feedback[data-solved="true"] { border-color: var(--accent); }
+.rule-lessons-hint { color: var(--text-secondary); }
+.rule-lessons-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.rule-lessons-return { margin-top: .75rem; width: 100%; }
+@media (max-width: 640px) { .rule-lessons-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "board" "feedback"; gap: .5rem; } .rule-lessons { padding: .75rem; } .rule-lessons-board .xiangqi-board-container { --board-max-width: 320px; } }

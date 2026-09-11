@@ -1,10 +1,11 @@
 import './BeginnerGuide.css';
 
-export function BeginnerGuide({ letters, compact, onToggleLetters, onPlay, onDismiss }: {
+export function BeginnerGuide({ letters, compact, onToggleLetters, onPlay, onLearn, onDismiss }: {
   letters: boolean;
   compact: boolean;
   onToggleLetters: () => void;
   onPlay: () => void;
+  onLearn: () => void;
   onDismiss: () => void;
 }) {
   const content = (
@@ -17,6 +18,7 @@ export function BeginnerGuide({ letters, compact, onToggleLetters, onPlay, onDis
       <div className="beginner-guide-actions">
         <button type="button" className="chip-btn" onClick={onToggleLetters} aria-pressed={letters}>Letter pieces</button>
         <button type="button" className="chip-btn" onClick={onPlay}>Play Beginner</button>
+        <button type="button" className="chip-btn" onClick={event => { event.currentTarget.focus(); onLearn(); }}>Learn the rules</button>
       </div>
     </>
   );

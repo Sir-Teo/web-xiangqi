@@ -18,6 +18,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-engine-startup-cancel-browser.cjs',
         'test-engine-recovery-navigation-browser.cjs',
         'test-beginner-browser.cjs',
+        'test-rule-lessons-browser.cjs',
         'test-editor-keyboard-browser.cjs',
         'test-unicode-share-browser.cjs',
         'test-study-undo-browser.cjs',

@@ -6,6 +6,7 @@ import { extractPgnMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
+import { RuleLessons } from './components/RuleLessons';
 import { hasMoveTreeLine } from './utils/appendMoveTreeLine';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -539,6 +540,7 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [showBoardEditor, setShowBoardEditor] = useState(false);
+  const [showRuleLessons, setShowRuleLessons] = useState(false);
   /**
    * The mode a position built by hand should start in, decided when the editor
    * opens rather than read off a dialog's visibility when it closes. It used to
@@ -2240,6 +2242,7 @@ function App() {
       letters={pieceStyle === 'letters'}
       onToggleLetters={() => setPieceStyle(style => style === 'letters' ? 'traditional' : 'letters')}
       onPlay={() => { setAiStrength(1); setAiSpeed('normal'); playFromHere(); }}
+      onLearn={() => setShowRuleLessons(true)}
       onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
     />
   ) : null;
@@ -4279,6 +4282,11 @@ function App() {
       run: () => { setShowSettings(false); setEditorGameMode(null); setShowBoardEditor(true); },
     },
     {
+      id: 'learn-rules', label: 'Learn the rules', hint: 'Nine guided board exercises',
+      keywords: ['beginner', 'lesson', 'practice', 'learn', 'tutorial'],
+      run: () => { setShowSettings(false); setShowRuleLessons(true); },
+    },
+    {
       id: 'write-note',
       label: 'Write a note on this move',
       hint: moveCommentTarget
@@ -4635,7 +4643,7 @@ function App() {
    * behind the open palette, losing the reader's place in the analysis.
    */
   const aDialogIsOpen = Boolean(
-    showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor
+    showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor || showRuleLessons
   );
   const [autoSaveChecked, setAutoSaveChecked] = useState(false);
 
@@ -7654,6 +7662,8 @@ function App() {
           onApply={handleApplyEditedPosition}
         />
       )}
+
+      {showRuleLessons && <RuleLessons onClose={() => setShowRuleLessons(false)} />}
 
       {autoSaveRecovery && (
         <AutoSaveRecoveryModal

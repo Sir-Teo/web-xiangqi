@@ -1,0 +1,90 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Board } from './Board/Board';
+import { keepTabWithin } from '../utils/focusTrap';
+import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress } from '../utils/ruleLessons';
+import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
+import './RuleLessons.css';
+
+export function RuleLessons({ onClose }: { onClose: () => void }) {
+    const [completed, setCompleted] = useState(readRuleLessonProgress);
+    const [index, setIndex] = useState(() => Math.max(0, RULE_LESSONS.findIndex(lesson => !completed.includes(lesson.id))));
+    const lesson = RULE_LESSONS[index];
+    const [board, setBoard] = useState(() => parseFenBoard(lesson.fen));
+    const [selected, setSelected] = useState(() => uciToSquare(lesson.solution.slice(0, 2)));
+    const [solved, setSolved] = useState(false);
+    const [hint, setHint] = useState(false);
+    const [message, setMessage] = useState('');
+    const [saveFailed, setSaveFailed] = useState(false);
+    const [letters, setLetters] = useState(false);
+    const dialog = useRef<HTMLDivElement>(null);
+    const feedback = useRef<HTMLParagraphElement>(null);
+    const validTargets = useMemo(() => selected && !solved ? legalMovesFrom(board, selected.file, selected.rank, 'w') : [], [board, selected, solved]);
+
+    useEffect(() => {
+        const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        dialog.current?.querySelector<HTMLButtonElement>('header button')?.focus({ preventScroll: true });
+        return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+    }, []);
+    useEffect(() => {
+        const keydown = (event: KeyboardEvent) => {
+            keepTabWithin(dialog.current, event);
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
+        };
+        window.addEventListener('keydown', keydown, true);
+        return () => window.removeEventListener('keydown', keydown, true);
+    }, [onClose]);
+    useEffect(() => {
+        // On short phones feedback sits below the board. Reveal the outcome so
+        // a learner never has to guess whether a tap worked.
+        if (message) feedback.current?.scrollIntoView({ block: 'nearest' });
+    }, [message]);
+
+    function openLesson(next: number) {
+        setIndex(next); setBoard(parseFenBoard(RULE_LESSONS[next].fen));
+        setSelected(uciToSquare(RULE_LESSONS[next].solution.slice(0, 2))); setSolved(false); setHint(false); setMessage('');
+        dialog.current?.querySelector<HTMLSelectElement>('select')?.focus();
+    }
+    function clickSquare(file: number, rank: number) {
+        if (solved) return;
+        if (isRedPiece(board[rank][file])) { setSelected({ file, rank }); setMessage(''); return; }
+        if (!selected) { setMessage('Select a red piece first.'); return; }
+        const attempt = attemptRuleLesson(lesson, squareToUci(selected.file, selected.rank) + squareToUci(file, rank));
+        setMessage(attempt.message);
+        if (attempt.solved) {
+            setBoard(attempt.board); setSelected(null); setSolved(true);
+            const progress = completeRuleLesson(lesson.id, completed);
+            setCompleted(progress.completed); setSaveFailed(!progress.saved);
+        }
+    }
+    return <>
+        <div className="rule-lessons-backdrop" onClick={onClose} aria-hidden="true" />
+        <div className="rule-lessons" role="dialog" aria-modal="true" aria-labelledby="rule-lessons-title" ref={dialog} data-testid="rule-lessons">
+            <header><div><h2 id="rule-lessons-title">Learn the rules</h2><span data-testid="lesson-progress">{completed.length} of {RULE_LESSONS.length} completed</span></div>
+                <button type="button" onClick={onClose} aria-label="Close rule lessons">×</button></header>
+            <div className="rule-lessons-layout">
+                <div className="rule-lessons-intro">
+                    <label>Choose a lesson<select value={index} onChange={event => openLesson(Number(event.target.value))} data-testid="lesson-select">
+                        {RULE_LESSONS.map((item, i) => <option key={item.id} value={i}>{completed.includes(item.id) ? '✓ ' : ''}{i + 1}. {item.title}</option>)}
+                    </select></label>
+                    <p>{lesson.rule}</p><p className="rule-lessons-task">{lesson.task}</p>
+                </div>
+                <div className="rule-lessons-board"><Board key={lesson.id} board={board} selected={selected} validTargets={validTargets} onSquareClick={clickSquare}
+                    draggableSide={solved ? null : 'w'} pieceStyle={letters ? 'letters' : 'traditional'}
+                    highlights={hint && !solved ? [uciToSquare(lesson.solution.slice(2))!] : []} /></div>
+                <section className="rule-lessons-content" aria-label="Exercise feedback">
+                    <p className="rule-lessons-feedback" role="status" data-solved={solved} data-testid="lesson-feedback" ref={feedback}>{message || 'The exercise piece is selected. Tap a target, or use arrow keys and Enter on the board.'}</p>
+                    {hint && !solved && <p className="rule-lessons-hint">{lesson.hint}</p>}
+                    {saveFailed && <p role="alert">Completed here, but browser storage could not save your progress.</p>}
+                    <div className="rule-lessons-actions">
+                        <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
+                        {!solved && <button type="button" onClick={() => setHint(true)}>Show hint</button>}
+                        <button type="button" onClick={() => openLesson(index)}>Try again</button>
+                        {solved && index < RULE_LESSONS.length - 1 && <button type="button" onClick={() => openLesson(index + 1)}>Next lesson</button>}
+                    </div>
+                    {completed.length === RULE_LESSONS.length && <p>You have completed all nine exercises. Revisit any lesson to practice again.</p>}
+                    <button type="button" className="rule-lessons-return" onClick={onClose}>Back to your board</button>
+                </section>
+            </div>
+        </div>
+    </>;
+}
