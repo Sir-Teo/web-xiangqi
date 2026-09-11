@@ -143,3 +143,14 @@ keep imported evidence stable. It checks unknown first-move scores for Red and
 Black starts, missing scores in a line, genuine zero, quality-mark precedence,
 variation-only legends, and matching estimated-quality text in titles and
 accessible names. Coverage runs at 1440/390/320px in the three-browser matrix.
+
+
+## Large-study navigation rendering
+
+`test-move-render-browser.cjs` loads 1,024 plies at 1440/390/320px. A React commit
+probe verifies that navigation renders only the affected move/breadcrumb entries.
+Native interactions then check roving keyboard focus, new studies with reused
+node IDs, WXF/Chinese labels and current-line copying, note edits, changes to a
+child's inferred quality after its parent score changes, and branch selection.
+The performance benchmark runs separately from these work-count assertions so
+CPU scheduling is not a correctness threshold.

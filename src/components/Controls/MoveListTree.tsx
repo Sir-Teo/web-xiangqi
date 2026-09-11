@@ -193,73 +193,15 @@ export const MoveListTree = memo(function MoveListTree({
         const record = node?.record;
         if (!node || !record) return null;
         const quality = getMoveListQuality(record, node.parentId ? treeNodes[node.parentId]?.record?.evalScore : undefined);
-        const qualityClass = getMoveQualityClassName(quality);
         if (quality) {
             hasMoveQualityLegend = true;
             if (!record.quality) hasEstimatedQuality = true;
             if (record.quality && record.persistEvaluation) hasSavedQualityMarks = true;
         }
-        // Coach hint: engine's best alternative (stored on this node from review)
-        const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
-        const note = record.quality && isCriticalReviewQuality(record.quality) && record.reviewNote
-            ? formatReviewNoteForDisplay(record.reviewNote, record.bestMove)
-            : null;
-        const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
-        // The reader's own note, which is not the review's. Shown under the
-        // move like the review note is, so a study reads as a study: a line of
-        // fifty moves with three notes on it has to make the three findable.
-        const comment = record.comment ? summarizeMoveComment(record.comment) : null;
-        const isCurrent = currentNodeId === nodeId;
-        return (
-            <span key={nodeId} className="mtree-chip-wrap">
-                <button
-                    data-node-id={nodeId}
-                    data-testid={isCurrent ? 'move-tree-active' : undefined}
-                    type="button"
-                    className={[
-                        'mtree-chip',
-                        qualityClass,
-                        compact ? 'mtree-chip-compact' : '',
-                        isCurrent ? 'mtree-chip-active' : '',
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => onNavigateNode(nodeId)}
-                    onFocus={() => setRovingNodeId(nodeId)}
-                    onKeyDown={handleChipKeyDown}
-                    tabIndex={nodeId === stopNodeId ? 0 : -1}
-                    title={formatMoveTitle(record, quality)}
-                    aria-current={isCurrent ? 'step' : undefined}
-                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle, quality)}
-                    aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
-                >
-                    {/* One authoritative reading of the move, then the raw
-                        coordinates as the cross-reference -- raw, because that
-                        is the form you paste into an engine or a share link.
-                        In UCI mode the reading already *is* the coordinates, so
-                        the second line goes: it was printing `h2e2` under
-                        `H2→E2`, which is the same move written twice. */}
-                    {formatMoveLabel(record, notationStyle)}
-                    {notationStyle === 'uci'
-                        ? null
-                        : <span className="move-uci">{record.uci}</span>}
-                    {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
-                </button>
-                {isBadMove && coachMove && (
-                    <span className="mtree-coach-hint" title={`Engine suggested: ${formatUciMove(coachMove)}`}>
-                        <IconSpark /> {formatAlternative(record, coachMove, notationStyle)}
-                    </span>
-                )}
-                {note ? (
-                    <span className="mtree-review-note" title={note}>
-                        {note}
-                    </span>
-                ) : null}
-                {comment ? (
-                    <span className="mtree-comment" title={record.comment}>
-                        {comment}
-                    </span>
-                ) : null}
-            </span>
-        );
+        return <MoveChip key={nodeId} nodeId={nodeId} record={record} quality={quality}
+            compact={compact} isCurrent={currentNodeId === nodeId} isTabStop={nodeId === stopNodeId}
+            notationStyle={notationStyle} onNavigateNode={onNavigateNode}
+            onRovingFocus={setRovingNodeId} onKeyDown={handleChipKeyDown} />;
     };
 
     const pushVariations = (parentId: string, lineIndex: number) => {
@@ -373,6 +315,88 @@ export const MoveListTree = memo(function MoveListTree({
 });
 
 MoveListTree.displayName = 'MoveListTree';
+
+type MoveChipProps = {
+    nodeId: string;
+    record: NonNullable<MoveTreeNode['record']>;
+    quality?: ReviewMoveQuality;
+    compact: boolean;
+    isCurrent: boolean;
+    isTabStop: boolean;
+    notationStyle: XiangqiNotationStyle;
+    onNavigateNode: (nodeId: string) => void;
+    onRovingFocus: (nodeId: string) => void;
+    onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>;
+};
+
+// Records are immutable. Cursor and focus changes only need to redraw the
+// affected chips, not rebuild every notation label and annotation in the study.
+const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCurrent,
+    isTabStop, notationStyle, onNavigateNode, onRovingFocus, onKeyDown }: MoveChipProps) {
+    const qualityClass = getMoveQualityClassName(quality);
+    // Coach hint: engine's best alternative (stored on this node from review)
+    const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
+    const note = record.quality && isCriticalReviewQuality(record.quality) && record.reviewNote
+        ? formatReviewNoteForDisplay(record.reviewNote, record.bestMove)
+        : null;
+    const isBadMove = record.quality ? isCriticalReviewQuality(record.quality) : qualityClass === 'quality-mistake' || qualityClass === 'quality-blunder';
+    // The reader's own note, which is not the review's. Shown under the
+    // move like the review note is, so a study reads as a study: a line of
+    // fifty moves with three notes on it has to make the three findable.
+    const comment = record.comment ? summarizeMoveComment(record.comment) : null;
+    return (
+        <span className="mtree-chip-wrap">
+            <button
+                data-node-id={nodeId}
+                data-testid={isCurrent ? 'move-tree-active' : undefined}
+                type="button"
+                className={[
+                    'mtree-chip',
+                    qualityClass,
+                    compact ? 'mtree-chip-compact' : '',
+                    isCurrent ? 'mtree-chip-active' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => onNavigateNode(nodeId)}
+                onFocus={() => onRovingFocus(nodeId)}
+                onKeyDown={onKeyDown}
+                tabIndex={isTabStop ? 0 : -1}
+                title={formatMoveTitle(record, quality)}
+                aria-current={isCurrent ? 'step' : undefined}
+                aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle, quality)}
+                aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
+            >
+                {/* One authoritative reading of the move, then the raw
+                    coordinates as the cross-reference -- raw, because that
+                    is the form you paste into an engine or a share link.
+                    In UCI mode the reading already *is* the coordinates, so
+                    the second line goes: it was printing `h2e2` under
+                    `H2→E2`, which is the same move written twice. */}
+                {formatMoveLabel(record, notationStyle)}
+                {notationStyle === 'uci'
+                    ? null
+                    : <span className="move-uci">{record.uci}</span>}
+                {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
+            </button>
+            {isBadMove && coachMove && (
+                <span className="mtree-coach-hint" title={`Engine suggested: ${formatUciMove(coachMove)}`}>
+                    <IconSpark /> {formatAlternative(record, coachMove, notationStyle)}
+                </span>
+            )}
+            {note ? (
+                <span className="mtree-review-note" title={note}>
+                    {note}
+                </span>
+            ) : null}
+            {comment ? (
+                <span className="mtree-comment" title={record.comment}>
+                    {comment}
+                </span>
+            ) : null}
+        </span>
+    );
+});
+
+MoveChip.displayName = 'MoveChip';
 
 function formatMoveLabel(
     record: NonNullable<MoveTreeNode['record']>,

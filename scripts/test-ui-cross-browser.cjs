@@ -35,6 +35,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-graph-gaps-browser.cjs',
         'test-move-quality-browser.cjs',
         'test-board-render-browser.cjs',
+        'test-move-render-browser.cjs',
         'test-library-annotations-browser.cjs',
         'test-dhtmlxq-browser.cjs',
         'test-root-notes-browser.cjs',

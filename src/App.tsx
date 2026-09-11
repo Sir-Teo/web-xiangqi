@@ -18,6 +18,7 @@ import { EvalGraph } from './components/Panels/EvalGraph';
 import { ReviewPanel } from './components/Panels/ReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
+import { BreadcrumbChip } from './components/Controls/BreadcrumbChip';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import { MoveLineStrip } from './components/Controls/MoveLineStrip';
 import {
@@ -1387,6 +1388,12 @@ function App() {
     return [rootNodeId, ...path];
   }, [currentNodeId, rootNodeId, treeNodes]);
 
+  // Labels depend on the study and notation, not on where the cursor stands.
+  const breadcrumbLabels = useMemo(() => new Map(Object.keys(treeNodes).map(nodeId => [nodeId, {
+    label: nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle, rootFen),
+    title: nodeTitle(nodeId, rootNodeId, treeNodes),
+  }])), [treeNodes, rootNodeId, notationStyle, rootFen]);
+
   useEffect(() => {
     const container = treeBreadcrumbRef.current;
     const active = container?.querySelector('.tree-breadcrumb-chip-active') as HTMLElement | null;
@@ -1437,14 +1444,14 @@ function App() {
     event: React.KeyboardEvent<HTMLButtonElement>,
     index: number
   ) => {
-    const next = rovingIndexForKey(event.key, breadcrumbNodeIds.length, index);
+    const strip = treeBreadcrumbRef.current;
+    const next = rovingIndexForKey(event.key, strip?.childElementCount ?? 0, index);
     if (next === null) return;
     event.preventDefault();
     setRovingBreadcrumbIndex(next);
-    const strip = treeBreadcrumbRef.current;
     const target = strip?.querySelector<HTMLButtonElement>(`[data-breadcrumb-index="${next}"]`);
     target?.focus();
-  }, [breadcrumbNodeIds.length]);
+  }, []);
 
   // A role="log" that does not follow its tail shows stale lines while the
   // newest sit below the fold -- measured 42px out of view on desktop. The
@@ -3184,11 +3191,8 @@ function App() {
    * `1. 炮二平五 馬8進7` -- which is what gets pasted into a chat or a notebook.
    * A PGN is for another program; this is for another person.
    */
-  const recordText = useMemo(
-    () => formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle),
-    [currentMoveIndex, moveHistory, notationStyle, rootFen]
-  );
-  const canCopyRecord = recordText.length > 0;
+  // Formatting the whole line belongs to Copy, not every navigation step.
+  const canCopyRecord = currentMoveIndex >= 0 && moveHistory.length > 0;
 
   /**
    * The reader's note on the move they are standing on.
@@ -3262,6 +3266,7 @@ function App() {
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const handleCopyRecord = useCallback(async () => {
+    const recordText = formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle);
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
     if (!ok) {
@@ -3277,7 +3282,7 @@ function App() {
       copiedRecordToastTimerRef.current = null;
       setCopiedRecordToast(false);
     }, 2000);
-  }, [clearExportFailure, recordText, showExportFailure]);
+  }, [clearExportFailure, currentMoveIndex, moveHistory, notationStyle, rootFen, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
     const rawLine = moves.filter(Boolean).join(' ').trim();
@@ -6762,26 +6767,12 @@ function App() {
                     aria-keyshortcuts="ArrowLeft ArrowRight Home End"
                   >
                     {breadcrumbNodeIds.map((nodeId, index) => {
-                      const label = nodeLabel(nodeId, rootNodeId, treeNodes, notationStyle, rootFen);
-                      const title = nodeTitle(nodeId, rootNodeId, treeNodes);
-                      return (
-                        <button
-                          key={nodeId}
-                          type="button"
-                          className={`tree-breadcrumb-chip ${nodeId === currentNodeId ? 'tree-breadcrumb-chip-active' : ''}`}
-                          onClick={() => jumpToNode(nodeId)}
-                          onFocus={() => setRovingBreadcrumbIndex(index)}
-                          onKeyDown={(event) => handleBreadcrumbKeyDown(event, index)}
-                          tabIndex={index === breadcrumbTabStopIndex ? 0 : -1}
-                          data-breadcrumb-index={index}
-                          title={title}
-                          aria-label={title}
-                          aria-current={nodeId === currentNodeId ? 'true' : undefined}
-                        >
-                          {label}
-                          {index < breadcrumbNodeIds.length - 1 ? <span className="tree-breadcrumb-sep">/</span> : null}
-                        </button>
-                      );
+                      const { label, title } = breadcrumbLabels.get(nodeId) ?? { label: 'Node', title: 'Move node' };
+                      return <BreadcrumbChip key={nodeId} nodeId={nodeId} index={index}
+                        label={label} title={title} isCurrent={nodeId === currentNodeId}
+                        isTabStop={index === breadcrumbTabStopIndex} hasNext={index < breadcrumbNodeIds.length - 1}
+                        onNavigate={jumpToNode} onFocusIndex={setRovingBreadcrumbIndex}
+                        onKeyDown={handleBreadcrumbKeyDown} />;
                     })}
                   </div>
                   {!isMobile && beginnerGuide ? beginnerGuide : <MoveListTree
