@@ -9270,6 +9270,99 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 }
 
 /**
+ * The board editor's brushes are sized by the hand using them.
+ *
+ * The palette is the editor's most tap-heavy control: pick a piece, tap the
+ * board, pick another. It was laid out as eight fixed columns below 640px,
+ * which sized each brush by the viewport instead — 37px on a 375px phone and
+ * 30px at 320px, the smallest targets in the app, while the desktop's
+ * four-column side panel gave a mouse the full 44px.
+ *
+ * Three assertions, because the obvious fix breaks the other two. A brush must
+ * clear 44x44 on a phone; the desktop's must stay 44 rather than being shrunk
+ * to make one rule fit both; and the board and the palette must both be fully
+ * visible without scrolling, since a bigger palette buys its room from
+ * somewhere and the thing a reader works between must not be what pays.
+ */
+async function assertTheBoardEditorBrushesAreThumbSized(browser) {
+  const measure = async (page) => {
+    await page.keyboard.press("Control+k");
+    await page.waitForTimeout(500);
+    await page.keyboard.type("Set up a position");
+    await page.waitForTimeout(450);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector(".board-editor-palette", { timeout: 15000 });
+    await page.waitForTimeout(600);
+    return page.evaluate(() => {
+      const editor = document.querySelector(".board-editor");
+      editor.scrollTop = 0;
+      const brushes = [...document.querySelectorAll(".board-editor-brush")];
+      const box = editor.getBoundingClientRect();
+      const shown = (el) => {
+        const r = el.getBoundingClientRect();
+        const top = Math.max(r.top, box.top, 0);
+        const bottom = Math.min(r.bottom, box.bottom, window.innerHeight);
+        return r.height > 0 ? Math.round((100 * Math.max(0, bottom - top)) / r.height) : 0;
+      };
+      const sizes = brushes.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { w: Math.round(r.width), h: Math.round(r.height) };
+      });
+      return {
+        count: brushes.length,
+        smallest: sizes.reduce((a, b) => (Math.min(b.w, b.h) < Math.min(a.w, a.h) ? b : a)),
+        boardShown: shown(document.querySelector(".board-editor-board .xiangqi-board")),
+        paletteShown: shown(document.querySelector(".board-editor-palette")),
+      };
+    });
+  };
+
+  for (const viewport of [{ width: 375, height: 812 }, { width: 320, height: 640 }]) {
+    const context = await browser.newContext({ viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    try {
+      const page = await context.newPage();
+      await clearAutoSaveBetweenNavigations(page);
+      await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForTimeout(700);
+      const result = await measure(page);
+      if (result.count < 10) {
+        throw new Error(`The editor palette should hold a brush per piece and an eraser; found ${result.count}.`);
+      }
+      if (result.smallest.w < 44 || result.smallest.h < 44) {
+        throw new Error(
+          `A board-editor brush is ${result.smallest.w}x${result.smallest.h} at ${viewport.width}x${viewport.height}; a thumb needs 44x44. ${JSON.stringify(result)}`
+        );
+      }
+      if (result.boardShown < 100 || result.paletteShown < 100) {
+        throw new Error(
+          `The editor's board and palette must both be on screen at the top of the dialog at ${viewport.width}x${viewport.height}; got ${JSON.stringify(result)}.`
+        );
+      }
+    } finally {
+      await context.close();
+    }
+  }
+
+  // The desktop side panel is 190px of four columns; keep it that way rather
+  // than letting one rule shrink a mouse's target to make a phone's fit.
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(700);
+    const result = await measure(page);
+    if (result.smallest.w < 44 || result.smallest.h < 44) {
+      throw new Error(`A desktop board-editor brush shrank to ${result.smallest.w}x${result.smallest.h}.`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+/**
  * The board actions answer to a thumb, not to their own chrome.
  *
  * They are drawn 36px so five of them read right in a 40px header, and each
@@ -12111,6 +12204,7 @@ async function main() {
     await assertNotationCanBeChosenFromThePalette(page);
     await assertAPhoneCanPinchTheBoard(browser);
     await assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser);
+    await assertTheBoardEditorBrushesAreThumbSized(browser);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);

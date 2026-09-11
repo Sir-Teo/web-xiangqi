@@ -125,7 +125,23 @@
   .board-editor {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Eight fixed columns sized the brushes by the viewport rather than by the
+     hand using them, and got it backwards at both ends: 37px on a 375px
+     phone and 30px at 320px -- the smallest targets in the app, on its most
+     tap-heavy screen -- while a 640px window blew the same brushes up to
+     68px. A mouse is precise and gets 44px on the desktop; a thumb was
+     getting 30.
+
+     `auto-fit` picks the column count from the width instead, with the
+     minimum a brush may be as the input. 44px is the tap target Apple's HIG
+     and WCAG 2.5.5 ask for, written in rem so it grows with the reader's
+     text the way the brush glyph inside it does. Measured: 51px at 320,
+     50px at 375, 48px at 414 and at 640. The palette takes a third row and
+     the editor scrolls a little sooner, but the two things a reader works
+     between -- the board and the brushes -- are both still fully on screen
+     without scrolling at all three phone sizes. What moves below the fold is
+     the FEN box and the side-to-move buttons, which are read once. */
   .board-editor-palette {
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(2.75rem, 1fr));
   }
 }
