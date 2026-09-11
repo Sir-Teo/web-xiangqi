@@ -37,7 +37,8 @@ browser name. The existing `test:ui:audit` continues to default to Chromium.
 | --- | --- | --- | --- |
 | Worker startup failure/cancel/timeout/success cleanup | Pass | Pass | Pass |
 | App startup cancellation on Restart and Play, then resume | Pass | Pass | Pass |
-| Beginner guide, letter pieces, reload, and real AI reply | Pass | Pass | Fails error check during reload |
+| Recovery across navigation, manual restart, disable, and crash budget | Pass | Pass | Pass |
+| Beginner guide, letter pieces, reload, and real AI reply | Pass | Pass | Pass |
 | Chinese/emoji shared variations, notes, save, and layout | Pass | Pass | Pass |
 | Undo within a study and isolation across games | Pass | Pass | Pass |
 | Keep/replay PV, branches, PGN, save/reload, capacity | Pass | Pass | Pass |
@@ -73,21 +74,32 @@ on the old configuration and passes with the middleware. It is included in
 `npm run verify` after the build. The Unicode sharing workflow now passes in
 WebKit at 1440, 390, and 320 pixels with ordinary browser caching enabled.
 
-## Remaining WebKit reload investigation
+## Recovery during navigation
 
-Beginner reloads still emit `due to access control checks` for `pikafish.js`.
-A steady initial load reaches Engine ready, and the beginner flow reaches a
-real AI reply before its error assertion fails. The error check remains enabled.
+The remaining beginner reload failure was caused by immediate engine recovery
+in a departing document. WebKit cancelled the weights fetch before `pagehide`;
+the app started another worker, which failed access-control checks before the
+old document left. A diagnostic trace reproduced that ordering. With deferred
+recovery, the old worker terminates and no replacement starts before pagehide.
+The existing beginner workflow now completes real AI replies and reloads at all
+four sizes without filtering page errors or disabling browser caching.
 
-A diagnostic trace shows the initial weights request being cancelled, followed
-by engine recovery starting another worker shortly before `pagehide`; that
-replacement receives a load error. This distinguishes the remaining navigation
-case from the fixed library-worker revalidation failure, but does not yet prove
-where the navigation error should be handled.
+Recovery now waits at least 250 ms to let navigation settle. `pagehide` cancels
+the timer; a pending failure can recover on `pageshow` if the document returns.
+Disabling the engine, changing its configuration, restarting manually, or
+unmounting discards recovery owned by the previous session.
 
-Separate/fresh wrapper URLs, disabling caching for only the small wrapper and
-library worker, and the 304 header fix did not resolve beginner reloads. No
-cache-disabling workaround or error suppression was shipped. Next: isolate the
-navigation/recovery timing and compare a Pages-style service-worker host.
-Retain the 53 MB network's validated cache reuse. The three-browser matrix is
-currently **not green** and has not been added as a required CI gate.
+The previous one-second throttle discarded rapid failures outright, potentially
+leaving the app stuck on “Recovering engine.” The scheduler now retains them
+until the cooldown expires. The existing budget still permits three automatic
+restarts in 15 seconds, followed by “Engine paused after crashes.” Manual Restart
+resets the crash budget. No engine strength, search budget, or cache policy changes
+are part of this fix.
+
+`test-engine-recovery-navigation-browser.cjs` checks the grace period, simulated
+pagehide/pageshow, manual restart and disable ownership, resumed PV output, and
+bounded repeated failures in all three browsers at desktop and phone widths.
+The lifecycle simulation is not certification of hardware back/forward-cache
+behavior. Existing startup cancellation and late-constructor watchdog regressions
+remain covered. The expanded matrix runs eight workflows per browser and remains
+an optional local audit; required CI retains its existing Chromium coverage.

@@ -23,6 +23,7 @@ import {
   IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
+import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove } from './utils/xiangqi';
@@ -964,7 +965,6 @@ function App() {
   const reviewControllerRef = useRef<ReviewController>(createReviewController());
   const reviewLineSignatureRef = useRef('');
   const engineRecoveryTimestampsRef = useRef<number[]>([]);
-  const lastEngineRecoveryAtRef = useRef(0);
 
   const restartEngine = useCallback(() => {
     setEngineRestartToken((value) => value + 1);
@@ -1133,11 +1133,6 @@ function App() {
 
   const handleEngineWorkerError = useCallback((message: string) => {
     const now = Date.now();
-    if (now - lastEngineRecoveryAtRef.current < 1000) {
-      return;
-    }
-    lastEngineRecoveryAtRef.current = now;
-
     engineRecoveryTimestampsRef.current = [
       ...engineRecoveryTimestampsRef.current.filter((timestamp) => now - timestamp < 15000),
       now,
@@ -1171,6 +1166,12 @@ function App() {
     restartEngine();
   }, [cancelReview, clearAllReviewData, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
 
+  const reportEngineWorkerError = useEngineErrorRecovery(
+    handleEngineWorkerError,
+    engineRequired,
+    `${engineRestartToken}:${engineBootConfig.variant}:${engineBootConfig.allowSIMD}:${engineBootConfig.threads}:${engineBootConfig.hashMB}`,
+  );
+
   const {
     isReady,
     isSearching,
@@ -1196,7 +1197,7 @@ function App() {
     threads: engineBootConfig.threads,
     hashMB: engineBootConfig.hashMB,
     captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
-    onWorkerError: handleEngineWorkerError,
+    onWorkerError: reportEngineWorkerError,
     onBestMove: (uci, score, searchTag, completedPvLines) => {
       const reviewTag = parseReviewTag(searchTag);
       if (reviewTag && reviewControllerRef.current.active) {
@@ -3434,7 +3435,6 @@ function App() {
     activeAnalysisRequestRef.current = '';
     analysisStageRef.current = 'idle';
     engineRecoveryTimestampsRef.current = [];
-    lastEngineRecoveryAtRef.current = 0;
     clearAnalysisDeepenTimer();
     clearQueuedSearch();
     setEngineSafetyBootLevel(0);

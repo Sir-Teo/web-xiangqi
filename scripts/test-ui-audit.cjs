@@ -24,6 +24,7 @@ const path = require('node:path');
       'test-engine-boot-race-browser.cjs',
       'test-worker-lifecycle-browser.cjs',
       'test-engine-startup-cancel-browser.cjs',
+      'test-engine-recovery-navigation-browser.cjs',
       'test-engine-line-browser.cjs',
       'test-unicode-share-browser.cjs',
       'test-study-undo-browser.cjs',
