@@ -484,6 +484,9 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const dispatchQueuedSearch = useCallback(() => {
         if (!engineRef.current || !pendingSearchRef.current) return;
+        // An old search can finish while navigation is still settling. Its
+        // bestmove must not dispatch the next position before the debounce.
+        if (queuedSearchTimerRef.current !== null) return;
 
         if (isSearchingRef.current) {
             stopSearch();
