@@ -9,7 +9,7 @@ import { type KeyValueStorage, getLocalStorage, removeStorage, writeStorage } fr
  * inherits every cap and validation the library already applies.
  */
 
-import { type SavedGame, normalizeSavedGame } from './gameLibrary';
+import { MAX_SAVED_MOVES, MAX_SAVED_TREE_NODES, type SavedGame, normalizeSavedGame } from './gameLibrary';
 import { AUTO_SAVED_GAME_KEY, readVersionedStorage } from './storageKeys';
 
 export { AUTO_SAVED_GAME_KEY };
@@ -23,6 +23,19 @@ export type AutoSavedGame = { version: 1; savedAt: number; game: SavedGame };
 export type AutoSaveWriteResult = 'saved' | 'too-large' | 'empty' | 'failed';
 
 type AutoSaveStorage = KeyValueStorage;
+
+function exceedsRecoveryMoveLimit(game: AutoSaveInput): boolean {
+    if (game.moves.length > MAX_SAVED_MOVES) return true;
+    const pending = [game.moveTree ?? []];
+    let nodes = 0;
+    while (pending.length) {
+        const siblings = pending.pop()!;
+        nodes += siblings.length;
+        if (nodes > MAX_SAVED_TREE_NODES) return true;
+        for (const node of siblings) if (node.children?.length) pending.push(node.children);
+    }
+    return false;
+}
 
 function getSerializedByteLength(value: string): number {
     try {
@@ -71,6 +84,12 @@ export function writeAutoSavedGame(
     }
 
     try {
+        // The byte ceiling alone permits thousands of moves that the reader
+        // rejects. Report the capacity problem while the study is still open.
+        if (exceedsRecoveryMoveLimit(game)) {
+            clearAutoSavedGame(storage);
+            return 'too-large';
+        }
         const snapshot: AutoSavedGame = {
             version: 1,
             savedAt,
@@ -82,6 +101,10 @@ export function writeAutoSavedGame(
             // no longer matches the game on screen.
             removeStorage(AUTO_SAVED_GAME_KEY, storage);
             return 'too-large';
+        }
+        if (!normalizeSavedGame(snapshot.game)) {
+            clearAutoSavedGame(storage);
+            return 'failed';
         }
         return writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage) ? 'saved' : 'failed';
     } catch {

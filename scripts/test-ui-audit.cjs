@@ -13,6 +13,7 @@ const path = require('node:path');
       'test-pgn-collection-browser.cjs',
       'test-metadata-browser.cjs',
       'test-autosave-error-browser.cjs',
+      'test-autosave-limit-browser.cjs',
       'test-explorer-browser.cjs',
       'test-library-matches-browser.cjs',
       'test-beginner-browser.cjs',

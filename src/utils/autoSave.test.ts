@@ -85,6 +85,31 @@ describe('writing and reading back', () => {
         expect(writeAutoSavedGame(GAME, storage, 1)).toBe('failed');
     });
 
+    it('does not report success for a line the recovery reader cannot load', () => {
+        const { storage, entries } = stubStorage();
+        const moves = Array.from({ length: 1024 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]);
+        expect(writeAutoSavedGame({ ...GAME, moves }, storage, 1)).toBe('saved');
+        expect(readAutoSavedGame(storage)?.game.moves).toHaveLength(1024);
+        expect(writeAutoSavedGame({ ...GAME, moves: [...moves, 'a0a1'] }, storage, 2)).toBe('too-large');
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+    });
+
+    it('counts the whole study, including branches outside the current line', () => {
+        const { storage, entries } = stubStorage();
+        const children = Array.from({ length: 512 }, () => ({ uci: 'h9g7' }));
+        const moveTree = [{ uci: 'h2e2', children }, { uci: 'b2e2', children }];
+        writeAutoSavedGame(GAME, storage, 1);
+        expect(writeAutoSavedGame({ ...GAME, moveTree }, storage, 2)).toBe('too-large');
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+    });
+
+    it('rejects other unreadable snapshots before claiming they were saved', () => {
+        const { storage, entries } = stubStorage();
+        writeAutoSavedGame(GAME, storage, 1);
+        expect(writeAutoSavedGame({ ...GAME, moves: ['not-a-move'] }, storage, 2)).toBe('failed');
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+    });
+
     it('does nothing at all without storage', () => {
         expect(writeAutoSavedGame(GAME, null, 1)).toBe('failed');
         expect(readAutoSavedGame(null)).toBeNull();
