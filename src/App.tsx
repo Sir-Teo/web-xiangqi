@@ -5231,7 +5231,7 @@ function App() {
                       className={`pill-btn ${engineBootConfig.threads === count ? 'pill-btn-active' : ''}`}
                       onClick={() => setEngineThreads(count)}
                       aria-pressed={engineBootConfig.threads === count}
-                      aria-label={`Engine threads ${count}${engineBootConfig.threads === count ? ', in use' : ''}`}
+                      aria-label={`Engine threads ${count}`}
                     >
                       {count}
                     </button>
@@ -5256,7 +5256,7 @@ function App() {
                     className={`pill-btn ${engineBootConfig.hashMB === size ? 'pill-btn-active' : ''}`}
                     onClick={() => setEngineHashMB(size)}
                     aria-pressed={engineBootConfig.hashMB === size}
-                    aria-label={`Engine hash ${size} megabytes${engineBootConfig.hashMB === size ? ', in use' : ''}`}
+                    aria-label={`Engine hash ${size} megabytes`}
                   >
                     {size}MB
                   </button>

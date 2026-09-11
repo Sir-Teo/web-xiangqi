@@ -234,7 +234,12 @@ export const WatchControls = memo(function WatchControls({
                     value={scrubberValue}
                     onChange={(e) => onScrub(Math.max(0, Number(e.target.value)) - 1)}
                     disabled={totalMoveCount === 0}
-                    aria-label={`Jump to move: ${scrubberValueText}`}
+                    /* The name says what the control is; `aria-valuetext` says
+                       where it is. Putting the position in both had a screen
+                       reader read it twice on every arrow press, and a name
+                       that changes under a control is re-announced as though
+                       it were a different control. */
+                    aria-label="Jump to move"
                     aria-valuetext={scrubberValueText}
                 />
             </div>

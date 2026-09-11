@@ -94,3 +94,34 @@ describe('WatchControls playback', () => {
         expect(html).not.toContain('aria-label="Pause"');
     });
 });
+
+describe('the move scrubber', () => {
+    /**
+     * A slider has a name and a value, and they are different things. The name
+     * carried the value too, so a screen reader read the position twice on
+     * every arrow press -- and a name that changes under a control is
+     * re-announced as though the reader had moved to a different control.
+     */
+    const nameOf = (html: string) => html.match(/class="wc-scrubber"[^>]*aria-label="([^"]*)"/)?.[1]
+        ?? html.match(/aria-label="([^"]*)"[^>]*class="wc-scrubber"/)?.[1]
+        ?? null;
+
+    it('keeps the same name wherever the game stands', () => {
+        const names = [0, 3, 5].map((currentMoveIndex) => nameOf(render({ currentMoveIndex, totalMoves: 5 })));
+        expect(names[0]).toBe('Jump to move');
+        expect(new Set(names).size, `names were ${JSON.stringify(names)}`).toBe(1);
+    });
+
+    it('says where it is in aria-valuetext, which is where a value belongs', () => {
+        const html = render({ currentMoveIndex: 2, totalMoves: 5 });
+        const valueText = html.match(/aria-valuetext="([^"]*)"/)?.[1] ?? '';
+        expect(valueText).not.toBe('');
+        expect(valueText).toContain('3');
+    });
+
+    it('does not say it twice', () => {
+        const html = render({ currentMoveIndex: 2, totalMoves: 5 });
+        const valueText = html.match(/aria-valuetext="([^"]*)"/)?.[1] ?? 'x';
+        expect(nameOf(html)).not.toContain(valueText);
+    });
+});

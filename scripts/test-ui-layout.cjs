@@ -2623,7 +2623,8 @@ async function assertBoardKeyboardNavigation(page) {
     moveState.timelineText !== "1 / 1" ||
     moveState.scrubberValue !== "1" ||
     moveState.scrubberValueText !== "Move 1 of 1 move" ||
-    !moveState.scrubberLabel.includes("Move 1 of 1 move") ||
+    // The name is the control; `aria-valuetext` above is where it stands.
+    moveState.scrubberLabel !== "Jump to move" ||
     moveState.overflowX > 2
   ) {
     throw new Error(`Board keyboard activation did not play the focused move: ${JSON.stringify(moveState)}`);
@@ -2641,7 +2642,7 @@ async function assertBoardKeyboardNavigation(page) {
     startTimelineState.timelineText !== "Start / 1" ||
     startTimelineState.scrubberValue !== "0" ||
     startTimelineState.scrubberValueText !== "Start position, 0 of 1 move" ||
-    !startTimelineState.scrubberLabel.includes("Start position, 0 of 1 move") ||
+    startTimelineState.scrubberLabel !== "Jump to move" ||
     startTimelineState.overflowX > 2
   ) {
     throw new Error(`Move timeline did not describe the start position: ${JSON.stringify(startTimelineState)}`);
@@ -9368,6 +9369,74 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 }
 
 /**
+ * Choosing an option does not rename it.
+ *
+ * The engine's thread and hash pills are `aria-pressed` toggles, and they also
+ * appended ", in use" to their own `aria-label` when selected. A screen reader
+ * then heard the state twice -- "Engine threads 4, in use, toggle button,
+ * pressed" -- and, worse, the name of the control changed underneath the
+ * reader, which is announced as though they had landed somewhere new.
+ *
+ * The check is a comparison rather than a fixed string: read every pill's name
+ * before and after selecting one, and require the set to be identical while
+ * `aria-pressed` moves. That way it holds whatever the names are, and fails
+ * for exactly the thing that was wrong.
+ */
+async function assertChoosingAnEngineOptionDoesNotRenameIt(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Open settings" }).first().click();
+  await page.waitForSelector('.settings-body[role="dialog"]', { timeout: 10000 });
+  await page.waitForTimeout(400);
+
+  const readGroup = (labelId) => page.evaluate((id) => {
+    const group = document.querySelector(`[aria-labelledby="${id}"]`);
+    if (!group) return null;
+    return [...group.querySelectorAll("button")].map((b) => ({
+      name: b.getAttribute("aria-label") || (b.textContent || "").trim(),
+      pressed: b.getAttribute("aria-pressed"),
+      text: (b.textContent || "").trim(),
+    }));
+  }, labelId);
+
+  for (const labelId of ["settings-engine-threads-label", "settings-engine-hash-label"]) {
+    const before = await readGroup(labelId);
+    if (!before || before.length < 2) continue;   // one choice cannot be re-chosen
+    const target = before.findIndex((pill) => pill.pressed !== "true");
+    if (target < 0) throw new Error(`${labelId}: no unselected option to choose.`);
+
+    await page.evaluate(([id, index]) => {
+      const group = document.querySelector(`[aria-labelledby="${id}"]`);
+      group.querySelectorAll("button")[index].click();
+    }, [labelId, target]);
+    await page.waitForTimeout(500);
+
+    const after = await readGroup(labelId);
+    const renamed = before
+      .map((pill, index) => ({ was: pill.name, now: after[index]?.name }))
+      .filter((row) => row.was !== row.now);
+    if (renamed.length > 0) {
+      throw new Error(
+        `${labelId}: choosing an option renamed ${renamed.length} of them -- state belongs in aria-pressed, not in the name: ${JSON.stringify(renamed)}`
+      );
+    }
+    if (after[target]?.pressed !== "true") {
+      throw new Error(`${labelId}: the chosen option is not aria-pressed, so nothing carries the state at all: ${JSON.stringify(after)}`);
+    }
+    // WCAG 2.5.3: whatever the name is, it has to contain what the pill says.
+    for (const pill of after) {
+      if (pill.text && !pill.name.includes(pill.text.replace(/MB$/, ""))) {
+        throw new Error(`${labelId}: the name "${pill.name}" does not contain the visible "${pill.text}".`);
+      }
+    }
+  }
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
+
+/**
  * The auto-save recovery modal keeps Tab inside it.
  *
  * It is the first thing a returning reader meets, it is `aria-modal="true"`,
@@ -12535,6 +12604,7 @@ async function main() {
     await assertTheBoardEditorBrushesAreThumbSized(browser);
     await assertTheBottomBarChipsSurviveAReview(browser);
     await assertTheRecoveryModalHoldsTheKeyboard(browser);
+    await assertChoosingAnEngineOptionDoesNotRenameIt(page);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertACloudRulingItDoesNotHaveIsNotAFailure(browser);
