@@ -45,6 +45,19 @@ function lineTree(moves: Array<[string, string]>, branches: Record<string, Array
     return { treeNodes, activeLineNodeIds };
 }
 
+/** A main line of two moves, with a variation of `plies` hanging off move 1. */
+function treeWithVariationOfLength(plies: number) {
+    const { treeNodes, activeLineNodeIds } = lineTree([['h2e2', 'C'], ['h9g7', 'n']]);
+    let parent = 'n1';
+    for (let i = 0; i < plies; i++) {
+        const id = `v${i}`;
+        treeNodes[parent].childrenIds.push(id);
+        treeNodes[id] = { id, parentId: parent, childrenIds: [], record: record('b9c7', 'n', i + 2) };
+        parent = id;
+    }
+    return { treeNodes, activeLineNodeIds };
+}
+
 function render(overrides: Partial<Parameters<typeof MoveListTree>[0]> = {}) {
     const { treeNodes, activeLineNodeIds } = lineTree([['h2e2', 'C'], ['h9g7', 'n'], ['b0c2', 'N']]);
     return renderToStaticMarkup(
@@ -105,5 +118,44 @@ describe('MoveListTree', () => {
 
     it('does not label a move that has not been reviewed', () => {
         expect(render().toLowerCase()).not.toContain('blunder');
+    });
+
+    describe('a variation too long to show in full', () => {
+        // The row stops at 80 plies so one side line cannot push the rest of
+        // the list off the screen. It used to stop with no sign that it had:
+        // a 100-ply line read as a 40-move line that simply ended.
+        it('says how many plies it is not showing', () => {
+            const { treeNodes, activeLineNodeIds } = treeWithVariationOfLength(100);
+            const html = render({ treeNodes, activeLineNodeIds });
+            expect(html).toContain('mtree-variation-rest');
+            expect(html).toContain('+20');
+        });
+
+        it('counts in plies, and says so where a reader can find out', () => {
+            const { treeNodes, activeLineNodeIds } = treeWithVariationOfLength(81);
+            const html = render({ treeNodes, activeLineNodeIds });
+            expect(html).toContain('+1');
+            expect(html).toContain('1 more ply in this line');
+        });
+
+        it('stays quiet when the whole line fits', () => {
+            const { treeNodes, activeLineNodeIds } = treeWithVariationOfLength(80);
+            const html = render({ treeNodes, activeLineNodeIds });
+            expect(html).not.toContain('mtree-variation-rest');
+        });
+
+        it('still shows exactly 80 of them', () => {
+            const { treeNodes, activeLineNodeIds } = treeWithVariationOfLength(100);
+            const html = render({ treeNodes, activeLineNodeIds });
+            const shown = [...html.matchAll(/data-node-id="v\d+"/g)].length;
+            expect(shown).toBe(80);
+        });
+
+        it('does not hang on a line that loops back on itself', () => {
+            const { treeNodes, activeLineNodeIds } = treeWithVariationOfLength(5);
+            treeNodes.v4.childrenIds.push('v0');
+            const html = render({ treeNodes, activeLineNodeIds });
+            expect(html).toContain('data-node-id="v0"');
+        });
     });
 });

@@ -2172,6 +2172,18 @@ body.resizing * {
   flex-wrap: wrap;
 }
 
+/* What the row is not showing. Same idiom and the same muted weight as the
+   engine line strip's `+12`, so it reads as a count rather than as a move --
+   the chips beside it are WXF, where `C8+4` is a move and `+20` must not be
+   mistaken for one. */
+.mtree-variation-rest {
+  flex: 0 0 auto;
+  padding-inline: 0.25rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
 .mtree-var-marker {
   width: 0.75rem;
   height: 0.75rem;

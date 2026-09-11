@@ -263,13 +263,21 @@ export const MoveListTree = memo(function MoveListTree({
         const mainChild = activeLineNodeIds[lineIndex + 1] ?? null;
         const variationRoots = parent.childrenIds.filter((childId) => childId !== mainChild);
         variationRoots.forEach((variationRootId) => {
-            const variationLine = buildVariationLine(variationRootId, treeNodes);
+            const { line: variationLine, remaining: variationRemaining } = buildVariationLine(variationRootId, treeNodes);
             const firstRecord = treeNodes[variationRootId]?.record;
             const variationName = firstRecord ? formatMoveLabel(firstRecord, notationStyle) : 'variation';
             rows.push(
                 <div key={`var-${parentId}-${variationRootId}`} className="mtree-variation">
                     <IconCornerDownRight className="mtree-var-marker" />
                     {variationLine.map((nodeId) => renderMoveChip(nodeId, true))}
+                    {variationRemaining > 0 ? (
+                        <span
+                            className="mtree-variation-rest"
+                            title={`${variationRemaining} more ${variationRemaining === 1 ? 'ply' : 'plies'} in this line — open it to read them`}
+                        >
+                            +{variationRemaining}
+                        </span>
+                    ) : null}
                     {onDeleteNode ? (
                         // At the end of the row rather than the start, so it
                         // cannot be mistaken for the first move of the line,
@@ -420,19 +428,37 @@ function formatMoveAriaLabel(
     return parts.join(', ');
 }
 
-function buildVariationLine(startId: string, treeNodes: Record<string, MoveTreeNode>): string[] {
+/**
+ * A variation row, and how much of it did not fit.
+ *
+ * The row stops at `MAX_VISIBLE_VARIATION_PLIES` so one long side line cannot
+ * push the rest of the list off the screen. It used to stop silently, which
+ * made a 100-ply line look like a 40-move line that simply ended -- the moves
+ * were still there, and still reachable by clicking into the row, but nothing
+ * on screen gave a reader any reason to look. The walk now continues past the
+ * cap to count what it is not showing, so the row can say so the way the
+ * engine's own line strip already does with its `+12`.
+ *
+ * The `seen` set stays the guard against a cycle; the cap is no longer doing
+ * that job on the side.
+ */
+function buildVariationLine(
+    startId: string,
+    treeNodes: Record<string, MoveTreeNode>
+): { line: string[]; remaining: number } {
     const line: string[] = [];
+    let remaining = 0;
     let cursor: string | undefined = startId;
     const seen = new Set<string>();
-    let guard = MAX_VISIBLE_VARIATION_PLIES;
-    while (cursor && guard-- > 0 && !seen.has(cursor)) {
+    while (cursor && !seen.has(cursor)) {
         seen.add(cursor);
-        line.push(cursor);
+        if (line.length < MAX_VISIBLE_VARIATION_PLIES) line.push(cursor);
+        else remaining += 1;
         const children: string[] = treeNodes[cursor]?.childrenIds ?? [];
         const nextNodeId: string | undefined = children[children.length - 1];
         cursor = nextNodeId;
     }
-    return line;
+    return { line, remaining };
 }
 
 function makeMoveListEntry(
