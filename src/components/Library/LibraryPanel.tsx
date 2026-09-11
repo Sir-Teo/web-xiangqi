@@ -189,6 +189,7 @@ function buildSavedGamePgn(game: SavedGame) {
       metadata: game.metadata,
       startFen: game.startFen,
       rootComment: game.rootComment,
+      mainLinePinned: game.mainLinePinned,
     });
     if (pgn) return pgn;
   }
@@ -200,7 +201,8 @@ function buildSavedGamePgn(game: SavedGame) {
     label: game.label,
     metadata: game.metadata,
     startFen: game.startFen,
-      rootComment: game.rootComment,
+    rootComment: game.rootComment,
+    mainLinePinned: game.mainLinePinned,
   });
 }
 

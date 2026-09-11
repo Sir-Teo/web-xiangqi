@@ -5,6 +5,7 @@ import {
     isMoveImportTextTooLarge,
     stripRecordMetadata,
 } from './moveImport';
+import { extractPgnHeaders } from './gameMetadata';
 import { normalizeMoveComment } from './moveComment';
 import { START_POSITION_FEN } from './xiangqi';
 import { parseDhtmlXqRecord } from './dhtmlxq';
@@ -19,6 +20,7 @@ export type MoveLineImportPlan =
     | { kind: 'error'; message: string }
     | {
         kind: 'line';
+        mainLinePinned?: true;
         rootComment?: string;
         moves: string[];
         startFen: string | undefined;
@@ -147,6 +149,7 @@ export function planMoveLineImport(
 
     return {
         kind: 'line',
+        ...(extractPgnHeaders(text).xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
         rootComment,
         moves,
         startFen,

@@ -27,7 +27,7 @@ export function normalizeGameMetadata(value: unknown): GameMetadata | undefined 
 }
 
 /** Read the leading PGN headers only; comments and later games cannot supply tags. */
-export function extractPgnMetadata(text: string): GameMetadata | undefined {
+export function extractPgnHeaders(text: string): Record<string, string> {
   const tags: Record<string, string> = {};
   let source = text.replace(/^\uFEFF/, '').trimStart();
   const header = /^\[\s*([A-Za-z][A-Za-z0-9_]*)\s+"((?:\\.|[^"\\])*)"\s*\]/;
@@ -37,6 +37,11 @@ export function extractPgnMetadata(text: string): GameMetadata | undefined {
     tags[match[1].toLowerCase()] = match[2].replace(/\\(["\\])/g, '$1');
     source = source.slice(match[0].length).trimStart();
   }
+  return tags;
+}
+
+export function extractPgnMetadata(text: string): GameMetadata | undefined {
+  const tags = extractPgnHeaders(text);
   return normalizeGameMetadata({
     redPlayer: tags.red ?? tags.white,
     blackPlayer: tags.black,

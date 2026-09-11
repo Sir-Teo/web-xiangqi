@@ -18,6 +18,8 @@ import { EvalGraph } from './components/Panels/EvalGraph';
 import { ReviewPanel } from './components/Panels/ReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
+import { StudyMainLineControls } from './components/Controls/StudyMainLineControls';
+import { getStudyMainLine } from './utils/studyMainLine';
 import { BreadcrumbChip } from './components/Controls/BreadcrumbChip';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import { MoveLineStrip } from './components/Controls/MoveLineStrip';
@@ -799,6 +801,9 @@ function App() {
     jumpToMove,
     jumpToNode,
     deleteNode,
+    pinActiveStudyLine,
+    unpinMainLine,
+    openStudyMainLine,
     captureTreeSnapshot,
     restoreDeletedSubtree,
   } = useXiangqi();
@@ -2521,6 +2526,11 @@ function App() {
       // level case read differently from "Red +1.4" for no reason.
       : 'Even';
   const rootComment = treeNodes[rootNodeId]?.comment;
+  const mainLinePinned = treeNodes[rootNodeId]?.mainLinePinned;
+  const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [], [mainLinePinned, treeNodes, rootNodeId]);
+  const viewingStudyMainLine = Boolean(mainLinePinned) && activeLineNodeIds.length === studyMainLineNodeIds.length
+    && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
+  const canPinStudyMainLine = hasMoveTreeMoves && !isAiTurn && !viewingStudyMainLine;
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment);
   const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment) || rootFen !== START_POSITION_FEN;
   // A finished game has nothing to play on from, and the starting position is
@@ -2735,6 +2745,9 @@ function App() {
     const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
     return matchOpening(uciMoves, rootFen);
   }, [moveHistory, currentMoveIndex, rootFen]);
+  const exportOpeningName = useMemo(() => mainLinePinned
+    ? matchOpening(studyMainLineNodeIds.map(id => treeNodes[id].record!.uci), rootFen)?.name
+    : detectedOpening?.name, [mainLinePinned, studyMainLineNodeIds, treeNodes, rootFen, detectedOpening]);
   const openingCandidates = useMemo(() => {
     const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
     return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4, rootFen);
@@ -2943,12 +2956,12 @@ function App() {
   }, [applyMode, closeNewGameMenu, pendingGameMode]);
 
   const buildCurrentPgn = useCallback(() => {
-    if (hasMoveTreeMoves && (hasStudyBranches || currentMoveIndex < 0)) {
+    if (hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || currentMoveIndex < 0)) {
       return exportPgnTree(treeNodes, rootNodeId, {
         mainLineNodeIds: activeLineNodeIds,
         gameMode,
         metadata: gameMetadata,
-        opening: detectedOpening?.name,
+        opening: exportOpeningName,
         result: gameResult,
         startFen: rootFen,
       });
@@ -2962,12 +2975,12 @@ function App() {
     return exportPgn(moves, {
       gameMode,
       metadata: gameMetadata,
-      opening: detectedOpening?.name,
+      opening: exportOpeningName,
       result: gameResult,
       startFen: rootFen,
       rootComment,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, detectedOpening, gameResult, rootFen, rootComment, hasMoveTreeMoves, hasStudyBranches]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -2992,7 +3005,7 @@ function App() {
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = downloadTextFile(
-      pgnDownloadFilename(detectedOpening?.name),
+      pgnDownloadFilename(exportOpeningName),
       pgn,
       'application/x-chess-pgn;charset=utf-8'
     );
@@ -3010,16 +3023,16 @@ function App() {
       downloadedPgnTimerRef.current = null;
       setDownloadedPgnToast(false);
     }, 2000);
-  }, [buildCurrentPgn, clearExportFailure, detectedOpening, showExportFailure]);
+  }, [buildCurrentPgn, clearExportFailure, exportOpeningName, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
     // Notes travel with the link for the same reason variations do: what is
     // being shared is a study. Move notes share the tree's 8000-character
     // budget; the bounded starting-position note has its own URL parameter.
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
+    const moveTree = hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment);
+    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned);
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
     if (!ok) {
@@ -3045,7 +3058,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3814,8 +3827,8 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
     const loadedNodeIds = (!importedFromNotation && plan.moveTree.length > 0)
-      ? loadMoveTree(plan.moveTree, moves, startFen, undefined, plan.rootComment)
-      : loadMoves(moves, startFen, undefined, plan.rootComment);
+      ? loadMoveTree(plan.moveTree, moves, startFen, undefined, plan.rootComment, plan.mainLinePinned)
+      : loadMoves(moves, startFen, undefined, plan.rootComment, plan.mainLinePinned);
     setGameMetadata(extractPgnMetadata(text));
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
@@ -3989,7 +4002,7 @@ function App() {
     setAiMoveError(null);
     setGameMode(mode);
     if (sharedMoveTree?.length && canLoadSharedTree) {
-      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment);
+      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1');
     } else if (moves.length > 0) {
       loadMoves(moves, rawFen, undefined, sharedRootComment);
     } else if (rawFen || sharedRootComment) {
@@ -4057,15 +4070,16 @@ function App() {
     // dropped. The `=== 0` case is the same bug at the root, where it was
     // noticed first.
     const holdsMoreThanTheSavedLine = moves.length === 0 || moves.length < activeLineNodeIds.length;
-    const moveTree = hasMoveTreeMoves && (hasStudyBranches || hasAnnotatedStudyMoves || holdsMoreThanTheSavedLine)
+    const moveTree = hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves || holdsMoreThanTheSavedLine)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
     return {
       gameMode,
       metadata: gameMetadata,
       rootComment,
+      mainLinePinned,
       moves,
-      opening: detectedOpening?.name,
+      opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
@@ -4079,7 +4093,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, detectedOpening, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, mainLinePinned, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -4308,6 +4322,21 @@ function App() {
       run: () => { void handleCopyShareLink(); },
     },
     {
+      id: 'pin-study-main-line', label: 'Set this as study main line',
+      hint: 'Keep this line first in saved studies and PGN', keywords: ['promote', 'variation', 'pin', 'mainline'],
+      disabled: !canPinStudyMainLine, run: pinActiveStudyLine,
+    },
+    {
+      id: 'open-study-main-line', label: 'Go to study main line',
+      keywords: ['mainline', 'return'], disabled: !mainLinePinned || isAiTurn || viewingStudyMainLine,
+      run: openStudyMainLine,
+    },
+    {
+      id: 'unpin-study-main-line', label: 'Let PGN follow the selected line',
+      hint: 'Clear the fixed main-line choice; keep every move', keywords: ['unpin', 'mainline', 'clear'],
+      disabled: !mainLinePinned || isAiTurn, run: unpinMainLine,
+    },
+    {
       // The palette is where a keyboard-first player reaches for anything, and
       // these five lived only as buttons -- two of them in the engine panel,
       // which has to be open before they can be clicked at all.
@@ -4502,7 +4531,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -4535,8 +4564,8 @@ function App() {
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment)
-      : loadMoves(game.moves, game.startFen, initialPly, game.rootComment);
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned)
+      : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     setGameMetadata(game.metadata);
     if (initialPly === undefined || initialPly >= game.moves.length) {
       setGameResult(savedResultToGameResult(game.result));
@@ -6767,6 +6796,9 @@ function App() {
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
                   />}
+                  {hasMoveTreeMoves && (hasStudyBranches || mainLinePinned || Boolean(treeNodes[rootNodeId]?.mainLineRevision)) && <StudyMainLineControls
+                    pinned={Boolean(mainLinePinned)} viewingMainLine={viewingStudyMainLine} disabled={isAiTurn}
+                    onPin={pinActiveStudyLine} onOpen={openStudyMainLine} onUnpin={unpinMainLine} />}
                   {/* The thinking, beside the moves. Everything attached to a
                       move here was written by the engine -- an evaluation, a
                       best move, a review note it overwrites on every re-run --

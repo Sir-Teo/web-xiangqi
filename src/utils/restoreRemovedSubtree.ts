@@ -27,6 +27,7 @@ export function restoreRemovedSubtree(
     current: Record<string, MoveTreeNode>,
     before: Record<string, MoveTreeNode>,
     removedId: string,
+    preserveFirstChildren = false,
 ): { tree: Record<string, MoveTreeNode>; restoredIds: Map<string, string> } | null {
     const removed = before[removedId];
     if (!removed?.parentId || !current[removed.parentId]) return null;
@@ -57,6 +58,9 @@ export function restoreRemovedSubtree(
                 const index = parent.childrenIds.findIndex(child => tree[child]?.record?.uci === uci);
                 if (index >= 0) insertAt = index + 1;
             }
+            // A main line explicitly chosen after the deletion is newer user
+            // intent. Restoring an old first sibling must not demote it.
+            if (preserveFirstChildren && parent.childrenIds.length && insertAt === 0) insertAt = 1;
             const childrenIds = [...parent.childrenIds];
             childrenIds.splice(insertAt, 0, id);
             tree[parentId] = { ...parent, childrenIds };

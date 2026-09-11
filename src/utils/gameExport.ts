@@ -5,7 +5,8 @@ import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
 import type { SavedMoveTreeNode } from './gameLibrary';
-import { START_FEN } from './xiangqi';
+import { START_FEN, parseFenBoard, validateMoveStr, hasAnyLegalMove, type Side } from './xiangqi';
+import { getStudyMainLine } from './studyMainLine';
 import { annotationTokensForMove, type MoveAnnotationInput } from './pgnAnnotations';
 
 function rootCommentText(comment?: string): string {
@@ -242,6 +243,7 @@ export function exportPgn(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        mainLinePinned?: boolean;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
@@ -260,15 +262,40 @@ export function exportPgn(
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        options.mainLinePinned ? tagLine('XiangqiMainLine', '1') : null,
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
     return `${tags}\n\n${rootCommentText(options.rootComment)}${buildMoveText(moves, startPosition, result)}\n`;
 }
 
+/** Position-derived outcome of the exported line, never a different viewed branch. */
+function pinnedLineResult(tree: Record<string, MoveTreeNode>, line: string[], fen: string): GameResult {
+    const last = tree[line[line.length - 1]]?.record;
+    if (last?.board?.length === 10) {
+        return hasAnyLegalMove(last.board, last.sideToMove) ? null : last.sideToMove === 'w' ? 'black-wins' : 'red-wins';
+    }
+    // Saved trees contain coordinates and annotations rather than board snapshots.
+    try {
+        let board = parseFenBoard(fen.split(/\s+/)[0]);
+        let side: Side = fen.split(/\s+/)[1] === 'b' ? 'b' : 'w';
+        for (const id of line) {
+            const checked = validateMoveStr(tree[id].record!.uci, board, side);
+            if (!checked.ok || !checked.mv) return null;
+            const { fromRank, fromFile, toRank, toFile } = checked.mv;
+            board = board.map(row => [...row]);
+            board[toRank][toFile] = board[fromRank][fromFile];
+            board[fromRank][fromFile] = '';
+            side = side === 'w' ? 'b' : 'w';
+        }
+        return hasAnyLegalMove(board, side) ? null : side === 'w' ? 'black-wins' : 'red-wins';
+    } catch { return null; }
+}
+
 /**
  * Exports the full move tree as PGN with sibling branches preserved as variations.
- * The provided main line is used as the primary line; other legal children become
+ * An explicit pin uses first-child order; otherwise the provided main line is
+ * primary. Other legal children become
  * parenthesized study variations.
  */
 export function exportPgnTree(
@@ -284,14 +311,22 @@ export function exportPgnTree(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        mainLinePinned?: boolean;
     } = {}
 ): string | null {
     if (!hasTreeMoves(treeNodes, rootNodeId)) return null;
 
-    const result = options.result ? RESULT_TAG[options.result] : '*';
+    const mainLinePinned = options.mainLinePinned ?? treeNodes[rootNodeId]?.mainLinePinned;
     const metadata = normalizeGameMetadata(options.metadata);
     const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
+    const pinnedIds = mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [];
+    const selectedIsMain = options.mainLineNodeIds?.length === pinnedIds.length
+        && pinnedIds.every((id, index) => id === options.mainLineNodeIds?.[index]);
+    const outcome = mainLinePinned
+        ? pinnedLineResult(treeNodes, pinnedIds, startPosition.fen) ?? (selectedIsMain ? options.result : undefined)
+        : options.result;
+    const result = outcome ? RESULT_TAG[outcome] : '*';
 
     const tags = [
         tagLine('Variant', 'Xiangqi'),
@@ -304,6 +339,7 @@ export function exportPgnTree(
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        mainLinePinned ? tagLine('XiangqiMainLine', '1') : null,
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
@@ -311,7 +347,7 @@ export function exportPgnTree(
         treeNodes,
         rootNodeId,
         startPosition,
-        options.mainLineNodeIds ?? [],
+        mainLinePinned ? [] : options.mainLineNodeIds ?? [],
         result
     )}\n`;
 }
@@ -330,6 +366,7 @@ export function exportPgnFromUci(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        mainLinePinned?: boolean;
     } = {}
 ): string {
     const result = options.result ? RESULT_TAG[options.result] : '*';
@@ -348,6 +385,7 @@ export function exportPgnFromUci(
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
+        options.mainLinePinned ? tagLine('XiangqiMainLine', '1') : null,
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
@@ -366,6 +404,7 @@ export function exportPgnFromMoveTree(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        mainLinePinned?: boolean;
     } = {}
 ): string | null {
     const { rootNodeId, treeNodes } = savedMoveTreeToNodes(moveTree);
@@ -389,6 +428,7 @@ export function exportPgnFromMoveTree(
         date: options.date,
         startFen: options.startFen,
         rootComment: options.rootComment,
+        mainLinePinned: options.mainLinePinned,
     });
     return pgn;
 }

@@ -28,6 +28,7 @@ export function buildShareUrl(
   mode: GameMode,
   moveTree?: SavedMoveTreeNode[],
   rootComment?: string,
+  mainLinePinned = false,
 ): ShareUrlBuildResult {
   const url = new URL(currentHref);
   url.search = '';
@@ -48,6 +49,7 @@ export function buildShareUrl(
       treeIncluded = true;
     }
   }
+  if (mainLinePinned && treeIncluded) url.searchParams.set('main', '1');
   if (mode !== 'PvP') {
     url.searchParams.set('mode', mode);
   }

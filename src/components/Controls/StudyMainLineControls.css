@@ -1,0 +1,17 @@
+.study-main-line {
+  flex-shrink: 0;
+  margin: 8px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.study-main-line summary {
+  min-height: 44px;
+  padding: 0 10px;
+  align-content: center;
+  cursor: pointer;
+  font-size: 13px;
+}
+.study-main-line summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.study-main-line p { margin: 0 10px 10px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.study-main-line-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 10px 10px; }
+.study-main-line-actions .chip-btn { flex: 1 1 130px; min-height: 44px; white-space: normal; }

@@ -93,6 +93,14 @@ describe('restore a deleted branch into the current study', () => {
         expect(restoreRemovedSubtree(current, before, 'b')).toBeNull();
         expect(Object.keys(current).sort()).toEqual(['a', 'd', 'root']);
     });
+    it('preserves a main line explicitly chosen after deletion', () => {
+        const before = fixture();
+        const { tree: current } = removeSubtree(before, 'root', 'b');
+        const restored = restoreRemovedSubtree(current, before, 'b', true)!;
+        expect(restored.tree.a.childrenIds).toEqual(['d', 'b']);
+        expect(restored.tree.b.record?.comment).toBe('Note b');
+        expect(restoreRemovedSubtree(current, before, 'b')!.tree.a.childrenIds).toEqual(['b', 'd']);
+    });
     it('restores a long line without recursion', () => {
         const before: Record<string, MoveTreeNode> = { root: node('root', null, ['n0']) };
         for (let i = 0; i < 10000; i++) before[`n${i}`] = node(`n${i}`, i ? `n${i - 1}` : 'root', i < 9999 ? [`n${i + 1}`] : []);

@@ -131,6 +131,7 @@ function parseGame(input: Token[]): CollectionGame {
     let finalNode = root[0];
     for (let node = root[0]; node; node = node.children?.[0] as SavedMoveTreeNode) { moves.push(node.uci); finalNode = node; }
     return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment,
+        ...(nodes && tags.xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
         metadata: extractPgnMetadata(headers), opening: tags.opening,
         ...(finalNode?.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
         result: RESULTS[result || tags.result || '*'] };

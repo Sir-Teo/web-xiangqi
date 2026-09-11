@@ -63,6 +63,8 @@ export interface SavedMoveTreeNode extends MoveEvaluation {
 export interface SavedGame {
     metadata?: GameMetadata;
     rootComment?: string;
+    /** First-child order is an explicit study main line, separate from the cursor. */
+    mainLinePinned?: true;
     id: string;
     savedAt: number;
     gameMode: GameMode;
@@ -405,6 +407,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         moves,
         startFen,
         rootComment,
+        ...(raw.mainLinePinned === true && (moves.length || moveTree?.length) ? { mainLinePinned: true as const } : {}),
         result,
         metadata: normalizeGameMetadata(raw.metadata),
         label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),

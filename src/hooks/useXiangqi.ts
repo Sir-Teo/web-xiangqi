@@ -24,6 +24,7 @@ import {
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
 import { removeSubtree } from '../utils/moveTreeEdit';
+import { getStudyMainLine, pinStudyMainLine, unpinStudyMainLine } from '../utils/studyMainLine';
 import { restoreRemovedSubtree } from '../utils/restoreRemovedSubtree';
 import { appendMoveTreeLine } from '../utils/appendMoveTreeLine';
 import { MAX_SAVED_TREE_NODES } from '../utils/gameLibrary';
@@ -442,11 +443,12 @@ export function useXiangqi() {
         return visitChildren(moveTree, root.board, root.sideToMove, 0);
     }, []);
 
-    const loadMoves = useCallback((moves: string[], startFen?: string, initialPly?: number, rootComment?: string) => {
+    const loadMoves = useCallback((moves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         let currentBoard = root.board;
         let currentSide: Side = root.sideToMove;
         const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
+        if (mainLinePinned) tree[ROOT_NODE_ID] = { ...tree[ROOT_NODE_ID], mainLinePinned: true, mainLineRevision: 1 };
         let parentNodeId = ROOT_NODE_ID;
         const activeLine: string[] = [];
         let counter = 1;
@@ -508,9 +510,10 @@ export function useXiangqi() {
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
-    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string) => {
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
+        if (mainLinePinned) tree[ROOT_NODE_ID] = { ...tree[ROOT_NODE_ID], mainLinePinned: true, mainLineRevision: 1 };
         let counter = 1;
         const sourceRootFen = boardToFen(root.board, root.sideToMove, root.fullmove, root.halfmove);
 
@@ -633,6 +636,25 @@ export function useXiangqi() {
         syncPositionForNode(treeNodes, targetId);
     }, [activeLineNodeIds, rootPosition, treeNodes, syncPositionForNode]);
 
+    const pinActiveStudyLine = useCallback(() => {
+        setTreeNodes(tree => pinStudyMainLine(tree, ROOT_NODE_ID, activeLineNodeIds));
+    }, [activeLineNodeIds]);
+
+    const unpinMainLine = useCallback(() => {
+        setTreeNodes(tree => unpinStudyMainLine(tree, ROOT_NODE_ID));
+    }, []);
+
+    const openStudyMainLine = useCallback(() => {
+        const line = getStudyMainLine(treeNodes, ROOT_NODE_ID);
+        if (!line.length) return;
+        const nodeId = line[line.length - 1];
+        setActiveLineNodeIds(line);
+        setCurrentMoveIndex(line.length - 1);
+        const position = getPositionFromNode(treeNodes, nodeId, rootPosition);
+        setGameResult(gameResultForPosition(position.board, position.sideToMove));
+        syncPositionForNode(treeNodes, nodeId);
+    }, [treeNodes, rootPosition, syncPositionForNode]);
+
     /**
      * Remove a move and every move after it, on every branch under it.
      *
@@ -681,7 +703,9 @@ export function useXiangqi() {
 
     const restoreDeletedSubtree = useCallback((snapshot: MoveTreeSnapshot, removedId: string): boolean => {
         if (snapshot.gameIdentity !== rootPosition || snapshot.rootFen !== rootFen) return false;
-        const restored = restoreRemovedSubtree(treeNodes, snapshot.treeNodes, removedId);
+        const preserveNewMainLine = Boolean(treeNodes[ROOT_NODE_ID]?.mainLinePinned)
+            && treeNodes[ROOT_NODE_ID]?.mainLineRevision !== snapshot.treeNodes[ROOT_NODE_ID]?.mainLineRevision;
+        const restored = restoreRemovedSubtree(treeNodes, snapshot.treeNodes, removedId, preserveNewMainLine);
         if (!restored) return false;
         const previousNodeId = snapshot.currentMoveIndex === -1
             ? ROOT_NODE_ID
@@ -1195,6 +1219,9 @@ export function useXiangqi() {
         jumpToMove,
         jumpToNode,
         deleteNode,
+        pinActiveStudyLine,
+        unpinMainLine,
+        openStudyMainLine,
         captureTreeSnapshot,
         restoreDeletedSubtree,
     };
