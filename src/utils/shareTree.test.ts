@@ -13,6 +13,33 @@ describe('sharing a tree in a URL', () => {
         expect(decodeSavedMoveTreeParam(param)).toEqual(TREE);
     });
 
+    it('retains Chinese, accented, and emoji notes in every branch', () => {
+        const annotated = [{ uci: 'h2e2', comment: '中炮：先出車 🐎', children: [
+            { uci: 'h9g7', comment: 'Défense — 将军' },
+            { uci: 'b9c7', comment: '另一种选择' },
+        ] }];
+        expect(decodeSavedMoveTreeParam(encodeSavedMoveTreeParam(annotated))).toEqual(annotated);
+    });
+
+    it('still reads legacy Latin-1 links without reinterpreting their bytes as UTF-8', () => {
+        const annotated = [{ uci: 'h2e2', comment: 'Café Ã©' }];
+        const legacy = btoa(JSON.stringify(annotated)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        expect(decodeSavedMoveTreeParam(legacy)).toEqual(annotated);
+    });
+
+    it('rejects malformed UTF-8 instead of silently changing a note', () => {
+        const invalid = btoa('[{"uci":"h2e2","comment":"' + String.fromCharCode(0xc3) + '"}]');
+        expect(decodeSavedMoveTreeParam('u.' + invalid)).toBeNull();
+    });
+
+    it('bounds Unicode links by encoded bytes', () => {
+        const notes = Array.from({ length: 6 }, () => ({ uci: 'h2e2', comment: '中'.repeat(500) }));
+        expect(JSON.stringify(notes).length).toBeLessThan(8000);
+        expect(encodeSavedMoveTreeParam(notes)).toBeNull();
+        const oversized = 'u.' + Buffer.from(JSON.stringify(notes), 'utf8').toString('base64url');
+        expect(decodeSavedMoveTreeParam(oversized)).toBeNull();
+    });
+
     it('produces something safe to put in a URL', () => {
         const param = encodeSavedMoveTreeParam(TREE)!;
         expect(param).toMatch(/^[A-Za-z0-9_-]+$/);
