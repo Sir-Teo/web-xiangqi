@@ -3,6 +3,7 @@ import { extractPgnMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
+import { hasMoveTreeLine } from './utils/appendMoveTreeLine';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
@@ -44,7 +45,7 @@ import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { formatExplorerRecord } from './utils/positionExplorer';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import type { SavedGame } from './utils/gameLibrary';
+import { MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
@@ -796,6 +797,7 @@ function App() {
     applyUciMove,
     applyUciMoveAtNode,
     applyUciLineAtNode,
+    keepUciLineAtNode,
     setCurrentNodeEval,
     setNodeEvals,
     setNodeBestMove,
@@ -2382,6 +2384,8 @@ function App() {
   );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const canPlayBestMove = engineEnabled && !isAiTurn && !gameResult && Boolean(topAnalysisPv?.moves[0]);
+  const canKeepBestLine = canPlayBestMove && reviewStatus !== 'running'
+    && !hasMoveTreeLine(treeNodes, currentNodeId, topAnalysisPv?.moves ?? []);
   const visibleEngineOutputLineCount = Math.min(outputLines.length, 20);
   const engineOutputTerminalLabel = visibleEngineOutputLineCount > 0
     ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
@@ -3461,6 +3465,16 @@ function App() {
     applyUciLineAtNode(currentNodeId, moves.slice(0, count));
   }, [applyUciLineAtNode, clearBoardMarkers, currentNodeId, gameResult, isAiTurn]);
 
+  const handleKeepPvLine = useCallback((moves: string[]) => {
+    if (gameResult || isAiTurn || reviewStatus === 'running') return;
+    const result = keepUciLineAtNode(currentNodeId, moves);
+    showImportNotice(result === 'kept'
+      ? 'Engine line kept in the move tree.'
+      : result === 'full'
+        ? `Study limit reached (${MAX_SAVED_TREE_NODES.toLocaleString('en-US')} moves). Remove a variation before keeping another line.`
+        : 'The complete engine line is not legal here. Nothing was added.');
+  }, [currentNodeId, gameResult, isAiTurn, keepUciLineAtNode, reviewStatus, showImportNotice]);
+
   const handlePlayBookMove = useCallback((uci: string) => {
     if (!uci || gameResult || isAiTurn) return;
     clearBoardMarkers();
@@ -4164,6 +4178,14 @@ function App() {
       run: () => { void handleCopyRecord(); },
     },
     {
+      id: 'keep-best-line',
+      label: 'Keep best engine line',
+      hint: canKeepBestLine ? 'Add the full line without moving the board' : 'Wait for a new engine line to keep',
+      keywords: ['variation', 'study', 'store', 'retain', 'analysis'],
+      disabled: !canKeepBestLine,
+      run: () => { if (topAnalysisPv) handleKeepPvLine(topAnalysisPv.moves); },
+    },
+    {
       id: 'copy-link',
       label: 'Copy link',
       hint: canShareCurrentPosition ? undefined : 'Play a move or set up a position first',
@@ -4358,7 +4380,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -6871,6 +6893,7 @@ function App() {
                       const pvScoreLabel = `Red POV score ${pvScoreText}`;
                       const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
                       const firstMove = pv.moves[0];
+                      const lineKept = hasMoveTreeLine(treeNodes, currentNodeId, pv.moves);
                       const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
                       const pvLineText = pv.moves.length ? formatLineInStyle(board, pv.moves, notationStyle, 7) : 'No moves yet';
                       const pvTokens = formatLineTokensInStyle(board, pv.moves, notationStyle, 7);
@@ -6973,6 +6996,18 @@ function App() {
                             >
                               {exportFailureKey === `copy-pv-${i}` ? <IconX /> : copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
                               <span>{exportFailureKey === `copy-pv-${i}` ? 'Failed' : copiedPvIndex === i ? 'Copied' : 'Copy'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="pv-action-btn"
+                              onClick={() => handleKeepPvLine(pv.moves)}
+                              disabled={lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
+                              title={lineKept ? 'This complete line is already in the move tree' : 'Add the complete line to the move tree and keep the board on this position'}
+                              aria-label={lineKept ? `Engine line ${i + 1} already kept` : `Keep engine line ${i + 1} in the move tree`}
+                              data-testid={`keep-engine-pv-${i}`}
+                            >
+                              {lineKept ? <IconCheck /> : <IconSave />}
+                              <span>{lineKept ? 'Kept' : 'Keep line'}</span>
                             </button>
                           </div>
                         </div>

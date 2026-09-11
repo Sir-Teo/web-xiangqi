@@ -21,6 +21,7 @@ import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
 import { removeSubtree } from '../utils/moveTreeEdit';
 import { appendMoveTreeLine } from '../utils/appendMoveTreeLine';
+import { MAX_SAVED_TREE_NODES } from '../utils/gameLibrary';
 import { isSameMoveComment, normalizeMoveComment } from '../utils/moveComment';
 import { bestLineForMove } from '../utils/engineBestLine';
 
@@ -817,6 +818,22 @@ export function useXiangqi() {
         return true;
     }, [rootPosition, syncPositionForNode, treeNodes]);
 
+    /** Keep the entire line atomically, preserving the board and chosen future. */
+    const keepUciLineAtNode = useCallback((parentNodeId: string, moves: string[]): 'kept' | 'invalid' | 'full' => {
+        const result = appendMoveTreeLine(treeNodes, parentNodeId, moves,
+            rootPosition.board, rootPosition.sideToMove, nodeCounterRef.current);
+        if (!result.played || result.played !== moves.length) return 'invalid';
+        // The root is not serialized. Never claim to keep a line that storage
+        // would reject on the next reload because the study is too large.
+        if (Object.keys(result.tree).length - 1 > MAX_SAVED_TREE_NODES) return 'full';
+        nodeCounterRef.current = result.nextNodeId;
+        setTreeNodes(result.tree);
+        if (parentNodeId === currentNodeId && currentMoveIndex === activeLineNodeIds.length - 1) {
+            setActiveLineNodeIds([...activeLineNodeIds, ...preferredContinuation(result.tree, currentNodeId)]);
+        }
+        return 'kept';
+    }, [activeLineNodeIds, currentMoveIndex, currentNodeId, rootPosition, treeNodes]);
+
     const setCurrentNodeEval = useCallback((evalScore: number) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
@@ -1092,6 +1109,7 @@ export function useXiangqi() {
         applyUciMove,
         applyUciMoveAtNode,
         applyUciLineAtNode,
+        keepUciLineAtNode,
         setCurrentNodeEval,
         setNodeEval,
         setNodeEvals,
