@@ -1,6 +1,7 @@
 import { BLACK_GENERAL_GLYPH, RED_GENERAL_GLYPH } from '../utils/pieceStyle';
 import { useEffect, useRef } from 'react';
 import type { GameResult } from '../hooks/useXiangqi';
+import { keepTabWithin } from '../utils/focusTrap';
 
 interface GameOverModalProps {
   result: GameResult;
@@ -43,32 +44,7 @@ export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverM
         return;
       }
 
-      if (event.key === 'Tab') {
-        const focusable = Array.from(
-          modalRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') ?? []
-        );
-        if (focusable.length === 0) return;
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const active = document.activeElement;
-        if (!active || !modalRef.current?.contains(active)) {
-          event.preventDefault();
-          first.focus();
-          return;
-        }
-
-        if (event.shiftKey && active === first) {
-          event.preventDefault();
-          last.focus();
-          return;
-        }
-
-        if (!event.shiftKey && active === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
+      keepTabWithin(modalRef.current, event);
     };
 
     document.addEventListener('keydown', onKeyDown);

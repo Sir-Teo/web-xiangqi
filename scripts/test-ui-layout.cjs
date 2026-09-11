@@ -9279,6 +9279,90 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 }
 
 /**
+ * The auto-save recovery modal keeps Tab inside it.
+ *
+ * It is the first thing a returning reader meets, it is `aria-modal="true"`,
+ * and its focus trap was the one hand-rolled copy nothing tested — the
+ * new-game dialog's trap and the game-over modal's are both gated, this one
+ * never was. Focus escaping it would leave a screen reader walking a page it
+ * has been told is inert.
+ *
+ * Its own context, because the shared page clears the auto-save between
+ * navigations and that is the state this needs to exist.
+ */
+async function assertTheRecoveryModalHoldsTheKeyboard(browser) {
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 820 });
+  try {
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.evaluate(() => { try { localStorage.clear(); } catch (_) {} });
+    // A game to come back to, then a fresh visit with nothing in the URL.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(1500);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".auto-save-modal", { timeout: 15000 });
+    await page.waitForTimeout(500);
+
+    const modal = await page.evaluate(() => {
+      const el = document.querySelector(".auto-save-modal");
+      return {
+        role: el?.getAttribute("role") || "",
+        ariaModal: el?.getAttribute("aria-modal") || "",
+        buttons: [...(el?.querySelectorAll("button") ?? [])].map((b) => (b.textContent || "").trim()),
+        focused: (document.activeElement?.textContent || "").trim(),
+      };
+    });
+    if (modal.role !== "dialog" || modal.ariaModal !== "true") {
+      throw new Error(`The recovery modal is not exposed as a modal dialog: ${JSON.stringify(modal)}`);
+    }
+    if (modal.buttons.length < 2) {
+      throw new Error(`The recovery modal needs both of its choices to have a cycle at all: ${JSON.stringify(modal)}`);
+    }
+    if (modal.focused !== modal.buttons[0]) {
+      throw new Error(`The recovery modal did not focus its primary action: ${JSON.stringify(modal)}`);
+    }
+
+    const focused = () => page.evaluate(() => ({
+      text: (document.activeElement?.textContent || "").trim(),
+      inside: Boolean(document.querySelector(".auto-save-modal")?.contains(document.activeElement)),
+    }));
+
+    // All the way round, twice, so a cycle that leaks on the second lap fails.
+    const walk = [];
+    for (let i = 0; i < modal.buttons.length * 2; i++) {
+      await page.keyboard.press("Tab");
+      walk.push(await focused());
+    }
+    if (walk.some((step) => !step.inside)) {
+      throw new Error(`Tab left the recovery modal: ${JSON.stringify(walk)}`);
+    }
+
+    await page.keyboard.press("Shift+Tab");
+    const back = await focused();
+    if (!back.inside) {
+      throw new Error(`Shift+Tab left the recovery modal: ${JSON.stringify(back)}`);
+    }
+
+    // Focus dropped on the modal's own prose is still the modal's problem: the
+    // next Tab must come back inside rather than walk into the page behind.
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+    await page.keyboard.press("Tab");
+    const recovered = await focused();
+    if (!recovered.inside) {
+      throw new Error(`Tab from outside the recovery modal did not come back into it: ${JSON.stringify(recovered)}`);
+    }
+
+    await page.keyboard.press("Escape");
+    await page.locator(".auto-save-modal").waitFor({ state: "detached", timeout: 5000 });
+  } finally {
+    await context.close();
+  }
+}
+
+/**
  * The bottom bar's chips stay reachable once a review fills it.
  *
  * A finished review adds a long summary to that row -- accuracy, average loss,
@@ -12361,6 +12445,7 @@ async function main() {
     await assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser);
     await assertTheBoardEditorBrushesAreThumbSized(browser);
     await assertTheBottomBarChipsSurviveAReview(browser);
+    await assertTheRecoveryModalHoldsTheKeyboard(browser);
     await assertTheAppIsInstallable(browser);
     await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
     await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);

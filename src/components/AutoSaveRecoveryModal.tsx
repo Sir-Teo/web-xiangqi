@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import './AutoSaveRecoveryModal.css';
+import { keepTabWithin } from '../utils/focusTrap';
 
 interface AutoSaveRecoveryModalProps {
     savedAt: number;
@@ -52,26 +53,7 @@ export function AutoSaveRecoveryModal({
                 onDismiss();
                 return;
             }
-            if (event.key !== 'Tab') return;
-
-            const focusable = Array.from(
-                modalRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') ?? []
-            );
-            if (!focusable.length) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            const active = document.activeElement;
-
-            if (!active || !modalRef.current?.contains(active)) {
-                event.preventDefault();
-                first.focus();
-            } else if (event.shiftKey && active === first) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && active === last) {
-                event.preventDefault();
-                first.focus();
-            }
+            keepTabWithin(modalRef.current, event);
         };
 
         document.addEventListener('keydown', onKeyDown);

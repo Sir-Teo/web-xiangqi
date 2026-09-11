@@ -128,6 +128,7 @@ import {
 } from './utils/preferences';
 import { buildBoardArrows, type BoardArrow, type BoardSquare } from './utils/boardArrows';
 import { planMoveLineImport } from './utils/moveLineImportPlan';
+import { getDialogFocusableElements, keepTabWithin } from './utils/focusTrap';
 import {
   describeRepetition,
   formatRepetitionHeadline,
@@ -496,23 +497,6 @@ function savedResultToGameResult(result: SavedGame['result']): GameResult {
   if (result === 'black') return 'black-wins';
   if (result === 'draw') return 'draw';
   return null;
-}
-
-function getDialogFocusableElements(container: HTMLElement): HTMLElement[] {
-  const selector = [
-    'button:not([disabled])',
-    'input:not([disabled])',
-    'select:not([disabled])',
-    'textarea:not([disabled])',
-    'a[href]',
-    '[tabindex]:not([tabindex="-1"])',
-  ].join(',');
-
-  return Array.from(container.querySelectorAll<HTMLElement>(selector))
-    .filter((element) => {
-      const style = window.getComputedStyle(element);
-      return style.display !== 'none' && style.visibility !== 'hidden';
-    });
 }
 
 function App() {
@@ -1729,26 +1713,7 @@ function App() {
     focusInitial();
     const frame = window.requestAnimationFrame(focusInitial);
     const retryTimer = window.setTimeout(focusInitial, 80);
-    const onDialogKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return;
-      const focusable = getDialogFocusableElements(activeDialog);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        activeDialog.focus({ preventScroll: true });
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const current = document.activeElement;
-      if (event.shiftKey && (current === first || !activeDialog.contains(current))) {
-        event.preventDefault();
-        last.focus({ preventScroll: true });
-      } else if (!event.shiftKey && (current === last || !activeDialog.contains(current))) {
-        event.preventDefault();
-        first.focus({ preventScroll: true });
-      }
-    };
+    const onDialogKeyDown = (event: KeyboardEvent) => keepTabWithin(activeDialog, event);
 
     document.addEventListener('keydown', onDialogKeyDown);
     return () => {
