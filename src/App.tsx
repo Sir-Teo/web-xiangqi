@@ -964,10 +964,12 @@ function App() {
    * render that created it.
    */
   const drillJudgeRef = useRef<(evalScore: number) => void>(() => {});
-  const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'deep-pending' | 'settled'>('idle');
+  const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'deep-pending' | 'deep-complete' | 'settled'>('idle');
   const analysisDeepenTimerRef = useRef<number | null>(null);
   const activeAnalysisRequestRef = useRef('');
   const currentAnalysisRequestKeyRef = useRef('');
+  const hasCurrentDeepResult = useCallback(() => analysisStageRef.current === 'deep-complete'
+    && activeAnalysisRequestRef.current === currentAnalysisRequestKeyRef.current, []);
   const currentMultiPvRef = useRef(1);
   const currentShowWdlRef = useRef(false);
   const reviewControllerRef = useRef<ReviewController>(createReviewController());
@@ -1333,7 +1335,7 @@ function App() {
       ) {
         analysisStageRef.current = 'primary-complete';
       } else {
-        analysisStageRef.current = 'settled';
+        analysisStageRef.current = analysisTag.phase === 'deep' ? 'deep-complete' : 'settled';
       }
     },
   });
@@ -1700,7 +1702,7 @@ function App() {
       // and the AI opponent still stop the moment the tab goes away; this one
       // is left alone, and the infinite mode's own description says it runs
       // until stopped.
-      if (!visible && deepDiveActiveRef.current) return;
+      if (!visible && (deepDiveActiveRef.current || hasCurrentDeepResult())) return;
       // A review is started by hand for the same reason, and it used to be
       // the odd one out: hiding the tab stopped the search it was on -- so
       // that one node was graded shallow -- while the nodes after it were
@@ -1727,7 +1729,7 @@ function App() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
-  }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
+  }, [clearAnalysisDeepenTimer, clearQueuedSearch, hasCurrentDeepResult, stopSearch]);
 
   useEffect(() => {
     const activeDialog = showSettings
@@ -1826,7 +1828,11 @@ function App() {
     // the teardown clears the stage the search is holding. Coming back finds
     // the stage still `deep-pending` and queues nothing, which is the same
     // thing that happens when the tab was never hidden at all.
-    if (!isPageVisible && (deepDiveActiveRef.current || retainCandidateInBackground)) return;
+    // Completed manual analysis is still useful when returning to this exact
+    // request. Engine shutdown, review, and navigation invalidate it normally.
+    const retainDeepResult = engineEnabled && isReady && !isAiTurn
+      && !reviewControllerRef.current.active && hasCurrentDeepResult();
+    if (!isPageVisible && (deepDiveActiveRef.current || retainCandidateInBackground || retainDeepResult)) return;
     if (!engineEnabled || !isReady || isAiTurn || reviewControllerRef.current.active || !isPageVisible) {
       activeAnalysisRequestRef.current = '';
       analysisStageRef.current = 'idle';
@@ -1897,6 +1903,7 @@ function App() {
     threatActive,
     candidateActive,
     retainCandidateInBackground,
+    hasCurrentDeepResult,
   ]);
 
   useEffect(() => {
