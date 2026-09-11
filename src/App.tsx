@@ -1,4 +1,4 @@
-import { captureStudyAnalysis, hasStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
+import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
 import { extractPgnMetadata } from './utils/gameMetadata';
@@ -904,7 +904,7 @@ function App() {
    * analysis has the same requirement even when the line has no written note.
    */
   const hasAnnotatedStudyMoves = useMemo(() => (
-    Object.values(treeNodes).some((node) => Boolean(node.record?.comment || node.record?.analysis))
+    Object.values(treeNodes).some((node) => Boolean(node.record?.comment || node.record?.analysis || node.record?.persistEvaluation))
   ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
@@ -1215,11 +1215,17 @@ function App() {
     hashMB: engineBootConfig.hashMB,
     captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
     onWorkerError: reportEngineWorkerError,
-    onBestMove: (uci, score, searchTag, completedPvLines) => {
+    onBestMove: (uci, score, searchTag, completedPvLines, hasEvaluation) => {
       const reviewTag = parseReviewTag(searchTag);
       if (reviewTag && reviewControllerRef.current.active) {
         const controller = reviewControllerRef.current;
         if (controller.currentNodeId !== reviewTag.nodeId) {
+          return;
+        }
+        if (!hasEvaluation) {
+          resetReviewController(true);
+          cancelReview();
+          showImportNotice('Review stopped', 'The engine returned no evaluation. Existing scores were kept. Try reviewing again.');
           return;
         }
 
@@ -1322,10 +1328,10 @@ function App() {
         return;
       }
 
-      if (currentMoveIndex >= 0 && reviewStatus !== 'done') {
+      if (hasEvaluation && currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(normalizeEvalForSide(score, sideToMove));
       }
-      drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
+      if (hasEvaluation) drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
 
       if (analysisTag.phase === 'deep') setDeepDiveActive(false);
 
@@ -3854,7 +3860,7 @@ function App() {
       handleLoadFen(plan.startFen, nextGameMode);
       return;
     }
-    const { moves, startFen, hasVariations, importedFromNotation, notationRejected } = plan;
+    const { moves, startFen, importedFromNotation, notationRejected } = plan;
 
     stopAnalysis();
     handleCancelReview();
@@ -3866,7 +3872,7 @@ function App() {
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
-    const loadedNodeIds = (hasVariations || hasStudyAnalysis(plan.moveTree))
+    const loadedNodeIds = (!importedFromNotation && plan.moveTree.length > 0)
       ? loadMoveTree(plan.moveTree, moves, startFen)
       : loadMoves(moves, startFen);
     setGameMetadata(extractPgnMetadata(text));
@@ -3915,7 +3921,7 @@ function App() {
             const nodeId = loadedNodeIds[index];
             if (!nodeId) return null;
             if (annotation.evalScore === undefined && annotation.quality === undefined) return null;
-            return { nodeId, evalScore: annotation.evalScore, quality: annotation.quality };
+            return { nodeId, evalScore: annotation.evalScore, evalDepth: annotation.evalDepth, quality: annotation.quality, persistEvaluation: true };
           })
           .filter((update): update is NonNullable<typeof update> => Boolean(update));
         if (updates.length > 0) setNodeReviewDataBulk(updates);

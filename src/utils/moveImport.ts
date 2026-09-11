@@ -1,4 +1,5 @@
 import { readStudyAnalysisPgn } from './studyAnalysis';
+import { normalizeEvalDepth, type MoveEvaluation } from './moveEvaluation';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { ReviewMoveQuality } from './review';
 import { MATE_SCORE_BASE } from './engineEvalReading';
@@ -131,6 +132,7 @@ function stripPgnMetadata(text: string): string {
 
 const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
 const UCI_TREE_TOKEN_PATTERN = /\(|\)|\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
+const UCI_ANNOTATED_TREE_TOKEN_PATTERN = new RegExp(`${UCI_TREE_TOKEN_PATTERN.source}|\\$\\d+|[!?]+`, 'gi');
 
 function hasBranch(nodes: SavedMoveTreeNode[]): boolean {
     return nodes.some((node) => (node.children?.length ?? 0) > 1 || hasBranch(node.children ?? []));
@@ -200,12 +202,12 @@ function* uciTreeTokens(source: string): Generator<{ comment: string } | { match
             missingClosers.add(close);
             continue;
         }
-        for (const match of source.slice(cursor, start).matchAll(UCI_TREE_TOKEN_PATTERN)) yield { match };
+        for (const match of source.slice(cursor, start).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
         if (opener !== '[') yield { comment: source.slice(start + 1, end < 0 ? source.length : end) };
         cursor = end < 0 ? source.length : end + 1;
         delimiters.lastIndex = cursor;
     }
-    for (const match of source.slice(cursor).matchAll(UCI_TREE_TOKEN_PATTERN)) yield { match };
+    for (const match of source.slice(cursor).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
 }
 
 export function extractUciMoveTree(text: string): {
@@ -229,12 +231,22 @@ export function extractUciMoveTree(text: string): {
             if (!commentTarget) continue;
             const snapshot = readStudyAnalysisPgn(entry.comment);
             if (snapshot?.move === commentTarget.uci) commentTarget.analysis = snapshot;
+            const evaluation = parseEvalCommand(entry.comment);
+            if (evaluation) {
+                commentTarget.evalScore = evaluation.evalScore;
+                commentTarget.evalDepth = evaluation.evalDepth;
+            }
             const note = parseFreeTextComment(entry.comment);
             if (note) commentTarget.comment = normalizeMoveComment([commentTarget.comment, note].filter(Boolean).join(' '));
             continue;
         }
         const match = entry.match;
         const token = match[0];
+        if (token.startsWith('$') || /^[!?]+$/.test(token)) {
+            const quality = QUALITY_FOR_NAG[token] ?? QUALITY_FOR_SUFFIX[token];
+            if (quality && commentTarget) commentTarget.quality = quality;
+            continue;
+        }
         if (token === '(') {
             stack.push(currentLine);
             currentLine = currentLine.slice(0, -1);
@@ -279,7 +291,7 @@ export function extractUciMoveTree(text: string): {
 
 
 /** A move's review as a record carried it, for the moves that had one. */
-export interface ImportedMoveAnnotation {
+export interface ImportedMoveAnnotation extends MoveEvaluation {
     /** Red-positive centipawns after the move, as this app stores an eval. */
     evalScore?: number;
     quality?: ReviewMoveQuality;
@@ -327,21 +339,23 @@ function parseFreeTextComment(comment: string): string | undefined {
     return normalizeMoveComment(prose);
 }
 
-function parseEvalCommand(comment: string): number | undefined {
+function parseEvalCommand(comment: string): Pick<MoveEvaluation, 'evalScore' | 'evalDepth'> | undefined {
     // python-chess also writes a comma-separated depth and accepts signed
     // decimal shorthand. The depth is not a score and must not prevent the
     // evaluation from being read. Walk in source order across both score kinds.
-    const commands = /\[%eval\s+(?:#([+-]?\d+)|([+-]?(?:\d+(?:\.\d*)?|\.\d+)))(?:,\d+)?\s*\]/gi;
+    const commands = /\[%eval\s+(?:#([+-]?\d+)|([+-]?(?:\d+(?:\.\d*)?|\.\d+)))(?:,(\d+))?\s*\]/gi;
     for (const match of comment.matchAll(commands)) {
+        const evalDepth = match[3] === undefined ? undefined : normalizeEvalDepth(Number(match[3]));
+        const depth = evalDepth === undefined ? {} : { evalDepth };
         if (match[1] !== undefined) {
             const distance = Math.abs(Number(match[1]));
             // Larger distances cannot fit this app's existing mate sentinel.
             // In particular, subtracting an arbitrary distance can flip sides.
             if (!Number.isSafeInteger(distance) || distance > MATE_SCORE_BASE / 2) continue;
-            return match[1].startsWith('-') ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance;
+            return { evalScore: match[1].startsWith('-') ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance, ...depth };
         }
         const score = Math.round(Number(match[2]) * 100);
-        if (Number.isSafeInteger(score)) return score;
+        if (Number.isSafeInteger(score)) return { evalScore: score, ...depth };
     }
     return undefined;
 }
@@ -388,8 +402,10 @@ export function extractAnnotatedMainLine(text: string): {
         if (ch === '{' || ch === ';') {
             const end = source.indexOf(ch === '{' ? '}' : '\n', index + 1);
             const comment = source.slice(index + 1, end < 0 ? source.length : end);
-            const evalScore = parseEvalCommand(comment);
-            if (evalScore !== undefined) annotate({ evalScore });
+            const evaluation = parseEvalCommand(comment);
+            if (evaluation !== undefined) {
+                annotate({ ...evaluation, evalDepth: evaluation.evalDepth });
+            }
             const note = parseFreeTextComment(comment);
             if (note) annotate({ comment: note });
             index = end < 0 ? source.length : end + 1;

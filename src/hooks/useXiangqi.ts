@@ -1,4 +1,5 @@
 import { makeEnginePositionCommand } from '../utils/engineTags';
+import { normalizeMoveEvaluation, replaceMoveEvaluation, type MoveEvaluation } from '../utils/moveEvaluation';
 import { normalizeStudyAnalysis, type StudyAnalysis } from '../utils/studyAnalysis';
 import type { GameMetadata } from '../utils/gameMetadata';
 import { describeSetupProblem } from '../utils/positionSetup';
@@ -29,7 +30,9 @@ import { bestLineForMove } from '../utils/engineBestLine';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
-export interface MoveRecord {
+export interface MoveRecord extends MoveEvaluation {
+    /** Imported/saved annotations are durable; ordinary live scores remain transient. */
+    persistEvaluation?: boolean;
     uci: string;
     piece: string;
     captured: string;
@@ -76,7 +79,7 @@ export type MoveSequenceValidation =
     | { ok: true }
     | { ok: false; failedIndex: number; move: string; reason: string };
 
-export type SerializableMoveTreeNode = {
+export type SerializableMoveTreeNode = MoveEvaluation & {
     uci: string;
     /** The reader's note on this move, when they wrote one. */
     comment?: string;
@@ -526,6 +529,7 @@ export function useXiangqi() {
                 const nextSide: Side = parentSide === 'w' ? 'b' : 'w';
                 const nextInCheck = isInCheck(nextBoard, nextSide);
                 const nodeId = `n${counter++}`;
+                const evaluation = normalizeMoveEvaluation(child);
 
                 tree[parentNodeId].childrenIds.push(nodeId);
                 tree[nodeId] = {
@@ -540,6 +544,8 @@ export function useXiangqi() {
                         sideToMove: nextSide,
                         inCheck: nextInCheck,
                         ply: plyIndex + 1,
+                        ...evaluation,
+                        ...(evaluation.evalScore !== undefined || evaluation.quality ? { persistEvaluation: true } : {}),
                         ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),
                         ...(child.analysis ? { analysis: normalizeStudyAnalysis(child.analysis,
                             makeEnginePositionCommand(sourceRootFen, getMovesToNode(tree, parentNodeId, ROOT_NODE_ID)), uci) } : {}),
@@ -735,6 +741,7 @@ export function useXiangqi() {
             const updatedRecord: MoveRecord | undefined = existingChild.record ? {
                 ...existingChild.record,
                 evalScore: evalScore ?? existingChild.record.evalScore,
+                evalDepth: evalScore !== undefined ? undefined : existingChild.record.evalDepth,
             } : undefined;
 
             const nextTree: Record<string, MoveTreeNode> = updatedRecord ? {
@@ -854,12 +861,13 @@ export function useXiangqi() {
         setTreeNodes((prevTree) => {
             const node = prevTree[currentNodeId];
             if (!node?.record) return prevTree;
-            if (node.record.evalScore === evalScore) return prevTree;
+            const record = replaceMoveEvaluation(node.record, evalScore);
+            if (record === node.record) return prevTree;
             return {
                 ...prevTree,
                 [currentNodeId]: {
                     ...node,
-                    record: { ...node.record, evalScore },
+                    record,
                 },
             };
         });
@@ -886,12 +894,13 @@ export function useXiangqi() {
         setTreeNodes((prevTree) => {
             const node = prevTree[nodeId];
             if (!node?.record) return prevTree;
-            if (node.record.evalScore === evalScore) return prevTree;
+            const record = replaceMoveEvaluation(node.record, evalScore);
+            if (record === node.record) return prevTree;
             return {
                 ...prevTree,
                 [nodeId]: {
                     ...node,
-                    record: { ...node.record, evalScore },
+                    record,
                 },
             };
         });
@@ -906,7 +915,9 @@ export function useXiangqi() {
                 const { nodeId, evalScore } = update;
                 if (!Number.isFinite(evalScore) || nodeId === ROOT_NODE_ID) continue;
                 const node = nextTree[nodeId];
-                if (!node?.record || node.record.evalScore === evalScore) continue;
+                if (!node?.record) continue;
+                const record = replaceMoveEvaluation(node.record, evalScore);
+                if (record === node.record) continue;
 
                 if (nextTree === prevTree) {
                     nextTree = { ...prevTree };
@@ -914,7 +925,7 @@ export function useXiangqi() {
 
                 nextTree[nodeId] = {
                     ...node,
-                    record: { ...node.record, evalScore },
+                    record,
                 };
             }
 
@@ -979,6 +990,8 @@ export function useXiangqi() {
     const setNodeReviewDataBulk = useCallback((updates: Array<{
         nodeId: string;
         evalScore?: number;
+        evalDepth?: number;
+        persistEvaluation?: boolean;
         bestMove?: string;
         quality?: ReviewMoveQuality;
         swing?: number;
@@ -998,11 +1011,11 @@ export function useXiangqi() {
 
                 const nextLine = bestLineForMove(update.bestMove ?? record.bestMove, update.bestLine ?? record.bestLine);
                 const nextRecord: MoveRecord = {
-                    ...record,
-                    evalScore: typeof update.evalScore === 'number' ? update.evalScore : record.evalScore,
+                    ...(typeof update.evalScore === 'number' ? replaceMoveEvaluation(record, update.evalScore, update.evalDepth) : record),
                     bestMove: update.bestMove ?? record.bestMove,
                     bestLine: nextLine,
                     quality: update.quality,
+                    persistEvaluation: update.persistEvaluation ?? record.persistEvaluation,
                     swing: typeof update.swing === 'number' ? update.swing : undefined,
                     winPercentLoss: typeof update.winPercentLoss === 'number' ? update.winPercentLoss : undefined,
                     reviewNote: update.reviewNote,
@@ -1010,6 +1023,8 @@ export function useXiangqi() {
 
                 const changed =
                     nextRecord.evalScore !== record.evalScore ||
+                    nextRecord.evalDepth !== record.evalDepth ||
+                    nextRecord.persistEvaluation !== record.persistEvaluation ||
                     nextRecord.bestMove !== record.bestMove ||
                     (nextRecord.bestLine ?? []).join(' ') !== (record.bestLine ?? []).join(' ') ||
                     nextRecord.quality !== record.quality ||

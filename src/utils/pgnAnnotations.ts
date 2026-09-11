@@ -2,6 +2,7 @@ import { studyAnalysisPgn, type StudyAnalysis } from './studyAnalysis';
 import { mateDistanceFromScore } from './engineEvalReading';
 import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
+import { normalizeEvalDepth } from './moveEvaluation';
 
 /**
  * Writing the review into the PGN, so the analysis leaves with the game.
@@ -37,6 +38,7 @@ const NAG_FOR_QUALITY: Partial<Record<ReviewMoveQuality, string>> = {
 export interface MoveAnnotationInput {
     /** Evaluation after the move, red-positive centipawns, as the engine gave it. */
     evalScore?: number;
+    evalDepth?: number;
     quality?: ReviewMoveQuality;
     /** The engine's preference in the position this move was played in. */
     bestMove?: string;
@@ -51,8 +53,10 @@ export interface MoveAnnotationInput {
  * The evaluation as `[%eval ...]` writes it: pawns to two places, or `#N` for a
  * mate, counted in moves and signed for the side delivering it.
  */
-export function formatEvalCommand(evalScore: number): string | null {
+export function formatEvalCommand(evalScore: number, evalDepth?: number): string | null {
     if (!Number.isFinite(evalScore)) return null;
+    const depth = normalizeEvalDepth(evalDepth);
+    const suffix = depth === undefined ? '' : `,${depth}`;
     const mateDistance = mateDistanceFromScore(evalScore);
     if (mateDistance !== null) {
         // The sign comes from the score, not from the distance. A mate in zero
@@ -61,9 +65,9 @@ export function formatEvalCommand(evalScore: number): string | null {
         // and read back as red's. Found by sweeping generated games through
         // the exporter and the importer.
         const sign = evalScore < 0 ? '-' : '';
-        return `[%eval #${sign}${Math.abs(mateDistance)}]`;
+        return `[%eval #${sign}${Math.abs(mateDistance)}${suffix}]`;
     }
-    return `[%eval ${(evalScore / 100).toFixed(2)}]`;
+    return `[%eval ${(evalScore / 100).toFixed(2)}${suffix}]`;
 }
 
 /**
@@ -82,7 +86,7 @@ export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     const analysis = studyAnalysisPgn(input.analysis);
     if (analysis) comment.push(analysis);
     if (typeof input.evalScore === 'number') {
-        const command = formatEvalCommand(input.evalScore);
+        const command = formatEvalCommand(input.evalScore, input.evalDepth);
         if (command) comment.push(command);
     }
     // Only where it is the point. On a move already graded good there is

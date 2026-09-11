@@ -50,7 +50,7 @@ export interface EngineInitOptions {
     threads?: number;
     hashMB?: number;
     captureInfoLines?: boolean;
-    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[]) => void;
+    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[], hasEvaluation: boolean) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
 }
@@ -217,8 +217,9 @@ export function useEngine(options: EngineInitOptions = {}) {
     /**
      * The evaluation this search has most recently read, handed to
      * `onBestMove` when it finishes. Reset to 0 when a search starts, so a
-     * search that never reports a score reports nothing rather than the
-     * previous position's number.
+     * search that never reports a score cannot carry the previous position's
+     * number. The completion callback separately says whether a score arrived;
+     * its numeric zero default must never be mistaken for an evaluation.
      *
      * A `useState` mirrored this and was returned from the hook, and nothing
      * ever read it: App.tsx takes its evaluation off the top PV line, which
@@ -884,7 +885,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             const completedSearchTag = activeSearchTagRef.current;
             activeSearchTagRef.current = null;
             const uciMove = parseBestMoveUci(msg);
-            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice());
+            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
             } else {

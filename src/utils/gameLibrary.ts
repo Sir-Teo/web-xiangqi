@@ -1,4 +1,5 @@
 import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
+import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { GameMode } from '../App';
 import { parseFenBoard } from './xiangqi';
@@ -48,7 +49,7 @@ const MAX_REVIEW_ENGINE_MOVE_TIME_MS = 600_000;
 const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = MAX_REPORTED_CENTIPAWN_LOSS;
 type SavedResult = typeof SAVED_RESULTS[number];
 
-export interface SavedMoveTreeNode {
+export interface SavedMoveTreeNode extends MoveEvaluation {
     uci: string;
     /** The reader's note on this move; see `utils/moveComment`. */
     comment?: string;
@@ -155,6 +156,7 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
         uci,
         ...(comment ? { comment } : {}),
         ...(analysis ? { analysis } : {}),
+        ...normalizeMoveEvaluation(raw),
         ...(normalizedChildren.length > 0 ? { children: normalizedChildren } : {}),
     };
 }

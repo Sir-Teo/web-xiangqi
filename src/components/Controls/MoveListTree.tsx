@@ -359,6 +359,8 @@ export const MoveListTree = memo(function MoveListTree({
                         <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> {formatReviewQuality('blunder')} <em>larger</em></span>
                     </div>
                     <p>Severity is capped by practical win-chance loss so lopsided positions are not over-punished.</p>
+                    {activeLineNodeIds.some(id => treeNodes[id]?.record?.persistEvaluation && treeNodes[id]?.record?.quality)
+                        ? <p>Saved PGN quality marks may use different criteria.</p> : null}
                 </div> : null}
         </div>
     );
