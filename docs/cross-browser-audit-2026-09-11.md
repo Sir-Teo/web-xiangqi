@@ -163,3 +163,10 @@ then creates a different first move through the board. The old line becomes an
 move-list Tab stop, native keyboard entry at the current move, retained focus on
 visible variation entries, and navigation through the reopened full line at
 1440/390/320px. macOS WebKit uses Option-Tab for Safari's full control sequence.
+
+The variation regression also verifies uninterrupted keyboard use across the DOM
+replacement when a variation opens: Enter on ply 80 followed by End reaches ply
+128; Space on the alternate first move followed by ArrowRight enters its side
+line. Firefox's native scroll-container Tab stop is checked before continuing
+to the move button. The earlier shortened-line fix and large-study work-count
+regression passed post-commit in all three browsers at all three widths.

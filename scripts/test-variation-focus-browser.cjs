@@ -38,18 +38,30 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
         await page.locator('.tree-breadcrumb-chip[tabindex="0"]').focus();
         // macOS WebKit uses Option-Tab for Safari's full control sequence.
         await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
+        // Firefox also makes overflow containers native Tab stops.
+        if (browserType.name() === 'firefox' && await page.locator('.mtree-scroll').evaluate(el => el === document.activeElement)) {
+          await page.keyboard.press('Tab');
+        }
         assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')), 'n129');
         await page.locator('.mtree-variation [data-node-id="n80"]').focus();
         assert.equal(await stops.getAttribute('data-node-id'), 'n80', 'A still-visible variation move should keep its tab stop');
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n80');
         assert.equal(await stops.count(), 1);
-        await stops.focus();
+        await page.waitForFunction(() => document.activeElement?.getAttribute('data-node-id') === 'n80');
         await page.keyboard.press('End');
         assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')), 'n128');
+        // Space activation must also transfer focus when this short branch opens.
+        await page.locator('.mtree-variation [data-node-id="n129"]').focus();
+        await page.keyboard.press('Space');
+        await page.waitForFunction(() => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n129'
+          && document.activeElement?.getAttribute('data-node-id') === 'n129');
+        await page.keyboard.press('ArrowRight');
+        assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')), 'n1');
+        assert.equal(await stops.count(), 1);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: shortened variation focus fallback, native Tab entry, visible-focus retention and full-line keyboard navigation passed`);
+        console.log(`${browserType.name()} ${width}px: shortened variation focus fallback, native Tab entry, visible-focus retention, Enter/Space focus transfer and uninterrupted keyboard navigation passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

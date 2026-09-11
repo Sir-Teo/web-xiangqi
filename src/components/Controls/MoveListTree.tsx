@@ -56,6 +56,27 @@ export const MoveListTree = memo(function MoveListTree({
     onDeleteNode,
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
+    const pendingVariationFocus = useRef<{ nodeId: string; element: Element } | null>(null);
+
+    const handleNavigateNode = useCallback((nodeId: string) => {
+        const focused = document.activeElement;
+        // Opening a side line reparents its chips into main-line rows. Remember
+        // focus only when activation came from the variation being replaced.
+        pendingVariationFocus.current = focused
+            && scrollRef.current?.contains(focused)
+            && focused.getAttribute('data-node-id') === nodeId
+            && focused.closest('.mtree-variation')
+            ? { nodeId, element: focused } : null;
+        onNavigateNode(nodeId);
+    }, [onNavigateNode]);
+
+    useEffect(() => {
+        const pending = pendingVariationFocus.current;
+        pendingVariationFocus.current = null;
+        if (!pending || pending.element.isConnected || document.activeElement !== document.body) return;
+        const target = scrollRef.current?.querySelector<HTMLButtonElement>('.mtree-chip-active');
+        if (target?.dataset.nodeId === pending.nodeId) target.focus({ preventScroll: true });
+    }, [activeLineNodeIds]);
 
     /**
      * One tab stop for the whole list, with the arrow keys inside it.
@@ -202,7 +223,7 @@ export const MoveListTree = memo(function MoveListTree({
         }
         return <MoveChip key={nodeId} nodeId={nodeId} record={record} quality={quality}
             compact={compact} isCurrent={currentNodeId === nodeId} isTabStop={nodeId === stopNodeId}
-            notationStyle={notationStyle} onNavigateNode={onNavigateNode}
+            notationStyle={notationStyle} onNavigateNode={handleNavigateNode}
             onRovingFocus={setRovingNodeId} onKeyDown={handleChipKeyDown} />;
     };
 
