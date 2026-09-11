@@ -19,7 +19,7 @@ import {
     getMoveQualityClassName,
     isFiniteNumber,
 } from '../../utils/review';
-import { formatEvaluationText } from '../../utils/engineEvalReading';
+import { formatEvaluationText, type EvaluationScoreKind } from '../../utils/engineEvalReading';
 import { isBestLineWorthShowing } from '../../utils/engineBestLine';
 import { formatUciMove } from '../../utils/moveNotation';
 
@@ -401,9 +401,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     title={formatReviewEvalTitle(focusMoment)}
                                 >
                                     <span>{formatReviewSide(focusMoment.side)} POV</span>
-                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalBefore, focusMoment.side)}</strong>
+                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalBefore, focusMoment.side, focusMoment.evalBeforeKind)}</strong>
                                     <em aria-hidden="true">→</em>
-                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalAfter, focusMoment.side)}</strong>
+                                    <strong>{formatReviewEvalScoreForSide(focusMoment.evalAfter, focusMoment.side, focusMoment.evalAfterKind)}</strong>
                                 </div>
                                 <div
                                     className="review-chance-loss"
@@ -510,9 +510,9 @@ export const ReviewPanel = memo(function ReviewPanel({
                                             title={formatReviewEvalTitle(moment)}
                                         >
                                             <span>{formatReviewSide(moment.side)} POV</span>
-                                            <strong>{formatReviewEvalScoreForSide(moment.evalBefore, moment.side)}</strong>
+                                            <strong>{formatReviewEvalScoreForSide(moment.evalBefore, moment.side, moment.evalBeforeKind)}</strong>
                                             <em aria-hidden="true">→</em>
-                                            <strong>{formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}</strong>
+                                            <strong>{formatReviewEvalScoreForSide(moment.evalAfter, moment.side, moment.evalAfterKind)}</strong>
                                         </div>
                                         <div
                                             className="review-chance-loss"
@@ -608,8 +608,8 @@ function formatAccuracyPercent(accuracy: number): string {
     return `${accuracy}%`;
 }
 
-function formatReviewEvalScore(score: number) {
-    return formatEvaluationText(score) ?? 'n/a';
+function formatReviewEvalScore(score: number, kind?: EvaluationScoreKind) {
+    return formatEvaluationText(score, 2, kind) ?? 'n/a';
 }
 
 function formatReviewSide(side: ReviewSide) {
@@ -620,16 +620,16 @@ function getSidePerspectiveEval(score: number, side: ReviewSide) {
     return side === 'red' ? score : -score;
 }
 
-function formatReviewEvalScoreForSide(score: number, side: ReviewSide) {
-    return formatReviewEvalScore(getSidePerspectiveEval(score, side));
+function formatReviewEvalScoreForSide(score: number, side: ReviewSide, kind?: EvaluationScoreKind) {
+    return formatReviewEvalScore(getSidePerspectiveEval(score, side), kind);
 }
 
 function formatReviewEvalTransition(moment: ReviewKeyMoment) {
-    return `${formatReviewEvalScoreForSide(moment.evalBefore, moment.side)} → ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}`;
+    return `${formatReviewEvalScoreForSide(moment.evalBefore, moment.side, moment.evalBeforeKind)} → ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side, moment.evalAfterKind)}`;
 }
 
 function formatReviewEvalChangeLabel(moment: ReviewKeyMoment) {
-    return `${formatReviewSide(moment.side)} evaluation changed from ${formatReviewEvalScoreForSide(moment.evalBefore, moment.side)} to ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side)}`;
+    return `${formatReviewSide(moment.side)} evaluation changed from ${formatReviewEvalScoreForSide(moment.evalBefore, moment.side, moment.evalBeforeKind)} to ${formatReviewEvalScoreForSide(moment.evalAfter, moment.side, moment.evalAfterKind)}`;
 }
 
 function formatReviewEvalTitle(moment: ReviewKeyMoment) {

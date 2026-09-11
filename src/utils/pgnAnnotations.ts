@@ -1,5 +1,5 @@
 import { studyAnalysisPgn, type StudyAnalysis } from './studyAnalysis';
-import { mateDistanceFromScore } from './engineEvalReading';
+import { mateDistanceFromScore, type EvaluationScoreKind } from './engineEvalReading';
 import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
 import { normalizeEvalDepth } from './moveEvaluation';
@@ -39,6 +39,7 @@ export interface MoveAnnotationInput {
     /** Evaluation after the move, red-positive centipawns, as the engine gave it. */
     evalScore?: number;
     evalDepth?: number;
+    evalScoreKind?: EvaluationScoreKind;
     quality?: ReviewMoveQuality;
     /** The engine's preference in the position this move was played in. */
     bestMove?: string;
@@ -53,11 +54,11 @@ export interface MoveAnnotationInput {
  * The evaluation as `[%eval ...]` writes it: pawns to two places, or `#N` for a
  * mate, counted in moves and signed for the side delivering it.
  */
-export function formatEvalCommand(evalScore: number, evalDepth?: number): string | null {
+export function formatEvalCommand(evalScore: number, evalDepth?: number, evalScoreKind?: EvaluationScoreKind): string | null {
     if (!Number.isFinite(evalScore)) return null;
     const depth = normalizeEvalDepth(evalDepth);
     const suffix = depth === undefined ? '' : `,${depth}`;
-    const mateDistance = mateDistanceFromScore(evalScore);
+    const mateDistance = mateDistanceFromScore(evalScore, evalScoreKind);
     if (mateDistance !== null) {
         // The sign comes from the score, not from the distance. A mate in zero
         // -- the position after this move is already mate -- gives a distance
@@ -86,7 +87,7 @@ export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     const analysis = studyAnalysisPgn(input.analysis);
     if (analysis) comment.push(analysis);
     if (typeof input.evalScore === 'number') {
-        const command = formatEvalCommand(input.evalScore, input.evalDepth);
+        const command = formatEvalCommand(input.evalScore, input.evalDepth, input.evalScoreKind);
         if (command) comment.push(command);
     }
     // Only where it is the point. On a move already graded good there is

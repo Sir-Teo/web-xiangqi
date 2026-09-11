@@ -1,3 +1,4 @@
+import { computeReviewArtifacts } from './review';
 import { describe, expect, it } from 'vitest';
 import { normalizeMoveEvaluation, replaceMoveEvaluation } from './moveEvaluation';
 import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
@@ -47,4 +48,41 @@ describe('durable move evaluations', () => {
         } as Record<string, MoveTreeNode>;
         expect(serializeSavedMoveTree(nodes, 'root')).toEqual([{ uci: 'h2e2', evalScore: 42, evalDepth: 18, quality: 'inaccuracy' }, { uci: 'b2e2' }]);
     });
+});
+
+describe('score-kind persistence', () => {
+    it('keeps a large numeric evaluation distinct from a mate with the same stored number', () => {
+        const parsed = extractUciMoveTree('h2e2 {[%eval 200.00,18]} h9g7 {[%eval #10000,18]} (b9c7 {[%eval -300.00,20]}) *');
+        const saved = normalizeSavedGame({ id: 'kinds', savedAt: 1, gameMode: 'PvP', moves: parsed.moves, moveTree: parsed.moveTree })!;
+        const shared = decodeSavedMoveTreeParam(encodeSavedMoveTreeParam(saved.moveTree!))!;
+        const pgn = exportPgnFromMoveTree(shared)!;
+        expect(pgn).toContain('[%eval 200.00,18]');
+        expect(pgn).toContain('[%eval #10000,18]');
+        expect(pgn).toContain('[%eval -300.00,20]');
+        expect(extractUciMoveTree(pgn).moveTree).toEqual(parsed.moveTree);
+    });
+});
+
+
+it('clears a previous score kind when an evaluation is replaced', () => {
+    const numeric = { evalScore: 20000, evalDepth: 18, evalScoreKind: 'cp' as const };
+    expect(replaceMoveEvaluation(numeric, 20000, undefined, 'mate').evalScoreKind).toBeUndefined();
+    expect(replaceMoveEvaluation(numeric, 20000, 20, 'cp').evalScoreKind).toBe('cp');
+    expect(extractAnnotatedMainLine('h2e2 {[%eval 200.00]} {[%eval #10000]}').annotations[0].evalScoreKind).toBeUndefined();
+    expect(extractUciMoveTree('h2e2 {[%eval 200.00]} {[%eval #10000]}').moveTree[0].evalScoreKind).toBeUndefined();
+    expect(normalizeMoveEvaluation({ evalScore: 20000, evalScoreKind: 'invented' })).toEqual({ evalScore: 20000 });
+    expect(normalizeMoveEvaluation({ evalScore: 20000, evalScoreKind: 'cp' })).toEqual({ evalScore: 20000, evalScoreKind: 'cp' });
+});
+
+it('carries review score kinds, including the root position, into saved annotations and key moments', () => {
+    const nodes = { root: { parentId: null }, n1: { parentId: 'root', record: { uci: 'h2e2', ply: 1 } } };
+    const kinds = new Map([['root', 'cp' as const], ['n1', 'cp' as const]]);
+    const artifacts = computeReviewArtifacts(['n1'], nodes, new Map([['root', 20000], ['n1', -20000]]), 1, undefined, kinds);
+    expect(artifacts.annotations[0].evalScoreKind).toBe('cp');
+    expect(artifacts.summary.keyMoments[0]).toMatchObject({ evalBeforeKind: 'cp', evalAfterKind: 'cp' });
+    const saved = normalizeSavedGame({ id: 'typed-review', savedAt: 1, gameMode: 'PvP', moves: ['h2e2'],
+        review: { summary: artifacts.summary, annotations: artifacts.annotations }, finalEval: -20000, finalEvalKind: 'cp' })!;
+    expect(saved.finalEvalKind).toBe('cp');
+    expect(saved.review?.annotations[0].evalScoreKind).toBe('cp');
+    expect(saved.review?.summary.keyMoments[0]).toMatchObject({ evalBeforeKind: 'cp', evalAfterKind: 'cp' });
 });

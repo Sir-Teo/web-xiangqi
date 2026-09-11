@@ -1,3 +1,4 @@
+import { evaluationKindOverride } from './engineEvalReading';
 import { readStudyAnalysisPgn } from './studyAnalysis';
 import { normalizeEvalDepth, type MoveEvaluation } from './moveEvaluation';
 import type { SavedMoveTreeNode } from './gameLibrary';
@@ -235,6 +236,7 @@ export function extractUciMoveTree(text: string): {
             if (evaluation) {
                 commentTarget.evalScore = evaluation.evalScore;
                 commentTarget.evalDepth = evaluation.evalDepth;
+                commentTarget.evalScoreKind = evaluation.evalScoreKind;
             }
             const note = parseFreeTextComment(entry.comment);
             if (note) commentTarget.comment = normalizeMoveComment([commentTarget.comment, note].filter(Boolean).join(' '));
@@ -339,7 +341,7 @@ function parseFreeTextComment(comment: string): string | undefined {
     return normalizeMoveComment(prose);
 }
 
-function parseEvalCommand(comment: string): Pick<MoveEvaluation, 'evalScore' | 'evalDepth'> | undefined {
+function parseEvalCommand(comment: string): Pick<MoveEvaluation, 'evalScore' | 'evalDepth' | 'evalScoreKind'> | undefined {
     // python-chess also writes a comma-separated depth and accepts signed
     // decimal shorthand. The depth is not a score and must not prevent the
     // evaluation from being read. Walk in source order across both score kinds.
@@ -355,7 +357,10 @@ function parseEvalCommand(comment: string): Pick<MoveEvaluation, 'evalScore' | '
             return { evalScore: match[1].startsWith('-') ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance, ...depth };
         }
         const score = Math.round(Number(match[2]) * 100);
-        if (Number.isSafeInteger(score)) return { evalScore: score, ...depth };
+        if (Number.isSafeInteger(score)) {
+            const evalScoreKind = evaluationKindOverride(score, 'cp');
+            return { evalScore: score, ...depth, ...(evalScoreKind ? { evalScoreKind } : {}) };
+        }
     }
     return undefined;
 }
@@ -404,7 +409,7 @@ export function extractAnnotatedMainLine(text: string): {
             const comment = source.slice(index + 1, end < 0 ? source.length : end);
             const evaluation = parseEvalCommand(comment);
             if (evaluation !== undefined) {
-                annotate({ ...evaluation, evalDepth: evaluation.evalDepth });
+                annotate({ ...evaluation, evalDepth: evaluation.evalDepth, evalScoreKind: evaluation.evalScoreKind });
             }
             const note = parseFreeTextComment(comment);
             if (note) annotate({ comment: note });

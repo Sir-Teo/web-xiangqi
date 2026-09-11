@@ -1,3 +1,4 @@
+import type { EvaluationScoreKind } from './engineEvalReading';
 import { GAME_PHASES, type GamePhase, getMovePhaseForRecord } from './gamePhase';
 import { MIN_WEIGHT, aggregateAccuracy, volatilityWeights } from './accuracyAggregate';
 import type { BoardState } from './xiangqi';
@@ -27,6 +28,7 @@ export interface ReviewRecordLike {
     piece?: string;
     ply: number;
     evalScore?: number;
+    evalScoreKind?: EvaluationScoreKind;
     bestMove?: string;
     /** The engine's line from the parent position; see `utils/engineBestLine`. */
     bestLine?: string[];
@@ -47,7 +49,9 @@ export interface ReviewKeyMoment {
     swing: number;
     winPercentLoss?: number;
     evalBefore: number;
+    evalBeforeKind?: EvaluationScoreKind;
     evalAfter: number;
+    evalAfterKind?: EvaluationScoreKind;
     bestMove?: string;
     /** What the engine would have played on, starting with `bestMove`. */
     bestLine?: string[];
@@ -86,6 +90,7 @@ export interface ReviewAnnotation {
     nodeId: string;
     moveIndex: number;
     evalScore: number;
+    evalScoreKind?: EvaluationScoreKind;
     bestMove?: string;
     bestLine?: string[];
     quality: ReviewMoveQuality;
@@ -97,6 +102,7 @@ export interface ReviewAnnotation {
 export interface SavedReviewAnnotation {
     moveIndex: number;
     evalScore?: number;
+    evalScoreKind?: EvaluationScoreKind;
     bestMove?: string;
     bestLine?: string[];
     quality?: ReviewMoveQuality;
@@ -589,7 +595,8 @@ export function computeReviewArtifacts(
     treeNodes: Record<string, ReviewTreeNodeLike>,
     evalOverrides?: EvalOverrides,
     reviewedAt = Date.now(),
-    engine?: ReviewEngineSummary
+    engine?: ReviewEngineSummary,
+    kindOverrides?: ReadonlyMap<string, EvaluationScoreKind | undefined>,
 ): { summary: ReviewSummary; annotations: ReviewAnnotation[] } {
     const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     const annotations: ReviewAnnotation[] = [];
@@ -616,6 +623,10 @@ export function computeReviewArtifacts(
 
         const overrideEval = getEvalOverride(nodeId, evalOverrides);
         const currentEval = typeof overrideEval === 'number' ? overrideEval : record.evalScore;
+        const currentKind = kindOverrides?.has(nodeId) ? kindOverrides.get(nodeId) : record.evalScoreKind;
+        const parentKind = node.parentId
+            ? (kindOverrides?.has(node.parentId) ? kindOverrides.get(node.parentId) : treeNodes[node.parentId]?.record?.evalScoreKind)
+            : undefined;
         /**
          * The `: 0` here is unreachable, as it was in the move tree and in the
          * board's last-move arrow, where it left the first move of every game
@@ -669,6 +680,7 @@ export function computeReviewArtifacts(
             nodeId,
             moveIndex,
             evalScore: currentEval,
+            ...(currentKind ? { evalScoreKind: currentKind } : {}),
             bestMove: record.bestMove,
             bestLine: bestLineForMove(record.bestMove, record.bestLine),
             quality,
@@ -688,7 +700,9 @@ export function computeReviewArtifacts(
                 swing,
                 winPercentLoss,
                 evalBefore: parentEval,
+                ...(parentKind ? { evalBeforeKind: parentKind } : {}),
                 evalAfter: currentEval,
+                ...(currentKind ? { evalAfterKind: currentKind } : {}),
                 bestMove: record.bestMove,
                 bestLine: bestLineForMove(record.bestMove, record.bestLine),
                 playedMove: record.uci,

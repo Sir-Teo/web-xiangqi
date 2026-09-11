@@ -9,7 +9,7 @@ import {
     isCriticalReviewQuality,
 
     isFiniteNumber,} from '../../utils/review';
-import { formatEvaluationText } from '../../utils/engineEvalReading';
+import { formatEvaluationText, type EvaluationScoreKind } from '../../utils/engineEvalReading';
 import { formatUciMove } from '../../utils/moveNotation';
 import { boardBeforeRecord, formatMoveInStyle, type XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import {
@@ -23,6 +23,7 @@ interface EvalGraphProps {
     history: MoveRecord[];
     currentMoveIndex: number;
     currentEval: number | null;
+    currentEvalKind?: EvaluationScoreKind;
     isSearching?: boolean;
     activity?: AnalysisActivity;
     notationStyle?: XiangqiNotationStyle;
@@ -44,6 +45,7 @@ const MIN_POINT_MARKER_GAP_PX = 7;
 type EvalPoint = {
     moveIndex: number;
     eval: number;
+    evalKind?: EvaluationScoreKind;
     ply: number;
     uci: string | null;
     /** The move written the way the reader asked for it. */
@@ -81,20 +83,21 @@ function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover']
  */
 const isFiniteEval = isFiniteNumber;
 
-/** Min or max over the finite evaluations, and 0 when there are none. */
-function extentOf(points: Array<{ eval: number }>, pick: (a: number, b: number) => number): number {
-    let best: number | null = null;
+/** Keep the source point with each extreme so its score kind survives too. */
+function extremePoint(points: EvalPoint[], pick: (a: number, b: number) => number): EvalPoint | undefined {
+    let best: EvalPoint | undefined;
     for (const point of points) {
         if (!isFiniteEval(point.eval)) continue;
-        best = best === null ? point.eval : pick(best, point.eval);
+        if (!best || pick(best.eval, point.eval) !== best.eval) best = point;
     }
-    return best ?? 0;
+    return best;
 }
 
 export const EvalGraph = React.memo(function EvalGraph({
     history,
     currentMoveIndex,
     currentEval,
+    currentEvalKind,
     isSearching = false,
     activity = 'idle',
     notationStyle = 'uci',
@@ -114,6 +117,7 @@ export const EvalGraph = React.memo(function EvalGraph({
 
     const points = useMemo<EvalPoint[]>(() => {
         let previous = 0;
+        let previousKind: EvaluationScoreKind | undefined;
         const next: EvalPoint[] = [{
             moveIndex: -1,
             eval: 0,
@@ -125,11 +129,12 @@ export const EvalGraph = React.memo(function EvalGraph({
             branchCount: rootBranchCount,
         }];
         history.forEach((move, index) => {
-            if (isFiniteEval(move.evalScore)) previous = move.evalScore;
+            if (isFiniteEval(move.evalScore)) { previous = move.evalScore; previousKind = move.evalScoreKind; }
             const before = notationStyle === 'uci' ? null : boardBeforeRecord(move);
             next.push({
                 moveIndex: index,
                 eval: previous,
+                evalKind: previousKind,
                 ply: index + 1,
                 uci: move.uci,
                 notation: before ? formatMoveInStyle(before, move.uci, notationStyle) : formatUciMove(move.uci),
@@ -154,10 +159,11 @@ export const EvalGraph = React.memo(function EvalGraph({
             next[activePointIndex] = {
                 ...next[activePointIndex],
                 eval: currentEval,
+                evalKind: currentEvalKind,
             };
         }
         return next;
-    }, [history, currentMoveIndex, currentEval, isSearching, branchCounts, rootBranchCount, notationStyle]);
+    }, [history, currentMoveIndex, currentEval, currentEvalKind, isSearching, branchCounts, rootBranchCount, notationStyle]);
 
     const maxEvalClamp = 1200;
     const chartHeight = shortViewport ? 184 : 248;
@@ -212,7 +218,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const pointIndexForMove = (moveIndex: number) => Math.max(0, Math.min(points.length - 1, moveIndex + 1));
     const currentPointIndex = pointIndexForMove(currentMoveIndex);
     const currentPoint = points[currentPointIndex];
-    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? 0);
+    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? 0, currentPoint?.evalKind);
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
     const pointRenderStep = pixelsPerPoint >= MIN_POINT_MARKER_GAP_PX
@@ -241,8 +247,12 @@ export const EvalGraph = React.memo(function EvalGraph({
         }
         return Array.from(indexes).sort((left, right) => left - right);
     }, [currentPointIndex, points.length, xTickStep]);
-    const highestEval = useMemo(() => extentOf(points, Math.max), [points]);
-    const lowestEval = useMemo(() => extentOf(points, Math.min), [points]);
+    const highestPoint = useMemo(() => extremePoint(points, Math.max), [points]);
+    const lowestPoint = useMemo(() => extremePoint(points, Math.min), [points]);
+    const highestEval = highestPoint?.eval ?? 0;
+    const lowestEval = lowestPoint?.eval ?? 0;
+    const highestKind = highestPoint?.evalKind;
+    const lowestKind = lowestPoint?.evalKind;
     const currentBranchCount = currentPoint?.branchCount ?? 0;
     // How far the line travelled, which is a distance rather than an
     // evaluation -- so `+M15` would be as wrong here as `+299.85` was. Taken
@@ -512,7 +522,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 </div>
                 <div className="graph-summary-card">
                     <span>Swing</span>
-                    <strong>{formatEval(swing)}</strong>
+                    <strong>{formatEval(swing, 'cp')}</strong>
                 </div>
                 <div className="graph-summary-card">
                     <span>Branches</span>
@@ -696,7 +706,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             }}
                         >
                             <strong>{formatPointLabel(tooltipPoint)}</strong>
-                            <span>{formatRedPovEval(tooltipPoint.eval)}</span>
+                            <span>{formatRedPovEval(tooltipPoint.eval, tooltipPoint.evalKind)}</span>
                             {tooltipPoint?.quality ? (
                                 <em className={`graph-tooltip-quality ${tooltipQualityClass}`}>
                                     {formatReviewQuality(tooltipPoint.quality)}
@@ -727,8 +737,8 @@ export const EvalGraph = React.memo(function EvalGraph({
                 <strong>{currentPerspectiveDisplay}</strong>
             </div>
             <div className="graph-extrema">
-                <span>Peak Red {formatEval(highestEval)}</span>
-                <span>Peak Black {formatEval(-lowestEval)}</span>
+                <span>Peak Red {formatEval(highestEval, highestKind)}</span>
+                <span>Peak Black {formatEval(-lowestEval, lowestKind)}</span>
             </div>
         </div>
     );
@@ -736,12 +746,12 @@ export const EvalGraph = React.memo(function EvalGraph({
 
 EvalGraph.displayName = 'EvalGraph';
 
-function formatEval(score: number): string {
-    return formatEvaluationText(score) ?? 'n/a';
+function formatEval(score: number, kind?: EvaluationScoreKind): string {
+    return formatEvaluationText(score, 2, kind) ?? 'n/a';
 }
 
-function formatRedPovEval(score: number): string {
-    return `Red POV ${formatEval(score)}`;
+function formatRedPovEval(score: number, kind?: EvaluationScoreKind): string {
+    return `Red POV ${formatEval(score, kind)}`;
 }
 
 function formatPointLabel(point: EvalPoint): string {
@@ -754,7 +764,7 @@ function formatPointLabel(point: EvalPoint): string {
 function formatGraphValueText(point: EvalPoint): string {
     const parts = [
         point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
-        `Red POV evaluation ${formatEval(point.eval)}`,
+        `Red POV evaluation ${formatEval(point.eval, point.evalKind)}`,
         point.quality ? formatReviewQuality(point.quality) : '',
         typeof point.winPercentLoss === 'number' && point.mover !== 'start'
             ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)

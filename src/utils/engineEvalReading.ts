@@ -1,16 +1,15 @@
-/**
- * How a mate is encoded once it leaves the engine.
- *
- * UCI reports `score mate N`, which is a statement about *moves*, not about
- * material. `useEngine` folds it into the same centipawn field everything else
- * reads, as `MATE_SCORE_BASE - N`, so anything that wants to know a score is a
- * mate rather than an evaluation compares against this.
- *
- * It lives here rather than in `useEngine` because it is now read in two
- * places -- the hook that writes it and the PGN export that decodes it back
- * into `#N` -- and a threshold written down twice is a threshold that drifts.
- */
+/** Legacy numeric mate encoding, retained for existing saved games. */
 export const MATE_SCORE_BASE = 30000;
+export type EvaluationScoreKind = 'cp' | 'mate';
+
+/**
+ * Preserve an explicit centipawn reading in the legacy mate range. Other
+ * readings already decode unambiguously and need no extra storage field.
+ * An old record with no override retains its original interpretation.
+ */
+export function evaluationKindOverride(score: number, kind: unknown): EvaluationScoreKind | undefined {
+    return kind === 'cp' && mateDistanceFromScore(score) !== null ? 'cp' : undefined;
+}
 
 /**
  * Mate distance in moves for a sentinel score, or null for an ordinary one.
@@ -18,8 +17,8 @@ export const MATE_SCORE_BASE = 30000;
  * Positive is mate for red, negative mate for black, matching the sign of the
  * score itself.
  */
-export function mateDistanceFromScore(score: number): number | null {
-    if (!Number.isFinite(score)) return null;
+export function mateDistanceFromScore(score: number, kind?: EvaluationScoreKind): number | null {
+    if (!Number.isFinite(score) || kind === 'cp') return null;
     const distance = MATE_SCORE_BASE - Math.abs(score);
     if (distance < 0 || distance > MATE_SCORE_BASE / 2) return null;
     return score >= 0 ? distance : -distance;
@@ -47,6 +46,7 @@ export interface EvalReading {
     score: number | null;
     /** Whether `score` came from an exact reading rather than a bound. */
     exact: boolean;
+    kind?: EvaluationScoreKind;
 }
 
 export function emptyEvalReading(): EvalReading {
@@ -59,10 +59,11 @@ export function emptyEvalReading(): EvalReading {
  * Returns the same object when nothing changes, so a caller can skip work on
  * the bounds that arrive while an exact score is already in hand.
  */
-export function takeEvalReading(current: EvalReading, score: number, isBounded: boolean): EvalReading {
+export function takeEvalReading(current: EvalReading, score: number, isBounded: boolean, scoreKind?: EvaluationScoreKind): EvalReading {
     if (isBounded && current.exact) return current;
-    if (current.score === score && current.exact === !isBounded) return current;
-    return { score, exact: !isBounded };
+    const kind = evaluationKindOverride(score, scoreKind);
+    if (current.score === score && current.exact === !isBounded && current.kind === kind) return current;
+    return { score, exact: !isBounded, ...(kind ? { kind } : {}) };
 }
 
 /**
@@ -84,9 +85,9 @@ export function takeEvalReading(current: EvalReading, score: number, isBounded: 
  * The sign comes from the score rather than from the distance: a mate in zero
  * for black gives a distance of `-0`, and `${-0}` is `"0"`.
  */
-export function formatEvaluationText(score: number, decimals = 2): string | null {
+export function formatEvaluationText(score: number, decimals = 2, kind?: EvaluationScoreKind): string | null {
     if (!Number.isFinite(score)) return null;
-    const mateDistance = mateDistanceFromScore(score);
+    const mateDistance = mateDistanceFromScore(score, kind);
     if (mateDistance !== null) {
         return `${score < 0 ? '-' : '+'}M${Math.abs(mateDistance)}`;
     }

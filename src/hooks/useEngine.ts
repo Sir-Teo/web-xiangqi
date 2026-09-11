@@ -1,3 +1,4 @@
+import type { EvaluationScoreKind } from '../utils/engineEvalReading';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 import { detectEngineBootConfig } from '../utils/analysisProfile';
@@ -50,7 +51,7 @@ export interface EngineInitOptions {
     threads?: number;
     hashMB?: number;
     captureInfoLines?: boolean;
-    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[], hasEvaluation: boolean) => void;
+    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[], hasEvaluation: boolean, scoreKind?: EvaluationScoreKind) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
 }
@@ -885,7 +886,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             const completedSearchTag = activeSearchTagRef.current;
             activeSearchTagRef.current = null;
             const uciMove = parseBestMoveUci(msg);
-            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null);
+            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null, pendingEvalRef.current.kind);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
             } else {
@@ -960,7 +961,8 @@ export function useEngine(options: EngineInitOptions = {}) {
                     pendingEvalRef.current = takeEvalReading(
                         pendingEvalRef.current,
                         finalScore,
-                        BOUNDED_SCORE_PATTERN.test(msg)
+                        BOUNDED_SCORE_PATTERN.test(msg),
+                        scoreMatch ? 'cp' : 'mate'
                     );
                 }
                 if (wdlMatch) {

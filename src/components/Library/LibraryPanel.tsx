@@ -124,7 +124,7 @@ function getSavedGameSearchText(game: SavedGame) {
     game.moves.join(' '),
     treeMoves.join(' '),
     typeof game.finalEval === 'number'
-      ? `${game.finalEval}cp final evaluation ${formatEvaluationText(game.finalEval) ?? 'n/a'}`
+      ? `${game.finalEval}cp final evaluation ${formatEvaluationText(game.finalEval, 2, game.finalEvalKind) ?? 'n/a'}`
       : '',
     summary ? formatLibraryReviewSummary(summary) : '',
     summary?.lineSignature,
@@ -755,7 +755,7 @@ export function LibraryPanel({
                 {typeof game.finalEval === 'number' && (
                   <>
                     <span className={`lib-eval ${game.finalEval > 0 ? 'lib-eval--pos' : 'lib-eval--neg'}`}>
-                      {formatEvaluationText(game.finalEval) ?? 'n/a'}
+                      {formatEvaluationText(game.finalEval, 2, game.finalEvalKind) ?? 'n/a'}
                     </span>
                   </>
                 )}

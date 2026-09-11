@@ -1,3 +1,4 @@
+import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
 import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
 import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
@@ -68,6 +69,7 @@ export interface SavedGame {
     label?: string;             // user-editable
     opening?: string;           // matched opening name
     finalEval?: number;
+    finalEvalKind?: EvaluationScoreKind;
     moveTree?: SavedMoveTreeNode[];
     review?: SavedReviewSnapshot;
 }
@@ -226,6 +228,7 @@ function normalizeSavedReviewAnnotation(raw: unknown, moveCount: number): SavedR
     return {
         moveIndex,
         evalScore: asFiniteNumber(raw.evalScore),
+        evalScoreKind: evaluationKindOverride(asFiniteNumber(raw.evalScore) ?? NaN, raw.evalScoreKind),
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         // Bounded and re-checked on read like everything else here, and paired
         // with the move it starts from: a saved review may predate the field
@@ -280,7 +283,9 @@ function normalizeReviewKeyMoment(raw: unknown, fallbackNodeId: string, moveCoun
         swing,
         winPercentLoss: rawWinPercentLoss ?? getWinPercentLossForMove(evalBefore, evalAfter, side),
         evalBefore,
+        ...(evaluationKindOverride(evalBefore, raw.evalBeforeKind) ? { evalBeforeKind: evaluationKindOverride(evalBefore, raw.evalBeforeKind) } : {}),
         evalAfter,
+        ...(evaluationKindOverride(evalAfter, raw.evalAfterKind) ? { evalAfterKind: evaluationKindOverride(evalAfter, raw.evalAfterKind) } : {}),
         bestMove: normalizeSavedMove(raw.bestMove) ?? undefined,
         // Whitelisted like every other field here, which is why it had to be
         // added rather than arriving for free: a key moment read back without
@@ -400,6 +405,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),
         opening: asBoundedString(raw.opening, MAX_SAVED_OPENING_LENGTH),
         finalEval: asFiniteNumber(raw.finalEval),
+        finalEvalKind: evaluationKindOverride(asFiniteNumber(raw.finalEval) ?? NaN, raw.finalEvalKind),
         moveTree,
         review: normalizeSavedReview(raw.review, moves, startFen),
     };

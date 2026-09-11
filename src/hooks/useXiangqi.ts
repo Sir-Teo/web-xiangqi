@@ -1,3 +1,4 @@
+import { type EvaluationScoreKind } from '../utils/engineEvalReading';
 import { makeEnginePositionCommand } from '../utils/engineTags';
 import { normalizeMoveEvaluation, replaceMoveEvaluation, type MoveEvaluation } from '../utils/moveEvaluation';
 import { normalizeStudyAnalysis, type StudyAnalysis } from '../utils/studyAnalysis';
@@ -742,6 +743,7 @@ export function useXiangqi() {
                 ...existingChild.record,
                 evalScore: evalScore ?? existingChild.record.evalScore,
                 evalDepth: evalScore !== undefined ? undefined : existingChild.record.evalDepth,
+                evalScoreKind: evalScore !== undefined ? undefined : existingChild.record.evalScoreKind,
             } : undefined;
 
             const nextTree: Record<string, MoveTreeNode> = updatedRecord ? {
@@ -856,12 +858,12 @@ export function useXiangqi() {
         return 'kept';
     }, [activeLineNodeIds, currentMoveIndex, currentNodeId, rootFen, rootPosition, treeNodes]);
 
-    const setCurrentNodeEval = useCallback((evalScore: number) => {
+    const setCurrentNodeEval = useCallback((evalScore: number, evalScoreKind?: EvaluationScoreKind) => {
         if (!Number.isFinite(evalScore) || currentNodeId === ROOT_NODE_ID) return;
         setTreeNodes((prevTree) => {
             const node = prevTree[currentNodeId];
             if (!node?.record) return prevTree;
-            const record = replaceMoveEvaluation(node.record, evalScore);
+            const record = replaceMoveEvaluation(node.record, evalScore, undefined, evalScoreKind);
             if (record === node.record) return prevTree;
             return {
                 ...prevTree,
@@ -991,6 +993,7 @@ export function useXiangqi() {
         nodeId: string;
         evalScore?: number;
         evalDepth?: number;
+        evalScoreKind?: EvaluationScoreKind;
         persistEvaluation?: boolean;
         bestMove?: string;
         quality?: ReviewMoveQuality;
@@ -1013,7 +1016,7 @@ export function useXiangqi() {
                 const bestLine = options?.replaceRecommendations ? update.bestLine : (update.bestLine ?? record.bestLine);
                 const nextLine = bestLineForMove(bestMove, bestLine);
                 const nextRecord: MoveRecord = {
-                    ...(typeof update.evalScore === 'number' ? replaceMoveEvaluation(record, update.evalScore, update.evalDepth) : record),
+                    ...(typeof update.evalScore === 'number' ? replaceMoveEvaluation(record, update.evalScore, update.evalDepth, update.evalScoreKind) : record),
                     bestMove,
                     bestLine: nextLine,
                     quality: update.quality,
@@ -1026,6 +1029,7 @@ export function useXiangqi() {
                 const changed =
                     nextRecord.evalScore !== record.evalScore ||
                     nextRecord.evalDepth !== record.evalDepth ||
+                    nextRecord.evalScoreKind !== record.evalScoreKind ||
                     nextRecord.persistEvaluation !== record.persistEvaluation ||
                     nextRecord.bestMove !== record.bestMove ||
                     (nextRecord.bestLine ?? []).join(' ') !== (record.bestLine ?? []).join(' ') ||

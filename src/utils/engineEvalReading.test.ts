@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MATE_SCORE_BASE, formatEvaluationText, mateDistanceFromScore } from './engineEvalReading';
+import { MATE_SCORE_BASE, formatEvaluationText, mateDistanceFromScore, takeEvalReading, emptyEvalReading } from './engineEvalReading';
 
 describe('formatEvaluationText', () => {
     it('writes an ordinary evaluation in pawns', () => {
@@ -48,5 +48,25 @@ describe('formatEvaluationText', () => {
     /** An evaluation a real search can reach is not a mate, however large. */
     it('does not mistake a decisive evaluation for a mate', () => {
         expect(formatEvaluationText(2500)).toBe('+25.00');
+    });
+});
+
+
+describe('explicit score kinds', () => {
+    it('distinguishes numeric evaluations from mates with the same scalar', () => {
+        for (const score of [15000, 20000, 29999, 30000, -15000, -20000, -30000]) {
+            expect(mateDistanceFromScore(score, 'cp')).toBeNull();
+            expect(formatEvaluationText(score, 2, 'cp')).toBe(`${score > 0 ? '+' : ''}${(score / 100).toFixed(2)}`);
+            expect(formatEvaluationText(score, 2, 'mate')).toContain('M');
+        }
+    });
+    it('updates kind even if the score is unchanged, and retains it when rejecting a bound', () => {
+        const numeric = takeEvalReading(emptyEvalReading(), 20000, false, 'cp');
+        expect(numeric.kind).toBe('cp');
+        expect(takeEvalReading(numeric, 20000, true, 'mate')).toBe(numeric);
+        const mate = takeEvalReading(numeric, 20000, false, 'mate');
+        expect(mate).not.toBe(numeric);
+        expect(mate.kind).toBeUndefined();
+        expect(takeEvalReading(mate, 20000, false, 'cp')).toEqual(numeric);
     });
 });

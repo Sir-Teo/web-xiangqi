@@ -29,6 +29,7 @@ export function useGameLibrary() {
             metadata?: SavedGame['metadata'];
             opening?: string;
             finalEval?: number;
+            finalEvalKind?: SavedGame['finalEvalKind'];
             label?: string;
             startFen?: string;
             result?: SavedGame['result'];

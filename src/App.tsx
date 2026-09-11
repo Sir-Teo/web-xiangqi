@@ -1,3 +1,4 @@
+import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
@@ -397,6 +398,7 @@ type ReviewController = {
   baseQueue: string[];
   revisitQueue: string[];
   provisionalEvals: Map<string, number>;
+  provisionalKinds: Map<string, EvaluationScoreKind | undefined>;
   criticalDecisionSwings: Map<string, number>;
   recommendations: Map<string, Pick<MoveRecord, 'bestMove' | 'bestLine'>>;
   completed: number;
@@ -411,6 +413,7 @@ function createReviewController(): ReviewController {
     baseQueue: [],
     revisitQueue: [],
     provisionalEvals: new Map(),
+    provisionalKinds: new Map(),
     criticalDecisionSwings: new Map(),
     recommendations: new Map(),
     completed: 0,
@@ -1085,6 +1088,7 @@ function App() {
       const node = treeNodes[nodeId];
       if (node?.record) reviewedTree[nodeId] = { ...node, record: {
         ...node.record,
+        evalScoreKind: controller.provisionalKinds.get(nodeId),
         bestMove: controller.recommendations.get(nodeId)?.bestMove,
         bestLine: controller.recommendations.get(nodeId)?.bestLine,
       } };
@@ -1096,6 +1100,7 @@ function App() {
       controller.provisionalEvals,
       reviewedAt,
       reviewEngineSummary,
+      controller.provisionalKinds,
     );
     setNodeReviewDataBulk(annotations, { replaceRecommendations: true });
     resetReviewController();
@@ -1173,7 +1178,7 @@ function App() {
     hashMB: engineBootConfig.hashMB,
     captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
     onWorkerError: reportEngineWorkerError,
-    onBestMove: (uci, score, searchTag, completedPvLines, hasEvaluation) => {
+    onBestMove: (uci, score, searchTag, completedPvLines, hasEvaluation, scoreKind) => {
       const reviewTag = parseReviewTag(searchTag);
       if (reviewTag && reviewControllerRef.current.active) {
         const controller = reviewControllerRef.current;
@@ -1190,6 +1195,7 @@ function App() {
         controller.currentNodeId = null;
         const normalizedScore = normalizeEvalForFen(score, getNodeFen(reviewTag.nodeId));
         controller.provisionalEvals.set(reviewTag.nodeId, normalizedScore);
+        controller.provisionalKinds.set(reviewTag.nodeId, scoreKind);
 
         // Store engine's recommended move for the child node that was actually played
         // so the coach UI can show "Engine suggests X" when a move was a mistake/blunder
@@ -1287,7 +1293,7 @@ function App() {
       }
 
       if (hasEvaluation && currentMoveIndex >= 0 && reviewStatus !== 'done') {
-        setCurrentNodeEval(normalizeEvalForSide(score, sideToMove));
+        setCurrentNodeEval(normalizeEvalForSide(score, sideToMove), scoreKind);
       }
       if (hasEvaluation) drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
 
@@ -2432,6 +2438,8 @@ function App() {
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
     [liveEvalScore, sideToMove]
   );
+  const displayEvalScoreKind = liveEvalScore === null ? undefined
+    : evaluationKindOverride(liveEvalScore, currentAnalysisPvLines[0]?.scoreStr.includes('M') ? 'mate' : 'cp');
   // Use the same position-tagged PV as the evaluation. An old search may emit
   // WDL after navigation has cleared the bar, and an untagged reading would
   // assign its chances to the new side. This also keeps WDL consistent when an
@@ -3877,7 +3885,7 @@ function App() {
             const nodeId = loadedNodeIds[index];
             if (!nodeId) return null;
             if (annotation.evalScore === undefined && annotation.quality === undefined) return null;
-            return { nodeId, evalScore: annotation.evalScore, evalDepth: annotation.evalDepth, quality: annotation.quality, persistEvaluation: true };
+            return { nodeId, evalScore: annotation.evalScore, evalDepth: annotation.evalDepth, evalScoreKind: annotation.evalScoreKind, quality: annotation.quality, persistEvaluation: true };
           })
           .filter((update): update is NonNullable<typeof update> => Boolean(update));
         if (updates.length > 0) setNodeReviewDataBulk(updates);
@@ -4023,6 +4031,7 @@ function App() {
       annotations: reviewedHistory.map((record, moveIndex) => ({
         moveIndex,
         evalScore: record.evalScore,
+        evalScoreKind: record.evalScoreKind,
         bestMove: record.bestMove,
         bestLine: record.bestLine,
         quality: record.quality,
@@ -4049,6 +4058,8 @@ function App() {
    */
   const displayEvalScoreRef = useRef(displayEvalScore);
   displayEvalScoreRef.current = displayEvalScore;
+  const displayEvalKindRef = useRef(displayEvalScoreKind);
+  displayEvalKindRef.current = displayEvalScoreKind;
   const currentGameSnapshot = useMemo(() => {
     // The whole line when it is the reviewed one, so the annotations line up
     // with it; otherwise the line as far as the cursor, and no review -- a
@@ -4095,6 +4106,7 @@ function App() {
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
     ...snapshot,
     finalEval: displayEvalScoreRef.current ?? undefined,
+    finalEvalKind: displayEvalKindRef.current,
   }), []);
 
   const handleSaveGame = useCallback(() => {
@@ -4551,6 +4563,7 @@ function App() {
             return {
               nodeId,
               evalScore: annotation.evalScore,
+              evalScoreKind: annotation.evalScoreKind,
               bestMove: annotation.bestMove,
               bestLine: annotation.bestLine,
               quality: annotation.quality,
@@ -5753,6 +5766,7 @@ function App() {
                     history={moveHistory}
                     currentMoveIndex={currentMoveIndex}
                     currentEval={displayEvalScore}
+                    currentEvalKind={displayEvalScoreKind}
                     isSearching={isSearching}
                     activity={analysisActivity}
                     notationStyle={notationStyle}

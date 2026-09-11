@@ -26,6 +26,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-pv-standing-browser.cjs',
         'test-study-analysis-browser.cjs',
         'test-pgn-notes-browser.cjs',
+        'test-eval-kind-browser.cjs',
         'test-autosave-limit-browser.cjs',
       ]) {
         console.log(`[${browser}] ${script}`);
