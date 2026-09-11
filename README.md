@@ -183,6 +183,7 @@ compares the three and tracks what is worth moving between them.
 - Deployed builds expose `THIRD_PARTY_NOTICES.md` and `Pikafish-Copying.txt` under the `/web-xiangqi/` base path so users can trace the bundled engine source and license.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
+- Pass an optional `signal: controller.signal` to cancel a pending `createWorkerEngine` call. Cancellation rejects with `AbortError` and releases the worker; failed initialization and timeouts release it too. After startup succeeds, use the returned engine's `terminate()` method. The app cancels pending startup when restarting or disabling analysis.
 - The React app preloads the lightweight `pikafish.js` wrapper, then lazy-loads the selected core/NNUE through `useEngine` instead of parser-blocking the app shell before first paint.
 - The React app unregisters legacy demo service workers and clears `pikafish-demo-*` caches at startup so older cached demo shells do not keep serving stale engine/app assets.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.

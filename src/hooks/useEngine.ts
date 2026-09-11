@@ -241,6 +241,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const infoFlushTimerRef = useRef<number | null>(null);
     const queuedSearchTimerRef = useRef<number | null>(null);
     const engineBootTimerRef = useRef<number | null>(null);
+    const engineBootAbortRef = useRef<AbortController | null>(null);
     const engineReadyTimerRef = useRef<number | null>(null);
     const didConfigureSessionRef = useRef(false);
     const initTokenRef = useRef(0);
@@ -383,6 +384,8 @@ export function useEngine(options: EngineInitOptions = {}) {
             window.clearTimeout(engineBootTimerRef.current);
             engineBootTimerRef.current = null;
         }
+        engineBootAbortRef.current?.abort();
+        engineBootAbortRef.current = null;
     }, []);
 
     const clearPvLines = useCallback(() => {
@@ -591,6 +594,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             if (initToken !== initTokenRef.current || engineRef.current) return;
             engineBootTimerRef.current = null;
             initTokenRef.current += 1;
+            clearEngineBootTimer();
             setIsReady(false);
             setIsSearching(false);
             isSearchingRef.current = false;
@@ -611,8 +615,11 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         let createEnginePromise: Promise<any>;
         try {
+            const controller = new AbortController();
+            engineBootAbortRef.current = controller;
             const engineBasePath = getEngineAssetUrl();
             createEnginePromise = Promise.resolve(pikafishFactory.createWorkerEngine({
+                signal: controller.signal,
                 basePath: engineBasePath,
                 workerScript: getEngineAssetUrl('pikafish.js'),
                 nnuePath: getEngineAssetUrl('pikafish.nnue'),

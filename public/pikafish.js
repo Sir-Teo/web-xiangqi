@@ -643,15 +643,28 @@
       });
     }
 
-    const started = await new Promise((resolve, reject) => {
+    let cleanupStartup = function() {};
+    const started = new Promise((resolve, reject) => {
       let settled = false;
       let timer;
+      const signal = opts.signal;
 
       function cleanup() {
         clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", abortStartup);
+      }
+      cleanupStartup = cleanup;
+
+      function abortStartup() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new DOMException("Pikafish startup cancelled", "AbortError"));
       }
 
+      if (signal && signal.aborted) { abortStartup(); return; }
       worker = new Worker(wrapperScript);
+      if (signal) signal.addEventListener("abort", abortStartup, { once: true });
 
       worker.onmessage = function(event) {
         const data = event.data;
@@ -721,7 +734,7 @@
       timer = setTimeout(() => {
         if (settled) return;
         settled = true;
-        try { worker.terminate(); } catch (_) {}
+        cleanup();
         reject(new Error("Timed out initializing Pikafish worker"));
       }, opts.initTimeoutMs || 60000);
 
@@ -744,7 +757,20 @@
       });
     });
 
-    void started;
+    await started.catch(function(error) {
+      cleanupStartup();
+      // There is no engine handle for the caller to terminate until startup
+      // resolves. Own cleanup here for every failed or abandoned attempt.
+      terminated = true;
+      if (worker) {
+        worker.onmessage = null;
+        // WebKit can deliver a cancelled load's error after termination.
+        worker.onerror = function(event) { event.preventDefault(); };
+        try { worker.terminate(); } catch (_) {}
+      }
+      rejectPendingRequests(error);
+      throw error;
+    });
 
     return {
       get variant() { return activeVariant; },
