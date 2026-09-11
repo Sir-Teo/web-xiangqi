@@ -23,6 +23,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-unicode-share-browser.cjs',
         'test-unicode-limits-browser.cjs',
         'test-study-undo-browser.cjs',
+        'test-study-undo-edits-browser.cjs',
         'test-engine-line-browser.cjs',
         'test-candidate-browser.cjs',
         'test-deep-result-browser.cjs',

@@ -170,3 +170,15 @@ replacement when a variation opens: Enter on ply 80 followed by End reaches ply
 line. Firefox's native scroll-container Tab stop is checked before continuing
 to the move button. The earlier shortened-line fix and large-study work-count
 regression passed post-commit in all three browsers at all three widths.
+
+## Undo after subsequent study edits
+
+`test-study-undo-edits-browser.cjs` runs at 1440/390/320px with a controlled engine.
+It verifies that Undo keeps a later note after navigating away from its editor,
+retains a newly added alternative, merges a replayed deleted move without
+creating duplicate sibling moves, restores missing notes when the current ID
+stays unchanged, preserves newer replay annotations and descendants, and keeps
+the selected continuation when restoring an off-line deletion at the root.
+The final saved-library tree must contain every retained annotation and move.
+Pair with `test-study-undo-browser.cjs` for ordinary restoration, touch targets,
+and isolation after loading another study or starting a new game.

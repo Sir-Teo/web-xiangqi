@@ -43,6 +43,7 @@ const path = require('node:path');
       'test-unicode-share-browser.cjs',
       'test-unicode-limits-browser.cjs',
       'test-study-undo-browser.cjs',
+      'test-study-undo-edits-browser.cjs',
       'test-wdl-freshness-browser.cjs',
       'test-library-backup-browser.cjs',
       'test-audit-browser.cjs',

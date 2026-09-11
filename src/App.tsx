@@ -824,7 +824,7 @@ function App() {
     jumpToNode,
     deleteNode,
     captureTreeSnapshot,
-    restoreTreeSnapshot,
+    restoreDeletedSubtree,
   } = useXiangqi();
 
   const viewportWidth = viewportSize.width;
@@ -3206,6 +3206,7 @@ function App() {
    * cursor still in the box.
    */
   const [moveCommentDraft, setMoveCommentDraft] = useState('');
+  const [moveCommentRestoreVersion, setMoveCommentRestoreVersion] = useState(0);
   const moveCommentEditRef = useRef<{ gameIdentity: object; nodeId: string; draft: string } | null>(null);
   const moveCommentTimerRef = useRef<number | null>(null);
   const treeNodesRef = useRef(treeNodes);
@@ -3257,7 +3258,7 @@ function App() {
       : editableNodeId ? treeNodesRef.current[editableNodeId]?.record?.comment ?? '' : '';
     moveCommentEditRef.current = editableNodeId ? { gameIdentity, nodeId: editableNodeId, draft: stored } : null;
     setMoveCommentDraft(stored);
-  }, [currentNodeId, gameIdentity, rootNodeId, setNodeComment]);
+  }, [currentNodeId, gameIdentity, moveCommentRestoreVersion, rootNodeId, setNodeComment]);
 
   useEffect(() => () => {
     if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
@@ -4153,7 +4154,7 @@ function App() {
    * confirmation would slow down the pruning the cross exists for. An undo
    * costs nothing until it is needed.
    */
-  const [deleteUndo, setDeleteUndo] = useState<{ snapshot: MoveTreeSnapshot; removed: number } | null>(null);
+  const [deleteUndo, setDeleteUndo] = useState<{ snapshot: MoveTreeSnapshot; removed: number; nodeId: string } | null>(null);
   const deleteUndoTimerRef = useRef<number | null>(null);
   const dismissDeleteUndo = useCallback(() => {
     if (deleteUndoTimerRef.current !== null) {
@@ -4183,7 +4184,7 @@ function App() {
     }
     if (!deleteNode(nodeId)) return;
     if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
-    setDeleteUndo({ snapshot, removed });
+    setDeleteUndo({ snapshot, removed, nodeId });
     deleteUndoTimerRef.current = window.setTimeout(() => {
       deleteUndoTimerRef.current = null;
       setDeleteUndo(null);
@@ -4194,9 +4195,12 @@ function App() {
     if (!deleteUndo) return;
     if (reviewStatus === 'running') handleCancelReview();
     clearBoardMarkers();
-    restoreTreeSnapshot(deleteUndo.snapshot);
+    if (restoreDeletedSubtree(deleteUndo.snapshot, deleteUndo.nodeId)) {
+      // Undo may restore a note on a replayed move without changing its ID.
+      setMoveCommentRestoreVersion(version => version + 1);
+    }
     dismissDeleteUndo();
-  }, [clearBoardMarkers, deleteUndo, dismissDeleteUndo, handleCancelReview, restoreTreeSnapshot, reviewStatus]);
+  }, [clearBoardMarkers, deleteUndo, dismissDeleteUndo, handleCancelReview, restoreDeletedSubtree, reviewStatus]);
   const canDeleteCurrentMove = currentNodeId !== rootNodeId && !isAiTurn;
 
   /**

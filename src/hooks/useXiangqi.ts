@@ -24,6 +24,7 @@ import {
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
 import { removeSubtree } from '../utils/moveTreeEdit';
+import { restoreRemovedSubtree } from '../utils/restoreRemovedSubtree';
 import { appendMoveTreeLine } from '../utils/appendMoveTreeLine';
 import { MAX_SAVED_TREE_NODES } from '../utils/gameLibrary';
 import { isSameMoveComment, normalizeMoveComment } from '../utils/moveComment';
@@ -668,20 +669,31 @@ export function useXiangqi() {
         gameIdentity: rootPosition,
     }), [activeLineNodeIds, currentMoveIndex, rootFen, rootPosition, treeNodes]);
 
-    const restoreTreeSnapshot = useCallback((snapshot: MoveTreeSnapshot): boolean => {
+    const restoreDeletedSubtree = useCallback((snapshot: MoveTreeSnapshot, removedId: string): boolean => {
         if (snapshot.gameIdentity !== rootPosition || snapshot.rootFen !== rootFen) return false;
-        const nodeId = snapshot.currentMoveIndex === -1
+        const restored = restoreRemovedSubtree(treeNodes, snapshot.treeNodes, removedId);
+        if (!restored) return false;
+        const previousNodeId = snapshot.currentMoveIndex === -1
             ? ROOT_NODE_ID
             : snapshot.activeLineNodeIds[snapshot.currentMoveIndex];
-        if (!snapshot.treeNodes[nodeId]) return false;
-        setTreeNodes(snapshot.treeNodes);
-        setActiveLineNodeIds(snapshot.activeLineNodeIds);
+        const nodeId = restored.restoredIds.get(previousNodeId) ?? previousNodeId;
+        if (!restored.tree[nodeId]) return false;
+        const line = snapshot.activeLineNodeIds.map(id => restored.restoredIds.get(id) ?? id);
+        let parentId = ROOT_NODE_ID;
+        for (const id of line) {
+            if (restored.tree[id]?.parentId !== parentId) return false;
+            parentId = id;
+        }
+        setTreeNodes(restored.tree);
+        // Preserve the selected continuation, including when Undo returns to
+        // the root. Any new moves beyond its old tip remain available too.
+        setActiveLineNodeIds([...line, ...preferredContinuation(restored.tree, parentId)]);
         setCurrentMoveIndex(snapshot.currentMoveIndex);
-        const position = getPositionFromNode(snapshot.treeNodes, nodeId, rootPosition);
+        const position = getPositionFromNode(restored.tree, nodeId, rootPosition);
         setGameResult(gameResultForPosition(position.board, position.sideToMove));
-        syncPositionForNode(snapshot.treeNodes, nodeId);
+        syncPositionForNode(restored.tree, nodeId);
         return true;
-    }, [rootFen, rootPosition, syncPositionForNode]);
+    }, [rootFen, rootPosition, syncPositionForNode, treeNodes]);
 
     const jumpToMove = useCallback((index: number) => {
         if (index < -1 || index >= activeLineNodeIds.length) return;
@@ -1174,6 +1186,6 @@ export function useXiangqi() {
         jumpToNode,
         deleteNode,
         captureTreeSnapshot,
-        restoreTreeSnapshot,
+        restoreDeletedSubtree,
     };
 }
