@@ -398,11 +398,10 @@ type ReviewController = {
   revisitQueue: string[];
   provisionalEvals: Map<string, number>;
   criticalDecisionSwings: Map<string, number>;
-  pendingEvals: Map<string, number>;
+  recommendations: Map<string, Pick<MoveRecord, 'bestMove' | 'bestLine'>>;
   completed: number;
   total: number;
   currentNodeId: string | null;
-  flushTimer: number | null;
 };
 
 function createReviewController(): ReviewController {
@@ -413,11 +412,10 @@ function createReviewController(): ReviewController {
     revisitQueue: [],
     provisionalEvals: new Map(),
     criticalDecisionSwings: new Map(),
-    pendingEvals: new Map(),
+    recommendations: new Map(),
     completed: 0,
     total: 0,
     currentNodeId: null,
-    flushTimer: null,
   };
 }
 
@@ -810,12 +808,10 @@ function App() {
     applyUciLineAtNode,
     keepUciLineAtNode,
     setCurrentNodeEval,
-    setNodeEvals,
-    setNodeBestMove,
     setNodeComment,
     setNodeComments,
     setNodeReviewDataBulk,
-    clearAllReviewData,
+    clearReviewData,
     getNodeFen,
     getNodeMoves,
     jumpToMove,
@@ -1067,38 +1063,9 @@ function App() {
     }
   }, []);
 
-  const flushReviewEvalUpdates = useCallback(() => {
-    const controller = reviewControllerRef.current;
-    if (controller.flushTimer !== null) {
-      window.clearTimeout(controller.flushTimer);
-      controller.flushTimer = null;
-    }
-    if (controller.pendingEvals.size === 0) return;
-
-    const updates = Array.from(controller.pendingEvals.entries()).map(([nodeId, evalScore]) => ({
-      nodeId,
-      evalScore,
-    }));
-    controller.pendingEvals.clear();
-    setNodeEvals(updates);
-  }, [setNodeEvals]);
-
-  const resetReviewController = useCallback((flushPending = false) => {
-    const controller = reviewControllerRef.current;
-    if (controller.flushTimer !== null) {
-      window.clearTimeout(controller.flushTimer);
-      controller.flushTimer = null;
-    }
-    if (flushPending && controller.pendingEvals.size > 0) {
-      const updates = Array.from(controller.pendingEvals.entries()).map(([nodeId, evalScore]) => ({
-        nodeId,
-        evalScore,
-      }));
-      controller.pendingEvals.clear();
-      setNodeEvals(updates);
-    }
+  const resetReviewController = useCallback(() => {
     reviewControllerRef.current = createReviewController();
-  }, [setNodeEvals]);
+  }, []);
 
   const getEffectiveNodeEval = useCallback((nodeId: string | null) => {
     if (!nodeId) return undefined;
@@ -1109,42 +1076,34 @@ function App() {
     return treeNodes[nodeId]?.record?.evalScore;
   }, [treeNodes]);
 
-  const queueReviewEvalUpdate = useCallback((nodeId: string, evalScore: number) => {
-    const controller = reviewControllerRef.current;
-    controller.provisionalEvals.set(nodeId, evalScore);
-    controller.pendingEvals.set(nodeId, evalScore);
-
-    if (controller.pendingEvals.size >= reviewPolicy.batchSize) {
-      flushReviewEvalUpdates();
-      return;
-    }
-
-    if (controller.flushTimer === null) {
-      controller.flushTimer = window.setTimeout(() => {
-        controller.flushTimer = null;
-        flushReviewEvalUpdates();
-      }, reviewPolicy.flushMs);
-    }
-  }, [flushReviewEvalUpdates, reviewPolicy.batchSize, reviewPolicy.flushMs]);
-
   const finalizeReview = useCallback(() => {
     const controller = reviewControllerRef.current;
+    // Keep all in-flight results private until the entire line is reviewed.
+    // Cancel/error must not leave mixed-depth scores or erase study annotations.
+    const reviewedTree = { ...treeNodes };
+    for (const nodeId of activeLineNodeIds) {
+      const node = treeNodes[nodeId];
+      if (node?.record) reviewedTree[nodeId] = { ...node, record: {
+        ...node.record,
+        bestMove: controller.recommendations.get(nodeId)?.bestMove,
+        bestLine: controller.recommendations.get(nodeId)?.bestLine,
+      } };
+    }
     const reviewedAt = Date.now();
     const { summary, annotations } = computeReviewArtifacts(
       activeLineNodeIds,
-      treeNodes,
+      reviewedTree,
       controller.provisionalEvals,
       reviewedAt,
       reviewEngineSummary,
     );
-    flushReviewEvalUpdates();
-    setNodeReviewDataBulk(annotations);
-    resetReviewController(false);
+    setNodeReviewDataBulk(annotations, { replaceRecommendations: true });
+    resetReviewController();
     completeReview(summary);
     setReviewedLineNodeIds(activeLineNodeIds);
     setAnalysisTab('review');
     setMobileAnalysisTab('review');
-  }, [activeLineNodeIds, completeReview, flushReviewEvalUpdates, resetReviewController, reviewEngineSummary, setNodeReviewDataBulk, treeNodes]);
+  }, [activeLineNodeIds, completeReview, resetReviewController, reviewEngineSummary, setNodeReviewDataBulk, treeNodes]);
 
   const handleEngineWorkerError = useCallback((message: string) => {
     const now = Date.now();
@@ -1159,8 +1118,7 @@ function App() {
     clearAnalysisDeepenTimer();
 
     if (reviewControllerRef.current.active) {
-      resetReviewController(true);
-      clearAllReviewData();
+      resetReviewController();
       cancelReview();
     }
 
@@ -1179,7 +1137,7 @@ function App() {
     }
 
     restartEngine();
-  }, [cancelReview, clearAllReviewData, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
+  }, [cancelReview, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
 
   const reportEngineWorkerError = useEngineErrorRecovery(
     handleEngineWorkerError,
@@ -1223,7 +1181,7 @@ function App() {
           return;
         }
         if (!hasEvaluation) {
-          resetReviewController(true);
+          resetReviewController();
           cancelReview();
           showImportNotice('Review stopped', 'The engine returned no evaluation. Existing scores were kept. Try reviewing again.');
           return;
@@ -1231,7 +1189,7 @@ function App() {
 
         controller.currentNodeId = null;
         const normalizedScore = normalizeEvalForFen(score, getNodeFen(reviewTag.nodeId));
-        queueReviewEvalUpdate(reviewTag.nodeId, normalizedScore);
+        controller.provisionalEvals.set(reviewTag.nodeId, normalizedScore);
 
         // Store engine's recommended move for the child node that was actually played
         // so the coach UI can show "Engine suggests X" when a move was a mistake/blunder
@@ -1242,7 +1200,7 @@ function App() {
           // so the line the engine would have played on costs nothing extra to
           // keep -- and without it the review can say which move was better and
           // never what it was for.
-          if (childNodeId) setNodeBestMove(childNodeId, uci, completedPvLines[0]?.moves);
+          if (childNodeId) controller.recommendations.set(childNodeId, { bestMove: uci, bestLine: completedPvLines[0]?.moves });
         }
 
         if (reviewTag.phase === 'base' && reviewPolicy.revisit) {
@@ -1566,22 +1524,20 @@ function App() {
     reviewLineSignatureRef.current = '';
     reviewControllerRef.current.active = false;
     reviewControllerRef.current.currentNodeId = null;
-    flushReviewEvalUpdates();
-    resetReviewController(false);
-    clearAllReviewData();
+    resetReviewController();
     cancelReview();
     clearQueuedSearch();
     stopSearch();
-  }, [cancelReview, clearAllReviewData, clearQueuedSearch, flushReviewEvalUpdates, resetReviewController, stopSearch]);
+  }, [cancelReview, clearQueuedSearch, resetReviewController, stopSearch]);
 
   const clearCompletedReview = useCallback(() => {
     reviewLineSignatureRef.current = '';
     reviewControllerRef.current.active = false;
     reviewControllerRef.current.currentNodeId = null;
-    resetReviewController(false);
-    clearAllReviewData();
+    resetReviewController();
+    clearReviewData(reviewedLineNodeIds);
     resetReview();
-  }, [clearAllReviewData, resetReview, resetReviewController]);
+  }, [clearReviewData, resetReview, resetReviewController, reviewedLineNodeIds]);
 
   const resetGame = useCallback(() => {
     stopAnalysis();
@@ -1626,7 +1582,7 @@ function App() {
   }, [clearCompletedReview, reviewStatus, reviewSummary, reviewedLineNodeIds, treeNodes]);
 
   /** Whether the board is on the line the review describes. */
-  const reviewMatchesActiveLine = reviewStatus === 'done' && reviewSummary?.lineSignature === currentLineSignature;
+  const reviewMatchesActiveLine = Boolean(reviewSummary) && reviewSummary?.lineSignature === currentLineSignature;
   /**
    * A finished review that a save will not carry.
    *
@@ -1645,11 +1601,11 @@ function App() {
    * annotations all describe the game that was reviewed, not the sideline.
    */
   const reviewedHistory = useMemo(() => {
-    if (reviewStatus !== 'done' || reviewMatchesActiveLine) return moveHistory;
+    if (!reviewSummary || reviewMatchesActiveLine) return moveHistory;
     return reviewedLineNodeIds
       .map((nodeId) => treeNodes[nodeId]?.record)
       .filter((record): record is MoveRecord => Boolean(record));
-  }, [moveHistory, reviewMatchesActiveLine, reviewStatus, reviewedLineNodeIds, treeNodes]);
+  }, [moveHistory, reviewMatchesActiveLine, reviewSummary, reviewedLineNodeIds, treeNodes]);
 
   useEffect(() => {
     if (reviewStatus !== 'running') return;
@@ -2048,7 +2004,8 @@ function App() {
     return () => clearTimeout(timer);
   }, [aiSearchConfig, aiSpeed, aiStrength, currentPositionCommand, gameResult, isAiTurn, isPageVisible, isReady, readySessionId, isSearchQueued, isSearching, paused, queueSearch, reviewStatus]);
 
-  // Review engine drive: when review is running and engine is idle, fire next search
+  // Completed steps also drive this effect: an instant bestmove can batch
+  // searching -> idle into one render, leaving both engine flags unchanged.
   useEffect(() => {
     const controller = reviewControllerRef.current;
     if (!controller.active) return;
@@ -2096,19 +2053,18 @@ function App() {
     // different evaluation depending on whether it was reviewed or hovered.
     const positionCommand = makeEnginePositionCommand(rootFen, getNodeMoves(nodeId));
     queueSearch(positionCommand, goCmd, 0, makeReviewTag(controller.phase, nodeId));
-  }, [finalizeReview, getNodeMoves, isReady, readySessionId, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewStatus, rootFen, updateReviewProgress]);
+  }, [finalizeReview, getNodeMoves, isReady, readySessionId, isSearchQueued, isSearching, queueSearch, reviewPolicy.base.goCmd, reviewPolicy.revisit, reviewPolicy.revisitLimit, reviewRevisitGoCmd, reviewCompletedSteps, reviewStatus, rootFen, updateReviewProgress]);
 
   const startGameReview = useCallback(() => {
     if (applyBestMoveRef.current) return;
-    if (!engineEnabled || !isReady) return;
+    if (!engineEnabled || !isReady || reviewControllerRef.current.active) return;
     if (isAiMode) {
       stepPendingRef.current = false;
       pausedRef.current = true;
       setPaused(true);
     }
     stopAnalysis();
-    resetReviewController(true);
-    clearAllReviewData();
+    resetReviewController();
     clearPvLines();
     clearWdl();
     currentMultiPvRef.current = 1;
@@ -2133,7 +2089,7 @@ function App() {
       baseQueue: [rootNodeId, ...activeLineNodeIds],
       total: totalSteps,
     };
-  }, [activeLineNodeIds, applyBestMoveRef, clearAllReviewData, clearPvLines, clearWdl, completeReview, currentLineSignature, engineEnabled, isAiMode, isReady, resetReviewController, reviewEngineSummary, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
+  }, [activeLineNodeIds, applyBestMoveRef, clearPvLines, clearWdl, completeReview, currentLineSignature, engineEnabled, isAiMode, isReady, resetReviewController, reviewEngineSummary, rootNodeId, setOption, startReview, stopAnalysis, treeNodes]);
 
   const clearBoardMarkers = useCallback(() => {
     setUserHighlights((prev) => prev.length ? [] : prev);
@@ -4061,7 +4017,7 @@ function App() {
   }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   const savedReviewSnapshot = useMemo(() => {
-    if (reviewStatus !== 'done' || !reviewSummary) return undefined;
+    if (!reviewSummary) return undefined;
     return {
       summary: reviewSummary,
       annotations: reviewedHistory.map((record, moveIndex) => ({
@@ -4075,7 +4031,7 @@ function App() {
         reviewNote: record.reviewNote,
       })),
     };
-  }, [reviewedHistory, reviewStatus, reviewSummary]);
+  }, [reviewedHistory, reviewSummary]);
 
   /**
    * The game as it stands, in the shape both the library and the auto-save

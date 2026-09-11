@@ -20,6 +20,7 @@ export function useGameReview() {
     const [totalSteps, setTotalSteps] = useState(0);
 
     const totalRef = useRef(0);
+    const completedSummaryRef = useRef<ReviewSummary | null>(null);
 
     const startReview = useCallback((totalSteps: number) => {
         totalRef.current = Math.max(0, totalSteps);
@@ -27,7 +28,7 @@ export function useGameReview() {
         setProgress(0);
         setCompletedSteps(0);
         setTotalSteps(totalRef.current);
-        setSummary(null);
+        // The last completed review remains available to autosave during a rerun.
         return totalRef.current > 0;
     }, []);
 
@@ -41,6 +42,7 @@ export function useGameReview() {
     }, []);
 
     const completeReview = useCallback((nextSummary: ReviewSummary) => {
+        completedSummaryRef.current = nextSummary;
         setSummary(nextSummary);
         setStatus('done');
         setProgress(1);
@@ -48,20 +50,23 @@ export function useGameReview() {
     }, []);
 
     const hydrateReview = useCallback((nextSummary: ReviewSummary | null) => {
+        completedSummaryRef.current = nextSummary;
         setSummary(nextSummary);
         setStatus(nextSummary ? 'done' : 'idle');
         setProgress(nextSummary ? 1 : 0);
     }, []);
 
     const cancelReview = useCallback(() => {
-        setStatus('idle');
-        setProgress(0);
+        const previous = completedSummaryRef.current;
+        setStatus(previous ? 'done' : 'idle');
+        setProgress(previous ? 1 : 0);
         setCompletedSteps(0);
         setTotalSteps(0);
-        setSummary(null);
+        setSummary(previous);
     }, []);
 
     const resetReview = useCallback(() => {
+        completedSummaryRef.current = null;
         setStatus('idle');
         setProgress(0);
         setCompletedSteps(0);

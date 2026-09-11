@@ -54,8 +54,6 @@ export interface ReviewPolicy {
     revisit: SearchBudget | null;
     revisitThreshold: number;
     revisitLimit: number;
-    batchSize: number;
-    flushMs: number;
     signature: string;
 }
 
@@ -456,8 +454,6 @@ export function resolveReviewPolicy(profile: DeviceProfile): ReviewPolicy {
         revisit,
         revisitThreshold: 220,
         revisitLimit: 4,
-        batchSize: 4,
-        flushMs: 250,
         signature: `${profile.signature}:review:${base.depth}:${base.moveTimeMs}:${revisit ? `${revisit.depth}:${revisit.moveTimeMs}` : 'norevisit'}`,
     };
 }

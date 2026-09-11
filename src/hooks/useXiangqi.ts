@@ -998,7 +998,7 @@ export function useXiangqi() {
         winPercentLoss?: number;
         reviewNote?: string;
         bestLine?: string[];
-    }>) => {
+    }>, options?: { replaceRecommendations: boolean }) => {
         if (updates.length === 0) return;
         setTreeNodes((prevTree) => {
             let nextTree = prevTree;
@@ -1009,10 +1009,12 @@ export function useXiangqi() {
                 const record = node?.record;
                 if (!record) continue;
 
-                const nextLine = bestLineForMove(update.bestMove ?? record.bestMove, update.bestLine ?? record.bestLine);
+                const bestMove = options?.replaceRecommendations ? update.bestMove : (update.bestMove ?? record.bestMove);
+                const bestLine = options?.replaceRecommendations ? update.bestLine : (update.bestLine ?? record.bestLine);
+                const nextLine = bestLineForMove(bestMove, bestLine);
                 const nextRecord: MoveRecord = {
                     ...(typeof update.evalScore === 'number' ? replaceMoveEvaluation(record, update.evalScore, update.evalDepth) : record),
-                    bestMove: update.bestMove ?? record.bestMove,
+                    bestMove,
                     bestLine: nextLine,
                     quality: update.quality,
                     persistEvaluation: update.persistEvaluation ?? record.persistEvaluation,
@@ -1047,15 +1049,17 @@ export function useXiangqi() {
         });
     }, []);
 
-    const clearAllReviewData = useCallback(() => {
+    const clearReviewData = useCallback((nodeIds: readonly string[]) => {
         setTreeNodes((prevTree) => {
             let nextTree = prevTree;
 
-            for (const [nodeId, node] of Object.entries(prevTree)) {
-                const record = node.record;
+            for (const nodeId of nodeIds) {
+                const node = prevTree[nodeId];
+                const record = node?.record;
                 if (!record) continue;
                 if (
                     record.bestMove === undefined &&
+                    record.bestLine === undefined &&
                     record.quality === undefined &&
                     record.swing === undefined &&
                     record.winPercentLoss === undefined &&
@@ -1073,6 +1077,7 @@ export function useXiangqi() {
                     record: {
                         ...record,
                         bestMove: undefined,
+                        bestLine: undefined,
                         quality: undefined,
                         swing: undefined,
                         winPercentLoss: undefined,
@@ -1147,7 +1152,7 @@ export function useXiangqi() {
         setNodeComment,
         setNodeComments,
         setNodeReviewDataBulk,
-        clearAllReviewData,
+        clearReviewData,
         getNodeFen,
         getNodeMoves,
         loadMoves,

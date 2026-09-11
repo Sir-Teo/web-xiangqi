@@ -264,6 +264,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                     >
                         <div className="review-progress-fill" style={{ width: `${progressPercent}%` }} />
                     </div>
+                    <small>Scores update when the review finishes. Cancel keeps your existing annotations.</small>
                 </div>
             ) : null}
 
