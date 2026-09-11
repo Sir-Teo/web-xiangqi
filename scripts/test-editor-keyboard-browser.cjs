@@ -7,6 +7,11 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
   try {
     for (const [width, height] of [[1440, 900], [390, 844], [320, 640], [844, 390]]) {
       const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 900 });
+      // macOS WebKit skips buttons with plain Tab unless Safari's full-control
+      // preference is enabled. Option-Tab follows the complete control sequence.
+      const tab = (reverse = false) => page.keyboard.press(
+        `${browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+' : ''}${reverse ? 'Shift+' : ''}Tab`
+      );
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       try {
@@ -35,12 +40,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.keyboard.press('Control+Home'); await expectSquare(0, 9);
         await page.keyboard.press('Control+End'); await expectSquare(8, 0);
         await square(1, 8).focus();
-        await page.keyboard.press('Tab');
+        await tab();
         assert.equal(await page.getByRole('button', { name: 'Close the editor' }).evaluate(node => node === document.activeElement), true, 'Tab did not leave the board for the controls');
-        await page.keyboard.press('Shift+Tab'); await expectSquare(1, 8);
-        await page.keyboard.press('Shift+Tab');
+        await tab(true); await expectSquare(1, 8);
+        await tab(true);
         assert.equal(await page.getByTestId('editor-done').evaluate(node => node === document.activeElement), true, 'Reverse Tab escaped the dialog instead of wrapping');
-        await page.keyboard.press('Tab'); await expectSquare(1, 8);
+        await tab(); await expectSquare(1, 8);
         assert.equal(await editor.evaluate(node => {
           const point = document.activeElement.getBoundingClientRect(); const dialog = node.getBoundingClientRect();
           return point.top >= Math.max(0, dialog.top) && point.bottom <= Math.min(innerHeight, dialog.bottom);
@@ -66,8 +71,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
           const skipped = document.createElement('button'); skipped.tabIndex = -1; skipped.dataset.qaFocus = '';
           skipped.textContent = 'Skipped last'; node.append(skipped);
         });
-        await page.getByTestId('editor-done').focus(); await page.keyboard.press('Tab'); await expectSquare(8, 0);
-        await page.keyboard.press('Shift+Tab');
+        await page.getByTestId('editor-done').focus(); await tab(); await expectSquare(8, 0);
+        await tab(true);
         assert.equal(await page.getByTestId('editor-done').evaluate(node => node === document.activeElement), true);
         await editor.locator('[data-qa-focus]').evaluateAll(nodes => nodes.forEach(node => node.remove()));
 
