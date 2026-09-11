@@ -1,3 +1,4 @@
+import { readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
 import { parseEvalCommand, parsePgnMoveQuality } from './pgnEvaluation';
 import { readStudyAnalysisPgn } from './studyAnalysis';
@@ -187,6 +188,7 @@ function* uciTreeTokens(source: string): Generator<{ comment: string } | { match
 }
 
 export function extractUciMoveTree(text: string): {
+    rootResult?: RecordedResult;
     rootComment?: string;
     moves: string[];
     moveTree: SavedMoveTreeNode[];
@@ -203,16 +205,20 @@ export function extractUciMoveTree(text: string): {
     let tooLarge = false;
     let commentTarget: SavedMoveTreeNode | undefined;
     let rootComment: string | undefined;
+    let rootResult: RecordedResult | undefined;
 
     for (const entry of uciTreeTokens(firstGame.text)) {
         if ('comment' in entry) {
             if (!commentTarget) {
                 if (nodeCount === 0 && stack.length === 0) {
+                    rootResult = readRecordedResultPgn(entry.comment) ?? rootResult;
                     const note = parseFreeTextComment(entry.comment);
                     rootComment = normalizeMoveComment([rootComment, note].filter(Boolean).join(' '));
                 }
                 continue;
             }
+            const recordedResult = readRecordedResultPgn(entry.comment);
+            if (recordedResult) commentTarget.recordedResult = recordedResult;
             const snapshot = readStudyAnalysisPgn(entry.comment);
             if (snapshot?.move === commentTarget.uci) commentTarget.analysis = snapshot;
             const evaluation = parseEvalCommand(entry.comment);
@@ -272,6 +278,7 @@ export function extractUciMoveTree(text: string): {
         tooLarge,
         hadMoreGames: firstGame.truncated,
         ...(rootComment ? { rootComment } : {}),
+        ...(rootResult ? { rootResult } : {}),
     };
 }
 

@@ -1,3 +1,4 @@
+import { recordedResultPgn, type RecordedResult } from './recordedResult';
 import { studyAnalysisPgn, type StudyAnalysis } from './studyAnalysis';
 import { mateDistanceFromScore, type EvaluationScoreKind } from './engineEvalReading';
 import type { ReviewMoveQuality } from './review';
@@ -36,6 +37,7 @@ const NAG_FOR_QUALITY: Partial<Record<ReviewMoveQuality, string>> = {
 };
 
 export interface MoveAnnotationInput {
+    recordedResult?: RecordedResult;
     /** Evaluation after the move, red-positive centipawns, as the engine gave it. */
     evalScore?: number;
     evalDepth?: number;
@@ -84,6 +86,8 @@ export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     if (nag) tokens.push(nag);
 
     const comment: string[] = [];
+    const result = recordedResultPgn(input.recordedResult);
+    if (result) comment.push(result);
     const analysis = studyAnalysisPgn(input.analysis);
     if (analysis) comment.push(analysis);
     if (typeof input.evalScore === 'number') {

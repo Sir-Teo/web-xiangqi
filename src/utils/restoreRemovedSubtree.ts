@@ -7,6 +7,7 @@ function mergeRestoredRecord(removed: MoveRecord, current: MoveRecord): MoveReco
     return {
         ...removed,
         ...current,
+        recordedResult: current.recordedResult ?? removed.recordedResult,
         // Scores, depths and score kinds describe one observation, not fields
         // that can be mixed between the old and newly evaluated move.
         evalScore: score.evalScore,

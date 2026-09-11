@@ -1,3 +1,4 @@
+import { parseResultTag, readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
 import { extractPgnEvalCommands, parsePgnMoveQuality } from './pgnEvaluation';
 import { readStudyAnalysisPgn } from './studyAnalysis';
@@ -64,19 +65,24 @@ function parseGame(input: Token[]): CollectionGame {
     let nodes = 0;
     let result: string | undefined;
     let rootComment: string | undefined;
+    let rootResult: RecordedResult | undefined;
     function addComment(text: string) {
         if (!text.trim()) return;
+        const recordedResult = readRecordedResultPgn(text);
+        const withoutResult = stripDelimited(text, '[%xqresult ', ']', '');
         if (!cursor.node) {
             if (nodes > 0 || stack.length > 0) throw new Error('Attach a variation note to its first move.');
-            const { prose } = extractPgnEvalCommands(stripDelimited(text, '[%xqanalysis ', ']', ''));
+            if (recordedResult) rootResult = recordedResult;
+            const { prose } = extractPgnEvalCommands(stripDelimited(withoutResult, '[%xqanalysis ', ']', ''));
             const joined = [rootComment, prose].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
             if (joined.length > MAX_MOVE_COMMENT_LENGTH) throw new Error(`A starting-position note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
             rootComment = normalizeMoveComment(joined);
             return;
         }
+        if (recordedResult) cursor.node.recordedResult = recordedResult;
         const analysis = readStudyAnalysisPgn(text);
         if (analysis && analysis.move === cursor.node.uci) cursor.node.analysis = analysis;
-        const { evaluation, prose } = extractPgnEvalCommands(stripDelimited(text, '[%xqanalysis ', ']', ''));
+        const { evaluation, prose } = extractPgnEvalCommands(stripDelimited(withoutResult, '[%xqanalysis ', ']', ''));
         if (evaluation) {
             cursor.node.evalScore = evaluation.evalScore;
             cursor.node.evalDepth = evaluation.evalDepth;
@@ -125,12 +131,14 @@ function parseGame(input: Token[]): CollectionGame {
         cursor = { board, side: cursor.side === 'w' ? 'b' : 'w', node, parent: cursor, children: node.children! };
     }
     if (stack.length) throw new Error('Unclosed variation.');
-    if (!nodes && !rootComment && !tags.fen) throw new Error('No moves found.');
+    if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result)) throw new Error('No moves found.');
     if (result && tags.result && result !== tags.result) throw new Error('The Result header disagrees with the final result marker.');
     const moves: string[] = [];
     let finalNode = root[0];
     for (let node = root[0]; node; node = node.children?.[0] as SavedMoveTreeNode) { moves.push(node.uci); finalNode = node; }
-    return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment,
+    const declared = parseResultTag(result ?? tags.result);
+    if (declared) { if (finalNode) finalNode.recordedResult = declared; else rootResult = declared; }
+    return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment, ...(rootResult ? { rootResult } : {}),
         ...(nodes && tags.xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
         metadata: extractPgnMetadata(headers), opening: tags.opening,
         ...(finalNode?.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),

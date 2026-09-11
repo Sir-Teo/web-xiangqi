@@ -1,3 +1,4 @@
+import { normalizeRecordedResult, type RecordedResult } from '../utils/recordedResult';
 import { type EvaluationScoreKind } from '../utils/engineEvalReading';
 import { makeEnginePositionCommand } from '../utils/engineTags';
 import { normalizeMoveEvaluation, replaceMoveEvaluation, type MoveEvaluation } from '../utils/moveEvaluation';
@@ -34,6 +35,7 @@ import { bestLineForMove } from '../utils/engineBestLine';
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
 export interface MoveRecord extends MoveEvaluation {
+    recordedResult?: RecordedResult;
     /** Imported/saved annotations are durable; ordinary live scores remain transient. */
     persistEvaluation?: boolean;
     uci: string;
@@ -64,6 +66,8 @@ export interface MoveRecord extends MoveEvaluation {
 }
 
 export interface MoveTreeNode {
+    /** Root-position declaration; move declarations live on record. */
+    recordedResult?: RecordedResult;
     /** Root only: first children define an explicitly chosen study main line. */
     mainLinePinned?: true;
     /** Session-local revision distinguishes a later promotion from deletion Undo. */
@@ -89,6 +93,7 @@ export type MoveSequenceValidation =
     | { ok: false; failedIndex: number; move: string; reason: string };
 
 export type SerializableMoveTreeNode = MoveEvaluation & {
+    recordedResult?: RecordedResult;
     uci: string;
     /** The reader's note on this move, when they wrote one. */
     comment?: string;
@@ -557,6 +562,7 @@ export function useXiangqi() {
                         inCheck: nextInCheck,
                         ply: plyIndex + 1,
                         ...evaluation,
+                        ...(normalizeRecordedResult(child.recordedResult) ? { recordedResult: normalizeRecordedResult(child.recordedResult) } : {}),
                         ...(evaluation.evalScore !== undefined || evaluation.quality ? { persistEvaluation: true } : {}),
                         ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),
                         ...(child.analysis ? { analysis: normalizeStudyAnalysis(child.analysis,
@@ -984,10 +990,22 @@ export function useXiangqi() {
         });
     }, []);
 
-    /**
-     * The reader's own note on a move. Passing an empty comment clears it, so
-     * "cleared" and "never written" end up the same stored state.
-     */
+    /** Attach imported/legacy declarations without replacing newer annotations. */
+    const restoreRecordedResult = useCallback((nodeId: string, value: unknown, replaceExisting = false) => {
+        const recordedResult = normalizeRecordedResult(value);
+        if (!recordedResult) return;
+        setTreeNodes(tree => {
+            const node = tree[nodeId];
+            if (!node) return tree;
+            const target = node.record ?? node;
+            if (target.recordedResult === recordedResult || (target.recordedResult && !replaceExisting)) return tree;
+            return { ...tree, [nodeId]: node.record
+                ? { ...node, record: { ...node.record, recordedResult } }
+                : { ...node, recordedResult } };
+        });
+    }, []);
+
+    /** Clearing a written note leaves the same state as never writing one. */
     const setNodeComment = useCallback((nodeId: string, comment: string) => {
         const normalized = normalizeMoveComment(comment);
         setTreeNodes((prevTree) => {
@@ -1205,6 +1223,7 @@ export function useXiangqi() {
         setNodeEval,
         setNodeEvals,
         setNodeBestMove,
+        restoreRecordedResult,
         setNodeComment,
         setNodeComments,
         setNodeReviewDataBulk,

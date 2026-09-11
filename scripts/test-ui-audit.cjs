@@ -28,6 +28,7 @@ const path = require('node:path');
       'test-active-continuation-browser.cjs',
       'test-study-main-line-browser.cjs',
       'test-loaded-result-browser.cjs',
+      'test-recorded-result-browser.cjs',
       'test-library-annotations-browser.cjs',
       'test-dhtmlxq-browser.cjs',
       'test-root-notes-browser.cjs',

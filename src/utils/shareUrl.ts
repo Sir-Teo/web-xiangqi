@@ -1,3 +1,4 @@
+import { normalizeRecordedResult, type RecordedResult } from './recordedResult';
 /**
  * The share link: which of a position's four facts a URL has to carry, and
  * which it can leave out because the app would have assumed them anyway.
@@ -29,12 +30,14 @@ export function buildShareUrl(
   moveTree?: SavedMoveTreeNode[],
   rootComment?: string,
   mainLinePinned = false,
+  rootResult?: RecordedResult,
 ): ShareUrlBuildResult {
   const url = new URL(currentHref);
   url.search = '';
   url.hash = '';
   const note = normalizeMoveComment(rootComment);
   if (note) url.searchParams.set('note', note);
+  if (normalizeRecordedResult(rootResult)) url.searchParams.set('rootResult', rootResult!);
   if (rootFen !== START_POSITION_FEN) {
     url.searchParams.set('fen', rootFen);
   }

@@ -1,3 +1,4 @@
+import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
@@ -792,6 +793,7 @@ function App() {
     applyUciLineAtNode,
     keepUciLineAtNode,
     setCurrentNodeEval,
+    restoreRecordedResult,
     setNodeComment,
     setNodeComments,
     setNodeReviewDataBulk,
@@ -887,7 +889,7 @@ function App() {
    * analysis has the same requirement even when the line has no written note.
    */
   const hasAnnotatedStudyMoves = useMemo(() => (
-    Object.values(treeNodes).some((node) => Boolean(node.record?.comment || node.record?.analysis || node.record?.persistEvaluation))
+    Object.values(treeNodes).some((node) => Boolean(node.record?.recordedResult || node.record?.comment || node.record?.analysis || node.record?.persistEvaluation))
   ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
@@ -2526,13 +2528,16 @@ function App() {
       // level case read differently from "Red +1.4" for no reason.
       : 'Even';
   const rootComment = treeNodes[rootNodeId]?.comment;
+  const rootResult = treeNodes[rootNodeId]?.recordedResult;
+  const selectedRecordedResult = treeNodes[currentNodeId]?.record?.recordedResult ?? (currentNodeId === rootNodeId ? rootResult : undefined);
+  const lineRecordedResult = activeLineNodeIds.length ? treeNodes[activeLineNodeIds.at(-1)!]?.record?.recordedResult : rootResult;
   const mainLinePinned = treeNodes[rootNodeId]?.mainLinePinned;
   const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [], [mainLinePinned, treeNodes, rootNodeId]);
   const viewingStudyMainLine = Boolean(mainLinePinned) && activeLineNodeIds.length === studyMainLineNodeIds.length
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !isAiTurn && !viewingStudyMainLine;
-  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment);
-  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment) || rootFen !== START_POSITION_FEN;
+  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult);
+  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
   // A finished game has nothing to play on from, and the starting position is
   // already what "New game" gives you.
   const canPlayFromHere = !gameResult && (currentMoveIndex >= 0 || rootFen !== START_POSITION_FEN);
@@ -2971,7 +2976,7 @@ function App() {
       .slice(0, currentMoveIndex + 1)
       .map(id => treeNodes[id]?.record)
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    if (moves.length === 0 && !rootComment && rootFen === START_POSITION_FEN) return null;
+    if (moves.length === 0 && !rootComment && !rootResult && rootFen === START_POSITION_FEN) return null;
     return exportPgn(moves, {
       gameMode,
       metadata: gameMetadata,
@@ -2979,8 +2984,9 @@ function App() {
       result: gameResult,
       startFen: rootFen,
       rootComment,
+      rootResult,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -3032,7 +3038,7 @@ function App() {
     const moveTree = hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned);
+    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult);
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
     if (!ok) {
@@ -3058,7 +3064,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3811,7 +3817,10 @@ function App() {
       return;
     }
     if (plan.kind === 'diagram') {
-      if (handleLoadFen(plan.startFen, nextGameMode, plan.rootComment)) setGameMetadata(extractPgnMetadata(text));
+      if (handleLoadFen(plan.startFen, nextGameMode, plan.rootComment)) {
+        restoreRecordedResult(rootNodeId, plan.rootResult);
+        setGameMetadata(extractPgnMetadata(text));
+      }
       return;
     }
     const { moves, startFen, importedFromNotation, notationRejected } = plan;
@@ -3829,6 +3838,8 @@ function App() {
     const loadedNodeIds = (!importedFromNotation && plan.moveTree.length > 0)
       ? loadMoveTree(plan.moveTree, moves, startFen, undefined, plan.rootComment, plan.mainLinePinned)
       : loadMoves(moves, startFen, undefined, plan.rootComment, plan.mainLinePinned);
+    restoreRecordedResult(rootNodeId, plan.rootResult);
+    restoreRecordedResult(loadedNodeIds[moves.length - 1] ?? rootNodeId, plan.recordedResult, true);
     setGameMetadata(extractPgnMetadata(text));
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
@@ -3901,7 +3912,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -3928,6 +3939,7 @@ function App() {
     const sharedMoveTree = decodeSavedMoveTreeParam(rawTree);
     const rawMode = params.get('mode');
     const sharedRootComment = normalizeMoveComment(params.get('note'));
+    const sharedRootResult = normalizeRecordedResult(params.get('rootResult'));
     if (isMoveImportTextTooLarge(rawMoves)) {
       failShareLink({ kind: 'too-long' });
       logDiagnosticWarning('Ignored oversized shared Xiangqi line.');
@@ -3959,7 +3971,7 @@ function App() {
       logDiagnosticWarning('Ignored shared Xiangqi link with unreadable moves:', rawMoves.slice(0, 80));
       return;
     }
-    if (!rawFen && moves.length === 0 && !sharedMoveTree?.length && !sharedRootComment) {
+    if (!rawFen && moves.length === 0 && !sharedMoveTree?.length && !sharedRootComment && !sharedRootResult) {
       // Every move token read as a move above, so an empty line here means the
       // `tree` parameter was the only content and it did not decode.
       if (rawTree || rawMoves.trim()) {
@@ -4005,15 +4017,16 @@ function App() {
       loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1');
     } else if (moves.length > 0) {
       loadMoves(moves, rawFen, undefined, sharedRootComment);
-    } else if (rawFen || sharedRootComment) {
+    } else if (rawFen || sharedRootComment || sharedRootResult) {
       loadFen(rawFen || START_POSITION_FEN, sharedRootComment);
     }
+    restoreRecordedResult(rootNodeId, sharedRootResult);
     setWorkspaceMode('analysis');
     setAnalysisTab('tree');
     setMobileAnalysisTab('moves');
     setMobileView('board');
     setGraphLoadSweepToken((token) => token + 1);
-  }, [handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, handleCancelReview, loadFen, loadMoves, loadMoveTree, resetReview, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   const savedReviewSnapshot = useMemo(() => {
     if (!reviewSummary) return undefined;
@@ -4077,11 +4090,12 @@ function App() {
       gameMode,
       metadata: gameMetadata,
       rootComment,
+      rootResult,
       mainLinePinned,
       moves,
       opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
-      result: (gameResult === 'red-wins' ? 'red' : gameResult === 'black-wins' ? 'black' : gameResult === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
+      result: ((gameResult ?? selectedRecordedResult) === 'red-wins' ? 'red' : (gameResult ?? selectedRecordedResult) === 'black-wins' ? 'black' : (gameResult ?? selectedRecordedResult) === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
       moveTree,
       review: reviewMatchesActiveLine && reviewSummary
         ? {
@@ -4093,7 +4107,7 @@ function App() {
           }
         : undefined,
     };
-  }, [activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, mainLinePinned, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -4566,6 +4580,8 @@ function App() {
     const loadedNodeIds = game.moveTree?.length
       ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned)
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
+    restoreRecordedResult(rootNodeId, game.rootResult);
+    restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
     setGameMetadata(game.metadata);
     if (initialPly === undefined || initialPly >= game.moves.length) {
       // The loader has already derived checkmate/stalemate from the selected
@@ -4610,7 +4626,7 @@ function App() {
     setMobileView('analysis');
     setGraphLoadSweepToken((token) => token + 1);
     return true;
-  }, [handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameMetadata, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameMetadata, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   // ── Auto-save ────────────────────────────────────────
   // Offer whatever was in progress when the tab last closed, then keep the
@@ -4634,7 +4650,7 @@ function App() {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     const rawMoves = params.get('moves') ?? '';
-    const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen') || params.get('note'));
+    const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen') || params.get('note') || normalizeRecordedResult(params.get('rootResult')));
     if (!hasLink) return null;
     return { moveCount: extractUciMoveLine(rawMoves).length };
   }, []);
@@ -6799,6 +6815,9 @@ function App() {
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
                   />}
+                  {lineRecordedResult && <p className="recorded-line-result" data-testid="recorded-line-result">
+                    Recorded line result: {lineRecordedResult === 'draw' ? 'Draw' : lineRecordedResult === 'red-wins' ? 'Red wins' : 'Black wins'} ({RESULT_TAG[lineRecordedResult]})
+                  </p>}
                   {hasMoveTreeMoves && (hasStudyBranches || mainLinePinned || Boolean(treeNodes[rootNodeId]?.mainLineRevision)) && <StudyMainLineControls
                     pinned={Boolean(mainLinePinned)} viewingMainLine={viewingStudyMainLine} disabled={isAiTurn}
                     onPin={pinActiveStudyLine} onOpen={openStudyMainLine} onUnpin={unpinMainLine} />}
@@ -6808,7 +6827,7 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
-                  {(hasMoveTreeMoves || rootComment || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
+                  {(hasMoveTreeMoves || rootComment || rootResult || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;

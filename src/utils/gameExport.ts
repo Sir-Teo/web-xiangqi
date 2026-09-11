@@ -1,3 +1,4 @@
+import { recordedResultPgn, RESULT_TAG, type RecordedResult } from './recordedResult';
 import { normalizeMoveComment } from './moveComment';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import { normalizeMoveEvaluation } from './moveEvaluation';
@@ -6,19 +7,12 @@ import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_FEN, parseFenBoard, validateMoveStr, hasAnyLegalMove, type Side } from './xiangqi';
-import { getStudyMainLine } from './studyMainLine';
 import { annotationTokensForMove, type MoveAnnotationInput } from './pgnAnnotations';
 
-function rootCommentText(comment?: string): string {
-    const note = normalizeMoveComment(comment);
+function rootCommentText(comment?: string, result?: RecordedResult): string {
+    const note = [recordedResultPgn(result), normalizeMoveComment(comment)].filter(Boolean).join(' ');
     return note ? `{ ${note} }\n` : '';
 }
-
-const RESULT_TAG: Record<NonNullable<GameResult>, string> = {
-    'red-wins':   '1-0',
-    'black-wins': '0-1',
-    'draw':       '1/2-1/2',
-};
 
 const DEFAULT_START_POSITION_FEN = `${START_FEN} w - - 0 1`;
 
@@ -218,7 +212,7 @@ function savedMoveTreeToNodes(moveTree: SavedMoveTreeNode[]) {
                 id: nodeId,
                 parentId,
                 childrenIds: [],
-                record: { uci: child.uci, comment: child.comment, analysis: child.analysis, ...normalizeMoveEvaluation(child) } as MoveRecord,
+                record: { recordedResult: child.recordedResult, uci: child.uci, comment: child.comment, analysis: child.analysis, ...normalizeMoveEvaluation(child) } as MoveRecord,
             };
             appendChildren(child.children ?? [], nodeId);
         }
@@ -243,10 +237,12 @@ export function exportPgn(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        rootResult?: RecordedResult;
         mainLinePinned?: boolean;
     } = {}
 ): string {
-    const result = options.result ? RESULT_TAG[options.result] : '*';
+    const outcome = options.result ?? moves.at(-1)?.recordedResult ?? (moves.length ? undefined : options.rootResult);
+    const result = outcome ? RESULT_TAG[outcome] : '*';
     const metadata = normalizeGameMetadata(options.metadata);
     const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
@@ -266,7 +262,7 @@ export function exportPgn(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${rootCommentText(options.rootComment)}${buildMoveText(moves, startPosition, result)}\n`;
+    return `${tags}\n\n${rootCommentText(options.rootComment, options.rootResult)}${buildMoveText(moves, startPosition, result)}\n`;
 }
 
 /** Position-derived outcome of the exported line, never a different viewed branch. */
@@ -311,6 +307,7 @@ export function exportPgnTree(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        rootResult?: RecordedResult;
         mainLinePinned?: boolean;
     } = {}
 ): string | null {
@@ -320,11 +317,21 @@ export function exportPgnTree(
     const metadata = normalizeGameMetadata(options.metadata);
     const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
-    const pinnedIds = mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [];
-    const selectedIsMain = options.mainLineNodeIds?.length === pinnedIds.length
-        && pinnedIds.every((id, index) => id === options.mainLineNodeIds?.[index]);
-    const outcome = mainLinePinned
-        ? pinnedLineResult(treeNodes, pinnedIds, startPosition.fen) ?? (selectedIsMain ? options.result : undefined)
+    const preferred = buildPreferredChildMap(mainLinePinned ? [] : options.mainLineNodeIds ?? [], treeNodes);
+    const primaryIds: string[] = [];
+    const seen = new Set([rootNodeId]);
+    let parent = rootNodeId;
+    while (treeNodes[parent]?.childrenIds.length) {
+        const wanted = preferred.get(parent);
+        const id = wanted && treeNodes[parent].childrenIds.includes(wanted) ? wanted : treeNodes[parent].childrenIds[0];
+        if (seen.has(id) || !treeNodes[id]?.record || treeNodes[id].parentId !== parent) break;
+        primaryIds.push(id); seen.add(id); parent = id;
+    }
+    const declared = treeNodes[primaryIds.at(-1) ?? rootNodeId]?.record?.recordedResult;
+    const selectedIsMain = options.mainLineNodeIds?.length === primaryIds.length
+        && primaryIds.every((id, index) => id === options.mainLineNodeIds?.[index]);
+    const outcome = mainLinePinned || declared
+        ? pinnedLineResult(treeNodes, primaryIds, startPosition.fen) ?? declared ?? (selectedIsMain ? options.result : undefined)
         : options.result;
     const result = outcome ? RESULT_TAG[outcome] : '*';
 
@@ -343,7 +350,7 @@ export function exportPgnTree(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${rootCommentText(options.rootComment ?? treeNodes[rootNodeId]?.comment)}${buildTreeMoveText(
+    return `${tags}\n\n${rootCommentText(options.rootComment ?? treeNodes[rootNodeId]?.comment, options.rootResult ?? treeNodes[rootNodeId]?.recordedResult)}${buildTreeMoveText(
         treeNodes,
         rootNodeId,
         startPosition,
@@ -366,10 +373,12 @@ export function exportPgnFromUci(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        rootResult?: RecordedResult;
         mainLinePinned?: boolean;
     } = {}
 ): string {
-    const result = options.result ? RESULT_TAG[options.result] : '*';
+    const outcome = options.result ?? (uciMoves.length ? undefined : options.rootResult);
+    const result = outcome ? RESULT_TAG[outcome] : '*';
     const metadata = normalizeGameMetadata(options.metadata);
     const date = metadata?.date ?? options.date ?? formatPgnDate();
     const startPosition = parsePgnStartPosition(options.startFen);
@@ -389,7 +398,7 @@ export function exportPgnFromUci(
         tagLine('Result', result),
     ].filter(Boolean).join('\n');
 
-    return `${tags}\n\n${rootCommentText(options.rootComment)}${buildMoveText(uciMoves.map((uci) => ({ uci })), startPosition, result)}\n`;
+    return `${tags}\n\n${rootCommentText(options.rootComment, options.rootResult)}${buildMoveText(uciMoves.map((uci) => ({ uci })), startPosition, result)}\n`;
 }
 
 export function exportPgnFromMoveTree(
@@ -404,6 +413,7 @@ export function exportPgnFromMoveTree(
         date?: string;
         startFen?: string;
         rootComment?: string;
+        rootResult?: RecordedResult;
         mainLinePinned?: boolean;
     } = {}
 ): string | null {
@@ -428,6 +438,7 @@ export function exportPgnFromMoveTree(
         date: options.date,
         startFen: options.startFen,
         rootComment: options.rootComment,
+        rootResult: options.rootResult,
         mainLinePinned: options.mainLinePinned,
     });
     return pgn;

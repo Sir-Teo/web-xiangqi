@@ -1,3 +1,5 @@
+import { extractPgnResult } from './pgnResult';
+import { type RecordedResult } from './recordedResult';
 import {
     MAX_MOVE_IMPORT_UCI_MOVES,
     extractFenTag,
@@ -15,11 +17,13 @@ import type { SavedMoveTreeNode } from './gameLibrary';
 /** What the app should do with a pasted record, decided before anything is touched. */
 export type MoveLineImportPlan =
     /** A position and nothing played from it. */
-    | { kind: 'diagram'; startFen: string; rootComment?: string }
+    | { kind: 'diagram'; startFen: string; rootComment?: string; rootResult?: RecordedResult }
     /** Nothing usable; `message` is what the reader is told, and why. */
     | { kind: 'error'; message: string }
     | {
         kind: 'line';
+        recordedResult?: RecordedResult;
+        rootResult?: RecordedResult;
         mainLinePinned?: true;
         rootComment?: string;
         moves: string[];
@@ -79,21 +83,25 @@ export function planMoveLineImport(
     }
 
     const dhtml = parseDhtmlXqRecord(text);
+    const outcome = dhtml ? {} : extractPgnResult(text);
+    const source = outcome.source ?? text;
+    if (outcome.error) return { kind: 'error', message: outcome.error };
     if (dhtml && dhtml.moves.length === 0 && dhtml.startFen) {
         return { kind: 'diagram', startFen: dhtml.startFen, rootComment: normalizeMoveComment(dhtml.comments.get(0)) };
     }
 
     const importedLine = dhtml
-        ? { moves: dhtml.moves, moveTree: [] as SavedMoveTreeNode[], hasVariations: false, tooLarge: false, hadMoreGames: false, rootComment: undefined }
-        : extractUciMoveTree(text);
-    const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(text) || undefined;
+        ? { moves: dhtml.moves, moveTree: [] as SavedMoveTreeNode[], hasVariations: false, tooLarge: false, hadMoreGames: false, rootComment: undefined, rootResult: undefined }
+        : extractUciMoveTree(source);
+    const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(source) || undefined;
 
+    const rootResult = importedLine.rootResult;
     const rootComment = dhtml ? normalizeMoveComment(dhtml.comments.get(0)) : importedLine.rootComment;
     let moves = importedLine.moves;
     let importedFromNotation = false;
     let notationRejected: string[] = [];
     if (moves.length === 0 && !dhtml) {
-        const parsed = parseNotationRecord(startFen, stripRecordMetadata(text), MAX_MOVE_IMPORT_UCI_MOVES);
+        const parsed = parseNotationRecord(startFen, stripRecordMetadata(source), MAX_MOVE_IMPORT_UCI_MOVES);
         notationRejected = parsed.rejected;
         if (parsed.moves.length > 0) {
             moves = parsed.moves;
@@ -105,9 +113,9 @@ export function planMoveLineImport(
         return { kind: 'error', message: `Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.` };
     }
 
-    const isDiagramText = moves.length === 0 && (dhtml || /^(?:\s*(?:1-0|0-1|1\/2-1\/2|\*))?\s*$/.test(stripRecordMetadata(text)));
-    if (moves.length === 0 && notationRejected.length === 0 && isDiagramText && (rootComment || startFen)) {
-        return { kind: 'diagram', startFen: startFen || START_POSITION_FEN, rootComment };
+    const isDiagramText = moves.length === 0 && (dhtml || /^(?:\s*(?:1-0|0-1|1\/2-1\/2|\*))?\s*$/.test(stripRecordMetadata(source)));
+    if (moves.length === 0 && notationRejected.length === 0 && isDiagramText && (rootComment || startFen || outcome.result || rootResult)) {
+        return { kind: 'diagram', startFen: startFen || START_POSITION_FEN, rootComment, rootResult: outcome.result ?? rootResult };
     }
 
     if (moves.length === 0) {
@@ -149,7 +157,9 @@ export function planMoveLineImport(
 
     return {
         kind: 'line',
-        ...(extractPgnHeaders(text).xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
+        recordedResult: notationRejected.length ? undefined : outcome.result,
+        rootResult,
+        ...(extractPgnHeaders(source).xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
         rootComment,
         moves,
         startFen,
@@ -157,7 +167,7 @@ export function planMoveLineImport(
         hasVariations,
         importedFromNotation,
         notationRejected,
-        hadMoreGames: importedLine.hadMoreGames,
+        hadMoreGames: importedLine.hadMoreGames || Boolean(outcome.hadMoreGames),
         dhtmlComments: dhtml ? Array.from(dhtml.comments.entries()) : [],
     };
 }

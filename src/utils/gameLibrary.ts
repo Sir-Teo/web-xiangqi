@@ -1,3 +1,4 @@
+import { normalizeRecordedResult, type RecordedResult } from './recordedResult';
 import { truncateText } from './truncateText';
 
 import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
@@ -53,6 +54,7 @@ const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = MAX_REPORTED_CENTIPAWN_LOSS;
 type SavedResult = typeof SAVED_RESULTS[number];
 
 export interface SavedMoveTreeNode extends MoveEvaluation {
+    recordedResult?: RecordedResult;
     uci: string;
     /** The reader's note on this move; see `utils/moveComment`. */
     comment?: string;
@@ -61,6 +63,7 @@ export interface SavedMoveTreeNode extends MoveEvaluation {
 }
 
 export interface SavedGame {
+    rootResult?: RecordedResult;
     metadata?: GameMetadata;
     rootComment?: string;
     /** First-child order is an explicit study main line, separate from the cursor. */
@@ -163,6 +166,7 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
         uci,
         ...(comment ? { comment } : {}),
         ...(analysis ? { analysis } : {}),
+        ...(normalizeRecordedResult(raw.recordedResult) ? { recordedResult: normalizeRecordedResult(raw.recordedResult) } : {}),
         ...normalizeMoveEvaluation(raw),
         ...(normalizedChildren.length > 0 ? { children: normalizedChildren } : {}),
     };
@@ -392,7 +396,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     if (!moves || moveTree === null || startFen === null) {
         return null;
     }
-    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length && !rootComment)) {
+    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length && !rootComment && !normalizeRecordedResult(raw.rootResult))) {
         return null;
     }
 
@@ -407,6 +411,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         moves,
         startFen,
         rootComment,
+        ...(normalizeRecordedResult(raw.rootResult) ? { rootResult: normalizeRecordedResult(raw.rootResult) } : {}),
         ...(raw.mainLinePinned === true && (moves.length || moveTree?.length) ? { mainLinePinned: true as const } : {}),
         result,
         metadata: normalizeGameMetadata(raw.metadata),

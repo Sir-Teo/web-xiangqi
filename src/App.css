@@ -7168,3 +7168,5 @@ summary:active {
     min-height: 44px;
   }
 }
+
+.recorded-line-result { flex-shrink: 0; margin: 8px 0; padding: 10px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; border: 1px solid var(--border-subtle); border-radius: 8px; }
