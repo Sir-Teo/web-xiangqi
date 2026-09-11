@@ -24,6 +24,15 @@ export function mateDistanceFromScore(score: number, kind?: EvaluationScoreKind)
     return score >= 0 ? distance : -distance;
 }
 
+/** Compare finite, Red-positive readings: losing mate < cp < winning mate. */
+export function compareEvaluationScores(left: number, right: number, leftKind?: EvaluationScoreKind, rightKind?: EvaluationScoreKind): number {
+    const leftClass = mateDistanceFromScore(left, leftKind) === null ? 0 : Math.sign(left);
+    const rightClass = mateDistanceFromScore(right, rightKind) === null ? 0 : Math.sign(right);
+    // Within either mate class, the legacy number already orders distances:
+    // faster Red mates are higher; faster Black mates are lower, including M0.
+    return leftClass - rightClass || Math.sign(left - right);
+}
+
 /**
  * The evaluation the app is holding for the search now running, and whether it
  * came from an exact score or a bound.

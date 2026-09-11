@@ -9,7 +9,7 @@ import {
     isCriticalReviewQuality,
 
     isFiniteNumber,} from '../../utils/review';
-import { formatEvaluationText, type EvaluationScoreKind } from '../../utils/engineEvalReading';
+import { compareEvaluationScores, formatEvaluationText, type EvaluationScoreKind } from '../../utils/engineEvalReading';
 import { formatUciMove } from '../../utils/moveNotation';
 import { boardBeforeRecord, formatMoveInStyle, type XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import {
@@ -84,11 +84,11 @@ function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover']
 const isFiniteEval = isFiniteNumber;
 
 /** Keep the source point with each extreme so its score kind survives too. */
-function extremePoint(points: EvalPoint[], pick: (a: number, b: number) => number): EvalPoint | undefined {
+function extremePoint(points: EvalPoint[], direction: 1 | -1): EvalPoint | undefined {
     let best: EvalPoint | undefined;
     for (const point of points) {
         if (!isFiniteEval(point.eval)) continue;
-        if (!best || pick(best.eval, point.eval) !== best.eval) best = point;
+        if (!best || direction * compareEvaluationScores(point.eval, best.eval, point.evalKind, best.evalKind) > 0) best = point;
     }
     return best;
 }
@@ -247,8 +247,8 @@ export const EvalGraph = React.memo(function EvalGraph({
         }
         return Array.from(indexes).sort((left, right) => left - right);
     }, [currentPointIndex, points.length, xTickStep]);
-    const highestPoint = useMemo(() => extremePoint(points, Math.max), [points]);
-    const lowestPoint = useMemo(() => extremePoint(points, Math.min), [points]);
+    const highestPoint = useMemo(() => extremePoint(points, 1), [points]);
+    const lowestPoint = useMemo(() => extremePoint(points, -1), [points]);
     const highestEval = highestPoint?.eval ?? 0;
     const lowestEval = lowestPoint?.eval ?? 0;
     const highestKind = highestPoint?.evalKind;

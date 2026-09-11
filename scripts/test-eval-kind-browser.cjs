@@ -73,7 +73,9 @@ async function command(page, label) {
         };
         await selectMove('h2e2'); await expectGraph('+200.00');
         await selectMove('h9g7'); await expectGraph('+M10000');
+        assert.equal(await page.locator('.graph-extrema span').first().innerText(), 'Peak Red +M10000', 'A tied numeric cp value outranked a forced mate');
         await selectMove('b9c7'); await expectGraph('-300.00');
+        assert.equal(await page.locator('.graph-extrema span').first().innerText(), 'Peak Red +200.00', 'A mate from an unselected variation changed this line’s peak');
         await page.screenshot({ path: `/tmp/xiangqi-eval-kind-visible-${browserType.name()}-${width}.png` });
         await selectMove('h2e2');
         await command(page, 'Save game');

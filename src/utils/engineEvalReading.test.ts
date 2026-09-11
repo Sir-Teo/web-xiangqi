@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { MATE_SCORE_BASE, formatEvaluationText, mateDistanceFromScore, takeEvalReading, emptyEvalReading } from './engineEvalReading';
+import { MATE_SCORE_BASE, compareEvaluationScores, formatEvaluationText, mateDistanceFromScore, takeEvalReading, emptyEvalReading, type EvaluationScoreKind } from './engineEvalReading';
+
+it('orders finite cp and mate readings, including overlapping numbers and mate zero', () => {
+    const ordered: [number, EvaluationScoreKind?][] = [
+        [-30000], [-29999], [-15000], [-Number.MAX_SAFE_INTEGER, 'cp'], [-30000, 'cp'],
+        [-1, 'cp'], [0, 'cp'], [1, 'cp'], [30000, 'cp'], [Number.MAX_SAFE_INTEGER, 'cp'],
+        [15000], [29999], [30000],
+    ];
+    for (let left = 0; left < ordered.length; left++) {
+        for (let right = 0; right < ordered.length; right++) {
+            const [a, aKind] = ordered[left]; const [b, bKind] = ordered[right];
+            expect(Math.sign(compareEvaluationScores(a, b, aKind, bKind))).toBe(Math.sign(left - right));
+        }
+    }
+});
 
 describe('formatEvaluationText', () => {
     it('writes an ordinary evaluation in pawns', () => {
