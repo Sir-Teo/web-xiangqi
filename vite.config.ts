@@ -1,5 +1,6 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import type { ViteDevServer } from 'vite'
 
 const crossOriginIsolationHeaders = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -8,16 +9,26 @@ const crossOriginIsolationHeaders = {
   'X-Content-Type-Options': 'nosniff',
 }
 
+function installIsolationHeaders(server: Pick<ViteDevServer, 'middlewares'>) {
+  // Vite's static/transform handlers can return 304 before applying their
+  // configured headers. WebKit rejects cached workers without COEP on that
+  // response, so set isolation headers before either handler can short-circuit.
+  server.middlewares.use((_request, response, next) => {
+    for (const [name, value] of Object.entries(crossOriginIsolationHeaders)) {
+      response.setHeader(name, value)
+    }
+    next()
+  })
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/web-xiangqi/',
-  plugins: [react()],
-  server: {
-    headers: crossOriginIsolationHeaders,
-  },
-  preview: {
-    headers: crossOriginIsolationHeaders,
-  },
+  plugins: [react(), {
+    name: 'isolation-headers-on-revalidation',
+    configureServer: installIsolationHeaders,
+    configurePreviewServer: installIsolationHeaders,
+  }],
   build: {
     emptyOutDir: false, // WASM artifacts in dist/ are built first; don't wipe them
   },

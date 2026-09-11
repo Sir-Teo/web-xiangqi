@@ -38,7 +38,7 @@ browser name. The existing `test:ui:audit` continues to default to Chromium.
 | Worker startup failure/cancel/timeout/success cleanup | Pass | Pass | Pass |
 | App startup cancellation on Restart and Play, then resume | Pass | Pass | Pass |
 | Beginner guide, letter pieces, reload, and real AI reply | Pass | Pass | Fails error check during reload |
-| Chinese/emoji shared variations, notes, save, and layout | Pass | Pass | Fails worker error check |
+| Chinese/emoji shared variations, notes, save, and layout | Pass | Pass | Pass |
 | Undo within a study and isolation across games | Pass | Pass | Pass |
 | Keep/replay PV, branches, PGN, save/reload, capacity | Pass | Pass | Pass |
 | Oversize autosave warning, PGN, prune, and recovery | Pass | Pass | Pass |
@@ -49,30 +49,45 @@ media query. In this Firefox setup, navigation to the isolated app changes the
 reported pointer back to fine despite `hasTouch: true`; its narrow viewport
 checks must not be described as touch-device verification.
 
-## Open WebKit investigation
+## Cached-worker isolation fix
 
-WebKit emits `due to access control checks` errors for `pikafish.js` during rapid
-reload and for the library's position-explorer worker during the sharing flow.
-This also occurs against the production build, so it is not solely Vite's
-development-module transformation. A steady initial load reaches Engine ready,
-and the beginner flow reaches a real AI reply before its error assertion fails.
-The error check remains enabled; neither error is treated as harmless yet.
+The original sharing failure affected newly created, active library workers,
+not only workers being terminated. Saving a game rebuilds the explorer worker;
+WebKit rejected the cached script load and left the explorer in its error state.
 
-Experiments so far:
+The installed Vite static and transformation handlers return 304 before applying
+`server.headers` / `preview.headers`. A real HTTP regression observed the missing
+isolation headers on the 304 response, despite their presence on the initial
+200 response. Browser response inspection alone was misleading because it
+reported the merged cached response headers.
 
-- Separate/stable and fresh worker-wrapper URLs did not fix beginner reloads.
-- Plain real-worker cancellation/reload with isolation headers did not reproduce
-  the app's error; there is not enough evidence to blame cancellation alone.
-- Disabling the browser HTTP cache in a diagnostic routing run let the Unicode
-  sharing flow pass at 1440, 390, and 320 pixels.
-- Serving only `pikafish.js` and the position-explorer worker with `no-store`
-  also let sharing pass, while beginner reload still failed. This was an
-  experimental server, not a shipped cache-policy change.
-- A [similar upstream COEP cache issue](https://bugs.webkit.org/show_bug.cgi?id=245346)
-  was fixed in 2022. Similar symptoms do not establish that this is the same bug.
+The Vite configuration now installs the headers in middleware before those
+handlers. [Vite documents this middleware ordering](https://vite.dev/guide/api-plugin#configureserver).
+The fix retains 304 responses, cached bodies, and the existing isolation policy.
+It applies to development and Vite preview; the Pages service worker already
+adds isolation headers separately.
 
-Next: isolate the engine core/WASM cache and navigation interaction, examine
-response headers on revalidation, and compare a Pages-style service-worker host.
-Retain the 53 MB network's validated cache reuse while diagnosing the smaller
-worker/core resources. The three-browser matrix is currently **not green** and
-has not been added as a required CI gate.
+`npm run test:server:headers` checks actual 200/304 responses for the public
+Pikafish wrapper and the library module worker in both server modes. It fails
+on the old configuration and passes with the middleware. It is included in
+`npm run verify` after the build. The Unicode sharing workflow now passes in
+WebKit at 1440, 390, and 320 pixels with ordinary browser caching enabled.
+
+## Remaining WebKit reload investigation
+
+Beginner reloads still emit `due to access control checks` for `pikafish.js`.
+A steady initial load reaches Engine ready, and the beginner flow reaches a
+real AI reply before its error assertion fails. The error check remains enabled.
+
+A diagnostic trace shows the initial weights request being cancelled, followed
+by engine recovery starting another worker shortly before `pagehide`; that
+replacement receives a load error. This distinguishes the remaining navigation
+case from the fixed library-worker revalidation failure, but does not yet prove
+where the navigation error should be handled.
+
+Separate/fresh wrapper URLs, disabling caching for only the small wrapper and
+library worker, and the 304 header fix did not resolve beginner reloads. No
+cache-disabling workaround or error suppression was shipped. Next: isolate the
+navigation/recovery timing and compare a Pages-style service-worker host.
+Retain the 53 MB network's validated cache reuse. The three-browser matrix is
+currently **not green** and has not been added as a required CI gate.

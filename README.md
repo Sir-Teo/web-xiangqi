@@ -189,7 +189,7 @@ compares the three and tracks what is worth moving between them.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
 - Local Node benchmark helper: `npm run bench:nps -- --variant threaded-simd --depth 8 --repeats 3 --out /tmp/pika-before.json` (and `--compare <file>` for before/after deltas). Benchmark runs fail if they do not return a best move, usable NPS, or the requested depth; use `--min-median-nps`, `--max-median-wall-ms`, or `--max-cold-start-ms` for machine-specific performance gates.
 - Study serialization benchmark: `node scripts/bench-study-serialization.mjs` compares the current traversal with the former algorithm on 128-, 512-, and 1,024-move chains. It verifies matching output and reports medians/p95 from interleaved samples; measurements exclude rendering, JSON encoding, storage, and engine search.
-- Cross-browser audit: after `npx playwright install chromium firefox webkit` and `npm run build:react`, run `npm run test:ui:cross-browser`. Use `XIANGQI_QA_BROWSER=firefox` to select one browser. The built-app matrix currently exposes unresolved WebKit failures; see [the findings and scope](docs/cross-browser-audit-2026-09-11.md).
+- Cross-browser audit: after `npx playwright install chromium firefox webkit` and `npm run build:react`, run `npm run test:ui:cross-browser`. Use `XIANGQI_QA_BROWSER=firefox` to select one browser. The built-app matrix currently exposes an unresolved WebKit reload failure; see [the findings and scope](docs/cross-browser-audit-2026-09-11.md).
 
 ## Demo defaults (performance-first)
 

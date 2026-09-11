@@ -14,7 +14,7 @@
     "build:react": "node scripts/clean-react-dist.cjs && tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run test:openings && npm run test:library && npm run test:engine:contract && npm run test:smoke && npm run test:parity && npm run build:react",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run test:openings && npm run test:library && npm run test:engine:contract && npm run test:smoke && npm run test:parity && npm run build:react && npm run test:server:headers",
     "preview": "vite preview",
     "test": "vitest run",
     "build": "bash scripts/build-pikafish.sh",
@@ -40,7 +40,8 @@
     "bench:nps": "node scripts/bench-nps.cjs",
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd",
     "test:ui:audit": "node scripts/test-ui-audit.cjs",
-    "test:ui:cross-browser": "node scripts/test-ui-cross-browser.cjs"
+    "test:ui:cross-browser": "node scripts/test-ui-cross-browser.cjs",
+    "test:server:headers": "node scripts/test-server-headers.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
