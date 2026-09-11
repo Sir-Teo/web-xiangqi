@@ -23,6 +23,7 @@ const path = require('node:path');
       'test-engine-position-browser.cjs',
       'test-engine-boot-race-browser.cjs',
       'test-worker-lifecycle-browser.cjs',
+      'test-worker-progress-browser.cjs',
       'test-engine-startup-cancel-browser.cjs',
       'test-engine-recovery-navigation-browser.cjs',
       'test-engine-line-browser.cjs',

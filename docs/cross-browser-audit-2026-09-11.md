@@ -36,6 +36,7 @@ browser name. The existing `test:ui:audit` continues to default to Chromium.
 | Workflow | Chromium | Firefox | WebKit |
 | --- | --- | --- | --- |
 | Worker startup failure/cancel/timeout/success cleanup | Pass | Pass | Pass |
+| Worker progress bounds, reload reset, and byte integrity | Pass | Pass | Pass |
 | App startup cancellation on Restart and Play, then resume | Pass | Pass | Pass |
 | Recovery across navigation, manual restart, disable, and crash budget | Pass | Pass | Pass |
 | Beginner guide, letter pieces, reload, and real AI reply | Pass | Pass | Pass |
@@ -101,7 +102,7 @@ pagehide/pageshow, manual restart and disable ownership, resumed PV output, and
 bounded repeated failures in all three browsers at 1440, 390, and 320 pixels.
 The lifecycle simulation is not certification of hardware back/forward-cache
 behavior. Existing startup cancellation and late-constructor watchdog regressions
-remain covered. The expanded matrix runs eight workflows per browser and remains
+remain covered. The expanded matrix runs nine workflows per browser and remains
 an optional local audit; required CI retains its existing Chromium coverage.
 
 ## Engine-tab recovery feedback

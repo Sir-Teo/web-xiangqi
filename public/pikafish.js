@@ -909,10 +909,18 @@
       let autoHashMBOverride = true;
       let hashMBOverride = undefined;
       let reportAssetProgressOverride = false;
+      let lastPostedAssetProgress = null;
       let forwardAttached = false;
 
     function postAssetProgress(progress) {
       if (!reportAssetProgressOverride) return;
+      // Match the app's one-MiB display step before crossing the worker
+      // boundary. Small network chunks otherwise enqueue thousands of main
+      // thread tasks that the UI immediately discards. Always retain startup,
+      // completion, changed totals, and a new download's reset to zero.
+      const previous = lastPostedAssetProgress;
+      if (previous && progress.done === previous.done && progress.total === previous.total &&
+          progress.loaded >= previous.loaded && progress.loaded - previous.loaded < 1024 * 1024) return;
       try {
         self.postMessage({
           type: "assetProgress",
@@ -920,6 +928,7 @@
           total: progress.total,
           done: progress.done
         });
+        lastPostedAssetProgress = progress;
       } catch (_) {}
     }
 

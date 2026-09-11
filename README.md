@@ -118,10 +118,10 @@ npm run verify            # typecheck, lint, tests, openings, library, engine
 parts: chaining by hand is how a real failure gets reported as success, and
 `npm test` typechecks nothing on its own — Vitest transpiles without checking.
 
-`test:prod:smoke` is the one that loads what actually ships. Every other browser
-suite here drives the *dev* server, so the bundle in `dist/` was the one thing
-nothing had ever opened; it runs in the Pages deploy, which is the only job
-upstream of a publish.
+`test:prod:smoke` loads the built app under isolation headers, a Pages-style
+service-worker host, and legacy-worker recovery. It runs before the Pages
+deploy. `test:ui:cross-browser` also serves `dist/` and checks user workflows in
+Chromium, Firefox, and WebKit; the layout and focused audit suites use Vite dev.
 
 Not in `verify`:
 
@@ -184,11 +184,13 @@ compares the three and tracks what is worth moving between them.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
 - Pass an optional `signal: controller.signal` to cancel a pending `createWorkerEngine` call. Cancellation rejects with `AbortError` and releases the worker; failed initialization and timeouts release it too. After startup succeeds, use the returned engine's `terminate()` method. The app cancels pending startup when restarting or disabling analysis.
+- Worker `onAssetProgress` callbacks are coalesced at roughly one-MiB steps, plus initial, completion, reset, and changed-total notifications. Download bytes and completion counts are unchanged; callers must not depend on a callback for every network chunk.
 - The React app preloads the lightweight `pikafish.js` wrapper, then lazy-loads the selected core/NNUE through `useEngine` instead of parser-blocking the app shell before first paint.
 - The React app unregisters legacy demo service workers and clears `pikafish-demo-*` caches at startup so older cached demo shells do not keep serving stale engine/app assets.
 - Current bundled Pikafish build requires the NNUE net (`pikafish.nnue`) to run; disabling NNUE causes engine termination.
 - Local Node benchmark helper: `npm run bench:nps -- --variant threaded-simd --depth 8 --repeats 3 --out /tmp/pika-before.json` (and `--compare <file>` for before/after deltas). Benchmark runs fail if they do not return a best move, usable NPS, or the requested depth; use `--min-median-nps`, `--max-median-wall-ms`, or `--max-cold-start-ms` for machine-specific performance gates.
 - Study serialization benchmark: `node scripts/bench-study-serialization.mjs` compares the current traversal with the former algorithm on 128-, 512-, and 1,024-move chains. It verifies matching output and reports medians/p95 from interleaved samples; measurements exclude rendering, JSON encoding, storage, and engine search.
+- Worker progress benchmark: `node scripts/bench-progress-browser.cjs [baseline-wrapper-path]` runs five real-engine startup samples per implementation, interleaved in fresh browser contexts. Set `XIANGQI_QA_BROWSER` to select a browser. It reports progress-message counts and startup time, not application-rendering or search-speed measurements.
 - Cross-browser audit: after `npx playwright install chromium firefox webkit` and `npm run build:react`, run `npm run test:ui:cross-browser`. Use `XIANGQI_QA_BROWSER=firefox` to select one browser. The built-app matrix covers engine recovery, beginner play, and study workflows; see [the findings and scope](docs/cross-browser-audit-2026-09-11.md).
 
 ## Demo defaults (performance-first)
