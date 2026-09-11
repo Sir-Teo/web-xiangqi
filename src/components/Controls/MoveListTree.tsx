@@ -3,14 +3,13 @@ import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
     REVIEW_THRESHOLDS,
     REVIEW_WIN_PERCENT_LOSS_THRESHOLDS,
-    classifyMoveQualityForEval,
     formatReviewQuality,
-    getEvalLossForMove,
     getMoveQualityClassName,
-    getReviewSideForRecord,
     isCriticalReviewQuality,
     formatReviewNoteForDisplay,
+    type ReviewMoveQuality,
 } from '../../utils/review';
+import { getMoveListQuality } from '../../utils/moveListQuality';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveNumber } from '../../utils/moveNumbering';
@@ -180,9 +179,9 @@ export const MoveListTree = memo(function MoveListTree({
     }
 
     const rows: JSX.Element[] = [];
-    const hasMoveQualityLegend = activeLineNodeIds.some((nodeId) => (
-        getMoveQualityClass(treeNodes, nodeId, rootNodeId) !== 'quality-pending'
-    ));
+    let hasMoveQualityLegend = false;
+    let hasEstimatedQuality = false;
+    let hasSavedQualityMarks = false;
     const entryAt = (lineIndex: number): MoveListEntry | null => {
         const nodeId = activeLineNodeIds[lineIndex];
         if (!nodeId) return null;
@@ -193,7 +192,13 @@ export const MoveListTree = memo(function MoveListTree({
         const node = treeNodes[nodeId];
         const record = node?.record;
         if (!node || !record) return null;
-        const qualityClass = getMoveQualityClass(treeNodes, nodeId, rootNodeId);
+        const quality = getMoveListQuality(record, node.parentId ? treeNodes[node.parentId]?.record?.evalScore : undefined);
+        const qualityClass = getMoveQualityClassName(quality);
+        if (quality) {
+            hasMoveQualityLegend = true;
+            if (!record.quality) hasEstimatedQuality = true;
+            if (record.quality && record.persistEvaluation) hasSavedQualityMarks = true;
+        }
         // Coach hint: engine's best alternative (stored on this node from review)
         const coachMove = record.bestMove && record.bestMove !== record.uci ? record.bestMove : null;
         const note = record.quality && isCriticalReviewQuality(record.quality) && record.reviewNote
@@ -221,9 +226,9 @@ export const MoveListTree = memo(function MoveListTree({
                     onFocus={() => setRovingNodeId(nodeId)}
                     onKeyDown={handleChipKeyDown}
                     tabIndex={nodeId === stopNodeId ? 0 : -1}
-                    title={formatMoveTitle(record)}
+                    title={formatMoveTitle(record, quality)}
                     aria-current={isCurrent ? 'step' : undefined}
-                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle)}
+                    aria-label={formatMoveAriaLabel(record, isCurrent, coachMove, notationStyle, quality)}
                     aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
                 >
                     {/* One authoritative reading of the move, then the raw
@@ -359,7 +364,8 @@ export const MoveListTree = memo(function MoveListTree({
                         <span className="legend-item quality-blunder"><span className="mtree-quality-dot" /> {formatReviewQuality('blunder')} <em>larger</em></span>
                     </div>
                     <p>Severity is capped by practical win-chance loss so lopsided positions are not over-punished.</p>
-                    {activeLineNodeIds.some(id => treeNodes[id]?.record?.persistEvaluation && treeNodes[id]?.record?.quality)
+                    {hasEstimatedQuality ? <p>Estimates compare separate position scores. Run Review to evaluate the whole line.</p> : null}
+                    {hasSavedQualityMarks
                         ? <p>Saved PGN quality marks may use different criteria.</p> : null}
                 </div> : null}
         </div>
@@ -378,14 +384,19 @@ function formatMoveLabel(
     return formatMoveRecordLabel(record);
 }
 
-function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>) {
+function qualityDescription(record: NonNullable<MoveTreeNode['record']>, quality?: ReviewMoveQuality): string {
+    return quality ? `${record.quality ? 'Move quality' : 'Estimated move quality'} ${formatReviewQuality(quality)}` : '';
+}
+
+function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>, quality?: ReviewMoveQuality) {
     // Move quality reaches the eye only as the colour of a 5px dot, and forced
     // colours repaint that dot to its own background -- so the annotation was
     // there with no way at all to read it. The aria-label already carries the
     // quality; give the tooltip the same, which also spares a mouse user from
     // matching a colour against the legend.
     const title = formatMoveRecordTitle(record);
-    return record.quality ? `${title} - ${formatReviewQuality(record.quality)}` : title;
+    const description = qualityDescription(record, quality);
+    return description ? `${title} - ${description}` : title;
 }
 
 function formatMoveNotation(
@@ -415,7 +426,8 @@ function formatMoveAriaLabel(
     record: NonNullable<MoveTreeNode['record']>,
     isCurrent: boolean,
     coachMove: string | null,
-    notationStyle: XiangqiNotationStyle
+    notationStyle: XiangqiNotationStyle,
+    quality?: ReviewMoveQuality
 ) {
     const notation = formatMoveNotation(record, notationStyle);
     const parts = [
@@ -423,7 +435,7 @@ function formatMoveAriaLabel(
         formatMoveRecordTitle(record),
         notationStyle === 'uci' ? '' : notation,
         `UCI ${formatUciMove(record.uci)}`,
-        record.quality ? `Review quality ${formatReviewQuality(record.quality)}` : '',
+        qualityDescription(record, quality),
         coachMove ? `Engine suggestion ${formatAlternative(record, coachMove, notationStyle)}` : '',
         record.comment ? `Note, ${record.comment}` : '',
     ].filter(Boolean);
@@ -475,37 +487,4 @@ function makeMoveListEntry(
     // numbering plies instead.
     const { moveNumber, side } = describeMoveNumber(rootFen, lineIndex + 1);
     return { nodeId, lineIndex, side, moveNumber };
-}
-
-function getMoveQualityClass(
-    treeNodes: Record<string, MoveTreeNode>,
-    nodeId: string,
-    rootNodeId: string
-): string {
-    const node = treeNodes[nodeId];
-    const record = node?.record;
-    if (record?.quality) {
-        return getMoveQualityClassName(record.quality);
-    }
-    const currentEval = record?.evalScore;
-    /**
-     * The root carries no record, so a first move has no parent evaluation to
-     * be judged against and stayed `quality-pending` for the life of the game
-     * -- every move but the first got a live colour. The `: 0` here was meant
-     * to cover it and never fired: the root's id is a truthy string, so the
-     * lookup ran and found nothing.
-     *
-     * Zero is the same baseline `EvalGraph` plots the start position at, so
-     * the two now agree rather than one grading a move the other does not.
-     * Both are wrong in the same way for a game set up from a lopsided
-     * position, where the start is not even -- and a review, whose stored
-     * quality is preferred above, is what corrects it.
-     */
-    const parentIsRoot = !node?.parentId || node.parentId === rootNodeId;
-    const parentEval = parentIsRoot ? 0 : treeNodes[node.parentId!]?.record?.evalScore;
-    if (!record || typeof currentEval !== 'number' || typeof parentEval !== 'number') return 'quality-pending';
-
-    const side = getReviewSideForRecord(record, record.ply - 1);
-    const delta = getEvalLossForMove(parentEval, currentEval, side);
-    return getMoveQualityClassName(classifyMoveQualityForEval(delta, parentEval, currentEval, side));
 }

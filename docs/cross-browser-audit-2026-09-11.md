@@ -134,3 +134,12 @@ move previews, downloaded PGN bytes, root-note and variation sharing, and
 recovery at 1440/390/320px. Characters crossing a storage or preview limit are
 omitted intact; characters that fit keep both UTF-16 units. The matrix checks
 source and recipient page errors and responsive horizontal fit.
+
+
+## Move-quality evidence and accessibility
+
+`test-move-quality-browser.cjs` uses fixed PGN scores and a controlled engine to
+keep imported evidence stable. It checks unknown first-move scores for Red and
+Black starts, missing scores in a line, genuine zero, quality-mark precedence,
+variation-only legends, and matching estimated-quality text in titles and
+accessible names. Coverage runs at 1440/390/320px in the three-browser matrix.
