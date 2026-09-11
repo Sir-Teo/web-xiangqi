@@ -4002,11 +4002,20 @@ async function assertEngineTelemetryDashboard(browser) {
 
     await page.waitForFunction(() => typeof window.__finishFakeTelemetrySearch === "function", null, { timeout: 10000 });
     await page.evaluate(() => window.__finishFakeTelemetrySearch());
+    // 10s rather than the file's usual 5, to match the wait directly above.
+    // This is the one wait in the suite that has actually lost a race: a
+    // queued Clear Hash flushes only after the search it was queued behind
+    // ends, so this is two effect passes and a round trip through the fake
+    // engine, and on a loaded machine that has twice overrun five seconds --
+    // once here, once in a scratchpad subset run. Green immediately on an
+    // idle re-run both times, which is what a race looks like and not what a
+    // stalled flush looks like. The predicate is untouched: a Clear Hash that
+    // never arrives still fails, ten seconds later.
     await page.waitForFunction((beforeCount) => {
       const clearHashCommandCount = (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
       const buttonText = document.querySelector('[data-testid="clear-engine-hash-btn"]')?.textContent?.replace(/\s+/g, " ").trim() || "";
       return clearHashCommandCount > beforeCount && buttonText !== "Queued";
-    }, clearHashCommandsBefore, { timeout: 5000 });
+    }, clearHashCommandsBefore, { timeout: 10000 });
     const flushedHashState = await page.evaluate((beforeCount) => {
       const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
       const clearHashCommandCount = (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
