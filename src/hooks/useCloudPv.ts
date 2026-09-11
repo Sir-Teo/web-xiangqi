@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { buildCloudPvUrl, parseCloudPvResponse, type CloudPvReading } from '../utils/cloudPv';
 import { BoundedLruCache } from '../utils/boundedCache';
 
@@ -22,8 +22,10 @@ const cache = new BoundedLruCache<CloudPvReading | null>(200);
  * agreed to it. Cached per FEN for the life of the page; a failed request is
  * not cached, so it is retried on the next visit.
  */
-export function useCloudPv(fen: string, enabled: boolean): CloudPvState {
+export function useCloudPv(fen: string, enabled: boolean): CloudPvState & { retry: () => void } {
     const [state, setState] = useState<CloudPvState>({ status: 'off', line: null, fen });
+    const [attempt, setAttempt] = useState(0);
+    const retry = useCallback(() => setAttempt(value => value + 1), []);
 
     useEffect(() => {
         if (!enabled) {
@@ -67,7 +69,7 @@ export function useCloudPv(fen: string, enabled: boolean): CloudPvState {
             if (timeout !== null) window.clearTimeout(timeout);
             controller.abort();
         };
-    }, [enabled, fen]);
+    }, [enabled, fen, attempt]);
 
-    return state;
+    return { ...state, retry };
 }

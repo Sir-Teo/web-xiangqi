@@ -9207,7 +9207,7 @@ async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
     });
 
     const failed = await card();
-    if (!/did not answer/.test(failed.text) || !/asked again/.test(failed.text)) {
+    if (!/did not answer/.test(failed.text) || !await page.getByTestId('cloud-book-retry').isEnabled()) {
       throw new Error(`The failure should say what happened and what happens next: ${JSON.stringify(failed.text)}`);
     }
 

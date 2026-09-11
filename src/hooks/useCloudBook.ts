@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     CloudBookCache,
     buildCloudBookUrl,
@@ -31,8 +31,10 @@ const cache = new CloudBookCache(200);
  * has already been asked about costs nothing and shows instantly; a failed
  * request is not cached, so a dropped connection is retried on the next visit.
  */
-export function useCloudBook(fen: string, enabled: boolean): CloudBookState {
+export function useCloudBook(fen: string, enabled: boolean): CloudBookState & { retry: () => void } {
     const [state, setState] = useState<CloudBookState>({ status: 'off', moves: [], fen });
+    const [attempt, setAttempt] = useState(0);
+    const retry = useCallback(() => setAttempt(value => value + 1), []);
 
     useEffect(() => {
         if (!enabled) {
@@ -80,7 +82,7 @@ export function useCloudBook(fen: string, enabled: boolean): CloudBookState {
             if (timeout !== null) window.clearTimeout(timeout);
             controller.abort();
         };
-    }, [enabled, fen]);
+    }, [enabled, fen, attempt]);
 
-    return state;
+    return { ...state, retry };
 }

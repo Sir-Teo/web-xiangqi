@@ -5705,18 +5705,28 @@ function App() {
                         {cloudBook.status === 'loading'
                           ? `Asking ${CLOUD_BOOK_SITE_NAME}…`
                           : cloudBook.status === 'error'
-                            ? `${CLOUD_BOOK_SITE_NAME} did not answer. It will be asked again on the next position.`
+                            ? `${CLOUD_BOOK_SITE_NAME} did not answer.`
                             : 'Not in the cloud book.'}
                       </p>
                     )}
+                    {cloudBookEnabled && cloudBook.status === 'error' ? (
+                      <button type="button" className="chip-btn cloud-book-toggle" onClick={cloudBookReading.retry} data-testid="cloud-book-retry">
+                        Retry cloud book
+                      </button>
+                    ) : null}
                     {cloudBookEnabled && (cloudPv.status === 'loading' || cloudPv.status === 'error' || cloudPv.status === 'unknown') ? (
                       <p className="library-explorer-note" role="status" data-testid="cloud-pv-status">
                         {cloudPv.status === 'loading'
                           ? 'Loading cloud line…'
                           : cloudPv.status === 'error'
-                            ? 'Cloud line unavailable. Turn the cloud book off and on to retry.'
+                            ? 'Cloud line unavailable.'
                             : 'No cloud line for this position.'}
                       </p>
+                    ) : null}
+                    {cloudBookEnabled && cloudPv.status === 'error' ? (
+                      <button type="button" className="chip-btn cloud-book-toggle" onClick={cloudPvReading.retry} data-testid="cloud-pv-retry">
+                        Retry cloud line
+                      </button>
                     ) : null}
                     {cloudBookEnabled && cloudPv.status === 'ok' && cloudPv.line && cloudPvTokens ? (
                       <div className="cloud-pv" data-testid="cloud-pv" data-depth={cloudPv.line.depth}>
