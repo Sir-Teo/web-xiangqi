@@ -5709,6 +5709,15 @@ function App() {
                             : 'Not in the cloud book.'}
                       </p>
                     )}
+                    {cloudBookEnabled && (cloudPv.status === 'loading' || cloudPv.status === 'error' || cloudPv.status === 'unknown') ? (
+                      <p className="library-explorer-note" role="status" data-testid="cloud-pv-status">
+                        {cloudPv.status === 'loading'
+                          ? 'Loading cloud line…'
+                          : cloudPv.status === 'error'
+                            ? 'Cloud line unavailable. Turn the cloud book off and on to retry.'
+                            : 'No cloud line for this position.'}
+                      </p>
+                    ) : null}
                     {cloudBookEnabled && cloudPv.status === 'ok' && cloudPv.line && cloudPvTokens ? (
                       <div className="cloud-pv" data-testid="cloud-pv" data-depth={cloudPv.line.depth}>
                         <div className="cloud-pv-head">

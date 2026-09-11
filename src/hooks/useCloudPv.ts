@@ -40,12 +40,16 @@ export function useCloudPv(fen: string, enabled: boolean): CloudPvState {
         const controller = new AbortController();
         let timeout: number | null = null;
         const timer = window.setTimeout(async () => {
-            timeout = window.setTimeout(() => controller.abort(), CLOUD_PV_TIMEOUT_MS);
+            timeout = window.setTimeout(() => {
+                controller.abort();
+                setState({ status: 'error', line: null, fen });
+            }, CLOUD_PV_TIMEOUT_MS);
             try {
                 const response = await fetch(buildCloudPvUrl(fen), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const result = parseCloudPvResponse(await response.text());
-                if (result.status === 'unreadable') throw new Error('unreadable reply');
+                if (controller.signal.aborted) return;
+                if (result.status === 'unreadable' || result.status === 'invalid') throw new Error('unavailable line');
                 const line = result.status === 'ok' ? result.line : null;
                 cache.set(fen, line);
                 if (controller.signal.aborted) return;
