@@ -66,6 +66,7 @@ export type MoveTreeSnapshot = {
     activeLineNodeIds: string[];
     currentMoveIndex: number;
     rootFen: string;
+    gameIdentity: object;
 };
 
 export type MoveSequenceValidation =
@@ -638,19 +639,20 @@ export function useXiangqi() {
      * The tree as it stands, so a deletion can be taken back.
      *
      * Everything a delete changes is here and nothing else: the nodes, the
-     * line the board is on, and where on it the board stands. The root FEN is
-     * carried so a snapshot from before a New Game or an import is refused
-     * rather than grafted onto a different position.
+     * line the board is on, and where on it the board stands. Identity is
+     * carried because distinct games commonly share the same starting FEN.
+     * A snapshot from before a New Game or an import must be refused.
      */
     const captureTreeSnapshot = useCallback((): MoveTreeSnapshot => ({
         treeNodes,
         activeLineNodeIds,
         currentMoveIndex,
         rootFen,
-    }), [activeLineNodeIds, currentMoveIndex, rootFen, treeNodes]);
+        gameIdentity: rootPosition,
+    }), [activeLineNodeIds, currentMoveIndex, rootFen, rootPosition, treeNodes]);
 
     const restoreTreeSnapshot = useCallback((snapshot: MoveTreeSnapshot): boolean => {
-        if (snapshot.rootFen !== rootFen) return false;
+        if (snapshot.gameIdentity !== rootPosition || snapshot.rootFen !== rootFen) return false;
         const nodeId = snapshot.currentMoveIndex === -1
             ? ROOT_NODE_ID
             : snapshot.activeLineNodeIds[snapshot.currentMoveIndex];

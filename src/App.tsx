@@ -4032,8 +4032,9 @@ function App() {
   useEffect(() => () => {
     if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
   }, []);
-  // A snapshot from a different root cannot be restored, so do not offer it.
-  useEffect(() => { dismissDeleteUndo(); }, [dismissDeleteUndo, rootFen]);
+  // A new game may have the same root FEN, but its predecessor's undo cannot
+  // be applied to it. Identity changes on reset, import, and library load.
+  useEffect(() => { dismissDeleteUndo(); }, [dismissDeleteUndo, gameIdentity]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     if (nodeId === rootNodeId) return;

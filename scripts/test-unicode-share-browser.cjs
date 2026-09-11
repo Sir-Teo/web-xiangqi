@@ -42,7 +42,7 @@ async function command(page, label) {
         recipient.on('pageerror', error => errors.push(error.message));
         await recipient.goto(copied);
         await recipient.keyboard.press('t');
-        await recipient.getByTestId('move-comment-input').waitFor();
+        await recipient.waitForFunction(note => document.querySelector('[data-testid="move-comment-input"]')?.value === note, study[0].comment);
         assert.equal(await recipient.getByTestId('move-comment-input').inputValue(), study[0].comment);
         assert.equal(await recipient.locator('.bottombar-fen').getAttribute('title'), fen);
         assert.equal(await recipient.locator('.mtree-chip').count(), 3);
