@@ -4568,7 +4568,10 @@ function App() {
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     setGameMetadata(game.metadata);
     if (initialPly === undefined || initialPly >= game.moves.length) {
-      setGameResult(savedResultToGameResult(game.result));
+      // The loader has already derived checkmate/stalemate from the selected
+      // board. Saved metadata may be stale or contradictory; only use it for
+      // results the position cannot prove, such as resignation or an agreed draw.
+      setGameResult(loadedResult => loadedResult ?? savedResultToGameResult(game.result));
     }
     if (game.review) {
       setNodeReviewDataBulk(

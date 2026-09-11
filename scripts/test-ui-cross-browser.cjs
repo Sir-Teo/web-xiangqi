@@ -41,6 +41,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-variation-focus-browser.cjs',
         'test-active-continuation-browser.cjs',
         'test-study-main-line-browser.cjs',
+        'test-loaded-result-browser.cjs',
         'test-library-annotations-browser.cjs',
         'test-dhtmlxq-browser.cjs',
         'test-root-notes-browser.cjs',
