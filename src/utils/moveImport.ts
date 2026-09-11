@@ -328,20 +328,22 @@ function parseFreeTextComment(comment: string): string | undefined {
 }
 
 function parseEvalCommand(comment: string): number | undefined {
-    // The sign is read as a character, not as a number: `#-0` is a real value
-    // (black is mated now) and `Number('-0') >= 0` is true, so a numeric test
-    // would read it as red's.
-    const mate = comment.match(/\[%eval\s+#(-)?(\d+)\]/i);
-    if (mate) {
-        const distance = Number(mate[2]);
-        if (!Number.isFinite(distance)) return undefined;
-        return mate[1] === '-' ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance;
+    // python-chess also writes a comma-separated depth and accepts signed
+    // decimal shorthand. The depth is not a score and must not prevent the
+    // evaluation from being read. Walk in source order across both score kinds.
+    const commands = /\[%eval\s+(?:#([+-]?\d+)|([+-]?(?:\d+(?:\.\d*)?|\.\d+)))(?:,\d+)?\s*\]/gi;
+    for (const match of comment.matchAll(commands)) {
+        if (match[1] !== undefined) {
+            const distance = Math.abs(Number(match[1]));
+            // Larger distances cannot fit this app's existing mate sentinel.
+            // In particular, subtracting an arbitrary distance can flip sides.
+            if (!Number.isSafeInteger(distance) || distance > MATE_SCORE_BASE / 2) continue;
+            return match[1].startsWith('-') ? -(MATE_SCORE_BASE - distance) : MATE_SCORE_BASE - distance;
+        }
+        const score = Math.round(Number(match[2]) * 100);
+        if (Number.isSafeInteger(score)) return score;
     }
-    const pawns = comment.match(/\[%eval\s+(-?\d+(?:\.\d+)?)\]/i);
-    if (!pawns) return undefined;
-    const value = Number(pawns[1]);
-    if (!Number.isFinite(value)) return undefined;
-    return Math.round(value * 100);
+    return undefined;
 }
 
 /**

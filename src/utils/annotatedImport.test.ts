@@ -58,6 +58,26 @@ describe('reading a review back out of a PGN', () => {
             .toEqual({ evalScore: -(MATE_SCORE_BASE - 3) });
     });
 
+    it('accepts signed scores, decimal shorthand and optional depth suffixes', () => {
+        for (const [value, expected] of [
+            ['+0.42,18', 42], ['-.75,21', -75], ['42.,0', 4200], ['.5', 50],
+            ['#+3,24', MATE_SCORE_BASE - 3], ['#-0,0', -MATE_SCORE_BASE],
+        ] as const) {
+            expect(extractAnnotatedMainLine(`h2e2 {[%eval ${value}]}`).annotations[0]).toEqual({ evalScore: expected });
+        }
+    });
+
+    it('takes the first valid evaluation in a comment regardless of score kind', () => {
+        expect(extractAnnotatedMainLine('h2e2 {[%eval +.42,18] [%eval #3]}').annotations[0]).toEqual({ evalScore: 42 });
+        expect(extractAnnotatedMainLine('h2e2 {[%eval #-30001] [%eval -.42,18]}').annotations[0]).toEqual({ evalScore: -42 });
+    });
+
+    it('rejects malformed evaluations and values that cannot be represented safely', () => {
+        for (const value of ['Infinity', 'NaN', '0.42,-1', '0.42,fast', '0.42,1.5', '1e3', '#30001', '#-30001', '9'.repeat(310), '#3.5']) {
+            expect(extractAnnotatedMainLine(`h2e2 {[%eval ${value}]}`).annotations[0]).toEqual({});
+        }
+    });
+
     it('accepts the suffix symbols other tools write instead of NAGs', () => {
         const parsed = extractAnnotatedMainLine('1. h2e2?! h9g7? 2. b0c2?? b9c7 *');
         expect(parsed.annotations.map((a) => a.quality))

@@ -81,9 +81,19 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.getByRole('button', { name: 'Restore', exact: true }).click();
         await command(page, 'Save game');
         assert.deepEqual(await lastTree(), expected, 'Reload recovery lost a branch note');
+        await importPgn(page, width, 'h2e2 {[%eval +0.42,18]} h9g7 {[%eval -.75,21]} h0g2 {[%eval #+3,24]} b9c7 {[%eval #-0,0]} *');
+        const reviewDownload = page.waitForEvent('download');
+        await command(page, 'Download PGN');
+        const reviewChunks = [];
+        for await (const chunk of await (await reviewDownload).createReadStream()) reviewChunks.push(chunk);
+        const reviewedPgn = Buffer.concat(reviewChunks).toString();
+        for (const evaluation of ['0.42', '-0.75', '#3', '#-0']) {
+          assert.ok(reviewedPgn.includes(`[%eval ${evaluation}]`), `Imported evaluation ${evaluation} was lost or changed sides`);
+        }
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()}: 198k-character malformed-command note imported, bounded and saved at ${width}px (${elapsed}ms click-to-dialog-close)`);
         console.log(`${browserType.name()}: nested notes, semicolon notes, paste/file PGN round-trip, save and recovery passed at ${width}px`);
+        console.log(`${browserType.name()}: signed/depth-suffixed evaluations and mate-zero PGN import/export passed at ${width}px`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
