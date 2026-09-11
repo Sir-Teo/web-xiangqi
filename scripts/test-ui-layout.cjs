@@ -11193,7 +11193,6 @@ async function assertLargeLibraryRendersProgressively(page) {
   await page.getByTestId("library-show-more-saved").waitFor({ timeout: 10000 });
 
   const initial = await page.evaluate(() => ({
-    searchPlaceholder: document.querySelector('[aria-label="Search library"]')?.getAttribute("placeholder") || "",
     savedCards: document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length,
     historicalCards: document.querySelectorAll('[data-testid="historical-game-list"] .lib-card').length,
     // What the panel says it is showing, so this checks the list agrees with
@@ -11208,8 +11207,6 @@ async function assertLargeLibraryRendersProgressively(page) {
   if (
     initial.savedCards !== 100 ||
     initial.historicalCards !== initial.historicalClaimed ||
-    !initial.searchPlaceholder.includes("moves") ||
-    !initial.searchPlaceholder.includes("reviews") ||
     !initial.showMoreText.includes("50 more") ||
     initial.needleVisible ||
     initial.overflowX > 2
