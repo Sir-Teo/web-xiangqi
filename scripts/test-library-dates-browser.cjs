@@ -12,9 +12,18 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
       const page = await browser.newPage({ ...(!liveDefaults ? { locale, timezoneId } : {}), viewport: { width, height }, hasTouch: width < 900 });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
+        let cdp;
+        if (liveDefaults) {
+          cdp = await page.context().newCDPSession(page);
+          await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'UTC' });
+          await cdp.send('Emulation.setLocaleOverride', { locale: 'en_US' });
+        }
         await page.addInitScript(() => {
           const games = Array.from({ length: 400 }, (_, i) => ({ id: 'dates-' + i, savedAt: Date.UTC(2026, 2, 8, 4, 30) + i * 86400000,
             gameMode: 'PvP', moves: ['h2e2'], ...(i === 399 ? {} : { label: 'Study alpha beta ' + i }) }));
+          // Keep the day distinct from other searchable numbers (e.g. 100%
+          // accuracy), since library search matches terms across all fields.
+          games[398].savedAt = Date.UTC(2027, 3, 22, 4, 30);
           games[398].review = { summary: { totalMoves: 1, accuracy: 100, averageCentipawnLoss: 0, redAccuracy: 100,
             bestCount: 1, goodCount: 0, inaccuracyCount: 0, mistakeCount: 0, blunderCount: 0,
             reviewedAt: Date.UTC(2026, 10, 1, 3, 30), lineSignature: 'h2e2', keyMoments: [] },
@@ -65,9 +74,8 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
         await checkDates();
         await search.fill('alpha');
         await settle(page);
-        let cdp;
         if (browserType.name() === 'chromium') {
-          cdp = await page.context().newCDPSession(page);
+          cdp ??= await page.context().newCDPSession(page);
           await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
         }
         const samples = [];
@@ -81,12 +89,30 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
         console.log(JSON.stringify({ browser: browserType.name(), defaults: await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions()), width, cpuSlowdown: cdp ? 4 : 1, samples }));
         assert.ok(samples.every(sample => sample.nativeCalls === 0 && sample.constructors <= 8 && sample.formats >= 100), 'Visible dates must share formatter setup: ' + JSON.stringify(samples));
         await search.fill(''); await settle(page); await checkDates();
+        const checkDateSearch = async expected => {
+          for (const [query, card, label] of [[expected.unnamed, unnamed, 'unnamed game date'],
+            [expected.saved, reviewed, 'saved date'], [expected.reviewed, reviewed, 'review date']]) {
+            await search.fill(query); await settle(page);
+            assert.equal(await card.count(), 1, `Searching the displayed ${label} (${query}) must find its game`);
+          }
+          await search.fill(''); await settle(page);
+        };
+        await checkDateSearch(await checkDates());
         if (cdp && liveDefaults) {
-          const before = await checkDates();
-          await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'America/Los_Angeles' });
-          await cdp.send('Emulation.setLocaleOverride', { locale: 'fr_FR' });
-          await search.fill('alpha'); await search.fill(''); await settle(page);
-          assert.notDeepEqual(await checkDates(), before, 'An open panel must pick up changed default locale/time zone');
+          for (const [method, args] of [['Emulation.setLocaleOverride', { locale: 'fr_FR' }],
+            ['Emulation.setTimezoneOverride', { timezoneId: 'America/Los_Angeles' }]]) {
+            const before = await checkDates();
+            await cdp.send(method, args);
+            await search.fill('alpha'); await search.fill(''); await settle(page);
+            const after = await checkDates();
+            assert.notDeepEqual(after, before, 'An open panel must pick up changed default locale/time zone');
+            await checkDateSearch(after);
+            for (const key of ['saved', 'reviewed']) {
+              await search.fill(before[key]); await settle(page);
+              assert.equal(await reviewed.count(), 0, `The stale ${key} date must no longer match this game`);
+            }
+            await search.fill(''); await settle(page);
+          }
         }
         await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
         await settle(page); await reviewed.locator('.lib-review-date').scrollIntoViewIfNeeded();

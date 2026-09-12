@@ -51,7 +51,7 @@ interface LibraryPanelProps {
 }
 
 let batchDateFormatter: Intl.DateTimeFormat | undefined;
-function formatDate(ts: number): string {
+function getDateFormatter(): Intl.DateTimeFormat {
   if (!batchDateFormatter) {
     batchDateFormatter = new Intl.DateTimeFormat(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
@@ -60,7 +60,11 @@ function formatDate(ts: number): string {
     // Release it afterward so later renders use current locale/time-zone defaults.
     queueMicrotask(() => { batchDateFormatter = undefined; });
   }
-  return batchDateFormatter.format(ts);
+  return batchDateFormatter;
+}
+
+function formatDate(ts: number): string {
+  return getDateFormatter().format(ts);
 }
 
 
@@ -298,13 +302,20 @@ export function LibraryPanel({
     );
   }), [searchTerms, resultFilter, reviewFilter]);
 
+  // The displayed dates follow the host defaults on each render. Search must
+  // follow them too, even when the immutable saved records haven't changed.
+  const dateFormatKey = JSON.stringify(getDateFormatter().resolvedOptions());
   // Format dates, review summaries and variation text once per game, so that
   // typing re-filters without re-deriving. Populated lazily: an empty search
   // needs none of this work. Keyed on the game object rather than its id, which
-  // is what makes one map enough for the life of the panel -- every library
+  // is what makes one map enough while date defaults stay the same -- every library
   // mutation re-reads storage and hands back fresh objects, so a game that
   // changed cannot be read back through a stale entry.
-  const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), []);
+  const savedSearchText = useMemo(() => {
+    // Keep the format context with the cache so a changed locale, calendar,
+    // numbering system or time zone invalidates localized search text.
+    return { dateFormatKey, entries: new WeakMap<SavedGame, string>() };
+  }, [dateFormatKey]);
   // Counting study lines visits every branch. Share the result between cards
   // and search text; immutable record replacement invalidates it after edits.
   const savedStudyLineLabels = useMemo(() => new WeakMap<SavedGame, string | null>(), []);
@@ -337,10 +348,10 @@ export function LibraryPanel({
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
       if (resultFilter !== 'all' && (getSavedPrimaryLine(g).result ?? 'ongoing') !== resultFilter) return false;
       if (searchTerms.length === 0) return true;
-      let text = savedSearchText.get(g);
+      let text = savedSearchText.entries.get(g);
       if (text === undefined) {
         text = getSavedGameSearchText(g, getSavedPrimaryLine(g), getSavedStudyLineLabel(g));
-        savedSearchText.set(g, text);
+        savedSearchText.entries.set(g, text);
       }
       return matchesSearchTerms(text, searchTerms);
     })
