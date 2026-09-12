@@ -201,20 +201,21 @@ export const MoveListTree = memo(function MoveListTree({
 
     useEffect(() => { centreActiveMove(); }, [centreActiveMove]);
 
-    // The panel holding this list is display:none while the board view is up, so
-    // the moves that arrive during play centre against a 0x0 box: maxTop is 0,
-    // the distance is 0, and the effect completes having done nothing. Coming
-    // back to the tab changes no dependency, so the list stayed pinned at the
-    // top with the current move below the fold. Re-centre when the box goes from
-    // collapsed to laid out.
+    // Mounting while the panel expands can initially measure its collapsed
+    // width. Reflow then moves the active row away from that scroll position.
+    // Recenter after visible size changes, including panel resizing and text
+    // enlargement, once the list has dimensions it can actually use.
     useEffect(() => {
         const container = scrollRef.current;
         if (!container || typeof ResizeObserver === 'undefined') return;
-        let wasCollapsed = container.clientHeight === 0;
+        let previousWidth = 0;
+        let previousHeight = 0;
         const observer = new ResizeObserver(() => {
-            const collapsed = container.clientHeight === 0;
-            if (wasCollapsed && !collapsed) centreActiveMove();
-            wasCollapsed = collapsed;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width > 0 && height > 0 && (width !== previousWidth || height !== previousHeight)) centreActiveMove();
+            previousWidth = width;
+            previousHeight = height;
         });
         observer.observe(container);
         return () => observer.disconnect();

@@ -1501,6 +1501,9 @@ function App() {
     ? mobileView === 'analysis' && mobileAnalysisTab === 'graph'
     : leftPanelOpen;
   const rightPanelOpen = rightWidth > 0;
+  const moveTreeVisible = isMobile
+    ? mobileView === 'analysis' && mobileAnalysisTab === 'moves'
+    : rightPanelOpen;
 
   // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
   //
@@ -2287,6 +2290,14 @@ function App() {
     setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
     setLeftPanelTab('library');
     setMobileAnalysisTab('library');
+    setMobileView('analysis');
+  }, []);
+
+  const openAnalysisPanel = useCallback((tab: 'tree' | 'review' | 'engine') => {
+    setShowMobileBoardActionMenu(false);
+    setRightWidth(width => width === 0 ? DEFAULT_RIGHT_PANEL_WIDTH : width);
+    setAnalysisTab(tab);
+    setMobileAnalysisTab(tab === 'tree' ? 'moves' : tab);
     setMobileView('analysis');
   }, []);
 
@@ -4379,9 +4390,7 @@ function App() {
       keywords: ['comment', 'annotate', 'study', 'remark', '注释'],
       disabled: !moveCommentTarget,
       run: () => {
-        setAnalysisTab('tree');
-        setMobileAnalysisTab('moves');
-        setMobileView('analysis');
+        openAnalysisPanel('tree');
         // After the panel is up, or the field is not in the document yet.
         window.setTimeout(() => {
           // A second command/dialog can open before this callback runs.
@@ -4397,9 +4406,7 @@ function App() {
       keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
       disabled: !studyNotes.length,
       run: () => {
-        setAnalysisTab('tree');
-        setMobileAnalysisTab('moves');
-        setMobileView('analysis');
+        openAnalysisPanel('tree');
         window.setTimeout(() => {
           if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
           const details = document.getElementById('study-notes') as HTMLDetailsElement | null;
@@ -4627,22 +4634,22 @@ function App() {
     },
     {
       id: 'tab-tree', label: 'Move tree', keywords: ['moves', 'variations'], shortcut: 'T',
-      run: () => { setAnalysisTab('tree'); setMobileAnalysisTab('moves'); setMobileView('analysis'); },
+      run: () => openAnalysisPanel('tree'),
     },
     {
       id: 'tab-review', label: 'Review panel', keywords: ['accuracy'], shortcut: 'R',
-      run: () => { setAnalysisTab('review'); setMobileAnalysisTab('review'); setMobileView('analysis'); },
+      run: () => openAnalysisPanel('review'),
     },
     {
       id: 'tab-engine', label: 'Engine panel', hint: engineEnabled ? undefined : 'Available in Analysis',
       keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', disabled: !engineEnabled,
-      run: () => { setAnalysisTab('engine'); setMobileAnalysisTab('engine'); setMobileView('analysis'); },
+      run: () => openAnalysisPanel('engine'),
     },
     { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: openGraphPanel },
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [studyControlsDisabled, canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [openAnalysisPanel, studyControlsDisabled, canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -4900,9 +4907,7 @@ function App() {
         return;
       }
       const openEnginePanel = () => {
-        setAnalysisTab('engine');
-        setMobileAnalysisTab('engine');
-        setMobileView('analysis');
+        openAnalysisPanel('engine');
       };
       switch (event.key.toLowerCase()) {
         case 'f':
@@ -4947,14 +4952,10 @@ function App() {
           openEnginePanel();
           break;
         case 't':
-          setAnalysisTab('tree');
-          setMobileAnalysisTab('moves');
-          setMobileView('analysis');
+          openAnalysisPanel('tree');
           break;
         case 'r':
-          setAnalysisTab('review');
-          setMobileAnalysisTab('review');
-          setMobileView('analysis');
+          openAnalysisPanel('review');
           break;
         default:
           return;
@@ -4964,7 +4965,7 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
+    openAnalysisPanel, aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
     handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopDeepDive,
     stopThreat, threatActive, topAnalysisPv,
   ]);
@@ -6956,7 +6957,7 @@ function App() {
                         onKeyDown={handleBreadcrumbKeyDown} />;
                     })}
                   </div>
-                  {!isMobile && beginnerGuide ? beginnerGuide : <MoveListTree
+                  {!isMobile && beginnerGuide ? beginnerGuide : moveTreeVisible && <MoveListTree
                     treeNodes={treeNodes}
                     rootNodeId={rootNodeId}
                     rootFen={rootFen}

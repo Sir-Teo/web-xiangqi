@@ -63,6 +63,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-graph-gaps-browser.cjs',
         'test-graph-reuse-browser.cjs',
         'test-graph-visibility-browser.cjs',
+        'test-move-tree-visibility-browser.cjs',
         'test-graph-details-browser.cjs',
         'test-graph-bounds-browser.cjs',
         'test-graph-axis-browser.cjs',
