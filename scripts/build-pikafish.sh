@@ -106,11 +106,17 @@ fi
 build_flavor() {
   local flavor="$1"
   local simd="$2"
+  local single_threaded="no"
   local -a args
+
+  if [ "$flavor" = "single" ]; then
+    single_threaded="yes"
+  fi
 
   args=(
     -C "$UPSTREAM_DIR/src" -j"$JOBS"
     ARCH=wasm NO_SYZYGY=yes debug=no optimize=no WASM_PROFILE="$WASM_PROFILE"
+    WASM_SINGLE_THREADED="$single_threaded" WASM_SIMD="$simd"
     WASM_ALLOW_MEMORY_GROWTH="$WASM_ALLOW_MEMORY_GROWTH"
     WASM_INITIAL_MEMORY="$WASM_INITIAL_MEMORY"
     WASM_MAXIMUM_MEMORY="$WASM_MAXIMUM_MEMORY"
@@ -121,14 +127,9 @@ build_flavor() {
     WASM_DISABLE_RTTI="$WASM_DISABLE_RTTI"
   )
 
-  if [ "$flavor" = "single" ]; then
-    args+=(WASM_SINGLE_THREADED=yes)
-  fi
-  if [ "$simd" = "yes" ]; then
-    args+=(WASM_SIMD=yes)
-  fi
-
-  make -C "$UPSTREAM_DIR/src" ARCH=wasm NO_SYZYGY=yes objclean >/dev/null
+  # Both modes must be explicit, including "no": inherited per-flavor settings
+  # otherwise change the output name and can leave the requested core missing.
+  make "${args[@]}" objclean >/dev/null
   args+=(build)
   make "${args[@]}"
 }

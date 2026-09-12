@@ -36,8 +36,12 @@ function fixture() {
   fs.writeFileSync(path.join(root, 'bin/make'), `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path');
 const args = process.argv.slice(2);
+// Make command-line assignments override inherited environment variables.
+const value = name => args.filter(arg => arg.startsWith(name + '=')).at(-1)?.slice(name.length + 1) ?? process.env[name];
+const single = value('WASM_SINGLE_THREADED'), simd = value('WASM_SIMD');
+fs.appendFileSync(process.env.TEST_MAKE_LOG, JSON.stringify({ single, simd, clean: args.includes('objclean') }) + '\\n');
 if (args.includes('objclean')) process.exit(0);
-const base = 'pikafish-core' + (args.includes('WASM_SINGLE_THREADED=yes') ? '-single' : '') + (args.includes('WASM_SIMD=yes') ? '-simd' : '');
+const base = 'pikafish-core' + (single === 'yes' ? '-single' : '') + (simd === 'yes' ? '-simd' : '');
 if (process.env.TEST_FAIL_FLAVOR === base) { console.error('Controlled compiler failure: ' + base); process.exit(2); }
 const dir = args[args.indexOf('-C') + 1];
 if (process.env.TEST_EXPECT_NETWORK) {
@@ -58,26 +62,65 @@ if (!base.includes('single')) fs.writeFileSync(path.join(dir, base + '.worker.js
       env: { ...process.env, PATH: path.join(root, 'bin') + path.delimiter + process.env.PATH,
         PIKAFISH_UPSTREAM_DIR: path.join(root, '.deps/pikafish'), WASM_BUILD_SIMD: 'yes', JOBS: '1',
         WASM_PROFILE: 'release', WASM_ALLOW_MEMORY_GROWTH: 'yes', WASM_ENABLE_LTO: 'yes', WASM_DISABLE_RTTI: 'yes',
-        TEST_GIT_LOG: path.join(root, 'git-calls.log'),
+        WASM_SINGLE_THREADED: 'no', WASM_SIMD: 'no',
+        TEST_GIT_LOG: path.join(root, 'git-calls.log'), TEST_MAKE_LOG: path.join(root, 'make-calls.log'),
         TEST_FAIL_FLAVOR: '', TEST_OMIT_WASM: '', TEST_EXPECT_NETWORK: '', ...extra } }),
     clean: () => fs.rmSync(root, { recursive: true, force: true }),
     assertClean: () => assert.deepEqual(fs.readdirSync(path.join(root, '.deps')).filter(name => name.startsWith('pikafish-artifacts.')), []),
   };
 }
 
-function inspectBuildFlags(options = {}) {
+function inspectBuildFlags(options = {}, inherited = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'xiangqi-build-flags-'));
   try {
     const probe = path.join(root, 'flags.mk');
     fs.writeFileSync(probe, '$(info QA_CXX=$(EM_CXXFLAGS))\n$(info QA_LINK=$(EM_LDFLAGS))\n.PHONY: qa-flags\nqa-flags:\n');
     const env = { ...process.env };
     for (const key of Object.keys(env)) if (key.startsWith('WASM_')) delete env[key];
+    Object.assign(env, inherited);
     return spawnSync('make', ['-s', '-f', path.join(__dirname, '../templates/emscripten/wasm-makefile.mk'),
       '-f', probe, 'qa-flags', ...Object.entries({ WASM_PROFILE: 'release', WASM_ALLOW_MEMORY_GROWTH: 'yes',
         WASM_ENABLE_LTO: 'yes', WASM_DISABLE_RTTI: 'yes', ...options }).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}=${value}`)],
     { cwd: root, env, encoding: 'utf8', timeout: 15000 });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
+
+for (const buildSimd of ['yes', 'no']) test(`${buildSimd === 'yes' ? 'four-flavor' : 'scalar-only'} builds ignore inherited per-flavor modes`, () => {
+  for (const [single, simd] of [['yes', 'no'], ['no', 'yes'], ['yes', 'yes']]) {
+    const f = fixture();
+    try {
+      const result = f.run({ WASM_BUILD_SIMD: buildSimd, WASM_SINGLE_THREADED: single, WASM_SIMD: simd });
+      assert.equal(result.status, 0, `Inherited single=${single}, simd=${simd}: ${result.stderr}`);
+      const modes = buildSimd === 'yes' ? [['no', 'no'], ['no', 'yes'], ['yes', 'no'], ['yes', 'yes']] : [['no', 'no'], ['yes', 'no']];
+      const calls = fs.readFileSync(path.join(f.root, 'make-calls.log'), 'utf8').trim().split('\n').map(JSON.parse);
+      assert.deepEqual(calls, modes.flatMap(([single, simd]) => [{ single, simd, clean: true }, { single, simd, clean: false }]), 'Clean and build must agree on each requested mode');
+      const files = f.readPublished();
+      for (const [single, simd] of modes) {
+        const base = 'pikafish-core' + (single === 'yes' ? '-single' : '') + (simd === 'yes' ? '-simd' : '');
+        for (const dir of ['public', 'dist']) for (const ext of ['js', 'wasm']) assert.equal(files[`${dir}/${base}.${ext}`], 'new ' + base);
+      }
+      if (buildSimd === 'no') assert.deepEqual(Object.keys(files).filter(file => file.includes('-simd.')), []);
+      f.assertClean();
+    } finally { f.clean(); }
+  }
+});
+
+test('real Make uses explicit variant settings over conflicting environment values', () => {
+  for (const single of ['yes', 'no']) for (const simd of ['yes', 'no']) {
+    const result = inspectBuildFlags({ WASM_SINGLE_THREADED: single, WASM_SIMD: simd },
+      { WASM_SINGLE_THREADED: single === 'yes' ? 'no' : 'yes', WASM_SIMD: simd === 'yes' ? 'no' : 'yes' });
+    assert.equal(result.status, 0, result.stderr);
+    const [compile, link] = result.stdout.trim().split('\n');
+    assert.equal(compile.includes('-D__EMSCRIPTEN_SINGLE_THREADED__'), single === 'yes');
+    for (const flags of [compile, link]) {
+      assert.equal(flags.includes('-pthread'), single === 'no');
+      assert.equal(flags.includes('-msimd128'), simd === 'yes');
+    }
+    assert.ok(link.includes(`USE_PTHREADS=${single === 'yes' ? 0 : 1}`));
+    const factory = 'PikafishCore' + (single === 'yes' ? 'Single' : '') + (simd === 'yes' ? 'Simd' : '');
+    assert.match(link, new RegExp(`\\b${factory}\\b`));
+  }
+});
 
 test('invalid optimization settings fail before checkout or publication', () => {
   const f = fixture();
