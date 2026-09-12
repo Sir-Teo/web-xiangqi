@@ -115,7 +115,8 @@ export const EvalGraph = React.memo(function EvalGraph({
     const sweepFrameRef = useRef<number | null>(null);
     const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-    const points = useMemo<EvalPoint[]>(() => {
+    // Historical labels depend on the study, not the cursor or a live score.
+    const historicalPoints = useMemo<EvalPoint[]>(() => {
         const next: EvalPoint[] = [{
             moveIndex: -1,
             eval: null,
@@ -148,19 +149,21 @@ export const EvalGraph = React.memo(function EvalGraph({
             });
         });
 
-        const activePointIndex = Math.max(0, Math.min(next.length - 1, currentMoveIndex + 1));
+        return next;
+    }, [history, branchCounts, rootBranchCount, notationStyle]);
+
+    const points = useMemo<EvalPoint[]>(() => {
+        const activePointIndex = Math.max(0, Math.min(historicalPoints.length - 1, currentMoveIndex + 1));
         const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
         const currentPlyHasStoredEval = isFiniteEval(currentMove?.evalScore);
         const shouldProjectLiveEval = isFiniteEval(currentEval) && (isSearching || !currentPlyHasStoredEval);
-        if (shouldProjectLiveEval) {
-            next[activePointIndex] = {
-                ...next[activePointIndex],
-                eval: currentEval,
-                evalKind: currentEvalKind,
-            };
-        }
+        if (!shouldProjectLiveEval) return historicalPoints;
+        const point = historicalPoints[activePointIndex];
+        if (point.eval === currentEval && point.evalKind === currentEvalKind) return historicalPoints;
+        const next = [...historicalPoints];
+        next[activePointIndex] = { ...point, eval: currentEval, evalKind: currentEvalKind };
         return next;
-    }, [history, currentMoveIndex, currentEval, currentEvalKind, isSearching, branchCounts, rootBranchCount, notationStyle]);
+    }, [historicalPoints, history, currentMoveIndex, currentEval, currentEvalKind, isSearching]);
 
     const maxEvalClamp = 1200;
     const chartHeight = shortViewport ? 184 : 248;
