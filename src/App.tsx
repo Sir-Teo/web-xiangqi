@@ -3225,11 +3225,11 @@ function App() {
   const moveCommentEditRef = useRef<{ gameIdentity: object; nodeId: string; draft: string } | null>(null);
   const moveCommentTimerRef = useRef<number | null>(null);
   const treeNodesRef = useRef(treeNodes);
-  // Synced in an effect rather than during render, and declared immediately
-  // above the effect that reads it: effects run in declaration order, so a
+  // Synced in a layout effect rather than during render, immediately above
+  // the effect that reads it: effects run in declaration order, so a
   // commit that adds a move and steps onto it has the new tree in hand by the
   // time the note below is loaded from it.
-  useEffect(() => {
+  useLayoutEffect(() => {
     treeNodesRef.current = treeNodes;
   }, [treeNodes]);
 
@@ -3257,7 +3257,9 @@ function App() {
   // next one, so a note is never lost by navigating away from it. The tree is
   // read through a ref because it changes on every move and this must not
   // re-run -- and re-reset the draft -- while someone is typing into it.
-  useEffect(() => {
+  // Initialize before paint: a passive effect can run after a quick paste
+  // into the new game's editor and erase that first edit with the stored note.
+  useLayoutEffect(() => {
     const previous = moveCommentEditRef.current;
     if (moveCommentTimerRef.current !== null) {
       window.clearTimeout(moveCommentTimerRef.current);
@@ -4350,6 +4352,8 @@ function App() {
         setMobileView('analysis');
         // After the panel is up, or the field is not in the document yet.
         window.setTimeout(() => {
+          // A second command/dialog can open before this callback runs.
+          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
           document.getElementById('move-comment-input')?.focus();
         }, 0);
       },
@@ -4365,6 +4369,7 @@ function App() {
         setMobileAnalysisTab('moves');
         setMobileView('analysis');
         window.setTimeout(() => {
+          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
           const details = document.getElementById('study-notes') as HTMLDetailsElement | null;
           if (details) details.open = true;
           document.getElementById('study-notes-search')?.focus();

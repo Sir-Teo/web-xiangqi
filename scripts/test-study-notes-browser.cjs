@@ -125,15 +125,39 @@ async function assertFits(page) {
           await results.first().click();
           await noteIs(page, 'Root plan');
         }
-        await command(page, 'New game');
+        // Rapid reset/paste used to let the old passive reset erase the first edit.
+        // Reuse the same draft and node ID without waiting for an empty editor.
+        for (let run = 0; run < (width === 320 ? 80 : 1); run++) {
+          await command(page, 'New game');
+          await command(page, 'Write a note on this move');
+          await page.getByTestId('move-comment-input').fill('Starting position lesson');
+          await page.getByTestId('move-comment-input').blur();
+          await openFinder(page);
+          assert.equal(await results.count(), 1, 'A root-only study must have a finder');
+          assert.match(await results.first().innerText(), /Starting position/);
+          await results.first().click();
+          await noteIs(page, 'Starting position lesson');
+        }
+        // Hold only Write note's scheduled focus, then open a second palette.
+        // Its stale callback must not move Enter into the textarea behind it.
+        await page.evaluate(() => {
+          const native = window.setTimeout;
+          window.setTimeout = function(callback, delay, ...args) {
+            if (delay === 0 && document.querySelector('[data-command-input]')?.value === 'Write a note on this move') {
+              window.__heldNoteFocus = () => callback(...args);
+              window.setTimeout = native;
+              return native(() => {}, 0);
+            }
+            return native(callback, delay, ...args);
+          };
+        });
         await command(page, 'Write a note on this move');
-        await page.getByTestId('move-comment-input').fill('Starting position lesson');
-        await page.getByTestId('move-comment-input').blur();
-        await openFinder(page);
-        assert.equal(await results.count(), 1, 'A root-only study must have a finder');
-        assert.match(await results.first().innerText(), /Starting position/);
-        await results.first().click();
-        await noteIs(page, 'Starting position lesson');
+        await page.keyboard.press('ControlOrMeta+k');
+        await page.getByRole('combobox', { name: 'Search commands' }).fill('Find study notes');
+        await page.evaluate(() => { window.__heldNoteFocus(); });
+        assert.equal(await page.getByRole('combobox', { name: 'Search commands' }).evaluate(element => element === document.activeElement), true);
+        await page.keyboard.press('Enter');
+        await search.waitFor({ state: 'visible' });
         await page.getByTestId('move-comment-input').fill('');
         await page.getByTestId('move-comment-input').blur();
         await page.getByTestId('study-notes').waitFor({ state: 'detached' });
