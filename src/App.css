@@ -6296,6 +6296,20 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+.mobile-hint-status {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--accent-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .capture-trays {
   grid-column: 1 / -1;
   display: grid;
@@ -6845,6 +6859,24 @@ summary:active {
     max-width: none;
     aspect-ratio: 9 / 10;
     margin: 0;
+  }
+
+  /* Hint feedback needs its own readable row. Keep a usable board when text
+     grows, then scroll the board and status cards within their existing area. */
+  [data-mobile-view="board"] .board-workspace.board-workspace-hint {
+    grid-template-rows: minmax(calc(var(--board-min-width) * 10 / 9), 1fr) auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+  /* In landscape the board already has a separate column. Scroll the status
+     rail rather than shrinking the board to accommodate the hint text. */
+  [data-mobile-view="board"] .board-workspace-hint .position-dock {
+    max-height: 100%;
+    overflow-y: auto;
+    align-content: safe center;
   }
 }
 

@@ -6504,7 +6504,7 @@ function App() {
           ) : null}
           {isMobile && beginnerGuide}
           <div className="mobile-board-center">
-            <div className={`board-workspace${drill ? ' board-workspace-drill' : ''}`}>
+            <div className={`board-workspace${drill ? ' board-workspace-drill' : ''}${isMobile && aiPlayActive && hintText ? ' board-workspace-hint' : ''}`}>
               <div className="board-wrap">
                 {/* Absolutely positioned against .board-wrap, which the
                     aspect-ratio sizing keeps exactly board-shaped, so the bar
@@ -6680,6 +6680,16 @@ function App() {
                   <strong>{materialText}</strong>
                   <em>Red {formatMaterialValue(materialSummary.redMaterialTenths)} · Black {formatMaterialValue(materialSummary.blackMaterialTenths)}</em>
                 </div>
+                {isMobile && aiPlayActive ? (
+                  <div
+                    className={hintText ? 'mobile-hint-status' : 'sr-only'}
+                    data-testid="mobile-hint-status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    {hintText}
+                  </div>
+                ) : null}
                 <div className="capture-trays">
                   <div className="capture-tray">
                     <span>Red took</span>
