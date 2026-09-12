@@ -59,6 +59,32 @@ describe('durable recorded results', () => {
         expect(pgn).toContain('[Result "*"]');
         expect(parsePgnCollection(pgn)[0].moveTree?.[0].recordedResult).toBe('draw');
     });
+    it('does not use an earlier saved result for a continuation, including legacy and root results', () => {
+        for (const recordedResult of [undefined, 'draw' as const]) {
+            const tree = [{ uci: 'h2e2', recordedResult, children: [{ uci: 'h9g7' }] }];
+            const before = JSON.stringify(tree);
+            const pgn = exportPgnFromMoveTree(tree, { mainLineMoves: ['h2e2'], result: 'draw' })!;
+            expect(pgn).toContain('[Result "*"]');
+            expect(pgn.trimEnd()).toMatch(/h9g7 \*$/);
+            expect(parsePgnCollection(pgn)[0].moveTree?.[0].recordedResult).toBe('draw');
+            expect(parsePgnCollection(pgn)[0].moveTree?.[0].children?.[0].recordedResult).toBeUndefined();
+            expect(JSON.stringify(tree)).toBe(before);
+        }
+        const root = exportPgnFromMoveTree([{ uci: 'h2e2' }], { mainLineMoves: [], result: 'draw' })!;
+        expect(root).toContain('[Result "*"]');
+        expect(parsePgnCollection(root)[0].rootResult).toBe('draw');
+    });
+    it('retains a result supplied for the whole primary line and lets an endpoint declaration win', () => {
+        const tree = [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }];
+        for (const mainLineMoves of [undefined, ['h2e2', 'h9g7']]) {
+            expect(exportPgnFromMoveTree(tree, { mainLineMoves, result: 'draw' })).toContain('[Result "1/2-1/2"]');
+        }
+        const declared = [{ uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'black-wins' as const }] }];
+        const pgn = exportPgnFromMoveTree(declared, { mainLineMoves: ['h2e2'], result: 'draw' })!;
+        expect(pgn).toContain('[Result "0-1"]');
+        expect(pgn).toContain('[%xqresult 1/2-1/2]');
+        expect(parsePgnCollection(pgn)[0].moveTree?.[0].children?.[0].recordedResult).toBe('black-wins');
+    });
     it('uses a proven terminal outcome before a contradictory declaration', () => {
         const startFen = '4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1';
         expect(exportPgnFromMoveTree([{ uci: 'a1a9', recordedResult: 'draw' }], { startFen })).toContain('[Result "1-0"]');

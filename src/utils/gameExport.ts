@@ -298,6 +298,7 @@ export function exportPgnTree(
     treeNodes: Record<string, MoveTreeNode>,
     rootNodeId: string,
     options: {
+        /** Selected path; a supplied result belongs to its endpoint, not a later continuation. */
         mainLineNodeIds?: string[];
         metadata?: GameMetadata;
         gameMode?: GameMode;
@@ -330,9 +331,10 @@ export function exportPgnTree(
     const declared = treeNodes[primaryIds.at(-1) ?? rootNodeId]?.record?.recordedResult;
     const selectedIsMain = options.mainLineNodeIds?.length === primaryIds.length
         && primaryIds.every((id, index) => id === options.mainLineNodeIds?.[index]);
+    const primaryResult = options.mainLineNodeIds === undefined || selectedIsMain ? options.result : undefined;
     const outcome = mainLinePinned || declared
-        ? pinnedLineResult(treeNodes, primaryIds, startPosition.fen) ?? declared ?? (selectedIsMain ? options.result : undefined)
-        : options.result;
+        ? pinnedLineResult(treeNodes, primaryIds, startPosition.fen) ?? declared ?? primaryResult
+        : primaryResult;
     const result = outcome ? RESULT_TAG[outcome] : '*';
 
     const tags = [
@@ -404,6 +406,7 @@ export function exportPgnFromUci(
 export function exportPgnFromMoveTree(
     moveTree: SavedMoveTreeNode[],
     options: {
+        /** Saved cursor path; omitted means the default primary line, whereas [] means the root. */
         mainLineMoves?: string[];
         metadata?: GameMetadata;
         gameMode?: GameMode;
@@ -428,8 +431,19 @@ export function exportPgnFromMoveTree(
         cursor = childId;
     }
 
+    // Older saves carry only a cursor result. Preserve it on the freshly built
+    // export tree without assigning it to an extension or mutating the save.
+    if (options.mainLineMoves !== undefined && options.result) {
+        const endpoint = treeNodes[cursor];
+        if (endpoint.record) {
+            endpoint.record = { ...endpoint.record, recordedResult: endpoint.record.recordedResult ?? options.result };
+        } else {
+            endpoint.recordedResult = options.rootResult ?? endpoint.recordedResult ?? options.result;
+        }
+    }
+
     const pgn = exportPgnTree(treeNodes, rootNodeId, {
-        mainLineNodeIds: preferredNodeIds,
+        mainLineNodeIds: options.mainLineMoves === undefined ? undefined : preferredNodeIds,
         metadata: options.metadata,
         gameMode: options.gameMode,
         opening: options.opening,

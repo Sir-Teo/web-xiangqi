@@ -2968,7 +2968,9 @@ function App() {
         gameMode,
         metadata: gameMetadata,
         opening: exportOpeningName,
-        result: gameResult,
+        // A tree export includes the continuation beyond the cursor. Its
+        // standard result cannot come from an earlier board position.
+        result: currentMoveIndex === activeLineNodeIds.length - 1 ? gameResult : undefined,
         startFen: rootFen,
       });
     }
