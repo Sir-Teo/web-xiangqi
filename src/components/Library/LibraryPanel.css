@@ -325,6 +325,13 @@
   white-space: nowrap;
 }
 
+.lib-review-scope {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .lib-review-pill-red-accuracy {
   border-color: rgba(248, 113, 113, 0.24);
   background: rgba(248, 113, 113, 0.12);

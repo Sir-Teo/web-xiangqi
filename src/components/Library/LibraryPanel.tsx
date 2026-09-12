@@ -24,6 +24,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
 import { evaluationSearchText, savedTreeSearchText } from '../../utils/savedStudySearch';
 
 const SAVED_PAGE_SIZE = 100;
+type LibraryPrimaryLine = ReturnType<typeof savedGameLine> & { savedPath: 'complete' | 'prefix' | 'variation' };
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
 
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
@@ -72,14 +73,22 @@ function countStudyLines(nodes: SavedGame['moveTree']): number {
   }, 0);
 }
 
-function formatSavedGameMoveCount(game: SavedGame, line: ReturnType<typeof savedGameLine>) {
-  if (line.moves.length !== game.moves.length || line.moves.some((move, i) => move !== game.moves[i])) {
-    return `${line.moves.length} main-line ${line.moves.length === 1 ? 'move' : 'moves'} · saved at ply ${game.moves.length}`;
+function formatSavedGameMoveCount(game: SavedGame, line: LibraryPrimaryLine) {
+  if (line.savedPath !== 'complete') {
+    const location = line.savedPath === 'variation' ? 'saved on variation' : 'saved';
+    return `${line.moves.length} main-line ${line.moves.length === 1 ? 'move' : 'moves'} · ${location} at ply ${game.moves.length}`;
   }
   if (game.moves.length > 0) {
     return `${game.moves.length} ${game.moves.length === 1 ? 'move' : 'moves'}`;
   }
   return game.moveTree?.length ? 'Start position' : '0 moves';
+}
+
+function savedReviewScope(game: SavedGame, line: LibraryPrimaryLine): string | undefined {
+  if (!game.review || line.savedPath === 'complete') return undefined;
+  if (line.savedPath === 'variation') return 'Review: saved variation';
+  if (!game.moves.length) return 'Review: start position';
+  return game.moves.length === 1 ? 'Review: first move' : `Review: first ${game.moves.length} moves`;
 }
 
 function formatSavedStudyLines(game: SavedGame) {
@@ -102,7 +111,7 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
-function getSavedGameSearchText(game: SavedGame, line: ReturnType<typeof savedGameLine>) {
+function getSavedGameSearchText(game: SavedGame, line: LibraryPrimaryLine) {
   const summary = game.review?.summary;
   const annotations = game.review?.annotations ?? [];
 
@@ -116,11 +125,12 @@ function getSavedGameSearchText(game: SavedGame, line: ReturnType<typeof savedGa
     formatDate(game.savedAt),
     formatSavedGameMoveCount(game, line),
     formatSavedStudyLines(game),
+    savedReviewScope(game, line),
     game.startFen,
     game.moves.join(' '),
     savedTreeSearchText(game.moveTree),
     typeof game.finalEval === 'number'
-      ? `${evaluationSearchText(game.finalEval, game.finalEvalKind)} final`
+      ? `${evaluationSearchText(game.finalEval, game.finalEvalKind)} final saved position`
       : '',
     summary ? formatLibraryReviewSummary(summary) : '',
     summary?.lineSignature,
@@ -281,11 +291,14 @@ export function LibraryPanel({
   const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), []);
   // A primary line can span 1,024 nodes. Resolve it once per immutable saved
   // record, rather than walking every tree again on each filter keystroke.
-  const savedPrimaryLines = useMemo(() => new WeakMap<SavedGame, ReturnType<typeof savedGameLine>>(), []);
+  const savedPrimaryLines = useMemo(() => new WeakMap<SavedGame, LibraryPrimaryLine>(), []);
   const getSavedPrimaryLine = useCallback((game: SavedGame) => {
     let line = savedPrimaryLines.get(game);
     if (!line) {
-      line = savedGameLine(game);
+      const primary = savedGameLine(game);
+      const prefixMatches = game.moves.every((move, i) => move === primary.moves[i]);
+      const savedPath = !prefixMatches ? 'variation' : game.moves.length === primary.moves.length ? 'complete' : 'prefix';
+      line = { ...primary, savedPath };
       savedPrimaryLines.set(game, line);
     }
     return line;
@@ -586,7 +599,9 @@ export function LibraryPanel({
             const primaryLine = getSavedPrimaryLine(game);
             const primaryResult = primaryLine.result ?? 'ongoing';
             const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
-            const reviewSummaryLabel = game.review ? formatLibraryReviewSummary(game.review.summary) : '';
+            const reviewScope = savedReviewScope(game, primaryLine);
+            const reviewSummaryLabel = game.review
+              ? [reviewScope, formatLibraryReviewSummary(game.review.summary)].filter(Boolean).join(', ') : '';
             const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
             const mistakeLabel = game.review ? formatReviewCount(game.review.summary.mistakeCount, 'mistake') : '';
             const inaccuracyLabel = game.review ? formatReviewCount(game.review.summary.inaccuracyCount, 'inaccuracy', 'inaccuracies') : '';
@@ -770,6 +785,7 @@ export function LibraryPanel({
                 {typeof game.finalEval === 'number' && (
                   <>
                     <span className={`lib-eval ${game.finalEval > 0 ? 'lib-eval--pos' : 'lib-eval--neg'}`}>
+                      {primaryLine.savedPath !== 'complete' ? 'Saved position: ' : ''}
                       {formatEvaluationText(game.finalEval, 2, game.finalEvalKind) ?? 'n/a'}
                     </span>
                   </>
@@ -786,6 +802,7 @@ export function LibraryPanel({
                   title={reviewSummaryLabel}
                   data-testid={`review-meta-saved-${game.id}`}
                 >
+                  {reviewScope && <span className="lib-review-scope" data-testid={`review-scope-saved-${game.id}`}>{reviewScope}</span>}
                   <span className="lib-review-pill" aria-label={`${game.review.summary.accuracy}% review accuracy`}>
                     {game.review.summary.accuracy}% accuracy
                   </span>
