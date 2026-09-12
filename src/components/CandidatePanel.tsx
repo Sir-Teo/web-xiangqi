@@ -86,7 +86,9 @@ export function CandidatePanel(props: Props) {
         const copied = copyStatus?.line === pv.moves.join(' ') ? copyStatus : null;
         return <article className="candidate-line" key={root} data-testid={`candidate-line-${root}`}>
           <div className="candidate-heading"><strong>{formatMoveInStyle(board, root, notation)}</strong>
-            <span>{formatRedPovEngineScore(pv, side)} Red POV · Depth {pv.depth}</span></div>
+            <span title={pv.bounded ? 'This score is a bound; an exact evaluation is not available yet.' : undefined}>
+              {formatRedPovEngineScore(pv, side)} Red POV · Depth {pv.depth}{pv.bounded ? ' · Not exact' : ''}
+            </span></div>
           <MoveLineStrip tokens={tokens.tokens} remaining={tokens.remaining} disabled={!props.canPlay}
             onPlay={count => props.onPlay(pv.moves, count)}
             title={(_, token) => `Follow candidate line through ${token}`}

@@ -11,6 +11,15 @@ async function setHidden(page, hidden) {
   await page.waitForTimeout(100);
 }
 
+async function saveSnapshot(page) {
+  const count = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length);
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox', { name: 'Search commands' }).fill('Save game');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(count => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length === count + 1, count);
+  return page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
+}
+
 async function compare(browser, width, real = false) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
   const errors = [];
@@ -37,7 +46,7 @@ async function compare(browser, width, real = false) {
             if (command.startsWith('go ')) queueMicrotask(() => {
               const roots = command.split(' searchmoves ')[1]?.split(' ');
               if (roots) {
-                roots.forEach((root, i) => emit('info depth 12 multipv ' + (i + 1) + ' score cp ' + (9999 - i) + ' pv ' +
+                roots.forEach((root, i) => emit('info depth 12 multipv ' + (i + 1) + ' score cp ' + (9999 - i) + (i === 0 ? window.__candidateBound || '' : '') + ' pv ' +
                   (root === 'a9a8' ? 'a9a8 a0a1 i9i8' : 'i9i8 i0i1 a9a8')));
                 if (!command.includes('infinite') && !window.__holdStop) emit('bestmove ' + roots[0]);
               } else {
@@ -52,13 +61,14 @@ async function compare(browser, width, real = false) {
       };
     ` }));
     await page.goto(base + '?moves=h2e2');
+    await page.locator('.xiangqi-board').waitFor();
+    const evalSelector = width < 900 ? '.mobile-eval-chip' : '.eval-bar-readout';
+    if (!real) await page.waitForFunction(selector => Number(document.querySelector(selector)?.textContent) === -0.3, evalSelector);
     await page.keyboard.press('e');
     const open = page.getByTestId('open-candidate-comparison');
     await page.waitForFunction(() => document.querySelector('[data-testid="open-candidate-comparison"]')?.disabled === false, null, { timeout: 60000 });
     const boardState = () => page.locator('.hitbox').evaluateAll(elements => elements.map(el => el.getAttribute('aria-label')));
     const initial = await boardState();
-    if (!real) await page.waitForFunction(() => document.querySelector('.graph-legend strong')?.textContent.includes('-0.30'));
-    const initialEval = await page.locator('.graph-legend strong').allTextContents();
     if (width === 320) {
       await page.keyboard.press('ControlOrMeta+k');
       await page.getByRole('combobox', { name: 'Search commands' }).fill('Compare candidate moves');
@@ -74,6 +84,7 @@ async function compare(browser, width, real = false) {
       await panel.getByRole('button', { name: 'Add move', exact: true }).click();
       assert.equal(await select.locator(`option[value="${move}"]`).isDisabled(), true);
     }
+    if (!real) await page.evaluate(() => { window.__candidateBound = ' lowerbound'; });
     await panel.getByTestId('compare-candidates').click();
     await page.getByTestId('candidate-line-a9a8').waitFor({ timeout: 60000 });
     await page.getByTestId('candidate-line-i9i8').waitFor({ timeout: 60000 });
@@ -88,7 +99,25 @@ async function compare(browser, width, real = false) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     if (!real) {
       assert.match(await panel.innerText(), /-100\.0 Red POV/);
-      assert.deepEqual(await page.locator('.graph-legend strong').allTextContents(), initialEval, 'Restricted score changed historical evaluation');
+      assert.match(await page.getByTestId('candidate-line-a9a8').locator('.candidate-heading').innerText(), /Not exact/, 'A bounded candidate must identify its uncertainty');
+      assert.doesNotMatch(await page.getByTestId('candidate-line-i9i8').locator('.candidate-heading').innerText(), /Not exact/, 'An exact candidate must not inherit another line’s bound');
+      if (width < 900) await page.getByTestId('mobile-view-board').click();
+      if (width < 900) assert.equal(await page.locator(evalSelector).count(), 0, 'A restricted score must not become a live board chip');
+      else assert.equal(await page.locator(evalSelector).textContent(), '—', 'The live position reading must stay paused during candidate comparison');
+      await page.keyboard.press('ControlOrMeta+k');
+      await page.getByRole('combobox', { name: 'Search commands' }).fill('Evaluation graph');
+      await page.keyboard.press('Enter');
+      await page.locator('.graph-wrap').waitFor();
+      assert.equal(await page.locator('.graph-legend strong').textContent(), 'Red POV -0.30', 'Restricted score changed historical evaluation');
+      await page.keyboard.press('e');
+      for (const size of [16, 32, 16]) {
+        await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const first = page.getByTestId('candidate-line-a9a8');
+        assert.equal(await first.locator('.candidate-heading').evaluate(node => node.scrollWidth > node.clientWidth + 1), false, 'Candidate uncertainty must fit with enlarged text');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        if (size === 32) await first.screenshot({ path: `/tmp/xiangqi-candidate-bound-${browserType.name()}-${width}.png` });
+      }
       const commands = await page.evaluate(() => window.__commands);
       const go = commands.findLastIndex(command => command.includes(' searchmoves '));
       assert.match(commands[go], /^go depth \d+ movetime \d+ searchmoves a9a8 i9i8$/);
@@ -125,21 +154,27 @@ async function compare(browser, width, real = false) {
     }
     await panel.screenshot({ path: `/tmp/xiangqi-candidates-${browserType.name()}-${width}-${real ? 'real' : 'controlled'}.png` });
     if (!real) {
-      await page.keyboard.press('ControlOrMeta+k');
-      await page.getByRole('combobox', { name: 'Search commands' }).fill('Save game');
-      await page.keyboard.press('Enter');
-      const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1'))[0]);
+      const saved = await saveSnapshot(page);
       assert.deepEqual(saved.moves, ['h2e2']);
       const treeLine = node => [node.uci, ...(node.children?.length ? treeLine(node.children[0]) : [])];
       assert.deepEqual(saved.moveTree[0].children.map(treeLine), [['a9a8', 'a0a1', 'i9i8'], ['i9i8', 'i0i1', 'a9a8']]);
       assert.notEqual(Math.abs(saved.finalEval || 0), 9999, 'Restricted score became the position evaluation');
       assert.equal(saved.moveTree[0].children[0].evalScore, undefined, 'Snapshot became a move evaluation');
       assert.equal(saved.moveTree[0].children[0].analysis.score, -9999);
+      assert.equal(saved.moveTree[0].children[0].analysis.bounded, true, 'Saving discarded the candidate bound');
       assert.deepEqual(saved.moveTree[0].children[0].analysis.candidates, ['a9a8', 'i9i8']);
     }
+    if (!real) await page.evaluate(() => { window.__candidateBound = ''; });
     await page.getByTestId('deep-dive-btn').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'), null, { timeout: 60000 });
     if (!real) assert.match((await page.evaluate(() => window.__commands)).findLast(command => command.startsWith('go ')), /searchmoves a9a8 i9i8$/);
+    if (!real) {
+      assert.doesNotMatch(await page.getByTestId('candidate-line-a9a8').locator('.candidate-heading').innerText(), /Not exact/, 'An exact result must clear the bound label');
+      const update = page.getByTestId('keep-candidate-a9a8');
+      assert.equal(await update.innerText(), 'Update analysis', 'A same-score exact result must be available to save');
+      await update.click();
+      assert.equal((await saveSnapshot(page)).moveTree[0].children[0].analysis.bounded, false);
+    }
     if (!real) {
       await page.evaluate(() => { window.__holdStop = true; });
       await panel.getByTestId('compare-candidates').click();
