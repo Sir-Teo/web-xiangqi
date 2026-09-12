@@ -19,6 +19,7 @@ const path = require('node:path');
       'test-select-controls-browser.cjs',
       'test-engine-resource-settings-browser.cjs',
       'test-review-engine-restart-browser.cjs',
+      'test-hint-restart-browser.cjs',
       'test-study-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',

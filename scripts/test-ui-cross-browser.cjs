@@ -45,6 +45,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-select-controls-browser.cjs',
         'test-engine-resource-settings-browser.cjs',
         'test-review-engine-restart-browser.cjs',
+        'test-hint-restart-browser.cjs',
         'test-study-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',

@@ -3432,12 +3432,12 @@ function App() {
     );
   }, [analysisRequestKey, canShowThreat, liveAnalysisPolicy.primary.goCmd, queueSearch, threatFen]);
 
-  // Navigating away answers a different question, so the threat goes with it.
-  // `analysisRequestKey` changes on every position, mode and policy change,
-  // which is exactly the set of things that invalidate the search behind it.
+  // Navigating away or replacing the worker invalidates the threat search.
+  // Use session identity too: a fast restart can skip an isReady=false render,
+  // leaving the availability guard below unable to detect the interruption.
   useEffect(() => {
     setThreatActive(false);
-  }, [analysisRequestKey]);
+  }, [analysisRequestKey, engineBootKey, readySessionId]);
 
   // Anything that takes the analysis engine away -- the opponent's turn
   // starting, a review beginning, the engine going down -- takes the threat
@@ -3564,9 +3564,12 @@ function App() {
   }, [canHint, currentPositionCommand, queueSearch]);
 
   useEffect(() => {
+    // Pending and completed hints belong to this position and engine session.
+    // A terminated worker never sends the bestmove that clears hintPending;
+    // a fast replacement may become ready without rendering isReady=false.
     setHintMove(null);
     setHintPending(false);
-  }, [currentNodeId, aiPlayActive]);
+  }, [currentNodeId, aiPlayActive, engineBootKey, readySessionId, isReady]);
 
   const hintText = useMemo(() => {
     if (hintPending) return 'Thinking of a hint…';
