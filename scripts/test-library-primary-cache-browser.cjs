@@ -15,10 +15,16 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
       window.__profilePayloadBytes = new TextEncoder().encode(payload).length;
       localStorage.setItem('xiangqi:library:v1', payload);
       window.__profileNodeVisits = 0;
+      window.__profileStudyLineVisits = 0;
       const add = Set.prototype.add;
       Set.prototype.add = function(value) {
         if (value && typeof value === 'object' && typeof value.uci === 'string') window.__profileNodeVisits++;
         return add.call(this, value);
+      };
+      const reduce = Array.prototype.reduce;
+      Array.prototype.reduce = function(callback, ...args) {
+        if (this[0] && typeof this[0] === 'object' && typeof this[0].uci === 'string') window.__profileStudyLineVisits += this.length;
+        return reduce.call(this, callback, ...args);
       };
     });
     await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
@@ -32,6 +38,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
         } };
       };` }));
     await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('ControlOrMeta+k');
     await page.getByRole('combobox', { name: 'Search commands' }).fill('Library');
     await page.keyboard.press('Enter');
@@ -45,13 +52,14 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
     }
     const samples = [];
     for (const query of ['beta', 'study', 'alpha beta', 'study alpha', 'alpha']) {
-      await page.evaluate(() => { window.__profileNodeVisits = 0; });
+      await page.evaluate(() => { window.__profileNodeVisits = 0; window.__profileStudyLineVisits = 0; });
       const start = performance.now();
       await search.fill(query);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      samples.push({ query, elapsedMs: +(performance.now() - start).toFixed(1), nodeVisits: await page.evaluate(() => window.__profileNodeVisits) });
+      samples.push({ query, elapsedMs: +(performance.now() - start).toFixed(1), ...await page.evaluate(() => ({ nodeVisits: window.__profileNodeVisits, studyLineVisits: window.__profileStudyLineVisits })) });
     }
     assert.ok(samples.every(sample => sample.nodeVisits === 0), JSON.stringify(samples));
+    assert.ok(samples.every(sample => sample.studyLineVisits === 0), `Warm filtering must reuse study-line counts: ${JSON.stringify(samples)}`);
     // A storage refresh with the same IDs must invalidate both the primary
     // line and result-search caches. Keep the panel mounted throughout.
     const updateRecord = async pinned => page.evaluate(pinned => {
@@ -82,6 +90,21 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
     await page.getByTestId('load-saved-profile-399').waitFor();
     const card = page.getByTestId('load-saved-profile-399').locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," lib-card ")][1]');
     assert.match(await card.innerText(), /1 main-line move/);
+    assert.match(await card.innerText(), /2 study lines/);
+    await search.fill('2 study lines');
+    await card.waitFor();
+    assert.equal(await page.locator('.lib-card[data-game-id]').count(), 1);
+    await page.evaluate(() => {
+      const games = JSON.parse(localStorage.getItem('xiangqi:library:v1'));
+      const game = games.find(game => game.id === 'profile-399');
+      game.moveTree = game.moveTree.slice(0, 1);
+      localStorage.setItem('xiangqi:library:v1', JSON.stringify(games));
+      dispatchEvent(new StorageEvent('storage', { key: 'xiangqi:library:v1', storageArea: localStorage }));
+    });
+    await card.waitFor({ state: 'hidden' });
+    await search.fill('1 study line');
+    await card.waitFor();
+    assert.match(await card.innerText(), /1 study line\b/);
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width === 320 ? 640 : 900 });
       if (width < 900) {
@@ -90,8 +113,9 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
       }
       await card.scrollIntoViewIfNeeded();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await page.screenshot({ path: `/tmp/xiangqi-study-count-${browserType.name()}-${width}.png` });
     }
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ browser: browserType.name(), fixture: '400 studies of 256 plies; warm result/text filtering; same-ID endpoint and pin refresh; desktop/mobile layout', cpuSlowdown: browserType.name() === 'chromium' ? 4 : 1, payloadBytes: await page.evaluate(() => window.__profilePayloadBytes), samples }, null, 2));
+    console.log(JSON.stringify({ browser: browserType.name(), fixture: '400 studies of 256 plies; warm primary-line and branch-count reuse; same-ID endpoint, pin and branch deletion refresh in cards/search; desktop/mobile layout', cpuSlowdown: browserType.name() === 'chromium' ? 4 : 1, payloadBytes: await page.evaluate(() => window.__profilePayloadBytes), samples }, null, 2));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

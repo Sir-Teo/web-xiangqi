@@ -114,7 +114,7 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
-function getSavedGameSearchText(game: SavedGame, line: LibraryPrimaryLine) {
+function getSavedGameSearchText(game: SavedGame, line: LibraryPrimaryLine, studyLineLabel: string | null) {
   const summary = game.review?.summary;
   const annotations = game.review?.annotations ?? [];
 
@@ -127,7 +127,7 @@ function getSavedGameSearchText(game: SavedGame, line: LibraryPrimaryLine) {
     resultLabel(line.result ?? 'ongoing'),
     formatDate(game.savedAt),
     formatSavedGameMoveCount(game, line),
-    formatSavedStudyLines(game),
+    studyLineLabel,
     savedReviewScope(game, line),
     game.startFen,
     game.moves.join(' '),
@@ -296,6 +296,17 @@ export function LibraryPanel({
   // mutation re-reads storage and hands back fresh objects, so a game that
   // changed cannot be read back through a stale entry.
   const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), []);
+  // Counting study lines visits every branch. Share the result between cards
+  // and search text; immutable record replacement invalidates it after edits.
+  const savedStudyLineLabels = useMemo(() => new WeakMap<SavedGame, string | null>(), []);
+  const getSavedStudyLineLabel = useCallback((game: SavedGame) => {
+    let label = savedStudyLineLabels.get(game);
+    if (label === undefined) {
+      label = formatSavedStudyLines(game);
+      savedStudyLineLabels.set(game, label);
+    }
+    return label;
+  }, [savedStudyLineLabels]);
   // A primary line can span 1,024 nodes. Resolve it once per immutable saved
   // record, rather than walking every tree again on each filter keystroke.
   const savedPrimaryLines = useMemo(() => new WeakMap<SavedGame, LibraryPrimaryLine>(), []);
@@ -319,12 +330,12 @@ export function LibraryPanel({
       if (searchTerms.length === 0) return true;
       let text = savedSearchText.get(g);
       if (text === undefined) {
-        text = getSavedGameSearchText(g, getSavedPrimaryLine(g));
+        text = getSavedGameSearchText(g, getSavedPrimaryLine(g), getSavedStudyLineLabel(g));
         savedSearchText.set(g, text);
       }
       return matchesSearchTerms(text, searchTerms);
     })
-    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText, getSavedPrimaryLine]);
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText, getSavedPrimaryLine, getSavedStudyLineLabel]);
   const reviewInsight = useMemo(() => {
     const reviewed = filteredSaved
       .map((game) => game.review?.summary)
@@ -630,7 +641,7 @@ export function LibraryPanel({
         ) : (
           visibleSaved.map((game, cardIndex) => {
             const savedTabIndex = cardIndex === savedStopIndex ? 0 : -1;
-            const studyLineLabel = formatSavedStudyLines(game);
+            const studyLineLabel = getSavedStudyLineLabel(game);
             const primaryLine = getSavedPrimaryLine(game);
             const primaryResult = primaryLine.result ?? 'ongoing';
             const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
