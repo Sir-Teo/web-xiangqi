@@ -3940,12 +3940,10 @@ async function assertEngineTelemetryDashboard(browser) {
         /Queued|Pending/.test(searchCard) &&
         /Queued|Analyzing/.test(bottomStatus) &&
         clearTitle.includes("current search") &&
-        // The target depth is the tier's, not a constant. It read D8 on every
-        // machine only because the Search Depth preference defaulted below
-        // every tier's ceiling and clamped them all to itself -- which was the
-        // bug, not the contract. What this asserts is that a queued search
-        // still discloses the depth it is aiming for.
-        /target D\d+/.test(searchCard) &&
+        // No readings have arrived for this position. A configured live target
+        // is neither measured depth nor necessarily this search's budget.
+        /queued|waiting for data/.test(searchCard) &&
+        !/target D\d+/.test(searchCard) &&
         !searchCard.includes("789k nps") &&
         !searchCard.includes("hash 2%");
     }, null, { timeout: 5000 });
@@ -3994,7 +3992,8 @@ async function assertEngineTelemetryDashboard(browser) {
       !cleared.pvText.includes("No PV available yet") ||
       !/Queued|Pending/.test(cleared.searchCard) ||
       !/Queued|Analyzing/.test(cleared.bottomStatus) ||
-      !/target D\d+/.test(cleared.searchCard) ||
+      !/queued|waiting for data/.test(cleared.searchCard) ||
+      /target D\d+/.test(cleared.searchCard) ||
       /789k nps|hash 2%/.test(cleared.searchCard) ||
       cleared.overflowX > 2
     ) {
