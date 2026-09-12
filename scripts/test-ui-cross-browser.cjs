@@ -37,6 +37,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-pgn-header-comments-browser.cjs',
         'test-pgn-glyphs-browser.cjs',
         'test-edit-glyphs-browser.cjs',
+        'test-select-controls-browser.cjs',
         'test-study-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',

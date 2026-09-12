@@ -55,13 +55,14 @@ export function CandidatePanel(props: Props) {
     <p>Choose up to {MAX_CANDIDATE_MOVES} legal moves. Scores apply only to these choices.</p>
     <div className="candidate-picker">
       <label htmlFor="candidate-move">Candidate move</label>
-      <select id="candidate-move" ref={selectRef} value={choice} onChange={event => setChoice(event.target.value)}
+      <select className="app-select" id="candidate-move" aria-describedby={choice ? 'candidate-choice-description' : undefined} ref={selectRef} value={choice} onChange={event => setChoice(event.target.value)}
         disabled={!props.canCompare || selected.length >= MAX_CANDIDATE_MOVES}>
         <option value="">Choose a legal move…</option>
         {choices.map(option => <option key={option.uci} value={option.uci} disabled={selected.includes(option.uci)}>{option.label}</option>)}
       </select>
       <button type="button" disabled={!choice || !props.canCompare || selected.length >= MAX_CANDIDATE_MOVES}
         onClick={() => { props.onEdit(); setSelected(previous => previous.includes(choice) ? previous : [...previous, choice]); setChoice(''); }}>Add move</button>
+      {choice && <span className="candidate-choice-description" id="candidate-choice-description">{choices.find(option => option.uci === choice)?.label}</span>}
     </div>
     <ul className="candidate-selections" aria-label="Selected moves">
       {selected.map(uci => <li key={uci}><span>{formatMoveInStyle(board, uci, notation)}</span>

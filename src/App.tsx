@@ -5236,7 +5236,7 @@ function App() {
               <label htmlFor="settings-workspace-mode">Workspace</label>
               <select
                 id="settings-workspace-mode"
-                className="premium-select"
+                className="premium-select app-select"
                 value={workspaceMode}
                 onChange={(e) => setWorkspaceMode(e.target.value as WorkspaceMode)}
               >
@@ -5328,7 +5328,7 @@ function App() {
               <label htmlFor="settings-game-mode">Game Mode</label>
               <select
                 id="settings-game-mode"
-                className="premium-select"
+                className="premium-select app-select"
                 value={gameMode}
                 onChange={(e) => {
                   applyMode(e.target.value as GameMode);

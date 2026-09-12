@@ -63,9 +63,10 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
                 <button type="button" onClick={onClose} aria-label="Close rule lessons">×</button></header>
             <div className="rule-lessons-layout">
                 <div className="rule-lessons-intro">
-                    <label>Choose a lesson<select value={index} onChange={event => openLesson(Number(event.target.value))} data-testid="lesson-select">
+                    <label>Choose a lesson<select className="app-select app-select-roomy" value={index} onChange={event => openLesson(Number(event.target.value))} data-testid="lesson-select">
                         {RULE_LESSONS.map((item, i) => <option key={item.id} value={i}>{completed.includes(item.id) ? '✓ ' : ''}{i + 1}. {item.title}</option>)}
                     </select></label>
+                    <h3>{lesson.title}</h3>
                     <p>{lesson.rule}</p><p className="rule-lessons-task">{lesson.task}</p>
                 </div>
                 <div className="rule-lessons-board"><Board key={lesson.id} board={board} selected={selected} validTargets={validTargets} onSquareClick={clickSquare}

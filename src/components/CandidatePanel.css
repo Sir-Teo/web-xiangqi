@@ -1,4 +1,5 @@
 .candidate-panel {
+  container-type: inline-size;
   min-width: 0;
   margin-bottom: .65rem;
   padding: .65rem;
@@ -23,7 +24,9 @@
   font: inherit;
 }
 .candidate-panel select { width: 100%; }
-.candidate-panel button { cursor: pointer; }
+.candidate-panel button { cursor: pointer; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.candidate-choice-description { grid-column: 1 / -1; overflow-wrap: anywhere; }
+@container (max-width: 12rem) { .candidate-picker { grid-template-columns: minmax(0, 1fr); } }
 .candidate-panel button:disabled, .candidate-panel select:disabled { opacity: .5; cursor: default; }
 .candidate-panel button:focus-visible, .candidate-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .candidate-selections { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; padding: 0; }

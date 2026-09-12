@@ -518,7 +518,7 @@ export function LibraryPanel({
       </div>
       <div className="lib-filter-row">
         <select
-          className="lib-filter-select"
+          className="lib-filter-select app-select"
           value={reviewFilter}
           onChange={(e) => setReviewFilter(e.target.value as typeof reviewFilter)}
           aria-label="Filter by review status"
@@ -528,7 +528,7 @@ export function LibraryPanel({
           <option value="unreviewed">Unreviewed</option>
         </select>
         <select
-          className="lib-filter-select"
+          className="lib-filter-select app-select"
           value={resultFilter}
           onChange={(e) => setResultFilter(e.target.value as typeof resultFilter)}
           aria-label="Filter by result"
@@ -540,7 +540,7 @@ export function LibraryPanel({
           <option value="ongoing">Ongoing</option>
         </select>
         <select
-          className="lib-filter-select"
+          className="lib-filter-select app-select"
           value={savedSort}
           onChange={(e) => setSavedSort(e.target.value as SavedSort)}
           aria-label="Sort saved games"

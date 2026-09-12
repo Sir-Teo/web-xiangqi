@@ -10,6 +10,7 @@
 .rule-lessons-intro { grid-area: intro; }
 .rule-lessons-content { grid-area: feedback; }
 .rule-lessons-intro label { display: grid; gap: .3rem; }
+.rule-lessons-intro h3 { margin: .65rem 0; font-size: 1rem; overflow-wrap: anywhere; }
 .rule-lessons select { width: 100%; min-width: 0; min-height: 44px; background: var(--bg-input); color: inherit; border: 1px solid var(--border-default); border-radius: 6px; padding: .4rem; }
 .rule-lessons button:not(.hitbox) { min-width: 44px; min-height: 44px; padding: .5rem .75rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
 .rule-lessons button[aria-pressed="true"] { border-color: var(--accent); }

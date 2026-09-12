@@ -20,7 +20,7 @@ export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity }: {
         <p>Import or add study symbols here. Engine review keeps them. Without a study move judgement, PGN export can use the review’s grade.</p>
         <form onSubmit={event => { event.preventDefault(); if (choice) apply(Number(choice)); }}>
         <label>Add or replace a judgement
-            <select ref={addSelect} aria-label="Add study annotation" aria-describedby={choice ? 'glyph-choice-description' : undefined} value={choice} disabled={disabled}
+            <select className="app-select app-select-roomy" ref={addSelect} aria-label="Add study annotation" aria-describedby={choice ? 'glyph-choice-description' : undefined} value={choice} disabled={disabled}
                 onChange={event => setChoice(event.target.value)}>
                 <option value="" disabled>Choose a symbol…</option>
                 {[['Move judgement', 1, 9], ['Position', 10, 19]].map(([label, first, last]) => <optgroup key={label} label={String(label)}>

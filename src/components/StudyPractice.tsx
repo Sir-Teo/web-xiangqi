@@ -61,7 +61,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   const nextMove = study.lines[session.line]?.[session.moves.length];
   return <div className="study-practice-layout">
     <div className="study-practice-controls">
-      <label>Practice as<select value={side} onChange={event => {
+      <label>Practice as<select className="app-select app-select-roomy" value={side} onChange={event => {
         const chosen = event.target.value as Side;
         setSide(chosen);
         const first = practiceLineIndices(study, chosen)[0];

@@ -449,7 +449,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                         {totalKeyMoments > 0 ? (
                             <div className="review-moment-filters" role="group" aria-label="Filter review key moments">
                                 <select
-                                    className="review-moment-filter"
+                                    className="review-moment-filter app-select"
                                     value={momentSideFilter}
                                     onChange={(event) => setMomentSideFilter(event.target.value as ReviewMomentSideFilter)}
                                     aria-label="Filter review moments by side"
@@ -460,7 +460,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                                     <option value="black">Black</option>
                                 </select>
                                 <select
-                                    className="review-moment-filter"
+                                    className="review-moment-filter app-select"
                                     value={momentQualityFilter}
                                     onChange={(event) => setMomentQualityFilter(event.target.value as ReviewMomentQualityFilter)}
                                     aria-label="Filter review moments by severity"
