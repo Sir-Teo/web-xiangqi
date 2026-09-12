@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
+const wrapper = fs.readFileSync(path.join(__dirname, '../templates/pikafish.js'), 'utf8');
 
 // Run the real build script in a disposable repository. Compiler/git stubs
 // exercise publication and failure handling, not WebAssembly correctness.
@@ -16,7 +17,7 @@ function fixture() {
   }
   fs.copyFileSync(path.join(__dirname, 'build-pikafish.sh'), path.join(root, 'scripts/build-pikafish.sh'));
   for (const [name, content] of Object.entries({
-    'templates/pikafish.js': 'new wrapper', 'templates/emscripten/wasm-makefile.mk': '',
+    'templates/pikafish.js': wrapper, 'templates/emscripten/wasm-makefile.mk': '',
     'templates/emscripten/pre.js': '', '.deps/pikafish/src/main.cpp': 'extern "C" void command',
     '.deps/pikafish/src/pikafish.nnue': 'upstream network', 'public/pikafish.nnue': 'pinned network',
     'public/THIRD_PARTY_NOTICES.md': 'notices', 'public/Pikafish-Copying.txt': 'license',
@@ -90,7 +91,7 @@ test('a successful build publishes every variant, wrapper and pinned network', (
         for (const ext of ['js', 'wasm']) assert.equal(files[`${dir}/${base}.${ext}`], 'new ' + base);
       }
       assert.equal(files[dir + '/pikafish-core.worker.js'], 'new worker pikafish-core');
-      assert.equal(files[dir + '/pikafish.js'], 'new wrapper');
+      assert.equal(files[dir + '/pikafish.js'], wrapper);
       assert.equal(files[dir + '/pikafish.nnue'], 'pinned network');
       assert.equal(files[dir + '/unrelated.txt'], 'keep');
     }
@@ -127,5 +128,80 @@ test('an upstream network is published to both destinations when no pinned netwo
     const files = f.readPublished();
     for (const dir of ['dist', 'public']) assert.equal(files[dir + '/pikafish.nnue'], 'upstream network');
     f.assertClean();
+  } finally { f.clean(); }
+});
+
+test('a scalar-only build removes old SIMD artifacts and disables their automatic selection', () => {
+  const f = fixture();
+  try {
+    for (const dir of ['public', 'dist']) {
+      fs.writeFileSync(path.join(f.root, dir, 'pikafish-core-simd.worker.js'), 'old SIMD worker');
+      fs.writeFileSync(path.join(f.root, dir, 'pikafish-core-single-simd.worker.js'), 'old SIMD worker');
+    }
+    const result = f.run({ WASM_BUILD_SIMD: 'no' });
+    assert.equal(result.status, 0, result.stderr);
+    const files = f.readPublished();
+    assert.deepEqual(Object.keys(files).filter(file => file.includes('-simd.')), []);
+    for (const dir of ['public', 'dist']) {
+      assert.equal(files[dir + '/pikafish.js'], wrapper.replace('const BUILD_HAS_SIMD = true;', 'const BUILD_HAS_SIMD = false;'));
+      assert.equal(files[dir + '/pikafish-core.js'], 'new pikafish-core');
+      assert.equal(files[dir + '/pikafish-core-single.js'], 'new pikafish-core-single');
+    }
+    f.assertClean();
+  } finally { f.clean(); }
+});
+
+test('a failed scalar-only build preserves the previous SIMD build', () => {
+  const f = fixture();
+  try {
+    const before = f.readPublished();
+    const result = f.run({ WASM_BUILD_SIMD: 'no', TEST_FAIL_FLAVOR: 'pikafish-core-single' });
+    assert.equal(result.status, 2, result.stderr);
+    assert.deepEqual(f.readPublished(), before);
+    f.assertClean();
+  } finally { f.clean(); }
+});
+
+test('invalid SIMD build options fail without changing published files', () => {
+  const f = fixture();
+  try {
+    const before = f.readPublished();
+    for (const value of ['false', '0', 'typo', '']) {
+      const result = f.run({ WASM_BUILD_SIMD: value });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /WASM_BUILD_SIMD must be yes or no/);
+      assert.deepEqual(f.readPublished(), before);
+      f.assertClean();
+    }
+  } finally { f.clean(); }
+});
+
+test('the engine contract accepts a scalar build and rejects stale artifacts or wrapper drift', () => {
+  const f = fixture();
+  try {
+    assert.equal(f.run({ WASM_BUILD_SIMD: 'no' }).status, 0);
+    fs.mkdirSync(path.join(f.root, 'src/utils'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, '../src/utils/analysisProfile.ts'), path.join(f.root, 'src/utils/analysisProfile.ts'));
+    fs.copyFileSync(path.join(__dirname, 'test-engine-contract.cjs'), path.join(f.root, 'scripts/test-engine-contract.cjs'));
+    // Use actual shipped core JS for the existing ABI/pool checks.
+    for (const dir of ['public', 'dist']) for (const core of ['pikafish-core.js', 'pikafish-core-single.js']) {
+      fs.copyFileSync(path.join(__dirname, '../public', core), path.join(f.root, dir, core));
+    }
+    const check = () => spawnSync(process.execPath, ['scripts/test-engine-contract.cjs'], { cwd: f.root, encoding: 'utf8', timeout: 15000 });
+    const valid = check();
+    assert.equal(valid.status, 0, valid.stderr);
+    assert.match(valid.stdout, /2 cores/);
+    const stale = path.join(f.root, 'public/pikafish-core-simd.wasm');
+    fs.writeFileSync(stale, 'old SIMD');
+    assert.match(check().stderr, /is stale: the wrapper declares a scalar-only build/);
+    fs.rmSync(stale);
+    const distWrapper = path.join(f.root, 'dist/pikafish.js');
+    const scalar = fs.readFileSync(distWrapper, 'utf8');
+    fs.writeFileSync(distWrapper, wrapper);
+    assert.match(check().stderr, /wrappers disagree/);
+    fs.writeFileSync(distWrapper, scalar + '\n// stale wrapper change\n');
+    assert.match(check().stderr, /does not match templates/);
+    fs.writeFileSync(distWrapper, scalar.replace('const BUILD_HAS_SIMD = false;', ''));
+    assert.match(check().stderr, /must declare one BUILD_HAS_SIMD setting/);
   } finally { f.clean(); }
 });

@@ -10,6 +10,7 @@ const path = require('node:path');
     await server.listen();
     const env = { ...process.env, XIANGQI_QA_URL: server.resolvedUrls.local[0] };
     for (const script of [
+      'test-scalar-build-browser.cjs',
       'test-pgn-collection-browser.cjs',
       'test-pgn-notes-browser.cjs',
       'test-pgn-header-comments-browser.cjs',

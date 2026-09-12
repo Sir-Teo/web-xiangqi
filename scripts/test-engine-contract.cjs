@@ -149,8 +149,25 @@ function main() {
     );
   }
 
+  const buildModes = new Map();
   for (const dir of SHIPPED_DIRS) {
-    for (const core of CORES) checkCore(dir, core, expectedPool);
+    const file = path.join(ROOT, dir, 'pikafish.js');
+    if (fs.existsSync(file)) {
+      const markers = [...fs.readFileSync(file, 'utf8').matchAll(/^  const BUILD_HAS_SIMD = (true|false);$/gm)];
+      if (markers.length !== 1) fail(`${dir}/pikafish.js must declare one BUILD_HAS_SIMD setting`);
+      else buildModes.set(dir, markers[0][1] === 'true');
+    }
+    for (const core of CORES) {
+      if (buildModes.get(dir) === false && core.jsFile.includes('-simd.')) {
+        for (const ext of ['js', 'wasm', 'worker.js']) {
+          const skipped = core.jsFile.replace(/\.js$/, '.' + ext);
+          if (fs.existsSync(path.join(ROOT, dir, skipped))) fail(`${dir}/${skipped} is stale: the wrapper declares a scalar-only build`);
+        }
+      } else checkCore(dir, core, expectedPool);
+    }
+  }
+  if (buildModes.size === 2 && buildModes.get('public') !== buildModes.get('dist')) {
+    fail('public and dist wrappers disagree about SIMD build availability');
   }
 
   // The wrapper carries its own copy, because it clamps a caller's explicit
@@ -169,8 +186,8 @@ function main() {
     );
   }
 
-  // And the shipped copies have to *be* the template. `build-pikafish.sh` copies
-  // it into `public/` and `dist/`, so editing the template without rebuilding
+  // The shipped copies match the template except for the generated SIMD flag.
+  // `build-pikafish.sh` writes them into `public/` and `dist/`, so editing the template without rebuilding
   // leaves the app running the old wrapper -- which is not a subtle difference
   // when the edit is a thread clamp. Nothing checked this, and the copies were
   // 35 lines behind when it was added.
@@ -180,11 +197,12 @@ function main() {
       if (dir === "public") fail(`${dir}/pikafish.js is missing`);
       continue;
     }
-    if (fs.readFileSync(shipped, "utf8") !== wrapper) {
+    const normalized = fs.readFileSync(shipped, "utf8").replace(/^  const BUILD_HAS_SIMD = false;$/m, '  const BUILD_HAS_SIMD = true;');
+    if (normalized !== wrapper) {
       fail(
-        `${dir}/pikafish.js does not match templates/pikafish.js. The build copies the ` +
+        `${dir}/pikafish.js does not match templates/pikafish.js apart from its build flag. The build writes the ` +
         `template into place, so this one is stale and it is what the app actually loads. ` +
-        `Rerun \`npm run build\`, or copy the template over it.`
+        `Rerun \`npm run build\` with the intended WASM_BUILD_SIMD setting.`
       );
     }
   }
@@ -210,7 +228,7 @@ function main() {
   }
 
   console.log(
-    `Engine contract check passed (${CORES.length} cores, pool ${expectedPool}, ` +
+    `Engine contract check passed (${buildModes.get('public') === false ? 2 : CORES.length} cores, pool ${expectedPool}, ` +
     `app max ask ${maxThreads}, wrapper agrees).`
   );
 }

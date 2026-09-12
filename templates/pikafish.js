@@ -1,6 +1,8 @@
 "use strict";
 
 (function() {
+  // Set by build-pikafish.sh; runtime SIMD support does not imply these files exist.
+  const BUILD_HAS_SIMD = true;
   let wasmThreadsSupportCache;
   let wasmSIMDSupportCache;
   let hardwareThreadsCache;
@@ -150,7 +152,7 @@
 
   function resolveVariant(opts) {
     const requested = String((opts && opts.variant) || "auto").trim();
-    const simdOK = (opts && opts.allowSIMD === false) ? false : wasmSIMDSupported();
+    const simdOK = BUILD_HAS_SIMD && !(opts && opts.allowSIMD === false) && wasmSIMDSupported();
     const threadOK = isNode() ? true : wasmThreadsSupported();
 
     if (requested === "threaded-simd") {

@@ -20,6 +20,11 @@ WASM_DEFAULT_PTHREAD_STACK_SIZE="${WASM_DEFAULT_PTHREAD_STACK_SIZE:-$WASM_STACK_
 WASM_PTHREAD_POOL_SIZE="${WASM_PTHREAD_POOL_SIZE:-12}"
 WASM_ENABLE_LTO="${WASM_ENABLE_LTO:-yes}"
 WASM_DISABLE_RTTI="${WASM_DISABLE_RTTI:-yes}"
+WASM_BUILD_SIMD="${WASM_BUILD_SIMD-yes}"
+case "$WASM_BUILD_SIMD" in
+  yes|no) ;;
+  *) echo "WASM_BUILD_SIMD must be yes or no." >&2; exit 2 ;;
+esac
 
 mkdir -p "$ROOT/.deps" "$DIST_DIR" "$PUBLIC_DIR"
 
@@ -72,7 +77,6 @@ else
 fi
 
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
-WASM_BUILD_SIMD="${WASM_BUILD_SIMD:-yes}"
 
 # Compile and assemble the complete requested build before changing files
 # served by Vite or dist/. A failed later flavor must not publish a mixed build.
@@ -142,8 +146,16 @@ if [ "$WASM_BUILD_SIMD" = "yes" ]; then
   copy_flavor_artifacts pikafish-core-single-simd
 fi
 
-cp "$ROOT/templates/pikafish.js" "$STAGED_DIST_DIR/pikafish.js"
-cp "$ROOT/templates/pikafish.js" "$STAGED_PUBLIC_DIR/pikafish.js"
+if ! has_text 'const BUILD_HAS_SIMD = true;' "$ROOT/templates/pikafish.js"; then
+  echo "Wrapper template is missing its BUILD_HAS_SIMD configuration marker." >&2
+  exit 1
+fi
+if [ "$WASM_BUILD_SIMD" = "no" ]; then
+  sed 's/const BUILD_HAS_SIMD = true;/const BUILD_HAS_SIMD = false;/' "$ROOT/templates/pikafish.js" > "$STAGED_DIST_DIR/pikafish.js"
+else
+  cp "$ROOT/templates/pikafish.js" "$STAGED_DIST_DIR/pikafish.js"
+fi
+cp "$STAGED_DIST_DIR/pikafish.js" "$STAGED_PUBLIC_DIR/pikafish.js"
 for notice_file in THIRD_PARTY_NOTICES.md Pikafish-Copying.txt; do
   if [ -f "$PUBLIC_DIR/$notice_file" ]; then
     cp "$PUBLIC_DIR/$notice_file" "$STAGED_DIST_DIR/$notice_file"
@@ -168,5 +180,15 @@ echo '{"type":"commonjs"}' > "$STAGED_DIST_DIR/package.json"
 
 cp "$STAGED_DIST_DIR/"* "$DIST_DIR/"
 cp "$STAGED_PUBLIC_DIR/"* "$PUBLIC_DIR/"
+
+# Remove skipped outputs only after successful compilation/staging/publication.
+# The published scalar wrapper will not request them even on SIMD-capable hosts.
+if [ "$WASM_BUILD_SIMD" = "no" ]; then
+  for target_dir in "$DIST_DIR" "$PUBLIC_DIR"; do
+    for base in pikafish-core-simd pikafish-core-single-simd; do
+      rm -f "$target_dir/$base.js" "$target_dir/$base.wasm" "$target_dir/$base.worker.js"
+    done
+  done
+fi
 
 echo "Built artifacts in $DIST_DIR"
