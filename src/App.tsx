@@ -6629,6 +6629,21 @@ function App() {
                     {inCheck ? 'Check' : (isMobile && aiPlayActive && boardAiStatusText) || currentModeMeta.shortLabel}
                   </em>
                 </div>
+                <div className="position-stat position-stat-selection">
+                  <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
+                  <strong>{selectedPieceText}</strong>
+                  <em
+                    className={moveRuleHint ? 'position-warning' : undefined}
+                    title={moveRuleHint ?? legalMoveText}
+                  >
+                    {moveRuleHint ?? legalMoveText}
+                  </em>
+                </div>
+                <div className="position-stat position-stat-material">
+                  <span>Material</span>
+                  <strong>{materialText}</strong>
+                  <em>Red {formatMaterialValue(materialSummary.redMaterialTenths)} · Black {formatMaterialValue(materialSummary.blackMaterialTenths)}</em>
+                </div>
                 {/* A repeated position is not a draw in xiangqi, and which it is
                     depends on what the repeating moves were doing. The board
                     said nothing at all about it before, so a player shuffling
@@ -6672,21 +6687,6 @@ function App() {
                     </em>
                   </div>
                 ) : null}
-                <div className="position-stat position-stat-selection">
-                  <span>{selectedPiece ? selectedSquareText : 'Selection'}</span>
-                  <strong>{selectedPieceText}</strong>
-                  <em
-                    className={moveRuleHint ? 'position-warning' : undefined}
-                    title={moveRuleHint ?? legalMoveText}
-                  >
-                    {moveRuleHint ?? legalMoveText}
-                  </em>
-                </div>
-                <div className="position-stat position-stat-material">
-                  <span>Material</span>
-                  <strong>{materialText}</strong>
-                  <em>Red {formatMaterialValue(materialSummary.redMaterialTenths)} · Black {formatMaterialValue(materialSummary.blackMaterialTenths)}</em>
-                </div>
                 {isMobile && aiPlayActive ? (
                   <div
                     className={hintText ? 'mobile-hint-status' : 'sr-only'}

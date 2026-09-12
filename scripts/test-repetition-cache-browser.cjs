@@ -56,9 +56,30 @@ const command = async (page, label) => {
         const count = await page.evaluate(() => window.__boardSerializations);
         console.log(`${browserType.name()} ${width}px: full-board serializations across ten backwards steps = ${count}`);
         assert.ok(count < 100, 'Navigating known snapshots must not reserialize the entire history');
-        await notice.scrollIntoViewIfNeeded();
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
-        await page.screenshot({ path: `/tmp/xiangqi-repetition-cache-${browserType.name()}-${width}.png` });
+        if (width < 900) {
+          const cards = await Promise.all(['turn', 'selection', 'material'].map(name => page.locator('.position-stat-' + name).boundingBox()));
+          assert.ok(cards.every(card => Math.abs(card.y - cards[0].y) < 1), 'Rule notices must not split the regular status row: ' + JSON.stringify(cards));
+        }
+        for (const size of [16, 32]) {
+          await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const material = await page.locator('.position-stat-material').boundingBox();
+          const repetitionBox = await notice.boundingBox();
+          assert.ok(repetitionBox.y >= material.y + material.height, 'Rules follow the regular status cards');
+          for (const rule of [notice, page.getByTestId('capture-free-notice')]) {
+            await rule.scrollIntoViewIfNeeded();
+            assert.equal(await rule.evaluate(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1), false, 'Rule text must fit');
+            assert.equal(await rule.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Rule notice must be reachable');
+          }
+          for (const square of await page.locator('.hitbox').all()) {
+            await square.scrollIntoViewIfNeeded();
+            assert.equal(await square.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Rule notices must leave every board intersection reachable');
+          }
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+          await notice.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: `/tmp/xiangqi-repetition-cache-${browserType.name()}-${width}-${size}.png` });
+        }
+        await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
         await load('different-root');
         assert.match(await notice.innerText(), /Black is checking perpetually/);
         await page.locator('button[aria-label="Go to first position"]:visible').first().click();
