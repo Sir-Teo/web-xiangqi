@@ -3,7 +3,7 @@ import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engine
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
-import { extractPgnMetadata } from './utils/gameMetadata';
+import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
@@ -3080,7 +3080,20 @@ function App() {
    */
   const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
-    if (record.moves.length === 0 && !record.startFen && !normalizeMoveComment(record.rootComment)) {
+    const recordedResult = record.mainLineComplete && record.result !== 'unknown'
+      ? savedResultToGameResult(record.result) : null;
+    const metadata = normalizeGameMetadata(record);
+    const reportRecovery = () => {
+      if (!record.mainLineComplete) {
+        showImportNotice('Incomplete XQF main line', 'The original main line could not be recovered completely. Available legal moves were imported without the file\'s game result.');
+      } else if (record.refused > 0) {
+        showImportNotice(
+          `Skipped ${record.refused} ${record.refused === 1 ? 'move' : 'moves'}`,
+          `The file holds ${record.refused} ${record.refused === 1 ? 'move' : 'moves'} the rules refuse; each branch stops at the first one.`
+        );
+      }
+    };
+    if (record.moves.length === 0 && !record.startFen && !normalizeMoveComment(record.rootComment) && !recordedResult) {
       setMoveLineError('This XQF file holds no moves and no position.');
       return;
     }
@@ -3089,9 +3102,13 @@ function App() {
       setMoveLineError(treeValidation.move ? `Move ${treeValidation.move}: ${treeValidation.reason}` : treeValidation.reason);
       return;
     }
-    if (record.moves.length === 0 && (record.startFen || record.rootComment)) {
+    if (record.moves.length === 0) {
       // Through the ref: the FEN loader is declared further down.
-      handleLoadFenRef.current?.(record.startFen || START_POSITION_FEN, nextGameMode, record.rootComment);
+      if (handleLoadFenRef.current?.(record.startFen || START_POSITION_FEN, nextGameMode, record.rootComment)) {
+        restoreRecordedResult(rootNodeId, recordedResult);
+        setGameMetadata(metadata);
+        reportRecovery();
+      }
       return;
     }
 
@@ -3104,13 +3121,10 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
 
-    loadMoveTree(record.moveTree, record.moves, record.startFen, undefined, record.rootComment);
-    if (record.refused > 0) {
-      showImportNotice(
-        `Skipped ${record.refused} ${record.refused === 1 ? 'move' : 'moves'}`,
-        `The file holds ${record.refused} ${record.refused === 1 ? 'move' : 'moves'} the rules refuse; each branch stops at the first one.`
-      );
-    }
+    const loadedNodeIds = loadMoveTree(record.moveTree, record.moves, record.startFen, undefined, record.rootComment);
+    restoreRecordedResult(loadedNodeIds[record.moves.length - 1] ?? rootNodeId, recordedResult);
+    setGameMetadata(metadata);
+    reportRecovery();
     setFenInput('');
     clearFenError();
     setMoveLineInput('');
@@ -3118,7 +3132,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
 
   const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];

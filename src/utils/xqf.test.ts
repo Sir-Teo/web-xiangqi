@@ -159,6 +159,7 @@ describe('a version 10 file, which is written in the clear', () => {
             ],
         }]);
         expect(record?.refused).toBe(0);
+        expect(record?.mainLineComplete).toBe(true);
     });
 });
 
@@ -178,6 +179,7 @@ describe('the keyed versions', () => {
             expect(record?.moveTree[0]?.comment).toBe('Central cannon.');
             expect(record?.moveTree[0]?.children?.[1]?.comment).toBe('The same-direction cannon.');
             expect(record?.refused).toBe(0);
+            expect(record?.mainLineComplete).toBe(true);
         });
     }
 });
@@ -204,5 +206,30 @@ describe('positions', () => {
         const record = parseXqf(writeXqf({ version: 10, tree: [{ uci: 'h2e2', children: [{ uci: 'a9a0', children: [{ uci: 'h0g2' }] }] }] }));
         expect(record?.moves).toEqual(['h2e2']);
         expect(record?.refused).toBe(1);
+        expect(record?.mainLineComplete).toBe(false);
     });
+});
+
+describe('whether a recovered line still owns the declared result', () => {
+    for (const version of [10, 11, 12, 18]) {
+        it(`distinguishes main-line and variation damage in version ${version}`, () => {
+            const sideDamage = writeXqf({ version, result: 3, tree: [{ uci: 'h2e2', children: [
+                { uci: 'h9g7' }, { uci: 'a9a0' },
+            ] }] });
+            expect(parseXqf(sideDamage)).toMatchObject({ mainLineComplete: true, refused: 1, moves: ['h2e2', 'h9g7'] });
+            const replacedMain = writeXqf({ version, result: 3, tree: [{ uci: 'a0a9' }, { uci: 'h2e2' }] });
+            expect(parseXqf(replacedMain)).toMatchObject({ mainLineComplete: false, refused: 1, moves: ['h2e2'] });
+            const complete = writeXqf({ version, result: 3, tree: [{ uci: 'h2e2', children: [{ uci: 'h9g7', comment: 'End.' }] }] });
+            // Even an intact move with missing comment bytes is not a complete record.
+            expect(parseXqf(complete.subarray(0, complete.length - 1))?.mainLineComplete).toBe(false);
+            // The parent's continuation flag promises a child whose bytes are missing.
+            const leafBytes = 12; // 4 move + 4 length + 4 comment bytes
+            expect(parseXqf(complete.subarray(0, complete.length - leafBytes)))
+                .toMatchObject({ mainLineComplete: false, moves: ['h2e2'] });
+            const rootOnly = writeXqf({ version, result: 3, tree: [] });
+            expect(parseXqf(rootOnly)?.mainLineComplete).toBe(true);
+            expect(parseXqf(rootOnly.subarray(0, 1024))?.mainLineComplete).toBe(false);
+            expect(parseXqf(rootOnly.subarray(0, rootOnly.length - 1))?.mainLineComplete).toBe(false);
+        });
+    }
 });

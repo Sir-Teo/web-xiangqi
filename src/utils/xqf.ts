@@ -52,6 +52,8 @@ export interface XqfRecord {
     startFen?: string;
     /** The main line, which is the first move at every branch. */
     moves: string[];
+    /** The original first-child line reached its written end without recovery. */
+    mainLineComplete: boolean;
     /** The whole game, variations and notes included. */
     moveTree: SerializableMoveTreeNode[];
     /** The note on the position before the first move, if any. */
@@ -186,6 +188,7 @@ interface Step {
     hasNext: boolean;
     hasVariation: boolean;
     comment?: string;
+    complete: boolean;
 }
 
 /** One record, decoded for the version; null at the end of the data. */
@@ -197,11 +200,13 @@ function readStep(records: Records, version: number, keys: Keys | null): Step | 
     let hasNext: boolean;
     let hasVariation: boolean;
     let commentLength = 0;
+    let complete = true;
 
     if (version <= 10 || !keys) {
         hasNext = (head[2] & 0xf0) !== 0;
         hasVariation = (head[2] & 0x0f) !== 0;
         const length = records.int32();
+        if (length === null) complete = false;
         commentLength = length ?? 0;
         from = (head[0] - FROM_OFFSET) & 0xff;
         to = (head[1] - TO_OFFSET) & 0xff;
@@ -212,6 +217,7 @@ function readStep(records: Records, version: number, keys: Keys | null): Step | 
         if (flags & 0x20) {
             const length = records.int32();
             commentLength = length === null ? 0 : (length - keys.keyRMKSize) | 0;
+            if (length === null || commentLength < 0) complete = false;
         }
         from = (head[0] - FROM_OFFSET - keys.keyXYf) & 0xff;
         to = (head[1] - TO_OFFSET - keys.keyXYt) & 0xff;
@@ -219,10 +225,11 @@ function readStep(records: Records, version: number, keys: Keys | null): Step | 
 
     let comment: string | undefined;
     if (commentLength > 0) {
+        if (commentLength > records.remaining) complete = false;
         const bytes = records.take(Math.min(commentLength, records.remaining));
         if (bytes) comment = decodeText(bytes) || undefined;
     }
-    return { from, to, hasNext, hasVariation, comment };
+    return { from, to, hasNext, hasVariation, comment, complete };
 }
 
 /** Whether the bytes are an XQF file at all. */
@@ -261,6 +268,7 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
     // The root record: no move of its own, a note and whether anything follows.
     const root = readStep(records, version, keys);
     const rootComment = root?.comment;
+    let mainLineComplete = root?.complete ?? false;
 
     let refused = 0;
     const startBoard = cloneBoardState(board);
@@ -271,9 +279,10 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
      * list they form. A record's "next" is its child; its "variation" is
      * the next sibling, played from the same parent position.
      */
-    const readSiblings = (parentBoard: BoardState, parentSide: Side | null, depth: number, discarded: boolean): SerializableMoveTreeNode[] => {
+    const readSiblings = (parentBoard: BoardState, parentSide: Side | null, depth: number, discarded: boolean, onMainLine: boolean): SerializableMoveTreeNode[] => {
         const siblings: SerializableMoveTreeNode[] = [];
         let step: Step | null = readStep(records, version, keys);
+        if (!step && onMainLine) mainLineComplete = false;
         while (step) {
             const fromSquare = squareFromByte(step.from);
             const toSquare = squareFromByte(step.to);
@@ -301,23 +310,27 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
             // A move under a refused one is dropped, not refused: the rules
             // never saw it, and the count is of moves the rules refused.
             if (!node && !discarded) refused += 1;
+            if (onMainLine && (!node || !step.complete)) mainLineComplete = false;
 
             // Children come before the next sibling in the file, so read them
             // whether or not this move was accepted -- the records are there
             // either way -- and keep them only under a move that was.
             const children = step.hasNext
-                ? readSiblings(nextBoard ?? parentBoard, nextSide ?? parentSide, depth + 1, discarded || !node)
+                ? readSiblings(nextBoard ?? parentBoard, nextSide ?? parentSide, depth + 1, discarded || !node, onMainLine)
                 : [];
             if (node) {
                 if (children.length > 0) node.children = children;
                 siblings.push(node);
             }
             step = step.hasVariation ? readStep(records, version, keys) : null;
+            // Recovery can promote a surviving sibling into the returned
+            // first-child line. It must not inherit the original game's result.
+            onMainLine = false;
         }
         return siblings;
     };
 
-    const moveTree = root?.hasNext ? readSiblings(startBoard, null, 0, false) : [];
+    const moveTree = root?.hasNext ? readSiblings(startBoard, null, 0, false, true) : [];
     const moves: string[] = [];
     let cursor = moveTree;
     while (cursor.length > 0) {
@@ -341,6 +354,7 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
         result,
         ...(isStandardStart ? {} : { startFen: boardToFen(board, sideToMove) }),
         moves,
+        mainLineComplete,
         moveTree,
         ...(rootComment ? { rootComment } : {}),
         refused,

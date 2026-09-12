@@ -51,6 +51,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-recovery-text-browser.cjs',
         'test-game-over-text-browser.cjs',
         'test-dialog-initial-focus-browser.cjs',
+        'test-xqf-details-browser.cjs',
         'test-library-annotations-browser.cjs',
         'test-dhtmlxq-browser.cjs',
         'test-root-notes-browser.cjs',
