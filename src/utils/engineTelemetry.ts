@@ -49,24 +49,25 @@ export function formatCompactCount(value: number) {
 }
 
 /**
- * With no stats the badge says what the engine is doing instead of what it
- * found; with stats it is the depth, and the selective depth beside it only
- * when the search has actually gone deeper than the nominal one.
+ * Without a reported depth the badge says what the engine is doing. Node
+ * counts alone do not establish a depth; a configured target is not a reading.
+ * Selective depth may be reported independently of nominal depth.
  */
 export function formatEngineDepthLabel(
   stats: EngineTelemetryStats | null,
-  fallbackDepth: number,
   isSearchQueued: boolean,
   isSearching: boolean,
   isReady: boolean,
 ) {
-  if (!stats) {
+  if (typeof stats?.depth !== 'number') {
+    if (typeof stats?.seldepth === 'number') return `S${stats.seldepth}`;
     if (isSearchQueued) return 'Queued';
     if (isSearching) return 'Pending';
+    if (stats) return 'No depth';
     return isReady ? 'Idle' : 'Booting';
   }
 
-  const depth = stats.depth ?? fallbackDepth;
+  const depth = stats.depth;
   const seldepth = stats?.seldepth;
   if (seldepth && seldepth > depth) {
     return `D${depth}/S${seldepth}`;
@@ -77,15 +78,12 @@ export function formatEngineDepthLabel(
 /** At most two figures, because this line sits under the badge in a narrow card. */
 export function formatEngineTelemetry(
   stats: EngineTelemetryStats | null,
-  fallbackDepth: number,
-  fallbackMoveTimeMs: number,
   isSearchQueued: boolean,
   isSearching: boolean,
 ) {
   if (!stats) {
-    const target = `target D${fallbackDepth}`;
-    if (isSearchQueued) return `${target} · queued`;
-    return isSearching ? `${target} · ${fallbackMoveTimeMs}ms` : target;
+    if (isSearchQueued) return 'queued';
+    return isSearching ? 'waiting for data' : 'no search data';
   }
 
   const parts: string[] = [];
@@ -101,23 +99,21 @@ export function formatEngineTelemetry(
     parts.push(`${stats.timeMs}ms`);
   }
 
-  return parts.length > 0 ? parts.slice(0, 2).join(' · ') : `${fallbackMoveTimeMs}ms primary`;
+  return parts.length > 0 ? parts.slice(0, 2).join(' · ') : 'no timing data';
 }
 
 /** The long form, for a title and an accessible name: everything the engine said. */
 export function formatEngineTelemetryDetail(
   stats: EngineTelemetryStats | null,
-  fallbackDepth: number,
-  fallbackMoveTimeMs: number,
   isSearchQueued: boolean,
   isSearching: boolean,
   isReady: boolean,
 ) {
   if (!stats) {
-    return `Search ${formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)}; ${formatEngineTelemetry(stats, fallbackDepth, fallbackMoveTimeMs, isSearchQueued, isSearching)}`;
+    return `Search ${formatEngineDepthLabel(stats, isSearchQueued, isSearching, isReady)}; ${formatEngineTelemetry(stats, isSearchQueued, isSearching)}`;
   }
 
-  const parts = [formatEngineDepthLabel(stats, fallbackDepth, isSearchQueued, isSearching, isReady)];
+  const parts = [formatEngineDepthLabel(stats, isSearchQueued, isSearching, isReady)];
   if (typeof stats.nodes === 'number') {
     parts.push(`${formatCompactCount(stats.nodes)} nodes`);
   }

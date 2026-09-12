@@ -30,6 +30,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-engine-line-browser.cjs',
         'test-candidate-browser.cjs',
         'test-deep-result-browser.cjs',
+        'test-search-telemetry-browser.cjs',
         'test-pv-standing-browser.cjs',
         'test-study-analysis-browser.cjs',
         'test-pgn-notes-browser.cjs',

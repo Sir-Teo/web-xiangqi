@@ -74,77 +74,91 @@ describe('the depth badge', () => {
     ['idle and ready', { queued: false, searching: false, ready: true }, 'Idle'],
     ['not up yet', { queued: false, searching: false, ready: false }, 'Booting'],
   ])('says what the engine is doing when it has said nothing: %s', (_label, flags, expected) => {
-    expect(formatEngineDepthLabel(null, 18, flags.queued, flags.searching, flags.ready)).toBe(expected);
+    expect(formatEngineDepthLabel(null, flags.queued, flags.searching, flags.ready)).toBe(expected);
   });
 
   it('prefers queued over searching, because that is the earlier state', () => {
-    expect(formatEngineDepthLabel(null, 18, true, true, true)).toBe('Queued');
+    expect(formatEngineDepthLabel(null, true, true, true)).toBe('Queued');
   });
 
   it('shows the depth once there is one', () => {
-    expect(formatEngineDepthLabel(stats({ depth: 12 }), 18, false, true, true)).toBe('D12');
+    expect(formatEngineDepthLabel(stats({ depth: 12 }), false, true, true)).toBe('D12');
   });
 
-  it('falls back to the target depth when the engine has not named one', () => {
-    expect(formatEngineDepthLabel(stats({ nodes: 5 }), 18, false, true, true)).toBe('D18');
+  it('keeps a missing depth unknown even when other counters have arrived', () => {
+    expect(formatEngineDepthLabel(stats({ nodes: 5 }), false, true, true)).toBe('Pending');
+  });
+
+  it('does not invent a depth when a partial search finishes', () => {
+    expect(formatEngineDepthLabel(stats({ nodes: 5 }), false, false, true)).toBe('No depth');
+    expect(formatEngineTelemetryDetail(stats({ nodes: 5 }), false, false, true)).toBe('Search No depth · 5 nodes');
+  });
+
+  it('can show selective depth without inventing nominal depth', () => {
+    expect(formatEngineDepthLabel(stats({ seldepth: 27 }), false, true, true)).toBe('S27');
+    expect(formatEngineTelemetryDetail(stats({ seldepth: 27 }), false, true, true)).toBe('Search S27');
+  });
+
+  it('retains a reported depth of zero', () => {
+    expect(formatEngineDepthLabel(stats({ depth: 0 }), false, true, true)).toBe('D0');
   });
 
   it('adds the selective depth only when the search really went deeper', () => {
-    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 12 }), 18, false, true, true)).toBe('D8/S12');
-    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 8 }), 18, false, true, true)).toBe('D8');
-    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 4 }), 18, false, true, true)).toBe('D8');
-    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 0 }), 18, false, true, true)).toBe('D8');
+    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 12 }), false, true, true)).toBe('D8/S12');
+    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 8 }), false, true, true)).toBe('D8');
+    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 4 }), false, true, true)).toBe('D8');
+    expect(formatEngineDepthLabel(stats({ depth: 8, seldepth: 0 }), false, true, true)).toBe('D8');
   });
 });
 
 describe('the one-line summary', () => {
-  it('names the target while there is nothing to report', () => {
-    expect(formatEngineTelemetry(null, 18, 900, false, false)).toBe('target D18');
-    expect(formatEngineTelemetry(null, 18, 900, true, false)).toBe('target D18 · queued');
-    expect(formatEngineTelemetry(null, 18, 900, false, true)).toBe('target D18 · 900ms');
+  it('reports missing data without borrowing a budget from another search', () => {
+    expect(formatEngineTelemetry(null, false, false)).toBe('no search data');
+    expect(formatEngineTelemetry(null, true, false)).toBe('queued');
+    expect(formatEngineTelemetry(null, false, true)).toBe('waiting for data');
   });
 
   it('leads with the rate, and falls back to the count when there is no rate', () => {
-    expect(formatEngineTelemetry(stats({ nps: 789_000, nodes: 123_000 }), 18, 900, false, true)).toBe('789k nps');
-    expect(formatEngineTelemetry(stats({ nodes: 123_000 }), 18, 900, false, true)).toBe('123k nodes');
+    expect(formatEngineTelemetry(stats({ nps: 789_000, nodes: 123_000 }), false, true)).toBe('789k nps');
+    expect(formatEngineTelemetry(stats({ nodes: 123_000 }), false, true)).toBe('123k nodes');
   });
 
   it('writes the hash as a percentage of a per-mille figure', () => {
-    expect(formatEngineTelemetry(stats({ nps: 789_000, hashfull: 20 }), 18, 900, false, true)).toBe('789k nps · hash 2%');
-    expect(formatEngineTelemetry(stats({ nps: 789_000, hashfull: 1000 }), 18, 900, false, true)).toBe('789k nps · hash 100%');
+    expect(formatEngineTelemetry(stats({ nps: 789_000, hashfull: 20 }), false, true)).toBe('789k nps · hash 2%');
+    expect(formatEngineTelemetry(stats({ nps: 789_000, hashfull: 1000 }), false, true)).toBe('789k nps · hash 100%');
   });
 
   it('shows a hash of zero rather than dropping it, because empty is a fact', () => {
-    expect(formatEngineTelemetry(stats({ hashfull: 0 }), 18, 900, false, true)).toBe('hash 0%');
+    expect(formatEngineTelemetry(stats({ hashfull: 0 }), false, true)).toBe('hash 0%');
   });
 
   it('never runs past two figures, because this line sits in a narrow card', () => {
     const full = stats({ nps: 789_000, nodes: 123_000, hashfull: 20, timeMs: 156 });
-    expect(formatEngineTelemetry(full, 18, 900, false, true).split(' · ')).toHaveLength(2);
+    expect(formatEngineTelemetry(full, false, true).split(' · ')).toHaveLength(2);
   });
 
-  it('falls back to the elapsed time, and then to the budget, when it has nothing else', () => {
-    expect(formatEngineTelemetry(stats({ timeMs: 156 }), 18, 900, false, true)).toBe('156ms');
-    expect(formatEngineTelemetry(stats({ depth: 8 }), 18, 900, false, true)).toBe('900ms primary');
+  it('uses reported time and leaves missing timing data unestimated', () => {
+    expect(formatEngineTelemetry(stats({ timeMs: 156 }), false, true)).toBe('156ms');
+    expect(formatEngineTelemetry(stats({ depth: 8 }), false, true)).toBe('no timing data');
   });
 });
 
 describe('the long form', () => {
   it('carries everything the engine said, in a fixed order', () => {
     const full = stats({ depth: 8, seldepth: 12, nodes: 123_000, nps: 789_000, hashfull: 20, timeMs: 156 });
-    expect(formatEngineTelemetryDetail(full, 18, 900, false, true, true))
+    expect(formatEngineTelemetryDetail(full, false, true, true))
       .toBe('Search D8/S12 · 123k nodes · 789k nps · hash 2% · 156ms');
   });
 
   it('keeps the order when fields are missing, rather than shuffling up', () => {
-    expect(formatEngineTelemetryDetail(stats({ depth: 8, hashfull: 20 }), 18, 900, false, true, true))
+    expect(formatEngineTelemetryDetail(stats({ depth: 8, hashfull: 20 }), false, true, true))
       .toBe('Search D8 · hash 2%');
   });
 
   it('joins the badge and the summary when there are no stats at all', () => {
-    expect(formatEngineTelemetryDetail(null, 18, 900, true, false, true))
-      .toBe('Search Queued; target D18 · queued');
-    expect(formatEngineTelemetryDetail(null, 18, 900, false, false, false))
-      .toBe('Search Booting; target D18');
+    expect(formatEngineTelemetryDetail(null, true, false, true))
+      .toBe('Search Queued; queued');
+    expect(formatEngineTelemetryDetail(null, false, false, false))
+      .toBe('Search Booting; no search data');
   });
 });

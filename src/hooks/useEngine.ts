@@ -354,7 +354,11 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
 
         if (pendingSearchStatsRef.current !== null) {
-            setSearchStats(pendingSearchStatsRef.current);
+            const update = pendingSearchStatsRef.current;
+            // UCI info messages can update only some counters. Keep the other
+            // readings from this search across flushes; clearSearchStats resets
+            // them when the next search starts.
+            setSearchStats(previous => ({ ...previous, ...update }));
             pendingSearchStatsRef.current = null;
         }
 

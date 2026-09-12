@@ -2388,13 +2388,11 @@ function App() {
   const engineSearchDetail = useMemo(
     () => formatEngineTelemetryDetail(
       searchStats,
-      liveAnalysisPolicy.primary.depth,
-      liveAnalysisPolicy.primary.moveTimeMs,
       isSearchQueued,
       isSearching,
       isReady,
     ),
-    [isReady, isSearchQueued, isSearching, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, searchStats]
+    [isReady, isSearchQueued, isSearching, searchStats]
   );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const canPlayBestMove = engineEnabled && !isAiTurn && !gameResult && Boolean(topAnalysisPv?.moves[0]);
@@ -7321,10 +7319,10 @@ function App() {
                           made a backgrounded tab look broken. */}
                       <strong data-testid="engine-search-status">{engineRecoveryNotice?.text ?? (analysisIsStalled
                         ? formatAnalysisActivity(analysisActivity)
-                        : formatEngineDepthLabel(searchStats, liveAnalysisPolicy.primary.depth, isSearchQueued, isSearching, isReady))}</strong>
+                        : formatEngineDepthLabel(searchStats, isSearchQueued, isSearching, isReady))}</strong>
                       <em>{engineRecoveryNotice ? engineRecoveryHint : candidateActive ? candidateSearch!.budgetLabel : analysisIsStalled
                         ? 'tab in background'
-                        : formatEngineTelemetry(searchStats, liveAnalysisPolicy.primary.depth, liveAnalysisPolicy.primary.moveTimeMs, isSearchQueued, isSearching)}</em>
+                        : formatEngineTelemetry(searchStats, isSearchQueued, isSearching)}</em>
                     </div>
                     <div className="engine-stat">
                       <span>Detail</span>

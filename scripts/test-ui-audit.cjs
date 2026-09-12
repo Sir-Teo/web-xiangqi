@@ -63,6 +63,7 @@ const path = require('node:path');
       'test-engine-line-browser.cjs',
       'test-candidate-browser.cjs',
       'test-deep-result-browser.cjs',
+      'test-search-telemetry-browser.cjs',
       'test-study-analysis-browser.cjs',
       'test-unicode-share-browser.cjs',
       'test-unicode-limits-browser.cjs',
