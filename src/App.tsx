@@ -105,7 +105,7 @@ import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComme
 import { formatBreadcrumbLabel } from './utils/moveBreadcrumb';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
-import { isXqfFile, parseXqf, type XqfRecord } from './utils/xqf';
+import { isXqfFile, parseXqf, XqfMoveLimitError, type XqfRecord } from './utils/xqf';
 import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
@@ -170,6 +170,7 @@ import {
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
   MAX_MOVE_IMPORT_UCI_MOVES,
+  MAX_MOVE_IMPORT_TREE_NODES,
 } from './utils/moveImport';
 import {
   detectDeviceProfile,
@@ -3150,7 +3151,7 @@ function App() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       // Binary, so it cannot go through the text box: read it and load it.
       if (isXqfFile(bytes) || /\.xqf$/i.test(file.name)) {
-        const record = parseXqf(bytes);
+        const record = parseXqf(bytes, MAX_MOVE_IMPORT_TREE_NODES);
         if (!record) {
           setMoveLineFileName('');
           setMoveLineError('Could not read this XQF file: it is not one, or its position cannot be placed.');
@@ -3170,9 +3171,9 @@ function App() {
       setMoveLineInput(text);
       setMoveLineFileName(file.name);
       setMoveLineError(null);
-    } catch {
+    } catch (error) {
       setMoveLineFileName('');
-      setMoveLineError('Could not read file');
+      setMoveLineError(error instanceof XqfMoveLimitError ? error.message : 'Could not read file');
     }
   }, [handleImportXqf]);
 

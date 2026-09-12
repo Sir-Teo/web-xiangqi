@@ -38,6 +38,7 @@ const path = require('node:path');
       'test-game-over-text-browser.cjs',
       'test-dialog-initial-focus-browser.cjs',
       'test-xqf-details-browser.cjs',
+      'test-xqf-capacity-browser.cjs',
       'test-library-annotations-browser.cjs',
       'test-dhtmlxq-browser.cjs',
       'test-root-notes-browser.cjs',

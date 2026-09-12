@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { isXqfFile, parseXqf } from './xqf';
+import { describe, expect, it, vi } from 'vitest';
+import { isXqfFile, parseXqf, XqfMoveLimitError } from './xqf';
+import * as rules from './xiangqi';
 
 /**
  * A writer, kept to the test: the reader is checked against files written
@@ -230,6 +231,66 @@ describe('whether a recovered line still owns the declared result', () => {
             expect(parseXqf(rootOnly)?.mainLineComplete).toBe(true);
             expect(parseXqf(rootOnly.subarray(0, 1024))?.mainLineComplete).toBe(false);
             expect(parseXqf(rootOnly.subarray(0, rootOnly.length - 1))?.mainLineComplete).toBe(false);
+        });
+    }
+});
+
+/** Build a deep file without making the fixture writer recursive too. */
+function deepXqf(count: number, refused = false): Uint8Array {
+    const root = writeXqf({ version: 10, tree: [] });
+    const file = new Uint8Array(root.length + count * 8 + (refused ? 8 : 0));
+    file.set(root);
+    file[1026] = 0xf0;
+    const cycle = ['h0g2', 'h9g7', 'g2h0', 'g7h9'];
+    for (let i = 0; i < count; i += 1) {
+        const move = refused ? 'a0a9' : cycle[i % 4];
+        const offset = root.length + i * 8;
+        file[offset] = byteOf(move.slice(0, 2)) + 24;
+        file[offset + 1] = byteOf(move.slice(2)) + 32;
+        file[offset + 2] = (i < count - 1 ? 0xf0 : 0) | (refused && i === 0 ? 1 : 0);
+    }
+    if (refused) {
+        file[root.length + count * 8] = byteOf('h2') + 24;
+        file[root.length + count * 8 + 1] = byteOf('e2') + 32;
+    }
+    return file;
+}
+
+describe('deep XQF studies', () => {
+    it('reads a long main line without consuming the call stack', () => {
+        const record = parseXqf(deepXqf(8192));
+        expect(record?.moves.length).toBe(8192);
+        expect(record?.mainLineComplete).toBe(true);
+    });
+
+    it('skips descendants of a refused move and resumes its legal sibling', () => {
+        const validate = vi.spyOn(rules, 'validatePieceMove');
+        try {
+            const record = parseXqf(deepXqf(8192, true));
+            expect(record).toMatchObject({ moves: ['h2e2'], refused: 1, mainLineComplete: false });
+            expect(record?.moveTree).toEqual([{ uci: 'h2e2' }]);
+            expect(validate).toHaveBeenCalledTimes(2);
+        } finally { validate.mockRestore(); }
+    });
+
+    it('rejects an oversized file before validating moves or constructing its tree', () => {
+        const validate = vi.spyOn(rules, 'validatePieceMove');
+        try {
+            expect(() => parseXqf(deepXqf(8192), 1024)).toThrow(XqfMoveLimitError);
+            expect(validate).not.toHaveBeenCalled();
+        } finally { validate.mockRestore(); }
+        expect(parseXqf(deepXqf(1024), 1024)?.moves.length).toBe(1024);
+    });
+
+    for (const version of [10, 11, 12, 18]) {
+        it(`counts all branches, not comments or the root, in version ${version}`, () => {
+            const file = writeXqf({ version, rootComment: 'h2e2 '.repeat(100), tree: [
+                { uci: 'h2e2', children: [{ uci: 'h9g7' }] },
+                { uci: 'a0a9', children: [{ uci: 'h9g7' }] },
+            ] });
+            expect(() => parseXqf(file, 3)).toThrow(XqfMoveLimitError);
+            expect(parseXqf(file, 4)).toMatchObject({ moves: ['h2e2', 'h9g7'], refused: 1 });
+            expect(parseXqf(writeXqf({ version, rootComment: 'Diagram', tree: [] }), 0)?.rootComment).toBe('Diagram');
         });
     }
 });

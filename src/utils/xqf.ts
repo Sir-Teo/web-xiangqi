@@ -192,7 +192,7 @@ interface Step {
 }
 
 /** One record, decoded for the version; null at the end of the data. */
-function readStep(records: Records, version: number, keys: Keys | null): Step | null {
+function readStep(records: Records, version: number, keys: Keys | null, decodeComment = true): Step | null {
     const head = records.take(4);
     if (!head) return null;
     let from: number;
@@ -227,9 +227,33 @@ function readStep(records: Records, version: number, keys: Keys | null): Step | 
     if (commentLength > 0) {
         if (commentLength > records.remaining) complete = false;
         const bytes = records.take(Math.min(commentLength, records.remaining));
-        if (bytes) comment = decodeText(bytes) || undefined;
+        if (bytes && decodeComment) comment = decodeText(bytes) || undefined;
     }
     return { from, to, hasNext, hasVariation, comment, complete };
+}
+
+/** A caller's capacity limit was exceeded before constructing a move tree. */
+export class XqfMoveLimitError extends Error {
+    constructor(maxNodes: number) {
+        super(`XQF file is too large. Import ${maxNodes} moves or fewer across all variations.`);
+        this.name = 'XqfMoveLimitError';
+    }
+}
+
+/** Count reachable records, including refused branches, without checking moves. */
+function checkMoveLimit(body: Uint8Array, version: number, keys: Keys | null, maxNodes: number): void {
+    const records = new Records(body);
+    const root = readStep(records, version, keys, false);
+    let pending = root?.hasNext ? 1 : 0;
+    let count = 0;
+    while (pending > 0) {
+        const step = readStep(records, version, keys, false);
+        if (!step) break;
+        if (++count > maxNodes) throw new XqfMoveLimitError(maxNodes);
+        pending -= 1;
+        if (step.hasNext) pending += 1;
+        if (step.hasVariation) pending += 1;
+    }
 }
 
 /** Whether the bytes are an XQF file at all. */
@@ -239,6 +263,8 @@ export function isXqfFile(bytes: Uint8Array): boolean {
 
 /**
  * Read a file. Null when it is not one, or its position cannot be placed.
+ * A finite maxNodes counts moves across all branches before tree construction
+ * and throws XqfMoveLimitError when the caller cannot support that many.
  *
  * Moves are checked against the rules as the tree is built, from the
  * position each was played in, and a branch stops at the first move the
@@ -247,7 +273,7 @@ export function isXqfFile(bytes: Uint8Array): boolean {
  * board. Who moves first is not written down; it is the side of the piece
  * the first move moves, and Red when there is no move.
  */
-export function parseXqf(bytes: Uint8Array): XqfRecord | null {
+export function parseXqf(bytes: Uint8Array, maxNodes = Number.POSITIVE_INFINITY): XqfRecord | null {
     if (!isXqfFile(bytes)) return null;
     const header = bytes.subarray(0, HEADER_SIZE);
     const version = header[2];
@@ -263,6 +289,7 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
         }
         body = decoded;
     }
+    if (Number.isFinite(maxNodes)) checkMoveLimit(body, version, keys, maxNodes);
     const records = new Records(body);
 
     // The root record: no move of its own, a note and whether anything follows.
@@ -274,63 +301,72 @@ export function parseXqf(bytes: Uint8Array): XqfRecord | null {
     const startBoard = cloneBoardState(board);
     let firstMoverSide: Side | null = null;
 
-    /**
-     * Read a chain of records under `parentBoard`, returning the sibling
-     * list they form. A record's "next" is its child; its "variation" is
-     * the next sibling, played from the same parent position.
-     */
-    const readSiblings = (parentBoard: BoardState, parentSide: Side | null, depth: number, discarded: boolean, onMainLine: boolean): SerializableMoveTreeNode[] => {
-        const siblings: SerializableMoveTreeNode[] = [];
-        let step: Step | null = readStep(records, version, keys);
-        if (!step && onMainLine) mainLineComplete = false;
-        while (step) {
-            const fromSquare = squareFromByte(step.from);
-            const toSquare = squareFromByte(step.to);
-            let node: SerializableMoveTreeNode | null = null;
-            let nextBoard: BoardState | null = null;
-            let nextSide: Side | null = null;
-            if (fromSquare && toSquare) {
-                const fromFile = fromSquare.charCodeAt(0) - 97;
-                const fromRank = Number(fromSquare[1]);
-                const toFile = toSquare.charCodeAt(0) - 97;
-                const toRank = Number(toSquare[1]);
-                const mover = parentSide ?? pieceSide(parentBoard[fromRank]?.[fromFile] ?? '');
-                if (mover) {
-                    const result = validatePieceMove(parentBoard, { fromFile, fromRank, toFile, toRank, raw: `${fromSquare}${toSquare}` }, mover);
-                    if (result.ok) {
-                        if (firstMoverSide === null && depth === 0) firstMoverSide = mover;
-                        nextBoard = cloneBoardState(parentBoard);
-                        nextBoard[toRank][toFile] = result.piece ?? '';
-                        nextBoard[fromRank][fromFile] = '';
-                        nextSide = mover === 'w' ? 'b' : 'w';
-                        node = { uci: `${fromSquare}${toSquare}`, ...(step.comment ? { comment: step.comment } : {}) };
-                    }
+    // The stream is depth-first: a child precedes its parent's next sibling.
+    // Explicit frames keep long lines off the JS call stack, and only pending
+    // siblings need to retain older board positions.
+    type Frame = {
+        parentBoard: BoardState;
+        parentSide: Side | null;
+        depth: number;
+        discarded: boolean;
+        onMainLine: boolean;
+        siblings: SerializableMoveTreeNode[];
+        owner?: SerializableMoveTreeNode;
+    };
+    const moveTree: SerializableMoveTreeNode[] = [];
+    const pending: Frame[] = root?.hasNext ? [{
+        parentBoard: startBoard, parentSide: null, depth: 0,
+        discarded: false, onMainLine: true, siblings: moveTree,
+    }] : [];
+    while (pending.length) {
+        const frame = pending.pop()!;
+        const { parentBoard, parentSide, depth, discarded, onMainLine, siblings, owner } = frame;
+        const step = readStep(records, version, keys);
+        if (!step) {
+            if (onMainLine) mainLineComplete = false;
+            continue;
+        }
+        const fromSquare = squareFromByte(step.from);
+        const toSquare = squareFromByte(step.to);
+        let node: SerializableMoveTreeNode | null = null;
+        let nextBoard: BoardState | null = null;
+        let nextSide: Side | null = null;
+        // Descendants of refused moves cannot be kept. Consume their records
+        // but do not validate moves or clone boards for an unreachable branch.
+        if (!discarded && fromSquare && toSquare) {
+            const fromFile = fromSquare.charCodeAt(0) - 97;
+            const fromRank = Number(fromSquare[1]);
+            const toFile = toSquare.charCodeAt(0) - 97;
+            const toRank = Number(toSquare[1]);
+            const mover = parentSide ?? pieceSide(parentBoard[fromRank]?.[fromFile] ?? '');
+            if (mover) {
+                const result = validatePieceMove(parentBoard, { fromFile, fromRank, toFile, toRank, raw: `${fromSquare}${toSquare}` }, mover);
+                if (result.ok) {
+                    if (firstMoverSide === null && depth === 0) firstMoverSide = mover;
+                    nextBoard = cloneBoardState(parentBoard);
+                    nextBoard[toRank][toFile] = result.piece ?? '';
+                    nextBoard[fromRank][fromFile] = '';
+                    nextSide = mover === 'w' ? 'b' : 'w';
+                    node = { uci: `${fromSquare}${toSquare}`, ...(step.comment ? { comment: step.comment } : {}) };
                 }
             }
-            // A move under a refused one is dropped, not refused: the rules
-            // never saw it, and the count is of moves the rules refused.
-            if (!node && !discarded) refused += 1;
-            if (onMainLine && (!node || !step.complete)) mainLineComplete = false;
-
-            // Children come before the next sibling in the file, so read them
-            // whether or not this move was accepted -- the records are there
-            // either way -- and keep them only under a move that was.
-            const children = step.hasNext
-                ? readSiblings(nextBoard ?? parentBoard, nextSide ?? parentSide, depth + 1, discarded || !node, onMainLine)
-                : [];
-            if (node) {
-                if (children.length > 0) node.children = children;
-                siblings.push(node);
-            }
-            step = step.hasVariation ? readStep(records, version, keys) : null;
-            // Recovery can promote a surviving sibling into the returned
-            // first-child line. It must not inherit the original game's result.
-            onMainLine = false;
         }
-        return siblings;
-    };
+        if (!node && !discarded) refused += 1;
+        if (onMainLine && (!node || !step.complete)) mainLineComplete = false;
+        if (node) {
+            siblings.push(node);
+            // Do not add an empty children array if every child is refused.
+            if (owner) owner.children = siblings;
+        }
+        if (step.hasVariation) pending.push({ ...frame, onMainLine: false });
+        if (step.hasNext) pending.push({
+            parentBoard: nextBoard ?? parentBoard,
+            parentSide: nextSide ?? parentSide,
+            depth: depth + 1, discarded: discarded || !node, onMainLine,
+            siblings: [], ...(node ? { owner: node } : {}),
+        });
+    }
 
-    const moveTree = root?.hasNext ? readSiblings(startBoard, null, 0, false, true) : [];
     const moves: string[] = [];
     let cursor = moveTree;
     while (cursor.length > 0) {
