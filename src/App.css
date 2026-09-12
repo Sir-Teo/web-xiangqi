@@ -3896,6 +3896,8 @@ summary:active {
 
 .pv-line-actions {
   display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   justify-content: flex-end;
   gap: 0.3rem;
@@ -3905,10 +3907,12 @@ summary:active {
 
 .pv-action-btn {
   min-height: 1.75rem;
+  max-width: 100%;
   padding: 0 0.48rem;
   border-radius: var(--radius-sm);
   font-size: 0.66rem;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .pv-action-btn svg {

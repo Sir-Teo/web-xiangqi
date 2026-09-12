@@ -30,6 +30,23 @@ window.Pikafish.createWorkerEngine = async () => {
   };
 };`;
 
+async function checkActionLabels(page, width, state) {
+  for (const size of [16, 32, 16]) {
+    await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const clipped = await page.locator('[data-testid="engine-pv-line-0"] .pv-action-btn').evaluateAll(buttons => buttons.flatMap(button => {
+      const rect = button.getBoundingClientRect();
+      const card = button.closest('.pv-line').getBoundingClientRect();
+      return rect.left < card.left || rect.right > card.right || button.scrollWidth > button.clientWidth + 1
+        ? [{ text: button.textContent, left: rect.left, right: rect.right, cardLeft: card.left, cardRight: card.right }] : [];
+    }));
+    assert.deepEqual(clipped, [], `${browserType.name()} ${width}px/${size}px/${state}: engine action labels must fit their card`);
+    if (size === 32 && state === 'Update analysis') {
+      await page.getByTestId('engine-pv-line-0').screenshot({ path: `/tmp/xiangqi-engine-actions-${browserType.name()}-${width}.png` });
+    }
+  }
+}
+
 async function check(browser, width) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: width < 900 });
   const errors = [];
@@ -40,13 +57,16 @@ async function check(browser, width) {
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     const keep = page.getByTestId('keep-engine-pv-0');
     await keep.waitFor();
+    await checkActionLabels(page, width, 'Keep line');
     const boardState = () => page.locator('.hitbox').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')));
     const root = await boardState();
     await keep.click();
     assert.equal(await keep.isDisabled(), true);
+    await checkActionLabels(page, width, 'Kept');
     await page.keyboard.press('t');
     const card = page.getByTestId('saved-analysis-card');
     await card.waitFor();
@@ -68,6 +88,7 @@ async function check(browser, width) {
     await page.evaluate(() => { window.__depth = 26; window.__score = 100; });
     await page.getByTestId('deep-dive-btn').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="keep-engine-pv-0"]')?.textContent.includes('Update analysis'));
+    await checkActionLabels(page, width, 'Update analysis');
     await page.keyboard.press('t');
     assert.match(await card.locator('summary').first().innerText(), /D18/);
     await page.keyboard.press('e');
@@ -176,6 +197,7 @@ async function checkRealEngine(browser, width) {
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     await page.getByTestId('keep-engine-pv-0').click({ timeout: 120_000 });
     await command(page, 'Save game');
