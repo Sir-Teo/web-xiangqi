@@ -19,6 +19,11 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
             } };
           };` }));
         await page.goto(base);
+        const coarsePointer = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+        // Desktop Firefox does not emulate a coarse pointer with hasTouch.
+        // Keep touch coverage mandatory in engines that support it.
+        if (browserType.name() !== 'firefox') assert.equal(coarsePointer, true);
+        const activate = locator => coarsePointer ? locator.tap() : locator.click();
         if (width < 900) {
           await page.getByTestId('mobile-view-analysis').click();
           await page.getByTestId('mobile-analysis-tab-moves').click();
@@ -28,14 +33,16 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
           await page.evaluate(size => document.documentElement.style.fontSize = `${size}px`, fontSize);
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           await summary.scrollIntoViewIfNeeded();
-          assert.ok((await summary.boundingBox()).height >= 44, `${width}px: game-details disclosure needs a 44px touch target`);
-          if (await editor.getAttribute('open') === null) await summary.tap();
+          if (coarsePointer) assert.ok((await summary.boundingBox()).height >= 43.99, `${width}px: game-details disclosure needs a 44px touch target`);
+          if (await editor.getAttribute('open') === null) await activate(summary);
           await editor.locator('input').first().waitFor({ state: 'visible' });
           const inputs = await editor.locator('input').all();
           for (const [index, input] of inputs.entries()) {
-            await input.scrollIntoViewIfNeeded(); await input.tap(); await input.fill(`Detail ${index} 王`);
+            await input.scrollIntoViewIfNeeded(); await activate(input); await input.fill(`Detail ${index} 王`);
             const bounds = await input.boundingBox();
-            assert.ok(bounds.height >= 44 && bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+            // Firefox can return 43.999969px for an exactly 44px input.
+            assert.ok(bounds.height >= 43.99 && bounds.x >= 0 && bounds.x + bounds.width <= width + 1,
+              `${width}px/${fontSize}px field ${index}: ${JSON.stringify(bounds)}`);
             const size = await input.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
             assert.ok(size >= fontSize, 'Input text must scale without shrinking below 16px');
             const labelSize = await input.evaluate(node => parseFloat(getComputedStyle(node.closest('label')).fontSize));
@@ -48,10 +55,10 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           await summary.scrollIntoViewIfNeeded();
           await page.screenshot({ path: `/tmp/xiangqi-metadata-layout-${browserType.name()}-${width}-${fontSize}.png` });
-          await summary.tap(); assert.equal(await editor.getAttribute('open'), null);
+          await activate(summary); assert.equal(await editor.getAttribute('open'), null);
         }
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}x${height}: 100/200% labels, input text, 44px touch targets, field reflow and reachable editing passed`);
+        console.log(`${browserType.name()} ${width}x${height}: 100/200% text, 44px inputs, field reflow and reachable editing passed (${coarsePointer ? 'touch disclosure verified' : 'mouse; coarse-pointer emulation unavailable'})`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
