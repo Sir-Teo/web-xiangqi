@@ -105,9 +105,47 @@ async function play(page, from, to) {
         for (const note of ['New note after deletion', 'New alternative', 'New replay annotation', 'New continuation']) {
           assert.ok(nodes.some(node => node.comment === note), `Saved study is missing ${note}`);
         }
+
+        // Clearing a newer annotation on a replayed move is an edit too.
+        // Undo restores the deleted continuation without resurrecting text or
+        // symbols that the author has deliberately removed since deletion.
+        await page.locator('.mtree-chip[data-node-id="n6"]').click();
+        let glyphs = page.getByTestId('imported-glyphs');
+        await glyphs.locator(':scope > summary').click();
+        await glyphs.getByRole('combobox', { name: 'Add study annotation' }).selectOption('1');
+        await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
+        await command(page, 'Delete this move and what follows');
+        await play(page, 'h0', 'g2');
+        await page.getByTestId('move-comment-input').fill('Temporary correction');
+        await page.getByTestId('move-comment-input').blur();
+        await page.getByTestId('move-comment-input').fill('');
+        await page.getByTestId('move-comment-input').blur();
+        glyphs = page.getByTestId('imported-glyphs');
+        await glyphs.locator(':scope > summary').click();
+        await glyphs.getByRole('combobox', { name: 'Add study annotation' }).selectOption('2');
+        await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
+        await glyphs.getByRole('button', { name: /Remove .*\(\$2\)/ }).click();
+        await page.getByTestId('delete-undo-btn').click();
+        await page.waitForFunction(() => !document.querySelector('[data-testid="delete-undo-btn"]'));
+        assert.deepEqual({
+          note: await page.getByTestId('move-comment-input').inputValue(),
+          symbols: await glyphs.locator(':scope > ul > li').count(),
+        }, { note: '', symbols: 0 }, 'Undo must respect deliberately cleared annotations');
+        await page.locator('.mtree-chip[data-node-id="n7"]').click();
+        await noteIs(page, 'New continuation');
+        await command(page, 'Save game');
+        const clearedStudy = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
+        const clearedNodes = [];
+        const collectCleared = list => { for (const node of list || []) { clearedNodes.push(node); collectCleared(node.children); } };
+        collectCleared(clearedStudy.moveTree);
+        const replayed = clearedNodes.find(node => node.uci === 'h0g2');
+        assert.ok(replayed);
+        assert.equal(replayed.comment, undefined);
+        assert.equal(replayed.nags, undefined);
+        assert.equal(clearedNodes.length, 5);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: undo preserves later notes/moves, merges replayed branches, restores annotations and saves the complete tree`);
+        console.log(`${browserType.name()} ${width}px: undo preserves later notes/moves and explicit annotation removal, merges replayed branches, restores annotations and saves the complete tree`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

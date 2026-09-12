@@ -1026,14 +1026,15 @@ export function useXiangqi() {
         setTreeNodes(tree => {
             const node = tree[nodeId];
             if (!node?.record || (node.record.nags ?? []).join(',') === (nags ?? []).join(',')) return tree;
-            const record = { ...node.record };
-            if (nags) record.nags = nags;
-            else delete record.nags;
+            // Keep an explicit undefined after removal: branch Undo must not
+            // replace a newer clearing with the deleted move's old symbols.
+            // JSON/storage serializers still omit this empty annotation.
+            const record = { ...node.record, nags };
             return { ...tree, [nodeId]: { ...node, record } };
         });
     }, []);
 
-    /** Clearing a written note leaves the same state as never writing one. */
+    /** Empty notes are not stored, but an explicit clearing survives branch Undo. */
     const setNodeComment = useCallback((nodeId: string, comment: string) => {
         const normalized = normalizeMoveComment(comment);
         setTreeNodes((prevTree) => {
@@ -1043,9 +1044,7 @@ export function useXiangqi() {
                 return { ...prevTree, [nodeId]: { ...node, comment: normalized } };
             }
             if (!node?.record || isSameMoveComment(node.record.comment, normalized)) return prevTree;
-            const record = { ...node.record };
-            if (normalized) record.comment = normalized;
-            else delete record.comment;
+            const record = { ...node.record, comment: normalized };
             return { ...prevTree, [nodeId]: { ...node, record } };
         });
     }, []);
