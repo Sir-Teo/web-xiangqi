@@ -919,6 +919,7 @@ function App() {
     completedSteps: reviewCompletedSteps,
     totalSteps: reviewTotalSteps,
     summary: reviewSummary,
+    error: reviewError,
     startReview,
     updateReviewProgress,
     completeReview,
@@ -1173,17 +1174,18 @@ function App() {
     hashMB: engineBootConfig.hashMB,
     captureInfoLines: assistMode === 'pro' && analysisTab === 'engine',
     onWorkerError: reportEngineWorkerError,
-    onBestMove: (uci, score, searchTag, completedPvLines, hasEvaluation, scoreKind) => {
+    onBestMove: (uci, score, searchTag, completedPvLines, hasEvaluation, hasExactEvaluation, scoreKind) => {
       const reviewTag = parseReviewTag(searchTag);
       if (reviewTag && reviewControllerRef.current.active) {
         const controller = reviewControllerRef.current;
         if (controller.currentNodeId !== reviewTag.nodeId) {
           return;
         }
-        if (!hasEvaluation) {
+        // Grade only the retained exact reading. The latest PV can be a
+        // deeper bound even when the search already supplied an exact score.
+        if (!hasExactEvaluation) {
           resetReviewController();
-          cancelReview();
-          showImportNotice('Review stopped', 'The engine returned no evaluation. Existing scores were kept. Try reviewing again.');
+          cancelReview(`Review stopped: the engine returned ${hasEvaluation ? 'only a score bound' : 'no evaluation'}. Existing scores were kept. Try reviewing again.`);
           return;
         }
 
@@ -6945,6 +6947,7 @@ function App() {
               ) : analysisTab === 'review' ? (
                 <DeferredReviewPanel
                   status={reviewStatus}
+                  error={reviewError}
                   progress={reviewProgress}
                   progressCompleted={reviewCompletedSteps}
                   progressTotal={reviewTotalSteps}

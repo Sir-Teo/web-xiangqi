@@ -11,6 +11,7 @@ export function useGameReview() {
     const [status, setStatus] = useState<ReviewStatus>('idle');
     const [progress, setProgress] = useState(0);
     const [summary, setSummary] = useState<ReviewSummary | null>(null);
+    const [error, setError] = useState<string | null>(null);
     /**
      * The same progress in the units it is counted in. A percentage cannot say
      * how much work is left, and on a long game that is what a reader wants:
@@ -23,6 +24,7 @@ export function useGameReview() {
     const completedSummaryRef = useRef<ReviewSummary | null>(null);
 
     const startReview = useCallback((totalSteps: number) => {
+        setError(null);
         totalRef.current = Math.max(0, totalSteps);
         setStatus('running');
         setProgress(0);
@@ -42,6 +44,7 @@ export function useGameReview() {
     }, []);
 
     const completeReview = useCallback((nextSummary: ReviewSummary) => {
+        setError(null);
         completedSummaryRef.current = nextSummary;
         setSummary(nextSummary);
         setStatus('done');
@@ -50,13 +53,15 @@ export function useGameReview() {
     }, []);
 
     const hydrateReview = useCallback((nextSummary: ReviewSummary | null) => {
+        setError(null);
         completedSummaryRef.current = nextSummary;
         setSummary(nextSummary);
         setStatus(nextSummary ? 'done' : 'idle');
         setProgress(nextSummary ? 1 : 0);
     }, []);
 
-    const cancelReview = useCallback(() => {
+    const cancelReview = useCallback((message?: string) => {
+        setError(message ?? null);
         const previous = completedSummaryRef.current;
         setStatus(previous ? 'done' : 'idle');
         setProgress(previous ? 1 : 0);
@@ -66,6 +71,7 @@ export function useGameReview() {
     }, []);
 
     const resetReview = useCallback(() => {
+        setError(null);
         completedSummaryRef.current = null;
         setStatus('idle');
         setProgress(0);
@@ -80,6 +86,7 @@ export function useGameReview() {
         completedSteps,
         totalSteps,
         summary,
+        error,
         startReview,
         updateReviewProgress,
         completeReview,

@@ -54,7 +54,7 @@ export interface EngineInitOptions {
     threads?: number;
     hashMB?: number;
     captureInfoLines?: boolean;
-    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[], hasEvaluation: boolean, scoreKind?: EvaluationScoreKind) => void;
+    onBestMove?: (uci: string, score: number, searchTag: string | null, pvLines: PvLine[], hasEvaluation: boolean, hasExactEvaluation: boolean, scoreKind?: EvaluationScoreKind) => void;
     onWorkerError?: (message: string) => void;
     restartToken?: number;
 }
@@ -893,7 +893,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             const completedSearchTag = activeSearchTagRef.current;
             activeSearchTagRef.current = null;
             const uciMove = parseBestMoveUci(msg);
-            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null, pendingEvalRef.current.kind);
+            onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null, pendingEvalRef.current.exact, pendingEvalRef.current.kind);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
             } else {

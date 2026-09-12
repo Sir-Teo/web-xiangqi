@@ -25,6 +25,7 @@ import { formatUciMove } from '../../utils/moveNotation';
 
 type Props = {
     status: ReviewStatus;
+    error?: string | null;
     progress: number;
     /** The same progress in positions searched, for a reader watching a long game. */
     progressCompleted?: number;
@@ -73,6 +74,7 @@ type ReviewMomentQualityFilter = 'all' | 'inaccuracy' | 'mistake' | 'blunder';
 
 export const ReviewPanel = memo(function ReviewPanel({
     status,
+    error,
     progress,
     progressCompleted = 0,
     progressTotal = 0,
@@ -243,6 +245,8 @@ export const ReviewPanel = memo(function ReviewPanel({
                     )}
                 </div>
             </div>
+
+            {error && <p className="review-off-line" role="alert" data-testid="review-error">{error}</p>}
 
             {status === 'running' ? (
                 <div className="review-progress-card">
