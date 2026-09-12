@@ -6,6 +6,7 @@ const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
 const { performance } = require("perf_hooks");
+const { createHash } = require("crypto");
 
 const START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
@@ -53,6 +54,27 @@ function getGitRef(rootDir) {
   } catch (_) {
     return "";
   }
+}
+
+function artifactStamp(file) {
+  const stat = fs.statSync(file, { bigint: true });
+  return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
+}
+
+async function fingerprintArtifacts(artifacts) {
+  const records = {};
+  for (const [name, artifact] of Object.entries(artifacts)) {
+    const unchanged = () => artifactStamp(artifact.source) === artifact.stamp;
+    if (!unchanged()) throw new Error("Benchmark artifact changed during the run: " + artifact.source);
+    const hash = createHash("sha256");
+    let bytes = 0;
+    for await (const chunk of fs.createReadStream(artifact.loadedPath || artifact.source)) {
+      hash.update(chunk); bytes += chunk.length;
+    }
+    if (!unchanged()) throw new Error("Benchmark artifact changed during the run: " + artifact.source);
+    records[name] = { file: path.basename(artifact.source), bytes, sha256: hash.digest("hex") };
+  }
+  return records;
 }
 
 function median(values) {
@@ -161,6 +183,9 @@ function printSummary(snapshot, compareTo) {
   console.log("  label:          " + (snapshot.label || ""));
   console.log("  requested:      " + snapshot.requestedVariant);
   console.log("  resolved:       " + snapshot.resolvedVariant);
+  console.log("  engine:         " + (snapshot.engineName || "not reported"));
+  console.log("  position:       " + snapshot.fen);
+  console.log("  network SHA256: " + snapshot.artifacts.network.sha256);
   console.log("  depth:          " + snapshot.depth);
   console.log("  repeats:        " + snapshot.repeats + " (warmup " + snapshot.warmup + ")");
   console.log("  threads/hash:   " + snapshot.threads + " / " + snapshot.hashMB + " MB");
@@ -254,13 +279,17 @@ async function main() {
   }
 
   const wrapperSrcPath = path.join(distDir, "pikafish.js");
-  const wrapperCjsPath = path.join(os.tmpdir(), "pikafish-bench-wrapper.cjs");
   const coreJsSrcPath = path.join(distDir, coreJsFile);
-  const coreFactoryCjsPath = path.join(os.tmpdir(), "pikafish-bench-core.cjs");
-  fs.copyFileSync(wrapperSrcPath, wrapperCjsPath);
-  fs.copyFileSync(coreJsSrcPath, coreFactoryCjsPath);
-  const createPikafish = require(wrapperCjsPath);
-  const coreFactory = require(coreFactoryCjsPath);
+  const artifacts = Object.fromEntries(Object.entries({
+    wrapper: wrapperSrcPath, coreJs: coreJsSrcPath,
+    coreWasm: path.join(distDir, coreJsFile.replace(/\.js$/, ".wasm")),
+    network: path.join(distDir, "pikafish.nnue"),
+  }).map(([name, source]) => [name, { source, stamp: artifactStamp(source) }]));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pikafish-bench-"));
+  const wrapperCjsPath = path.join(tempDir, "wrapper.cjs");
+  const coreFactoryCjsPath = path.join(tempDir, "core.cjs");
+  artifacts.wrapper.loadedPath = wrapperCjsPath;
+  artifacts.coreJs.loadedPath = coreFactoryCjsPath;
   const state = { activeRun: null, threadLimits: null };
   let engine = null;
 
@@ -275,6 +304,9 @@ async function main() {
     distDir,
     requestedVariant: cfg.variant,
     resolvedVariant: "",
+    engineName: null,
+    fen: cfg.fen,
+    artifacts: null,
     depth: cfg.depth,
     repeats: cfg.repeats,
     warmup: cfg.warmup,
@@ -291,6 +323,10 @@ async function main() {
   };
 
   try {
+    fs.copyFileSync(wrapperSrcPath, wrapperCjsPath);
+    fs.copyFileSync(coreJsSrcPath, coreFactoryCjsPath);
+    const createPikafish = require(wrapperCjsPath);
+    const coreFactory = require(coreFactoryCjsPath);
     const initT0 = performance.now();
     engine = await createPikafish({
       basePath: distDir,
@@ -307,6 +343,7 @@ async function main() {
 
     const lineListener = (line) => {
       const text = String(line);
+      if (text.startsWith("id name ")) snapshot.engineName = text.slice(8).trim() || null;
       const threadsOption = text.match(/^option name Threads type spin default \d+ min (\d+) max (\d+)\s*$/i);
       if (threadsOption) state.threadLimits = { min: Number(threadsOption[1]), max: Number(threadsOption[2]) };
       const run = state.activeRun;
@@ -383,6 +420,12 @@ async function main() {
     snapshot.avgNps = avg(npsValues);
     snapshot.medianNps = median(npsValues);
 
+    validateSnapshot(snapshot, cfg);
+    // Fingerprint after the measured work, without prewarming the network
+    // file or charging hashing time to initialization/search. Stat guards
+    // reject ordinary concurrent rebuilds instead of labeling a mixed run.
+    snapshot.artifacts = await fingerprintArtifacts(artifacts);
+
     let compareSnapshot = null;
     if (cfg.comparePath) {
       compareSnapshot = JSON.parse(fs.readFileSync(cfg.comparePath, "utf8"));
@@ -393,8 +436,6 @@ async function main() {
       fs.writeFileSync(cfg.outPath, JSON.stringify(snapshot, null, 2) + "\n");
       if (!cfg.quiet) console.log("saved snapshot: " + cfg.outPath);
     }
-
-    validateSnapshot(snapshot, cfg);
 
     if (cfg.json) {
       console.log(JSON.stringify({ snapshot, compareTo: compareSnapshot || null }, null, 2));
@@ -407,6 +448,7 @@ async function main() {
     if (engine) {
       try { await engine.terminate(); } catch (_) {}
     }
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
