@@ -1478,6 +1478,11 @@ function App() {
 
   const rootGraphBranchCount = treeNodes[rootNodeId]?.childrenIds.length ?? 0;
   const leftPanelOpen = leftWidth > 0;
+  // Match the responsive panel visibility so a hidden chart does not keep
+  // rebuilding its SVG or observing layout on every live engine score.
+  const graphVisible = isMobile
+    ? mobileView === 'analysis' && mobileAnalysisTab === 'graph'
+    : leftPanelOpen;
   const rightPanelOpen = rightWidth > 0;
 
   // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
@@ -2242,6 +2247,14 @@ function App() {
       onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
     />
   ) : null;
+
+  const openGraphPanel = useCallback(() => {
+    setShowMobileBoardActionMenu(false);
+    setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
+    setLeftPanelTab('graph');
+    setMobileAnalysisTab('graph');
+    setMobileView('analysis');
+  }, []);
 
   const openLibraryPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
@@ -4570,7 +4583,7 @@ function App() {
       keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', disabled: !engineEnabled,
       run: () => { setAnalysisTab('engine'); setMobileAnalysisTab('engine'); setMobileView('analysis'); },
     },
-    { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: () => setLeftPanelTab('graph') },
+    { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: openGraphPanel },
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
@@ -4578,7 +4591,7 @@ function App() {
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
-      handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
+      handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
       stopDeepDive, studyNotes.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
@@ -5832,7 +5845,7 @@ function App() {
               {leftPanelTab === 'graph' ? (
                 <>
                   {shouldShowWdlBar && <WdlBar wdl={displayWdl} isSearching={isSearching} />}
-                  <EvalGraph
+                  {graphVisible && <EvalGraph
                     history={moveHistory}
                     currentMoveIndex={currentMoveIndex}
                     currentEval={displayEvalScore}
@@ -5844,7 +5857,7 @@ function App() {
                     rootBranchCount={rootGraphBranchCount}
                     loadSweepToken={graphLoadSweepToken}
                     onNavigate={jumpToMove}
-                  />
+                  />}
                   {openingCandidates.length > 0 ? (
                     <div className="opening-candidates-card">
                       <div className="opening-candidates-head">

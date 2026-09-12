@@ -63,11 +63,11 @@ async function command(page, label) {
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: 1024 }, (_, i) => cycle[i % 4]).join('+'));
-        await page.waitForFunction(() => window.__graphPoints?.length === 1025 && window.__searchStarted);
         if (width < 900) {
           await page.getByTestId('mobile-view-analysis').click();
           await page.getByTestId('mobile-analysis-tab-graph').click();
         }
+        await page.waitForFunction(() => window.__graphPoints?.length === 1025 && window.__searchStarted);
         const navigator = page.getByRole('slider', { name: 'Evaluation graph move navigator' });
         await navigator.focus();
         await page.evaluate(() => { window.__graphReplaced = 0; });
