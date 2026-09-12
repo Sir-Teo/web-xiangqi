@@ -10,7 +10,7 @@ const EMPTY_REPORT: LibraryPositionReport = { games: 0, moves: [], hits: [] };
 type Query = { requestId: number; games: SavedGame[]; board: BoardState; side: Side };
 
 /** Reuse the index worker; while busy, keep only the latest library/position query. */
-export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: Side) {
+export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: Side, enabled = true) {
   const workerRef = useRef<Worker | null>(null);
   const indexedSourceRef = useRef<SavedGame[] | null>(null);
   const latestRef = useRef<Query | null>(null);
@@ -57,6 +57,13 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
   }, [failWorker]);
 
   useEffect(() => {
+    if (!enabled) {
+      // Keep an existing index for reopening, but discard queued work and
+      // prevent an already-running query from publishing a hidden result.
+      latestRef.current = null;
+      pendingRef.current = null;
+      return;
+    }
     const query = { requestId: ++requestIdRef.current, games, board, side };
     latestRef.current = query;
     pendingRef.current = query;
@@ -93,7 +100,7 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
       }
     }
     dispatch();
-  }, [games, board, side, dispatch, failWorker]);
+  }, [games, board, side, enabled, dispatch, failWorker]);
 
   useEffect(() => () => {
     const worker = workerRef.current;

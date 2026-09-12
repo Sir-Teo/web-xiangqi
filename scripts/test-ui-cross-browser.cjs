@@ -84,6 +84,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-dhtmlxq-browser.cjs',
         'test-root-notes-browser.cjs',
         'test-library-worker-browser.cjs',
+        'test-library-visibility-browser.cjs',
         'test-explorer-browser.cjs',
         'test-autosave-limit-browser.cjs',
       ]) {

@@ -25,6 +25,7 @@ const path = require('node:path');
       'test-autosave-limit-browser.cjs',
       'test-explorer-browser.cjs',
       'test-library-matches-browser.cjs',
+      'test-library-visibility-browser.cjs',
       'test-library-edit-focus-browser.cjs',
       'test-study-practice-browser.cjs',
       'test-update-study-browser.cjs',

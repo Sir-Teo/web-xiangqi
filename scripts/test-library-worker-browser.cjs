@@ -71,9 +71,14 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         };
         await publish('old', 'h9g7');
         await page.waitForFunction(() => window.__indexReplies.length === 1);
+        // Hiding while a request is in flight must drop queued versions. The
+        // old reply can finish, but only reopening may dispatch the latest.
+        await page.getByTestId(width < 900 ? 'mobile-analysis-tab-library' : 'left-panel-tab-library').click();
         for (let i = 0; i < 20; i++) await publish('latest-' + i);
         assert.deepEqual(await page.evaluate(() => ({ workers: window.__indexWorkers.length, builds: window.__indexBuilds.length, lookups: window.__indexReplies.length })), { workers: 1, builds: 1, lookups: 1 });
         await page.evaluate(() => window.__deliverIndex(0));
+        assert.equal(await page.evaluate(() => window.__indexReplies.length), 1, 'A hidden reply dispatched queued work');
+        await page.getByTestId(width < 900 ? 'mobile-analysis-tab-graph' : 'left-panel-tab-graph').click();
         await page.waitForFunction(() => window.__indexReplies.length === 2);
         assert.equal(await page.getByTestId('library-continuation-h9g7').count(), 0, 'An old library result was displayed');
         assert.equal(await page.evaluate(() => window.__indexBuilds[1][0].id), 'latest-19');

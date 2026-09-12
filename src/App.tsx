@@ -2817,7 +2817,7 @@ function App() {
   const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped } =
-    useLibraryExplorer(savedGames, board, sideToMove);
+    useLibraryExplorer(savedGames, board, sideToMove, graphVisible && leftPanelTab === 'graph');
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
