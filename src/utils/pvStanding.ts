@@ -12,7 +12,7 @@ export const PV_STANDING_EQUAL_THRESHOLD_CP = 5;
  * A losing mate in zero has distance -0, whose sign a plain `< 0` test loses.
  */
 export function describePvStanding(best: Reading, line: Reading, lineIndex: number): string {
-    if (lineIndex === 0) return 'Best';
+    if (lineIndex === 0) return line.bounded ? 'Not exact' : 'Best';
     if (best.bounded || line.bounded) return 'Not exact';
     const bestMate = parseMateScoreText(best.scoreStr);
     const lineMate = parseMateScoreText(line.scoreStr);

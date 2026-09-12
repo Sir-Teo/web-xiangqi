@@ -7229,9 +7229,11 @@ function App() {
                             <div className="pv-line-heading">
                               <span className="pv-line-rank">Line {i + 1}</span>
                               <span
-                                className={`pv-line-standing ${i === 0 ? 'pv-line-standing-best' : ''}`}
+                                className={`pv-line-standing ${lineStanding === 'Best' ? 'pv-line-standing-best' : ''}`}
                                 title={lineStanding === 'Not exact'
-                                  ? 'At least one score is a bound, so an exact comparison is not available yet.'
+                                  ? i === 0
+                                    ? 'This score is a bound; an exact evaluation is not available yet.'
+                                    : 'At least one score is a bound, so an exact comparison is not available yet.'
                                   : i === 0 ? 'The engine’s first principal variation.'
                                   : 'Compared with Line 1 from the side to move’s perspective. Live scores can update at different times.'}
                               >

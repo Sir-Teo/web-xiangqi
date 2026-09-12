@@ -9,9 +9,12 @@ const mate = (distance: number) => ({
 });
 
 describe('describePvStanding', () => {
-    it('names the first line best whatever its score', () => {
+    it('names an exact first line best while identifying bounded readings', () => {
         expect(describePvStanding(cp(30), cp(30), 0)).toBe('Best');
         expect(describePvStanding(mate(2), mate(2), 0)).toBe('Best');
+        expect(describePvStanding(cp(30, true), cp(30, true), 0)).toBe('Not exact');
+        const boundedMate = { ...mate(2), bounded: true };
+        expect(describePvStanding(boundedMate, boundedMate, 0)).toBe('Not exact');
     });
 
     it('calls a nearly level line equal instead of printing 0.0 behind', () => {
