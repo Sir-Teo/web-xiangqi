@@ -46,6 +46,21 @@ async function showCard(page) {
   if (await card.getAttribute('open') === null) await card.locator(':scope > summary').click();
   return card;
 }
+async function checkCollapsedSummary(page, card, bound) {
+  const summary = card.locator(':scope > summary');
+  if (await card.getAttribute('open') !== null) {
+    await summary.focus(); await page.keyboard.press('Enter');
+  }
+  assert.equal(await card.getAttribute('open'), null);
+  const text = await summary.innerText();
+  if (bound) {
+    const label = bound === 'lower' ? 'Lower bound' : bound === 'upper' ? 'Upper bound' : 'Bound';
+    assert.ok(text.includes(`${label}, not exact`), `Collapsed snapshot hides uncertainty: ${text}`);
+    if (bound === 'unknown') assert.doesNotMatch(text, /Lower bound|Upper bound/);
+  } else assert.doesNotMatch(text, /bound|not exact/i, 'An exact replacement retains a stale summary qualifier');
+  await summary.focus(); await page.keyboard.press('Enter');
+  assert.notEqual(await card.getAttribute('open'), null);
+}
 async function sourceCard(page, black) {
   await command(page, 'Go to start');
   if (black) {
@@ -93,6 +108,7 @@ async function importPgn(page, width, pgn) {
           assert.equal(snapshot.score, black ? -score : score);
           assert.deepEqual(await boardState(), before, 'Saving analysis moved the board');
           const card = await showCard(page);
+          await checkCollapsedSummary(page, card, bound);
           const label = bound ? `${bound === 'lower' ? 'Lower' : 'Upper'} bound, not an exact score` : 'Exact search score';
           assert.ok((await card.innerText()).includes(label));
         }
@@ -104,6 +120,13 @@ async function importPgn(page, width, pgn) {
           assert.deepEqual(clipped, []);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           if (size === 32) await card.screenshot({ path: `/tmp/xiangqi-analysis-bounds-${browserType.name()}-${width}-${black ? 'black' : 'red'}.png` });
+          if (size === 32) {
+            const summary = card.locator(':scope > summary');
+            await summary.focus(); await page.keyboard.press('Enter');
+            assert.equal(await summary.evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+            await card.screenshot({ path: `/tmp/xiangqi-analysis-summary-${browserType.name()}-${width}-${black ? 'black' : 'red'}.png` });
+            await page.keyboard.press('Enter');
+          }
         }
         await command(page, 'Go to start');
         await command(page, 'Copy PGN');
@@ -116,15 +139,21 @@ async function importPgn(page, width, pgn) {
         await recipient.goto(link);
         await recipient.locator('.xiangqi-board').waitFor();
         const expected = `${snapshot.bound === 'lower' ? 'Lower' : 'Upper'} bound, not an exact score`;
-        assert.ok((await (await sourceCard(recipient, black)).innerText()).includes(expected));
+        const sharedCard = await sourceCard(recipient, black);
+        await checkCollapsedSummary(recipient, sharedCard, snapshot.bound);
+        assert.ok((await sharedCard.innerText()).includes(expected));
         assert.deepEqual(await savedAnalysis(recipient), [snapshot], 'Share loading changed the saved bound');
         await importPgn(recipient, width, pgn);
-        assert.ok((await (await sourceCard(recipient, black)).innerText()).includes(expected));
+        const importedCard = await sourceCard(recipient, black);
+        await checkCollapsedSummary(recipient, importedCard, snapshot.bound);
+        assert.ok((await importedCard.innerText()).includes(expected));
         assert.deepEqual(await savedAnalysis(recipient), [snapshot], 'PGN import changed the saved bound');
         const legacy = { ...snapshot }; delete legacy.bound;
         const legacyPgn = pgn.replace(/\[%xqanalysis [^\]\s]+\]/, '[%xqanalysis ' + encodeURIComponent(JSON.stringify(legacy)) + ']');
         await importPgn(recipient, width, legacyPgn);
-        const legacyText = await (await sourceCard(recipient, black)).innerText();
+        const legacyCard = await sourceCard(recipient, black);
+        await checkCollapsedSummary(recipient, legacyCard, 'unknown');
+        const legacyText = await legacyCard.innerText();
         assert.ok(legacyText.includes('Bound, not an exact score'));
         assert.doesNotMatch(legacyText, /Lower bound|Upper bound/);
         assert.deepEqual(await savedAnalysis(recipient), [legacy], 'An older bounded snapshot acquired an invented direction');

@@ -5,7 +5,7 @@ import './StudyAnalysisCard.css';
 export function StudyAnalysisCard({ analysis, move, onSource }: { analysis: StudyAnalysis; move: string; onSource: () => void }) {
   const boundLabel = analysis.bound === 'lower' ? 'Lower bound' : analysis.bound === 'upper' ? 'Upper bound' : 'Bound';
   return <details className="study-analysis-card" data-testid="saved-analysis-card">
-    <summary>Saved analysis · {move} · {studyAnalysisScore(analysis)} Red POV · D{analysis.depth}</summary>
+    <summary>Saved analysis · {move} · {studyAnalysisScore(analysis)} Red POV · D{analysis.depth}{analysis.bounded ? ` · ${boundLabel}, not exact` : ''}</summary>
     <p>Captured before this move on {new Date(analysis.savedAt).toLocaleString()}. This snapshot stays as saved when live analysis changes.</p>
     <dl>
       <div><dt>Search</dt><dd>{analysis.candidates ? `Selected candidates: ${analysis.candidates.join(', ')}` : 'All legal moves'} · MultiPV {analysis.multiPv}</dd></div>
