@@ -50,10 +50,17 @@ interface LibraryPanelProps {
   onLoadHistorical: (game: HistoricalGame) => void;
 }
 
+let batchDateFormatter: Intl.DateTimeFormat | undefined;
 function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
+  if (!batchDateFormatter) {
+    batchDateFormatter = new Intl.DateTimeFormat(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+    });
+    // Share locale setup across the cards/search in this synchronous batch.
+    // Release it afterward so later renders use current locale/time-zone defaults.
+    queueMicrotask(() => { batchDateFormatter = undefined; });
+  }
+  return batchDateFormatter.format(ts);
 }
 
 
