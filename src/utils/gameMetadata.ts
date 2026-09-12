@@ -1,3 +1,4 @@
+import { pgnTokens } from './pgnText';
 import { truncateText } from './truncateText';
 
 /** Tournament facts, separate from the study's editable library label. */
@@ -33,13 +34,10 @@ export function normalizeGameMetadata(value: unknown): GameMetadata | undefined 
 /** Read the leading PGN headers only; comments and later games cannot supply tags. */
 export function extractPgnHeaders(text: string): Record<string, string> {
   const tags: Record<string, string> = {};
-  let source = text.replace(/^\uFEFF/, '').trimStart();
-  const header = /^\[\s*([A-Za-z][A-Za-z0-9_]*)\s+"((?:\\.|[^"\\])*)"\s*\]/;
-  for (;;) {
-    const match = header.exec(source);
-    if (!match) break;
-    tags[match[1].toLowerCase()] = match[2].replace(/\\(["\\])/g, '$1');
-    source = source.slice(match[0].length).trimStart();
+  for (const token of pgnTokens(text)) {
+    if (token.kind === 'comment' || token.kind === 'escape') continue;
+    if (token.kind !== 'tag') break;
+    tags[token.name.toLowerCase()] = token.value.replace(/\\(["\\])/g, '$1');
   }
   return tags;
 }
