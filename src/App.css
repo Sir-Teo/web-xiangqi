@@ -6875,7 +6875,7 @@ summary:active {
   [data-mobile-view="board"] .board-workspace .position-dock {
     /* rem-based minimums keep three cards at normal text, then give enlarged
        labels wider columns instead of splitting ordinary words mid-letter. */
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(6rem, calc((100% - 0.76rem) / 3))), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(5.5rem, calc((100% - 0.76rem) / 3))), 1fr));
   }
 
   /* A hint adds another row, so retain its larger minimum at normal text. */

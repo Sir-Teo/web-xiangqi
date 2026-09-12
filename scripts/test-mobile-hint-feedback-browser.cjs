@@ -58,7 +58,7 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
               if (size === 16) {
                 const dock = await page.locator('.position-dock').boundingBox();
                 const material = await page.locator('.position-stat-material').boundingBox();
-                assert.ok(Math.abs(material.x + material.width - dock.x - dock.width) < 1, 'A spanning hint must not create empty columns after the three status cards');
+                assert.ok(Math.abs(material.x + material.width - dock.x - dock.width) < 1, 'A spanning hint must not create empty columns after the three status cards: ' + JSON.stringify({ width, dock, material, columns: await page.locator('.position-dock').evaluate(node => getComputedStyle(node).gridTemplateColumns) }));
               }
             }
             assert.equal(await feedback.evaluate(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1), false, 'Hint feedback must not clip');
