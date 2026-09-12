@@ -1,4 +1,5 @@
 import { parseResultTag, readRecordedResultPgn, type RecordedResult } from './recordedResult';
+import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { stripDelimited } from './stripDelimited';
 import { extractPgnEvalCommands, parsePgnMoveQuality } from './pgnEvaluation';
 import { appendPgnGlyph } from './moveGlyphs';
@@ -43,7 +44,7 @@ function* tokens(text: string): Generator<Token> {
     }
 }
 
-type Cursor = { board: BoardState; side: Side; children: SavedMoveTreeNode[]; node?: SavedMoveTreeNode; parent?: Cursor };
+type Cursor = { board: BoardState; side: Side; children: SavedMoveTreeNode[]; ply: number; node?: SavedMoveTreeNode; parent?: Cursor };
 function parseGame(input: Token[]): CollectionGame {
     let seenMovetext = false;
     for (const token of input) {
@@ -64,7 +65,7 @@ function parseGame(input: Token[]): CollectionGame {
     const base = normalizeSavedGame({ id: 'preview', savedAt: 1, gameMode: 'PvP', moves: [], startFen: fen });
     if (!base) throw new Error('Invalid starting FEN.');
     const root: SavedMoveTreeNode[] = [];
-    let cursor: Cursor = { board: parseFenBoard(fen), side: fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w', children: root };
+    let cursor: Cursor = { board: parseFenBoard(fen), side: fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w', children: root, ply: 0 };
     const stack: Cursor[] = [];
     let nodes = 0;
     let result: string | undefined;
@@ -123,7 +124,8 @@ function parseGame(input: Token[]): CollectionGame {
         }
         if (result) throw new Error('Moves follow the game result.');
         if (!/^[a-i][0-9][a-i][0-9]$/i.test(value)) throw new Error(`Unsupported move “${value}”. Use coordinate PGN such as h2e2 h9g7.`);
-        if (++nodes > 1024) throw new Error('A game exceeds 1,024 moves including variations.');
+        if (++nodes > MAX_STUDY_TREE_NODES) throw new Error('A study exceeds 8,192 moves across its variations.');
+        if (cursor.ply >= MAX_STUDY_LINE_MOVES) throw new Error('A line exceeds 1,024 moves.');
         const uci = value.toLowerCase();
         const checked = validateMoveStr(uci, cursor.board, cursor.side);
         if (!checked.ok || !checked.mv) throw new Error(`Illegal move ${uci}: ${checked.reason || 'invalid move'}.`);
@@ -133,7 +135,7 @@ function parseGame(input: Token[]): CollectionGame {
         board[mv.fromRank][mv.fromFile] = '';
         const node: SavedMoveTreeNode = { uci, children: [] };
         cursor.children.push(node);
-        cursor = { board, side: cursor.side === 'w' ? 'b' : 'w', node, parent: cursor, children: node.children! };
+        cursor = { board, side: cursor.side === 'w' ? 'b' : 'w', node, parent: cursor, children: node.children!, ply: cursor.ply + 1 };
     }
     if (stack.length) throw new Error('Unclosed variation.');
     if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result)) throw new Error('No moves found.');

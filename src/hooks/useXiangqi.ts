@@ -29,7 +29,7 @@ import { removeSubtree } from '../utils/moveTreeEdit';
 import { getStudyMainLine, pinStudyMainLine, unpinStudyMainLine } from '../utils/studyMainLine';
 import { restoreRemovedSubtree } from '../utils/restoreRemovedSubtree';
 import { appendMoveTreeLine } from '../utils/appendMoveTreeLine';
-import { MAX_SAVED_TREE_NODES } from '../utils/gameLibrary';
+import { MAX_SAVED_MOVES, MAX_SAVED_TREE_NODES } from '../utils/gameLibrary';
 import { isSameMoveComment, normalizeMoveComment } from '../utils/moveComment';
 import { bestLineForMove } from '../utils/engineBestLine';
 
@@ -915,7 +915,9 @@ export function useXiangqi() {
     }, [rootPosition, syncPositionForNode, treeNodes]);
 
     /** Keep the entire line atomically, preserving the board and chosen future. */
-    const keepUciLineAtNode = useCallback((parentNodeId: string, moves: string[], analysis?: StudyAnalysis): 'kept' | 'invalid' | 'full' => {
+    const keepUciLineAtNode = useCallback((parentNodeId: string, moves: string[], analysis?: StudyAnalysis): 'kept' | 'invalid' | 'full' | 'line-full' => {
+        const sourceMoves = getMovesToNode(treeNodes, parentNodeId, ROOT_NODE_ID);
+        if (sourceMoves.length + moves.length > MAX_SAVED_MOVES) return 'line-full';
         const result = appendMoveTreeLine(treeNodes, parentNodeId, moves,
             rootPosition.board, rootPosition.sideToMove, nodeCounterRef.current);
         if (!result.played || result.played !== moves.length) return 'invalid';
@@ -923,7 +925,7 @@ export function useXiangqi() {
         // would reject on the next reload because the study is too large.
         if (Object.keys(result.tree).length - 1 > MAX_SAVED_TREE_NODES) return 'full';
         const snapshot = normalizeStudyAnalysis(analysis,
-            makeEnginePositionCommand(rootFen, getMovesToNode(treeNodes, parentNodeId, ROOT_NODE_ID)), moves[0]);
+            makeEnginePositionCommand(rootFen, sourceMoves), moves[0]);
         if (analysis && !snapshot) return 'invalid';
         const firstId = result.tree[parentNodeId].childrenIds.find(id => result.tree[id]?.record?.uci === moves[0])!;
         const nextTree = snapshot && result.tree === treeNodes ? { ...result.tree } : result.tree;

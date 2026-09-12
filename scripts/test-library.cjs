@@ -383,18 +383,18 @@ try {
     savedAt: 1710000000010,
     gameMode: "PvP",
     moves: ["b2e2"],
-    moveTree: Array.from({ length: 1024 }, () => ({ uci: "b2e2" })),
+    moveTree: Array.from({ length: library.MAX_SAVED_TREE_NODES }, () => ({ uci: "b2e2" })),
   });
-  assert(maxSizedStudyTree?.moveTree?.length === 1024, "Saved study trees should preserve the full 1024-node import cap.");
+  assert(maxSizedStudyTree?.moveTree?.length === library.MAX_SAVED_TREE_NODES, "Saved study trees should preserve the full breadth cap.");
 
   const oversizedSavedStudyTree = library.normalizeSavedGame({
     id: "oversized-study-tree",
     savedAt: 1710000000011,
     gameMode: "PvP",
     moves: ["b2e2"],
-    moveTree: Array.from({ length: 1025 }, () => ({ uci: "b2e2" })),
+    moveTree: Array.from({ length: library.MAX_SAVED_TREE_NODES + 1 }, () => ({ uci: "b2e2" })),
   });
-  assert(oversizedSavedStudyTree === null, "Saved study trees beyond the 1024-node cap should still be rejected.");
+  assert(oversizedSavedStudyTree === null, "Saved study trees beyond the breadth cap should still be rejected.");
 
   const malformedSavedStudyTree = library.normalizeSavedGame({
     id: "bad-study-tree",

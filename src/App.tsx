@@ -173,7 +173,6 @@ import {
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
   MAX_MOVE_IMPORT_UCI_MOVES,
-  MAX_MOVE_IMPORT_TREE_NODES,
 } from './utils/moveImport';
 import {
   detectDeviceProfile,
@@ -3197,7 +3196,7 @@ function App() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       // Binary, so it cannot go through the text box: read it and load it.
       if (isXqfFile(bytes) || /\.xqf$/i.test(file.name)) {
-        const record = parseXqf(bytes, MAX_MOVE_IMPORT_TREE_NODES);
+        const record = parseXqf(bytes, MAX_MOVE_IMPORT_UCI_MOVES);
         if (!record) {
           setMoveLineFileName('');
           setMoveLineError('Could not read this XQF file: it is not one, or its position cannot be placed.');
@@ -3662,6 +3661,8 @@ function App() {
       ? 'Engine line kept in the move tree.'
       : result === 'full'
         ? `Study limit reached (${MAX_SAVED_TREE_NODES.toLocaleString('en-US')} moves). Remove a variation before keeping another line.`
+        : result === 'line-full'
+          ? 'Line limit reached (1,024 moves). Step back before keeping another engine line.'
         : 'The complete engine line is not legal here. Nothing was added.');
   }, [analysisForLine, currentNodeId, gameResult, isAiTurn, isReady, keepUciLineAtNode, reviewStatus, showImportNotice]);
 

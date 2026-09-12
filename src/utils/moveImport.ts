@@ -1,4 +1,5 @@
 import { firstPgnGame as firstGameOnly } from './pgnText';
+import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { extractPgnHeaders } from './gameMetadata';
 import { readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
@@ -11,8 +12,8 @@ import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
-export const MAX_MOVE_IMPORT_UCI_MOVES = 1024;
-export const MAX_MOVE_IMPORT_TREE_NODES = 1024;
+export const MAX_MOVE_IMPORT_UCI_MOVES = MAX_STUDY_LINE_MOVES;
+export const MAX_MOVE_IMPORT_TREE_NODES = MAX_STUDY_TREE_NODES;
 
 function stripParentheticalVariations(text: string): string {
     if (!text.includes('(')) return text;
@@ -199,7 +200,7 @@ export function extractUciMoveTree(text: string): {
         const from = match[1] ?? match[3];
         const to = match[2] ?? match[4];
         if (!from || !to) continue;
-        if (nodeCount >= MAX_MOVE_IMPORT_TREE_NODES) {
+        if (nodeCount >= MAX_MOVE_IMPORT_TREE_NODES || currentLine.length >= MAX_MOVE_IMPORT_UCI_MOVES) {
             tooLarge = true;
             break;
         }

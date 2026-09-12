@@ -27,13 +27,14 @@ type AutoSaveStorage = KeyValueStorage;
 
 function exceedsRecoveryMoveLimit(game: AutoSaveInput): boolean {
     if (game.moves.length > MAX_SAVED_MOVES) return true;
-    const pending = [game.moveTree ?? []];
+    const pending = [{ siblings: game.moveTree ?? [], depth: 1 }];
     let nodes = 0;
     while (pending.length) {
-        const siblings = pending.pop()!;
+        const { siblings, depth } = pending.pop()!;
+        if (siblings.length && depth > MAX_SAVED_MOVES) return true;
         nodes += siblings.length;
         if (nodes > MAX_SAVED_TREE_NODES) return true;
-        for (const node of siblings) if (node.children?.length) pending.push(node.children);
+        for (const node of siblings) if (node.children?.length) pending.push({ siblings: node.children, depth: depth + 1 });
     }
     return false;
 }

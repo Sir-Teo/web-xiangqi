@@ -14,13 +14,14 @@ async function followEngineLine(browser, width) {
         const listeners = [];
         const emit = line => listeners.forEach(listener => listener(line));
         let position = '';
+        const atHistoryLimit = 'position startpos moves ' + Array.from({ length: 1024 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]).join(' ');
         return {
           variant: 'single-simd', addMessageListener: listener => listeners.push(listener), terminate() {},
           postMessage(command) {
             if (command.startsWith('position ')) position = command;
             if (command === 'uci') queueMicrotask(() => emit('uciok'));
             if (command === 'isready') queueMicrotask(() => emit('readyok'));
-            if (command.startsWith('go ') && position === 'position startpos') queueMicrotask(() => {
+            if (command.startsWith('go ') && (position === 'position startpos' || position === atHistoryLimit)) queueMicrotask(() => {
               emit('info depth 12 multipv 1 score cp 30 pv ' + window.__pv);
               emit('bestmove h2e2');
             });
@@ -30,6 +31,7 @@ async function followEngineLine(browser, width) {
       };
     ` }));
     await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     const keep = page.getByTestId('keep-engine-pv-0');
     await keep.waitFor();
@@ -103,9 +105,12 @@ async function followEngineLine(browser, width) {
 
     // A full study must remain recoverable after rejecting an oversized addition.
     await page.addInitScript(() => {
-      const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
-      let children = [];
-      for (let i = 1023; i >= 0; i--) children = [{ uci: cycle[i % 4], children }];
+      const roots = ['h2c2','h2d2','b2b3','h2f2','h2g2','h2i2','b2a2','b2c2','b2d2','b2e2','b2f2','b2g2','h2h3','h2h4','h2h5','h2h6'];
+      const children = roots.map(uci => {
+        let children = [];
+        for (let i = 510; i >= 0; i--) children = [{ uci: ['a9a8','a0a1','a8a9','a1a0'][i % 4], children }];
+        return { uci, children };
+      });
       localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify({
         version: 1, savedAt: Date.now(),
         game: { id: 'full-study', savedAt: Date.now(), gameMode: 'PvP', moves: [], moveTree: children },
@@ -121,10 +126,20 @@ async function followEngineLine(browser, width) {
     await page.getByRole('combobox').fill('Save game');
     await page.keyboard.press('Enter');
     const fullStudy = JSON.parse(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('xiangqi:library:v1'))
-      .find(game => game.moveTree?.[0]?.uci === 'a0a1') ?? null)));
+      .find(game => game.moveTree?.[0]?.uci === 'h2c2') ?? null)));
     assert.ok(fullStudy, 'The study could not be saved after rejecting the line');
-    assert.equal(fullStudy.moveTree.length, 1, 'Rejected line added a root branch');
-    assert.equal(treeLine(fullStudy.moveTree[0]).length, 1024);
+    assert.equal(fullStudy.moveTree.length, 16, 'Rejected line added a root branch');
+    assert.equal(treeLine(fullStudy.moveTree[0]).length, 512);
+    // The total-node allowance must not let engine lines exceed history depth.
+    await page.addInitScript(() => {
+      const moves = Array.from({ length: 1024 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]);
+      localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify({ version: 1, savedAt: 1,
+        game: { id: 'deep-study', savedAt: 1, gameMode: 'PvP', moves } }));
+    });
+    await page.reload(); await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('e'); await keep.click();
+    assert.match(await page.getByTestId('notice-announcement').innerText(), /Line limit reached/);
+    assert.deepEqual(await boardState(), initial);
     assert.deepEqual(errors, []);
     console.log(`Keep/replay engine lines, atomic rejection, branching, save, PGN, reload, study limit and layout passed at ${width}px`);
   } catch (error) {

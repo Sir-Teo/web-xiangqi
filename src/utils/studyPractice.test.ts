@@ -109,6 +109,9 @@ describe('saved study practice', () => {
   });
   it('bounds deep records before recursion or large path allocation', () => {
     expect(preparePracticeStudy(game({ moves: Array(MAX_SAVED_TREE_NODES + 1).fill('a0a1') })).study).toBeNull();
+    let deep: SavedMoveTreeNode[] = [];
+    for (let i = 1024; i >= 0; i--) deep = [{ uci: ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4], children: deep }];
+    expect(preparePracticeStudy(game({ moveTree: deep })).error).toMatch(/line has too many moves/);
     const loop: SavedMoveTreeNode = { uci: 'h2e2' }; loop.children = [loop];
     expect(preparePracticeStudy(game({ moveTree: [loop] })).error).toMatch(/circular/);
   });

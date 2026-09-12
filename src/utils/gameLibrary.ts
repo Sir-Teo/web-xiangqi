@@ -1,4 +1,5 @@
 import { normalizeRecordedResult, type RecordedResult } from './recordedResult';
+import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { truncateText } from './truncateText';
 
 import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
@@ -31,8 +32,8 @@ const REVIEW_ENGINE_TIERS: ReviewEngineSummary['tier'][] = ['low', 'mid', 'high'
 const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
 export const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
 export const MAX_SAVED_GAMES = 500;
-export const MAX_SAVED_MOVES = 1024;
-export const MAX_SAVED_TREE_NODES = MAX_SAVED_MOVES;
+export const MAX_SAVED_MOVES = MAX_STUDY_LINE_MOVES;
+export const MAX_SAVED_TREE_NODES = MAX_STUDY_TREE_NODES;
 const MAX_SAVED_LABEL_LENGTH = 120;
 const MAX_SAVED_OPENING_LENGTH = 160;
 const MAX_REVIEW_TEXT_LENGTH = 500;
@@ -142,8 +143,8 @@ function normalizeSavedMoves(value: unknown): string[] | null {
     return moves;
 }
 
-function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): SavedMoveTreeNode | null {
-    if (!isRecord(raw)) return null;
+function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }, depth = 1): SavedMoveTreeNode | null {
+    if (!isRecord(raw) || depth > MAX_SAVED_MOVES) return null;
     const uci = normalizeSavedMove(raw.uci);
     if (!uci) return null;
     state.count += 1;
@@ -152,7 +153,7 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
     const rawChildren = raw.children;
     if (rawChildren !== undefined && !Array.isArray(rawChildren)) return null;
     const children = Array.isArray(rawChildren)
-        ? rawChildren.map((child) => normalizeSavedMoveTreeNode(child, state))
+        ? rawChildren.map((child) => normalizeSavedMoveTreeNode(child, state, depth + 1))
         : [];
     if (children.some((child) => child === null)) return null;
     const normalizedChildren = children.filter((child): child is SavedMoveTreeNode => Boolean(child));

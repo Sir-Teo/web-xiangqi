@@ -107,6 +107,8 @@ describe('strict Xiangqi PGN collections', () => {
   it('bounds games and total moves per game without truncating', () => {
     expect(() => parsePgnCollection('1.h2e2 * '.repeat(501))).toThrow('at most 500');
     expect(() => parsePgnCollection('a0a1 a9a8 a1a0 a8a9 '.repeat(257) + '*')).toThrow('1,024 moves');
+    expect(() => parsePgnCollection('h2e2 (' + 'a0a1 a9a8 a1a0 a8a9 '.repeat(257) + ') *')).toThrow('A line exceeds 1,024 moves');
+    expect(() => parsePgnCollection('h2e2 ' + '(b2e2) '.repeat(8192) + '*')).toThrow('8,192 moves');
   });
   it('validates a custom Black-to-move position', () => {
     const fen='rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 20';

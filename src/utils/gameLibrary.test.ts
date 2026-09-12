@@ -4,6 +4,7 @@ import {
     normalizeSavedGame,
     normalizeSavedGames,
     normalizeSavedMoveTree,
+    MAX_SAVED_TREE_NODES,
 } from './gameLibrary';
 
 const MAX_SAVED_MOVES = 1024;
@@ -19,6 +20,14 @@ function game(overrides: Partial<Record<keyof SavedGame, unknown>> = {}) {
 }
 
 describe('normalizing a saved game', () => {
+    it('allows broad studies but rejects excess depth even on an unselected branch', () => {
+        expect(normalizeSavedMoveTree(Array.from({ length: MAX_SAVED_TREE_NODES }, () => ({ uci: 'h2e2' })))).toHaveLength(MAX_SAVED_TREE_NODES);
+        expect(normalizeSavedMoveTree(Array.from({ length: MAX_SAVED_TREE_NODES + 1 }, () => ({ uci: 'h2e2' })))).toBeNull();
+        let line: { uci: string; children?: unknown[] }[] = [];
+        for (let i = 0; i < MAX_SAVED_MOVES; i++) line = [{ uci: 'h2e2', children: line }];
+        expect(normalizeSavedMoveTree(line)).not.toBeNull();
+        expect(normalizeSavedMoveTree([{ uci: 'b2e2' }, { uci: 'h2e2', children: line }])).toBeNull();
+    });
     it('keeps a well-formed record and defaults the result', () => {
         const saved = normalizeSavedGame(game());
         expect(saved).toMatchObject({

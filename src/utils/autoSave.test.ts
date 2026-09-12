@@ -106,10 +106,19 @@ describe('writing and reading back', () => {
 
     it('counts the whole study, including branches outside the current line', () => {
         const { storage, entries } = stubStorage();
-        const children = Array.from({ length: 512 }, () => ({ uci: 'h9g7' }));
+        const children = Array.from({ length: 4096 }, () => ({ uci: 'h9g7' }));
         const moveTree = [{ uci: 'h2e2', children }, { uci: 'b2e2', children }];
         writeAutoSavedGame(GAME, storage, 1);
         expect(writeAutoSavedGame({ ...GAME, moveTree }, storage, 2)).toBe('too-large');
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+    });
+
+    it('rejects a too-deep side line even when the saved cursor is short', () => {
+        const { storage, entries } = stubStorage();
+        let line: { uci: string; children?: unknown[] }[] = [];
+        for (let i = 0; i < 1025; i++) line = [{ uci: 'h2e2', children: line }];
+        writeAutoSavedGame(GAME, storage, 1);
+        expect(writeAutoSavedGame({ ...GAME, moveTree: line as AutoSaveInput['moveTree'] }, storage, 2)).toBe('too-large');
         expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
     });
 

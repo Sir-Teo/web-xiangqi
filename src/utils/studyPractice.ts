@@ -1,4 +1,4 @@
-import { MAX_SAVED_TREE_NODES, type SavedGame, type SavedMoveTreeNode } from './gameLibrary';
+import { MAX_SAVED_MOVES, MAX_SAVED_TREE_NODES, type SavedGame, type SavedMoveTreeNode } from './gameLibrary';
 import { describeSetupProblem } from './positionSetup';
 import { formatMoveRuleHint } from './moveRuleHints';
 import { normalizeMoveComment } from './moveComment';
@@ -38,7 +38,7 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
     if (problem) return fail(problem);
     let roots = game.moveTree;
     if (!roots?.length) {
-      if (game.moves.length > MAX_SAVED_TREE_NODES) return fail('This study has too many moves to practice.');
+      if (game.moves.length > MAX_SAVED_MOVES) return fail('This line has too many moves to practice.');
       roots = [];
       for (let i = game.moves.length - 1; i >= 0; i--) roots = [{ uci: game.moves[i], children: roots }];
     }
@@ -61,6 +61,7 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
         continue;
       }
       const node = frame.nodes[frame.index++];
+      if (path.length >= MAX_SAVED_MOVES) return fail('This line has too many moves to practice.');
       if (++visited > MAX_SAVED_TREE_NODES || ancestors.has(node)) return fail('This study has too many moves or a circular variation.');
       const next = movedBoard(frame.board, node.uci, frame.side);
       if (!next) return fail(`Saved move ${node.uci} at ply ${path.length + 1} is illegal. Correct the study before practicing.`);

@@ -2,6 +2,7 @@ import { extractPgnResult } from './pgnResult';
 import { type RecordedResult } from './recordedResult';
 import {
     MAX_MOVE_IMPORT_UCI_MOVES,
+    MAX_MOVE_IMPORT_TREE_NODES,
     extractFenTag,
     extractUciMoveTree,
     isMoveImportTextTooLarge,
@@ -110,7 +111,7 @@ export function planMoveLineImport(
     }
 
     if (importedLine.tooLarge || moves.length > MAX_MOVE_IMPORT_UCI_MOVES) {
-        return { kind: 'error', message: `Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.` };
+        return { kind: 'error', message: `Study is too large. Import up to ${MAX_MOVE_IMPORT_UCI_MOVES} moves per line and ${MAX_MOVE_IMPORT_TREE_NODES} across all variations.` };
     }
 
     const isDiagramText = moves.length === 0 && (dhtml || /^(?:\s*(?:1-0|0-1|1\/2-1\/2|\*))?\s*$/.test(stripRecordMetadata(source)));
