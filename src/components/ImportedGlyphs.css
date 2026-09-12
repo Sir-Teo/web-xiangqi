@@ -6,6 +6,8 @@
 .imported-glyphs li > span { flex: 1 1 8rem; min-width: 0; }
 .imported-glyphs label { display: grid; gap: 4px; min-width: 0; }
 .imported-glyphs select, .imported-glyphs input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 6px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--bg-panel); color: var(--text-primary); font: inherit; font-size: max(16px, 1rem); }
+/* WebKit's native popup styling ignores the minimum height. */
+.imported-glyphs select { appearance: none; padding-inline-end: 2rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%239d9d9d' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; }
 .imported-glyphs button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 5px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
 .imported-glyphs button:disabled, .imported-glyphs select:disabled { opacity: .5; cursor: default; }
 .imported-glyphs .glyph-code-editor { margin-bottom: 8px; }
