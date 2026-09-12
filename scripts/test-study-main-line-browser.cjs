@@ -15,8 +15,14 @@ async function expand(page) {
   return panel;
 }
 async function activateMainLineAction(page, testId) {
+  const text = page.getByTestId('study-main-line').locator('summary, p');
+  const originalSizes = await text.evaluateAll(nodes => nodes.map(node => parseFloat(getComputedStyle(node).fontSize)));
   await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+  await text.first().scrollIntoViewIfNeeded();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const enlargedSizes = await text.evaluateAll(nodes => nodes.map(node => parseFloat(getComputedStyle(node).fontSize)));
+  assert.deepEqual(enlargedSizes, originalSizes.map(size => size * 2), 'Main-line summary and guidance must grow with enlarged text');
+  assert.equal(await page.getByTestId('study-main-line').evaluate(node => node.scrollWidth > node.clientWidth), false, 'Enlarged main-line text must wrap inside the panel');
   await page.getByTestId(testId).focus();
   await page.keyboard.press('Enter');
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
