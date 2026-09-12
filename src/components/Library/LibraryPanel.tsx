@@ -1,5 +1,5 @@
 import { LibraryPgnImport } from './LibraryPgnImport';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
 import type { LibraryState, SavedGame } from '../../utils/gameLibrary';
@@ -249,6 +249,8 @@ export function LibraryPanel({
    */
   const [rovingSavedIndex, setRovingSavedIndex] = useState<number | null>(null);
   const savedListRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const pendingFocusRef = useRef<{ id: string; index: number; selector: string } | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
@@ -271,7 +273,7 @@ export function LibraryPanel({
 
   useEffect(() => {
     setSavedVisibleLimit(SAVED_PAGE_SIZE);
-  }, [q, reviewFilter, resultFilter, savedGames.length, savedSort]);
+  }, [q, reviewFilter, resultFilter, savedSort]);
 
   const filteredHistorical = useMemo(() => HISTORICAL_GAMES.filter((g) => {
     if (reviewFilter === 'reviewed') return false;
@@ -341,6 +343,24 @@ export function LibraryPanel({
     };
   }, [filteredSaved]);
   const visibleSaved = filteredSaved.slice(0, savedVisibleLimit);
+  // Explicit edits replace/remove the focused DOM node. Restore focus after
+  // the commit, preferring the same game, then its neighbor, then search.
+  // Storage events alone never request focus or interrupt another input.
+  useLayoutEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending) return;
+    pendingFocusRef.current = null;
+    const cards = Array.from(savedListRef.current?.querySelectorAll<HTMLElement>('.lib-card[data-game-id]') ?? []);
+    const sameCard = cards.find(card => card.dataset.gameId === pending.id);
+    const neighbor = cards[Math.max(0, Math.min(pending.index, cards.length - 1))];
+    const target = sameCard?.querySelector<HTMLElement>(pending.selector)
+      ?? neighbor?.querySelector<HTMLElement>('[data-testid^="load-saved-"]')
+      ?? searchRef.current;
+    target?.focus();
+  });
+  const restoreActionFocus = (id: string, selector: string) => {
+    pendingFocusRef.current = { id, index: visibleSaved.findIndex(game => game.id === id), selector };
+  };
   const savedStopIndex = rovingTabStopIndex(visibleSaved.length, rovingSavedIndex, 0);
   const handleSavedListKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
@@ -393,6 +413,14 @@ export function LibraryPanel({
     }
     setActionError(null);
     setFailedActionId(null);
+    restoreActionFocus(id, '.lib-game-name-button');
+    setEditingId(null);
+  };
+
+  const cancelEdit = (id: string) => {
+    setActionError(null);
+    setFailedActionId(null);
+    restoreActionFocus(id, '.lib-game-name-button');
     setEditingId(null);
   };
 
@@ -404,6 +432,7 @@ export function LibraryPanel({
     }
     setActionError(null);
     setFailedActionId(null);
+    restoreActionFocus(id, '[data-testid^="load-saved-"]');
     setPendingDeleteId(null);
   };
 
@@ -471,6 +500,7 @@ export function LibraryPanel({
       <div className="lib-search-wrap">
         <input
           className="lib-search"
+          ref={searchRef}
           type="search"
           placeholder="Search players, openings, moves, notes…"
           value={search}
@@ -619,6 +649,7 @@ export function LibraryPanel({
                 key={game.id}
                 className="lib-card"
                 data-card-index={cardIndex}
+                data-game-id={game.id}
                 onFocusCapture={() => setRovingSavedIndex(cardIndex)}
               >
               <div className="lib-card-title">
@@ -626,6 +657,9 @@ export function LibraryPanel({
                   <form
                     className="lib-rename-form"
                     onSubmit={(e) => { e.preventDefault(); commitEdit(game.id); }}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(game.id); }
+                    }}
                     data-testid={`rename-form-saved-${game.id}`}
                     aria-label={`Rename ${savedGameLabel}`}
                   >
@@ -651,7 +685,7 @@ export function LibraryPanel({
                       tabIndex={savedTabIndex}
                       type="button"
                       className="chip-btn"
-                      onClick={() => { setActionError(null); setFailedActionId(null); setEditingId(null); }}
+                      onClick={() => cancelEdit(game.id)}
                       aria-label={`Cancel rename for ${savedGameLabel}`}
                       title={`Cancel rename for ${savedGameLabel}`}
                       data-testid={`cancel-rename-saved-${game.id}`}
@@ -720,7 +754,11 @@ export function LibraryPanel({
                         tabIndex={savedTabIndex}
                         type="button"
                         className="chip-btn"
-                        onClick={() => { setActionError(null); setFailedActionId(null); setPendingDeleteId(null); }}
+                        onClick={() => {
+                          setActionError(null); setFailedActionId(null);
+                          restoreActionFocus(game.id, '[data-testid^="delete-saved-"]');
+                          setPendingDeleteId(null);
+                        }}
                         aria-label={`Cancel delete ${savedGameLabel}`}
                         title={`Cancel delete ${savedGameLabel}`}
                         data-testid={`cancel-delete-saved-${game.id}`}
@@ -737,6 +775,7 @@ export function LibraryPanel({
                         setEditingId(null);
                         setActionError(null);
                         setFailedActionId(null);
+                        restoreActionFocus(game.id, '[data-testid^="confirm-delete-saved-"]');
                         setPendingDeleteId(game.id);
                       }}
                       title={`Delete ${savedGameLabel}`}
