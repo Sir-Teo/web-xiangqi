@@ -1950,14 +1950,14 @@ body.resizing * {
   overflow-y: auto;
   overscroll-behavior: contain;
   outline: none;
-  padding: 0.1rem 0;
+  padding: 0.1rem 0.15rem;
 }
 
-/* A row = move number + white half + black half */
+/* The move number stays beside its pair; each move keeps enough space to read. */
 .mtree-row {
   display: grid;
-  grid-template-columns: 2rem 1fr 1fr;
-  align-items: center;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
   gap: 0.15rem;
   margin-bottom: 0.12rem;
 }
@@ -1969,15 +1969,21 @@ body.resizing * {
   font-family: var(--font-mono);
   padding-left: 0.1rem;
   user-select: none;
+  overflow-wrap: anywhere;
 }
 
-.mtree-spacer {
-  display: block;
+.mtree-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  align-items: start;
+  gap: 0.15rem;
 }
 
 /* A clickable move chip */
 .mtree-chip {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   /* Measured 21px; these rows are the primary way to move through a game. */
   min-height: 24px;
@@ -2204,6 +2210,13 @@ body.resizing * {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.1rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mtree-side {
+  font-size: 0.55rem;
+  color: var(--text-secondary);
 }
 
 .mtree-coach-hint {
@@ -2217,6 +2230,9 @@ body.resizing * {
   padding: 0 0.2rem;
   letter-spacing: 0.02em;
   cursor: default;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .mtree-coach-hint svg {
@@ -2232,7 +2248,8 @@ body.resizing * {
 }
 
 .mtree-review-note {
-  max-width: 16rem;
+  max-width: min(100%, 16rem);
+  overflow-wrap: anywhere;
   font-size: 0.62rem;
   line-height: 1.35;
   color: var(--text-tertiary);
@@ -2243,7 +2260,8 @@ body.resizing * {
    rather than by colour -- the quality palette is already spending colour on
    this row and a fourth hue would compete with it. */
 .mtree-comment {
-  max-width: 16rem;
+  max-width: min(100% - 0.2rem, 16rem);
+  overflow-wrap: anywhere;
   font-size: 0.62rem;
   line-height: 1.35;
   color: var(--text-secondary);

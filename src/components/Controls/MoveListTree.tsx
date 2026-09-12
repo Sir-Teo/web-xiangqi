@@ -140,7 +140,12 @@ export const MoveListTree = memo(function MoveListTree({
         else if (key === 'Home') target = chips[0];
         else if (key === 'End') target = chips[chips.length - 1];
         else {
-            const rowOf = (chip: HTMLButtonElement) => chip.closest('.mtree-row, .mtree-variation');
+            const pair = container.querySelector('.mtree-pair:has(> .mtree-chip-wrap + .mtree-chip-wrap)');
+            const stacked = !pair || getComputedStyle(pair).gridTemplateColumns.split(' ').length === 1;
+            const rowOf = (chip: HTMLButtonElement) => {
+                const row = chip.closest('.mtree-row, .mtree-variation');
+                return stacked && row?.classList.contains('mtree-row') ? chip : row;
+            };
             const rows: HTMLButtonElement[][] = [];
             for (const chip of chips) {
                 const row = rowOf(chip);
@@ -321,8 +326,10 @@ export const MoveListTree = memo(function MoveListTree({
         rows.push(
             <div key={`row-${rowKey}`} className="mtree-row">
                 <span className="mtree-num" data-testid={`move-tree-row-label-${rowIndex}`}>{rowLabel}</span>
-                {redEntry ? renderMoveChip(redEntry.nodeId) : <span className="mtree-spacer" />}
-                {blackEntry ? renderMoveChip(blackEntry.nodeId) : <span className="mtree-spacer" />}
+                <div className="mtree-pair">
+                    {redEntry ? renderMoveChip(redEntry.nodeId) : null}
+                    {blackEntry ? renderMoveChip(blackEntry.nodeId) : null}
+                </div>
             </div>
         );
 
@@ -394,6 +401,7 @@ const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCu
     const comment = record.comment ? summarizeMoveComment(record.comment) : null;
     return (
         <span className="mtree-chip-wrap">
+            {!compact ? <span className="mtree-side" aria-hidden="true">{record.sideToMove === 'b' ? 'Red' : 'Black'}</span> : null}
             <button
                 data-node-id={nodeId}
                 data-testid={isCurrent ? 'move-tree-active' : undefined}
