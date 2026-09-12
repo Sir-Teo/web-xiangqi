@@ -74,6 +74,14 @@ fi
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 WASM_BUILD_SIMD="${WASM_BUILD_SIMD:-yes}"
 
+# Compile and assemble the complete requested build before changing files
+# served by Vite or dist/. A failed later flavor must not publish a mixed build.
+STAGE_DIR="$(mktemp -d "$ROOT/.deps/pikafish-artifacts.XXXXXX")"
+trap 'rm -rf "$STAGE_DIR"' EXIT
+STAGED_DIST_DIR="$STAGE_DIR/dist"
+STAGED_PUBLIC_DIR="$STAGE_DIR/public"
+mkdir -p "$STAGED_DIST_DIR" "$STAGED_PUBLIC_DIR"
+
 build_flavor() {
   local flavor="$1"
   local simd="$2"
@@ -108,13 +116,13 @@ copy_flavor_artifacts() {
   local base="$1"
   local target_dir
 
-  for target_dir in "$DIST_DIR" "$PUBLIC_DIR"; do
+  for target_dir in "$STAGED_DIST_DIR" "$STAGED_PUBLIC_DIR"; do
     cp "$UPSTREAM_DIR/src/${base}.js" "$target_dir/${base}.js"
     cp "$UPSTREAM_DIR/src/${base}.wasm" "$target_dir/${base}.wasm"
   done
   if [ -f "$UPSTREAM_DIR/src/${base}.worker.js" ]; then
-    cp "$UPSTREAM_DIR/src/${base}.worker.js" "$DIST_DIR/${base}.worker.js"
-    cp "$UPSTREAM_DIR/src/${base}.worker.js" "$PUBLIC_DIR/${base}.worker.js"
+    cp "$UPSTREAM_DIR/src/${base}.worker.js" "$STAGED_DIST_DIR/${base}.worker.js"
+    cp "$UPSTREAM_DIR/src/${base}.worker.js" "$STAGED_PUBLIC_DIR/${base}.worker.js"
   fi
 }
 
@@ -134,28 +142,31 @@ if [ "$WASM_BUILD_SIMD" = "yes" ]; then
   copy_flavor_artifacts pikafish-core-single-simd
 fi
 
-cp "$ROOT/templates/pikafish.js" "$DIST_DIR/pikafish.js"
-cp "$ROOT/templates/pikafish.js" "$PUBLIC_DIR/pikafish.js"
+cp "$ROOT/templates/pikafish.js" "$STAGED_DIST_DIR/pikafish.js"
+cp "$ROOT/templates/pikafish.js" "$STAGED_PUBLIC_DIR/pikafish.js"
 for notice_file in THIRD_PARTY_NOTICES.md Pikafish-Copying.txt; do
   if [ -f "$PUBLIC_DIR/$notice_file" ]; then
-    cp "$PUBLIC_DIR/$notice_file" "$DIST_DIR/$notice_file"
+    cp "$PUBLIC_DIR/$notice_file" "$STAGED_DIST_DIR/$notice_file"
   fi
 done
-cp "$ROOT/demo/"*.html "$DIST_DIR/"
+cp "$ROOT/demo/"*.html "$STAGED_DIST_DIR/"
 if [ -f "$ROOT/demo/sw.js" ]; then
-  cp "$ROOT/demo/sw.js" "$DIST_DIR/sw.js"
+  cp "$ROOT/demo/sw.js" "$STAGED_DIST_DIR/sw.js"
 fi
 NNUE_SOURCE="$UPSTREAM_DIR/src/pikafish.nnue"
 if [ -f "$PUBLIC_DIR/pikafish.nnue" ]; then
   NNUE_SOURCE="$PUBLIC_DIR/pikafish.nnue"
 fi
-cp "$NNUE_SOURCE" "$DIST_DIR/pikafish.nnue"
+cp "$NNUE_SOURCE" "$STAGED_DIST_DIR/pikafish.nnue"
 if [ "$NNUE_SOURCE" != "$PUBLIC_DIR/pikafish.nnue" ]; then
-  cp "$NNUE_SOURCE" "$PUBLIC_DIR/pikafish.nnue"
+  cp "$NNUE_SOURCE" "$STAGED_PUBLIC_DIR/pikafish.nnue"
 fi
 
 # Mark dist/ as CJS so Node.js doesn't treat pikafish.js as ES module
 # (root package.json has "type":"module" but pikafish.js uses module.exports)
-echo '{"type":"commonjs"}' > "$DIST_DIR/package.json"
+echo '{"type":"commonjs"}' > "$STAGED_DIST_DIR/package.json"
+
+cp "$STAGED_DIST_DIR/"* "$DIST_DIR/"
+cp "$STAGED_PUBLIC_DIR/"* "$PUBLIC_DIR/"
 
 echo "Built artifacts in $DIST_DIR"

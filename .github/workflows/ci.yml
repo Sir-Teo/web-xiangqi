@@ -61,6 +61,7 @@ jobs:
           npm test
           npm run test:openings
           npm run test:library
+          npm run test:build:publication
           npm run build:react
 
       - name: Cache emsdk

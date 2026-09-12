@@ -178,6 +178,7 @@ compares the three and tracks what is worth moving between them.
   - set `PIKAFISH_UPSTREAM_REF=<commit-or-ref>` to test a newer upstream revision after updating `patches/pikafish-wasm.patch` and `public/pikafish.nnue`
   - it falls back to `grep` if `rg` (ripgrep) is not installed
   - it skips patch application if the patch was already applied
+  - it stages requested variants and supporting files before publication, so compilation or staging failures leave the served engine files unchanged; `npm run test:build:publication` checks this with isolated compiler/git stubs
 - Default build now uses a release-style Emscripten profile (`WASM_PROFILE=release`) while keeping Pikafish's host-specific `optimize` path disabled (`optimize=no`) to avoid upstream LTO/clang incompatibilities on current Emscripten.
 - The wasm core build enables Emscripten/LLVM LTO by default (`WASM_ENABLE_LTO=yes`) and strips RTTI (`WASM_DISABLE_RTTI=yes`) for a smaller/faster core. Both are opt-out build env vars.
 - Threaded builds prewarm a pthread worker pool (`WASM_PTHREAD_POOL_SIZE=12`), and the app never asks for more than `MAX_ENGINE_THREADS` (8) of it. The pool is a hard ceiling rather than a preference: asking past it blocks the engine in `pthread_create` and it never answers `readyok`. Measured in the browser at depth 18, 18-core machine: 435k nps at 1 thread, 1.92M at 4, 3.74M at 8. Raising it means raising the build *and* rebuilding the artifacts together — `scripts/test-engine-contract.cjs` fails if they drift apart.
