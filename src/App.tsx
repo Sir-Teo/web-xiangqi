@@ -20,7 +20,7 @@ import { Board } from './components/Board/Board';
 import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
 import { EvalGraph } from './components/Panels/EvalGraph';
-import { ReviewPanel } from './components/Panels/ReviewPanel';
+import { DeferredReviewPanel } from './components/Panels/DeferredReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
 import { StudyMainLineControls } from './components/Controls/StudyMainLineControls';
@@ -2075,6 +2075,7 @@ function App() {
     setOption('UCI_ShowWDL', false);
     setAnalysisTab('review');
     setMobileAnalysisTab('review');
+    setMobileView('analysis');
     reviewLineSignatureRef.current = currentLineSignature;
 
     const totalSteps = activeLineNodeIds.length + 1;
@@ -6920,7 +6921,7 @@ function App() {
                   ) : null}
                 </>
               ) : analysisTab === 'review' ? (
-                <ReviewPanel
+                <DeferredReviewPanel
                   status={reviewStatus}
                   progress={reviewProgress}
                   progressCompleted={reviewCompletedSteps}

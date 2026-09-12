@@ -31,6 +31,7 @@ const path = require('node:path');
       'test-beginner-browser.cjs',
       'test-rule-lessons-browser.cjs',
       'test-deferred-dialogs-browser.cjs',
+      'test-deferred-review-browser.cjs',
       'test-graph-gaps-browser.cjs',
       'test-move-quality-browser.cjs',
       'test-board-render-browser.cjs',

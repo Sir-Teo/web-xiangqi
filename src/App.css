@@ -133,7 +133,8 @@ body.resizing * {
   color: var(--text-tertiary);
 }
 
-.library-loading {
+.library-loading,
+.panel-loading {
   min-height: 9rem;
   display: grid;
   place-items: center;
