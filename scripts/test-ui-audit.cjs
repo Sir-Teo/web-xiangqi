@@ -24,6 +24,7 @@ const path = require('node:path');
       'test-mobile-hint-feedback-browser.cjs',
       'test-position-card-text-browser.cjs',
       'test-study-notes-browser.cjs',
+      'test-ai-pause-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',
       'test-metadata-layout-browser.cjs',

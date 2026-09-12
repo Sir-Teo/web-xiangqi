@@ -743,11 +743,6 @@ function App() {
   const pausedRef = useRef(false);
   const stepPendingRef = useRef(false);
 
-  const pause = useCallback(() => {
-    pausedRef.current = true;
-    setPaused(true);
-  }, []);
-
   const resume = useCallback(() => {
     pausedRef.current = false;
     setPaused(false);
@@ -1255,6 +1250,7 @@ function App() {
       if (aiTag) {
         const shouldApplyAiMove =
           applyBestMoveRef.current &&
+          !pausedRef.current &&
           isAiTurn &&
           !gameResult &&
           aiTag.positionCommand === currentPositionCommand;
@@ -1545,6 +1541,15 @@ function App() {
     clearQueuedSearch();
     stopSearch();
   }, [clearAnalysisDeepenTimer, clearQueuedSearch, stopSearch]);
+
+  const pause = useCallback(() => {
+    pausedRef.current = true;
+    stepPendingRef.current = false;
+    setPaused(true);
+    // UCI stop can return a playable bestmove. Revoke permission before
+    // stopping the opponent so that response cannot move the paused board.
+    if (isAiTurn) stopAnalysis();
+  }, [isAiTurn, stopAnalysis]);
 
   const handleCancelReview = useCallback(() => {
     reviewLineSignatureRef.current = '';
@@ -6976,7 +6981,7 @@ function App() {
                   <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
-                    disabled={isAiTurn} onNavigate={jumpToNode} />
+                    disabled={isAiTurn && !paused} onNavigate={jumpToNode} />
                   {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
                     nags={treeNodes[currentNodeId]?.record?.nags} disabled={isAiTurn}
                     onChange={nags => setNodeGlyphs(currentNodeId, nags)} />}

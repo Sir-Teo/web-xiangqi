@@ -55,6 +55,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-mobile-hint-feedback-browser.cjs',
         'test-position-card-text-browser.cjs',
         'test-study-notes-browser.cjs',
+        'test-ai-pause-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',
         'test-collection-evals-browser.cjs',
