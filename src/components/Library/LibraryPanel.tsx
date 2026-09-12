@@ -1,5 +1,6 @@
 import { LibraryPgnImport } from './LibraryPgnImport';
 import { LibraryGameMetadata } from './LibraryGameMetadata';
+import { LibraryStudyMatches } from './LibraryStudyMatches';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
@@ -42,7 +43,7 @@ interface LibraryPanelProps {
   savedGames: SavedGame[];
   libraryState: LibraryState;
   onLibraryChange: () => void;
-  onLoadSavedGame: (game: SavedGame) => boolean;
+  onLoadSavedGame: (game: SavedGame, moves?: string[]) => boolean;
   onDeleteSavedGame: (id: string) => boolean;
   onRenameSavedGame: (id: string, label: string) => boolean;
   onPracticeSavedGame: (game: SavedGame) => void;
@@ -526,8 +527,8 @@ export function LibraryPanel({
     }, 1800);
   };
 
-  const loadSavedGame = (game: SavedGame) => {
-    const ok = onLoadSavedGame(game);
+  const loadSavedGame = (game: SavedGame, moves?: string[]) => {
+    const ok = onLoadSavedGame(game, moves);
     if (!ok) {
       setFailedActionId(`load-${game.id}`);
       setActionError('Could not load this game. Its saved move data is invalid.');
@@ -893,6 +894,9 @@ export function LibraryPanel({
                     needs it: its title no longer carries the date. */}
                 {game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
               </div>
+              {searchTerms.length > 0 && Boolean(game.moveTree?.length) && <LibraryStudyMatches
+                game={game} terms={searchTerms} formatKey={dateFormatKey} tabIndex={savedTabIndex}
+                onOpen={moves => loadSavedGame(game, moves)} />}
               {game.review ? (
                 <div
                   className="lib-review-meta"

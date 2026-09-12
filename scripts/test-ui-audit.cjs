@@ -94,6 +94,7 @@ const path = require('node:path');
       'test-search-telemetry-browser.cjs',
       'test-study-analysis-browser.cjs',
       'test-library-analysis-search-browser.cjs',
+      'test-library-move-search-browser.cjs',
       'test-analysis-bounds-browser.cjs',
       'test-review-bounds-browser.cjs',
       'test-eval-storage-bounds-browser.cjs',

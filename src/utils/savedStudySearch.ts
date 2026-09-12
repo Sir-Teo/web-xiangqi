@@ -1,5 +1,5 @@
 import { formatEvaluationText, mateDistanceFromScore, type EvaluationScoreKind } from './engineEvalReading';
-import type { SavedGame } from './gameLibrary';
+import type { SavedGame, SavedMoveTreeNode } from './gameLibrary';
 import { studyAnalysisEffort, type StudyAnalysis } from './studyAnalysis';
 import { describeMoveGlyphs } from './moveGlyphs';
 
@@ -31,19 +31,53 @@ function savedAnalysisSearchText(analysis: StudyAnalysis): string {
     return parts.join(' ');
 }
 
+function savedNodeSearchText(node: SavedMoveTreeNode): string {
+    const parts = [node.uci];
+    if (node.comment) parts.push(node.comment);
+    if (node.analysis) parts.push(savedAnalysisSearchText(node.analysis));
+    if (node.quality) parts.push(node.quality);
+    if (node.nags?.length) parts.push(describeMoveGlyphs(node.nags), ...node.nags.map(code => `$${code}`));
+    const score = evaluationSearchText(node.evalScore, node.evalScoreKind);
+    if (score) parts.push(score);
+    return parts.join(' ');
+}
+
+export interface SavedStudySearchEntry {
+    node: SavedMoveTreeNode;
+    parent?: SavedStudySearchEntry;
+    ply: number;
+    text: string;
+}
+
+/** On-demand move lookup: shared parent links keep deep studies linear in size. */
+export function savedStudySearchEntries(nodes: SavedGame['moveTree']): SavedStudySearchEntry[] {
+    const entries: SavedStudySearchEntry[] = [];
+    const pending: { nodes: SavedMoveTreeNode[]; index: number; parent?: SavedStudySearchEntry }[] = [{ nodes: nodes ?? [], index: 0 }];
+    while (pending.length) {
+        const frame = pending[pending.length - 1];
+        const node = frame.nodes[frame.index++];
+        if (!node) { pending.pop(); continue; }
+        const entry = { node, parent: frame.parent, ply: (frame.parent?.ply ?? 0) + 1, text: savedNodeSearchText(node).toLowerCase() };
+        entries.push(entry);
+        if (node.children?.length) pending.push({ nodes: node.children, index: 0, parent: entry });
+    }
+    return entries;
+}
+
+/** Reconstruct only the path the reader chooses to inspect or open. */
+export function savedStudyMatchMoves(entry: SavedStudySearchEntry): string[] {
+    const moves: string[] = [];
+    for (let cursor: SavedStudySearchEntry | undefined = entry; cursor; cursor = cursor.parent) moves.push(cursor.node.uci);
+    return moves.reverse();
+}
+
 /** Called once per saved-game object by the library's lazy search cache. */
 export function savedTreeSearchText(nodes: SavedGame['moveTree']): string {
     const parts: string[] = [];
     const pending = [...nodes ?? []];
     while (pending.length) {
         const node = pending.pop()!;
-        parts.push(node.uci);
-        if (node.comment) parts.push(node.comment);
-        if (node.analysis) parts.push(savedAnalysisSearchText(node.analysis));
-        if (node.quality) parts.push(node.quality);
-        if (node.nags?.length) parts.push(describeMoveGlyphs(node.nags), ...node.nags.map(code => `$${code}`));
-        const score = evaluationSearchText(node.evalScore, node.evalScoreKind);
-        if (score) parts.push(score);
+        parts.push(savedNodeSearchText(node));
         if (node.children) pending.push(...node.children);
     }
     return parts.join(' ');

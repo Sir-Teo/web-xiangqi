@@ -4641,7 +4641,8 @@ function App() {
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
       stopDeepDive, studyNotes.length])
-  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false) => {
+  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
+    if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
@@ -4667,7 +4668,7 @@ function App() {
     setGameMode(game.gameMode);
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
-    const navigation = openPrimaryLine ? savedGameLine(game) : undefined;
+    const navigation = selectedMoves ? { moves: selectedMoves, result: undefined } : openPrimaryLine ? savedGameLine(game) : undefined;
     const loadedNodeIds = game.moveTree?.length
       ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves)
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
@@ -4675,7 +4676,7 @@ function App() {
     restoreRecordedResult(rootNodeId, game.rootResult);
     restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
     setGameMetadata(game.metadata);
-    if (initialPly === undefined || initialPly >= (navigation?.moves.length ?? game.moves.length)) {
+    if (!selectedMoves && (initialPly === undefined || initialPly >= (navigation?.moves.length ?? game.moves.length))) {
       // The loader has already derived checkmate/stalemate from the selected
       // board. Saved metadata may be stale or contradictory; only use it for
       // results the position cannot prove, such as resignation or an agreed draw.
@@ -4711,7 +4712,8 @@ function App() {
       setReviewedLineNodeIds(loadedNodeIds.slice(0, game.moves.length));
       setAnalysisTab('review');
       setMobileAnalysisTab('review');
-    } else {
+    }
+    if (!game.review || selectedMoves) {
       setAnalysisTab('tree');
       setMobileAnalysisTab('moves');
     }
@@ -6156,7 +6158,7 @@ function App() {
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
                     savedGames={savedGames}
-                    onLoadSavedGame={handleLoadGame}
+                    onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
                     onDeleteSavedGame={deleteGameFromLibrary}
                     onRenameSavedGame={renameGameInLibrary}
                     loadedStudy={loadedSavedStudy ? {

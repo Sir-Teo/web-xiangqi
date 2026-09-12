@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluationSearchText, savedTreeSearchText } from './savedStudySearch';
+import { evaluationSearchText, savedTreeSearchText, savedStudySearchEntries, savedStudyMatchMoves } from './savedStudySearch';
 import { matchesSearchTerms, toSearchTerms } from './searchTerms';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { StudyAnalysis } from './studyAnalysis';
@@ -57,6 +57,31 @@ describe('searching saved study annotations', () => {
     it('handles studies without a saved tree', () => {
         expect(savedTreeSearchText(undefined)).toBe('');
         expect(savedTreeSearchText([])).toBe('');
+    });
+    it('locates repeated moves on distinct branches in main-line order without mutating the study', () => {
+        const tree = [{ uci: 'h2e2', children: [{ uci: 'h9g7', comment: 'Shared preparation' }] },
+            { uci: 'b2e2', children: [{ uci: 'h9g7', comment: 'Shared preparation 龙门', nags: [2] }] }];
+        const before = JSON.stringify(tree);
+        const entries = savedStudySearchEntries(tree);
+        const matches = entries.filter(entry => matchesSearchTerms(entry.text, toSearchTerms('Shared preparation')));
+        expect(matches.map(savedStudyMatchMoves)).toEqual([['h2e2', 'h9g7'], ['b2e2', 'h9g7']]);
+        expect(matches.map(entry => entry.ply)).toEqual([2, 2]);
+        expect(matchesSearchTerms(matches[1].text, toSearchTerms('龙门 $2'))).toBe(true);
+        expect(JSON.stringify(tree)).toBe(before);
+        expect(savedStudySearchEntries(undefined)).toEqual([]);
+    });
+    it('keeps a maximum-depth move index linked rather than copying every ancestor path', () => {
+        const tree: SavedMoveTreeNode[] = [];
+        let children = tree;
+        for (let i = 0; i < 1024; i++) {
+            const node: SavedMoveTreeNode = { uci: 'h2e2', children: [] };
+            children.push(node); children = node.children!;
+        }
+        const entries = savedStudySearchEntries(tree);
+        expect(entries).toHaveLength(1024);
+        expect(entries.at(-1)?.parent).toBe(entries.at(-2));
+        expect(entries.at(-1)?.ply).toBe(1024);
+        expect(savedStudyMatchMoves(entries.at(-1)!)).toEqual(Array(1024).fill('h2e2'));
     });
 });
 
