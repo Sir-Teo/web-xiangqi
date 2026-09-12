@@ -2605,6 +2605,34 @@ summary:active {
   transform: translate(-50%, 0);
 }
 
+/* Persistent details need their own space when touch or enlarged text makes
+   an overlay obscure the chart. Keep the full review note in the panel flow. */
+@media (hover: none), (pointer: coarse) {
+  .graph-tooltip {
+    position: static;
+    transform: none;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin-top: 0.6rem;
+    overflow-wrap: anywhere;
+    box-shadow: none;
+  }
+}
+
+@container (max-width: 16rem) {
+  .graph-tooltip {
+    position: static;
+    transform: none;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    margin-top: 0.6rem;
+    overflow-wrap: anywhere;
+    box-shadow: none;
+  }
+}
+
 .graph-tooltip strong {
   color: var(--text-primary);
   font-weight: 700;
