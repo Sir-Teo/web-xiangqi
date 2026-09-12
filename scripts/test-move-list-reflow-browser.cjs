@@ -25,7 +25,7 @@ async function assertFits(page, label) {
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const [width, height] of [[1440, 900], [390, 844], [320, 480], [844, 390]]) {
+    for (const [width, height] of [[1440, 900], [1280, 820], [390, 844], [320, 480], [844, 390]]) {
       const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 900, reducedMotion: 'reduce' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
@@ -55,8 +55,21 @@ async function assertFits(page, label) {
           }
           await command(page, 'Write moves in WXF');
           const chips = page.locator('.mtree-row .mtree-chip');
+          for (const index of [0, 1]) {
+            await chips.nth(index).focus();
+            const ring = await chips.nth(index).evaluate(element => {
+              const rect = element.getBoundingClientRect();
+              const container = element.closest('.mtree-scroll').getBoundingClientRect();
+              const style = getComputedStyle(element);
+              const extent = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+              return { left: rect.left - extent, right: rect.right + extent, containerLeft: container.left, containerRight: container.right };
+            });
+            assert.ok(ring.left >= ring.containerLeft - 1 && ring.right <= ring.containerRight + 1,
+              `${browserType.name()} ${width}px/${fontSize}px clipped focus outline: ${JSON.stringify(ring)}`);
+          }
           await chips.first().focus();
           const stacked = await chips.evaluateAll(elements => elements[1].getBoundingClientRect().top >= elements[0].getBoundingClientRect().bottom);
+          if (width >= 1280 && fontSize === 16) assert.equal(stacked, false, 'Normal desktop text should retain the compact two-column pair');
           await page.keyboard.press('ArrowDown');
           assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')), stacked ? 'n2' : 'n3');
           await page.keyboard.press('ArrowUp');

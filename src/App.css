@@ -1950,7 +1950,7 @@ body.resizing * {
   overflow-y: auto;
   overscroll-behavior: contain;
   outline: none;
-  padding: 0.1rem 0.15rem;
+  padding: 0.1rem max(4px, 0.15rem);
 }
 
 /* The move number stays beside its pair; each move keeps enough space to read. */
@@ -1974,7 +1974,7 @@ body.resizing * {
 
 .mtree-pair {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
   align-items: start;
   gap: 0.15rem;
 }
