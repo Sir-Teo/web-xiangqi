@@ -14,6 +14,25 @@ async function expand(page) {
   if (!await panel.evaluate(el => el.open)) await panel.locator('summary').click();
   return panel;
 }
+async function activateMainLineAction(page, testId) {
+  await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.getByTestId(testId).focus();
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const focused = await page.getByTestId('study-main-line').locator('summary').evaluate(node => ({
+    summary: node === document.activeElement,
+    active: document.activeElement?.outerHTML.slice(0, 180),
+    outline: getComputedStyle(node).outlineStyle,
+    reachable: (() => { const rect = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)); })(),
+  }));
+  assert.equal(focused.summary, true, `${testId} must leave focus on the persistent main-line summary: ${JSON.stringify(focused)}`);
+  assert.equal(focused.reachable, true, `${testId} must reveal the focused summary at 200% text: ${JSON.stringify(focused)}`);
+  assert.notEqual(focused.outline, 'none', `${testId} needs a visible focus indicator`);
+  await page.screenshot({ path: `/tmp/xiangqi-mainline-focus-${browserType.name()}-${page.viewportSize().width}-${testId}.png` });
+  await page.evaluate(() => { document.documentElement.style.fontSize = '16px'; });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
 async function importPgn(page, width, text) {
   if (width < 900) await page.getByTestId('mobile-view-board').click();
   await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
@@ -52,8 +71,7 @@ async function install(page) {
         await move(page, 'b2e2').click();
         await expand(page);
         const nodeIds = await page.locator('.mtree-chip').evaluateAll(nodes => nodes.map(node => node.dataset.nodeId).sort());
-        await page.getByTestId('pin-study-main-line').focus();
-        await page.keyboard.press('Enter');
+        await activateMainLineAction(page, 'pin-study-main-line');
         assert.equal(await page.getByTestId('pin-study-main-line').isDisabled(), true);
         assert.deepEqual(await page.locator('.mtree-chip').evaluateAll(nodes => nodes.map(node => node.dataset.nodeId).sort()), nodeIds);
         pinnedPgn(await copyPgn(page));
@@ -70,11 +88,11 @@ async function install(page) {
         assert.equal(new URL(url).searchParams.get('main'), '1');
         const recipient = await browser.newPage({ viewport: { width, height: width === 320 ? 640 : width === 390 ? 844 : 900 }, hasTouch: width < 900 });
         try {
-          await install(recipient); await recipient.goto(url); await recipient.keyboard.press('t');
+          await install(recipient); await recipient.goto(url); await recipient.locator('.xiangqi-board').waitFor(); await recipient.keyboard.press('t');
           await recipient.getByTestId('study-main-line').waitFor();
           assert.deepEqual(await line(recipient), ['h2e2', 'h9g7']);
           pinnedPgn(await copyPgn(recipient));
-          await expand(recipient); await recipient.getByTestId('open-study-main-line').click();
+          await expand(recipient); await activateMainLineAction(recipient, 'open-study-main-line');
           assert.deepEqual(await line(recipient), ['b2e2', 'b9c7']);
         } finally { await recipient.close(); }
         await command(page, 'Library');
@@ -100,7 +118,7 @@ async function install(page) {
           const box = await button.boundingBox(); assert.ok(box.height >= 44 && box.width >= 44);
         }
         await page.screenshot({ path: `/tmp/xiangqi-study-main-line-${browserType.name()}-${width}.png` });
-        await page.getByTestId('unpin-study-main-line').click();
+        await activateMainLineAction(page, 'unpin-study-main-line');
         await move(page, 'b2e2').click();
         const unpinned = await copyPgn(page);
         assert.ok(!unpinned.includes('[XiangqiMainLine'));
