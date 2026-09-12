@@ -26,6 +26,11 @@ async function assertVisibleFocus(modal, label) {
   for(const viewport of [{width:320,height:480},{width:844,height:390},{width:1440,height:900}]) {
    for(const size of [16,32]) for(const kind of ['recovery','result']) {
     const page=await browser.newPage({viewport,reducedMotion:'reduce'});
+    // macOS WebKit needs Option-Tab to include buttons when Safari's full
+    // keyboard navigation preference is off, as in the editor keyboard test.
+    const tab=(reverse=false)=>page.keyboard.press(
+     `${browserType.name()==='webkit' && process.platform==='darwin'?'Alt+':''}${reverse?'Shift+':''}Tab`
+    );
     const label=`${browserType.name()} ${viewport.width}x${viewport.height} ${size}px ${kind}`;
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     try {
@@ -59,18 +64,18 @@ async function assertVisibleFocus(modal, label) {
       await page.keyboard.press('Enter'); // Reading the title must not start/reset a game.
       assert.equal(await modal.count(),1,label);
      }
-     await page.keyboard.press('Shift+Tab');
+     await tab(true);
      assert.equal(await secondary.evaluate(el=>el===document.activeElement),true,label);
      await assertVisibleFocus(modal,label+' reverse');
-     await page.keyboard.press('Tab');
+     await tab();
      assert.equal(await primary.evaluate(el=>el===document.activeElement),true,label);
      await assertVisibleFocus(modal,label+' forward wrap');
      if(overflowing) {
-      await modal.getByRole('heading').focus();await page.keyboard.press('Tab');
+      await modal.getByRole('heading').focus();await tab();
       assert.equal(await primary.evaluate(el=>el===document.activeElement),true,label);
       await assertVisibleFocus(modal,label+' from heading');
      }
-     await page.keyboard.press('Tab');
+     await tab();
      assert.equal(await secondary.evaluate(el=>el===document.activeElement),true,label);
      const fen=await page.locator('.bottombar-fen').getAttribute('title');
      await page.keyboard.press('Escape');await modal.waitFor({state:'hidden'});
