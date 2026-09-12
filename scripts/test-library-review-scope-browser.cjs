@@ -38,7 +38,9 @@ async function command(page, label) {
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base); await command(page, 'Library');
+        await page.goto(base);
+        await page.locator('.xiangqi-board').waitFor();
+        await command(page, 'Library');
         const card = id => page.getByTestId(`load-saved-${id}`).locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," lib-card ")][1]');
         assert.equal(await page.getByTestId('review-scope-saved-side').innerText(), 'Review: saved variation');
         assert.equal(await page.getByTestId('review-scope-saved-prefix').innerText(), 'Review: first move');
