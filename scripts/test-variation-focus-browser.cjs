@@ -59,9 +59,43 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
         await page.keyboard.press('ArrowRight');
         assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-node-id')), 'n1');
         assert.equal(await stops.count(), 1);
+        const removeLongLine = page.getByTestId('delete-variation-n1');
+        await removeLongLine.focus();
+        await page.keyboard.press('Enter');
+        await removeLongLine.waitFor({ state: 'detached' });
+        await page.waitForFunction(() => document.activeElement?.getAttribute('data-node-id') === 'n129', null, { timeout: 2000 });
+        assert.equal(await stops.getAttribute('data-node-id'), 'n129');
+        if (width < 900) await page.getByTestId('mobile-view-board').click();
+        await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
+        await page.getByTestId('uci-line-input').fill('h2e2 h9g7 (b9c7) (a9a8) h0g2 *');
+        await page.getByTestId('import-uci-line-btn').click();
+        await page.getByTestId('uci-line-input').waitFor({ state: 'hidden' });
+        await page.keyboard.press('t');
+        if (width === 320) await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+        const parent = page.locator('.mtree-row .mtree-chip').filter({ hasText: 'h2e2' });
+        const parentId = await parent.getAttribute('data-node-id');
+        const currentId = await page.getByTestId('move-tree-active').getAttribute('data-node-id');
+        const variation = page.locator('.mtree-variation').filter({ hasText: 'b9c7' });
+        const removeNestedLine = variation.locator('.mtree-var-delete');
+        await removeNestedLine.focus();
+        await page.keyboard.press('Space');
+        await removeNestedLine.waitFor({ state: 'detached' });
+        await page.waitForFunction(id => document.activeElement?.getAttribute('data-node-id') === id, parentId, { timeout: 2000 });
+        assert.equal(await page.getByTestId('move-tree-active').getAttribute('data-node-id'), currentId, 'Focus recovery must not change the board position');
+        assert.equal(await stops.count(), 1);
+        assert.equal(await stops.getAttribute('data-node-id'), parentId);
+        await page.screenshot({ path: `/tmp/xiangqi-delete-focus-${browserType.name()}-${width}.png` });
+        const note = page.getByTestId('move-comment-input');
+        await note.fill('Keep focus on my note');
+        // Script/pointer activation that does not focus the delete button must
+        // not steal focus from another control when the row disappears.
+        await page.locator('.mtree-variation .mtree-var-delete').evaluate(button => button.click());
+        await page.locator('.mtree-variation').waitFor({ state: 'detached' });
+        assert.ok(await note.evaluate(element => element === document.activeElement));
+        assert.equal(await note.inputValue(), 'Keep focus on my note');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: shortened variation focus fallback, native Tab entry, visible-focus retention, Enter/Space focus transfer and uninterrupted keyboard navigation passed`);
+        console.log(`${browserType.name()} ${width}px: long-variation keyboard navigation, root/nested deletion focus, unchanged board, enlarged text and no focus stealing passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

@@ -57,6 +57,7 @@ export const MoveListTree = memo(function MoveListTree({
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const pendingVariationFocus = useRef<{ nodeId: string; element: Element } | null>(null);
+    const pendingDeleteFocus = useRef<{ parentId: string; element: Element } | null>(null);
 
     const handleNavigateClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         const chip = event.target instanceof Element
@@ -81,6 +82,22 @@ export const MoveListTree = memo(function MoveListTree({
         const target = scrollRef.current?.querySelector<HTMLButtonElement>('.mtree-chip-active');
         if (target?.dataset.nodeId === pending.nodeId) target.focus({ preventScroll: true });
     }, [activeLineNodeIds]);
+
+    useEffect(() => {
+        const pending = pendingDeleteFocus.current;
+        pendingDeleteFocus.current = null;
+        if (!pending || pending.element.isConnected || document.activeElement !== document.body) return;
+        const container = scrollRef.current;
+        // Return to the position where this variation branched. Root branches
+        // have no parent chip, so keep the reader on the current visible move.
+        const parent = Array.from(container?.querySelectorAll<HTMLButtonElement>('.mtree-chip') ?? [])
+            .find(chip => chip.dataset.nodeId === pending.parentId);
+        const target = parent ?? container?.querySelector<HTMLButtonElement>('.mtree-chip-active')
+            ?? container?.querySelector<HTMLButtonElement>('.mtree-chip[tabindex="0"]')
+            ?? container?.querySelector<HTMLButtonElement>('.mtree-chip');
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [treeNodes]);
 
     /**
      * One tab stop for the whole list, with the arrow keys inside it.
@@ -260,7 +277,11 @@ export const MoveListTree = memo(function MoveListTree({
                         <button
                             type="button"
                             className="mtree-var-delete"
-                            onClick={() => onDeleteNode(variationRootId)}
+                            onClick={(event) => {
+                                pendingDeleteFocus.current = document.activeElement === event.currentTarget
+                                    ? { parentId, element: event.currentTarget } : null;
+                                onDeleteNode(variationRootId);
+                            }}
                             title={`Delete the variation starting ${variationName}`}
                             aria-label={`Delete the variation starting ${variationName}`}
                             data-testid={`delete-variation-${variationRootId}`}
