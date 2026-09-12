@@ -108,7 +108,7 @@ import { formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComment';
 import { formatBreadcrumbLabel } from './utils/moveBreadcrumb';
 import { passMoveFen } from './utils/threatPosition';
-import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
+import { isDrillSuccess, judgeCompletedDrillAttempt, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import { isXqfFile, parseXqf, XqfMoveLimitError, type XqfRecord } from './utils/xqf';
 import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
@@ -961,7 +961,7 @@ function App() {
    * is; read from the engine's bestmove callback, which runs long after the
    * render that created it.
    */
-  const drillJudgeRef = useRef<(evalScore: number) => void>(() => {});
+  const drillJudgeRef = useRef<(evalScore: number | null, hasExactEvaluation: boolean) => void>(() => {});
   const analysisStageRef = useRef<'idle' | 'primary-pending' | 'primary-complete' | 'deepen-pending' | 'deep-pending' | 'deep-complete' | 'settled'>('idle');
   const analysisDeepenTimerRef = useRef<number | null>(null);
   const activeAnalysisRequestRef = useRef('');
@@ -1292,7 +1292,7 @@ function App() {
       if (hasExactEvaluation && currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(normalizeEvalForSide(score, sideToMove), scoreKind);
       }
-      if (hasEvaluation) drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
+      drillJudgeRef.current(hasEvaluation ? normalizeEvalForSide(score, sideToMove) : null, hasExactEvaluation);
 
       if (analysisTag.phase === 'deep') setDeepDiveActive(false);
 
@@ -3762,12 +3762,19 @@ function App() {
     setDrill({ ...drill, attempt: { nodeId: currentNodeId, uci }, verdict: judgeDrillAttempt(drillMoment, uci, null) });
   }, [currentNodeId, drill, drillMoment, drillParentNodeId, treeNodes]);
 
-  drillJudgeRef.current = (evalScore: number) => {
-    if (!drill || drill.finished || drill.verdict || !drill.attempt || !drillMoment) return;
+  drillJudgeRef.current = (evalScore, hasExactEvaluation) => {
+    if (!drill || drill.finished || (drill.verdict && drill.verdict.kind !== 'unavailable') || !drill.attempt || !drillMoment) return;
     if (currentNodeId !== drill.attempt.nodeId) return;
-    const verdict = judgeDrillAttempt(drillMoment, drill.attempt.uci, evalScore);
-    if (verdict) setDrill({ ...drill, verdict });
+    const verdict = judgeCompletedDrillAttempt(drillMoment, drill.attempt.uci, evalScore, hasExactEvaluation);
+    setDrill({ ...drill, verdict });
   };
+
+  const canRetryDrillAnalysis = canDeepDive && !candidatePickerOpen && currentNodeId === drill?.attempt?.nodeId;
+  const retryDrillAnalysis = useCallback(() => {
+    if (!drill || !canRetryDrillAnalysis) return;
+    setDrill({ ...drill, verdict: null });
+    runDeepDive();
+  }, [canRetryDrillAnalysis, drill, runDeepDive]);
 
   // The drill is a reading of the review; it goes when the review does.
   useEffect(() => {
@@ -3796,6 +3803,11 @@ function App() {
           };
     }
     switch (verdict.kind) {
+      case 'unavailable':
+        return {
+          headline: 'This move has not been graded.',
+          detail: `The engine returned ${verdict.reason === 'bound' ? 'only a score bound' : 'no evaluation'}. Retry analysis, try another move, or see the answer.`,
+        };
       case 'best':
         return { headline: `${attemptText} is the engine's move.`, detail: '' };
       case 'good':
@@ -6452,7 +6464,7 @@ function App() {
           ) : null}
           {isMobile && beginnerGuide}
           <div className="mobile-board-center">
-            <div className="board-workspace">
+            <div className={`board-workspace${drill ? ' board-workspace-drill' : ''}`}>
               <div className="board-wrap">
                 {/* Absolutely positioned against .board-wrap, which the
                     aspect-ratio sizing keeps exactly board-shaped, so the bar
@@ -6535,10 +6547,13 @@ function App() {
                       <button type="button" className="chip-btn chip-btn-primary" onClick={stopMistakeDrill} data-testid="drill-close-btn">Close</button>
                     ) : (
                       <>
-                        {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat') ? (
+                        {drillVerdictKind === 'unavailable' && (
+                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillAnalysis} disabled={!canRetryDrillAnalysis} data-testid="drill-reanalyze-btn">Retry analysis</button>
+                        )}
+                        {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
                           <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
                         ) : null}
-                        {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat') ? (
+                        {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
                           <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
                         ) : null}
                         <button
@@ -6547,7 +6562,7 @@ function App() {
                           onClick={nextDrillMoment}
                           data-testid="drill-next-btn"
                         >
-                          {drillVerdictKind === 'asking' || drillVerdictKind === 'pending' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
+                          {drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'unavailable' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
                         </button>
                         <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
                       </>

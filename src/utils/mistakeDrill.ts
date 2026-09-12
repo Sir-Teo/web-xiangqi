@@ -33,6 +33,8 @@ export type DrillVerdict =
     | { kind: 'wrong'; winPercentLoss: number; quality: ReviewMoveQuality }
     /** The move from the game, which is the one the question is about. */
     | { kind: 'repeat' }
+    /** A finished search could not support a grade. */
+    | { kind: 'unavailable'; reason: 'bound' | 'missing' }
     /** The reader asked to be shown the answer. */
     | { kind: 'shown' };
 
@@ -72,6 +74,18 @@ export function judgeDrillAttempt(
     const winPercentLoss = getWinPercentLossForMove(moment.evalBefore, evalAfter, moment.side);
     if (quality === 'best' || quality === 'good') return { kind: 'good', winPercentLoss, quality };
     return { kind: 'wrong', winPercentLoss, quality };
+}
+
+/** A completed search must not turn a bound into a grade or wait forever for a missing score. */
+export function judgeCompletedDrillAttempt(
+    moment: DrillMoment,
+    attemptUci: string,
+    evalAfter: number | null,
+    hasExactEvaluation: boolean,
+): DrillVerdict {
+    const finite = evalAfter !== null && Number.isFinite(evalAfter);
+    return judgeDrillAttempt(moment, attemptUci, hasExactEvaluation && finite ? evalAfter : null)
+        ?? { kind: 'unavailable', reason: finite ? 'bound' : 'missing' };
 }
 
 /** Whether a verdict counts as the reader having found a better move. */

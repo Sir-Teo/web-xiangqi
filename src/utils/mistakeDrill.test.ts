@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDrillSuccess, judgeDrillAttempt, orderDrillMoments, type DrillMoment } from './mistakeDrill';
+import { isDrillSuccess, judgeCompletedDrillAttempt, judgeDrillAttempt, orderDrillMoments, type DrillMoment } from './mistakeDrill';
 import { REVIEW_THRESHOLDS, classifyMoveQualityForEval, getEvalLossForMove } from './review';
 
 const redMistake: DrillMoment = {
@@ -75,6 +75,31 @@ describe('judgeDrillAttempt', () => {
     });
 });
 
+describe('grading a completed search', () => {
+    it('does not grade bounds that would otherwise be good or wrong', () => {
+        for (const score of [-29997, -1500, 0, 1500, 29997]) {
+            expect(judgeCompletedDrillAttempt(redMistake, 'h2e2', score, false)).toEqual({ kind: 'unavailable', reason: 'bound' });
+            expect(judgeCompletedDrillAttempt(blackBlunder, 'a9a8', score, false)).toEqual({ kind: 'unavailable', reason: 'bound' });
+        }
+    });
+
+    it('finishes without a grade when the search had no usable evaluation', () => {
+        for (const score of [null, NaN, Infinity]) {
+            expect(judgeCompletedDrillAttempt(redMistake, 'h2e2', score, false)).toEqual({ kind: 'unavailable', reason: 'missing' });
+        }
+    });
+
+    it('grades retained exact results using the normal review scale', () => {
+        expect(judgeCompletedDrillAttempt(redMistake, 'h2e2', 10, true)).toEqual(judgeDrillAttempt(redMistake, 'h2e2', 10));
+        expect(judgeCompletedDrillAttempt(blackBlunder, 'a9a8', 200, true)).toEqual(judgeDrillAttempt(blackBlunder, 'a9a8', 200));
+    });
+
+    it('recognizes known moves without requiring another score', () => {
+        expect(judgeCompletedDrillAttempt(redMistake, 'h0g2', null, false)).toEqual({ kind: 'best' });
+        expect(judgeCompletedDrillAttempt(redMistake, 'b0c2', 1500, false)).toEqual({ kind: 'repeat' });
+    });
+});
+
 describe('isDrillSuccess', () => {
     it('counts the engine move and a good move, and nothing else', () => {
         expect(isDrillSuccess({ kind: 'best' })).toBe(true);
@@ -82,6 +107,8 @@ describe('isDrillSuccess', () => {
         expect(isDrillSuccess({ kind: 'wrong', winPercentLoss: 20, quality: 'mistake' })).toBe(false);
         expect(isDrillSuccess({ kind: 'repeat' })).toBe(false);
         expect(isDrillSuccess({ kind: 'shown' })).toBe(false);
+        expect(isDrillSuccess({ kind: 'unavailable', reason: 'bound' })).toBe(false);
+        expect(isDrillSuccess({ kind: 'unavailable', reason: 'missing' })).toBe(false);
         expect(isDrillSuccess(null)).toBe(false);
     });
 });

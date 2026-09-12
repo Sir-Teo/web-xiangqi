@@ -80,6 +80,7 @@ const path = require('node:path');
       'test-analysis-bounds-browser.cjs',
       'test-review-bounds-browser.cjs',
       'test-eval-storage-bounds-browser.cjs',
+      'test-drill-bounds-browser.cjs',
       'test-unicode-share-browser.cjs',
       'test-unicode-limits-browser.cjs',
       'test-study-undo-browser.cjs',

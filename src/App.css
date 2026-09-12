@@ -3667,6 +3667,13 @@ summary:active {
   flex-wrap: wrap;
   gap: 0.35rem;
   flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.drill-banner-actions .chip-btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .drill-banner-best,
@@ -3680,12 +3687,19 @@ summary:active {
   border-left-color: var(--quality-mistake);
 }
 
-.drill-banner-repeat {
+.drill-banner-repeat,
+.drill-banner-unavailable {
   border-left-color: var(--warning);
 }
 
 .drill-banner-pending {
   border-left-color: var(--info);
+}
+
+/* A practice card can be taller than the board's bounded workspace at large
+   text sizes. Keep its controls reachable within that workspace. */
+.board-workspace-drill {
+  overflow-y: auto;
 }
 
 .undo-toast {
@@ -7265,3 +7279,34 @@ summary:active {
 }
 
 .recorded-line-result { flex-shrink: 0; margin: 8px 0; padding: 10px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; border: 1px solid var(--border-subtle); border-radius: 8px; }
+
+/* Practice adds a third row. Reserve a usable board before scrolling the
+   question and actions, including when enlarged text fills the phone. */
+.board-workspace.board-workspace-drill {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(calc(var(--board-min-width) * 10 / 9), 1fr) auto auto;
+}
+
+.board-workspace.board-workspace-drill .board-wrap {
+  /* Short-window layouts normally size against the whole workspace. Practice
+     needs the board's own row, so it cannot overlap the question beneath it. */
+  height: min(100%, calc((100cqw - 2 * var(--eval-bar-room)) * 10 / 9));
+  align-self: safe center;
+}
+
+@media (max-width: 900px) {
+  [data-mobile-view="board"] .board-workspace.board-workspace-drill .board-wrap {
+    width: 100% !important;
+    height: 100%;
+    aspect-ratio: auto;
+    container-type: size;
+    display: grid;
+    place-items: center;
+  }
+
+  [data-mobile-view="board"] .board-workspace.board-workspace-drill .xiangqi-board-container {
+    width: min(100cqw, calc(100cqh * 0.9));
+    height: auto;
+    aspect-ratio: 9 / 10;
+  }
+}
