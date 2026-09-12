@@ -35,6 +35,7 @@ export function StudyMainLineControls({ pinned, viewingMainLine, disabled, onPin
         <p role="status">{pinned
             ? `${viewingMainLine ? 'Viewing the main line.' : 'Exploring a variation.'} Your main line stays fixed in saved studies and PGN.`
             : 'Set the line shown above as your main line. You can explore other variations without changing it.'}</p>
+        {disabled && <p>Pause play to change the study main line.</p>}
         <div className="study-main-line-actions">
             <button type="button" className="chip-btn" disabled={disabled || viewingMainLine} onClick={event => activate(event.currentTarget, onPin)}
                 data-testid="pin-study-main-line">Set this as main line</button>

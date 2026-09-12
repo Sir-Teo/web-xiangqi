@@ -30,16 +30,18 @@ const command = async (page, label) => {
               if (command === 'stop') { window.__stopCount++; queueMicrotask(window.__finishMove); }
             } };
           };` }));
-        await page.goto(base + '?moves=h2e2&mode=PvAI-Black');
+        await page.addInitScript(() => localStorage.setItem('xiangqi:library:v1', JSON.stringify([{
+          id: 'paused-study', savedAt: 1, gameMode: 'PvAI-Black', label: 'Paused study',
+          rootComment: 'Opening overview', moves: ['h2e2'],
+          moveTree: [{ uci: 'h2e2', comment: 'Cannon plan' }, { uci: 'b2e2', comment: 'Other cannon' }],
+        }])));
+        await page.goto(base);
         await page.locator('.xiangqi-board').waitFor();
-        await command(page, 'Go to start');
-        await command(page, 'Write a note on this move');
-        await page.getByTestId('move-comment-input').fill('Opening overview');
-        await page.getByTestId('move-comment-input').blur();
-        await command(page, 'Go to latest move');
-        await command(page, 'Write a note on this move');
-        await page.getByTestId('move-comment-input').fill('Cannon plan');
-        await page.getByTestId('move-comment-input').blur();
+        if (mobile) {
+          await page.getByTestId('mobile-view-analysis').click();
+          await page.getByTestId('mobile-analysis-tab-library').click();
+        } else await page.getByRole('button', { name: 'Open game library', exact: true }).click();
+        await page.getByTestId('load-saved-paused-study').click();
         await command(page, 'Find study notes');
         await page.locator('#study-notes-search').fill('Cannon plan');
         await page.locator('.study-note-result').waitFor();
@@ -51,6 +53,13 @@ const command = async (page, label) => {
         await command(page, 'Find study notes');
         const note = page.locator('.study-note-result');
         assert.equal(await note.isDisabled(), true, 'Wait for the opponent or pause before visiting notes');
+        const glyphs = page.getByTestId('imported-glyphs');
+        await glyphs.locator(':scope > summary').click();
+        const annotation = glyphs.locator('select[aria-label="Add study annotation"]');
+        assert.equal(await annotation.isDisabled(), true);
+        const mainLine = page.getByTestId('study-main-line');
+        await mainLine.locator('summary').click();
+        assert.equal(await page.getByTestId('pin-study-main-line').isDisabled(), true);
         const fen = await page.locator('.bottombar-fen').getAttribute('title');
         if (mobile) await page.getByTestId('mobile-view-board').click();
         const stops = await page.evaluate(() => window.__stopCount);
@@ -64,6 +73,34 @@ const command = async (page, label) => {
         await command(page, 'Find study notes');
         assert.equal(await note.isEnabled(), true, 'Pausing must enable the promised note navigation');
         assert.equal(await page.getByText('Pause play to visit a note.', { exact: true }).count(), 0);
+        assert.equal(await annotation.isEnabled(), true, 'Paused games must allow study annotations');
+        assert.equal(await page.getByText('Pause play to edit study annotations.', { exact: true }).count(), 0);
+        await annotation.selectOption('1');
+        await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
+        await glyphs.getByRole('button', { name: 'Remove Good move ($1)', exact: true }).waitFor();
+        await command(page, 'Set this as study main line');
+        await page.waitForFunction(() => document.querySelector('[data-testid="study-main-line"] summary')?.textContent === 'Study main line set');
+        await page.locator('#study-notes-search').fill('Other cannon');
+        await note.click();
+        const otherFen = await page.locator('.bottombar-fen').getAttribute('title');
+        assert.notEqual(otherFen, fen);
+        await page.getByTestId('open-study-main-line').click();
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen);
+        await command(page, 'Let PGN follow the selected line');
+        assert.equal(await page.getByTestId('pin-study-main-line').isEnabled(), true);
+        await page.getByTestId('pin-study-main-line').click();
+        await page.locator('#study-notes-search').fill('Other cannon');
+        await note.click();
+        await command(page, 'Go to study main line');
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen);
+        await page.locator('#study-notes-search').fill('Cannon plan');
+        await command(page, 'Save game');
+        const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
+        assert.deepEqual(saved.moveTree[0].nags, [1]);
+        assert.equal(saved.moveTree[0].uci, 'h2e2');
+        assert.equal(saved.moveTree[1].uci, 'b2e2');
+        assert.equal(saved.mainLinePinned, true);
+        if (!await glyphs.evaluate(node => node.open)) await glyphs.locator(':scope > summary').click();
         for (const size of [16, 32]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
           await page.waitForFunction(size => parseFloat(getComputedStyle(document.querySelector('.study-note-result')).fontSize) === size * .8125, size);
@@ -72,6 +109,13 @@ const command = async (page, label) => {
           assert.equal(await note.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
           await page.screenshot({ path: `/tmp/xiangqi-ai-pause-notes-${browserType.name()}-${width}-${size}.png` });
+          for (const [panel, target, label] of [[mainLine, page.getByTestId('unpin-study-main-line'), 'main-line'], [glyphs, annotation, 'annotations']]) {
+            await target.evaluate(node => node.scrollIntoView({ block: 'center' }));
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+            assert.equal(await target.evaluate(node => { const r = node.getBoundingClientRect(); return r.height >= 44 && node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, `${label} controls must remain reachable`);
+            assert.equal(await panel.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true);
+            await page.screenshot({ path: `/tmp/xiangqi-ai-pause-${label}-${browserType.name()}-${width}-${size}.png` });
+          }
         }
         await page.locator('#study-notes-search').fill('Opening overview');
         await note.focus(); await page.keyboard.press('Enter');
@@ -85,10 +129,17 @@ const command = async (page, label) => {
         const searches = await page.evaluate(() => window.__goCount);
         await page.getByRole('button', { name: mobile ? 'Resume AI' : 'Resume AI game', exact: true }).click();
         await page.waitForFunction(before => window.__goCount > before, searches);
+        await command(page, 'Find study notes');
+        assert.equal(await annotation.isDisabled(), true, 'Resuming must lock annotations during the opponent turn');
+        assert.equal(await page.getByTestId('unpin-study-main-line').isDisabled(), true);
+        await page.keyboard.press('ControlOrMeta+k');
+        await page.getByRole('combobox', { name: 'Search commands' }).fill('Let PGN follow the selected line');
+        assert.equal(await page.getByRole('option').filter({ hasText: 'Let PGN follow the selected line' }).getAttribute('aria-disabled'), 'true', 'Palette actions must refresh when play resumes');
+        await page.keyboard.press('Escape');
         await page.evaluate(() => window.__finishMove());
         await page.waitForFunction(fen => document.querySelector('.bottombar-fen')?.getAttribute('title') !== fen, fen);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}x${height}: pause stops search, rejects late moves, enables notes, resumes play and fits 100/200% text`);
+        console.log(`${browserType.name()} ${width}x${height}: pause stops search, rejects late moves, enables notes/annotations/main-line controls, persists edits, resumes play and fits 100/200% text`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

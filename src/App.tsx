@@ -907,6 +907,7 @@ function App() {
       (gameMode === 'PvAI-Black' && sideToMove === 'b') ||
       (gameMode === 'PvAI-Red' && sideToMove === 'w'));
   const engineRequired = engineEnabled || aiPlayActive;
+  const studyControlsDisabled = isAiTurn && !paused;
 
   const {
     status: reviewStatus,
@@ -2588,7 +2589,7 @@ function App() {
   const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [], [mainLinePinned, treeNodes, rootNodeId]);
   const viewingStudyMainLine = Boolean(mainLinePinned) && activeLineNodeIds.length === studyMainLineNodeIds.length
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
-  const canPinStudyMainLine = hasMoveTreeMoves && !isAiTurn && !viewingStudyMainLine;
+  const canPinStudyMainLine = hasMoveTreeMoves && !studyControlsDisabled && !viewingStudyMainLine;
   const hasGameMetadata = Boolean(normalizeGameMetadata(gameMetadata));
   const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata;
   const canShareCurrentPosition = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
@@ -4438,13 +4439,13 @@ function App() {
     },
     {
       id: 'open-study-main-line', label: 'Go to study main line',
-      keywords: ['mainline', 'return'], disabled: !mainLinePinned || isAiTurn || viewingStudyMainLine,
+      keywords: ['mainline', 'return'], disabled: !mainLinePinned || studyControlsDisabled || viewingStudyMainLine,
       run: openStudyMainLine,
     },
     {
       id: 'unpin-study-main-line', label: 'Let PGN follow the selected line',
       hint: 'Clear the fixed main-line choice; keep every move', keywords: ['unpin', 'mainline', 'clear'],
-      disabled: !mainLinePinned || isAiTurn, run: unpinMainLine,
+      disabled: !mainLinePinned || studyControlsDisabled, run: unpinMainLine,
     },
     {
       // The palette is where a keyboard-first player reaches for anything, and
@@ -4641,7 +4642,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [studyControlsDisabled, canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -6970,7 +6971,7 @@ function App() {
                     Recorded line result: {lineRecordedResult === 'draw' ? 'Draw' : lineRecordedResult === 'red-wins' ? 'Red wins' : 'Black wins'} ({RESULT_TAG[lineRecordedResult]})
                   </p>}
                   {hasMoveTreeMoves && (hasStudyBranches || mainLinePinned || Boolean(treeNodes[rootNodeId]?.mainLineRevision)) && <StudyMainLineControls
-                    pinned={Boolean(mainLinePinned)} viewingMainLine={viewingStudyMainLine} disabled={isAiTurn}
+                    pinned={Boolean(mainLinePinned)} viewingMainLine={viewingStudyMainLine} disabled={studyControlsDisabled}
                     onPin={pinActiveStudyLine} onOpen={openStudyMainLine} onUnpin={unpinMainLine} />}
                   {/* The thinking, beside the moves. Everything attached to a
                       move here was written by the engine -- an evaluation, a
@@ -6981,9 +6982,9 @@ function App() {
                   <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
-                    disabled={isAiTurn && !paused} onNavigate={jumpToNode} />
+                    disabled={studyControlsDisabled} onNavigate={jumpToNode} />
                   {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
-                    nags={treeNodes[currentNodeId]?.record?.nags} disabled={isAiTurn}
+                    nags={treeNodes[currentNodeId]?.record?.nags} disabled={studyControlsDisabled}
                     onChange={nags => setNodeGlyphs(currentNodeId, nags)} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
