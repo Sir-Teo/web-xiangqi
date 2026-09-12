@@ -71,7 +71,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
           const reach = await retry.evaluate(button => {
             const rect = button.getBoundingClientRect();
             const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-            return { reachable: button.scrollWidth <= button.clientWidth + 1 && button.contains(hit), rect: rect.toJSON(), hit: hit?.outerHTML.slice(0, 500), scrollWidth: button.scrollWidth, clientWidth: button.clientWidth };
+            return { reachable: button.scrollWidth <= button.clientWidth + 1 && button.scrollHeight <= button.clientHeight + 1 && button.contains(hit), rect: rect.toJSON(), hit: hit?.outerHTML.slice(0, 500), scrollWidth: button.scrollWidth, clientWidth: button.clientWidth, scrollHeight: button.scrollHeight, clientHeight: button.clientHeight };
           });
           if (!reach.reachable) await page.screenshot({ path: `/tmp/xiangqi-library-retry-failure-${width}-${size}.png` });
           assert.equal(reach.reachable, true, 'Retry is clipped or covered: ' + JSON.stringify(reach));
