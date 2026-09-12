@@ -524,13 +524,15 @@ export function useXiangqi() {
         if (mainLinePinned) tree[ROOT_NODE_ID] = { ...tree[ROOT_NODE_ID], mainLinePinned: true, mainLineRevision: 1 };
         let counter = 1;
         const sourceRootFen = boardToFen(root.board, root.sideToMove, root.fullmove, root.halfmove);
+        const sourceRootCommand = makeEnginePositionCommand(sourceRootFen, []);
 
         const appendChildren = (
             children: SerializableMoveTreeNode[] | undefined,
             parentNodeId: string,
             parentBoard: BoardState,
             parentSide: Side,
-            plyIndex: number
+            plyIndex: number,
+            parentPosition: string
         ) => {
             if (!children?.length) return;
 
@@ -570,16 +572,19 @@ export function useXiangqi() {
                         ...(normalizeRecordedResult(child.recordedResult) ? { recordedResult: normalizeRecordedResult(child.recordedResult) } : {}),
                         ...(evaluation.evalScore !== undefined || evaluation.quality ? { persistEvaluation: true } : {}),
                         ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),
-                        ...(child.analysis ? { analysis: normalizeStudyAnalysis(child.analysis,
-                            makeEnginePositionCommand(sourceRootFen, getMovesToNode(tree, parentNodeId, ROOT_NODE_ID)), uci) } : {}),
+                        ...(child.analysis ? { analysis: normalizeStudyAnalysis(child.analysis, parentPosition, uci) } : {}),
                     },
                 };
 
-                appendChildren(child.children, nodeId, nextBoard, nextSide, plyIndex + 1);
+                // This traversal already knows the source history. Extend its
+                // branch-local command instead of walking all ancestors for
+                // every snapshot. Keep root counters and repetition history.
+                if (child.children?.length) appendChildren(child.children, nodeId, nextBoard, nextSide, plyIndex + 1,
+                    `${parentPosition}${plyIndex === 0 ? ' moves' : ''} ${uci}`);
             }
         };
 
-        appendChildren(moveTree, ROOT_NODE_ID, root.board, root.sideToMove, 0);
+        appendChildren(moveTree, ROOT_NODE_ID, root.board, root.sideToMove, 0, sourceRootCommand);
 
         let activeLine: string[] = [];
         let cursor = ROOT_NODE_ID;

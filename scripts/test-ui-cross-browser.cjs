@@ -36,6 +36,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-study-analysis-browser.cjs',
         'test-library-analysis-search-browser.cjs',
         'test-library-move-search-browser.cjs',
+        'test-study-load-context-browser.cjs',
         'test-analysis-bounds-browser.cjs',
         'test-review-bounds-browser.cjs',
         'test-eval-storage-bounds-browser.cjs',
