@@ -22,6 +22,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-beginner-browser.cjs',
         'test-rule-lessons-browser.cjs',
         'test-editor-keyboard-browser.cjs',
+        'test-deferred-dialogs-browser.cjs',
         'test-unicode-share-browser.cjs',
         'test-unicode-limits-browser.cjs',
         'test-study-undo-browser.cjs',

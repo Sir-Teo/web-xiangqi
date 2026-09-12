@@ -8,7 +8,7 @@ import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata'
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
-import { RuleLessons } from './components/RuleLessons';
+import { DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
 import { hasMoveTreeLine } from './utils/appendMoveTreeLine';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -99,7 +99,6 @@ import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
 import { AutoSaveRecoveryModal } from './components/AutoSaveRecoveryModal';
-import { BoardEditor } from './components/Board/BoardEditor';
 import { exportPgn, exportPgnTree, copyToClipboard, downloadTextFile } from './utils/gameExport';
 import { formatMoveRecordTitle, formatUciMove } from './utils/moveNotation';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComment';

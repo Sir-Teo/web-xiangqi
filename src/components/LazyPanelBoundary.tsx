@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import './LazyPanelBoundary.css';
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; fallback?: ReactNode };
 type State = { failed: boolean };
 
 /**
@@ -31,6 +31,7 @@ export class LazyPanelBoundary extends Component<Props, State> {
 
     render() {
         if (!this.state.failed) return this.props.children;
+        if (this.props.fallback) return this.props.fallback;
         return (
             <div className="lazy-panel-error" role="alert">
                 This panel could not be loaded. Reload the page to get it back —

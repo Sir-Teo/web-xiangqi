@@ -26,7 +26,7 @@ function topFor(rank: number) {
     return `${((9 - rank) / 9) * 100}%`;
 }
 
-interface Props {
+export interface BoardEditorProps {
     initialBoard: BoardState;
     initialSide: Side;
     /** The same set the board draws, so the palette reads like the board. */
@@ -46,7 +46,7 @@ interface Props {
  * game could reach. Red is always drawn at the bottom here: the editor is a
  * diagram, and diagrams are printed one way.
  */
-export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'traditional', onCancel, onApply }: Props) {
+export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'traditional', onCancel, onApply }: BoardEditorProps) {
     const [board, setBoard] = useState<BoardState>(() => initialBoard.map((row) => row.slice()));
     const letterClass = pieceStyle === 'letters' ? ' piece-letter' : '';
     const [side, setSide] = useState<Side>(initialSide);

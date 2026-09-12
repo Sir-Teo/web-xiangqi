@@ -1,0 +1,6 @@
+.dialog-load-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 12, .78); z-index: 9200; }
+.dialog-load { position: fixed; top: 3vh; left: 50%; transform: translateX(-50%); width: min(94vw, 32rem); max-height: 94vh; overflow: auto; padding: 1rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 14px; z-index: 9201; }
+.dialog-load header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.dialog-load h2 { margin: 0; font-size: 1.15rem; }
+.dialog-load p { font-size: .9rem; line-height: 1.5; }
+.dialog-load button { flex-shrink: 0; min-width: 44px; min-height: 44px; padding: .5rem .75rem; font-size: .9rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
