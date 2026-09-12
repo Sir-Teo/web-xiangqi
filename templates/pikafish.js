@@ -446,7 +446,9 @@
     function waitForLine(matcher, waitOpts) {
       const pred = linePredicate(matcher);
       const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
-      const cached = lineHistory.find(pred);
+      // Command barriers must observe a new acknowledgment. Keep history
+      // lookup available for callers inspecting output already received.
+      const cached = waitOpts && waitOpts.fresh ? null : lineHistory.find(pred);
       if (cached !== null) return Promise.resolve(cached);
 
       return new Promise((resolve, reject) => {
@@ -523,12 +525,12 @@
       loadNNUE,
       waitForLine,
       async uci(waitOpts) {
-        const p = waitForLine(/^uciok$/, waitOpts);
+        const p = waitForLine(/^uciok$/, { ...waitOpts, fresh: true });
         postMessage("uci");
         await p;
       },
       async isReady(waitOpts) {
-        const p = waitForLine(/^readyok$/, waitOpts);
+        const p = waitForLine(/^readyok$/, { ...waitOpts, fresh: true });
         postMessage("isready");
         await p;
       },
@@ -790,7 +792,8 @@
       waitForLine(matcher, waitOpts) {
         const pred = linePredicate(matcher);
         const timeoutMs = (waitOpts && waitOpts.timeoutMs) || 30000;
-        const cached = lineHistory.find(pred);
+        // Mirror the direct engine's fresh command-barrier semantics.
+        const cached = waitOpts && waitOpts.fresh ? null : lineHistory.find(pred);
         if (cached !== null) return Promise.resolve(cached);
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => {
@@ -819,12 +822,12 @@
         });
       },
       async uci(waitOpts) {
-        const p = this.waitForLine(/^uciok$/, waitOpts);
+        const p = this.waitForLine(/^uciok$/, { ...waitOpts, fresh: true });
         this.postMessage("uci");
         await p;
       },
       async isReady(waitOpts) {
-        const p = this.waitForLine(/^readyok$/, waitOpts);
+        const p = this.waitForLine(/^readyok$/, { ...waitOpts, fresh: true });
         this.postMessage("isready");
         await p;
       },

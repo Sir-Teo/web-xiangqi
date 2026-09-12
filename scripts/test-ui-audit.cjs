@@ -53,6 +53,7 @@ const path = require('node:path');
       'test-worker-lifecycle-browser.cjs',
       'test-worker-progress-browser.cjs',
       'test-nnue-memory-browser.cjs',
+      'test-engine-barriers-browser.cjs',
       'test-engine-startup-cancel-browser.cjs',
       'test-engine-recovery-navigation-browser.cjs',
       'test-engine-line-browser.cjs',
