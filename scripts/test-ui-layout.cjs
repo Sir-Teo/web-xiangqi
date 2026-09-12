@@ -8506,7 +8506,7 @@ async function assertRootStudyTreeShareExportSave(page) {
     };
   }, exported.saved.id);
   if (
-    !librarySummary.meta.includes("1 main-line move") ||
+    !librarySummary.meta.includes("2 main-line moves") ||
     !librarySummary.meta.includes("saved at ply 0") ||
     !librarySummary.meta.includes("2 study lines") ||
     librarySummary.overflowX > 2
