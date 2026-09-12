@@ -2550,6 +2550,17 @@ summary:active {
 }
 
 /* An open marker keeps an unscored move reachable without depicting a score. */
+.graph-point.graph-point-bound {
+  stroke-dasharray: 2 2;
+}
+
+.graph-bound-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
 .graph-point.graph-point-unknown {
   fill: var(--bg-base);
   stroke: var(--text-secondary);

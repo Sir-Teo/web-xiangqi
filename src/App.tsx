@@ -5877,6 +5877,7 @@ function App() {
                     currentMoveIndex={currentMoveIndex}
                     currentEval={displayEvalScore}
                     currentEvalKind={displayEvalScoreKind}
+                    currentEvalBoundText={displayEvalBoundText}
                     isSearching={isSearching}
                     activity={analysisActivity}
                     notationStyle={notationStyle}

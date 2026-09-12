@@ -24,6 +24,8 @@ interface EvalGraphProps {
     currentMoveIndex: number;
     currentEval: number | null;
     currentEvalKind?: EvaluationScoreKind;
+    /** Red-perspective qualifier for a live score that is only a bound. */
+    currentEvalBoundText?: string;
     isSearching?: boolean;
     activity?: AnalysisActivity;
     notationStyle?: XiangqiNotationStyle;
@@ -46,6 +48,7 @@ type EvalPoint = {
     moveIndex: number;
     eval: number | null;
     evalKind?: EvaluationScoreKind;
+    boundText?: string;
     ply: number;
     uci: string | null;
     /** The move written the way the reader asked for it. */
@@ -83,11 +86,11 @@ function getMoveRecordMover(move: MoveRecord, index: number): EvalPoint['mover']
  */
 const isFiniteEval = isFiniteNumber;
 
-/** Keep the source point with each extreme so its score kind survives too. */
+/** Only exact readings define peaks; keep each source point's score kind. */
 function extremePoint(points: EvalPoint[], direction: 1 | -1): EvalPoint | undefined {
     let best: EvalPoint | undefined;
     for (const point of points) {
-        if (!isFiniteEval(point.eval)) continue;
+        if (point.boundText || !isFiniteEval(point.eval)) continue;
         if (!best || best.eval === null || direction * compareEvaluationScores(point.eval, best.eval, point.evalKind, best.evalKind) > 0) best = point;
     }
     return best;
@@ -98,6 +101,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     currentMoveIndex,
     currentEval,
     currentEvalKind,
+    currentEvalBoundText,
     isSearching = false,
     activity = 'idle',
     notationStyle = 'uci',
@@ -156,14 +160,17 @@ export const EvalGraph = React.memo(function EvalGraph({
         const activePointIndex = Math.max(0, Math.min(historicalPoints.length - 1, currentMoveIndex + 1));
         const currentMove = currentMoveIndex >= 0 ? history[currentMoveIndex] : undefined;
         const currentPlyHasStoredEval = isFiniteEval(currentMove?.evalScore);
-        const shouldProjectLiveEval = isFiniteEval(currentEval) && (isSearching || !currentPlyHasStoredEval);
+        // A bound can fill an unknown point, but cannot replace a stored
+        // exact reading. Its qualifier belongs only to this live projection.
+        const shouldProjectLiveEval = isFiniteEval(currentEval) && (isSearching || !currentPlyHasStoredEval)
+            && (!currentEvalBoundText || !currentPlyHasStoredEval);
         if (!shouldProjectLiveEval) return historicalPoints;
         const point = historicalPoints[activePointIndex];
-        if (point.eval === currentEval && point.evalKind === currentEvalKind) return historicalPoints;
+        if (point.eval === currentEval && point.evalKind === currentEvalKind && point.boundText === currentEvalBoundText) return historicalPoints;
         const next = [...historicalPoints];
-        next[activePointIndex] = { ...point, eval: currentEval, evalKind: currentEvalKind };
+        next[activePointIndex] = { ...point, eval: currentEval, evalKind: currentEvalKind, boundText: currentEvalBoundText };
         return next;
-    }, [historicalPoints, history, currentMoveIndex, currentEval, currentEvalKind, isSearching]);
+    }, [historicalPoints, history, currentMoveIndex, currentEval, currentEvalKind, currentEvalBoundText, isSearching]);
 
     const maxEvalClamp = 1200;
     const chartHeight = shortViewport ? 184 : 248;
@@ -226,7 +233,8 @@ export const EvalGraph = React.memo(function EvalGraph({
     const pointIndexForMove = (moveIndex: number) => Math.max(0, Math.min(points.length - 1, moveIndex + 1));
     const currentPointIndex = pointIndexForMove(currentMoveIndex);
     const currentPoint = points[currentPointIndex];
-    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? null, currentPoint?.evalKind);
+    const currentPerspectiveDisplay = formatRedPovEval(currentPoint?.eval ?? null, currentPoint?.evalKind)
+        + (currentPoint?.boundText ? ' · Bound' : '');
     const currentValueText = currentPoint ? formatGraphValueText(currentPoint) : 'No moves';
     const hoveredPoint = hoverPointIndex == null ? null : points[hoverPointIndex];
     const pointRenderStep = pixelsPerPoint >= MIN_POINT_MARKER_GAP_PX
@@ -533,7 +541,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 </div>
                 <div className="graph-summary-card">
                     <span>Current</span>
-                    <strong>{currentPerspectiveDisplay}</strong>
+                    <strong title={currentPoint?.boundText}>{currentPerspectiveDisplay}</strong>
                 </div>
                 <div className="graph-summary-card">
                     <span>Swing</span>
@@ -671,7 +679,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                                 />
                                             ) : null}
                                             <circle
-                                                className={`graph-point ${pt.eval === null ? 'graph-point-unknown' : ''} ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
+                                                className={`graph-point ${pt.eval === null ? 'graph-point-unknown' : ''} ${pt.boundText ? 'graph-point-bound' : ''} ${pointIndex === currentPointIndex ? 'graph-point-active' : ''} ${pointIndex === hoverPointIndex ? 'graph-point-hover' : ''}`}
                                                 cx={pt.x}
                                                 cy={pt.y}
                                                 r={pointIndex === currentPointIndex ? 4.4 : pointIndex === hoverPointIndex ? 4 : 2.9}
@@ -722,6 +730,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                         >
                             <strong>{formatPointLabel(tooltipPoint)}</strong>
                             <span>{formatRedPovEval(tooltipPoint.eval, tooltipPoint.evalKind)}</span>
+                            {tooltipPoint.boundText && <em>{tooltipPoint.boundText}</em>}
                             {tooltipPoint?.quality ? (
                                 <em className={`graph-tooltip-quality ${tooltipQualityClass}`}>
                                     {formatReviewQuality(tooltipPoint.quality)}
@@ -749,12 +758,13 @@ export const EvalGraph = React.memo(function EvalGraph({
             </div>
             <div className="graph-legend">
                 <span data-testid="graph-current-point">{currentPoint?.moveIndex === -1 ? 'Start Position' : `${formatPointLabel(currentPoint)} · Ply ${currentPoint?.ply ?? 0}`}</span>
-                <strong>{currentPerspectiveDisplay}</strong>
+                <strong title={currentPoint?.boundText}>{currentPerspectiveDisplay}</strong>
             </div>
             <div className="graph-extrema">
                 <span>Peak Red {formatEval(highestEval, highestKind)}</span>
                 <span>Peak Black {formatEval(lowestEval === null ? null : -lowestEval, lowestKind)}</span>
             </div>
+            {currentPoint?.boundText && <p className="graph-bound-note" data-testid="graph-bound-note">Peaks and swing use exact scores.</p>}
         </div>
     );
 });
@@ -780,6 +790,7 @@ function formatGraphValueText(point: EvalPoint): string {
     const parts = [
         point.moveIndex === -1 ? 'Start position' : `${formatPointLabel(point)}, ply ${point.ply}`,
         point.eval === null ? 'Not evaluated' : `Red POV evaluation ${formatEval(point.eval, point.evalKind)}`,
+        point.boundText ?? '',
         point.quality ? formatReviewQuality(point.quality) : '',
         typeof point.winPercentLoss === 'number' && point.mover !== 'start'
             ? formatWinPercentLossLabel(point.winPercentLoss, point.mover)

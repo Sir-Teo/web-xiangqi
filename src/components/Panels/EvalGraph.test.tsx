@@ -88,6 +88,42 @@ describe('EvalGraph and a score that is not a number', () => {
     });
 });
 
+describe('bounded graph readings', () => {
+    const bound = 'Lower bound, not an exact score';
+    it('identifies a live bound without inventing peaks or a swing', () => {
+        const html = render({ history: [], currentMoveIndex: -1, currentEval: 150, currentEvalBoundText: bound, isSearching: true });
+        expect(html).toContain('Red POV +1.50 · Bound');
+        expect(html).toContain('Red POV evaluation +1.50, Lower bound, not an exact score');
+        expect(html).toContain('<em>Lower bound, not an exact score</em>');
+        expect(html).toContain('graph-point-bound');
+        expect(html).toContain('Peak Red n/a');
+        expect(html).toContain('Peak Black n/a');
+        expect(html).toContain('<span>Swing</span><strong>n/a</strong>');
+    });
+    it('uses only exact positions for the peaks and swing', () => {
+        const html = render({ history: [move('h2e2', 1, -400), move('h9g7', 2, 200), move('b0c2', 3)], currentMoveIndex: 2,
+            currentEval: 29997, currentEvalBoundText: bound, isSearching: true });
+        expect(html).toContain('Red POV +M3 · Bound');
+        expect(html).toContain('Peak Red +2.00');
+        expect(html).toContain('Peak Black +4.00');
+        expect(html).toContain('<span>Swing</span><strong>+6.00</strong>');
+    });
+    it('preserves a stored exact reading during a bounded search', () => {
+        const html = render({ history: [{ ...move('h2e2', 1, 29997), evalScoreKind: 'cp' }], currentMoveIndex: 0,
+            currentEval: 150, currentEvalBoundText: bound, isSearching: true });
+        expect(html).toContain('Red POV +299.97');
+        expect(html).not.toContain('Bound');
+        expect(html).not.toContain('+M3');
+    });
+    it('removes bound metadata when the same score becomes exact', () => {
+        const html = render({ history: [], currentMoveIndex: -1, currentEval: 150, isSearching: true });
+        expect(html).toContain('Red POV +1.50');
+        expect(html).toContain('Peak Red +1.50');
+        expect(html).not.toContain('graph-point-bound');
+        expect(html).not.toContain('graph-bound-note');
+    });
+});
+
 describe('unevaluated graph positions', () => {
     it('does not call an unscored move equal or reuse the preceding evaluation', () => {
         const html = render({ history: [move('h2e2', 1, 400), move('h9g7', 2)], currentMoveIndex: 1, currentEval: null });
