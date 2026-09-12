@@ -13,6 +13,7 @@ export function LibraryGameMetadata({ metadata, gameId, label, tabIndex }: {
     metadata.annotator ? `Annotated by ${metadata.annotator}` : undefined].filter(Boolean).join(' · ');
   return <div className="lib-tournament-details" data-testid={`metadata-saved-${gameId}`}>
     <button type="button" className="chip-btn lib-details-toggle" tabIndex={tabIndex}
+      data-library-action="details"
       aria-expanded={expanded} aria-controls={contentId} aria-label={`Game details for ${label}`}
       onClick={() => setExpanded(value => !value)}>
       <span aria-hidden="true">{expanded ? '▾' : '▸'}</span> Game details

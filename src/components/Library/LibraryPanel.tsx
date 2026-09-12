@@ -265,6 +265,7 @@ export function LibraryPanel({
   const pendingFocusRef = useRef<{ id: string; index: number; selector: string } | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
+  const navigationFrameRef = useRef<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
   const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
   const [savedSort, setSavedSort] = useState<SavedSort>('recent');
@@ -277,6 +278,7 @@ export function LibraryPanel({
       if (downloadedToastTimerRef.current !== null) {
         window.clearTimeout(downloadedToastTimerRef.current);
       }
+      if (navigationFrameRef.current !== null) cancelAnimationFrame(navigationFrameRef.current);
     };
   }, []);
 
@@ -399,11 +401,20 @@ export function LibraryPanel({
     const cards = savedListRef.current?.querySelectorAll<HTMLElement>('.lib-card[data-card-index]');
     const nextCard = cards?.[next];
     if (!nextCard) return;
-    // The same button of the next card when it has one, else its Load.
-    const position = [...card.querySelectorAll<HTMLElement>('button')].indexOf(target);
-    const buttons = [...nextCard.querySelectorAll<HTMLElement>('button')];
-    const load = nextCard.querySelector<HTMLElement>('[data-testid^="load-saved-"]');
-    (buttons[position] ?? load ?? buttons[0])?.focus();
+    // Optional practice/update controls and rename/delete forms change button
+    // positions. Match the action itself, then fall back to an enabled Load.
+    const action = target.closest<HTMLButtonElement>('button')?.dataset.libraryAction;
+    const buttons = [...nextCard.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+    const matching = action ? buttons.find(button => button.dataset.libraryAction === action) : undefined;
+    const load = buttons.find(button => button.dataset.libraryAction === 'load');
+    const destination = matching ?? load ?? buttons[0];
+    destination?.focus({ preventScroll: true });
+    // Reveal it after the focus-driven render, including enlarged-text layout.
+    if (navigationFrameRef.current !== null) cancelAnimationFrame(navigationFrameRef.current);
+    navigationFrameRef.current = requestAnimationFrame(() => {
+      navigationFrameRef.current = null;
+      if (destination === document.activeElement) destination?.scrollIntoView({ block: 'center' });
+    });
     setRovingSavedIndex(next);
   }, [visibleSaved.length]);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
@@ -701,6 +712,7 @@ export function LibraryPanel({
                       aria-label={`Save rename for ${savedGameLabel}`}
                       title={`Save rename for ${savedGameLabel}`}
                       data-testid={`save-rename-saved-${game.id}`}
+                      data-library-action="save-rename"
                     >
                       Save
                     </button>
@@ -712,6 +724,7 @@ export function LibraryPanel({
                       aria-label={`Cancel rename for ${savedGameLabel}`}
                       title={`Cancel rename for ${savedGameLabel}`}
                       data-testid={`cancel-rename-saved-${game.id}`}
+                      data-library-action="cancel-rename"
                     >
                       Cancel
                     </button>
@@ -721,6 +734,7 @@ export function LibraryPanel({
                     tabIndex={savedTabIndex}
                     type="button"
                     className="lib-game-name-button"
+                    data-library-action="rename"
                     onClick={() => startEdit(game)}
                     title={`Rename ${savedGameLabel}`}
                   >
@@ -736,6 +750,7 @@ export function LibraryPanel({
                     title={`Copy PGN for ${savedGameLabel}`}
                     aria-label={copiedId === game.id ? `Copied PGN for ${savedGameLabel}` : `Copy PGN for ${savedGameLabel}`}
                     data-testid={`copy-pgn-saved-${game.id}`}
+                    data-library-action="copy-pgn"
                   >
                     {copiedId === game.id ? <><IconCheck /> Copied</> : <><IconCopy /> PGN</>}
                   </button>
@@ -747,6 +762,7 @@ export function LibraryPanel({
                     title={`Download PGN for ${savedGameLabel}`}
                     aria-label={downloadedId === game.id ? `Downloaded PGN for ${savedGameLabel}` : `Download PGN for ${savedGameLabel}`}
                     data-testid={`download-pgn-saved-${game.id}`}
+                    data-library-action="download-pgn"
                   >
                     {downloadedId === game.id ? <><IconCheck /> Saved</> : <><IconDownload /> File</>}
                   </button>
@@ -757,6 +773,7 @@ export function LibraryPanel({
                     onClick={() => loadSavedGame(game)}
                     aria-label={`Load ${savedGameLabel}`}
                     data-testid={`load-saved-${game.id}`}
+                    data-library-action="load"
                   >
                     <IconRefresh /> Load
                   </button>
@@ -767,6 +784,7 @@ export function LibraryPanel({
                     onClick={() => onPracticeSavedGame(game)}
                     aria-label={`Practice ${savedGameLabel}`}
                     data-testid={`practice-saved-${game.id}`}
+                    data-library-action="practice"
                   >Practice</button>}
                   {pendingDeleteId === game.id ? (
                     <>
@@ -776,6 +794,7 @@ export function LibraryPanel({
                         className="chip-btn chip-btn-danger chip-btn-danger-armed"
                         onClick={() => confirmDelete(game.id)}
                         data-testid={`confirm-delete-saved-${game.id}`}
+                        data-library-action="confirm-delete"
                         aria-label={`Confirm delete ${savedGameLabel}`}
                         title={`Confirm delete ${savedGameLabel}`}
                       >
@@ -793,6 +812,7 @@ export function LibraryPanel({
                         aria-label={`Cancel delete ${savedGameLabel}`}
                         title={`Cancel delete ${savedGameLabel}`}
                         data-testid={`cancel-delete-saved-${game.id}`}
+                        data-library-action="cancel-delete"
                       >
                         Cancel
                       </button>
@@ -812,6 +832,7 @@ export function LibraryPanel({
                       title={`Delete ${savedGameLabel}`}
                       aria-label={`Delete ${savedGameLabel}`}
                       data-testid={`delete-saved-${game.id}`}
+                      data-library-action="delete"
                     >
                       <IconX />
                     </button>
@@ -824,6 +845,7 @@ export function LibraryPanel({
                 <button type="button" className="chip-btn" tabIndex={savedTabIndex}
                   disabled={!loadedStudy.canUpdate || libraryState.mutationBlocked}
                   onClick={loadedStudy.update} data-testid={`update-saved-${game.id}`}
+                  data-library-action="update"
                   aria-label={`Update ${savedGameLabel} from board`}
                   title="Replace this saved version with the current board and all its variations">
                   {loadedStudy.updated ? 'Updated' : 'Update from board'}
