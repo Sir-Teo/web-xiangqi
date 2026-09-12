@@ -30,21 +30,25 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
           for (const textSize of [16, 32, 16]) {
             await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, textSize);
             await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            assert.equal(await page.locator('.graph-wrap').evaluate(node => node.scrollHeight > node.clientHeight + 1), false, `${width}px/${textSize}px: graph content must not be vertically clipped`);
             const clippedSummary = await page.locator('.graph-summary-card span, .graph-summary-card strong, .graph-summary-hint').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.textContent));
             assert.deepEqual(clippedSummary, [], `${width}px/${textSize}px: graph summary text must fit`);
             for (const area of await page.locator('.graph-legend, .graph-extrema').all()) {
               assert.equal(await area.evaluate(node => node.scrollWidth > node.clientWidth + 1), false, `${width}px/${textSize}px: graph legend and extrema must fit`);
             }
             for (const [key, ply] of [['Home', 0], ['End', length], ['ArrowLeft', Math.max(0, length - 1)]]) {
+              await navigator.scrollIntoViewIfNeeded();
               await navigator.focus(); await page.keyboard.press(key);
               await page.waitForFunction(ply => document.querySelector('[role="slider"][aria-label="Evaluation graph move navigator"]')?.getAttribute('aria-valuenow') === String(ply), ply);
+              await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
               const labels = await page.locator('.graph-axis-text').evaluateAll(nodes => nodes.map(node => {
                 const rect = node.getBoundingClientRect();
                 return { text: node.textContent, left: rect.left, right: rect.right };
               }).sort((a, b) => a.left - b.left));
               assert.ok(labels.length > 0);
-              assert.equal(labels[0].text, 'Start');
-              if (length) assert.equal(labels.at(-1).text, String(length));
+              const context = `${browserType.name()} ${width}px/${length} moves/${textSize}px/${key}: ${JSON.stringify(labels)}`;
+              assert.equal(labels[0].text, 'Start', context);
+              if (length) assert.equal(labels.at(-1).text, String(length), context);
               for (let index = 1; index < labels.length; index++) {
                 assert.ok(labels[index].left >= labels[index - 1].right + 2, `${browserType.name()} ${width}px/${length} moves/${textSize}px/${key}: overlapping axis labels ${JSON.stringify(labels)}`);
               }
@@ -65,7 +69,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
           assert.deepEqual(errors, []);
         } finally { await page.close(); }
       }
-      console.log(`${browserType.name()} ${width}x${height}: graph axis labels do not overlap for 0/1/5/40/1024 moves, three cursor positions and doubled text`);
+      console.log(`${browserType.name()} ${width}x${height}: graph stays readable without vertical clipping or overlapping labels for 0/1/5/40/1024 moves, three cursor positions and doubled text`);
     }
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
