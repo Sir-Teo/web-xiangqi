@@ -39,9 +39,10 @@ export function readEvalBar(evalScore: number | null | undefined): EvalBarReadin
  * What a screen reader is told, which is the same three facts the bar shows:
  * whose evaluation it is, what it reads, and which way it is leaning.
  */
-export function describeEvalBar(evalScore: number | null | undefined, evalText: string | null): string {
+export function describeEvalBar(evalScore: number | null | undefined, evalText: string | null, boundText?: string): string {
     const { redShare, measured } = readEvalBar(evalScore);
     if (!measured || !evalText) return 'Engine evaluation unavailable';
+    if (boundText) return `Engine evaluation, Red POV ${evalText}, ${boundText}`;
     const redPercent = Math.round(redShare * 100);
     return `Engine evaluation, Red POV ${evalText}, red winning chances ${redPercent}%`;
 }

@@ -7,6 +7,8 @@ interface EvalBarProps {
     evalScore: number | null;
     /** The same reading as text, mate included, as the rest of the app writes it. */
     evalText: string | null;
+    /** Red-perspective qualifier when the reported score is only a bound. */
+    boundText?: string;
     orientation: BoardOrientation;
 }
 
@@ -25,7 +27,7 @@ interface EvalBarProps {
  * while the board turned would be read backwards by exactly the people who
  * flipped it.
  */
-export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, orientation }: EvalBarProps) {
+export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, boundText, orientation }: EvalBarProps) {
     const { redShare, measured } = readEvalBar(evalScore);
     const redPercent = redShare * 100;
     const redAtBottom = orientation === 'red';
@@ -34,7 +36,7 @@ export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, orient
         <div
             className={`eval-bar${measured ? '' : ' eval-bar-idle'}`}
             role="img"
-            aria-label={describeEvalBar(evalScore, evalText)}
+            aria-label={describeEvalBar(evalScore, evalText, boundText)}
             data-testid="eval-bar"
         >
             <div className="eval-bar-track">
@@ -47,8 +49,9 @@ export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, orient
                 />
                 <div className="eval-bar-midline" />
             </div>
-            <span className="eval-bar-readout" aria-hidden="true">
+            <span className="eval-bar-readout" aria-hidden="true" title={measured ? boundText : undefined}>
                 {measured && evalText ? evalText : '—'}
+                {measured && evalText && boundText && <span className="board-eval-bound" data-testid="board-eval-bound">Bound</span>}
             </span>
         </div>
     );

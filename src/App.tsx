@@ -91,6 +91,7 @@ import {
   formatRedPovEngineScore,
   normalizeEvalForFen,
   normalizeEvalForSide,
+  normalizeScoreBoundForSide,
   normalizeWdlForSide,
 } from './utils/engineScore';
 import {
@@ -2463,7 +2464,13 @@ function App() {
     ? formatRedPovEngineScore(topAnalysisPv, sideToMove)
     : null;
   const redPerspectiveEvalText = currentEvalText ? `Red POV ${currentEvalText}` : null;
-  const liveEvalLabel = currentEvalText ? `Live engine evaluation, ${redPerspectiveEvalText}` : undefined;
+  const displayEvalBound = normalizeScoreBoundForSide(topAnalysisPv?.bound, sideToMove);
+  const displayEvalBoundText = topAnalysisPv?.bounded
+    ? `${displayEvalBound === 'lower' ? 'Lower bound' : displayEvalBound === 'upper' ? 'Upper bound' : 'Bound'}, not an exact score`
+    : undefined;
+  const liveEvalLabel = currentEvalText
+    ? `Live engine evaluation, ${redPerspectiveEvalText}${displayEvalBoundText ? `, ${displayEvalBoundText}` : ''}`
+    : undefined;
   // Only where the board leaves room beside it. On a phone the board is the
   // full width of the screen and there is no gutter to sit in; the eval is on
   // the mobile header chip and in the analysis tab there instead.
@@ -6128,6 +6135,7 @@ function App() {
                     title={liveEvalLabel}
                   >
                     {currentEvalText}
+                    {displayEvalBoundText && <span className="board-eval-bound" data-testid="board-eval-bound" aria-hidden="true">Bound</span>}
                   </span>
                 )}
                 {/* The desktop engine status lives in .panel.top and is repeated in
@@ -6446,6 +6454,7 @@ function App() {
                   <EvalBar
                     evalScore={displayEvalScore}
                     evalText={currentEvalText}
+                    boundText={displayEvalBoundText}
                     orientation={orientation}
                   />
                 ) : null}

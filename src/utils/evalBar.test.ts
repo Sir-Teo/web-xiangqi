@@ -48,4 +48,13 @@ describe('what a screen reader is told', () => {
         expect(describeEvalBar(null, null)).toBe('Engine evaluation unavailable');
         expect(describeEvalBar(250, null)).toBe('Engine evaluation unavailable');
     });
+
+    it('describes a bound without converting it into definite winning chances', () => {
+        expect(describeEvalBar(250, '+2.5', 'Lower bound, not an exact score'))
+            .toBe('Engine evaluation, Red POV +2.5, Lower bound, not an exact score');
+        expect(describeEvalBar(-29997, '-M3', 'Upper bound, not an exact score'))
+            .toBe('Engine evaluation, Red POV -M3, Upper bound, not an exact score');
+        expect(describeEvalBar(null, null, 'Bound, not an exact score'))
+            .toBe('Engine evaluation unavailable');
+    });
 });
