@@ -4,12 +4,16 @@ import { truncateText } from './truncateText';
 export interface GameMetadata {
   redPlayer?: string;
   blackPlayer?: string;
+  redRating?: string;
+  blackRating?: string;
   event?: string;
   site?: string;
   date?: string;
   round?: string;
+  timeControl?: string;
+  annotator?: string;
 }
-export const GAME_METADATA_FIELDS = ['redPlayer', 'blackPlayer', 'event', 'site', 'date', 'round'] as const;
+export const GAME_METADATA_FIELDS = ['redPlayer', 'blackPlayer', 'redRating', 'blackRating', 'event', 'site', 'date', 'round', 'timeControl', 'annotator'] as const;
 export const MAX_METADATA_FIELD_LENGTH = 256;
 
 export function normalizeGameMetadata(value: unknown): GameMetadata | undefined {
@@ -45,9 +49,17 @@ export function extractPgnMetadata(text: string): GameMetadata | undefined {
   return normalizeGameMetadata({
     redPlayer: tags.red ?? tags.white,
     blackPlayer: tags.black,
+    redRating: tags.redelo ?? tags.whiteelo,
+    blackRating: tags.blackelo,
     event: tags.event,
     site: tags.site,
     date: tags.date,
     round: tags.round,
+    timeControl: tags.timecontrol,
+    annotator: tags.annotator,
   });
+}
+
+export function formatRatedPlayer(name: string | undefined, rating: string | undefined, fallback: string): string {
+  return `${name || fallback}${rating ? ` (${rating})` : ''}`;
 }

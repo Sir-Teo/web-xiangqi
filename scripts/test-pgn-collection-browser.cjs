@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
-const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
+const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"] [WhiteElo "2500"] [BlackElo "2450"] [TimeControl "40/7200:3600"] [Annotator "Coach 王"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
 (async () => {
  const browser = await browserType.launch();
  try {
@@ -33,6 +33,8 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    assert.equal(await raw(),before);
    await upload(source);
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
+   assert.match(await panel.locator('.lib-pgn-game strong').first().innerText(), /Alice \(2500\).*Bob \(2450\)/);
+   assert.match(await panel.innerText(), /ratings.*recorded time control.*annotator credits/);
    assert.equal(await raw(),before,'Preview does not save');
    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen);
    await panel.getByRole('checkbox').last().uncheck();
@@ -51,11 +53,13 @@ const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"]\
    const alice=games.find(game=>game.metadata.redPlayer==='Alice');
    assert.equal(alice.result,'red');
    assert.equal(alice.moveTree[1].comment,'Branch note');
+   assert.deepEqual(alice.metadata, {redPlayer:'Alice',blackPlayer:'Bob',event:'Open Cup',redRating:'2500',blackRating:'2450',timeControl:'40/7200:3600',annotator:'Coach 王'});
    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen,'Saving leaves board untouched');
    const download=page.waitForEvent('download');
    await page.getByTestId(`download-pgn-saved-${alice.id}`).click();
    const pgn=fs.readFileSync(await (await download).path(),'utf8');
    assert.ok(pgn.includes('Branch note') && pgn.includes('(') && pgn.includes('[White "Alice"]'));
+   for(const tag of ['[WhiteElo "2500"]','[BlackElo "2450"]','[TimeControl "40/7200:3600"]','[Annotator "Coach 王"]']) assert.ok(pgn.includes(tag), `Collection export lost ${tag}`);
    // Failed writes preserve the current library and leave the preview available.
    await upload(source);
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();

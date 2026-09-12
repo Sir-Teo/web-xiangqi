@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { extractPgnMetadata, normalizeGameMetadata } from './gameMetadata';
-import { exportPgnFromMoveTree, exportPgnFromUci } from './gameExport';
+import { exportPgn, exportPgnFromMoveTree, exportPgnFromUci } from './gameExport';
 import { normalizeSavedGame } from './gameLibrary';
 
 describe('tournament metadata', () => {
-  const metadata = { redPlayer: '王 "A" \\ B', blackPlayer: '李', event: 'Club championship', site: 'Denver', date: '2020.??.??', round: '3.2' };
+  const metadata = { redPlayer: '王 "A" \\ B', blackPlayer: '李', event: 'Club championship', site: 'Denver', date: '2020.??.??', round: '3.2',
+    redRating: '2500', blackRating: '?', timeControl: '40/7200:3600', annotator: 'Coach "王" \\ team' };
   it('round-trips escaped names and unknown dates through both exporters and storage', () => {
     const saved = normalizeSavedGame({ id: 'one', savedAt: 1, gameMode: 'PvP', moves: ['h2e2'], metadata });
     expect(saved?.metadata).toEqual(metadata);
-    for (const pgn of [exportPgnFromUci(['h2e2'], { metadata }), exportPgnFromMoveTree([{ uci: 'h2e2' }], { metadata })]) {
+    for (const pgn of [exportPgn([], { metadata }), exportPgnFromUci(['h2e2'], { metadata }), exportPgnFromMoveTree([{ uci: 'h2e2' }], { metadata })]) {
       expect(extractPgnMetadata(pgn!)).toEqual(metadata);
     }
   });
@@ -16,6 +17,7 @@ describe('tournament metadata', () => {
     expect(extractPgnMetadata('[White "First"]\n\n1. h2e2 *\n[White "Second"]')).toEqual({ redPlayer: 'First' });
     expect(extractPgnMetadata('1. h2e2 { [Event "Fake"] }')).toBeUndefined();
     expect(extractPgnMetadata('[Red "Red alias"]\n[White "Other"]')).toEqual({ redPlayer: 'Red alias' });
+    expect(extractPgnMetadata('[RedElo "2400"]\n[WhiteElo "2500"]\n[BlackElo "-"]')).toEqual({ redRating: '2400', blackRating: '-' });
   });
   it('bounds fields and strips control characters without coercing malformed data', () => {
     expect(normalizeGameMetadata({ redPlayer: 12, event: ' A\nB ', site: 'x'.repeat(400), extra: 'ignored' })).toEqual({ event: 'A B', site: 'x'.repeat(256) });
@@ -25,6 +27,14 @@ describe('tournament metadata', () => {
     expect(normalizeSavedGame({ ...draft, metadata })?.metadata).toEqual(metadata);
     for (const empty of [undefined, {}, { event: '  \n ' }, { event: 42 }, { unknown: 'x' }]) {
       expect(normalizeSavedGame({ ...draft, metadata: empty })).toBeNull();
+    }
+  });
+  it('retains individual rating, time control or credit drafts, with the usual text bounds', () => {
+    for (const field of ['redRating', 'blackRating', 'timeControl', 'annotator']) {
+      const saved = normalizeSavedGame({ id: 'draft', savedAt: 1, gameMode: 'PvP', moves: [], metadata: { [field]: ' A\nB ' } });
+      expect(saved?.metadata).toEqual({ [field]: 'A B' });
+      expect(normalizeGameMetadata({ [field]: 'x'.repeat(400) })).toEqual({ [field]: 'x'.repeat(256) });
+      expect(normalizeGameMetadata({ [field]: 2500 })).toBeUndefined();
     }
   });
 });

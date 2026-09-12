@@ -55,6 +55,10 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           await summary.scrollIntoViewIfNeeded();
           await page.screenshot({ path: `/tmp/xiangqi-metadata-layout-${browserType.name()}-${width}-${fontSize}.png` });
+          if (width === 320 && fontSize === 32) {
+            await editor.getByLabel('Recorded time control', { exact: true }).scrollIntoViewIfNeeded();
+            await page.screenshot({ path: `/tmp/xiangqi-tournament-fields-${browserType.name()}-${width}-${fontSize}.png` });
+          }
           await activate(summary); assert.equal(await editor.getAttribute('open'), null);
         }
         assert.deepEqual(errors, []);

@@ -1,4 +1,5 @@
 import { LibraryPgnImport } from './LibraryPgnImport';
+import { formatRatedPlayer } from '../../utils/gameMetadata';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
@@ -816,15 +817,18 @@ export function LibraryPanel({
                 // one imported game with a long enough event name filled the
                 // whole panel and pushed every other saved game off it. The
                 // title carries whatever the clamp cuts.
-                const players = `Red: ${game.metadata.redPlayer || 'Unknown'} · Black: ${game.metadata.blackPlayer || 'Unknown'}`;
+                const players = `Red: ${formatRatedPlayer(game.metadata.redPlayer, game.metadata.redRating, 'Unknown')} · Black: ${formatRatedPlayer(game.metadata.blackPlayer, game.metadata.blackRating, 'Unknown')}`;
                 const tournament = [game.metadata.event, game.metadata.site, game.metadata.date,
                   game.metadata.round ? `Round ${game.metadata.round}` : undefined].filter(Boolean).join(' · ');
+                const credits = [game.metadata.timeControl ? `Time control: ${game.metadata.timeControl}` : undefined,
+                  game.metadata.annotator ? `Annotated by ${game.metadata.annotator}` : undefined].filter(Boolean).join(' · ');
                 return (
                   <div className="lib-tournament-details" data-testid={`metadata-saved-${game.id}`}>
-                    {(game.metadata.redPlayer || game.metadata.blackPlayer) && (
+                    {(game.metadata.redPlayer || game.metadata.blackPlayer || game.metadata.redRating || game.metadata.blackRating) && (
                       <div className="lib-detail-line" title={players}>{players}</div>
                     )}
                     <div className="lib-detail-line" title={tournament || undefined}>{tournament}</div>
+                    {credits && <div className="lib-detail-line" title={credits}>{credits}</div>}
                   </div>
                 );
               })()}

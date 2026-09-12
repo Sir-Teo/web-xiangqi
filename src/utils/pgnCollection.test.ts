@@ -96,33 +96,16 @@ describe('strict Xiangqi PGN collections', () => {
     expect(parsePgnCollection('1.h2e2 $2 {[%eval 0.42]} *')[0].moveTree?.[0]).toMatchObject({ evalScore: 42, quality: 'mistake', comment: undefined });
   });
 
-  /**
-   * The last of the panel's four clauses: "Other PGN tags are not retained."
-   * A PGN can carry anything -- an Annotator, a rating, a note someone left in
-   * a tag of their own invention -- and a reader importing a file from a
-   * stranger is told none of it is kept. Listed exhaustively rather than by
-   * spot-check, because the failure this guards is a *new* field appearing,
-   * which no assertion about the six known ones would notice.
-   *
-   * Two layers enforce this, which is why neither can be mutation-tested alone:
-   * `extractPgnMetadata` builds an object literal of exactly the six, and
-   * `normalizeGameMetadata` copies only `GAME_METADATA_FIELDS` out of whatever
-   * it is handed. Opening either one on its own leaks nothing and this test
-   * stays green -- the other still closes it. Opening both reports
-   * "expected [ 'annotator', 'blackPlayer', …(7) ] to deeply equal [ Array(6) ]".
-   * So this guards the pair, not either half, and a regression in one layer is
-   * caught by the *other layer* rather than by this assertion.
-   */
-  it('keeps the six headers it names and drops every other tag', () => {
+  it('retains the supported tournament and credit headers while dropping unknown tags', () => {
     const [game] = parsePgnCollection(
       '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Round "3"] [Date "2026.01.02"] ' +
-      '[Site "Beijing"] [Annotator "Someone"] [TimeControl "40/7200"] [WhiteElo "2500"] [SecretNote "keep me"]\n' +
+      '[Site "Beijing"] [Annotator "Someone"] [TimeControl "40/7200"] [WhiteElo "2500"] [BlackElo "?"] [SecretNote "keep me"]\n' +
       '1.h2e2 h9g7 *'
     );
     expect(Object.keys(game.metadata ?? {}).sort())
-      .toEqual(['blackPlayer', 'date', 'event', 'redPlayer', 'round', 'site']);
+      .toEqual(['annotator', 'blackPlayer', 'blackRating', 'date', 'event', 'redPlayer', 'redRating', 'round', 'site', 'timeControl']);
+    expect(game.metadata).toMatchObject({ annotator: 'Someone', timeControl: '40/7200', redRating: '2500', blackRating: '?' });
     expect(JSON.stringify(game)).not.toContain('keep me');
-    expect(JSON.stringify(game)).not.toContain('2500');
   });
 
   /**

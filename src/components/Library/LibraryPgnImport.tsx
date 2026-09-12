@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
 import { MAX_SAVED_GAMES, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
+import { formatRatedPlayer } from '../../utils/gameMetadata';
 
 export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onChange: () => void }) {
   const [games, setGames] = useState<CollectionGame[]>([]);
@@ -66,7 +67,7 @@ export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onC
       {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview">
         <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Select the games to add. Existing games will be kept; importing the same file again creates new copies.</p>
-        <p>Players, tournament details, results, variations, notes, evaluations, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
+        <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
         <div className="lib-transfer-actions">
           <button type="button" onClick={() => setSelected(new Set(games.map((_, index) => index)))}>Select all</button>
           <button type="button" onClick={() => setSelected(new Set())}>Select none</button>
@@ -76,7 +77,7 @@ export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onC
             <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected(previous => {
               const next = new Set(previous); if (next.has(index)) next.delete(index); else next.add(index); return next;
             })} />
-            <span><strong>{index + 1}. {game.metadata?.redPlayer || 'Red'} · {game.metadata?.blackPlayer || 'Black'}</strong>
+            <span><strong>{index + 1}. {formatRatedPlayer(game.metadata?.redPlayer, game.metadata?.redRating, 'Red')} · {formatRatedPlayer(game.metadata?.blackPlayer, game.metadata?.blackRating, 'Black')}</strong>
               <span>{[game.metadata?.event, game.metadata?.date, game.metadata?.round ? `Round ${game.metadata.round}` : undefined,
                 `${game.moves.length} ${game.moves.length === 1 ? 'ply' : 'plies'}`, resultLabel(game.result || 'ongoing')].filter(Boolean).join(' · ')}</span></span>
           </label>)}

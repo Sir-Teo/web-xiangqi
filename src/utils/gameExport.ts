@@ -71,6 +71,14 @@ function tagLine(name: string, value: string): string {
     return `[${name} "${escapeTagValue(value)}"]`;
 }
 
+function additionalMetadataTags(metadata: GameMetadata | undefined): string[] {
+    return ([['WhiteElo', 'redRating'], ['BlackElo', 'blackRating'], ['TimeControl', 'timeControl'], ['Annotator', 'annotator']] as const)
+        .flatMap(([tag, field]) => {
+            const value = metadata?.[field];
+            return value ? [tagLine(tag, value)] : [];
+        });
+}
+
 /**
  * The move text, with each move's review written after it when there is one.
  *
@@ -255,6 +263,7 @@ export function exportPgn(
         metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
         metadata?.site ? tagLine('Site', metadata.site) : null,
         metadata?.round ? tagLine('Round', metadata.round) : null,
+        ...additionalMetadataTags(metadata),
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -345,6 +354,7 @@ export function exportPgnTree(
         metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
         metadata?.site ? tagLine('Site', metadata.site) : null,
         metadata?.round ? tagLine('Round', metadata.round) : null,
+        ...additionalMetadataTags(metadata),
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
@@ -393,6 +403,7 @@ export function exportPgnFromUci(
         metadata?.blackPlayer ? tagLine('Black', metadata.blackPlayer) : null,
         metadata?.site ? tagLine('Site', metadata.site) : null,
         metadata?.round ? tagLine('Round', metadata.round) : null,
+        ...additionalMetadataTags(metadata),
         options.opening ? tagLine('Opening', options.opening) : null,
         startPosition.isCustom ? tagLine('SetUp', '1') : null,
         startPosition.isCustom ? tagLine('FEN', startPosition.fen) : null,
