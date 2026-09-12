@@ -3302,6 +3302,9 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
     }, null, { timeout: 5000 });
     await page.getByTestId("analysis-tab-review").click();
 
+    // Opening the tab can first show the deferred interface's loading state.
+    await page.getByTestId("start-review-btn").waitFor({ timeout: 5000 });
+
     const state = await page.evaluate(() => ({
       engineText: document.querySelector(".top-engine-state")?.textContent?.trim() || "",
       bottomEngineText: document.querySelector(".bottom-engine-info")?.textContent?.trim() || "",
@@ -12334,6 +12337,7 @@ async function assertMobileGameOverReviewOpensReviewTab(page) {
   await page.getByRole("heading", { name: "Red Wins" }).waitFor({ timeout: 5000 });
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-testid="mobile-analysis-tab-review"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 });
+  await page.locator('.review-panel').waitFor({ timeout: 5000 });
 
   const state = await page.evaluate(() => ({
     mobileAnalysisCurrent: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current") || "",
