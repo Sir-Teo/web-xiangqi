@@ -10,7 +10,7 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const [width, height] of [[390, 844], [320, 480], [844, 390]]) {
+    for (const [width, height] of [[390, 844], [320, 480], [844, 390], [768, 1024]]) {
       const page = await browser.newPage({ viewport: { width, height }, hasTouch: true, reducedMotion: 'reduce' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
@@ -55,6 +55,11 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
             if (width !== 844) {
               const workspace = await page.locator('.board-workspace').boundingBox();
               assert.ok(board.x - workspace.x >= 9 && workspace.x + workspace.width - board.x - board.width >= 9, 'Keep the decorative side frame inside the scroll container');
+              if (size === 16) {
+                const dock = await page.locator('.position-dock').boundingBox();
+                const material = await page.locator('.position-stat-material').boundingBox();
+                assert.ok(Math.abs(material.x + material.width - dock.x - dock.width) < 1, 'A spanning hint must not create empty columns after the three status cards');
+              }
             }
             assert.equal(await feedback.evaluate(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1), false, 'Hint feedback must not clip');
             assert.equal(await feedback.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Hint text must be reachable');

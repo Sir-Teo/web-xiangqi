@@ -4879,12 +4879,17 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
         const stage = document.querySelector(".board-stage");
         const box = () => document.querySelector(".xiangqi-board").getBoundingClientRect();
         const before = box();
-        // Scroll to the far end and check the last rank is on screen there:
-        // a floor with nowhere for its overflow to go is what put the board
-        // under the toolbar the last time this was tried.
+        // Start at the far end, then bring the board back into view. Enlarged
+        // status cards can extend well below it, so the end of the scroll area
+        // is no longer necessarily a position that shows the whole board.
         stage.scrollTop = stage.scrollHeight;
+        document.querySelector(".xiangqi-board").scrollIntoView({ block: "center", inline: "nearest" });
         const scrolled = box();
-        const reachable = scrolled.bottom <= window.innerHeight + 1 && scrolled.top >= -1;
+        const reachable = scrolled.bottom <= window.innerHeight + 1 && scrolled.top >= -1
+          && [...document.querySelectorAll(".hitbox")].every(node => {
+            const rect = node.getBoundingClientRect();
+            return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+          });
         stage.scrollTop = 0;
         // A floor that only makes the child taller leaves the grid row where it
         // was, and the board paints straight over the dock below it -- pieces
