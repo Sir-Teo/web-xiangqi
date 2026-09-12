@@ -10,6 +10,38 @@ const branched = game({ moveTree: [
 ] });
 
 describe('saved study practice', () => {
+  it('keeps root and move notes attached to their exact branch and ply', () => {
+    const source = game({ rootComment: 'Opening plan', moveTree: [
+      { uci: 'h2e2', comment: 'Central cannon', children: [
+        { uci: 'h9g7', comment: 'Right horse', children: [{ uci: 'h0g2', comment: 'Red develops' }] },
+        { uci: 'b9c7', comment: 'Left horse' },
+      ] },
+      { uci: 'b2e2', comment: 'Other cannon' },
+    ] });
+    const before = JSON.stringify(source);
+    const study = preparePracticeStudy(source).study!;
+    expect(study.notes).toEqual([
+      [{ ply: 0, comment: 'Opening plan' }, { ply: 1, move: 'h2e2', comment: 'Central cannon' }, { ply: 2, move: 'h9g7', comment: 'Right horse' }, { ply: 3, move: 'h0g2', comment: 'Red develops' }],
+      [{ ply: 0, comment: 'Opening plan' }, { ply: 1, move: 'h2e2', comment: 'Central cannon' }, { ply: 2, move: 'b9c7', comment: 'Left horse' }],
+      [{ ply: 0, comment: 'Opening plan' }, { ply: 1, move: 'b2e2', comment: 'Other cannon' }],
+    ]);
+    const alternate = attemptPracticeMove(study, startPracticeLine(study, 0), 'w', 'b2e2');
+    expect(study.notes[alternate.session.line].at(-1)?.comment).toBe('Other cannon');
+    expect(JSON.stringify(source)).toBe(before);
+  });
+  it('normalizes notes, omits empty ones and supports a plain line with a root note', () => {
+    const plain = preparePracticeStudy(game({ moves: ['h2e2'] })).study!;
+    expect(plain.notes).toEqual([[]]);
+    expect(preparePracticeStudy(game({ moves: ['h2e2'], rootComment: ' Plan\n{ahead} ' })).study?.notes)
+      .toEqual([[{ ply: 0, comment: 'Plan ahead' }]]);
+    const annotated = preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2', comment: ' '.repeat(10), children: [{ uci: 'h9g7', comment: 'x'.repeat(600) }] }] })).study!;
+    expect(annotated.notes).toEqual([[{ ply: 2, move: 'h9g7', comment: 'x'.repeat(500) }]]);
+  });
+  it('keeps notes aligned with the retained line when duplicate paths collapse', () => {
+    const study = preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2', comment: 'Earlier' }, { uci: 'h2e2', comment: 'Later' }] })).study!;
+    expect(study.lines).toEqual([['h2e2']]);
+    expect(study.notes).toEqual([[{ ply: 1, move: 'h2e2', comment: 'Later' }]]);
+  });
   it('includes all variations without changing the saved cursor, annotations or tree', () => {
     const original = JSON.stringify(branched);
     const prepared = preparePracticeStudy(branched);

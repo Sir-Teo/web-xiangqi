@@ -1,9 +1,11 @@
 import { MAX_SAVED_TREE_NODES, type SavedGame, type SavedMoveTreeNode } from './gameLibrary';
 import { describeSetupProblem } from './positionSetup';
 import { formatMoveRuleHint } from './moveRuleHints';
+import { normalizeMoveComment } from './moveComment';
 import { START_POSITION_FEN, cloneBoardState, otherSide, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
-export interface PracticeStudy { board: BoardState; side: Side; lines: string[][] }
+export interface PracticeStudyNote { ply: number; move?: string; comment: string }
+export interface PracticeStudy { board: BoardState; side: Side; lines: string[][]; notes: PracticeStudyNote[][] }
 export interface PracticeSession {
   board: BoardState;
   side: Side;
@@ -41,8 +43,11 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       for (let i = game.moves.length - 1; i >= 0; i--) roots = [{ uci: game.moves[i], children: roots }];
     }
     if (!roots.length) return fail('Save a game or variation with moves to practice it.');
-    const lines: string[][] = [];
+    const lines: Array<{ moves: string[]; notes: PracticeStudyNote[] }> = [];
     const path: string[] = [];
+    const pathNotes: Array<PracticeStudyNote | undefined> = [];
+    const rootComment = normalizeMoveComment(game.rootComment);
+    const rootNotes: PracticeStudyNote[] = rootComment ? [{ ply: 0, comment: rootComment }] : [];
     const ancestors = new Set<SavedMoveTreeNode>();
     const stack: Array<{ nodes: SavedMoveTreeNode[]; index: number; board: BoardState; side: Side; owner?: SavedMoveTreeNode }> = [
       { nodes: roots, index: 0, board, side },
@@ -52,7 +57,7 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       const frame = stack[stack.length - 1];
       if (frame.index === frame.nodes.length) {
         stack.pop();
-        if (frame.owner) { ancestors.delete(frame.owner); path.pop(); }
+        if (frame.owner) { ancestors.delete(frame.owner); path.pop(); pathNotes.pop(); }
         continue;
       }
       const node = frame.nodes[frame.index++];
@@ -60,13 +65,18 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       const next = movedBoard(frame.board, node.uci, frame.side);
       if (!next) return fail(`Saved move ${node.uci} at ply ${path.length + 1} is illegal. Correct the study before practicing.`);
       path.push(node.uci);
+      const comment = normalizeMoveComment(node.comment);
+      pathNotes.push(comment ? { ply: path.length, move: node.uci, comment } : undefined);
       if (node.children?.length) {
         ancestors.add(node);
         stack.push({ nodes: node.children, index: 0, board: next, side: otherSide(frame.side), owner: node });
-      } else { lines.push([...path]); path.pop(); }
+      } else {
+        lines.push({ moves: [...path], notes: [...rootNotes, ...pathNotes.filter((note): note is PracticeStudyNote => Boolean(note))] });
+        path.pop(); pathNotes.pop();
+      }
     }
-    const unique = [...new Map(lines.map(line => [line.join(' '), line])).values()];
-    return { study: { board, side, lines: unique }, error: null };
+    const unique = [...new Map(lines.map(line => [line.moves.join(' '), line])).values()];
+    return { study: { board, side, lines: unique.map(line => line.moves), notes: unique.map(line => line.notes) }, error: null };
   } catch { return fail('This saved study could not be read. Load and correct it before practicing.'); }
 }
 

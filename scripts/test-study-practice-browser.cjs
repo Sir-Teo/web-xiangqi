@@ -3,10 +3,10 @@ const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
 const setup = async page => {
   await page.addInitScript(() => {
-    localStorage.setItem('xiangqi:library:v1', JSON.stringify([{ id: 'repertoire', savedAt: 1, gameMode: 'PvP', label: 'Cannon repertoire 炮', moves: ['h2e2'],
+    localStorage.setItem('xiangqi:library:v1', JSON.stringify([{ id: 'repertoire', savedAt: 1, gameMode: 'PvP', label: 'Cannon repertoire 炮', rootComment: 'Opening plan <b>literal text</b>', moves: ['h2e2'],
       moveTree: [
-        { uci: 'h2e2', comment: 'Keep this note', children: [{ uci: 'h9g7', children: [{ uci: 'h0g2' }] }, { uci: 'b9c7', children: [{ uci: 'b0c2' }] }] },
-        { uci: 'b2e2', children: [{ uci: 'h9g7' }] },
+        { uci: 'h2e2', comment: 'Keep this note ' + '準備'.repeat(100), children: [{ uci: 'h9g7', comment: 'Right horse reply', children: [{ uci: 'h0g2', comment: 'Develop the right horse' }] }, { uci: 'b9c7', comment: 'Left horse reply', children: [{ uci: 'b0c2', comment: 'Develop the left horse' }] }] },
+        { uci: 'b2e2', comment: 'Other cannon', children: [{ uci: 'h9g7', comment: 'Other line reply' }] },
       ],
     }, { id: 'black-root', savedAt: 2, gameMode: 'PvP', label: 'Black to move', moves: ['h9g7'],
       startFen: 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 1' },
@@ -51,6 +51,19 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         const progress = page.getByTestId('study-practice-progress'); await progress.waitFor();
         assert.ok(chunks.length > 0);
         assert.equal(await close.evaluate(node => node === document.activeElement), true);
+        const notes = dialog.getByTestId('study-practice-line-notes');
+        const checkNotes = async expected => {
+          await notes.waitFor();
+          assert.equal(await notes.locator('li').count(), 0, 'Collapsed notes should not render the full annotation list');
+          await notes.locator('summary').focus();
+          await page.keyboard.press('Enter');
+          await notes.locator('li').first().waitFor();
+          assert.deepEqual(await notes.locator('li p').allTextContents(), ['Opening plan <b>literal text</b>', ...expected]);
+          assert.equal(await notes.locator('b').count(), 0, 'Study text must not be interpreted as markup');
+          assert.match(await notes.locator('li strong').first().innerText(), /Start position/);
+        };
+        const commonNote = 'Keep this note ' + '準備'.repeat(100);
+        assert.equal(await notes.count(), 0, 'Study notes must not reveal future moves before completion');
         const move = async uci => {
           for (const square of [uci.slice(0, 2), uci.slice(2)]) await dialog.locator(`.hitbox[data-file="${square.charCodeAt(0) - 97}"][data-rank="${square[1]}"]`).click();
         };
@@ -60,24 +73,32 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         await dialog.getByRole('button', { name: 'Show a saved move' }).click();
         assert.match(await dialog.getByTestId('study-practice-hint').innerText(), /h2→e2/i);
         await move('h2e2');
+        assert.equal(await notes.count(), 0);
         await dialog.getByRole('button', { name: 'Play saved reply' }).click();
         assert.equal(await dialog.evaluate(node => Boolean(node.querySelector('.study-practice-board')?.contains(document.activeElement))), true);
+        assert.equal(await notes.count(), 0);
         await move('h0g2');
+        await checkNotes([commonNote, 'Right horse reply', 'Develop the right horse']);
         assert.match(await progress.innerText(), /1 of 3/);
         assert.match(await dialog.getByTestId('study-practice-recall').innerText(), /1 of 2/);
         await dialog.getByRole('button', { name: 'Next line' }).click();
+        assert.equal(await notes.count(), 0, 'Starting another line must hide the previous notes');
         // A different saved Red branch is accepted, not labeled a mistake.
         await move('b2e2'); await dialog.getByRole('button', { name: 'Play saved reply' }).click();
         assert.match(await progress.innerText(), /2 of 3/);
+        await checkNotes(['Other cannon', 'Other line reply']);
         await dialog.getByRole('button', { name: 'Next line' }).click();
         await move('h2e2'); await dialog.getByRole('button', { name: 'Play saved reply' }).click(); await move('b0c2');
         assert.match(await progress.innerText(), /3 of 3/);
+        await checkNotes([commonNote, 'Left horse reply', 'Develop the left horse']);
         await dialog.getByRole('button', { name: 'Practice again' }).waitFor();
         await dialog.getByRole('combobox', { name: 'Practice as' }).selectOption('b');
         assert.match(await progress.innerText(), /0 of 3/);
+        assert.equal(await notes.count(), 0, 'Changing sides must hide completed-line notes');
         await dialog.getByRole('button', { name: 'Play saved reply' }).click();
         await move('b9c7'); await dialog.getByRole('button', { name: 'Play saved reply' }).click();
         assert.match(await progress.innerText(), /1 of 3/);
+        await checkNotes([commonNote, 'Left horse reply', 'Develop the left horse']);
         // Dialog shortcuts must not navigate or flip the actual study behind it.
         await close.focus(); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('f');
         const current = await page.evaluate(() => ({ raw: localStorage.getItem('xiangqi:library:v1'),
@@ -90,6 +111,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
           await page.screenshot({ path: `/tmp/xiangqi-study-practice-${browserType.name()}-${width}-${fontSize}.png` });
           assert.equal(await dialog.evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+          assert.equal(await notes.evaluate(node => node.scrollWidth > node.clientWidth + 1), false, 'Long notes overflow the panel');
           const buttons = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
           assert.ok(buttons.every(height => height >= 43.99));
           const clipped = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => ({ text: node.textContent, width: node.clientWidth, scrollWidth: node.scrollWidth, height: node.clientHeight, scrollHeight: node.scrollHeight })));
@@ -113,7 +135,16 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
             }), true, 'Practice control is covered or unreachable');
           }
           if (fontSize === 32) await dialog.locator('.study-practice-controls').screenshot({ path: `/tmp/xiangqi-practice-controls-${browserType.name()}-${width}.png` });
+          if (fontSize === 32 && width === 320) {
+            // Inspect the whole expanded notes card separately from the short
+            // viewport assertions above, then restore the actual device size.
+            await page.setViewportSize({ width, height: 2600 });
+            await notes.screenshot({ path: `/tmp/xiangqi-practice-notes-${browserType.name()}-${width}.png` });
+            await page.setViewportSize({ width, height });
+          }
         }
+        await dialog.getByRole('button', { name: 'Restart line' }).click();
+        assert.equal(await notes.count(), 0, 'Restarting must hide completed-line notes');
         await close.focus(); await page.keyboard.press('Shift+Tab');
         assert.equal(await dialog.evaluate(node => node.contains(document.activeElement)), true);
         await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
@@ -124,6 +155,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         assert.equal(await dialog.getByRole('combobox', { name: 'Practice as' }).inputValue(), 'b');
         await move('h9g7');
         assert.match(await progress.innerText(), /1 of 1/);
+        assert.equal(await notes.count(), 0, 'An unannotated game must not show an empty notes section');
         await close.click();
         await page.getByTestId('practice-saved-invalid').click();
         await dialog.getByRole('alert').waitFor();

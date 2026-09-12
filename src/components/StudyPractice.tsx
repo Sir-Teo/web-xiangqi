@@ -15,6 +15,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   const [letters, setLetters] = useState(pieceStyle === 'letters');
   const [hint, setHint] = useState(false);
   const [message, setMessage] = useState('');
+  const [notesOpen, setNotesOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLParagraphElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
@@ -42,7 +43,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   function reset(line: number, keepProgress: boolean) {
     if (!study || !session) return;
     setSession(startPracticeLine(study, line, keepProgress ? session : undefined));
-    setSelected(null); setHint(false); setMessage('');
+    setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
     focusBoardRef.current = true;
   }
   function clickSquare(file: number, rank: number) {
@@ -59,6 +60,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   }
   const next = nextPracticeLine(study, session, side);
   const nextMove = study.lines[session.line]?.[session.moves.length];
+  const completedNotes = complete ? study.notes[session.line] : [];
   return <div className="study-practice-layout">
     <div className="study-practice-controls">
       <label>Practice as<select className="app-select app-select-roomy" value={side} onChange={event => {
@@ -66,7 +68,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
         setSide(chosen);
         const first = practiceLineIndices(study, chosen)[0];
         if (first !== undefined) setSession(startPracticeLine(study, first));
-        setSelected(null); setHint(false); setMessage('');
+        setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
       }}><option value="w">Red</option><option value="b">Black</option></select></label>
       <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
     </div>
@@ -95,8 +97,17 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
         </div>
         <p data-testid="study-practice-progress">{session.completed.filter(line => eligible.includes(line)).length} of {eligible.length} lines practiced</p>
         {session.answered > 0 && <p data-testid="study-practice-recall">{session.recalled} of {session.answered} moves recalled without help</p>}
+        {completedNotes.length > 0 && <details className="study-practice-note study-practice-line-notes" data-testid="study-practice-line-notes"
+          onToggle={event => setNotesOpen(event.currentTarget.open)}>
+          <summary>Study notes for this line ({completedNotes.length})</summary>
+          {notesOpen && <ul>{completedNotes.map(note => <li key={note.ply}>
+            <strong>{note.move ? `Ply ${note.ply} · ${formatUciMove(note.move)}` : 'Start position'}</strong>
+            <p>{note.comment}</p>
+          </li>)}</ul>}
+        </details>}
         <details className="study-practice-note"><summary>How practice works</summary>
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
+          <p>Complete a line to read any notes saved with it.</p>
           <p>Progress lasts for this session. Changing sides starts a new session.</p>
         </details>
       </section>

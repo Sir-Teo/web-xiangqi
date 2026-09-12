@@ -18,5 +18,10 @@
 .study-practice-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .study-practice-note { color: var(--text-secondary); }
 .study-practice-note summary { min-height: 44px; align-content: center; cursor: pointer; font-size: .85rem; }
+.study-practice-line-notes { margin: .75rem 0; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.study-practice-line-notes ul { list-style: none; padding: 0; margin: .5rem 0 0; }
+.study-practice-line-notes li + li { border-top: 1px solid var(--border-subtle); padding-top: .5rem; }
+.study-practice-line-notes strong { font-size: .78rem; overflow-wrap: anywhere; }
+.study-practice-line-notes p { color: var(--text-primary); }
 @container (max-width: 36rem) { .study-practice-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "controls" "board" "feedback"; } }
 @media (max-height: 520px) and (min-width: 700px) { .study-practice-board .xiangqi-board-container { --board-max-width: 65vh; } }
