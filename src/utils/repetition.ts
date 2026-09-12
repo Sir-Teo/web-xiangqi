@@ -109,16 +109,41 @@ export function describeRepetition(
     rootSideToMove: Side,
     line: RepetitionPly[]
 ): RepetitionReport {
+    return describeRepetitionWithKeys(rootBoard, rootSideToMove, line, positionKey);
+}
+
+/** Reuse position strings for the app's immutable board snapshots. The caller
+ * owns the cache; discarded boards are weakly held, and side-to-move remains
+ * part of the key. Check flags and line order are read afresh on every call. */
+export function createRepetitionAnalyzer(): typeof describeRepetition {
+    const keys = new WeakMap<BoardState, Partial<Record<Side, string>>>();
+    const cachedKey = (board: BoardState, side: Side): string => {
+        let entry = keys.get(board);
+        if (!entry) {
+            entry = {};
+            keys.set(board, entry);
+        }
+        return entry[side] ?? (entry[side] = positionKey(board, side));
+    };
+    return (root, side, line) => describeRepetitionWithKeys(root, side, line, cachedKey);
+}
+
+function describeRepetitionWithKeys(
+    rootBoard: BoardState,
+    rootSideToMove: Side,
+    line: RepetitionPly[],
+    keyFor: typeof positionKey,
+): RepetitionReport {
     const currentBoard = line.length ? line[line.length - 1].board : rootBoard;
     const currentSide = line.length ? line[line.length - 1].sideToMove : rootSideToMove;
-    const currentKey = positionKey(currentBoard, currentSide);
+    const currentKey = keyFor(currentBoard, currentSide);
 
     // Index -1 stands for the root, so a cycle back to the starting position is
     // measured like any other.
     const visits: number[] = [];
-    if (positionKey(rootBoard, rootSideToMove) === currentKey) visits.push(-1);
+    if (keyFor(rootBoard, rootSideToMove) === currentKey) visits.push(-1);
     line.forEach((ply, index) => {
-        if (positionKey(ply.board, ply.sideToMove) === currentKey) visits.push(index);
+        if (keyFor(ply.board, ply.sideToMove) === currentKey) visits.push(index);
     });
 
     const occurrences = visits.length;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    createRepetitionAnalyzer,
     describeRepetition,
     formatRepetitionHeadline,
     formatRepetitionRule,
@@ -192,5 +193,49 @@ describe('nothing to report', () => {
         const result = describeRepetition(board, 'w', []);
         expect(result.occurrences).toBe(1);
         expect(shouldReportRepetition(result)).toBe(false);
+    });
+});
+
+
+describe('reusing immutable board snapshots', () => {
+    it('matches uncached reports through navigation, branches and a new root', () => {
+        const analyze = createRepetitionAnalyzer();
+        for (const [fen, moves] of [
+            [`${START_FEN} w`, ['a0a1', 'a9a8', 'a1a0', 'a8a9', 'a0a1', 'a9a8', 'a1a0', 'a8a9']],
+            ['4k4/9/9/9/9/9/9/9/4R4/3K5 b', ['e9f9', 'e1f1', 'f9e9', 'f1e1']],
+        ] as [string, string[]][]) {
+            const { root, rootSide, line } = play(fen, moves);
+            for (const end of [line.length, 0, 2, 1, line.length - 1, line.length]) {
+                const prefix = line.slice(0, end);
+                expect(analyze(root, rootSide, prefix)).toEqual(describeRepetition(root, rootSide, prefix));
+            }
+            const alternate = play(fen, moves.slice(0, 2)).line;
+            expect(analyze(root, rootSide, alternate)).toEqual(describeRepetition(root, rootSide, alternate));
+        }
+    });
+
+    it('does not confuse turns or reuse verdicts after check flags change', () => {
+        const root = parseFenBoard(START_FEN);
+        const analyze = createRepetitionAnalyzer();
+        const line: RepetitionPly[] = [
+            { board: root, sideToMove: 'b', inCheck: true },
+            { board: root, sideToMove: 'w', inCheck: false },
+        ];
+        expect(analyze(root, 'w', line)).toEqual({ occurrences: 2, verdict: 'red-perpetual-check', mustVary: 'w' });
+        const quiet = line.map(ply => ({ ...ply, inCheck: false }));
+        expect(analyze(root, 'w', quiet)).toEqual({ occurrences: 2, verdict: 'unforced', mustVary: null });
+        expect(analyze(root, 'b', quiet)).toEqual(describeRepetition(root, 'b', quiet));
+    });
+
+    it('reads replacement boards and keeps the uncached API safe for mutable input', () => {
+        const root = parseFenBoard(START_FEN);
+        const analyze = createRepetitionAnalyzer();
+        expect(analyze(root, 'w', [{ board: root, sideToMove: 'w', inCheck: false }]).occurrences).toBe(2);
+        const changed = root.map(row => [...row]);
+        changed[1][0] = changed[0][0]; changed[0][0] = '';
+        const line: RepetitionPly[] = [{ board: changed, sideToMove: 'w', inCheck: false }];
+        expect(analyze(root, 'w', line).occurrences).toBe(1);
+        changed[0][0] = changed[1][0]; changed[1][0] = '';
+        expect(describeRepetition(root, 'w', line).occurrences).toBe(2);
     });
 });

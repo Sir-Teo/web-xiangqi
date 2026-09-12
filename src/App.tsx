@@ -146,7 +146,7 @@ import { createBoardArrowSelector, type BoardArrow, type BoardSquare } from './u
 import { planMoveLineImport } from './utils/moveLineImportPlan';
 import { getDialogFocusableElements, keepTabWithin } from './utils/focusTrap';
 import {
-  describeRepetition,
+  createRepetitionAnalyzer,
   formatRepetitionHeadline,
   formatRepetitionRule,
   shouldReportRepetition,
@@ -2557,7 +2557,7 @@ function App() {
   // The start position, not the standard opening set: a game loaded from a FEN
   // began where its FEN says, and subtracting from the standard set reported
   // every piece that setup never had as one this game captured.
-  const rootBoardForMaterial = useMemo(() => {
+  const rootBoardSnapshot = useMemo(() => {
     try {
       return parseFenBoard(rootFen.split(/\s+/)[0]);
     } catch {
@@ -2565,8 +2565,8 @@ function App() {
     }
   }, [rootFen]);
   const materialSummary = useMemo(
-    () => summarizeMaterial(board, rootBoardForMaterial),
-    [board, rootBoardForMaterial]
+    () => summarizeMaterial(board, rootBoardSnapshot),
+    [board, rootBoardSnapshot]
   );
 
   const materialText = materialSummary.deltaTenths > 0
@@ -2687,18 +2687,15 @@ function App() {
    * property of the moves actually made, and a variation explored and left is
    * not one of them.
    */
+  const analyzeRepetition = useMemo(createRepetitionAnalyzer, []);
   const repetition = useMemo(() => {
-    const line = moveHistory.slice(0, currentMoveIndex + 1).map((record) => ({
-      board: record.board,
-      sideToMove: record.sideToMove,
-      inCheck: record.inCheck,
-    }));
+    const line = moveHistory.slice(0, currentMoveIndex + 1);
     // The root comes from its FEN rather than from the hook, which does not
     // expose the board -- and the FEN is already the hook's own description of
     // that position, so there is nothing to keep in step.
-    const [placement, sideChar] = rootFen.trim().split(/\s+/);
-    return describeRepetition(parseFenBoard(placement), sideChar === 'b' ? 'b' : 'w', line);
-  }, [currentMoveIndex, moveHistory, rootFen]);
+    const sideChar = rootFen.trim().split(/\s+/)[1];
+    return analyzeRepetition(rootBoardSnapshot, sideChar === 'b' ? 'b' : 'w', line);
+  }, [analyzeRepetition, currentMoveIndex, moveHistory, rootBoardSnapshot, rootFen]);
   /**
    * chessdb.cn's ruling on the moves from here, once the position has stood
    * here before. It is the part `describeRepetition` cannot do: a chase.

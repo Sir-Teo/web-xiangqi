@@ -83,6 +83,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-metadata-only-browser.cjs',
         'test-metadata-layout-browser.cjs',
         'test-snapshot-reuse-browser.cjs',
+        'test-repetition-cache-browser.cjs',
         'test-mobile-tabs-text-browser.cjs',
         'test-recovery-text-browser.cjs',
         'test-game-over-text-browser.cjs',
