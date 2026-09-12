@@ -214,10 +214,10 @@ function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string)
     const path: string[] = [];
     let cursor: string | null = nodeId;
     while (cursor && cursor !== ROOT_NODE_ID) {
-        path.unshift(cursor);
+        path.push(cursor);
         cursor = treeNodes[cursor]?.parentId ?? null;
     }
-    return path;
+    return path.reverse();
 }
 
 function preferredContinuation(treeNodes: Record<string, MoveTreeNode>, startNodeId: string): string[] {
@@ -287,18 +287,20 @@ export function useXiangqi() {
         () => activeLineNodeIds.map((nodeId) => treeNodes[nodeId]?.record).filter((record): record is MoveRecord => Boolean(record)),
         [activeLineNodeIds, treeNodes]
     );
-    const currentFen = boardToFen(
+    // Engine telemetry also rerenders this hook. Reuse unchanged FENs across
+    // those updates instead of rebuilding ancestry paths and board strings.
+    const currentFen = useMemo(() => boardToFen(
         board,
         sideToMove,
         fullmoveForPly(rootPosition, currentMoveIndex + 1),
-        halfmoveForNode(treeNodes, activeLineNodeIds[currentMoveIndex] ?? ROOT_NODE_ID, rootPosition)
-    );
-    const rootFen = boardToFen(
+        halfmoveForNode(treeNodes, currentNodeId, rootPosition)
+    ), [board, sideToMove, rootPosition, currentMoveIndex, treeNodes, currentNodeId]);
+    const rootFen = useMemo(() => boardToFen(
         rootPosition.board,
         rootPosition.sideToMove,
         rootPosition.fullmove,
         rootPosition.halfmove
-    );
+    ), [rootPosition]);
 
     const syncPositionForNode = useCallback((nextTree: Record<string, MoveTreeNode>, nodeId: string) => {
         const position = getPositionFromNode(nextTree, nodeId, rootPosition);
