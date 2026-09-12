@@ -56,7 +56,7 @@ async function assertFits(page) {
         const apply = async code => { await choose().selectOption(code); await details.getByRole('button', { name: 'Apply symbol', exact: true }).click(); };
         await choose().selectOption('1');
         assert.equal((await save(page)).moveTree[0].nags, undefined, 'Browsing symbols changed the study before Apply');
-        await choose().focus(); await page.keyboard.press(browserType.name() === 'webkit' ? 'Alt+Tab' : 'Tab');
+        await choose().focus(); await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Apply symbol');
         await page.keyboard.press('Enter');
         await details.getByRole('status').filter({ hasText: 'Good move' }).waitFor({ state: 'attached' });
