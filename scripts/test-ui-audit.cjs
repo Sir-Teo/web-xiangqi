@@ -12,6 +12,7 @@ const path = require('node:path');
     for (const script of [
       'test-pgn-collection-browser.cjs',
       'test-pgn-notes-browser.cjs',
+      'test-pgn-glyphs-browser.cjs',
       'test-study-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',

@@ -1,5 +1,6 @@
 import { formatEvaluationText, mateDistanceFromScore, type EvaluationScoreKind } from './engineEvalReading';
 import type { SavedGame } from './gameLibrary';
+import { describeMoveGlyphs } from './moveGlyphs';
 
 /** Search the displayed score, with a raw cp alias only for centipawn scores. */
 export function evaluationSearchText(score: number | undefined, kind?: EvaluationScoreKind): string {
@@ -19,6 +20,7 @@ export function savedTreeSearchText(nodes: SavedGame['moveTree']): string {
         parts.push(node.uci);
         if (node.comment) parts.push(node.comment);
         if (node.quality) parts.push(node.quality);
+        if (node.nags?.length) parts.push(describeMoveGlyphs(node.nags), ...node.nags.map(code => `$${code}`));
         const score = evaluationSearchText(node.evalScore, node.evalScoreKind);
         if (score) parts.push(score);
         if (node.children) pending.push(...node.children);

@@ -20,7 +20,8 @@ describe('strict Xiangqi PGN collections', () => {
     const note = 'n'.repeat(500);
     const [game] = parsePgnCollection(`h2e2 {[%eval .42,18] ${note}} h9g7 $3 {[%eval invalid] [%clk 1:00:00]} *`);
     expect(game.moveTree?.[0]).toMatchObject({ evalScore: 42, evalDepth: 18, comment: note });
-    expect(game.moveTree?.[0].children?.[0].comment).toBe('$3 [%eval invalid] [%clk 1:00:00]');
+    expect(game.moveTree?.[0].children?.[0].comment).toBe('[%eval invalid] [%clk 1:00:00]');
+    expect(game.moveTree?.[0].children?.[0].nags).toEqual([3]);
     expect(game.moveTree?.[0].children?.[0].quality).toBeUndefined();
     const splitNote = `${'a'.repeat(250)} [%eval .42] ${'b'.repeat(249)}`;
     expect(parsePgnCollection(`h2e2 {${splitNote}} *`)[0].moveTree?.[0].comment).toBe(`${'a'.repeat(250)} ${'b'.repeat(249)}`);

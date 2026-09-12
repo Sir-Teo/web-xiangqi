@@ -54,6 +54,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Copy record**: the line as a numbered record in the chosen notation -- `1. 炮二平五 馬8進7` -- for pasting where a person will read it, beside Copy PGN for programs
 - Command palette entry *Write a note on this move*, so the field is reachable without knowing where it lives
 - **Find study notes**: expand Study notes below the move tree, or use the command palette, to search note text across the starting position and every variation. Select a result to visit its position. Results follow tree order, with 20 shown initially and more available on demand.
+- **Imported annotation symbols**: coordinate PGN import retains `!`, `?`, `!!`, `??`, `!?`, `?!`, position annotations, and numeric codes from `$0` through `$255` on every variation. Compact symbols appear beside moves; expand Imported annotations to read their meanings. They survive library storage, recovery, sharing within link limits, and export. Reviews keep supplied symbols, which take precedence over generated move symbols in PGN.
 - Single-key shortcuts: `F` flip, `X` threat, `D` deep search, `H` hint, `E`/`T`/`R` the Engine, Tree and Review panels, arrows to step through the game; each is printed beside its command in the palette
 
 ## What this repo contains

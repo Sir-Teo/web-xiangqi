@@ -21,9 +21,9 @@ describe('reading a review back out of a PGN', () => {
         expect(parsed.moves).toEqual(['h2e2', 'h9g7', 'b0c2', 'b9c7']);
         expect(parsed.annotations).toEqual([
             { evalScore: 38 },
-            { evalScore: -180, quality: 'mistake' },
-            { evalScore: 210, quality: 'inaccuracy' },
-            { evalScore: -820, quality: 'blunder' },
+            { evalScore: -180, quality: 'mistake', nags: [2] },
+            { evalScore: 210, quality: 'inaccuracy', nags: [6] },
+            { evalScore: -820, quality: 'blunder', nags: [4] },
         ]);
     });
 
@@ -88,7 +88,7 @@ describe('reading a review back out of a PGN', () => {
         // $3 is "very good move" and $5 "interesting"; neither is a grade on
         // this app's ladder, and inventing one would label a move nobody graded.
         expect(extractAnnotatedMainLine('1. h2e2 $3 h9g7 $5 *').annotations)
-            .toEqual([{}, {}]);
+            .toEqual([{ nags: [3] }, { nags: [5] }]);
     });
 
     it('says nothing about a record with no annotations at all', () => {

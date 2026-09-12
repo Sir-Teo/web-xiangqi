@@ -1,0 +1,8 @@
+.imported-glyphs { flex-shrink: 0; min-width: 0; margin: 8px 0; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 8px; font-size: .8125rem; line-height: 1.5; }
+.imported-glyphs summary { cursor: pointer; min-height: 44px; padding-block: 8px; box-sizing: border-box; align-content: center; }
+.imported-glyphs p, .imported-glyphs small { color: var(--text-secondary); }
+.imported-glyphs ul { list-style: none; margin: 0 0 10px; padding: 0; max-height: 16rem; overflow-y: auto; }
+.imported-glyphs li { overflow-wrap: anywhere; margin-block: 6px; }
+.imported-glyphs strong { margin-inline-end: 4px; }
+.imported-glyphs small { font-size: inherit; }
+.mtree-glyphs { font-weight: 700; white-space: normal; overflow-wrap: anywhere; }

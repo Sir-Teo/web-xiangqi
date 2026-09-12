@@ -1,6 +1,7 @@
 import { parseResultTag, readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
 import { extractPgnEvalCommands, parsePgnMoveQuality } from './pgnEvaluation';
+import { appendPgnGlyph } from './moveGlyphs';
 import { readStudyAnalysisPgn } from './studyAnalysis';
 import { normalizeSavedGame, type SavedGame, type SavedMoveTreeNode, MAX_SAVED_GAMES } from './gameLibrary';
 import { extractPgnMetadata } from './gameMetadata';
@@ -98,9 +99,10 @@ function parseGame(input: Token[]): CollectionGame {
         const value = token.value;
         if (/^\d+\.+$/.test(value)) continue;
         if (/^(\$\d+|[!?]+)$/.test(value)) {
+            const hasGlyph = cursor.node ? appendPgnGlyph(cursor.node, value) : false;
             const quality = parsePgnMoveQuality(value);
             if (quality && cursor.node) cursor.node.quality = quality;
-            else addComment(value);
+            else if (!hasGlyph) addComment(value);
             continue;
         }
         if (value === '(') {

@@ -1,6 +1,7 @@
 import { readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
 import { parseEvalCommand, parsePgnMoveQuality } from './pgnEvaluation';
+import { appendPgnGlyph, normalizeMoveGlyphs, parsePgnGlyph, type MoveGlyphs } from './moveGlyphs';
 import { readStudyAnalysisPgn } from './studyAnalysis';
 import type { MoveEvaluation } from './moveEvaluation';
 import type { SavedMoveTreeNode } from './gameLibrary';
@@ -232,6 +233,7 @@ export function extractUciMoveTree(text: string): {
         const match = entry.match;
         const token = match[0];
         if (token.startsWith('$') || /^[!?]+$/.test(token)) {
+            if (commentTarget) appendPgnGlyph(commentTarget, token);
             const quality = parsePgnMoveQuality(token);
             if (quality && commentTarget) commentTarget.quality = quality;
             continue;
@@ -282,7 +284,7 @@ export function extractUciMoveTree(text: string): {
 
 
 /** A move's review as a record carried it, for the moves that had one. */
-export interface ImportedMoveAnnotation extends MoveEvaluation {
+export interface ImportedMoveAnnotation extends MoveEvaluation, MoveGlyphs {
     /** Red-positive centipawns after the move, as this app stores an eval. */
     evalScore?: number;
     quality?: ReviewMoveQuality;
@@ -342,6 +344,7 @@ export function extractAnnotatedMainLine(text: string): {
     const annotate = (patch: ImportedMoveAnnotation) => {
         if (depth > 0 || annotations.length === 0) return;
         const current = annotations[annotations.length - 1];
+        if (patch.nags) patch.nags = normalizeMoveGlyphs([...(current.nags ?? []), ...patch.nags]);
         if (patch.comment && current.comment) patch.comment = normalizeMoveComment(`${current.comment} ${patch.comment}`);
         Object.assign(current, patch);
     };
@@ -371,6 +374,8 @@ export function extractAnnotatedMainLine(text: string): {
         if (ch === '$') {
             const nag = source.slice(index).match(/^\$\d+/);
             if (nag) {
+                const code = parsePgnGlyph(nag[0]);
+                if (code !== undefined) annotate({ nags: [code] });
                 const quality = parsePgnMoveQuality(nag[0]);
                 if (quality) annotate({ quality });
                 index += nag[0].length;
@@ -378,8 +383,10 @@ export function extractAnnotatedMainLine(text: string): {
             }
         }
         if (ch === '?' || ch === '!') {
-            const suffix = source.slice(index).match(/^(\?\?|\?!|\?)/);
+            const suffix = source.slice(index).match(/^[!?]+/);
             if (suffix) {
+                const code = parsePgnGlyph(suffix[0]);
+                if (code !== undefined) annotate({ nags: [code] });
                 const quality = parsePgnMoveQuality(suffix[0]);
                 if (quality) annotate({ quality });
                 index += suffix[0].length;

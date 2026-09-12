@@ -2,6 +2,7 @@ import { normalizeRecordedResult, type RecordedResult } from '../utils/recordedR
 import { type EvaluationScoreKind } from '../utils/engineEvalReading';
 import { makeEnginePositionCommand } from '../utils/engineTags';
 import { normalizeMoveEvaluation, replaceMoveEvaluation, type MoveEvaluation } from '../utils/moveEvaluation';
+import { normalizeMoveGlyphs, type MoveGlyphs } from '../utils/moveGlyphs';
 import { normalizeStudyAnalysis, type StudyAnalysis } from '../utils/studyAnalysis';
 import type { GameMetadata } from '../utils/gameMetadata';
 import { describeSetupProblem } from '../utils/positionSetup';
@@ -34,7 +35,7 @@ import { bestLineForMove } from '../utils/engineBestLine';
 
 export type GameResult = 'red-wins' | 'black-wins' | 'draw' | null;
 
-export interface MoveRecord extends MoveEvaluation {
+export interface MoveRecord extends MoveEvaluation, MoveGlyphs {
     recordedResult?: RecordedResult;
     /** Imported/saved annotations are durable; ordinary live scores remain transient. */
     persistEvaluation?: boolean;
@@ -92,7 +93,7 @@ export type MoveSequenceValidation =
     | { ok: true }
     | { ok: false; failedIndex: number; move: string; reason: string };
 
-export type SerializableMoveTreeNode = MoveEvaluation & {
+export type SerializableMoveTreeNode = MoveEvaluation & MoveGlyphs & {
     recordedResult?: RecordedResult;
     uci: string;
     /** The reader's note on this move, when they wrote one. */
@@ -547,6 +548,7 @@ export function useXiangqi() {
                 const nextInCheck = isInCheck(nextBoard, nextSide);
                 const nodeId = `n${counter++}`;
                 const evaluation = normalizeMoveEvaluation(child);
+                const nags = normalizeMoveGlyphs(child.nags);
 
                 tree[parentNodeId].childrenIds.push(nodeId);
                 tree[nodeId] = {
@@ -562,6 +564,7 @@ export function useXiangqi() {
                         inCheck: nextInCheck,
                         ply: plyIndex + 1,
                         ...evaluation,
+                        ...(nags ? { nags } : {}),
                         ...(normalizeRecordedResult(child.recordedResult) ? { recordedResult: normalizeRecordedResult(child.recordedResult) } : {}),
                         ...(evaluation.evalScore !== undefined || evaluation.quality ? { persistEvaluation: true } : {}),
                         ...(normalizeMoveComment(child.comment) ? { comment: normalizeMoveComment(child.comment) } : {}),

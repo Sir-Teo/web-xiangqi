@@ -13,6 +13,7 @@ import { getMoveListQuality } from '../../utils/moveListQuality';
 import { isMoveListNodeVisible, MAX_VISIBLE_VARIATION_PLIES } from '../../utils/moveListVisibility';
 import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
+import { describeMoveGlyphs, glyphSymbol } from '../../utils/moveGlyphs';
 import { describeMoveNumber } from '../../utils/moveNumbering';
 import {
     boardBeforeRecord,
@@ -427,6 +428,9 @@ const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCu
                     the second line goes: it was printing `h2e2` under
                     `H2→E2`, which is the same move written twice. */}
                 {formatMoveLabel(record, notationStyle)}
+                {record.nags?.length ? <span className="mtree-glyphs" aria-hidden="true">
+                    {record.nags.slice(0, 3).map(glyphSymbol).join(' ')}{record.nags.length > 3 ? ` +${record.nags.length - 3}` : ''}
+                </span> : null}
                 {notationStyle === 'uci'
                     ? null
                     : <span className="move-uci">{record.uci}</span>}
@@ -475,7 +479,7 @@ function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>, quality?: 
     // matching a colour against the legend.
     const title = formatMoveRecordTitle(record);
     const description = qualityDescription(record, quality);
-    return description ? `${title} - ${description}` : title;
+    return [title, description, describeMoveGlyphs(record.nags)].filter(Boolean).join(' - ');
 }
 
 function formatMoveNotation(
@@ -515,6 +519,7 @@ function formatMoveAriaLabel(
         notationStyle === 'uci' ? '' : notation,
         `UCI ${formatUciMove(record.uci)}`,
         qualityDescription(record, quality),
+        describeMoveGlyphs(record.nags),
         coachMove ? `Engine suggestion ${formatAlternative(record, coachMove, notationStyle)}` : '',
         record.comment ? `Note, ${record.comment}` : '',
     ].filter(Boolean);

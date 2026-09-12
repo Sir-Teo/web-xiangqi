@@ -2,6 +2,7 @@ import { recordedResultPgn, RESULT_TAG, type RecordedResult } from './recordedRe
 import { normalizeMoveComment } from './moveComment';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import { normalizeMoveEvaluation } from './moveEvaluation';
+import { normalizeMoveGlyphs } from './moveGlyphs';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
@@ -220,7 +221,7 @@ function savedMoveTreeToNodes(moveTree: SavedMoveTreeNode[]) {
                 id: nodeId,
                 parentId,
                 childrenIds: [],
-                record: { recordedResult: child.recordedResult, uci: child.uci, comment: child.comment, analysis: child.analysis, ...normalizeMoveEvaluation(child) } as MoveRecord,
+                record: { recordedResult: child.recordedResult, uci: child.uci, comment: child.comment, nags: normalizeMoveGlyphs(child.nags), analysis: child.analysis, ...normalizeMoveEvaluation(child) } as MoveRecord,
             };
             appendChildren(child.children ?? [], nodeId);
         }

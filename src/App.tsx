@@ -4,6 +4,7 @@ import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
 import { StudyNotes } from './components/StudyNotes';
+import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata';
@@ -896,7 +897,7 @@ function App() {
    * analysis has the same requirement even when the line has no written note.
    */
   const hasAnnotatedStudyMoves = useMemo(() => (
-    Object.values(treeNodes).some((node) => Boolean(node.record?.recordedResult || node.record?.comment || node.record?.analysis || node.record?.persistEvaluation))
+    Object.values(treeNodes).some((node) => Boolean(node.record?.nags?.length || node.record?.recordedResult || node.record?.comment || node.record?.analysis || node.record?.persistEvaluation))
   ), [treeNodes]);
   const currentPositionCommand = useMemo(() => {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
@@ -6908,6 +6909,7 @@ function App() {
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
                     disabled={isAiTurn} onNavigate={jumpToNode} />
+                  <ImportedGlyphs nags={treeNodes[currentNodeId]?.record?.nags} />
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;

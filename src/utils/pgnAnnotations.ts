@@ -4,6 +4,7 @@ import { mateDistanceFromScore, type EvaluationScoreKind } from './engineEvalRea
 import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
 import { normalizeEvalDepth } from './moveEvaluation';
+import { normalizeMoveGlyphs, type MoveGlyphs } from './moveGlyphs';
 
 /**
  * Writing the review into the PGN, so the analysis leaves with the game.
@@ -36,7 +37,7 @@ const NAG_FOR_QUALITY: Partial<Record<ReviewMoveQuality, string>> = {
     blunder: '$4',
 };
 
-export interface MoveAnnotationInput {
+export interface MoveAnnotationInput extends MoveGlyphs {
     recordedResult?: RecordedResult;
     /** Evaluation after the move, red-positive centipawns, as the engine gave it. */
     evalScore?: number;
@@ -82,7 +83,11 @@ export function formatEvalCommand(evalScore: number, evalDepth?: number, evalSco
 export function annotationTokensForMove(input: MoveAnnotationInput): string[] {
     const tokens: string[] = [];
 
-    const nag = input.quality ? NAG_FOR_QUALITY[input.quality] : undefined;
+    const supplied = normalizeMoveGlyphs(input.nags) ?? [];
+    tokens.push(...supplied.map(code => `$${code}`));
+    // Supplied move judgements take precedence over generated move glyphs.
+    // Position annotations can coexist with an engine's move judgement.
+    const nag = !supplied.some(code => code >= 1 && code <= 9) && input.quality ? NAG_FOR_QUALITY[input.quality] : undefined;
     if (nag) tokens.push(nag);
 
     const comment: string[] = [];

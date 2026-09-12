@@ -4,6 +4,7 @@ import { truncateText } from './truncateText';
 import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
 import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
 import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
+import { normalizeMoveGlyphs, type MoveGlyphs } from './moveGlyphs';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { GameMode } from '../App';
 import { parseFenBoard } from './xiangqi';
@@ -53,7 +54,7 @@ const MAX_REVIEW_ENGINE_MOVE_TIME_MS = 600_000;
 const MAX_REVIEW_AVERAGE_CENTIPAWN_LOSS = MAX_REPORTED_CENTIPAWN_LOSS;
 type SavedResult = typeof SAVED_RESULTS[number];
 
-export interface SavedMoveTreeNode extends MoveEvaluation {
+export interface SavedMoveTreeNode extends MoveEvaluation, MoveGlyphs {
     recordedResult?: RecordedResult;
     uci: string;
     /** The reader's note on this move; see `utils/moveComment`. */
@@ -161,10 +162,12 @@ function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }): Sav
     // dropped rather than failing the node, since losing a sentence is better
     // than losing the variation it sits on.
     const comment = normalizeMoveComment(raw.comment);
+    const nags = normalizeMoveGlyphs(raw.nags);
     const analysis = normalizeStudyAnalysis(raw.analysis, undefined, uci);
     return {
         uci,
         ...(comment ? { comment } : {}),
+        ...(nags ? { nags } : {}),
         ...(analysis ? { analysis } : {}),
         ...(normalizeRecordedResult(raw.recordedResult) ? { recordedResult: normalizeRecordedResult(raw.recordedResult) } : {}),
         ...normalizeMoveEvaluation(raw),

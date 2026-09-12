@@ -1,6 +1,9 @@
 const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
+function suppliedGlyphs(tree) {
+  return (tree || []).map(node => ({ uci: node.uci, nags: node.nags, children: suppliedGlyphs(node.children) }));
+}
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
@@ -111,8 +114,8 @@ async function importPgn(page, width, source, fromFile = false) {
         const readSaved = () => page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         const annotatedGame = await readSaved();
         assert.equal(annotatedGame.review, undefined, 'Import fabricated a completed engine review');
-        assert.deepEqual(annotatedGame.moveTree[0], { uci: 'h2e2', evalScore: 42, evalDepth: 18, quality: 'inaccuracy', children: [
-          { uci: 'h9g7', evalScore: -75, evalDepth: 21, quality: 'mistake', children: [
+        assert.deepEqual(annotatedGame.moveTree[0], { uci: 'h2e2', nags: [6], evalScore: 42, evalDepth: 18, quality: 'inaccuracy', children: [
+          { uci: 'h9g7', nags: [2], evalScore: -75, evalDepth: 21, quality: 'mistake', children: [
             { uci: 'h0g2', evalScore: 29997, evalDepth: 24, children: [{ uci: 'b9c7', evalScore: -30000, evalDepth: 0 }] },
           ] },
         ] });
@@ -147,7 +150,7 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.evaluate(() => { window.__evaluationLine = undefined; });
         await importPgn(page, width, 'h2e2 $6 {[%eval 0.42,18]} h9g7 $2 {[%eval -0.75,21]} (b9c7 $4 {[%eval #-3,20] Annotated alternative}) *');
         await command(page, 'Save game');
-        assert.deepEqual((await readSaved()).moveTree[0].children[1], { uci: 'b9c7', evalScore: -29997, evalDepth: 20, quality: 'blunder', comment: 'Annotated alternative' });
+        assert.deepEqual((await readSaved()).moveTree[0].children[1], { uci: 'b9c7', nags: [4], evalScore: -29997, evalDepth: 20, quality: 'blunder', comment: 'Annotated alternative' });
         const beforeReview = (await readSaved()).moveTree;
         await page.keyboard.press('r');
         await page.locator('.review-panel [data-testid="start-review-btn"]').click();
@@ -186,6 +189,7 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.locator('.review-panel').getByRole('button', { name: 'Clear completed game review', exact: true }).waitFor();
         await command(page, 'Save game');
         const finished = await readSaved();
+        assert.deepEqual(suppliedGlyphs(finished.moveTree), suppliedGlyphs(beforeReview), 'Completed review changed supplied glyphs');
         assert.ok(finished.review, 'A successful review was not saved');
         assert.notEqual(finished.moveTree[0].evalScore, 42, 'Completion did not apply the staged scores');
         assert.equal(finished.moveTree[0].evalDepth, undefined, 'Completion retained the old imported depth');
@@ -204,6 +208,7 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.locator('.review-panel').getByRole('button', { name: 'Clear completed game review', exact: true }).click();
         await command(page, 'Save game');
         const cleared = await readSaved();
+        assert.deepEqual(suppliedGlyphs(cleared.moveTree), suppliedGlyphs(beforeReview), 'Clear review removed supplied glyphs');
         assert.equal(cleared.review, undefined);
         assert.equal(cleared.moveTree[0].quality, undefined);
         assert.deepEqual(cleared.moveTree[0].children[1], beforeReview[0].children[1], 'Clear review erased a sibling annotation');
