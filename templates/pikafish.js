@@ -393,14 +393,21 @@
 
     async function loadNNUE(nnueSource) {
       const target = "/pikafish.nnue";
+      const source = nnueSource || opts.nnuePath || joinPath(basePath, "pikafish.nnue");
       const bytes = await readBytes(
-        nnueSource || opts.nnuePath || joinPath(basePath, "pikafish.nnue"),
+        source,
         opts.onAssetProgress
       );
       try {
         mod.FS.unlink(target);
       } catch (_) {}
-      mod.FS.writeFile(target, bytes);
+      // MEMFS can adopt our downloaded buffer instead of copying the entire
+      // network. Never adopt caller-owned data, or retain the megabytes of
+      // spare capacity possible when an unknown-length stream grows. Allow
+      // small encoded Content-Length differences without a full extra copy.
+      const canOwn = !(source instanceof Uint8Array)
+        && bytes.buffer.byteLength - bytes.byteLength <= 64 * 1024;
+      mod.FS.writeFile(target, bytes, { canOwn });
       rawSend("setoption name EvalFile value " + target);
       return target;
     }

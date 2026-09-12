@@ -15,6 +15,7 @@ const { browserType } = require('./qa-browser.cjs');
       for (const script of [
         'test-worker-lifecycle-browser.cjs',
         'test-worker-progress-browser.cjs',
+        'test-nnue-memory-browser.cjs',
         'test-engine-startup-cancel-browser.cjs',
         'test-engine-recovery-navigation-browser.cjs',
         'test-beginner-browser.cjs',
