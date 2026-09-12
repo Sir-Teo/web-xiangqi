@@ -56,7 +56,7 @@ async function assertFits(page) {
         await page.locator('.mtree-chip[data-node-id="n1"]').click();
         assert.equal(await page.locator('.mtree-chip[data-node-id="n1"] .mtree-glyphs').innerText(), '! +=');
         assert.match(await page.locator('.mtree-chip[data-node-id="n1"]').getAttribute('aria-label'), /Good move/);
-        await page.getByTestId('imported-glyphs').locator('summary').click();
+        await page.getByTestId('imported-glyphs').locator(':scope > summary').click();
         await page.getByText('Red has a slight advantage', { exact: false }).last().waitFor();
         await assertFits(page);
         await page.getByTestId('imported-glyphs').scrollIntoViewIfNeeded();
@@ -100,14 +100,14 @@ async function assertFits(page) {
         await importPgn(page, width, 'h2e2 ' + codes + ' *');
         await command(page, 'Move tree');
         const details = page.getByTestId('imported-glyphs');
-        if (!await details.getAttribute('open').then(value => value !== null)) await details.locator('summary').click();
+        if (!await details.getAttribute('open').then(value => value !== null)) await details.locator(':scope > summary').click();
         assert.equal(await details.locator('li').count(), 256);
         assert.match(await page.locator('.mtree-glyphs').innerText(), /\+253$/);
         for (const font of [16, 32, 16]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, font);
           await assertFits(page);
           if (width === 320 && font === 32) {
-            await details.locator('summary').scrollIntoViewIfNeeded();
+            await details.locator(':scope > summary').scrollIntoViewIfNeeded();
             await page.screenshot({ path: `/tmp/xiangqi-pgn-glyphs-${browserType.name()}-enlarged.png` });
           }
         }

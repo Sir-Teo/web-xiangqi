@@ -14,6 +14,7 @@ const path = require('node:path');
       'test-pgn-notes-browser.cjs',
       'test-pgn-header-comments-browser.cjs',
       'test-pgn-glyphs-browser.cjs',
+      'test-edit-glyphs-browser.cjs',
       'test-study-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',

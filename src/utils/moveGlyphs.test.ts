@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
-import { appendPgnGlyph, describeGlyph, normalizeMoveGlyphs, parsePgnGlyph } from './moveGlyphs';
+import { appendPgnGlyph, chooseMoveGlyph, describeGlyph, normalizeMoveGlyphs, parsePgnGlyph } from './moveGlyphs';
 import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
 import { normalizeSavedGame, normalizeSavedMoveTree } from './gameLibrary';
 import { serializeSavedMoveTree } from './savedMoveTree';
@@ -12,6 +12,16 @@ import { replaceMoveEvaluation } from './moveEvaluation';
 import { savedTreeSearchText } from './savedStudySearch';
 
 describe('durable supplied PGN glyphs', () => {
+    it('replaces a judgement group without erasing other study symbols or mutating the source', () => {
+        const source = [1, 3, 14, 255];
+        expect(chooseMoveGlyph(source, 2)).toEqual([14, 255, 2]);
+        expect(chooseMoveGlyph(source, 17)).toEqual([1, 3, 255, 17]);
+        expect(chooseMoveGlyph(source, 255)).toEqual(source);
+        expect(chooseMoveGlyph(source, 0)).toEqual([1, 3, 14, 255, 0]);
+        expect(chooseMoveGlyph(undefined, 7)).toEqual([7]);
+        for (const invalid of [-1, 256, NaN, 1.5]) expect(chooseMoveGlyph(source, invalid)).toBe(source);
+        expect(source).toEqual([1, 3, 14, 255]);
+    });
     it('normalizes the complete standard code range without interpreting unknown codes', () => {
         const all = Array.from({ length: 256 }, (_, code) => code);
         expect(normalizeMoveGlyphs([...all, ...all])).toEqual(all);

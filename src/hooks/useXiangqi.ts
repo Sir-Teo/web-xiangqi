@@ -1021,6 +1021,18 @@ export function useXiangqi() {
         });
     }, []);
 
+    const setNodeGlyphs = useCallback((nodeId: string, value: number[] | undefined) => {
+        const nags = normalizeMoveGlyphs(value);
+        setTreeNodes(tree => {
+            const node = tree[nodeId];
+            if (!node?.record || (node.record.nags ?? []).join(',') === (nags ?? []).join(',')) return tree;
+            const record = { ...node.record };
+            if (nags) record.nags = nags;
+            else delete record.nags;
+            return { ...tree, [nodeId]: { ...node, record } };
+        });
+    }, []);
+
     /** Clearing a written note leaves the same state as never writing one. */
     const setNodeComment = useCallback((nodeId: string, comment: string) => {
         const normalized = normalizeMoveComment(comment);
@@ -1241,6 +1253,7 @@ export function useXiangqi() {
         setNodeBestMove,
         restoreRecordedResult,
         setNodeComment,
+        setNodeGlyphs,
         setNodeComments,
         setNodeReviewDataBulk,
         clearReviewData,

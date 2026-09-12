@@ -41,5 +41,12 @@ export function appendPgnGlyph(target: MoveGlyphs, token: string): boolean {
 export function glyphSymbol(code: number): string { return symbols[code] ?? `$${code}`; }
 export function describeGlyph(code: number): string { return descriptions[code] ?? `PGN annotation $${code}`; }
 export function describeMoveGlyphs(nags: number[] | undefined): string {
-    return nags?.length ? `Imported annotations: ${nags.map(code => `${glyphSymbol(code)} (${describeGlyph(code)})`).join(', ')}` : '';
+    return nags?.length ? `Study annotations: ${nags.map(code => `${glyphSymbol(code)} (${describeGlyph(code)})`).join(', ')}` : '';
+}
+
+/** Choosing a named judgement replaces its group, preserving unfamiliar codes. */
+export function chooseMoveGlyph(nags: number[] | undefined, code: number): number[] | undefined {
+    if (!Number.isInteger(code) || code < 0 || code > 255) return nags;
+    const group = code >= 1 && code <= 9 ? [1, 9] : code >= 10 && code <= 19 ? [10, 19] : null;
+    return normalizeMoveGlyphs([...(nags ?? []).filter(value => !group || value < group[0] || value > group[1]), code]);
 }

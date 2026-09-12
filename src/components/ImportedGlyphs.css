@@ -2,7 +2,14 @@
 .imported-glyphs summary { cursor: pointer; min-height: 44px; padding-block: 8px; box-sizing: border-box; align-content: center; }
 .imported-glyphs p, .imported-glyphs small { color: var(--text-secondary); }
 .imported-glyphs ul { list-style: none; margin: 0 0 10px; padding: 0; max-height: 16rem; overflow-y: auto; }
-.imported-glyphs li { overflow-wrap: anywhere; margin-block: 6px; }
+.imported-glyphs li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; overflow-wrap: anywhere; margin-block: 6px; }
+.imported-glyphs li > span { flex: 1 1 8rem; min-width: 0; }
+.imported-glyphs label { display: grid; gap: 4px; min-width: 0; }
+.imported-glyphs select, .imported-glyphs input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 6px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--bg-panel); color: var(--text-primary); font: inherit; font-size: max(16px, 1rem); }
+.imported-glyphs button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 5px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
+.imported-glyphs button:disabled, .imported-glyphs select:disabled { opacity: .5; cursor: default; }
+.imported-glyphs .glyph-code-editor { margin-bottom: 8px; }
+.imported-glyphs form { display: grid; gap: 8px; }
 .imported-glyphs strong { margin-inline-end: 4px; }
 .imported-glyphs small { font-size: inherit; }
 .mtree-glyphs { font-weight: 700; white-space: normal; overflow-wrap: anywhere; }

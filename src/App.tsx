@@ -802,6 +802,7 @@ function App() {
     setCurrentNodeEval,
     restoreRecordedResult,
     setNodeComment,
+    setNodeGlyphs,
     setNodeComments,
     setNodeReviewDataBulk,
     clearReviewData,
@@ -6870,7 +6871,9 @@ function App() {
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
                     disabled={isAiTurn} onNavigate={jumpToNode} />
-                  <ImportedGlyphs nags={treeNodes[currentNodeId]?.record?.nags} />
+                  {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
+                    nags={treeNodes[currentNodeId]?.record?.nags} disabled={isAiTurn}
+                    onChange={nags => setNodeGlyphs(currentNodeId, nags)} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;
