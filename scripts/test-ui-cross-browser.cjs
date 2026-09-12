@@ -34,6 +34,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-search-telemetry-browser.cjs',
         'test-pv-standing-browser.cjs',
         'test-study-analysis-browser.cjs',
+        'test-analysis-bounds-browser.cjs',
         'test-pgn-notes-browser.cjs',
         'test-pgn-header-comments-browser.cjs',
         'test-pgn-glyphs-browser.cjs',

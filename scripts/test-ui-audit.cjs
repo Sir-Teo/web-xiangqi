@@ -77,6 +77,7 @@ const path = require('node:path');
       'test-deep-result-browser.cjs',
       'test-search-telemetry-browser.cjs',
       'test-study-analysis-browser.cjs',
+      'test-analysis-bounds-browser.cjs',
       'test-unicode-share-browser.cjs',
       'test-unicode-limits-browser.cjs',
       'test-study-undo-browser.cjs',

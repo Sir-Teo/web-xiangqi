@@ -162,6 +162,7 @@ async function compare(browser, width, real = false) {
       assert.equal(saved.moveTree[0].children[0].evalScore, undefined, 'Snapshot became a move evaluation');
       assert.equal(saved.moveTree[0].children[0].analysis.score, -9999);
       assert.equal(saved.moveTree[0].children[0].analysis.bounded, true, 'Saving discarded the candidate bound');
+      assert.equal(saved.moveTree[0].children[0].analysis.bound, 'upper', 'Black’s lower bound must become an upper bound for Red');
       assert.deepEqual(saved.moveTree[0].children[0].analysis.candidates, ['a9a8', 'i9i8']);
     }
     if (!real) await page.evaluate(() => { window.__candidateBound = ''; });
@@ -173,7 +174,9 @@ async function compare(browser, width, real = false) {
       const update = page.getByTestId('keep-candidate-a9a8');
       assert.equal(await update.innerText(), 'Update analysis', 'A same-score exact result must be available to save');
       await update.click();
-      assert.equal((await saveSnapshot(page)).moveTree[0].children[0].analysis.bounded, false);
+      const exact = (await saveSnapshot(page)).moveTree[0].children[0].analysis;
+      assert.equal(exact.bounded, false);
+      assert.equal(exact.bound, undefined);
     }
     if (!real) {
       await page.evaluate(() => { window.__holdStop = true; });

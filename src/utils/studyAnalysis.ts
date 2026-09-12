@@ -1,5 +1,5 @@
 import type { PvLine } from '../hooks/useEngine';
-import { normalizeEvalForSide, formatRedPovEngineScore } from './engineScore';
+import { normalizeEvalForSide, formatRedPovEngineScore, normalizeScoreBoundForSide, type ScoreBound } from './engineScore';
 import type { Side } from './xiangqi';
 
 /** A saved observation of the position BEFORE the attached move, never a move grade. */
@@ -10,6 +10,8 @@ export type StudyAnalysis = {
   score: number; // Red-positive centipawns, with the existing mate sentinel.
   scoreKind: 'cp' | 'mate';
   bounded: boolean;
+  /** Red-perspective direction. Older bounded snapshots may not include it. */
+  bound?: ScoreBound;
   depth: number;
   savedAt: number;
   engine: { name: string; variant: string; threads: number; hashMB: number };
@@ -38,24 +40,26 @@ export function normalizeStudyAnalysis(value: unknown, position?: string, move?:
     || !text(a.engine.name, 120) || !text(a.engine.variant, 32)
     || !integer(a.engine.threads, 1, 128) || !integer(a.engine.hashMB, 1, 65536)) return undefined;
   if (a.scoreKind === 'mate' && (Math.abs(a.score) < 15000 || Math.abs(a.score) > 30000)) return undefined;
+  if (a.bound !== undefined && (!a.bounded || (a.bound !== 'lower' && a.bound !== 'upper'))) return undefined;
   if (a.candidates !== undefined && (!Array.isArray(a.candidates) || !a.candidates.length || a.candidates.length > 5
     || new Set(a.candidates).size !== a.candidates.length || !a.candidates.every(m => typeof m === 'string' && MOVE.test(m))
     || !a.candidates.includes(a.move) || a.candidates.length !== a.multiPv)) return undefined;
   return { version: 1, position: a.position, move: a.move, score: a.score, scoreKind: a.scoreKind,
     bounded: a.bounded, depth: a.depth, savedAt: a.savedAt, engine: { name: a.engine.name, variant: a.engine.variant, threads: a.engine.threads, hashMB: a.engine.hashMB }, multiPv: a.multiPv,
-    ...(a.candidates ? { candidates: [...a.candidates] } : {}) };
+    ...(a.bound ? { bound: a.bound } : {}), ...(a.candidates ? { candidates: [...a.candidates] } : {}) };
 }
 
 export function captureStudyAnalysis(pv: PvLine, side: Side, position: string, engine: StudyAnalysis['engine'], multiPv: number, candidates?: string[]): StudyAnalysis | undefined {
   return normalizeStudyAnalysis({ version: 1, position, move: pv.moves[0], score: normalizeEvalForSide(pv.score, side),
     scoreKind: /^[+-]M\d+$/.test(pv.scoreStr) ? 'mate' : 'cp', bounded: Boolean(pv.bounded), depth: Number(pv.depth),
+    ...(pv.bounded && pv.bound ? { bound: normalizeScoreBoundForSide(pv.bound, side) } : {}),
     savedAt: Date.now(), engine, multiPv, ...(candidates ? { candidates } : {}) });
 }
 
 export function sameStudyAnalysis(a: StudyAnalysis | undefined, b: StudyAnalysis | undefined) {
   if (!a || !b) return a === b;
   return a.position === b.position && a.move === b.move && a.score === b.score && a.scoreKind === b.scoreKind
-    && a.bounded === b.bounded && a.depth === b.depth && a.multiPv === b.multiPv
+    && a.bounded === b.bounded && a.bound === b.bound && a.depth === b.depth && a.multiPv === b.multiPv
     && a.engine.name === b.engine.name && a.engine.variant === b.engine.variant
     && a.engine.threads === b.engine.threads && a.engine.hashMB === b.engine.hashMB
     && (a.candidates?.join(' ') ?? '') === (b.candidates?.join(' ') ?? '');

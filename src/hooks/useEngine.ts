@@ -1,4 +1,5 @@
 import type { EvaluationScoreKind } from '../utils/engineEvalReading';
+import { parseScoreBound, type ScoreBound } from '../utils/engineScore';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EngineRuntimeVariant } from '../utils/analysisProfile';
 import { detectEngineBootConfig } from '../utils/analysisProfile';
@@ -20,6 +21,8 @@ export type PvLine = {
     searchTag: string | null;
     /** The engine reported this score as a bound, not a value. */
     bounded?: boolean;
+    /** Direction in the engine's side-to-move perspective, if reported unambiguously. */
+    bound?: ScoreBound;
     /** Win/draw/loss per mille for the side to move, when UCI_ShowWDL is on. */
     wdl?: WdlStats;
 };
@@ -1002,6 +1005,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                     multipv: multipvIndex,
                     searchTag: activeSearchTagRef.current,
                     bounded: BOUNDED_SCORE_PATTERN.test(msg),
+                    bound: parseScoreBound(msg),
                     // Every multipv line carries its own wdl; only the first
                     // feeds the bar, but a reader comparing candidates wants
                     // each line's chances beside its score.

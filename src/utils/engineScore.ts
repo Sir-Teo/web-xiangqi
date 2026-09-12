@@ -12,6 +12,20 @@ import type { Side } from './xiangqi';
 
 /** Win/draw/loss from the perspective of whoever the engine was speaking for. */
 export type EngineWdl = { win: number; draw: number; loss: number };
+export type ScoreBound = 'lower' | 'upper';
+const LOWER_BOUND_PATTERN = /\blowerbound\b/;
+const UPPER_BOUND_PATTERN = /\bupperbound\b/;
+
+export function parseScoreBound(line: string): ScoreBound | undefined {
+  const lower = LOWER_BOUND_PATTERN.test(line);
+  const upper = UPPER_BOUND_PATTERN.test(line);
+  return lower === upper ? undefined : lower ? 'lower' : 'upper';
+}
+
+/** Negating the score reverses its inequality; legacy bounds may lack a direction. */
+export function normalizeScoreBoundForSide(bound: ScoreBound | undefined, side: Side): ScoreBound | undefined {
+  return bound && side === 'b' ? bound === 'lower' ? 'upper' : 'lower' : bound;
+}
 
 export function sideFromFen(fen: string): Side {
   return fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';

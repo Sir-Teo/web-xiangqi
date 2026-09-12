@@ -5,11 +5,30 @@ import {
   formatRedPovEngineScore,
   normalizeEvalForFen,
   normalizeEvalForSide,
+  normalizeScoreBoundForSide,
   normalizeWdlForSide,
   parseMateScoreText,
+  parseScoreBound,
   sideFromFen,
 } from './engineScore';
 import { START_POSITION_FEN } from './xiangqi';
+
+describe('directional engine bounds', () => {
+  it('reads score bounds without inventing a direction for exact or conflicting flags', () => {
+    expect(parseScoreBound('info score cp 150 lowerbound pv h2e2')).toBe('lower');
+    expect(parseScoreBound('info score mate -3 upperbound pv h2e2')).toBe('upper');
+    expect(parseScoreBound('info score cp 150 pv h2e2')).toBeUndefined();
+    expect(parseScoreBound('info string lowerboundish upperboundish')).toBeUndefined();
+    expect(parseScoreBound('info score cp 150 lowerbound upperbound pv h2e2')).toBeUndefined();
+  });
+  it('reverses the inequality exactly once when converting Black to Red perspective', () => {
+    expect(normalizeScoreBoundForSide('lower', 'w')).toBe('lower');
+    expect(normalizeScoreBoundForSide('upper', 'w')).toBe('upper');
+    expect(normalizeScoreBoundForSide('lower', 'b')).toBe('upper');
+    expect(normalizeScoreBoundForSide('upper', 'b')).toBe('lower');
+    expect(normalizeScoreBoundForSide(undefined, 'b')).toBeUndefined();
+  });
+});
 
 /**
  * The engine speaks from the side to move; the board speaks from Red. These
