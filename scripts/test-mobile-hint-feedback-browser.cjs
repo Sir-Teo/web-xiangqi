@@ -52,6 +52,10 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
             const board = await page.locator('.xiangqi-board-container').boundingBox();
             assert.ok(board.width >= (width === 844 ? 140 : 250), 'Retain a usable board size');
             assert.ok(Math.abs(board.width / board.height - .9) < .02, 'Preserve the board proportions');
+            if (width !== 844) {
+              const workspace = await page.locator('.board-workspace').boundingBox();
+              assert.ok(board.x - workspace.x >= 9 && workspace.x + workspace.width - board.x - board.width >= 9, 'Keep the decorative side frame inside the scroll container');
+            }
             assert.equal(await feedback.evaluate(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1), false, 'Hint feedback must not clip');
             assert.equal(await feedback.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Hint text must be reachable');
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
