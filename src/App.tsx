@@ -4083,6 +4083,14 @@ function App() {
   displayEvalScoreRef.current = displayEvalScore;
   const displayEvalKindRef = useRef(displayEvalScoreKind);
   displayEvalKindRef.current = displayEvalScoreKind;
+  // The cursor and game details change the snapshot, not the stored tree.
+  // Serialize only when the tree changes or a compact line first needs its
+  // unplayed continuation. Keep the memo local so old studies can be released.
+  const savedLineLength = reviewMatchesActiveLine ? activeLineNodeIds.length : currentMoveIndex + 1;
+  const needsSnapshotTree = hasMoveTreeMoves && Boolean(mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves
+    || savedLineLength === 0 || savedLineLength < activeLineNodeIds.length);
+  const snapshotMoveTree = useMemo(() => needsSnapshotTree
+    ? serializeSavedMoveTree(treeNodes, rootNodeId) : undefined, [needsSnapshotTree, treeNodes, rootNodeId]);
   const currentGameSnapshot = useMemo(() => {
     // The whole line when it is the reviewed one, so the annotations line up
     // with it; otherwise the line as far as the cursor, and no review -- a
@@ -4094,17 +4102,6 @@ function App() {
     const moves = saveNodeIds
       .map(id => treeNodes[id]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-    // `moves` stops where the cursor is standing, so that restoring puts the
-    // reader back on the move they were looking at. Anything past the cursor
-    // exists only in the tree, and a straight line has no branches and may
-    // have no notes -- so without this last clause a game stepped back through
-    // and then closed came back cut off at the cursor, with the rest silently
-    // dropped. The `=== 0` case is the same bug at the root, where it was
-    // noticed first.
-    const holdsMoreThanTheSavedLine = moves.length === 0 || moves.length < activeLineNodeIds.length;
-    const moveTree = hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves || holdsMoreThanTheSavedLine)
-      ? serializeSavedMoveTree(treeNodes, rootNodeId)
-      : undefined;
     return {
       gameMode,
       metadata: gameMetadata,
@@ -4115,7 +4112,7 @@ function App() {
       opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: ((gameResult ?? selectedRecordedResult) === 'red-wins' ? 'red' : (gameResult ?? selectedRecordedResult) === 'black-wins' ? 'black' : (gameResult ?? selectedRecordedResult) === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
-      moveTree,
+      moveTree: snapshotMoveTree,
       review: reviewMatchesActiveLine && reviewSummary
         ? {
             ...savedReviewSnapshot!,
@@ -4126,7 +4123,7 @@ function App() {
           }
         : undefined,
     };
-  }, [selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, savedReviewSnapshot, treeNodes]);
+  }, [selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
