@@ -1140,10 +1140,21 @@ function App() {
     restartEngine();
   }, [cancelReview, clearAnalysisDeepenTimer, resetReviewController, restartEngine, workspaceMode]);
 
+  const engineBootKey = `${engineRestartToken}:${engineBootConfig.variant}:${engineBootConfig.allowSIMD}:${engineBootConfig.threads}:${engineBootConfig.hashMB}`;
+  useEffect(() => {
+    // A replacement worker cannot finish the review search its predecessor
+    // owned. Drop provisional work before the new engine starts; otherwise
+    // currentNodeId keeps the review waiting forever for the terminated search.
+    if (!reviewControllerRef.current.active) return;
+    reviewLineSignatureRef.current = '';
+    resetReviewController();
+    cancelReview('Review stopped because the engine restarted. Existing scores were kept. Try reviewing again.');
+  }, [engineBootKey, cancelReview, resetReviewController]);
+
   const reportEngineWorkerError = useEngineErrorRecovery(
     handleEngineWorkerError,
     engineRequired,
-    `${engineRestartToken}:${engineBootConfig.variant}:${engineBootConfig.allowSIMD}:${engineBootConfig.threads}:${engineBootConfig.hashMB}`,
+    engineBootKey,
   );
 
   const {
