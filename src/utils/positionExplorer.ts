@@ -1,6 +1,7 @@
 import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 import { positionKey } from './repetition';
 import type { SavedGame } from './gameLibrary';
+import { savedGameLine } from './savedGameLine';
 
 /**
  * "Have I been here before?" — an opening explorer over the games you own.
@@ -18,9 +19,9 @@ import type { SavedGame } from './gameLibrary';
  * ## Only the line that was played
  *
  * A saved game may also carry a `moveTree` of variations. Those are not
- * indexed: a variation is a position someone *considered*, and counting it
- * beside a game that was actually played would put analysis and results in the
- * same tally. `moves` is the main line, and the main line is the game.
+ * counted as additional games. Index one primary line per record, following
+ * its explicit pin or its saved path and remaining first-child continuation,
+ * just like PGN export. The saved cursor alone is not the complete game.
  *
  * ## Identity
  *
@@ -81,8 +82,8 @@ const EMPTY_REPORT: LibraryPositionReport = { games: 0, moves: [], hits: [] };
  * move that was played, so it counts toward how *often* a move was chosen and
  * not toward how it did.
  */
-function resultOf(game: SavedGame): ExplorerResult {
-    switch (game.result) {
+function resultOf(result: SavedGame['result']): ExplorerResult {
+    switch (result) {
         case 'red':
             return 'red-wins';
         case 'black':
@@ -133,8 +134,9 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
 
         const board = start.board;
         let side = start.sideToMove;
-        const moves = Array.isArray(game.moves) ? game.moves : [];
-        const result = resultOf(game);
+        const line = savedGameLine(game);
+        const moves = line.moves;
+        const result = resultOf(line.result);
         let abandoned = false;
 
         for (let ply = 0; ply <= moves.length; ply += 1) {
@@ -170,8 +172,10 @@ export function buildLibraryPositionIndex(games: SavedGame[]): LibraryPositionIn
 
 /** Include every field the index exposes, including same-length edits and renames. */
 export function libraryPositionSignature(games: SavedGame[]): string {
-    return JSON.stringify(games.map(({ id, savedAt, moves, startFen, result, label, opening }) =>
-        [id, savedAt, moves, startFen, result, label, opening]));
+    return JSON.stringify(games.map(game => {
+        const { moves, result } = savedGameLine(game);
+        return [game.id, game.savedAt, moves, game.startFen, result, game.label, game.opening];
+    }));
 }
 
 function compareMoves(left: LibraryPositionMove, right: LibraryPositionMove): number {

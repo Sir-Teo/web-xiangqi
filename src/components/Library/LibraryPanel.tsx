@@ -17,6 +17,7 @@ import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/sea
 import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
 import { pgnDownloadFilename } from '../../utils/pgnFilename';
 import { resultLabel } from '../../utils/savedGameLabels';
+import { savedGameLine } from '../../utils/savedGameLine';
 import { IconCheck, IconCopy, IconDownload, IconRefresh, IconX } from '../icons';
 import './LibraryPanel.css';
 import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
@@ -72,6 +73,10 @@ function countStudyLines(nodes: SavedGame['moveTree']): number {
 }
 
 function formatSavedGameMoveCount(game: SavedGame) {
+  const line = savedGameLine(game);
+  if (line.moves.length !== game.moves.length || line.moves.some((move, i) => move !== game.moves[i])) {
+    return `${line.moves.length} main-line ${line.moves.length === 1 ? 'move' : 'moves'} · saved at ply ${game.moves.length}`;
+  }
   if (game.moves.length > 0) {
     return `${game.moves.length} ${game.moves.length === 1 ? 'move' : 'moves'}`;
   }
@@ -108,7 +113,7 @@ function getSavedGameSearchText(game: SavedGame) {
     ...Object.values(game.metadata ?? {}),
     game.opening,
     game.gameMode,
-    resultLabel(game.result ?? 'ongoing'),
+    resultLabel(savedGameLine(game).result ?? 'ongoing'),
     formatDate(game.savedAt),
     formatSavedGameMoveCount(game),
     formatSavedStudyLines(game),
@@ -280,7 +285,7 @@ export function LibraryPanel({
       const isReviewed = Boolean(g.review);
       if (reviewFilter === 'reviewed' && !isReviewed) return false;
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
-      if (resultFilter !== 'all' && (g.result ?? 'ongoing') !== resultFilter) return false;
+      if (resultFilter !== 'all' && (savedGameLine(g).result ?? 'ongoing') !== resultFilter) return false;
       if (searchTerms.length === 0) return true;
       let text = savedSearchText.get(g);
       if (text === undefined) {
@@ -568,6 +573,7 @@ export function LibraryPanel({
           visibleSaved.map((game, cardIndex) => {
             const savedTabIndex = cardIndex === savedStopIndex ? 0 : -1;
             const studyLineLabel = formatSavedStudyLines(game);
+            const primaryResult = savedGameLine(game).result ?? 'ongoing';
             const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
             const reviewSummaryLabel = game.review ? formatLibraryReviewSummary(game.review.summary) : '';
             const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
@@ -736,8 +742,8 @@ export function LibraryPanel({
               })()}
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
-                <span className={`lib-result lib-result--${game.result ?? 'ongoing'}`}>
-                  {resultLabel(game.result ?? 'ongoing')}
+                <span className={`lib-result lib-result--${primaryResult}`} title="Primary line result">
+                  {resultLabel(primaryResult)}
                 </span>
                 <span>{formatSavedGameMoveCount(game)}</span>
                 {studyLineLabel ? (

@@ -515,7 +515,7 @@ export function useXiangqi() {
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
-    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false) => {
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false, navigationMoves?: string[]) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
         if (mainLinePinned) tree[ROOT_NODE_ID] = { ...tree[ROOT_NODE_ID], mainLinePinned: true, mainLineRevision: 1 };
@@ -576,13 +576,26 @@ export function useXiangqi() {
 
         appendChildren(moveTree, ROOT_NODE_ID, root.board, root.sideToMove, 0);
 
-        const activeLine: string[] = [];
+        let activeLine: string[] = [];
         let cursor = ROOT_NODE_ID;
         for (const move of mainLineMoves) {
             const childId = tree[cursor]?.childrenIds.find((id) => tree[id]?.record?.uci === move);
             if (!childId) break;
             activeLine.push(childId);
             cursor = childId;
+        }
+        // Review annotations and legacy results belong to the saved path even
+        // when an explorer match opens another primary-line occurrence.
+        const savedLine = activeLine;
+        if (navigationMoves) {
+            activeLine = [];
+            cursor = ROOT_NODE_ID;
+            for (const move of navigationMoves) {
+                const childId = tree[cursor]?.childrenIds.find(id => tree[id]?.record?.uci === move);
+                if (!childId) break;
+                activeLine.push(childId);
+                cursor = childId;
+            }
         }
 
         // The saved line stops where the reader was standing, and the rest of
@@ -618,7 +631,7 @@ export function useXiangqi() {
         setGameResult(gameResultForPosition(position.board, position.sideToMove));
         setSelected(null);
         setValidTargets([]);
-        return activeLine;
+        return navigationMoves ? savedLine : activeLine;
     }, []);
 
     const jumpToNode = useCallback((nodeId: string) => {

@@ -54,6 +54,7 @@ import {
 } from './utils/panelWidth';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { formatExplorerRecord } from './utils/positionExplorer';
+import { savedGameLine } from './utils/savedGameLine';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import { MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
@@ -4551,7 +4552,7 @@ function App() {
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
       stopDeepDive])
-  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number) => {
+  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
@@ -4577,17 +4578,18 @@ function App() {
     setGameMode(game.gameMode);
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
+    const navigation = openPrimaryLine ? savedGameLine(game) : undefined;
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned)
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves)
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     restoreRecordedResult(rootNodeId, game.rootResult);
     restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
     setGameMetadata(game.metadata);
-    if (initialPly === undefined || initialPly >= game.moves.length) {
+    if (initialPly === undefined || initialPly >= (navigation?.moves.length ?? game.moves.length)) {
       // The loader has already derived checkmate/stalemate from the selected
       // board. Saved metadata may be stale or contradictory; only use it for
       // results the position cannot prove, such as resignation or an agreed draw.
-      setGameResult(loadedResult => loadedResult ?? savedResultToGameResult(game.result));
+      setGameResult(loadedResult => loadedResult ?? savedResultToGameResult(navigation ? navigation.result : game.result));
     }
     if (game.review) {
       setNodeReviewDataBulk(
@@ -5997,8 +5999,8 @@ function App() {
                               className="opening-candidate-btn"
                               onClick={() => handlePlayBookMove(move.uci)}
                               disabled={Boolean(gameResult) || isAiTurn}
-                              title={isAiTurn ? 'Wait for the AI move to finish' : `Played in ${move.games} of your saved games`}
-                              aria-label={`Play ${formatLineInStyle(board, [move.uci], notationStyle, 1)}, played in ${move.games} of your saved games, record ${formatExplorerRecord(move)}`}
+                              title={isAiTurn ? 'Wait for the AI move to finish' : `In the primary line of ${move.games} saved games; other variations are excluded`}
+                              aria-label={`Play ${formatLineInStyle(board, [move.uci], notationStyle, 1)}, in ${move.games} saved primary lines, record ${formatExplorerRecord(move)}`}
                               data-testid={`library-continuation-${move.uci}`}
                             >
                               <strong>{formatLineInStyle(board, [move.uci], notationStyle, 1)}</strong>
@@ -6021,7 +6023,7 @@ function App() {
                         onOpenLibrary={openLibraryPanel}
                         onOpen={(hit) => {
                           const game = savedGames.find(game => game.id === hit.gameId);
-                          if (!game || !handleLoadGame(game, hit.ply)) return false;
+                          if (!game || !handleLoadGame(game, hit.ply, true)) return false;
                           setAnalysisTab('tree');
                           setMobileAnalysisTab('moves');
                           if (isMobile) setMobileView('board');

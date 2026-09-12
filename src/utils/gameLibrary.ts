@@ -71,7 +71,7 @@ export interface SavedGame {
     id: string;
     savedAt: number;
     gameMode: GameMode;
-    moves: string[];            // UCI strings from root to leaf
+    moves: string[];            // UCI strings from root to the saved cursor
     startFen?: string;          // root position for custom-FEN games
     result?: SavedResult;
     label?: string;             // user-editable

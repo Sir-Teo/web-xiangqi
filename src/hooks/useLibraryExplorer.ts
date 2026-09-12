@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
+import { savedGameLine } from '../utils/savedGameLine';
 import type { LibraryPositionReport } from '../utils/positionExplorer';
 import type { BoardState, Side } from '../utils/xiangqi';
 import { positionKey } from '../utils/repetition';
@@ -42,10 +43,12 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
     inFlightRef.current = query;
     try {
       if (indexedSourceRef.current !== query.games) {
-        // Annotations and variation trees are not indexed. Only clone the
-        // played line and metadata, and only for the latest pending library.
-        const records = query.games.map(({ id, savedAt, gameMode, moves, startFen, result, label, opening }) =>
-          ({ id, savedAt, gameMode, moves, startFen, result, label, opening }));
+        // Resolve one primary line before transfer. Other variations and their
+        // annotations still need no cloning or replay in the index worker.
+        const records = query.games.map(game => {
+          const { id, savedAt, gameMode, startFen, label, opening } = game;
+          return { id, savedAt, gameMode, startFen, label, opening, ...savedGameLine(game) };
+        });
         worker.postMessage({ type: 'build', games: records } satisfies ExplorerRequest);
         indexedSourceRef.current = query.games;
       }

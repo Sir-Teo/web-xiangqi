@@ -43,6 +43,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-study-main-line-browser.cjs',
         'test-loaded-result-browser.cjs',
         'test-recorded-result-browser.cjs',
+        'test-library-primary-line-browser.cjs',
         'test-library-annotations-browser.cjs',
         'test-dhtmlxq-browser.cjs',
         'test-root-notes-browser.cjs',
