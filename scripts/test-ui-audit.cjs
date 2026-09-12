@@ -12,6 +12,7 @@ const path = require('node:path');
     for (const script of [
       'test-pgn-collection-browser.cjs',
       'test-pgn-notes-browser.cjs',
+      'test-study-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',
       'test-metadata-layout-browser.cjs',
@@ -30,6 +31,7 @@ const path = require('node:path');
       'test-move-quality-browser.cjs',
       'test-board-render-browser.cjs',
       'test-move-render-browser.cjs',
+      'test-move-list-reflow-browser.cjs',
       'test-analysis-move-render-browser.cjs',
       'test-variation-focus-browser.cjs',
       'test-active-continuation-browser.cjs',
@@ -51,6 +53,7 @@ const path = require('node:path');
       'test-root-notes-browser.cjs',
       'test-weights-cache-browser.cjs',
       'test-cloud-pv-browser.cjs',
+      'test-cloud-response-browser.cjs',
       'test-search-queue-browser.cjs',
       'test-engine-position-browser.cjs',
       'test-engine-boot-race-browser.cjs',
