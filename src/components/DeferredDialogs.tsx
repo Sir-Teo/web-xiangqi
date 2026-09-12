@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { BoardEditorProps } from './Board/BoardEditor';
 import { keepTabWithin } from '../utils/focusTrap';
 import { LazyPanelBoundary } from './LazyPanelBoundary';
@@ -47,7 +47,10 @@ function DeferredDialog({ title, onClose, children }: { title: string; onClose: 
 }
 
 export function DeferredBoardEditor(props: BoardEditorProps) {
-  return <DeferredDialog title="Set up a position" onClose={props.onCancel}><Editor {...props} /></DeferredDialog>;
+  // Preserve the position the user opened, even if an AI reply changes the
+  // main board before the editor finishes downloading. Boards are immutable.
+  const [position] = useState(() => ({ initialBoard: props.initialBoard, initialSide: props.initialSide }));
+  return <DeferredDialog title="Set up a position" onClose={props.onCancel}><Editor {...props} {...position} /></DeferredDialog>;
 }
 
 export function DeferredRuleLessons({ onClose }: { onClose: () => void }) {

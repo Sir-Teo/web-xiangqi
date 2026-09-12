@@ -128,6 +128,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
     await ai.getByRole('button', { name: 'Open game library' }).waitFor();
     await ai.keyboard.press('ControlOrMeta+k');
     await ai.getByRole('combobox', { name: 'Search commands' }).fill('Settings'); await ai.keyboard.press('Enter');
+    await ai.evaluate(() => { window.__goCount = 0; });
     await ai.locator('#settings-workspace-mode').selectOption('play');
     await ai.getByRole('button', { name: 'Close settings', exact: true }).click();
     await ai.waitForFunction(() => window.__goCount > 0);

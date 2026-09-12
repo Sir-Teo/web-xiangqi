@@ -16,10 +16,12 @@ async function setup(page) {
     window.Pikafish = function() {};
     window.Pikafish.createWorkerEngine = async () => {
       const listeners = []; const emit = line => listeners.forEach(listener => listener(line));
+      window.__goCount = 0; window.__releaseAiMove = () => emit('bestmove h9g7');
       return { variant: 'single-simd', addMessageListener: listener => listeners.push(listener), terminate() {}, postMessage(command) {
         if (command === 'uci') queueMicrotask(() => emit('uciok'));
         if (command === 'isready') queueMicrotask(() => emit('readyok'));
-        if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
+        if (command.startsWith('go ')) { window.__goCount++; if (!window.__holdAiMove) queueMicrotask(() => emit('bestmove (none)')); }
+        if (command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
       } };
     };` }));
 }
@@ -90,6 +92,33 @@ async function setup(page) {
         await notice.waitFor({ state: 'hidden' });
         console.log(`${browserType.name()} ${item.module}: failed ${extension} retains an accessible close action and the main board`);
       } finally { await page.close(); }
+    }
+    for (const width of [1440, 390, 320]) {
+      const page = await browser.newPage({ viewport: { width, height: width === 320 ? 480 : 900 } });
+      let release; const gate = new Promise(resolve => { release = resolve; });
+      try {
+        await setup(page); await page.addInitScript(() => { window.__holdAiMove = true; });
+        await page.route(url => isModule(url.href, 'BoardEditor') && /\.(?:js|tsx)(?:\?|$)/.test(url.href), async route => { await gate; await route.continue(); });
+        await page.goto(base + '?moves=h2e2&mode=PvAI-Black');
+        await page.locator('.board-stage .hitbox[tabindex="0"]').first().focus();
+        await open(page, 'Settings');
+        // The shared link opens analysis. Count only searches started after
+        // switching to Play, so the held reply belongs to an actual AI turn.
+        await page.evaluate(() => { window.__goCount = 0; });
+        await page.locator('#settings-workspace-mode').selectOption('play');
+        await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+        await page.waitForFunction(() => window.__goCount > 0);
+        const before = await page.locator('.bottombar-fen').getAttribute('title');
+        await open(page, 'Set up a position'); await page.getByTestId('dialog-load').waitFor();
+        await page.evaluate(() => window.__releaseAiMove());
+        await page.waitForFunction(fen => document.querySelector('.bottombar-fen').getAttribute('title') !== fen, before);
+        const after = await page.locator('.bottombar-fen').getAttribute('title');
+        release(); await page.getByTestId('editor-fen').waitFor();
+        assert.equal((await page.getByTestId('editor-fen').innerText()).split(' ').slice(0, 2).join(' '), before.split(' ').slice(0, 2).join(' '));
+        await page.keyboard.press('Escape'); await page.getByTestId('board-editor').waitFor({ state: 'hidden' });
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), after, 'Cancel must leave the main game at its latest position');
+        console.log(`${browserType.name()} ${width}px: an AI-turn reply during download preserves the editor's opening position and Cancel leaves the game intact`);
+      } finally { release(); await page.close(); }
     }
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
