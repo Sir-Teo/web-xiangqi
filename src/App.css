@@ -909,6 +909,8 @@ body.resizing * {
 .graph-summary-card {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
   gap: 0.16rem;
   padding: 0.46rem 0.54rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -957,6 +959,13 @@ body.resizing * {
 @container (max-width: 420px) {
   .graph-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Text size changes how much room each card needs, even on a wide screen. */
+@container (max-width: 16rem) {
+  .graph-wrap .graph-summary {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

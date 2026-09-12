@@ -247,13 +247,20 @@ export const EvalGraph = React.memo(function EvalGraph({
 
         return Array.from(indexes).sort((left, right) => left - right);
     }, [computedPoints, currentPointIndex, hoverPointIndex, pointRenderStep, points.length]);
-    const xTickStep = Math.max(1, Math.ceil(56 / Math.max(1, pixelsPerPoint)));
+    const xTickStep = Math.max(1, Math.ceil(56 / pixelsPerPoint));
     const xTickIndexes = useMemo(() => {
-        const indexes = new Set<number>([0, currentPointIndex, points.length - 1]);
+        // Reserve the endpoints, then show the current ply only when its
+        // label fits. Its exact value is always available in the legend.
+        const indexes = [0];
+        if (points.length > 1) indexes.push(points.length - 1);
+        const addIfSeparated = (index: number) => {
+            if (indexes.every(other => Math.abs(index - other) >= xTickStep)) indexes.push(index);
+        };
+        addIfSeparated(currentPointIndex);
         for (let index = xTickStep; index < points.length - 1; index += xTickStep) {
-            indexes.add(index);
+            addIfSeparated(index);
         }
-        return Array.from(indexes).sort((left, right) => left - right);
+        return indexes.sort((left, right) => left - right);
     }, [currentPointIndex, points.length, xTickStep]);
     const highestPoint = useMemo(() => extremePoint(points, 1), [points]);
     const lowestPoint = useMemo(() => extremePoint(points, -1), [points]);

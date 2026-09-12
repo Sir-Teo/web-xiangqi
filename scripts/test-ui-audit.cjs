@@ -34,6 +34,7 @@ const path = require('node:path');
       'test-deferred-review-browser.cjs',
       'test-graph-gaps-browser.cjs',
       'test-graph-reuse-browser.cjs',
+      'test-graph-axis-browser.cjs',
       'test-move-quality-browser.cjs',
       'test-board-render-browser.cjs',
       'test-move-render-browser.cjs',
