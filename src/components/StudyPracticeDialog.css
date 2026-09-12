@@ -1,4 +1,5 @@
 .study-practice-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 12, .86); z-index: 9200; }
+.study-practice-dialog { scroll-padding-block: 6px; }
 .study-practice-dialog { container-type: inline-size; box-sizing: border-box; position: fixed; inset: 2vh auto auto 50%; transform: translateX(-50%); width: min(calc(100vw - 16px), 900px); max-height: 96vh; overflow: auto; padding: 1rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 14px; z-index: 9201; }
 .study-practice-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
 .study-practice-dialog header div { min-width: 0; }
