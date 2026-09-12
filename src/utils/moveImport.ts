@@ -268,7 +268,9 @@ export function extractUciMoveTree(text: string): {
         } else {
             root.push(node);
         }
-        currentLine = [...currentLine, node];
+        // Entering a variation already copies the path. Appending here owns
+        // this array, so a straight line needs no growing per-move copies.
+        currentLine.push(node);
     }
 
     return {

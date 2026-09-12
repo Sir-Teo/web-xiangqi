@@ -167,7 +167,6 @@ import { CommandPaletteModal } from './components/CommandPaletteModal';
 import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
 import {
-  extractAnnotatedMainLine,
   extractUciMoveLine,
   hasTooManyUciMoves,
   isMoveImportTextTooLarge,
@@ -3887,19 +3886,8 @@ function App() {
       );
     }
 
-    /**
-     * The review the record was carrying, if it was carrying one.
-     *
-     * The exporter writes NAGs and `[%eval ...]` into the PGN, and until now
-     * the importer stripped them -- so a game exported from here and pasted
-     * back lost every evaluation, and a PGN annotated anywhere else arrived as
-     * bare moves. Read on a separate pass, which returns the moves as well as
-     * the annotations so the two can be checked against the line that was
-     * actually loaded rather than trusted to have walked it the same way.
-     *
-     * A notation record has no coordinates and takes the other import path, so
-     * there is nothing to align to; skipped there.
-     */
+    // Coordinate PGN annotations are already loaded with plan.moveTree,
+    // including a straight line. DhtmlXQ keeps its separate move-indexed notes.
     if (plan.dhtmlComments.length > 0) {
       const comments = plan.dhtmlComments
         .map(([moveNumber, comment]) => {
@@ -3908,33 +3896,6 @@ function App() {
         })
         .filter((update): update is { nodeId: string; comment: string } => Boolean(update));
       if (comments.length > 0) setNodeComments(comments);
-    } else if (!importedFromNotation) {
-      const annotated = extractAnnotatedMainLine(text);
-      const alignsWithLine = annotated.moves.length === moves.length
-        && annotated.moves.every((uci, index) => uci === moves[index]);
-      if (alignsWithLine) {
-        const updates = annotated.annotations
-          .map((annotation, index) => {
-            const nodeId = loadedNodeIds[index];
-            if (!nodeId) return null;
-            if (annotation.evalScore === undefined && annotation.quality === undefined) return null;
-            return { nodeId, evalScore: annotation.evalScore, evalDepth: annotation.evalDepth, evalScoreKind: annotation.evalScoreKind, quality: annotation.quality, persistEvaluation: true };
-          })
-          .filter((update): update is NonNullable<typeof update> => Boolean(update));
-        if (updates.length > 0) setNodeReviewDataBulk(updates);
-
-        // The prose in the same comments. Kept apart from the review data
-        // because it is the reader's and a re-run of the review must not
-        // overwrite it.
-        const comments = annotated.annotations
-          .map((annotation, index) => {
-            const nodeId = loadedNodeIds[index];
-            if (!nodeId || !annotation.comment) return null;
-            return { nodeId, comment: annotation.comment };
-          })
-          .filter((update): update is { nodeId: string; comment: string } => Boolean(update));
-        if (comments.length > 0) setNodeComments(comments);
-      }
     }
 
     setFenInput('');
@@ -3944,7 +3905,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, setNodeReviewDataBulk, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;

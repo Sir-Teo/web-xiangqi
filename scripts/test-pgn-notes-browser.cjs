@@ -101,7 +101,7 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.getByRole('button', { name: 'Restore', exact: true }).click();
         await command(page, 'Save game');
         assert.deepEqual(await lastTree(), expected, 'Reload recovery lost a branch note');
-        await importPgn(page, width, 'h2e2 $6 {[%eval +0.42,18]} h9g7 $2 {[%eval -.75,21]} h0g2 {[%eval #+3,24]} b9c7 {[%eval #-0,0]} *');
+        await importPgn(page, width, 'h2e2 $6 {[%eval +0.42,18] Brace idea} ; Semicolon continuation\nh9g7 $2 {[%eval -.75,21]} h0g2 {[%eval #+3,24]} b9c7 {[%eval #-0,0]} *');
         const reviewDownload = page.waitForEvent('download');
         await command(page, 'Download PGN');
         const reviewChunks = [];
@@ -114,7 +114,7 @@ async function importPgn(page, width, source, fromFile = false) {
         const readSaved = () => page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         const annotatedGame = await readSaved();
         assert.equal(annotatedGame.review, undefined, 'Import fabricated a completed engine review');
-        assert.deepEqual(annotatedGame.moveTree[0], { uci: 'h2e2', nags: [6], evalScore: 42, evalDepth: 18, quality: 'inaccuracy', children: [
+        assert.deepEqual(annotatedGame.moveTree[0], { uci: 'h2e2', nags: [6], evalScore: 42, evalDepth: 18, quality: 'inaccuracy', comment: 'Brace idea Semicolon continuation', children: [
           { uci: 'h9g7', nags: [2], evalScore: -75, evalDepth: 21, quality: 'mistake', children: [
             { uci: 'h0g2', evalScore: 29997, evalDepth: 24, children: [{ uci: 'b9c7', evalScore: -30000, evalDepth: 0 }] },
           ] },
