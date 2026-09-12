@@ -134,7 +134,9 @@ async function check(browser, width) {
     await page.locator('.mtree-chip').first().click();
     await page.getByTestId('move-comment-input').fill(note);
     await command(page, 'Go to start');
-    await page.keyboard.press('e');
+    // The palette restores focus to the note field. A bare e would edit it;
+    // use a command that works while focus remains in a text control.
+    await command(page, 'Engine panel');
     await page.evaluate(() => { window.__depth = 245; window.__score = 100; });
     await page.getByTestId('deep-dive-btn').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="keep-engine-pv-0"]')?.textContent.includes('Update analysis'));

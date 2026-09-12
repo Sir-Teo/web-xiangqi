@@ -47,6 +47,8 @@ const { browserType } = require('./qa-browser.cjs');
         'test-pgn-result-endpoint-browser.cjs',
         'test-library-primary-cache-browser.cjs',
         'test-library-review-scope-browser.cjs',
+        'test-metadata-only-browser.cjs',
+        'test-snapshot-reuse-browser.cjs',
         'test-mobile-tabs-text-browser.cjs',
         'test-recovery-text-browser.cjs',
         'test-game-over-text-browser.cjs',

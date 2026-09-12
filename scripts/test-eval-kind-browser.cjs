@@ -99,6 +99,7 @@ async function command(page, label) {
           await page.waitForFunction(label => document.querySelector('[data-testid="engine-pv-score-0"] strong')?.textContent === label, kind ? '+200.0' : '+M10000');
           await command(page, 'Save game');
           const saved = await readSaved();
+          assert.deepEqual(saved.moves, ['h2e2'], 'The evaluated saved position is before the full line ends');
           assert.equal(saved.moveTree[0].evalScore, 20000);
           assert.equal(saved.moveTree[0].evalScoreKind, kind, 'A same-number engine result retained the previous kind');
           assert.equal(saved.moveTree[0].evalDepth, undefined);
@@ -109,8 +110,8 @@ async function command(page, label) {
         await command(page, 'Library');
         const numericCard = page.locator('.lib-card').filter({ has: page.getByTestId(`load-saved-${numericSaveId}`) });
         const mateCard = page.locator('.lib-card').filter({ has: page.getByTestId(`load-saved-${mateSaveId}`) });
-        assert.equal(await numericCard.locator('.lib-eval').innerText(), '+200.00');
-        assert.equal(await mateCard.locator('.lib-eval').innerText(), '+M10000');
+        assert.equal(await numericCard.locator('.lib-eval').innerText(), 'Saved position: +200.00');
+        assert.equal(await mateCard.locator('.lib-eval').innerText(), 'Saved position: +M10000');
         await selectMove('h9g7');
         await page.evaluate(() => { window.__review = true; window.__score = undefined; });
         await page.keyboard.press('r');
