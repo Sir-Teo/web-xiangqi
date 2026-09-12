@@ -1,7 +1,15 @@
-.game-metadata { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 8px; }
-.game-metadata summary { cursor: pointer; font-size: 13px; }
-.game-metadata summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-.game-metadata p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.game-metadata { container-type: inline-size; margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.game-metadata summary { cursor: pointer; font-size: .8125rem; line-height: 1.5; }
+.game-metadata summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; color: var(--text-secondary); margin-top: 4px; }
+.game-metadata p { font-size: .75rem; color: var(--text-secondary); line-height: 1.5; }
 .game-metadata-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.game-metadata-fields label { min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
-.game-metadata-fields input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 5px; background: transparent; color: inherit; font: inherit; font-size: 16px; }
+.game-metadata-fields label { min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: .75rem; }
+.game-metadata-fields input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 5px; background: transparent; color: inherit; font: inherit; font-size: max(16px, 1rem); }
+
+/* Reflow with the reader's text size and the actual panel width. */
+@container (max-width: 16rem) {
+  .game-metadata-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse) {
+  .game-metadata summary { box-sizing: border-box; min-height: 44px; padding-block: 10px; }
+}

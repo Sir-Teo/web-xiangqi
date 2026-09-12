@@ -14,6 +14,7 @@ const path = require('node:path');
       'test-pgn-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',
+      'test-metadata-layout-browser.cjs',
       'test-snapshot-reuse-browser.cjs',
       'test-autosave-error-browser.cjs',
       'test-autosave-limit-browser.cjs',
