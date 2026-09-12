@@ -45,6 +45,7 @@ interface LibraryPanelProps {
   onDeleteSavedGame: (id: string) => boolean;
   onRenameSavedGame: (id: string, label: string) => boolean;
   onPracticeSavedGame: (game: SavedGame) => void;
+  loadedStudy?: { id: string; canUpdate: boolean; updated: boolean; dropsReview: boolean; update: () => void };
   onLoadHistorical: (game: HistoricalGame) => void;
 }
 
@@ -231,6 +232,7 @@ export function LibraryPanel({
   onDeleteSavedGame,
   onRenameSavedGame,
   onPracticeSavedGame,
+  loadedStudy,
   onLoadHistorical,
 }: LibraryPanelProps) {
   const [search, setSearch] = useState('');
@@ -797,6 +799,17 @@ export function LibraryPanel({
                   )}
                 </div>
               </div>
+              {loadedStudy?.id === game.id && <div className="lib-open-study">
+                <span>Open study · Save creates a new copy.</span>
+                {loadedStudy.dropsReview && <span>The review covers another line and will not be included.</span>}
+                <button type="button" className="chip-btn" tabIndex={savedTabIndex}
+                  disabled={!loadedStudy.canUpdate || libraryState.mutationBlocked}
+                  onClick={loadedStudy.update} data-testid={`update-saved-${game.id}`}
+                  aria-label={`Update ${savedGameLabel} from board`}
+                  title="Replace this saved version with the current board and all its variations">
+                  {loadedStudy.updated ? 'Updated' : 'Update from board'}
+                </button>
+              </div>}
               {game.metadata && (() => {
                 // Both lines are clamped to two rows in CSS, because these are
                 // player-supplied and bounded only at 256 characters apiece --

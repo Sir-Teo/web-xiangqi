@@ -532,6 +532,28 @@ export function saveGame(game: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | n
     return saveGameWithResult(game).game;
 }
 
+/** Replace an explicitly selected study, checking the source again at the write. */
+export function updateSavedGameWithResult(source: SavedGame, replacement: Omit<SavedGame, 'id' | 'savedAt'>): SaveGameResult {
+    const fail = (error: string): SaveGameResult => ({ game: null, error });
+    const state = loadLibraryState();
+    if (state.mutationBlocked) return fail('Your saved library could not be read. Update was cancelled; the original data has been kept.');
+    const index = state.games.findIndex(game => game.id === source.id);
+    if (index < 0) return fail('This study is no longer in the library. Use Save to keep a new copy.');
+    const current = state.games[index];
+    // The label is edited independently in the library. Preserve its newest
+    // value; a rename does not invalidate the board's source content.
+    const content = (game: SavedGame) => JSON.stringify({ ...game, label: undefined });
+    const expected = normalizeSavedGame(source);
+    if (!expected || content(current) !== content(expected)) {
+        return fail('This saved study changed since it was opened. Update was cancelled. Reload that version, or use Save to keep your board as a separate copy.');
+    }
+    const updated = normalizeSavedGame({ ...replacement, id: current.id, savedAt: current.savedAt, label: current.label });
+    if (!updated) return fail('This study could not be updated because its data is invalid. The saved version has been kept.');
+    const games = [...state.games]; games[index] = updated;
+    return writeAll(games) ? { game: updated, error: null }
+        : fail('Could not update: browser storage is full, blocked, or the study is too large. The saved version has been kept.');
+}
+
 export function deleteGame(id: string): boolean {
     const { games, mutationBlocked } = readAllResult();
     if (mutationBlocked) {

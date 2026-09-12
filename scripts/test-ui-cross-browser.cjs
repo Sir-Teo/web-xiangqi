@@ -51,6 +51,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-library-review-scope-browser.cjs',
         'test-library-edit-focus-browser.cjs',
         'test-study-practice-browser.cjs',
+        'test-update-study-browser.cjs',
         'test-metadata-only-browser.cjs',
         'test-metadata-layout-browser.cjs',
         'test-snapshot-reuse-browser.cjs',

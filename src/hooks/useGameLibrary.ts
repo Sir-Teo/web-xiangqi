@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { GAME_LIBRARY_STORAGE_KEY, loadLibraryState, saveGameWithResult, deleteGame, renameGame } from '../utils/gameLibrary';
+import { GAME_LIBRARY_STORAGE_KEY, loadLibraryState, saveGameWithResult, updateSavedGameWithResult, deleteGame, renameGame } from '../utils/gameLibrary';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { GameMode } from '../App';
 
@@ -54,11 +54,18 @@ export function useGameLibrary() {
         return ok;
     }, []);
 
+    const update = useCallback((source: SavedGame, replacement: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null => {
+        const result = updateSavedGameWithResult(source, replacement);
+        setSaveError(result.error);
+        setLibraryState(loadLibraryState());
+        return result.game;
+    }, []);
+
     const rename = useCallback((id: string, label: string): boolean => {
         const ok = renameGame(id, label);
         setLibraryState(loadLibraryState());
         return ok;
     }, []);
 
-    return { games: libraryState.games, libraryState, save, saveError, remove, rename, refresh };
+    return { games: libraryState.games, libraryState, save, update, saveError, remove, rename, refresh };
 }

@@ -525,6 +525,8 @@ function App() {
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [showRuleLessons, setShowRuleLessons] = useState(false);
   const [practiceStudy, setPracticeStudy] = useState<SavedGame | null>(null);
+  const [loadedSavedStudy, setLoadedSavedStudy] = useState<SavedGame | null>(null);
+  const [lastSaveWasUpdate, setLastSaveWasUpdate] = useState(false);
   /**
    * The mode a position built by hand should start in, decided when the editor
    * opens rather than read off a dialog's visibility when it closes. It used to
@@ -1537,6 +1539,7 @@ function App() {
   }, [clearReviewData, resetReview, resetReviewController, reviewedLineNodeIds]);
 
   const resetGame = useCallback(() => {
+    setLoadedSavedStudy(null);
     stopAnalysis();
     handleCancelReview();
     pausedRef.current = false;
@@ -2217,6 +2220,7 @@ function App() {
     setGameMode(sideToMove === 'w' ? 'PvAI-Black' : 'PvAI-Red');
     setOrientation(sideToMove === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
+    setLoadedSavedStudy(null);
     loadMoves(currentLineMoves, rootFen, undefined, treeNodes[rootNodeId]?.comment);
     setGameMetadata(gameMetadata);
     setGraphLoadSweepToken((token) => token + 1);
@@ -2787,7 +2791,7 @@ function App() {
   );
 
   // Game library
-  const { games: savedGames, save: saveGameToLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
+  const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped } =
     useLibraryExplorer(savedGames, board, sideToMove);
@@ -3125,6 +3129,7 @@ function App() {
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
 
+    setLoadedSavedStudy(null);
     const loadedNodeIds = loadMoveTree(record.moveTree, record.moves, record.startFen, undefined, record.rootComment);
     restoreRecordedResult(loadedNodeIds[record.moves.length - 1] ?? rootNodeId, recordedResult);
     setGameMetadata(metadata);
@@ -3648,6 +3653,7 @@ function App() {
     setGameMode(practiceSide === 'w' ? 'PvAI-Black' : 'PvAI-Red');
     setOrientation(practiceSide === 'w' ? 'red' : 'black');
     setWorkspaceMode('play');
+    setLoadedSavedStudy(null);
     loadMoves(practiceMoves, rootFen, undefined, treeNodes[rootNodeId]?.comment);
     setGameMetadata(gameMetadata);
     setAnalysisTab('tree');
@@ -3808,6 +3814,7 @@ function App() {
       }, 2000);
       return false;
     }
+    setLoadedSavedStudy(null);
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -3856,6 +3863,7 @@ function App() {
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
+    setLoadedSavedStudy(null);
     const loadedNodeIds = (!importedFromNotation && plan.moveTree.length > 0)
       ? loadMoveTree(plan.moveTree, moves, startFen, undefined, plan.rootComment, plan.mainLinePinned)
       : loadMoves(moves, startFen, undefined, plan.rootComment, plan.mainLinePinned);
@@ -4034,6 +4042,7 @@ function App() {
     resetReview();
     setAiMoveError(null);
     setGameMode(mode);
+    setLoadedSavedStudy(null);
     if (sharedMoveTree?.length && canLoadSharedTree) {
       loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1');
     } else if (moves.length > 0) {
@@ -4134,10 +4143,8 @@ function App() {
     finalEvalKind: displayEvalKindRef.current,
   }), []);
 
-  const handleSaveGame = useCallback(() => {
-    const { gameMode: mode, moves, ...rest } = snapshotForStorage(currentGameSnapshot);
-    const saved = saveGameToLibrary(mode, moves, rest);
-
+  const reportSaveResult = useCallback((saved: SavedGame | null) => {
+    if (saved) setLoadedSavedStudy(saved);
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
     }
@@ -4155,7 +4162,19 @@ function App() {
       setSavedToast(false);
       setSaveFailedToast(false);
     }, saved ? 1800 : 8000);
-  }, [currentGameSnapshot, saveGameToLibrary, snapshotForStorage]);
+  }, []);
+
+  const handleSaveGame = useCallback(() => {
+    const { gameMode: mode, moves, ...rest } = snapshotForStorage(currentGameSnapshot);
+    setLastSaveWasUpdate(false);
+    reportSaveResult(saveGameToLibrary(mode, moves, rest));
+  }, [currentGameSnapshot, saveGameToLibrary, snapshotForStorage, reportSaveResult]);
+
+  const handleUpdateSavedStudy = useCallback(() => {
+    if (!loadedSavedStudy) return;
+    setLastSaveWasUpdate(true);
+    reportSaveResult(updateGameInLibrary(loadedSavedStudy, snapshotForStorage(currentGameSnapshot)));
+  }, [loadedSavedStudy, currentGameSnapshot, updateGameInLibrary, snapshotForStorage, reportSaveResult]);
 
 
   /**
@@ -4255,6 +4274,12 @@ function App() {
       keywords: ['store', 'keep'],
       disabled: !canSaveCurrentPosition,
       run: handleSaveGame,
+    },
+    {
+      id: 'update-saved-study', label: 'Update saved study',
+      hint: loadedSavedStudy ? (savingWouldDropTheReview ? 'Replace the opened study; its different-line review will not be included' : 'Replace the opened study with this board and its variations') : 'Load or save a study first',
+      keywords: ['replace', 'overwrite', 'library'], disabled: !loadedSavedStudy || !canSaveCurrentPosition,
+      run: handleUpdateSavedStudy,
     },
     {
       id: 'review-game',
@@ -4567,7 +4592,7 @@ function App() {
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
-      handleSaveGame, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
+      handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
       stopDeepDive])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
@@ -4599,6 +4624,7 @@ function App() {
     const loadedNodeIds = game.moveTree?.length
       ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves)
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
+    setLoadedSavedStudy(savedGames.some(saved => saved.id === game.id) ? game : null);
     restoreRecordedResult(rootNodeId, game.rootResult);
     restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
     setGameMetadata(game.metadata);
@@ -4645,7 +4671,7 @@ function App() {
     setMobileView('analysis');
     setGraphLoadSweepToken((token) => token + 1);
     return true;
-  }, [restoreRecordedResult, rootNodeId, handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, setGameMetadata, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, handleCancelReview, hydrateReview, loadMoves, loadMoveTree, resetReview, savedGames, setGameMetadata, setGameResult, setNodeReviewDataBulk, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   // ── Auto-save ────────────────────────────────────────
   // Offer whatever was in progress when the tab last closed, then keep the
@@ -4941,6 +4967,7 @@ function App() {
     setWorkspaceMode('analysis');
     setLeftPanelTab('graph');
     setAnalysisTab('tree');
+    setLoadedSavedStudy(null);
     loadMoves(game.moves);
     setMobileView('analysis');
     setMobileAnalysisTab('moves');
@@ -6059,6 +6086,11 @@ function App() {
                     onLoadSavedGame={handleLoadGame}
                     onDeleteSavedGame={deleteGameFromLibrary}
                     onRenameSavedGame={renameGameInLibrary}
+                    loadedStudy={loadedSavedStudy ? {
+                      id: loadedSavedStudy.id, canUpdate: canSaveCurrentPosition,
+                      dropsReview: savingWouldDropTheReview,
+                      updated: savedToast && lastSaveWasUpdate, update: handleUpdateSavedStudy,
+                    } : undefined}
                     onPracticeSavedGame={game => {
                       if (isAiMode) { stepPendingRef.current = false; pause(); stopAnalysis(); }
                       setPracticeStudy(game);

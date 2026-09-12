@@ -519,3 +519,4 @@
 .lib-pgn-game input { flex: 0 0 auto; width: 20px; height: 20px; }
 
 .lib-pgn-filename { overflow-wrap: anywhere; }
+.lib-open-study { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .4rem 0; color: var(--text-secondary); font-size: .75rem; }
