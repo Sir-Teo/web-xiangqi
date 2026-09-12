@@ -10,7 +10,7 @@ async function command(page, label) {
   await page.keyboard.press('Enter');
 }
 const fake = `
-window.__depth = 18; window.__score = 75; window.__pv = 'h2e2 h9g7 h0g2';
+window.__depth = 18; window.__score = 75; window.__pv = 'h2e2 h9g7 h0g2'; window.__nodes = 123456; window.__timeMs = 1200;
 window.Pikafish = function() {};
 window.Pikafish.createWorkerEngine = async () => {
   const listeners = []; const emit = line => listeners.forEach(listener => listener(line));
@@ -22,7 +22,11 @@ window.Pikafish.createWorkerEngine = async () => {
       if (command === 'isready') queueMicrotask(() => emit('readyok'));
       if (command.startsWith('go ')) queueMicrotask(() => {
         const line = position === 'position startpos' ? window.__pv : 'a9a8 a0a1';
-        emit('info depth ' + window.__depth + ' multipv 1 score cp ' + window.__score + ' pv ' + line);
+        emit('info depth ' + window.__depth + ' seldepth 28 multipv 1 score cp ' + window.__score + ' nodes ' + window.__nodes + ' time ' + window.__timeMs + ' pv ' + line);
+        // A same-depth bound, later telemetry and another PV must not replace the retained exact reading's effort.
+        emit('info depth ' + window.__depth + ' seldepth 30 multipv 1 score cp 900 lowerbound nodes 777777 time 8000 pv ' + line);
+        emit('info depth 17 seldepth 24 multipv 2 score cp 30 nodes 987654 time 9000 pv b2e2 h9g7');
+        emit('info nodes 999999 time 9500');
         emit('bestmove ' + line.split(' ')[0]);
       });
       if (command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
@@ -74,6 +78,7 @@ async function check(browser, width) {
     await card.locator('summary').first().click();
     assert.match(await card.innerText(), /Pikafish QA 2026/);
     assert.match(await card.innerText(), /single-simd · 1 thread/);
+    assert.match(await card.innerText(), /123,456 nodes · 1,200 ms · selective depth 28/);
     await card.locator('details summary').click();
     assert.equal(await card.locator('code').innerText(), 'position startpos');
     assert.deepEqual(await boardState(), root);
@@ -82,6 +87,30 @@ async function check(browser, width) {
     }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await card.screenshot({ path: `/tmp/xiangqi-study-analysis-${browserType.name()}-${width}.png` });
+
+    for (const size of [16, 32, 16]) {
+      await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      for (const field of await card.locator('p, dd, code').all()) {
+        await field.scrollIntoViewIfNeeded();
+        assert.equal(await field.evaluate(node => node.scrollWidth > node.clientWidth + 1), false, 'Saved analysis details must wrap');
+        assert.equal(await field.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, 'Saved analysis details must be reachable');
+      }
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      await card.locator('dl > div').filter({ hasText: 'Search effort' }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `/tmp/xiangqi-study-effort-${browserType.name()}-${width}-${size}.png` });
+    }
+    // An unchanged depth/score can still have a newer reported search effort.
+    await page.keyboard.press('e');
+    await page.evaluate(() => { window.__nodes = 234567; window.__timeMs = 2400; });
+    await page.getByTestId('deep-dive-btn').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="keep-engine-pv-0"]')?.textContent.includes('Update analysis'));
+    await page.keyboard.press('t');
+    await card.locator('summary').first().click();
+    assert.match(await card.innerText(), /123,456 nodes · 1,200 ms/);
+    await page.keyboard.press('e'); await keep.click(); await page.keyboard.press('t');
+    await card.locator('summary').first().click();
+    assert.match(await card.innerText(), /234,567 nodes · 2,400 ms/);
 
     // Reanalysis only replaces the snapshot after explicitly updating it.
     await page.keyboard.press('e');
@@ -101,6 +130,7 @@ async function check(browser, width) {
     assert.deepEqual(saved.moves, []);
     assert.equal(saved.moveTree[0].analysis.score, 100);
     assert.equal(saved.moveTree[0].analysis.depth, 26);
+    assert.deepEqual(saved.moveTree[0].analysis.effort, { nodes: 234567, timeMs: 2400, seldepth: 28 });
     assert.equal(saved.moveTree[0].evalScore, undefined);
     const snapshot = saved.moveTree[0].analysis;
 
@@ -175,6 +205,19 @@ async function check(browser, width) {
     assert.match(await card.innerText(), /D245/);
     assert.deepEqual(await boardState(), root);
 
+    // Older snapshots remain usable and do not acquire invented zero counters.
+    await page.addInitScript(() => {
+      const saved = JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1'));
+      delete saved.game.moveTree[0].analysis.effort;
+      localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify(saved));
+    });
+    await page.reload();
+    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('t');
+    await card.locator('summary').first().click();
+    assert.match(await card.innerText(), /Search effort\s+Not recorded/);
+    assert.match(await card.innerText(), /D245/);
+
     // Same placement without the stored history is not the same source search.
     await page.addInitScript(() => {
       const saved = JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1'));
@@ -204,6 +247,9 @@ async function checkRealEngine(browser, width) {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
     const snapshot = saved.moveTree[0].analysis;
     assert.ok(snapshot.depth > 0);
+    assert.ok(snapshot.effort.nodes > 0);
+    assert.ok(snapshot.effort.timeMs >= 0);
+    assert.ok(Number.isInteger(snapshot.effort.seldepth) && snapshot.effort.seldepth >= 0);
     assert.match(snapshot.engine.name, /^Pikafish /);
     assert.ok(!snapshot.engine.name.includes('not reported'));
     assert.match(snapshot.engine.variant, /^(single|threaded)/);

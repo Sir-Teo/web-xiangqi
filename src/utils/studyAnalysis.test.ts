@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { captureStudyAnalysis, normalizeStudyAnalysis, sameStudyAnalysis, studyAnalysisScore, studyAnalysisPgn, readStudyAnalysisPgn } from './studyAnalysis';
+import { captureStudyAnalysis, normalizeStudyAnalysis, sameStudyAnalysis, studyAnalysisScore, studyAnalysisEffort, studyAnalysisPgn, readStudyAnalysisPgn } from './studyAnalysis';
 import { exportPgnFromMoveTree } from './gameExport';
 import { extractUciMoveTree, extractAnnotatedMainLine } from './moveImport';
 import { parsePgnCollection } from './pgnCollection';
@@ -7,7 +7,7 @@ import { encodeSavedMoveTreeParam, decodeSavedMoveTreeParam } from './shareTree'
 import { normalizeSavedMoveTree } from './gameLibrary';
 
 const engine = { name: 'Pikafish 测试', variant: 'single-simd', threads: 1, hashMB: 64 };
-const pv = { depth: '18', score: 125, scoreStr: '+125', moves: ['a9a8', 'a0a1'], searchTag: null };
+const pv = { depth: '18', score: 125, scoreStr: '+125', moves: ['a9a8', 'a0a1'], searchTag: null, effort: { nodes: 123456, timeMs: 1200, seldepth: 28 } };
 const snapshot = () => captureStudyAnalysis(pv, 'b', 'position startpos moves h2e2', engine, 2, ['a9a8', 'i9i8'])!;
 
 describe('saved study analysis', () => {
@@ -54,6 +54,33 @@ describe('saved study analysis', () => {
       expect(readStudyAnalysisPgn(studyAnalysisPgn(a)!)).toEqual(a);
     }
     expect(normalizeStudyAnalysis({ ...snapshot(), depth: 257 })).toBeUndefined();
+  });
+  it('keeps reported search effort independently of later input changes', () => {
+    const effort = { nodes: 1000, timeMs: 50, seldepth: 22 };
+    const a = captureStudyAnalysis({ ...pv, effort }, 'b', 'position startpos', engine, 1)!;
+    effort.nodes = 2000;
+    expect(a.effort).toEqual({ nodes: 1000, timeMs: 50, seldepth: 22 });
+    expect(sameStudyAnalysis(a, { ...a, effort: { ...a.effort } })).toBe(true);
+    for (const field of ['nodes', 'timeMs', 'seldepth'] as const) {
+      expect(sameStudyAnalysis(a, { ...a, effort: { ...a.effort, [field]: a.effort![field]! + 1 } })).toBe(false);
+    }
+  });
+  it('distinguishes missing effort from reported zero and preserves legacy snapshots', () => {
+    const legacy = { ...snapshot(), effort: undefined };
+    expect(normalizeStudyAnalysis(legacy)).not.toHaveProperty('effort');
+    expect(studyAnalysisEffort(legacy)).toBe('Not recorded');
+    const zero = normalizeStudyAnalysis({ ...legacy, effort: { nodes: 0, timeMs: 0 } })!;
+    expect(studyAnalysisEffort(zero)).toBe('0 nodes · 0 ms');
+    expect(sameStudyAnalysis(legacy, zero)).toBe(false);
+    expect(normalizeStudyAnalysis({ ...legacy, effort: {} })).not.toHaveProperty('effort');
+    expect(normalizeStudyAnalysis({ ...legacy, effort: { seldepth: 256, extra: 'discard' } })?.effort).toEqual({ seldepth: 256 });
+  });
+  it('rejects malformed or imprecise effort instead of inventing valid counters', () => {
+    for (const effort of [null, [], '100 nodes', { nodes: -1 }, { nodes: 1.5 }, { nodes: Number.MAX_SAFE_INTEGER + 1 },
+      { timeMs: Infinity }, { timeMs: '1200' }, { timeMs: -1 }, { seldepth: 257 }, { seldepth: 1.5 }]) {
+      expect(normalizeStudyAnalysis({ ...snapshot(), effort })).toBeUndefined();
+    }
+    expect(normalizeStudyAnalysis({ ...snapshot(), effort: { nodes: Number.MAX_SAFE_INTEGER } })?.effort?.nodes).toBe(Number.MAX_SAFE_INTEGER);
   });
   it('round-trips the snapshot through PGN comments without creating an eval command', () => {
     const a = snapshot();

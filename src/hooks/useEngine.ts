@@ -25,6 +25,8 @@ export type PvLine = {
     bound?: ScoreBound;
     /** Win/draw/loss per mille for the side to move, when UCI_ShowWDL is on. */
     wdl?: WdlStats;
+    /** Reported with this PV, independent of later search-wide telemetry. */
+    effort?: EngineSearchEffort;
 };
 
 export type WdlStats = { win: number; draw: number; loss: number };
@@ -37,6 +39,8 @@ export type EngineSearchStats = {
     hashfull?: number;
     timeMs?: number;
 };
+
+export type EngineSearchEffort = Pick<EngineSearchStats, 'nodes' | 'timeMs' | 'seldepth'>;
 
 type SearchRequest = {
     positionCmd: string;
@@ -1006,6 +1010,11 @@ export function useEngine(options: EngineInitOptions = {}) {
                     searchTag: activeSearchTagRef.current,
                     bounded: BOUNDED_SCORE_PATTERN.test(msg),
                     bound: parseScoreBound(msg),
+                    ...(nodesMatch || timeMatch || seldepthMatch ? { effort: {
+                        ...(nodesMatch ? { nodes: parseInt(nodesMatch[1], 10) } : {}),
+                        ...(timeMatch ? { timeMs: parseInt(timeMatch[1], 10) } : {}),
+                        ...(seldepthMatch ? { seldepth: parseInt(seldepthMatch[1], 10) } : {}),
+                    } } : {}),
                     // Every multipv line carries its own wdl; only the first
                     // feeds the bar, but a reader comparing candidates wants
                     // each line's chances beside its score.
