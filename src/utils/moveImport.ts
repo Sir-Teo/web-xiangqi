@@ -12,26 +12,24 @@ export const MAX_MOVE_IMPORT_UCI_MOVES = 1024;
 export const MAX_MOVE_IMPORT_TREE_NODES = 1024;
 
 function stripParentheticalVariations(text: string): string {
+    if (!text.includes('(')) return text;
     let depth = 0;
+    let start = 0;
     let result = '';
-
-    for (const char of text) {
-        if (char === '(') {
+    // Copy unchanged ranges; visiting every character built large temporary
+    // strings even for plain coordinate records and unrelated pasted text.
+    for (const match of text.matchAll(/[()]/g)) {
+        if (match[0] === '(') {
+            if (depth === 0) result += text.slice(start, match.index);
             depth += 1;
             result += ' ';
-            continue;
-        }
-        if (char === ')' && depth > 0) {
+        } else if (depth > 0) {
             depth -= 1;
             result += ' ';
-            continue;
-        }
-        if (depth === 0) {
-            result += char;
+            if (depth === 0) start = match.index + 1;
         }
     }
-
-    return result;
+    return depth === 0 ? result + text.slice(start) : result;
 }
 
 /**

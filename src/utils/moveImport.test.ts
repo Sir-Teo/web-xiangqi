@@ -35,6 +35,16 @@ describe('reading a line of moves', () => {
         expect(extractUciMoveLine('h2e2 (h2d2 (b0c2 x) b9c7) h9g7')).toEqual(['h2e2', 'h9g7']);
     });
 
+    it('preserves token boundaries and recovers malformed variation endings', () => {
+        expect(extractUciMoveLine('h2(ignored)e2')).toEqual([]);
+        expect(extractUciMoveLine('h2e2)h9g7')).toEqual(['h2e2', 'h9g7']);
+        expect(extractUciMoveLine('h2e2 (b2e2 (炮🐎) h9g7')).toEqual(['h2e2']);
+        expect(extractUciMoveLine('h2e2 (b2e2 (炮🐎))h9g7')).toEqual(['h2e2', 'h9g7']);
+        const hidden = `h2e2 (${('b2e2 ').repeat(MAX_MOVE_IMPORT_UCI_MOVES + 1)}) h9g7`;
+        expect(hasTooManyUciMoves(hidden)).toBe(false);
+        expect(extractUciMoveLine(hidden)).toEqual(['h2e2', 'h9g7']);
+    });
+
     it('finds nothing in text with no moves', () => {
         expect(extractUciMoveLine('')).toEqual([]);
         expect(extractUciMoveLine('no moves here')).toEqual([]);

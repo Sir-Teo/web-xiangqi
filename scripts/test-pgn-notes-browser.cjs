@@ -36,8 +36,11 @@ async function importPgn(page, width, source, fromFile = false) {
               postMessage(command) {
                 if (command === 'uci') queueMicrotask(() => emit('uciok'));
                 if (command === 'isready') queueMicrotask(() => emit('readyok'));
+                // Cancel/error resumes live analysis. Do not let that search
+                // consume a newly armed review fixture before Review is clicked.
+                const isReviewSearch = Boolean(document.querySelector('button[aria-label="Cancel running game review"]'));
                 if (command.startsWith('go ')) queueMicrotask(() => {
-                  if (window.__reviewResponses) {
+                  if (isReviewSearch && window.__reviewResponses) {
                     window.__reviewSearches = (window.__reviewSearches || 0) + 1;
                     const response = window.__reviewResponses.shift();
                     if (!response) return; // Hold this search until Cancel sends stop.
