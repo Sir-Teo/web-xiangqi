@@ -393,10 +393,11 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     const moveTree = normalizeSavedMoveTree(raw.moveTree);
     const startFen = normalizeStartFen(raw.startFen);
     const rootComment = normalizeMoveComment(raw.rootComment);
+    const metadata = normalizeGameMetadata(raw.metadata);
     if (!moves || moveTree === null || startFen === null) {
         return null;
     }
-    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length && !rootComment && !normalizeRecordedResult(raw.rootResult))) {
+    if (!id || typeof savedAt !== 'number' || !gameMode || (moves.length === 0 && !startFen && !moveTree?.length && !rootComment && !normalizeRecordedResult(raw.rootResult) && !metadata)) {
         return null;
     }
 
@@ -414,7 +415,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         ...(normalizeRecordedResult(raw.rootResult) ? { rootResult: normalizeRecordedResult(raw.rootResult) } : {}),
         ...(raw.mainLinePinned === true && (moves.length || moveTree?.length) ? { mainLinePinned: true as const } : {}),
         result,
-        metadata: normalizeGameMetadata(raw.metadata),
+        metadata,
         label: asBoundedString(raw.label, MAX_SAVED_LABEL_LENGTH),
         opening: asBoundedString(raw.opening, MAX_SAVED_OPENING_LENGTH),
         finalEval: asFiniteNumber(raw.finalEval),

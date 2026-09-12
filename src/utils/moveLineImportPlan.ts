@@ -7,7 +7,7 @@ import {
     isMoveImportTextTooLarge,
     stripRecordMetadata,
 } from './moveImport';
-import { extractPgnHeaders } from './gameMetadata';
+import { extractPgnHeaders, extractPgnMetadata } from './gameMetadata';
 import { normalizeMoveComment } from './moveComment';
 import { START_POSITION_FEN } from './xiangqi';
 import { parseDhtmlXqRecord } from './dhtmlxq';
@@ -114,7 +114,7 @@ export function planMoveLineImport(
     }
 
     const isDiagramText = moves.length === 0 && (dhtml || /^(?:\s*(?:1-0|0-1|1\/2-1\/2|\*))?\s*$/.test(stripRecordMetadata(source)));
-    if (moves.length === 0 && notationRejected.length === 0 && isDiagramText && (rootComment || startFen || outcome.result || rootResult)) {
+    if (moves.length === 0 && notationRejected.length === 0 && isDiagramText && (rootComment || startFen || outcome.result || rootResult || extractPgnMetadata(source))) {
         return { kind: 'diagram', startFen: startFen || START_POSITION_FEN, rootComment, rootResult: outcome.result ?? rootResult };
     }
 

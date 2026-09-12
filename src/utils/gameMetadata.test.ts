@@ -20,4 +20,11 @@ describe('tournament metadata', () => {
   it('bounds fields and strips control characters without coercing malformed data', () => {
     expect(normalizeGameMetadata({ redPlayer: 12, event: ' A\nB ', site: 'x'.repeat(400), extra: 'ignored' })).toEqual({ event: 'A B', site: 'x'.repeat(256) });
   });
+  it('keeps tournament preparation without moves and rejects empty metadata', () => {
+    const draft = { id: 'draft', savedAt: 1, gameMode: 'PvP', moves: [] };
+    expect(normalizeSavedGame({ ...draft, metadata })?.metadata).toEqual(metadata);
+    for (const empty of [undefined, {}, { event: '  \n ' }, { event: 42 }, { unknown: 'x' }]) {
+      expect(normalizeSavedGame({ ...draft, metadata: empty })).toBeNull();
+    }
+  });
 });

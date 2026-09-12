@@ -42,6 +42,16 @@ describe('deciding what is worth keeping', () => {
 });
 
 describe('writing and reading back', () => {
+    it('retains metadata after the final note or move is removed', () => {
+        const { storage } = stubStorage();
+        const metadata = { redPlayer: '王 Alice', event: 'Autumn Invitational' };
+        expect(writeAutoSavedGame({ ...GAME, metadata }, storage, 1)).toBe('saved');
+        expect(writeAutoSavedGame({ ...GAME, moves: [], metadata }, storage, 2)).toBe('saved');
+        expect(readAutoSavedGame(storage)?.game.metadata).toEqual(metadata);
+        expect(readAutoSavedGame(storage)?.game.moves).toEqual([]);
+        expect(writeAutoSavedGame({ ...GAME, moves: [], metadata: { event: '  ' } }, storage, 3)).toBe('empty');
+        expect(readAutoSavedGame(storage)).toBeNull();
+    });
     it('round-trips the game in progress', () => {
         const { storage } = stubStorage();
         expect(writeAutoSavedGame(GAME, storage, 1234)).toBe('saved');

@@ -21,6 +21,12 @@ const rejectsAt = (failedIndex: number, move: string, reason: string): MoveLineI
 const plan = (text: string, fen = '', validators = accepts) => planMoveLineImport(text, fen, validators);
 
 describe('planning an import', () => {
+    it('accepts game details before the first move without accepting invalid move text', () => {
+        expect(plan('[White "Alice"]\n[Event "Autumn Invitational"]\n\n*').kind).toBe('diagram');
+        expect(plan('[Event "  "]\n\n*').kind).toBe('error');
+        expect(plan('[Event "Autumn Invitational"]\n\nnot a game').kind).toBe('error');
+        expect(plan('[Event "Autumn Invitational"]\n\nC5=9').kind).toBe('error');
+    });
     it('reads plain coordinates', () => {
         const result = plan('h2e2 h9g7 b0c2');
         expect(result.kind).toBe('line');

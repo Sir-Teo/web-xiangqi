@@ -2538,12 +2538,13 @@ function App() {
   const viewingStudyMainLine = Boolean(mainLinePinned) && activeLineNodeIds.length === studyMainLineNodeIds.length
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !isAiTurn && !viewingStudyMainLine;
-  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult);
-  const canExportCurrentLine = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
+  const hasGameMetadata = Boolean(normalizeGameMetadata(gameMetadata));
+  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata;
+  const canShareCurrentPosition = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
+  const canExportCurrentLine = canShareCurrentPosition || hasGameMetadata;
   // A finished game has nothing to play on from, and the starting position is
   // already what "New game" gives you.
   const canPlayFromHere = !gameResult && (currentMoveIndex >= 0 || rootFen !== START_POSITION_FEN);
-  const canShareCurrentPosition = canExportCurrentLine || rootFen !== START_POSITION_FEN;
 
 
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
@@ -2980,7 +2981,7 @@ function App() {
       .slice(0, currentMoveIndex + 1)
       .map(id => treeNodes[id]?.record)
       .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    if (moves.length === 0 && !rootComment && !rootResult && rootFen === START_POSITION_FEN) return null;
+    if (moves.length === 0 && !rootComment && !rootResult && rootFen === START_POSITION_FEN && !hasGameMetadata) return null;
     return exportPgn(moves, {
       gameMode,
       metadata: gameMetadata,
@@ -2990,7 +2991,7 @@ function App() {
       rootComment,
       rootResult,
     });
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
+  }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, hasGameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
     const pgn = buildCurrentPgn();
@@ -6846,7 +6847,7 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
-                  {(hasMoveTreeMoves || rootComment || rootResult || rootFen !== START_POSITION_FEN) && <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />}
+                  <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;

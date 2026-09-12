@@ -11,6 +11,7 @@ import { type KeyValueStorage, getLocalStorage, removeStorage, writeStorage } fr
 
 import { MAX_SAVED_MOVES, MAX_SAVED_TREE_NODES, type SavedGame, normalizeSavedGame } from './gameLibrary';
 import { AUTO_SAVED_GAME_KEY, readVersionedStorage } from './storageKeys';
+import { normalizeGameMetadata } from './gameMetadata';
 
 export { AUTO_SAVED_GAME_KEY };
 export const AUTO_SAVE_MAX_BYTES = 2 * 1024 * 1024;
@@ -50,7 +51,7 @@ function getSerializedByteLength(value: string): number {
 export function isWorthAutoSaving(game: AutoSaveInput): boolean {
     if (game.moves.length > 0) return true;
     if (game.moveTree?.length) return true;
-    return Boolean(game.startFen || game.rootComment?.trim() || game.rootResult);
+    return Boolean(game.startFen || game.rootComment?.trim() || game.rootResult || normalizeGameMetadata(game.metadata));
 }
 
 export function readAutoSavedGame(
