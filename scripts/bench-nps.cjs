@@ -84,7 +84,7 @@ function coreJsFileForVariant(variant) {
     case "threaded-simd":
       return "pikafish-core-simd.js";
     default:
-      return "pikafish-core-simd.js";
+      throw new Error("Unknown benchmark variant: " + variant);
   }
 }
 
@@ -222,13 +222,18 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   const cpuCount = Math.max(1, (os.cpus() || []).length || 1);
+  const requestedThreads = args.threads ?? process.env.PIKAFISH_BENCH_THREADS;
+  const explicitThreads = Object.hasOwn(args, "threads") || (requestedThreads !== undefined && requestedThreads !== "");
+  if (explicitThreads && (!Number.isSafeInteger(Number(requestedThreads)) || Number(requestedThreads) < 1)) {
+    throw new Error("Benchmark threads must be a positive integer.");
+  }
   const cfg = {
     variant: String(args.variant || process.env.PIKAFISH_BENCH_VARIANT || "threaded-simd").trim(),
     depth: clampInt(args.depth || process.env.PIKAFISH_BENCH_DEPTH || 8, 1, 64),
     repeats: clampInt(args.repeats || process.env.PIKAFISH_BENCH_REPEATS || 3, 1, 20),
     warmup: clampInt(args.warmup || process.env.PIKAFISH_BENCH_WARMUP || 1, 0, 10),
     hashMB: clampInt(args.hash || process.env.PIKAFISH_BENCH_HASH || 256, 1, 4096),
-    threads: clampInt(args.threads || process.env.PIKAFISH_BENCH_THREADS || Math.max(1, cpuCount - 1), 1, 64),
+    threads: explicitThreads ? Number(requestedThreads) : null,
     timeoutMs: clampInt(args.timeout || process.env.PIKAFISH_BENCH_TIMEOUT_MS || 120000, 1000, 600000),
     outPath: args.out ? path.resolve(String(args.out)) : "",
     comparePath: args.compare ? path.resolve(String(args.compare)) : "",
@@ -242,6 +247,7 @@ async function main() {
     maxMedianWallMs: optionalPositiveNumber(args["max-median-wall-ms"] || process.env.PIKAFISH_BENCH_MAX_MEDIAN_WALL_MS || 0),
     maxColdStartMs: optionalPositiveNumber(args["max-cold-start-ms"] || process.env.PIKAFISH_BENCH_MAX_COLD_START_MS || 0)
   };
+  const coreJsFile = coreJsFileForVariant(cfg.variant);
 
   if (!fs.existsSync(path.join(distDir, "pikafish.js"))) {
     throw new Error("dist/pikafish.js not found. Build first.");
@@ -249,13 +255,13 @@ async function main() {
 
   const wrapperSrcPath = path.join(distDir, "pikafish.js");
   const wrapperCjsPath = path.join(os.tmpdir(), "pikafish-bench-wrapper.cjs");
-  const coreJsSrcPath = path.join(distDir, coreJsFileForVariant(cfg.variant));
+  const coreJsSrcPath = path.join(distDir, coreJsFile);
   const coreFactoryCjsPath = path.join(os.tmpdir(), "pikafish-bench-core.cjs");
   fs.copyFileSync(wrapperSrcPath, wrapperCjsPath);
   fs.copyFileSync(coreJsSrcPath, coreFactoryCjsPath);
   const createPikafish = require(wrapperCjsPath);
   const coreFactory = require(coreFactoryCjsPath);
-  const state = { activeRun: null };
+  const state = { activeRun: null, threadLimits: null };
   let engine = null;
 
   const snapshot = {
@@ -290,13 +296,19 @@ async function main() {
       basePath: distDir,
       nnuePath: path.join(distDir, "pikafish.nnue"),
       variant: cfg.variant,
+      allowSIMD: cfg.variant.endsWith("-simd"),
       coreFactory,
       autoTune: false,
       lineHistoryMax: 200
     });
+    if (engine.variant !== cfg.variant) {
+      throw new Error(`Engine resolved ${engine.variant}, but benchmark loaded the ${cfg.variant} core.`);
+    }
 
     const lineListener = (line) => {
       const text = String(line);
+      const threadsOption = text.match(/^option name Threads type spin default \d+ min (\d+) max (\d+)\s*$/i);
+      if (threadsOption) state.threadLimits = { min: Number(threadsOption[1]), max: Number(threadsOption[2]) };
       const run = state.activeRun;
       if (!run) return;
       const info = parseInfoLine(text);
@@ -313,8 +325,17 @@ async function main() {
     engine.addMessageListener(lineListener);
 
     await engine.uci({ timeoutMs: cfg.timeoutMs });
+    const limits = state.threadLimits;
+    if (!limits || limits.min < 1 || limits.max < limits.min) {
+      throw new Error("Engine did not advertise a valid Threads range; cannot verify benchmark configuration.");
+    }
+    if (!explicitThreads) cfg.threads = Math.max(limits.min, Math.min(cpuCount - 1, limits.max, 64));
+    if (cfg.threads < limits.min || cfg.threads > limits.max) {
+      throw new Error(`Threads ${cfg.threads} outside engine's supported range ${limits.min}–${limits.max} (${cfg.variant}).`);
+    }
+    snapshot.threads = cfg.threads;
     try { engine.setOption("Hash", cfg.hashMB); } catch (_) {}
-    try { engine.setOption("Threads", cfg.threads); } catch (_) {}
+    engine.setOption("Threads", cfg.threads);
     try { engine.setOption("MultiPV", 1); } catch (_) {}
     try { engine.setOption("UCI_ShowWDL", "false"); } catch (_) {}
     try { engine.setOption("Ponder", "false"); } catch (_) {}
