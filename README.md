@@ -53,6 +53,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Learn from mistakes**: the review's key moments asked as questions. Each puts the position before the mistake on the board with the engine's arrows hidden and asks for a better move; the engine's move is recognised at once, and anything else is graded on the review's own scale once the live analysis has evaluated it, so a move the review would have called good is called good here. Attempts stay in the tree as variations, and a finished review now survives them -- it used to be cleared by the first move played after it
 - **Copy record**: the line as a numbered record in the chosen notation -- `1. 炮二平五 馬8進7` -- for pasting where a person will read it, beside Copy PGN for programs
 - Command palette entry *Write a note on this move*, so the field is reachable without knowing where it lives
+- **Find study notes**: expand Study notes below the move tree, or use the command palette, to search note text across the starting position and every variation. Select a result to visit its position. Results follow tree order, with 20 shown initially and more available on demand.
 - Single-key shortcuts: `F` flip, `X` threat, `D` deep search, `H` hint, `E`/`T`/`R` the Engine, Tree and Review panels, arrows to step through the game; each is printed beside its command in the palette
 
 ## What this repo contains

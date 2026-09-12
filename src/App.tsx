@@ -3,6 +3,8 @@ import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engine
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
+import { StudyNotes } from './components/StudyNotes';
+import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
@@ -3279,6 +3281,7 @@ function App() {
 
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
+  const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const handleCopyRecord = useCallback(async () => {
     const recordText = formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle);
     if (!recordText) return;
@@ -4352,6 +4355,23 @@ function App() {
       },
     },
     {
+      id: 'find-study-notes',
+      label: 'Find study notes',
+      hint: studyNotes.length ? 'Search notes in every variation and jump to a position' : 'Write or import a note first',
+      keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
+      disabled: !studyNotes.length,
+      run: () => {
+        setAnalysisTab('tree');
+        setMobileAnalysisTab('moves');
+        setMobileView('analysis');
+        window.setTimeout(() => {
+          const details = document.getElementById('study-notes') as HTMLDetailsElement | null;
+          if (details) details.open = true;
+          document.getElementById('study-notes-search')?.focus();
+        }, 0);
+      },
+    },
+    {
       id: 'copy-record',
       label: `Copy record in ${NOTATION_STYLE_LABELS[notationStyle]}`,
       hint: canCopyRecord ? 'Numbered moves, one pair per line' : 'Play or import a line first',
@@ -4590,7 +4610,7 @@ function App() {
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
-      stopDeepDive])
+      stopDeepDive, studyNotes.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false) => {
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
@@ -6880,6 +6900,9 @@ function App() {
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
                   <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
+                  <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
+                    notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
+                    disabled={isAiTurn} onNavigate={jumpToNode} />
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
                     const node = treeNodes[id];
                     const analysis = node?.record?.analysis;
