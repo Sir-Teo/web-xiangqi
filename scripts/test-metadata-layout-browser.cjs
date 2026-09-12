@@ -18,7 +18,11 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base); await page.keyboard.press('t');
+        await page.goto(base);
+        if (width < 900) {
+          await page.getByTestId('mobile-view-analysis').click();
+          await page.getByTestId('mobile-analysis-tab-moves').click();
+        }
         const editor = page.getByTestId('game-metadata'); const summary = editor.locator('summary');
         for (const fontSize of [16, 32]) {
           await page.evaluate(size => document.documentElement.style.fontSize = `${size}px`, fontSize);
