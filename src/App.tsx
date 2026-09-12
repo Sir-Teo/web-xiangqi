@@ -40,7 +40,7 @@ import { CandidatePanel } from './components/CandidatePanel';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
-import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validatePieceMove } from './utils/xiangqi';
+import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove } from './utils/xiangqi';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
@@ -656,6 +656,7 @@ function App() {
    */
   const [hintMove, setHintMove] = useState<string | null>(null);
   const [hintPending, setHintPending] = useState(false);
+  const [hintUnavailable, setHintUnavailable] = useState(false);
   const [engineSafetyBootLevel, setEngineSafetyBootLevel] = useState(0);
   const [engineNotice, setEngineNotice] = useState<EngineNotice>(null);
   const [spotlightPvIndex, setSpotlightPvIndex] = useState<number | null>(null);
@@ -1241,7 +1242,13 @@ function App() {
       const hintTag = parseHintTag(searchTag);
       if (hintTag) {
         setHintPending(false);
-        if (uci && hintTag.positionCommand === currentPositionCommand) setHintMove(uci);
+        if (hintTag.positionCommand !== currentPositionCommand || !aiPlayActive || isAiTurn || gameResult) return;
+        // A completed search can have no move, or a move that cannot be played
+        // on this board. Explain that result instead of silently removing the
+        // thinking message or recommending an illegal move.
+        const validHint = Boolean(uci) && validateMoveStr(uci, board, sideToMove).ok;
+        setHintMove(validHint ? uci : null);
+        setHintUnavailable(!validHint);
         return;
       }
 
@@ -3559,6 +3566,7 @@ function App() {
   const runHint = useCallback(() => {
     if (!canHint) return;
     setHintMove(null);
+    setHintUnavailable(false);
     setHintPending(true);
     queueSearch(currentPositionCommand, HINT_GO_CMD, 0, makeHintTag(currentPositionCommand));
   }, [canHint, currentPositionCommand, queueSearch]);
@@ -3569,13 +3577,15 @@ function App() {
     // a fast replacement may become ready without rendering isReady=false.
     setHintMove(null);
     setHintPending(false);
+    setHintUnavailable(false);
   }, [currentNodeId, aiPlayActive, engineBootKey, readySessionId, isReady]);
 
   const hintText = useMemo(() => {
     if (hintPending) return 'Thinking of a hint…';
+    if (hintUnavailable) return 'No hint available. Try again.';
     if (!hintMove) return null;
     return `Hint: ${formatLineInStyle(board, [hintMove], notationStyle, 1)}`;
-  }, [board, hintMove, hintPending, notationStyle]);
+  }, [board, hintMove, hintPending, hintUnavailable, notationStyle]);
 
   const handleClearEngineHash = useCallback(() => {
     if (clearedHashTimerRef.current !== null) {

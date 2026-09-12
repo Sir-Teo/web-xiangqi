@@ -20,6 +20,7 @@ const path = require('node:path');
       'test-engine-resource-settings-browser.cjs',
       'test-review-engine-restart-browser.cjs',
       'test-hint-restart-browser.cjs',
+      'test-hint-unavailable-browser.cjs',
       'test-mobile-hint-feedback-browser.cjs',
       'test-position-card-text-browser.cjs',
       'test-study-notes-browser.cjs',
