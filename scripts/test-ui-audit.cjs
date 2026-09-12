@@ -21,6 +21,7 @@ const path = require('node:path');
       'test-review-engine-restart-browser.cjs',
       'test-hint-restart-browser.cjs',
       'test-mobile-hint-feedback-browser.cjs',
+      'test-position-card-text-browser.cjs',
       'test-study-notes-browser.cjs',
       'test-metadata-browser.cjs',
       'test-metadata-only-browser.cjs',

@@ -6229,6 +6229,8 @@ summary:active {
 
 .position-stat {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-wrap: anywhere;
   gap: 0.16rem;
   padding: 0.48rem 0.58rem;
 }
@@ -6861,15 +6863,27 @@ summary:active {
     margin: 0;
   }
 
-  /* Hint feedback needs its own readable row. Keep a usable board when text
-     grows, then scroll the board and status cards within their existing area. */
-  [data-mobile-view="board"] .board-workspace.board-workspace-hint {
-    grid-template-rows: minmax(calc(var(--board-min-width) * 10 / 9), 1fr) auto;
+  /* Wrapped status text must not squeeze intersections on top of each other.
+     Let the board's floor grow with text size, then scroll within the existing
+     board area. Normal text still uses the available space without scrolling. */
+  [data-mobile-view="board"] .board-workspace {
+    grid-template-rows: minmax(calc(8.5rem * 10 / 9), 1fr) auto;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
-  [data-mobile-view="board"] .board-workspace-hint .board-wrap {
+  [data-mobile-view="board"] .board-workspace .position-dock {
+    /* rem-based minimums keep three cards at normal text, then give enlarged
+       labels wider columns instead of splitting ordinary words mid-letter. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  }
+
+  /* A hint adds another row, so retain its larger minimum at normal text. */
+  [data-mobile-view="board"] .board-workspace.board-workspace-hint {
+    grid-template-rows: minmax(calc(var(--board-min-width) * 10 / 9), 1fr) auto;
+  }
+
+  [data-mobile-view="board"] .board-workspace .board-wrap {
     /* A scroll container clips shadows at its edge. Reserve the decorative
        frame inside the board's measuring box without narrowing the dock. */
     padding-inline: 13px;
@@ -6878,11 +6892,26 @@ summary:active {
 
 @media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
   /* In landscape the board already has a separate column. Scroll the status
-     rail rather than shrinking the board to accommodate the hint text. */
-  [data-mobile-view="board"] .board-workspace-hint .position-dock {
+     rail rather than shrinking the board to accommodate wrapped card text. */
+  [data-mobile-view="board"] .board-workspace .position-dock {
     max-height: 100%;
     overflow-y: auto;
     align-content: safe center;
+  }
+}
+
+/* Stacked desktop docks need the same text-aware minimum. The fractional
+   floor preserves the normal three/four-column layout even when a capture
+   tray spans the row; larger text can reduce the number of columns. */
+@media (min-width: 901px) and (min-height: 701px) {
+  .board-workspace .position-dock {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(6rem, calc((100% - 0.96rem) / 3))), 1fr));
+  }
+}
+
+@media (min-width: 1201px) and (min-height: 701px) {
+  [data-assist-mode="pro"] .board-workspace .position-dock {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(6rem, calc((100% - 1.44rem) / 4))), 1fr));
   }
 }
 
