@@ -547,7 +547,7 @@ export function LibraryPanel({
           className="lib-search"
           ref={searchRef}
           type="search"
-          placeholder="Search players, openings, moves, notes…"
+          placeholder="Search players, moves, notes, analysis…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search library"

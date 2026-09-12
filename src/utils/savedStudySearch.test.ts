@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { evaluationSearchText, savedTreeSearchText } from './savedStudySearch';
 import { matchesSearchTerms, toSearchTerms } from './searchTerms';
 import type { SavedMoveTreeNode } from './gameLibrary';
+import type { StudyAnalysis } from './studyAnalysis';
 
 describe('searching saved study annotations', () => {
     it('indexes notes and qualities throughout variations alongside their moves', () => {
@@ -25,6 +26,33 @@ describe('searching saved study annotations', () => {
             children.push(node); children = node.children!;
         }
         expect(savedTreeSearchText(tree)).toContain('Deep preparation');
+    });
+    it('indexes saved analysis on side lines without assigning a move evaluation', () => {
+        const analysis: StudyAnalysis = { version: 1, position: 'position startpos moves h2e2', move: 'a9a8', score: 20000, scoreKind: 'cp',
+            bounded: true, bound: 'upper', depth: 27, savedAt: 1,
+            engine: { name: 'Pikafish Research build', variant: 'single-simd', threads: 1, hashMB: 64 },
+            multiPv: 2, candidates: ['a9a8', 'i9i8'], effort: { nodes: 123456, timeMs: 1200, seldepth: 35 } };
+        const tree: SavedMoveTreeNode[] = [{ uci: 'h2e2', children: [{ uci: 'h9g7' }, { uci: 'a9a8', analysis }] }];
+        const before = JSON.stringify(tree);
+        const text = savedTreeSearchText(tree);
+        for (const query of ['saved analysis', 'Pikafish Research', 'D27', 'depth 27', '+200.00 upper bound', '20000cp',
+            'upperbound', 'single-simd 1 thread', '64 MB hash', '64MB', 'MultiPV 2 selected candidates i9i8',
+            '123456 nodes', `${(123456).toLocaleString()} nodes`, '1200ms', `${(1200).toLocaleString()} ms`, 'selective depth 35']) {
+            expect(matchesSearchTerms(text, toSearchTerms(query)), query).toBe(true);
+        }
+        expect(text).not.toContain('mate');
+        expect(JSON.stringify(tree)).toBe(before);
+        expect(tree[0].children![1]).not.toHaveProperty('evalScore');
+    });
+    it('keeps saved mate readings distinct from centipawns and omits absent effort', () => {
+        const analysis: StudyAnalysis = { version: 1, position: 'position startpos', move: 'h2e2', score: 29997, scoreKind: 'mate',
+            bounded: false, depth: 18, savedAt: 1, engine: { name: 'Pikafish', variant: 'threaded-simd', threads: 8, hashMB: 256 }, multiPv: 1 };
+        const text = savedTreeSearchText([{ uci: 'h2e2', analysis }]);
+        for (const query of ['+M3', 'exact search score', 'all legal moves', 'Not recorded']) {
+            expect(matchesSearchTerms(text, toSearchTerms(query)), query).toBe(true);
+        }
+        expect(text).not.toContain('29997cp');
+        expect(text).not.toContain('0 nodes');
     });
     it('handles studies without a saved tree', () => {
         expect(savedTreeSearchText(undefined)).toBe('');
