@@ -1,3 +1,4 @@
+import { MAX_CLOUD_RESPONSE_BYTES } from './cloudResponse';
 /**
  * The cloud book's own line for a position: chessdb.cn's `querypv`.
  *
@@ -40,7 +41,10 @@ const UCI_MOVE = /^[a-i][0-9][a-i][0-9]$/;
 
 /** `score:1,depth:62,pv:c3c4|b7c7|...` -- moves separated by bars, not spaces. */
 export function parseCloudPvResponse(text: string): CloudPvResult {
-    const body = String(text ?? '').trim();
+    const raw = String(text ?? '');
+    // Also bound direct parser calls before splitting or allocating move records.
+    if (raw.length > MAX_CLOUD_RESPONSE_BYTES) return { status: 'unreadable' };
+    const body = raw.trim();
     if (!body) return { status: 'unreadable' };
     const lowered = body.toLowerCase();
     if (lowered === 'unknown' || lowered === 'nobestmove') return { status: 'unknown' };

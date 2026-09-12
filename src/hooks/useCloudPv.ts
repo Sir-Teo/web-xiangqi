@@ -1,3 +1,4 @@
+import { readCloudResponse } from '../utils/cloudResponse';
 import { useCallback, useEffect, useState } from 'react';
 import { buildCloudPvUrl, parseCloudPvResponse, type CloudPvReading } from '../utils/cloudPv';
 import { BoundedLruCache } from '../utils/boundedCache';
@@ -49,7 +50,7 @@ export function useCloudPv(fen: string, enabled: boolean): CloudPvState & { retr
             try {
                 const response = await fetch(buildCloudPvUrl(fen), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const result = parseCloudPvResponse(await response.text());
+                const result = parseCloudPvResponse(await readCloudResponse(response));
                 if (controller.signal.aborted) return;
                 if (result.status === 'unreadable' || result.status === 'invalid') throw new Error('unavailable line');
                 const line = result.status === 'ok' ? result.line : null;

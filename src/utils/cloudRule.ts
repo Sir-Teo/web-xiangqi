@@ -1,3 +1,4 @@
+import { MAX_CLOUD_RESPONSE_BYTES } from './cloudResponse';
 import { CLOUD_BOOK_ENDPOINT } from './cloudBook';
 
 /**
@@ -57,7 +58,10 @@ const UCI_MOVE = /^[a-i][0-9][a-i][0-9]$/;
 
 /** `move:f0f1,rule:none|move:e0d0,rule:ban|...` */
 export function parseCloudRuleResponse(text: string): CloudRuleReading {
-    const body = String(text ?? '').trim();
+    const raw = String(text ?? '');
+    // Also bound direct parser calls before splitting or allocating move records.
+    if (raw.length > MAX_CLOUD_RESPONSE_BYTES) return { status: 'unreadable' };
+    const body = raw.trim();
     if (!body) return { status: 'unreadable' };
     const lowered = body.toLowerCase();
     // The same replies its two siblings read, which this parser did not: a

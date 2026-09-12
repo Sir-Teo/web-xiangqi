@@ -1,3 +1,4 @@
+import { readCloudResponse } from '../utils/cloudResponse';
 import { useEffect, useState } from 'react';
 import {
     CLOUD_RULE_MIN_MOVES,
@@ -52,7 +53,7 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
             try {
                 const response = await fetch(buildCloudRuleUrl(rootFen, moves), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const reading = parseCloudRuleResponse(await response.text());
+                const reading = parseCloudRuleResponse(await readCloudResponse(response));
                 if (controller.signal.aborted) return;
                 if (reading.status === 'unreadable' || reading.status === 'invalid') throw new Error('unavailable ruling');
                 // `unknown` is cached as `null`: the service answered, so asking

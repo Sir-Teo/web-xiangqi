@@ -1,3 +1,4 @@
+import { MAX_CLOUD_RESPONSE_BYTES } from './cloudResponse';
 import { BoundedLruCache } from './boundedCache';
 /**
  * The chessdb.cn xiangqi cloud book (象棋云库): what it says about a position,
@@ -60,7 +61,10 @@ const UCI_MOVE = /^[a-i][0-9][a-i][0-9]$/;
  * "stalemate", "nobestmove" -- is a status of its own.
  */
 export function parseCloudBookResponse(text: string): CloudBookReading {
-    const body = String(text ?? '').trim();
+    const raw = String(text ?? '');
+    // Also bound direct parser calls before splitting or allocating move records.
+    if (raw.length > MAX_CLOUD_RESPONSE_BYTES) return { status: 'unreadable' };
+    const body = raw.trim();
     if (!body) return { status: 'unreadable' };
     const lowered = body.toLowerCase();
     if (lowered === 'unknown' || lowered === 'nobestmove') return { status: 'unknown' };

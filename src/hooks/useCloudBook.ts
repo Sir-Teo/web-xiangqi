@@ -1,3 +1,4 @@
+import { readCloudResponse } from '../utils/cloudResponse';
 import { useCallback, useEffect, useState } from 'react';
 import {
     CloudBookCache,
@@ -61,7 +62,7 @@ export function useCloudBook(fen: string, enabled: boolean): CloudBookState & { 
             try {
                 const response = await fetch(buildCloudBookUrl(fen), { signal: controller.signal, cache: 'no-store' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const reading = parseCloudBookResponse(await response.text());
+                const reading = parseCloudBookResponse(await readCloudResponse(response));
                 if (controller.signal.aborted) return;
                 if (reading.status === 'unreadable') throw new Error('unreadable reply');
                 cache.set(fen, reading);
