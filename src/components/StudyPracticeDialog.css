@@ -16,6 +16,7 @@
 .study-practice-feedback { grid-area: feedback; min-width: 0; }
 .study-practice-feedback > p[role="status"] { padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-panel); }
 .study-practice-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.app-shell .study-practice-dialog .study-practice-actions button:focus { outline: 2px solid var(--info); outline-offset: 2px; scroll-margin-block: 5px; }
 .study-practice-note { color: var(--text-secondary); }
 .study-practice-note summary { min-height: 44px; align-content: center; cursor: pointer; font-size: .85rem; }
 .study-practice-line-notes { margin: .75rem 0; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; }

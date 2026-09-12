@@ -30,9 +30,15 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   useLayoutEffect(() => {
     if (!focusBoardRef.current) return;
     focusBoardRef.current = false;
-    if (complete) nextRef.current?.focus();
-    else if (!asking) replyRef.current?.focus();
-    else boardRef.current?.querySelector<HTMLElement>('.hitbox[tabindex="0"]')?.focus();
+    const target = complete ? nextRef.current : !asking ? replyRef.current
+      : boardRef.current?.querySelector<HTMLElement>('.hitbox[tabindex="0"]');
+    target?.focus({ preventScroll: true });
+    // Wait for the dialog's responsive layout: WebKit can focus a newly
+    // mounted control before its final position is available for scrolling.
+    const frame = requestAnimationFrame(() => {
+      if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
   });
   useEffect(() => {
     if (message && revealFeedbackRef.current) feedbackRef.current?.scrollIntoView({ block: 'nearest' });
@@ -56,11 +62,18 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
     if (!selected) { setMessage(`Select a ${side === 'w' ? 'red' : 'black'} piece first.`); return; }
     const result = attemptPracticeMove(study, session, side, squareToUci(selected.file, selected.rank) + squareToUci(file, rank));
     setSession(result.session); setMessage(result.message);
-    if (result.matched) { setSelected(null); setHint(false); }
+    if (result.matched) {
+      setSelected(null); setHint(false);
+      // The next action can be below the board on a phone. Keep keyboard
+      // practice moving through reply/next controls and let focus reveal it.
+      focusBoardRef.current = true;
+      revealFeedbackRef.current = false;
+    }
   }
   const next = nextPracticeLine(study, session, side);
   const nextMove = study.lines[session.line]?.[session.moves.length];
   const completedNotes = complete ? study.notes[session.line] : [];
+  const turnMessage = complete ? 'Line complete.' : asking ? `${side === 'w' ? 'Red' : 'Black'} to move.` : 'Play the saved reply to continue.';
   return <div className="study-practice-layout">
     <div className="study-practice-controls">
       <label>Practice as<select className="app-select app-select-roomy" value={side} onChange={event => {
@@ -80,8 +93,8 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
           highlights={hint && nextMove ? [uciToSquare(nextMove.slice(0, 2))!, uciToSquare(nextMove.slice(2))!] : []} />
       </div>
       <section className="study-practice-feedback" aria-label="Practice feedback">
-        <p role="status" ref={feedbackRef} data-testid="study-practice-status">{message || 'Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.'}</p>
-        <p>{complete ? 'Line complete.' : asking ? `${side === 'w' ? 'Red' : 'Black'} to move.` : 'Play the saved reply to continue.'}</p>
+        <p role="status" ref={feedbackRef} data-testid="study-practice-status">{message ? `${message} ${turnMessage}` : asking
+          ? `${turnMessage} Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.` : turnMessage}</p>
         {hint && nextMove && <p data-testid="study-practice-hint">One saved move: {formatUciMove(nextMove)}</p>}
         <div className="study-practice-actions">
           {asking && <button type="button" onClick={() => { setHint(true); setSession({ ...session, assisted: true }); }}>Show a saved move</button>}

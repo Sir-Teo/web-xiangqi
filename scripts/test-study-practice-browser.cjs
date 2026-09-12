@@ -64,20 +64,37 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         };
         const commonNote = 'Keep this note ' + '準備'.repeat(100);
         assert.equal(await notes.count(), 0, 'Study notes must not reveal future moves before completion');
-        const move = async uci => {
-          for (const square of [uci.slice(0, 2), uci.slice(2)]) await dialog.locator(`.hitbox[data-file="${square.charCodeAt(0) - 97}"][data-rank="${square[1]}"]`).click();
+        const move = async (uci, keyboard = false) => {
+          const square = name => dialog.locator(`.hitbox[data-file="${name.charCodeAt(0) - 97}"][data-rank="${name[1]}"]`);
+          if (!keyboard) {
+            for (const name of [uci.slice(0, 2), uci.slice(2)]) await square(name).click();
+            return;
+          }
+          await square(uci.slice(0, 2)).focus();
+          await page.keyboard.press('Enter');
+          const flipped = await dialog.getByRole('combobox', { name: 'Practice as' }).inputValue() === 'b';
+          const dx = (uci.charCodeAt(2) - uci.charCodeAt(0)) * (flipped ? -1 : 1);
+          const dy = (Number(uci[3]) - Number(uci[1])) * (flipped ? -1 : 1);
+          for (let i = 0; i < Math.abs(dx); i++) await page.keyboard.press(dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+          for (let i = 0; i < Math.abs(dy); i++) await page.keyboard.press(dy > 0 ? 'ArrowUp' : 'ArrowDown');
+          await page.keyboard.press('Enter');
         };
-        await move('a3a4');
+        await move('a3a4', true);
         assert.match(await dialog.getByTestId('study-practice-status').innerText(), /legal, but outside/);
+        assert.equal(await dialog.locator('.hitbox[data-file="0"][data-rank="4"]').evaluate(node => node === document.activeElement), true, 'An off-study attempt must retain board focus for correction');
         assert.match(await dialog.locator('.hitbox[data-file="0"][data-rank="3"]').getAttribute('aria-label'), /red soldier/);
         await dialog.getByRole('button', { name: 'Show a saved move' }).click();
         assert.match(await dialog.getByTestId('study-practice-hint').innerText(), /h2→e2/i);
-        await move('h2e2');
+        await move('h2e2', true);
         assert.equal(await notes.count(), 0);
-        await dialog.getByRole('button', { name: 'Play saved reply' }).click();
+        assert.equal(await dialog.getByRole('button', { name: 'Play saved reply' }).evaluate(node => node === document.activeElement), true, 'A recalled move must focus the saved reply');
+        assert.match(await dialog.getByTestId('study-practice-status').innerText(), /Play the saved reply/);
+        await page.keyboard.press('Enter');
         assert.equal(await dialog.evaluate(node => Boolean(node.querySelector('.study-practice-board')?.contains(document.activeElement))), true);
         assert.equal(await notes.count(), 0);
-        await move('h0g2');
+        await move('h0g2', true);
+        assert.equal(await dialog.getByRole('button', { name: 'Next line' }).evaluate(node => node === document.activeElement), true, 'Completing a line must focus the next line');
+        assert.match(await dialog.getByTestId('study-practice-status').innerText(), /Line complete/);
         await checkNotes([commonNote, 'Right horse reply', 'Develop the right horse']);
         assert.match(await progress.innerText(), /1 of 3/);
         assert.match(await dialog.getByTestId('study-practice-recall').innerText(), /1 of 2/);
@@ -94,6 +111,8 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         await dialog.getByRole('button', { name: 'Practice again' }).waitFor();
         await dialog.getByRole('combobox', { name: 'Practice as' }).selectOption('b');
         assert.match(await progress.innerText(), /0 of 3/);
+        assert.match(await dialog.getByTestId('study-practice-status').innerText(), /Play the saved reply/);
+        assert.doesNotMatch(await dialog.getByTestId('study-practice-status').innerText(), /Choose a piece/);
         assert.equal(await notes.count(), 0, 'Changing sides must hide completed-line notes');
         await dialog.getByRole('button', { name: 'Play saved reply' }).click();
         await move('b9c7'); await dialog.getByRole('button', { name: 'Play saved reply' }).click();
@@ -153,10 +172,30 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         await page.getByTestId('practice-saved-black-root').click();
         await dialog.getByRole('combobox', { name: 'Practice as' }).waitFor();
         assert.equal(await dialog.getByRole('combobox', { name: 'Practice as' }).inputValue(), 'b');
-        await move('h9g7');
+        await page.evaluate(() => document.documentElement.style.fontSize = '32px');
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await move('h9g7', true);
         assert.match(await progress.innerText(), /1 of 1/);
+        assert.equal(await dialog.getByRole('button', { name: 'Practice again' }).evaluate(node => node === document.activeElement), true, 'Black completion must focus Practice again');
+        const focusStyle = await dialog.getByRole('button', { name: 'Practice again' }).evaluate(node => {
+          const style = getComputedStyle(node);
+          return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+        });
+        assert.ok(focusStyle.style !== 'none' && focusStyle.width >= 2, 'The focused next action needs a visible outline');
+        await page.waitForFunction(() => {
+          const node = document.activeElement;
+          if (node?.textContent !== 'Practice again') return false;
+          const rect = node.getBoundingClientRect();
+          const panel = node.closest('[role="dialog"]').getBoundingClientRect();
+          return rect.top >= panel.top + 4 && rect.bottom <= panel.bottom - 4
+            && node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+        }, null, { timeout: 3000 }); // Focus must reveal the action without manual scrolling.
+        await page.screenshot({ path: `/tmp/xiangqi-practice-next-action-${browserType.name()}-${width}.png` });
+        await page.keyboard.press('Enter');
+        assert.equal(await dialog.evaluate(node => Boolean(node.querySelector('.study-practice-board')?.contains(document.activeElement))), true, 'Practice again must return focus to the board');
         assert.equal(await notes.count(), 0, 'An unannotated game must not show an empty notes section');
         await close.click();
+        await page.evaluate(() => document.documentElement.style.fontSize = '16px');
         await page.getByTestId('practice-saved-invalid').click();
         await dialog.getByRole('alert').waitFor();
         assert.match(await dialog.getByRole('alert').innerText(), /illegal/);
