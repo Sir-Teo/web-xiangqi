@@ -7323,6 +7323,7 @@ async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByTestId("load-saved-decisive-arrow-quality").click();
+  await page.getByTestId("review-moment-2").waitFor({ timeout: 5000 });
   await page.waitForFunction(() => {
     const arrow = document.querySelector('.board-arrow-last[data-from="1:0"][data-to="2:2"] path');
     return arrow?.getAttribute("stroke") === "#facc15";
