@@ -68,6 +68,12 @@ async function command(page, label) {
           } else assert.equal(layout.position, 'absolute', 'Roomy mouse layouts retain anchored details');
           assert.match(await details.innerText(), /Mistake/);
           assert.match(await details.innerText(), /Chance -21%/);
+          const legend = await page.locator('.graph-wrap .graph-legend').evaluate(node => {
+            const move = node.querySelector('span').getBoundingClientRect();
+            const score = node.querySelector('strong').getBoundingClientRect();
+            return { horizontalGap: score.left - move.right, verticalGap: score.top - move.bottom };
+          });
+          assert.ok(Math.max(legend.horizontalGap, legend.verticalGap) >= 4, `${browserType.name()} ${width}px/${textSize}px: move label and score need visible separation: ${JSON.stringify(legend)}`);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           assert.equal(await page.locator('.graph-wrap').evaluate(node => node.scrollHeight > node.clientHeight + 1), false);
           if (textSize === 32) {

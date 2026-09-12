@@ -1132,6 +1132,8 @@ body.resizing * {
 .graph-legend {
   margin-top: 0.45rem;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
   justify-content: space-between;
   align-items: center;
   font-size: 0.72rem;
@@ -1148,6 +1150,7 @@ body.resizing * {
   content: "";
   display: inline-block;
   width: 8px;
+  flex-shrink: 0;
   height: 3px;
   border-radius: 2px;
   background: var(--accent);
