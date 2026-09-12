@@ -1289,7 +1289,7 @@ function App() {
         return;
       }
 
-      if (hasEvaluation && currentMoveIndex >= 0 && reviewStatus !== 'done') {
+      if (hasExactEvaluation && currentMoveIndex >= 0 && reviewStatus !== 'done') {
         setCurrentNodeEval(normalizeEvalForSide(score, sideToMove), scoreKind);
       }
       if (hasEvaluation) drillJudgeRef.current(normalizeEvalForSide(score, sideToMove));
@@ -4078,10 +4078,16 @@ function App() {
    * finished search changes the tree (`setCurrentNodeEval`), which is what
    * rewrites the snapshot anyway.
    */
-  const displayEvalScoreRef = useRef(displayEvalScore);
-  displayEvalScoreRef.current = displayEvalScore;
-  const displayEvalKindRef = useRef(displayEvalScoreKind);
-  displayEvalKindRef.current = displayEvalScoreKind;
+  // Ordinary game evaluations have no bound metadata. While a bound is live,
+  // retain this position's existing exact reading, including its score kind.
+  // Explicit Keep Line snapshots preserve uncertain scores separately.
+  const storedCurrentEval = treeNodes[currentNodeId]?.record;
+  const snapshotEval = {
+    score: topAnalysisPv?.bounded ? storedCurrentEval?.evalScore : displayEvalScore ?? undefined,
+    kind: topAnalysisPv?.bounded ? storedCurrentEval?.evalScoreKind : displayEvalScoreKind,
+  };
+  const snapshotEvalRef = useRef(snapshotEval);
+  snapshotEvalRef.current = snapshotEval;
   // The cursor and game details change the snapshot, not the stored tree.
   // Serialize only when the tree changes or a compact line first needs its
   // unplayed continuation. Keep the memo local so old studies can be released.
@@ -4127,8 +4133,8 @@ function App() {
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
     ...snapshot,
-    finalEval: displayEvalScoreRef.current ?? undefined,
-    finalEvalKind: displayEvalKindRef.current,
+    finalEval: snapshotEvalRef.current.score,
+    finalEvalKind: snapshotEvalRef.current.kind,
   }), []);
 
   const reportSaveResult = useCallback((saved: SavedGame | null) => {
