@@ -502,8 +502,8 @@
 
 /* Players and tournament are stored bounded at 256 characters each, and a card
    laid them out in full: one saved game ran past the height of the panel, so
-   the list it belongs to could not be scanned at all. Two rows each, with the
-   rest on the title. */
+   the list it belongs to could not be scanned at all. Keep a two-row preview;
+   the disclosure reveals the full text without needing a hover tooltip. */
 .lib-detail-line {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -511,6 +511,14 @@
   line-clamp: 2;
   overflow: hidden;
 }
+.lib-details-content[data-expanded="true"] .lib-detail-line {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+  scroll-margin-block: 1rem;
+}
+.lib-tournament-details .lib-details-toggle { min-height: 44px; max-width: 100%; margin-bottom: .35rem; font: inherit; white-space: normal; }
 
 .lib-pgn-games { max-height: 260px; overflow-y: auto; margin: 10px 0; }
 .lib-pgn-game { display: flex; align-items: flex-start; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; }

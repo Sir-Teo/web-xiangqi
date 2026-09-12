@@ -1,5 +1,5 @@
 import { LibraryPgnImport } from './LibraryPgnImport';
-import { formatRatedPlayer } from '../../utils/gameMetadata';
+import { LibraryGameMetadata } from './LibraryGameMetadata';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
@@ -829,27 +829,8 @@ export function LibraryPanel({
                   {loadedStudy.updated ? 'Updated' : 'Update from board'}
                 </button>
               </div>}
-              {game.metadata && (() => {
-                // Both lines are clamped to two rows in CSS, because these are
-                // player-supplied and bounded only at 256 characters apiece --
-                // one imported game with a long enough event name filled the
-                // whole panel and pushed every other saved game off it. The
-                // title carries whatever the clamp cuts.
-                const players = `Red: ${formatRatedPlayer(game.metadata.redPlayer, game.metadata.redRating, 'Unknown')} · Black: ${formatRatedPlayer(game.metadata.blackPlayer, game.metadata.blackRating, 'Unknown')}`;
-                const tournament = [game.metadata.event, game.metadata.site, game.metadata.date,
-                  game.metadata.round ? `Round ${game.metadata.round}` : undefined].filter(Boolean).join(' · ');
-                const credits = [game.metadata.timeControl ? `Time control: ${game.metadata.timeControl}` : undefined,
-                  game.metadata.annotator ? `Annotated by ${game.metadata.annotator}` : undefined].filter(Boolean).join(' · ');
-                return (
-                  <div className="lib-tournament-details" data-testid={`metadata-saved-${game.id}`}>
-                    {(game.metadata.redPlayer || game.metadata.blackPlayer || game.metadata.redRating || game.metadata.blackRating) && (
-                      <div className="lib-detail-line" title={players}>{players}</div>
-                    )}
-                    <div className="lib-detail-line" title={tournament || undefined}>{tournament}</div>
-                    {credits && <div className="lib-detail-line" title={credits}>{credits}</div>}
-                  </div>
-                );
-              })()}
+              {game.metadata && <LibraryGameMetadata metadata={game.metadata} gameId={game.id}
+                label={savedGameLabel} tabIndex={savedTabIndex} />}
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
                 <span className={`lib-result lib-result--${primaryResult}`} title="Primary line result">

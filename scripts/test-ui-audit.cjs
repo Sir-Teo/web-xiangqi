@@ -57,6 +57,7 @@ const path = require('node:path');
       'test-pgn-result-endpoint-browser.cjs',
       'test-library-primary-cache-browser.cjs',
       'test-library-dates-browser.cjs',
+      'test-library-details-browser.cjs',
       'test-library-review-scope-browser.cjs',
       'test-mobile-tabs-text-browser.cjs',
       'test-recovery-text-browser.cjs',
