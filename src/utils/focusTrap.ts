@@ -1,5 +1,16 @@
 /** Shared keyboard focus handling for the app's dialogs. */
 
+/** Keep the beginning of a long dialog and its initial focus in view. */
+export function focusDialogStart(
+    container: HTMLElement | null,
+    primaryAction: HTMLElement | null,
+    heading: HTMLElement | null,
+): void {
+    if (!container) return;
+    const target = container.scrollHeight > container.clientHeight + 1 ? heading : primaryAction;
+    target?.focus({ preventScroll: true });
+}
+
 /** Candidate controls; visibility and actual tab stops are checked below. */
 export const DIALOG_FOCUSABLE_SELECTOR = [
     'button:not([disabled])',
@@ -49,13 +60,15 @@ export function keepTabWithin(container: HTMLElement | null, event: KeyboardEven
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     const active = document.activeElement;
-    const outside = !active || !container.contains(active);
-    if (event.shiftKey && (outside || active === first)) {
+    // A long dialog initially focuses its title (tabindex=-1). Treat that as
+    // the start of the cycle too, so Shift+Tab cannot escape into the page.
+    const outsideTabOrder = !focusable.some(element => element === active);
+    if (event.shiftKey && (outsideTabOrder || active === first)) {
         event.preventDefault();
         // Let the dialog scroll to the destination, especially when its board
         // and last control cannot both fit on a small screen.
         last.focus();
-    } else if (!event.shiftKey && (outside || active === last)) {
+    } else if (!event.shiftKey && (outsideTabOrder || active === last)) {
         event.preventDefault();
         first.focus();
     }

@@ -1,7 +1,7 @@
 import { BLACK_GENERAL_GLYPH, RED_GENERAL_GLYPH } from '../utils/pieceStyle';
 import { useEffect, useRef } from 'react';
 import type { GameResult } from '../hooks/useXiangqi';
-import { keepTabWithin } from '../utils/focusTrap';
+import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
 
 interface GameOverModalProps {
   result: GameResult;
@@ -25,17 +25,18 @@ function resultSubtitle(result: NonNullable<GameResult>, reason?: GameOverModalP
 
 export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverModalProps) {
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!result) return;
-    const focusPrimaryAction = () => {
+    const focusInitialElement = () => {
       if (modalRef.current?.contains(document.activeElement)) return;
-      primaryButtonRef.current?.focus({ preventScroll: true });
+      focusDialogStart(modalRef.current, primaryButtonRef.current, titleRef.current);
     };
-    focusPrimaryAction();
-    const frame = window.requestAnimationFrame(focusPrimaryAction);
-    const retryTimer = window.setTimeout(focusPrimaryAction, 80);
+    focusInitialElement();
+    const frame = window.requestAnimationFrame(focusInitialElement);
+    const retryTimer = window.setTimeout(focusInitialElement, 80);
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -76,7 +77,7 @@ export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverM
             ? RED_GENERAL_GLYPH
             : result === 'black-wins' ? BLACK_GENERAL_GLYPH : '＝'}
         </div>
-        <h2 className="game-over-title" id="game-over-title">{cfg.title}</h2>
+        <h2 className="game-over-title" id="game-over-title" ref={titleRef} tabIndex={-1}>{cfg.title}</h2>
         <p className="game-over-subtitle" id="game-over-subtitle">{subtitle}</p>
         <div className="game-over-actions">
           <button

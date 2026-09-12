@@ -52,9 +52,7 @@ describe('the unfinished-game prompt', () => {
         expect(render({ moveCount: 1, incomingLink: { moveCount: 2 } })).toContain('1 move was in progress');
     });
 
-    it('keeps Restore as the button that carries focus', () => {
-        // Restore stays the default: it is the one that protects work the
-        // reader has not saved anywhere else.
+    it('keeps Restore first in the action order', () => {
         const html = render({ incomingLink: { moveCount: 5 } });
         expect(html.indexOf('Restore')).toBeLessThan(html.indexOf("Keep the link"));
     });

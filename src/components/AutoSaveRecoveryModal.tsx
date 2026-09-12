@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import './AutoSaveRecoveryModal.css';
-import { keepTabWithin } from '../utils/focusTrap';
+import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
 
 interface AutoSaveRecoveryModalProps {
     savedAt: number;
@@ -43,9 +43,10 @@ export function AutoSaveRecoveryModal({
 }: AutoSaveRecoveryModalProps) {
     const modalRef = useRef<HTMLDivElement | null>(null);
     const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+    const titleRef = useRef<HTMLHeadingElement | null>(null);
 
     useEffect(() => {
-        primaryButtonRef.current?.focus({ preventScroll: true });
+        focusDialogStart(modalRef.current, primaryButtonRef.current, titleRef.current);
 
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -70,7 +71,7 @@ export function AutoSaveRecoveryModal({
                 aria-labelledby="auto-save-title"
                 aria-describedby="auto-save-subtitle"
             >
-                <h2 className="auto-save-title" id="auto-save-title">Unfinished game</h2>
+                <h2 className="auto-save-title" id="auto-save-title" ref={titleRef} tabIndex={-1}>Unfinished game</h2>
                 <p className="auto-save-subtitle" id="auto-save-subtitle">
                     {moveCount > 0
                         ? `${moveCount} ${moveCount === 1 ? 'move was' : 'moves were'} in progress ${describeWhen(savedAt)}.`
