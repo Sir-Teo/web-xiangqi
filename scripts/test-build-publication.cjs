@@ -32,6 +32,7 @@ function fixture() {
   }
   fs.writeFileSync(path.join(root, 'dist/pikafish.nnue'), 'old dist network');
   for (const name of ['git', 'emcc']) fs.writeFileSync(path.join(root, 'bin', name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(root, 'bin/git'), '#!/bin/sh\necho called >> "$TEST_GIT_LOG"\nexit 0\n', { mode: 0o755 });
   fs.writeFileSync(path.join(root, 'bin/make'), `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path');
 const args = process.argv.slice(2);
@@ -56,11 +57,81 @@ if (!base.includes('single')) fs.writeFileSync(path.join(dir, base + '.worker.js
     run: (extra = {}) => spawnSync('bash', ['scripts/build-pikafish.sh'], { cwd: root, encoding: 'utf8', timeout: 15000,
       env: { ...process.env, PATH: path.join(root, 'bin') + path.delimiter + process.env.PATH,
         PIKAFISH_UPSTREAM_DIR: path.join(root, '.deps/pikafish'), WASM_BUILD_SIMD: 'yes', JOBS: '1',
+        WASM_PROFILE: 'release', WASM_ALLOW_MEMORY_GROWTH: 'yes', WASM_ENABLE_LTO: 'yes', WASM_DISABLE_RTTI: 'yes',
+        TEST_GIT_LOG: path.join(root, 'git-calls.log'),
         TEST_FAIL_FLAVOR: '', TEST_OMIT_WASM: '', TEST_EXPECT_NETWORK: '', ...extra } }),
     clean: () => fs.rmSync(root, { recursive: true, force: true }),
     assertClean: () => assert.deepEqual(fs.readdirSync(path.join(root, '.deps')).filter(name => name.startsWith('pikafish-artifacts.')), []),
   };
 }
+
+function inspectBuildFlags(options = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'xiangqi-build-flags-'));
+  try {
+    const probe = path.join(root, 'flags.mk');
+    fs.writeFileSync(probe, '$(info QA_CXX=$(EM_CXXFLAGS))\n$(info QA_LINK=$(EM_LDFLAGS))\n.PHONY: qa-flags\nqa-flags:\n');
+    const env = { ...process.env };
+    for (const key of Object.keys(env)) if (key.startsWith('WASM_')) delete env[key];
+    return spawnSync('make', ['-s', '-f', path.join(__dirname, '../templates/emscripten/wasm-makefile.mk'),
+      '-f', probe, 'qa-flags', ...Object.entries({ WASM_PROFILE: 'release', WASM_ALLOW_MEMORY_GROWTH: 'yes',
+        WASM_ENABLE_LTO: 'yes', WASM_DISABLE_RTTI: 'yes', ...options }).filter(([, value]) => value !== undefined).map(([key, value]) => `${key}=${value}`)],
+    { cwd: root, env, encoding: 'utf8', timeout: 15000 });
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+}
+
+test('invalid optimization settings fail before checkout or publication', () => {
+  const f = fixture();
+  try {
+    const before = f.readPublished();
+    for (const [key, values] of Object.entries({
+      WASM_PROFILE: ['relese', 'Release', '', 'release debug'],
+      WASM_ENABLE_LTO: ['ye', '', 'yes no'],
+      WASM_DISABLE_RTTI: ['ture', '', '%'],
+      WASM_ALLOW_MEMORY_GROWTH: ['off', '', 'true false'],
+    })) for (const value of values) {
+      const result = f.run({ [key]: value });
+      assert.equal(result.status, 2, `${key}=${value}: ${result.stderr}`);
+      assert.ok(result.stderr.includes(key));
+      assert.equal(fs.existsSync(path.join(f.root, 'git-calls.log')), false, 'Invalid settings must not touch the checkout');
+      assert.deepEqual(f.readPublished(), before);
+      f.assertClean();
+    }
+  } finally { f.clean(); }
+});
+
+test('the actual Makefile rejects invalid profiles and boolean switches', () => {
+  for (const [key, values] of Object.entries({ WASM_PROFILE: ['relese', '', 'release debug'],
+    WASM_ENABLE_LTO: ['ye', '', 'yes no'], WASM_DISABLE_RTTI: ['ture', '', '%'],
+    WASM_ALLOW_MEMORY_GROWTH: ['off', '', 'true false'] })) for (const value of values) {
+    const result = inspectBuildFlags({ [key]: value });
+    assert.notEqual(result.status, 0, `${key}=${value} must not silently select different flags`);
+    assert.ok(result.stderr.includes(key), result.stderr);
+  }
+});
+
+test('release/debug profiles and documented boolean aliases produce the intended compiler/linker flags', () => {
+  const defaults = inspectBuildFlags({ WASM_PROFILE: undefined });
+  assert.equal(defaults.status, 0, defaults.stderr);
+  assert.match(defaults.stdout, /-O3\b/);
+  for (const [enabled, values] of [[true, ['yes', 'true', '1']], [false, ['no', 'false', '0']]]) for (const value of values) {
+    const result = inspectBuildFlags({ WASM_ENABLE_LTO: value, WASM_DISABLE_RTTI: value, WASM_ALLOW_MEMORY_GROWTH: value });
+    assert.equal(result.status, 0, result.stderr);
+    const [compile, link] = result.stdout.trim().split('\n');
+    for (const flags of [compile, link]) { assert.match(flags, /-O3\b/); assert.equal(flags.includes('-flto'), enabled); }
+    assert.equal(compile.includes('-fno-rtti'), enabled);
+    assert.ok(link.includes(`ALLOW_MEMORY_GROWTH=${enabled ? 1 : 0}`));
+    assert.match(link, /ASSERTIONS=0/);
+  }
+  const debug = inspectBuildFlags({ WASM_PROFILE: 'debug' });
+  assert.equal(debug.status, 0, debug.stderr);
+  assert.doesNotMatch(debug.stdout, /-O3|-flto|-DNDEBUG/);
+  assert.match(debug.stdout, /-g\b/); assert.match(debug.stdout, /ASSERTIONS=1/);
+  const f = fixture();
+  try {
+    assert.equal(f.run({ WASM_PROFILE: 'debug', WASM_ENABLE_LTO: 'false', WASM_DISABLE_RTTI: '0', WASM_ALLOW_MEMORY_GROWTH: 'true' }).status, 0);
+    f.assertClean();
+  } finally { f.clean(); }
+});
 
 for (const flavor of ['pikafish-core', 'pikafish-core-simd', 'pikafish-core-single', 'pikafish-core-single-simd']) {
   test(`a failed ${flavor} compilation preserves published files`, () => {

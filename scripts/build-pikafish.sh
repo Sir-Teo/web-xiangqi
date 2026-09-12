@@ -11,20 +11,30 @@ EMSDK_DIR="${EMSDK_DIR:-$ROOT/.deps/emsdk}"
 DIST_DIR="$ROOT/dist"
 PUBLIC_DIR="$ROOT/public"
 PATCH_FILE="$ROOT/patches/pikafish-wasm.patch"
-WASM_PROFILE="${WASM_PROFILE:-release}"
-WASM_ALLOW_MEMORY_GROWTH="${WASM_ALLOW_MEMORY_GROWTH:-yes}"
+WASM_PROFILE="${WASM_PROFILE-release}"
+WASM_ALLOW_MEMORY_GROWTH="${WASM_ALLOW_MEMORY_GROWTH-yes}"
 WASM_INITIAL_MEMORY="${WASM_INITIAL_MEMORY:-134217728}"
 WASM_MAXIMUM_MEMORY="${WASM_MAXIMUM_MEMORY:-2147483648}"
 WASM_STACK_SIZE="${WASM_STACK_SIZE:-8388608}"
 WASM_DEFAULT_PTHREAD_STACK_SIZE="${WASM_DEFAULT_PTHREAD_STACK_SIZE:-$WASM_STACK_SIZE}"
 WASM_PTHREAD_POOL_SIZE="${WASM_PTHREAD_POOL_SIZE:-12}"
-WASM_ENABLE_LTO="${WASM_ENABLE_LTO:-yes}"
-WASM_DISABLE_RTTI="${WASM_DISABLE_RTTI:-yes}"
+WASM_ENABLE_LTO="${WASM_ENABLE_LTO-yes}"
+WASM_DISABLE_RTTI="${WASM_DISABLE_RTTI-yes}"
 WASM_BUILD_SIMD="${WASM_BUILD_SIMD-yes}"
 case "$WASM_BUILD_SIMD" in
   yes|no) ;;
   *) echo "WASM_BUILD_SIMD must be yes or no." >&2; exit 2 ;;
 esac
+case "$WASM_PROFILE" in
+  release|debug) ;;
+  *) echo "WASM_PROFILE must be release or debug." >&2; exit 2 ;;
+esac
+for build_flag in WASM_ALLOW_MEMORY_GROWTH WASM_ENABLE_LTO WASM_DISABLE_RTTI; do
+  case "${!build_flag}" in
+    yes|no|true|false|1|0) ;;
+    *) echo "$build_flag must be yes/no, true/false, or 1/0." >&2; exit 2 ;;
+  esac
+done
 
 mkdir -p "$ROOT/.deps" "$DIST_DIR" "$PUBLIC_DIR"
 

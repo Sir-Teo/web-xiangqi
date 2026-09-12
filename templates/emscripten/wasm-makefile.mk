@@ -26,6 +26,7 @@ arch = any
 bits = 64
 SUPPORTED_ARCH=true
 
+WASM_PROFILE ?= release
 WASM_ALLOW_MEMORY_GROWTH ?= yes
 WASM_INITIAL_MEMORY ?= 134217728
 WASM_MAXIMUM_MEMORY ?= 2147483648
@@ -34,6 +35,16 @@ WASM_DEFAULT_PTHREAD_STACK_SIZE ?= $(WASM_STACK_SIZE)
 WASM_PTHREAD_POOL_SIZE ?= 12
 WASM_ENABLE_LTO ?= yes
 WASM_DISABLE_RTTI ?= yes
+
+# Direct make invocations must not silently turn a typo into a debug build or
+# disable an optimization. Keep the accepted values aligned with the wrapper.
+ifneq ($(WASM_PROFILE),release)
+ifneq ($(WASM_PROFILE),debug)
+$(error WASM_PROFILE must be release or debug)
+endif
+endif
+validate_wasm_boolean = $(if $(and $(filter 1,$(words $($(1)))),$(filter yes no true false 1 0,$($(1)))),,$(error $(1) must be yes/no true/false or 1/0))
+$(foreach setting,WASM_ALLOW_MEMORY_GROWTH WASM_ENABLE_LTO WASM_DISABLE_RTTI,$(call validate_wasm_boolean,$(setting)))
 
 # zstd ships an x86_64 asm file that cannot be assembled for wasm.
 SRCS := $(filter-out ./external/decompress/huf_decompress_amd64.S, $(SRCS))
