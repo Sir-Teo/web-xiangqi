@@ -4477,7 +4477,9 @@ summary:active {
 
   [data-mobile-view="analysis"] .mobile-analysis-tabs {
     display: flex;
-    flex: 0 0 48px;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    min-height: 48px;
     order: 0;
     width: 100%;
     /* The tab bar under this one already clears the cutout; this strip is the
@@ -4529,8 +4531,10 @@ summary:active {
   }
 
   .mobile-tab-btn {
-    flex: 1;
-    min-width: 0;
+    /* Enlarged text needs intrinsic-width targets and additional rows. Fixed
+       equal-width cells let labels paint over their neighbours at 200%. */
+    flex: 1 0 auto;
+    min-height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
