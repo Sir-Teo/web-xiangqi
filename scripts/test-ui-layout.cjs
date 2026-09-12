@@ -4857,14 +4857,16 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
     { viewport: { width: 1024, height: 600 }, font: 16, floored: false },
     { viewport: { width: 1024, height: 600 }, font: 24, floored: true },
     { viewport: { width: 1024, height: 720 }, font: 32, floored: true },
+    { viewport: { width: 1024, height: 720 }, font: 32, floored: true, downloading: true },
     { viewport: { width: 1440, height: 900 }, font: 32, floored: true },
   ];
 
-  for (const { viewport, font, floored } of cases) {
+  for (const { viewport, font, floored, downloading } of cases) {
     const context = await browser.newContext({ viewport });
     try {
       const page = await context.newPage();
       await clearAutoSaveBetweenNavigations(page);
+      if (downloading) await installFakePikafish(page, { variant: "fake-slow-weights" });
       const cdp = await context.newCDPSession(page);
       await cdp.send("Page.enable");
       await cdp.send("Page.setFontSizes", { fontSizes: { standard: font, fixed: font } });
@@ -4873,6 +4875,11 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
         timeout: 60000,
       });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      if (downloading) {
+        await page.waitForFunction(() => typeof window.__reportWeights === "function");
+        await page.evaluate(() => window.__reportWeights(25, false));
+        await page.waitForFunction(() => document.querySelector('[aria-label^="Loading engine"]')?.textContent.includes('MB'));
+      }
       await page.waitForTimeout(500);
 
       const measured = await page.evaluate(() => {
@@ -4885,11 +4892,17 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
         stage.scrollTop = stage.scrollHeight;
         document.querySelector(".xiangqi-board").scrollIntoView({ block: "center", inline: "nearest" });
         const scrolled = box();
+        // Download progress can grow the enlarged header until the stage is
+        // shorter than the board. Reachability then requires scrolling each
+        // rank into view, not fitting all ranks in the viewport simultaneously.
+        const squares = [...document.querySelectorAll(".hitbox")];
+        const unreachable = squares.filter(node => {
+          node.scrollIntoView({ block: "center", inline: "nearest" });
+          const rect = node.getBoundingClientRect();
+          return !node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+        }).map(node => node.getAttribute("aria-label"));
         const reachable = scrolled.bottom <= window.innerHeight + 1 && scrolled.top >= -1
-          && [...document.querySelectorAll(".hitbox")].every(node => {
-            const rect = node.getBoundingClientRect();
-            return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
-          });
+          && squares.length === 90 && unreachable.length === 0;
         stage.scrollTop = 0;
         // A floor that only makes the child taller leaves the grid row where it
         // was, and the board paints straight over the dock below it -- pieces
@@ -4904,12 +4917,13 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
           ratio: before.width / before.height,
           scrollable: stage.scrollHeight - stage.clientHeight,
           reachable,
+          unreachable,
           overlapsDock,
           overflowX: document.body.scrollWidth - document.body.clientWidth,
         };
       });
 
-      const where = `${viewport.width}x${viewport.height} at ${font}px text`;
+      const where = `${viewport.width}x${viewport.height} at ${font}px text${downloading ? " during download" : ""}`;
       if (measured.width < FLOOR - 1) {
         throw new Error(`The board fell under its floor at ${where}: ${JSON.stringify(measured)}`);
       }
@@ -4918,7 +4932,7 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
       }
       if (!measured.reachable) {
         throw new Error(
-          `The board could not be brought fully on screen at ${where}: ${JSON.stringify(measured)}. ` +
+          `The board intersections could not all be reached by scrolling at ${where}: ${JSON.stringify(measured)}. ` +
           `A floor needs somewhere for its overflow to go.`
         );
       }
