@@ -10,6 +10,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
+const { compareSnapshots, validateBaseline } = require("./bench-comparison.cjs");
 
 const root = path.resolve(__dirname, "..");
 const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "xiangqi-bench-config-"));
@@ -168,4 +169,80 @@ for (const at of [2, 3]) test(`a changed artifact before/after hashing (${at}) r
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Benchmark artifact changed during the run/);
   assert.equal(fs.existsSync(result.out), false);
+});
+
+test("matching workloads retain deltas for intentional thread, SIMD and network comparisons", () => {
+  const baseline = { fen: 'position w - - 0 1', depth: 8, threads: 1, resolvedVariant: 'single', hashMB: 16,
+    avgNps: 100, avgWallMs: 40, coldStartMs: 200, artifacts: { network: { sha256: 'old' } } };
+  const current = { ...baseline, threads: 2, resolvedVariant: 'threaded-simd', hashMB: 32,
+    avgNps: 150, avgWallMs: 20, coldStartMs: 250, artifacts: { network: { sha256: 'new' } } };
+  const comparison = compareSnapshots(current, baseline);
+  assert.equal(comparison.workloadStatus, 'same');
+  assert.deepEqual(comparison.deltas, { avgNps: 0.5, avgWallMs: -0.5, coldStartMs: 0.25 });
+  assert.deepEqual(comparison.context.filter(item => item.status === 'different').map(item => item.field),
+    ['resolvedVariant', 'threads', 'hashMB', 'artifacts.network.sha256']);
+  assert.ok(comparison.context.some(item => item.field === 'engineName' && item.status === 'unknown'));
+});
+
+test("different depths, sides and FEN counters suppress search deltas but preserve startup comparison", () => {
+  const baseline = { fen: 'position w - - 0 1', depth: 8, avgNps: 100, avgWallMs: 40, coldStartMs: 200 };
+  for (const changed of [{ depth: 9 }, { fen: 'position b - - 0 1' }, { fen: 'position w - - 0 20' }]) {
+    const comparison = compareSnapshots({ ...baseline, ...changed, coldStartMs: 100 }, baseline);
+    assert.equal(comparison.workloadStatus, 'different');
+    assert.deepEqual(comparison.deltas, { avgNps: null, avgWallMs: null, coldStartMs: -0.5 });
+  }
+});
+
+test("legacy workload omissions and zero denominators cannot produce invented percentages", () => {
+  const baseline = { depth: 8, avgNps: 0, avgWallMs: 0, coldStartMs: 0 };
+  const comparison = compareSnapshots({ ...baseline, fen: 'position w - - 0 1' }, baseline);
+  assert.equal(comparison.workloadStatus, 'unknown');
+  assert.deepEqual(comparison.deltas, { avgNps: null, avgWallMs: null, coldStartMs: null });
+  assert.equal(comparison.workload[0].before, null);
+  const same = compareSnapshots({ ...baseline, fen: 'same' }, { ...baseline, fen: 'same' });
+  assert.equal(same.workloadStatus, 'same');
+  assert.deepEqual(same.deltas, comparison.deltas);
+});
+
+test("malformed comparison snapshots are rejected without coercing metrics", () => {
+  const valid = { depth: 8, avgNps: 100, avgWallMs: 40, coldStartMs: 200 };
+  for (const invalid of [null, [], {}, { snapshot: valid }, { ...valid, depth: 1.5 },
+    ...['avgNps', 'avgWallMs', 'coldStartMs'].flatMap(key =>
+      [null, '100', -1, Infinity, NaN].map(value => ({ ...valid, [key]: value })))]) {
+    assert.throws(() => validateBaseline(invalid), /Invalid benchmark comparison/);
+  }
+});
+
+test("the CLI exposes comparison context in JSON and withholds legacy text deltas", () => {
+  const first = run('single-simd');
+  assert.equal(first.status, 0, first.stderr);
+  const baseline = JSON.parse(first.stdout).snapshot;
+  const file = path.join(outputDir, 'baseline.json');
+  fs.writeFileSync(file, JSON.stringify(baseline));
+  const matched = run('single-simd', ['--compare', file]);
+  assert.equal(matched.status, 0, matched.stderr);
+  const output = JSON.parse(matched.stdout);
+  assert.equal(output.comparison.workloadStatus, 'same');
+  assert.deepEqual(output.comparison.context, []);
+  assert.equal(typeof output.comparison.deltas.avgNps, 'number');
+  assert.deepEqual(output.compareTo, baseline);
+  assert.equal(JSON.parse(fs.readFileSync(matched.out)).comparison, undefined, 'Saved snapshots stay independently reusable');
+  delete baseline.fen;
+  delete baseline.artifacts;
+  fs.writeFileSync(file, JSON.stringify(baseline));
+  const legacy = spawnSync(process.execPath, ['scripts/bench-nps.cjs', '--variant', 'single-simd', '--depth', '3',
+    '--repeats', '1', '--warmup', '0', '--threads', '1', '--hash', '16', '--quiet', '--compare', file],
+    { cwd: root, encoding: 'utf8', timeout: 30000 });
+  assert.ifError(legacy.error);
+  assert.equal(legacy.status, 0, legacy.stderr);
+  assert.match(legacy.stdout, /recorded FEN\/depth: unknown/);
+  assert.match(legacy.stdout, /Search deltas withheld/);
+  assert.match(legacy.stdout, /avg nps delta:  n\/a/);
+  assert.match(legacy.stdout, /avg wall delta: n\/a/);
+  assert.doesNotMatch(legacy.stdout, /NaN|undefined/);
+  fs.writeFileSync(file, 'null');
+  const invalid = run('single-simd', ['--compare', file]);
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /Invalid benchmark comparison/);
+  assert.equal(fs.existsSync(invalid.out), false);
 });

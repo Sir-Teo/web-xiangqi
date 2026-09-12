@@ -7,6 +7,7 @@ const path = require("path");
 const { execSync } = require("child_process");
 const { performance } = require("perf_hooks");
 const { createHash } = require("crypto");
+const { compareSnapshots, validateBaseline } = require("./bench-comparison.cjs");
 
 const START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
@@ -177,7 +178,7 @@ async function runSearch(engine, cfg, state) {
   }
 }
 
-function printSummary(snapshot, compareTo) {
+function printSummary(snapshot, compareTo, comparison) {
   console.log("");
   console.log("Benchmark Summary");
   console.log("  label:          " + (snapshot.label || ""));
@@ -197,15 +198,20 @@ function printSummary(snapshot, compareTo) {
   console.log("  bestmove:       " + (snapshot.lastBestmove || ""));
   if (!compareTo) return;
 
-  const npsDelta = compareTo.avgNps > 0 ? ((snapshot.avgNps - compareTo.avgNps) / compareTo.avgNps) : NaN;
-  const wallDelta = compareTo.avgWallMs > 0 ? ((snapshot.avgWallMs - compareTo.avgWallMs) / compareTo.avgWallMs) : NaN;
-  const coldDelta = compareTo.coldStartMs > 0 ? ((snapshot.coldStartMs - compareTo.coldStartMs) / compareTo.coldStartMs) : NaN;
-
   console.log("");
-  console.log("Comparison vs " + (compareTo.label || compareTo.createdAt));
-  console.log("  avg nps delta:  " + formatPct(npsDelta) + " (" + Math.round(compareTo.avgNps) + " -> " + Math.round(snapshot.avgNps) + ")");
-  console.log("  avg wall delta: " + formatPct(wallDelta) + " (" + Math.round(compareTo.avgWallMs) + " -> " + Math.round(snapshot.avgWallMs) + ")");
-  console.log("  cold start:     " + formatPct(coldDelta) + " (" + Math.round(compareTo.coldStartMs) + " -> " + Math.round(snapshot.coldStartMs) + ")");
+  console.log("Comparison vs " + (compareTo.label || compareTo.createdAt || "saved snapshot"));
+  console.log("  recorded FEN/depth: " + comparison.workloadStatus);
+  for (const item of [...comparison.workload, ...comparison.context]) {
+    if (item.status === "same") continue;
+    console.log("  " + item.field + " (" + item.status + "): " + (item.before ?? "not recorded") + " -> " + (item.after ?? "not recorded"));
+  }
+  if (comparison.workloadStatus !== "same") {
+    console.log("  Search deltas withheld: FEN/depth differ or were not recorded.");
+  }
+  console.log("  avg nps delta:  " + formatPct(comparison.deltas.avgNps) + " (" + Math.round(compareTo.avgNps) + " -> " + Math.round(snapshot.avgNps) + ")");
+  console.log("  avg wall delta: " + formatPct(comparison.deltas.avgWallMs) + " (" + Math.round(compareTo.avgWallMs) + " -> " + Math.round(snapshot.avgWallMs) + ")");
+  console.log("  cold start:     " + formatPct(comparison.deltas.coldStartMs) + " (" + Math.round(compareTo.coldStartMs) + " -> " + Math.round(snapshot.coldStartMs) + ")");
+  console.log("  Deltas describe these runs; recorded inputs do not establish equal hardware, load or cache state.");
 }
 
 function validateSnapshot(snapshot, cfg) {
@@ -273,6 +279,8 @@ async function main() {
     maxColdStartMs: optionalPositiveNumber(args["max-cold-start-ms"] || process.env.PIKAFISH_BENCH_MAX_COLD_START_MS || 0)
   };
   const coreJsFile = coreJsFileForVariant(cfg.variant);
+  const compareSnapshot = cfg.comparePath
+    ? validateBaseline(JSON.parse(fs.readFileSync(cfg.comparePath, "utf8"))) : null;
 
   if (!fs.existsSync(path.join(distDir, "pikafish.js"))) {
     throw new Error("dist/pikafish.js not found. Build first.");
@@ -426,10 +434,7 @@ async function main() {
     // reject ordinary concurrent rebuilds instead of labeling a mixed run.
     snapshot.artifacts = await fingerprintArtifacts(artifacts);
 
-    let compareSnapshot = null;
-    if (cfg.comparePath) {
-      compareSnapshot = JSON.parse(fs.readFileSync(cfg.comparePath, "utf8"));
-    }
+    const comparison = compareSnapshot ? compareSnapshots(snapshot, compareSnapshot) : null;
 
     if (cfg.outPath) {
       fs.mkdirSync(path.dirname(cfg.outPath), { recursive: true });
@@ -438,9 +443,9 @@ async function main() {
     }
 
     if (cfg.json) {
-      console.log(JSON.stringify({ snapshot, compareTo: compareSnapshot || null }, null, 2));
+      console.log(JSON.stringify({ snapshot, compareTo: compareSnapshot, comparison }, null, 2));
     } else {
-      printSummary(snapshot, compareSnapshot);
+      printSummary(snapshot, compareSnapshot, comparison);
     }
 
     try { engine.removeMessageListener(lineListener); } catch (_) {}
