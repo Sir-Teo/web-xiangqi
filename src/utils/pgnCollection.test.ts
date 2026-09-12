@@ -1,9 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { parsePgnCollection, MAX_COLLECTION_TEXT_LENGTH } from './pgnCollection';
 import { exportPgnFromMoveTree } from './gameExport';
-import { normalizeSavedGame } from './gameLibrary';
+import { normalizeSavedGame, type SavedMoveTreeNode } from './gameLibrary';
 
 describe('strict Xiangqi PGN collections', () => {
+  it('reopens a dense analysis backup larger than the old collection limit without losing snapshots', () => {
+    const moves = Array.from({ length: 1000 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]);
+    let tree: SavedMoveTreeNode[] = [];
+    for (let i = 999; i >= 0; i--) tree = [{ uci: moves[i], comment: `Preparation ${i + 1}`, children: tree,
+      analysis: { version: 1, position: i ? `position startpos moves ${moves.slice(0, i).join(' ')}` : 'position startpos', move: moves[i],
+        score: 125, scoreKind: 'cp', bounded: true, bound: 'lower', depth: 27, savedAt: 1,
+        engine: { name: 'Pikafish backup QA', variant: 'single-simd', threads: 1, hashMB: 64 }, multiPv: 1,
+        effort: { nodes: 123456, timeMs: 1200, seldepth: 35 } } }];
+    const pgn = exportPgnFromMoveTree(tree)!;
+    expect(pgn.length).toBeGreaterThan(1_000_000);
+    expect(pgn.length).toBeLessThan(MAX_COLLECTION_TEXT_LENGTH);
+    const [game] = parsePgnCollection(pgn);
+    expect(game.moves).toEqual(moves);
+    let original = tree, restored = game.moveTree!;
+    for (let i = 0; i < 1000; i++) {
+      expect(restored[0].analysis).toEqual(original[0].analysis);
+      expect(restored[0].comment).toBe(original[0].comment);
+      original = original[0].children ?? []; restored = restored[0].children ?? [];
+    }
+    expect(restored).toHaveLength(0);
+  });
   it('round-trips typed scores, depths, and quality on the main line and alternatives', () => {
     const [game] = parsePgnCollection('h2e2 $2 {[%eval +200.00,18] Main note} h9g7?! {[%eval #10000,20]} (b9c7?? {[%eval -300.00,21] Branch note}) *');
     expect(game.moveTree?.[0]).toMatchObject({ evalScore: 20000, evalScoreKind: 'cp', evalDepth: 18, quality: 'mistake', comment: 'Main note' });
@@ -79,7 +100,7 @@ describe('strict Xiangqi PGN collections', () => {
     expect(game.moveTree?.[0].analysis).toBeUndefined();
   });
   it('rejects a near-limit malformed analysis note without truncating it', () => {
-    const source = `h2e2 {${'[%xqanalysis '.repeat(74000)}} *`;
+    const source = `h2e2 {${'[%xqanalysis '.repeat(Math.floor((MAX_COLLECTION_TEXT_LENGTH - 100) / 13))}} *`;
     expect(source.length).toBeLessThan(MAX_COLLECTION_TEXT_LENGTH);
     expect(() => parsePgnCollection(source)).toThrow('Game 1: A move note exceeds 500 characters.');
   });

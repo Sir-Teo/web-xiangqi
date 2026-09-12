@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
+import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
 import { MAX_SAVED_GAMES, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { formatRatedPlayer } from '../../utils/gameMetadata';
 
-export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onChange: () => void }) {
+export function LibraryPgnImport({ state, onChange, onOpenGame }: {
+  state: LibraryState; onChange: () => void; onOpenGame: (game: CollectionGame) => boolean;
+}) {
   const [games, setGames] = useState<CollectionGame[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -27,7 +29,7 @@ export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onC
     try {
       const text = await file.text();
       if (generation.current !== id) return;
-      if (text.length > MAX_COLLECTION_TEXT_LENGTH) throw new Error('Collection exceeds 1,000,000 characters. Split it into smaller files.');
+      if (text.length > MAX_COLLECTION_TEXT_LENGTH) throw new Error(COLLECTION_SIZE_ERROR);
       const parser = new Worker(new URL('../../workers/pgnCollection.worker.ts', import.meta.url), { type: 'module' });
       worker.current = parser;
       const fail = (message: string) => {
@@ -59,28 +61,34 @@ export function LibraryPgnImport({ state, onChange }: { state: LibraryState; onC
   return <section className="lib-transfer" aria-label="Import PGN collection">
     <details data-testid="pgn-collection-import">
       <summary>Import PGN collection</summary>
-      <p>Add several games to your library without changing the board. Choose a Xiangqi PGN file with coordinate moves, such as h2e2 h9g7.</p>
+      <p>Open a game on the board or add games to your library. Choose a Xiangqi PGN file with coordinate moves, such as h2e2 h9g7.</p>
       <label className="lib-backup-file">Choose PGN collection
-        <input type="file" accept=".pgn,.txt,text/plain,application/x-chess-pgn" disabled={state.mutationBlocked}
+        <input type="file" accept=".pgn,.txt,text/plain,application/x-chess-pgn"
           onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void read(file); }} />
       </label>
       {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview">
-        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Select the games to add. Existing games will be kept; importing the same file again creates new copies.</p>
-        <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
+        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept; importing the same file again creates new copies.</p>
+        <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, saved analysis, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
         <div className="lib-transfer-actions">
           <button type="button" onClick={() => setSelected(new Set(games.map((_, index) => index)))}>Select all</button>
           <button type="button" onClick={() => setSelected(new Set())}>Select none</button>
         </div>
         <div className="lib-pgn-games">
-          {games.map((game, index) => <label key={index} className="lib-pgn-game">
+          {games.map((game, index) => <div key={index} className="lib-pgn-game">
+            <label>
             <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected(previous => {
               const next = new Set(previous); if (next.has(index)) next.delete(index); else next.add(index); return next;
             })} />
             <span><strong>{index + 1}. {formatRatedPlayer(game.metadata?.redPlayer, game.metadata?.redRating, 'Red')} · {formatRatedPlayer(game.metadata?.blackPlayer, game.metadata?.blackRating, 'Black')}</strong>
               <span>{[game.metadata?.event, game.metadata?.date, game.metadata?.round ? `Round ${game.metadata.round}` : undefined,
                 `${game.moves.length} ${game.moves.length === 1 ? 'ply' : 'plies'}`, resultLabel(game.result || 'ongoing')].filter(Boolean).join(' · ')}</span></span>
-          </label>)}
+            </label>
+            <button type="button" aria-label={`Open game ${index + 1} on board`}
+              onClick={() => { if (!onOpenGame(game)) setError('This game could not be opened because its move data is invalid.'); }}>
+              Open on board
+            </button>
+          </div>)}
         </div>
         {tooMany && <p role="alert">Select fewer games. Your library has {MAX_SAVED_GAMES - state.games.length} spaces remaining.</p>}
         <div className="lib-transfer-actions">

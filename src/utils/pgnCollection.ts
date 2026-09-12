@@ -8,7 +8,10 @@ import { extractPgnMetadata } from './gameMetadata';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './moveComment';
 import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
-export const MAX_COLLECTION_TEXT_LENGTH = 1_000_000;
+// Encoded snapshot histories can make a supported study several MB of PGN.
+// Parsing runs in a cancellable worker; per-game move/tree bounds still apply.
+export const MAX_COLLECTION_TEXT_LENGTH = 8_000_000;
+export const COLLECTION_SIZE_ERROR = 'Collection exceeds 8,000,000 characters. Split it into smaller files.';
 export type CollectionGame = Omit<SavedGame, 'id' | 'savedAt'>;
 type Token = { kind: 'tag' | 'comment' | 'symbol'; value: string };
 const RESULTS: Record<string, SavedGame['result']> = { '1-0': 'red', '0-1': 'black', '1/2-1/2': 'draw', '*': 'ongoing' };
@@ -149,7 +152,7 @@ function parseGame(input: Token[]): CollectionGame {
 
 /** Token-aware game boundaries, including multiple games on one physical line. */
 export function parsePgnCollection(text: string): CollectionGame[] {
-    if (text.length > MAX_COLLECTION_TEXT_LENGTH) throw new Error('Collection exceeds 1,000,000 characters. Split it into smaller files.');
+    if (text.length > MAX_COLLECTION_TEXT_LENGTH) throw new Error(COLLECTION_SIZE_ERROR);
     const games: CollectionGame[] = [];
     let current: Token[] = [];
     let depth = 0;

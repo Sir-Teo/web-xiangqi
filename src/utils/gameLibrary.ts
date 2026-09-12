@@ -488,7 +488,7 @@ function writeAll(games: SavedGame[]): boolean {
     }
 }
 
-function createSavedGameId() {
+export function createSavedGameId() {
     if (typeof globalThis.crypto?.randomUUID === 'function') {
         return globalThis.crypto.randomUUID();
     }

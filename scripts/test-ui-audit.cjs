@@ -96,6 +96,7 @@ const path = require('node:path');
       'test-library-analysis-search-browser.cjs',
       'test-library-move-search-browser.cjs',
       'test-study-load-context-browser.cjs',
+      'test-dense-pgn-backup-browser.cjs',
       'test-analysis-bounds-browser.cjs',
       'test-review-bounds-browser.cjs',
       'test-eval-storage-bounds-browser.cjs',

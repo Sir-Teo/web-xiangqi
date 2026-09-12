@@ -3189,7 +3189,7 @@ function App() {
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
       setMoveLineInput('');
-      setMoveLineError(`File is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+      setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
       return;
     }
 
@@ -3211,7 +3211,7 @@ function App() {
       if (isMoveImportTextTooLarge(text)) {
         setMoveLineInput('');
         setMoveLineFileName('');
-        setMoveLineError(`File is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
+        setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
         return;
       }
       setMoveLineInput(text);

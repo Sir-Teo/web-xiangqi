@@ -4,7 +4,7 @@ import { LibraryStudyMatches } from './LibraryStudyMatches';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 import { LibraryTransfer } from './LibraryTransfer';
-import type { LibraryState, SavedGame } from '../../utils/gameLibrary';
+import { createSavedGameId, type LibraryState, type SavedGame } from '../../utils/gameLibrary';
 import type { HistoricalGame } from '../../utils/historicalGames';
 import {
   describeReviewEngineSummary,
@@ -542,7 +542,8 @@ export function LibraryPanel({
   return (
     <div className="lib-panel">
       <LibraryTransfer state={libraryState} onChange={onLibraryChange} />
-      <LibraryPgnImport state={libraryState} onChange={onLibraryChange} />
+      <LibraryPgnImport state={libraryState} onChange={onLibraryChange}
+        onOpenGame={game => onLoadSavedGame({ ...game, id: `pgn-preview-${createSavedGameId()}`, savedAt: Date.now() })} />
       <div className="lib-search-wrap">
         <input
           className="lib-search"
