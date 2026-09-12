@@ -72,8 +72,7 @@ function countStudyLines(nodes: SavedGame['moveTree']): number {
   }, 0);
 }
 
-function formatSavedGameMoveCount(game: SavedGame) {
-  const line = savedGameLine(game);
+function formatSavedGameMoveCount(game: SavedGame, line: ReturnType<typeof savedGameLine>) {
   if (line.moves.length !== game.moves.length || line.moves.some((move, i) => move !== game.moves[i])) {
     return `${line.moves.length} main-line ${line.moves.length === 1 ? 'move' : 'moves'} · saved at ply ${game.moves.length}`;
   }
@@ -103,7 +102,7 @@ function formatLibraryReviewSummary(summary: ReviewSummary) {
   ].filter(Boolean).join(', ');
 }
 
-function getSavedGameSearchText(game: SavedGame) {
+function getSavedGameSearchText(game: SavedGame, line: ReturnType<typeof savedGameLine>) {
   const summary = game.review?.summary;
   const annotations = game.review?.annotations ?? [];
 
@@ -113,9 +112,9 @@ function getSavedGameSearchText(game: SavedGame) {
     ...Object.values(game.metadata ?? {}),
     game.opening,
     game.gameMode,
-    resultLabel(savedGameLine(game).result ?? 'ongoing'),
+    resultLabel(line.result ?? 'ongoing'),
     formatDate(game.savedAt),
-    formatSavedGameMoveCount(game),
+    formatSavedGameMoveCount(game, line),
     formatSavedStudyLines(game),
     game.startFen,
     game.moves.join(' '),
@@ -280,21 +279,32 @@ export function LibraryPanel({
   // mutation re-reads storage and hands back fresh objects, so a game that
   // changed cannot be read back through a stale entry.
   const savedSearchText = useMemo(() => new WeakMap<SavedGame, string>(), []);
+  // A primary line can span 1,024 nodes. Resolve it once per immutable saved
+  // record, rather than walking every tree again on each filter keystroke.
+  const savedPrimaryLines = useMemo(() => new WeakMap<SavedGame, ReturnType<typeof savedGameLine>>(), []);
+  const getSavedPrimaryLine = useCallback((game: SavedGame) => {
+    let line = savedPrimaryLines.get(game);
+    if (!line) {
+      line = savedGameLine(game);
+      savedPrimaryLines.set(game, line);
+    }
+    return line;
+  }, [savedPrimaryLines]);
   const filteredSaved = useMemo(() => savedGames
     .filter((g) => {
       const isReviewed = Boolean(g.review);
       if (reviewFilter === 'reviewed' && !isReviewed) return false;
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
-      if (resultFilter !== 'all' && (savedGameLine(g).result ?? 'ongoing') !== resultFilter) return false;
+      if (resultFilter !== 'all' && (getSavedPrimaryLine(g).result ?? 'ongoing') !== resultFilter) return false;
       if (searchTerms.length === 0) return true;
       let text = savedSearchText.get(g);
       if (text === undefined) {
-        text = getSavedGameSearchText(g);
+        text = getSavedGameSearchText(g, getSavedPrimaryLine(g));
         savedSearchText.set(g, text);
       }
       return matchesSearchTerms(text, searchTerms);
     })
-    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText]);
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText, getSavedPrimaryLine]);
   const reviewInsight = useMemo(() => {
     const reviewed = filteredSaved
       .map((game) => game.review?.summary)
@@ -573,7 +583,8 @@ export function LibraryPanel({
           visibleSaved.map((game, cardIndex) => {
             const savedTabIndex = cardIndex === savedStopIndex ? 0 : -1;
             const studyLineLabel = formatSavedStudyLines(game);
-            const primaryResult = savedGameLine(game).result ?? 'ongoing';
+            const primaryLine = getSavedPrimaryLine(game);
+            const primaryResult = primaryLine.result ?? 'ongoing';
             const savedGameLabel = game.label || `Game — ${formatDate(game.savedAt)}`;
             const reviewSummaryLabel = game.review ? formatLibraryReviewSummary(game.review.summary) : '';
             const blunderLabel = game.review ? formatReviewCount(game.review.summary.blunderCount, 'blunder') : '';
@@ -745,7 +756,7 @@ export function LibraryPanel({
                 <span className={`lib-result lib-result--${primaryResult}`} title="Primary line result">
                   {resultLabel(primaryResult)}
                 </span>
-                <span>{formatSavedGameMoveCount(game)}</span>
+                <span>{formatSavedGameMoveCount(game, primaryLine)}</span>
                 {studyLineLabel ? (
                   <>
                     <span>{studyLineLabel}</span>
