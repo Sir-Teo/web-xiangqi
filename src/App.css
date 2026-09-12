@@ -2607,7 +2607,7 @@ summary:active {
 
 /* Persistent details need their own space when touch or enlarged text makes
    an overlay obscure the chart. Keep the full review note in the panel flow. */
-@media (hover: none), (pointer: coarse) {
+@media (max-width: 900px), (hover: none), (pointer: coarse) {
   .graph-tooltip {
     position: static;
     transform: none;

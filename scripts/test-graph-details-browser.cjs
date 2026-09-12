@@ -10,8 +10,8 @@ async function command(page, label) {
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const [width, height] of [[1440, 900], [390, 844], [320, 480], [844, 390]]) {
-      const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 900, reducedMotion: 'reduce' });
+    for (const [width, height, hasTouch] of [[1440, 900, false], [390, 844, true], [320, 480, true], [844, 390, true], [390, 844, false]]) {
+      const page = await browser.newPage({ viewport: { width, height }, hasTouch, reducedMotion: 'reduce' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
         await page.addInitScript(() => localStorage.setItem('xiangqi:library:v1', JSON.stringify([{
@@ -74,7 +74,7 @@ async function command(page, label) {
             await page.setViewportSize({ width, height: 1600 });
             await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
             await page.locator('.left .panel-content').evaluate(node => { node.scrollTop = 0; });
-            await page.screenshot({ path: `/tmp/xiangqi-graph-details-${browserType.name()}-${width}.png` });
+            await page.screenshot({ path: `/tmp/xiangqi-graph-details-${browserType.name()}-${width}-${hasTouch ? 'touch' : 'mouse'}.png` });
             await page.setViewportSize({ width, height });
           }
           await navigator.scrollIntoViewIfNeeded();
@@ -83,7 +83,7 @@ async function command(page, label) {
           await page.waitForFunction(() => document.querySelector('.graph-tooltip')?.textContent?.includes('Solid choice.'));
         }
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}x${height}: review details leave the plot visible on touch/enlarged layouts and update with keyboard navigation`);
+        console.log(`${browserType.name()} ${width}x${height}/${hasTouch ? 'touch' : 'mouse'}: review details leave the plot visible on narrow/enlarged layouts and update with keyboard navigation`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
