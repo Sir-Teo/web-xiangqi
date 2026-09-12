@@ -21,6 +21,7 @@ const path = require('node:path');
       'test-explorer-browser.cjs',
       'test-library-matches-browser.cjs',
       'test-library-edit-focus-browser.cjs',
+      'test-study-practice-browser.cjs',
       'test-beginner-browser.cjs',
       'test-rule-lessons-browser.cjs',
       'test-graph-gaps-browser.cjs',

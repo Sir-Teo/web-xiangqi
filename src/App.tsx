@@ -3,6 +3,7 @@ import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engine
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
+import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
@@ -523,6 +524,7 @@ function App() {
   const [showNewGameMenu, setShowNewGameMenu] = useState(false);
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [showRuleLessons, setShowRuleLessons] = useState(false);
+  const [practiceStudy, setPracticeStudy] = useState<SavedGame | null>(null);
   /**
    * The mode a position built by hand should start in, decided when the editor
    * opens rather than read off a dialog's visibility when it closes. It used to
@@ -4687,7 +4689,7 @@ function App() {
    * behind the open palette, losing the reader's place in the analysis.
    */
   const aDialogIsOpen = Boolean(
-    showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor || showRuleLessons
+    showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor || showRuleLessons || practiceStudy
   );
   const [autoSaveChecked, setAutoSaveChecked] = useState(false);
 
@@ -6057,6 +6059,10 @@ function App() {
                     onLoadSavedGame={handleLoadGame}
                     onDeleteSavedGame={deleteGameFromLibrary}
                     onRenameSavedGame={renameGameInLibrary}
+                    onPracticeSavedGame={game => {
+                      if (isAiMode) { stepPendingRef.current = false; pause(); stopAnalysis(); }
+                      setPracticeStudy(game);
+                    }}
                     libraryState={libraryState}
                     onLibraryChange={refreshGameLibrary}
                     onLoadHistorical={handleLoadHistoricalGame}
@@ -7709,6 +7715,8 @@ function App() {
       )}
 
       {showRuleLessons && <RuleLessons onClose={() => setShowRuleLessons(false)} />}
+
+      {practiceStudy && <StudyPracticeDialog game={practiceStudy} pieceStyle={pieceStyle} onClose={() => setPracticeStudy(null)} />}
 
       {autoSaveRecovery && (
         <AutoSaveRecoveryModal

@@ -1,0 +1,22 @@
+.study-practice-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 12, .86); z-index: 9200; }
+.study-practice-dialog { container-type: inline-size; box-sizing: border-box; position: fixed; inset: 2vh auto auto 50%; transform: translateX(-50%); width: min(calc(100vw - 16px), 900px); max-height: 96vh; overflow: auto; padding: 1rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 14px; z-index: 9201; }
+.study-practice-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+.study-practice-dialog header div { min-width: 0; }
+.study-practice-dialog h2 { margin: 0; font-size: 1.15rem; }
+.study-practice-dialog p { font-size: .85rem; line-height: 1.5; overflow-wrap: anywhere; }
+.study-practice-dialog header p { margin: .35rem 0 0; color: var(--text-secondary); }
+.study-practice-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "board controls" "board feedback"; gap: .75rem 1rem; align-items: start; }
+.study-practice-controls { grid-area: controls; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: .5rem; }
+.study-practice-controls label { display: grid; gap: .3rem; font-size: .85rem; }
+.study-practice-dialog select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font-size: max(16px, 1rem); padding: .4rem; background: var(--bg-input); color: inherit; border: 1px solid var(--border-default); border-radius: 6px; }
+.study-practice-dialog button:not(.hitbox) { min-width: 44px; min-height: 44px; max-width: 100%; font: inherit; font-size: .85rem; padding: .5rem .75rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
+.study-practice-dialog button[aria-pressed="true"] { border-color: var(--accent); }
+.study-practice-board { grid-area: board; min-width: 0; padding: 10px; }
+.study-practice-board .xiangqi-board-container { --board-max-width: 440px; }
+.study-practice-feedback { grid-area: feedback; min-width: 0; }
+.study-practice-feedback > p[role="status"] { padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-panel); }
+.study-practice-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.study-practice-note { color: var(--text-secondary); }
+.study-practice-note summary { min-height: 44px; align-content: center; cursor: pointer; font-size: .85rem; }
+@container (max-width: 36rem) { .study-practice-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "controls" "board" "feedback"; } }
+@media (max-height: 520px) and (min-width: 700px) { .study-practice-board .xiangqi-board-container { --board-max-width: 65vh; } }

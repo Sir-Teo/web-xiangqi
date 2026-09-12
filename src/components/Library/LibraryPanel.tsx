@@ -44,6 +44,7 @@ interface LibraryPanelProps {
   onLoadSavedGame: (game: SavedGame) => boolean;
   onDeleteSavedGame: (id: string) => boolean;
   onRenameSavedGame: (id: string, label: string) => boolean;
+  onPracticeSavedGame: (game: SavedGame) => void;
   onLoadHistorical: (game: HistoricalGame) => void;
 }
 
@@ -229,6 +230,7 @@ export function LibraryPanel({
   onLoadSavedGame,
   onDeleteSavedGame,
   onRenameSavedGame,
+  onPracticeSavedGame,
   onLoadHistorical,
 }: LibraryPanelProps) {
   const [search, setSearch] = useState('');
@@ -737,6 +739,14 @@ export function LibraryPanel({
                   >
                     <IconRefresh /> Load
                   </button>
+                  {(game.moves.length > 0 || Boolean(game.moveTree?.length)) && <button
+                    tabIndex={savedTabIndex}
+                    type="button"
+                    className="chip-btn"
+                    onClick={() => onPracticeSavedGame(game)}
+                    aria-label={`Practice ${savedGameLabel}`}
+                    data-testid={`practice-saved-${game.id}`}
+                  >Practice</button>}
                   {pendingDeleteId === game.id ? (
                     <>
                       <button
