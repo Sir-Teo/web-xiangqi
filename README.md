@@ -175,6 +175,7 @@ compares the three and tracks what is worth moving between them.
 - `scripts/build-pikafish.sh` is now idempotent for the local upstream checkout:
   - it pins the upstream Pikafish checkout by default so CI and GitHub Pages builds do not break when upstream `master` changes
   - it publishes the checked-in `public/pikafish.nnue` by default so CI does not pair an older engine with a moving `master-net`
+  - it also copies those pinned weights into the clean upstream checkout before compiling, avoiding an unnecessary `master-net` download during upstream configuration
   - set `PIKAFISH_UPSTREAM_REF=<commit-or-ref>` to test a newer upstream revision after updating `patches/pikafish-wasm.patch` and `public/pikafish.nnue`
   - it falls back to `grep` if `rg` (ripgrep) is not installed
   - it skips patch application if the patch was already applied

@@ -86,6 +86,13 @@ STAGED_DIST_DIR="$STAGE_DIR/dist"
 STAGED_PUBLIC_DIR="$STAGE_DIR/public"
 mkdir -p "$STAGED_DIST_DIR" "$STAGED_PUBLIC_DIR"
 
+# Upstream config-sanity runs net.sh for every flavor. git clean removed its
+# ignored network; reuse our pinned weights instead of downloading master-net
+# only to discard that download when publishing the public copy below.
+if [ -f "$PUBLIC_DIR/pikafish.nnue" ]; then
+  cp "$PUBLIC_DIR/pikafish.nnue" "$UPSTREAM_DIR/src/pikafish.nnue"
+fi
+
 build_flavor() {
   local flavor="$1"
   local simd="$2"

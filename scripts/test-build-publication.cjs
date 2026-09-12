@@ -39,6 +39,13 @@ if (args.includes('objclean')) process.exit(0);
 const base = 'pikafish-core' + (args.includes('WASM_SINGLE_THREADED=yes') ? '-single' : '') + (args.includes('WASM_SIMD=yes') ? '-simd' : '');
 if (process.env.TEST_FAIL_FLAVOR === base) { console.error('Controlled compiler failure: ' + base); process.exit(2); }
 const dir = args[args.indexOf('-C') + 1];
+if (process.env.TEST_EXPECT_NETWORK) {
+  const file = path.join(dir, 'pikafish.nnue');
+  if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== process.env.TEST_EXPECT_NETWORK) {
+    console.error('Pinned network was not available before compiling ' + base); process.exit(3);
+  }
+  fs.appendFileSync(path.join(dir, 'network-builds.log'), base + '\\n');
+}
 fs.writeFileSync(path.join(dir, base + '.js'), 'new ' + base);
 if (process.env.TEST_OMIT_WASM !== base) fs.writeFileSync(path.join(dir, base + '.wasm'), 'new ' + base);
 if (!base.includes('single')) fs.writeFileSync(path.join(dir, base + '.worker.js'), 'new worker ' + base);
@@ -49,7 +56,7 @@ if (!base.includes('single')) fs.writeFileSync(path.join(dir, base + '.worker.js
     run: (extra = {}) => spawnSync('bash', ['scripts/build-pikafish.sh'], { cwd: root, encoding: 'utf8', timeout: 15000,
       env: { ...process.env, PATH: path.join(root, 'bin') + path.delimiter + process.env.PATH,
         PIKAFISH_UPSTREAM_DIR: path.join(root, '.deps/pikafish'), WASM_BUILD_SIMD: 'yes', JOBS: '1',
-        TEST_FAIL_FLAVOR: '', TEST_OMIT_WASM: '', ...extra } }),
+        TEST_FAIL_FLAVOR: '', TEST_OMIT_WASM: '', TEST_EXPECT_NETWORK: '', ...extra } }),
     clean: () => fs.rmSync(root, { recursive: true, force: true }),
     assertClean: () => assert.deepEqual(fs.readdirSync(path.join(root, '.deps')).filter(name => name.startsWith('pikafish-artifacts.')), []),
   };
@@ -127,6 +134,24 @@ test('an upstream network is published to both destinations when no pinned netwo
     assert.equal(result.status, 0, result.stderr);
     const files = f.readPublished();
     for (const dir of ['dist', 'public']) assert.equal(files[dir + '/pikafish.nnue'], 'upstream network');
+    f.assertClean();
+  } finally { f.clean(); }
+});
+
+for (const simd of ['yes', 'no']) test(`all ${simd === 'yes' ? 'four' : 'two scalar'} flavors reuse pinned weights in a clean upstream checkout`, () => {
+  const f = fixture();
+  try {
+    // A real git clean removes the ignored upstream network. The public copy
+    // must be available before make's config-sanity/net prerequisite runs.
+    fs.rmSync(path.join(f.root, '.deps/pikafish/src/pikafish.nnue'));
+    const result = f.run({ WASM_BUILD_SIMD: simd, TEST_EXPECT_NETWORK: 'pinned network' });
+    assert.equal(result.status, 0, result.stderr);
+    const compiled = fs.readFileSync(path.join(f.root, '.deps/pikafish/src/network-builds.log'), 'utf8').trim().split('\n');
+    assert.deepEqual(compiled, simd === 'yes'
+      ? ['pikafish-core', 'pikafish-core-simd', 'pikafish-core-single', 'pikafish-core-single-simd']
+      : ['pikafish-core', 'pikafish-core-single']);
+    const files = f.readPublished();
+    for (const dir of ['dist', 'public']) assert.equal(files[dir + '/pikafish.nnue'], 'pinned network');
     f.assertClean();
   } finally { f.clean(); }
 });
