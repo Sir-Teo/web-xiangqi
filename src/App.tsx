@@ -5503,7 +5503,7 @@ function App() {
                 >
                   Engine Threads
                 </span>
-                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-threads-label">
+                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-threads-label" aria-describedby="settings-engine-threads-help">
                   {engineThreadChoices.map((count) => (
                     <button
                       key={count}
@@ -5517,6 +5517,9 @@ function App() {
                     </button>
                   ))}
                 </div>
+                <p id="settings-engine-threads-help" className="settings-help">
+                  Fewer threads leave more CPU available for other apps. More threads can speed up analysis.
+                </p>
               </div>
             ) : null}
 
@@ -5528,7 +5531,7 @@ function App() {
               >
                 Engine Hash
               </span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-hash-label">
+              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-hash-label" aria-describedby="settings-engine-hash-help">
                 {engineHashChoices.map((size) => (
                   <button
                     key={size}
@@ -5542,6 +5545,23 @@ function App() {
                   </button>
                 ))}
               </div>
+              <p id="settings-engine-hash-help" className="settings-help">
+                Hash remembers positions already searched. A larger hash can help longer analysis, but uses more memory.
+              </p>
+            </div>
+
+            <div className="settings-group">
+              <button
+                type="button"
+                className="pill-btn settings-resource-reset"
+                aria-describedby="settings-engine-defaults-help"
+                onClick={() => { setEngineThreads(undefined); setEngineHashMB(undefined); }}
+              >
+                Use device defaults
+              </button>
+              <p id="settings-engine-defaults-help" className="settings-help">
+                Restore automatic thread and hash choices for this device. Changing resources restarts the engine.
+              </p>
             </div>
 
             {isAiMode && (

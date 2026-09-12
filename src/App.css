@@ -2697,6 +2697,17 @@ summary:active {
   gap: 0.35rem;
 }
 
+.settings-help {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.settings-resource-reset {
+  min-height: 44px;
+}
+
 .graph-jump-btn {
   display: grid;
   min-height: 2rem;
