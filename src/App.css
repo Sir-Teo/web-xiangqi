@@ -7100,6 +7100,12 @@ summary:active {
   color: var(--text-secondary);
 }
 
+.library-explorer-retry {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .library-explorer-note {
   margin: 0;
   padding: 0.5rem 0.65rem 0.15rem;

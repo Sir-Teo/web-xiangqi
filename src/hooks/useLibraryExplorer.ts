@@ -20,7 +20,17 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
   const failedSourceRef = useRef<SavedGame[] | null>(null);
   const [result, setResult] = useState<(ExplorerReply & { source: SavedGame[] }) | null>(null);
   const [failedSource, setFailedSource] = useState<SavedGame[] | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const key = positionKey(board, side);
+
+  const retry = useCallback(() => {
+    if (!enabled || failedSourceRef.current !== games) return;
+    // Clear the guard synchronously so a repeated activation cannot launch
+    // several workers before React renders the loading state.
+    failedSourceRef.current = null;
+    setFailedSource(null);
+    setRetryVersion(version => version + 1);
+  }, [enabled, games]);
 
   const failWorker = useCallback((worker: Worker) => {
     if (workerRef.current !== worker) return;
@@ -100,7 +110,7 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
       }
     }
     dispatch();
-  }, [games, board, side, enabled, dispatch, failWorker]);
+  }, [games, board, side, enabled, retryVersion, dispatch, failWorker]);
 
   useEffect(() => () => {
     const worker = workerRef.current;
@@ -118,5 +128,5 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
 
   const current = result?.source === games && result.key === key;
   const status = !games.length ? 'ready' : failedSource === games ? 'error' : current ? 'ready' : 'loading';
-  return { report: current ? result.report : EMPTY_REPORT, status, skipped: current ? result.skipped : 0 };
+  return { report: current ? result.report : EMPTY_REPORT, status, skipped: current ? result.skipped : 0, retry };
 }

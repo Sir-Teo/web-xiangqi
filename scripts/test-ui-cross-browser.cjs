@@ -86,6 +86,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-library-worker-browser.cjs',
         'test-library-visibility-browser.cjs',
         'test-library-lookup-browser.cjs',
+        'test-library-retry-browser.cjs',
         'test-explorer-browser.cjs',
         'test-autosave-limit-browser.cjs',
       ]) {

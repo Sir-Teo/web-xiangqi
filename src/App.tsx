@@ -2816,7 +2816,7 @@ function App() {
   // Game library
   const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
-  const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped } =
+  const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped, retry: retryLibraryExplorer } =
     useLibraryExplorer(savedGames, board, sideToMove, graphVisible && leftPanelTab === 'graph');
 
   const [copiedToast, setCopiedToast] = useState(false);
@@ -6051,9 +6051,14 @@ function App() {
                   {libraryExplorerStatus !== 'ready' || libraryExplorerSkipped > 0 ? (
                     <p className="library-explorer-note" role="status" data-testid="library-explorer-status">
                       {libraryExplorerStatus === 'loading' ? 'Checking your saved games…'
-                        : libraryExplorerStatus === 'error' ? 'Library explorer unavailable. Reload to try again; your saved games are unchanged.'
+                        : libraryExplorerStatus === 'error' ? 'Library explorer unavailable. Try again; your saved games are unchanged.'
                           : `${libraryExplorerSkipped} saved ${libraryExplorerSkipped === 1 ? 'game contains' : 'games contain'} invalid moves. Only reachable positions are shown.`}
                     </p>
+                  ) : null}
+                  {libraryExplorerStatus === 'error' ? (
+                    <button type="button" className="chip-btn library-explorer-retry" onClick={retryLibraryExplorer} data-testid="library-explorer-retry">
+                      Retry library explorer
+                    </button>
                   ) : null}
                   {libraryPositionReport.games > 0 ? (
                     <div className="opening-candidates-card library-explorer-card">
