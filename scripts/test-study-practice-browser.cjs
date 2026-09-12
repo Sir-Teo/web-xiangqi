@@ -85,12 +85,34 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         assert.deepEqual(current, original);
         for (const fontSize of [16, 32]) {
           await page.evaluate(size => document.documentElement.style.fontSize = `${size}px`, fontSize);
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           await close.scrollIntoViewIfNeeded();
           await page.screenshot({ path: `/tmp/xiangqi-study-practice-${browserType.name()}-${width}-${fontSize}.png` });
           assert.equal(await dialog.evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           const buttons = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
           assert.ok(buttons.every(height => height >= 43.99));
+          const clipped = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => ({ text: node.textContent, width: node.clientWidth, scrollWidth: node.scrollWidth, height: node.clientHeight, scrollHeight: node.scrollHeight })));
+          assert.deepEqual(clipped, [], 'Practice controls must contain their enlarged labels');
+          const selection = await dialog.getByRole('combobox', { name: 'Practice as' }).evaluate(select => {
+            const style = getComputedStyle(select);
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+            const text = select.selectedOptions[0].text;
+            // app-select reserves its chevron in the computed end padding.
+            const needed = context.measureText(text).width + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+            return { text, needed, available: select.clientWidth };
+          });
+          assert.ok(selection.available >= selection.needed, 'Selected practice side is truncated: ' + JSON.stringify(selection));
+          for (const control of await dialog.locator('button:not(.hitbox), select').all()) {
+            await control.scrollIntoViewIfNeeded();
+            assert.equal(await control.evaluate(node => {
+              const rect = node.getBoundingClientRect();
+              return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+            }), true, 'Practice control is covered or unreachable');
+          }
+          if (fontSize === 32) await dialog.locator('.study-practice-controls').screenshot({ path: `/tmp/xiangqi-practice-controls-${browserType.name()}-${width}.png` });
         }
         await close.focus(); await page.keyboard.press('Shift+Tab');
         assert.equal(await dialog.evaluate(node => node.contains(document.activeElement)), true);
