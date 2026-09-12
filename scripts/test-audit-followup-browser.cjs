@@ -321,6 +321,7 @@ async function commandPaletteRows(browser, width, height, mobile) {
   const page = await browser.newPage({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile });
   try {
     await page.goto(base + '?moves=h2e2%20h9g7%20b0c2%20b9c7');
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('Control+k');
     await page.locator('.command-palette-button').first().waitFor();
     const rows = await page.evaluate(() => {
