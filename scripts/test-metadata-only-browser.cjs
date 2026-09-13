@@ -26,7 +26,7 @@ async function command(page, label) {
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base); await page.keyboard.press('t');
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor(); await page.keyboard.press('t');
         // Reproduce losing tournament preparation after erasing the last note.
         const note = page.getByRole('textbox', { name: 'Note on starting position', exact: true });
         await note.fill('Temporary preparation note'); await note.blur();

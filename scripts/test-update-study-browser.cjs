@@ -29,7 +29,7 @@ async function command(page, label) {
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base); await command(page, 'Library');
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor(); await command(page, 'Library');
         await page.getByTestId('load-saved-source').click();
         const editNote = async value => {
           await command(page, 'Move tree');

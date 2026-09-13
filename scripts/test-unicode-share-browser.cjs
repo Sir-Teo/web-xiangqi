@@ -28,7 +28,7 @@ async function command(page, label) {
         await page.addInitScript(moveTree => localStorage.setItem('xiangqi:library:v1', JSON.stringify([
           { id: 'unicode-study', savedAt: 1, gameMode: 'PvP', moves: ['h2e2'], moveTree },
         ])), study);
-        await page.goto(base);
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         await command(page, 'Library');
         await page.getByTestId('load-saved-unicode-study').click();
         await command(page, 'Copy link');

@@ -25,7 +25,7 @@ async function wdlFreshness(browser, width) {
       };
     ` }));
     await page.clock.install();
-    await page.goto(base + '?moves=h2e2,h9g7');
+    await page.goto(base + '?moves=h2e2,h9g7'); await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     await page.waitForFunction(() => window.__commands?.some(command => command.startsWith('go ')));
     // Use the browser's clock origin; the Node clock can be a few ms behind.

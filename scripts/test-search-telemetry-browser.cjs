@@ -24,7 +24,7 @@ async function command(page, label) {
               if (command === 'stop') queueMicrotask(() => emit('bestmove h2e2'));
             } };
           };` }));
-        await page.goto(base); await command(page, 'Engine panel');
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor(); await command(page, 'Engine panel');
         const status = page.getByTestId('engine-search-status');
         await page.waitForFunction(() => document.querySelector('[data-testid="engine-search-status"]')?.textContent === 'D8');
         const card = status.locator('..');

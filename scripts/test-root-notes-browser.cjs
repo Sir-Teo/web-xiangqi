@@ -46,7 +46,7 @@ function xqf(diagram = false) {
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
         await page.context().addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied = text; } } }));
-        await page.goto(base);
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
         await page.getByRole('textbox', { name: 'Note on starting position', exact: true }).fill(rootNote);
         await command(page, 'Save game');
@@ -61,7 +61,7 @@ function xqf(diagram = false) {
         const url = await page.evaluate(() => window.__copied);
         assert.equal(new URL(url).searchParams.get('note'), rootNote);
         const recipient = await browser.newPage({ viewport: { width, height: 900 } });
-        await recipient.goto(url); await recipient.keyboard.press('t'); await noteIs(recipient, rootNote); await recipient.close();
+        await recipient.goto(url); await recipient.locator('.xiangqi-board').waitFor(); await recipient.keyboard.press('t'); await noteIs(recipient, rootNote); await recipient.close();
         await importPgn(page, width, `{${rootNote}} 1.h2e2 {Central cannon} (1.b2e2 {Other cannon}) h9g7 *`);
         await page.locator('.mtree-chip').filter({ hasText: 'h2e2' }).click(); await noteIs(page, 'Central cannon');
         await atRoot(page); await noteIs(page, rootNote);

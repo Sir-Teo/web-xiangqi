@@ -64,7 +64,7 @@ async function measure(page, target, label, width) {
           if(command==='stop') queueMicrotask(()=>emit('bestmove (none)'));
         }};
       };` }));
-    await page.goto(base);
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
     await command(page,'Learn the rules');
     await measure(page,page.getByTestId('lesson-select'),'lessons',width);
     await page.getByTestId('lesson-select').selectOption('1');

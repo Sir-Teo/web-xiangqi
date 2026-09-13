@@ -48,8 +48,10 @@ For commit `2b6ed1b`, [CI run 34729171229](https://github.com/Sir-Teo/web-xiangq
 failed after 8m16s. This was a 30-second locator timeout in the third audit
 script, not the 90-minute job limit. The test waited for a transient review
 announcement even though the persistent review error was already present.
-It now waits for that persistent error. A separate snapshot regression now
-waits for the app board before sending the command-palette shortcut.
+It now waits for that persistent error. Tests that immediately send keyboard
+shortcuts after navigation now wait for the app board to mount first; otherwise
+Vite can finish document navigation before React installs its shortcut handler.
+Tests inspecting mobile move controls open their panel before querying it.
 
 The old CI engine build took 4m40s. The independent [successful Pages run](https://github.com/Sir-Teo/web-xiangqi/actions/runs/34729171254)
 compiled the same engine again in 4m15s. Sharing one build removes that duplicate

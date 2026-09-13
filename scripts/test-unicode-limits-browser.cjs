@@ -57,7 +57,7 @@ async function noteIs(page, text) {
         const recipient = await browser.newPage({ viewport: { width, height: 900 } });
         recipient.on('pageerror', error => errors.push(error.message));
         try {
-          await recipient.goto(url); await recipient.keyboard.press('t'); await noteIs(recipient, bounded);
+          await recipient.goto(url); await recipient.locator('.xiangqi-board').waitFor(); await recipient.keyboard.press('t'); await noteIs(recipient, bounded);
           await recipient.locator('.mtree-chip').filter({ hasText: 'h2e2' }).click(); await noteIs(recipient, bounded);
           await recipient.locator('.mtree-chip').filter({ hasText: 'h9g7' }).click(); await noteIs(recipient, preview + '🐎 develops');
           assert.equal(await recipient.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

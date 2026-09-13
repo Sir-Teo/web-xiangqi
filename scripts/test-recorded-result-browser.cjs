@@ -77,7 +77,7 @@ async function install(page) {
         const url = await page.evaluate(() => window.__copied);
         const recipient = await browser.newPage({ viewport, hasTouch: width < 900 });
         try {
-          await install(recipient); await recipient.goto(url); await recipient.keyboard.press('t');
+          await install(recipient); await recipient.goto(url); await recipient.locator('.xiangqi-board').waitFor(); await recipient.keyboard.press('t');
           await copyPgn(recipient, '1/2-1/2');
           await command(recipient, 'Let PGN follow the selected line');
           await move(recipient, 'b2e2').click(); await copyPgn(recipient, '0-1');

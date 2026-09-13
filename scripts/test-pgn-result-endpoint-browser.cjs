@@ -45,7 +45,7 @@ async function install(page, game) {
         const page = await browser.newPage({ viewport: { width, height: width === 320 ? 640 : 900 }, hasTouch: width < 900, reducedMotion: 'reduce' });
         const errors = []; page.on('pageerror', error => errors.push(error.message));
         try {
-          await install(page, game); await page.goto(base); await command(page, 'Library');
+          await install(page, game); await page.goto(base); await page.locator('.xiangqi-board').waitFor(); await command(page, 'Library');
           const original = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
           await page.getByTestId('copy-pgn-saved-study').click();
           const libraryPgn = await page.evaluate(() => window.__copied);

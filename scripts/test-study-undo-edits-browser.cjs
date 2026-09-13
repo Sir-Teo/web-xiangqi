@@ -34,7 +34,7 @@ async function play(page, from, to) {
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base + '?moves=h2e2+h9g7+h0g2');
+        await page.goto(base + '?moves=h2e2+h9g7+h0g2'); await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
         await page.getByTestId('move-comment-input').fill('Deleted line note');
         await page.getByTestId('move-comment-input').blur();

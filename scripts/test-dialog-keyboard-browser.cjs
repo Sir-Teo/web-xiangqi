@@ -8,7 +8,7 @@ async function paletteKeyboard(browser, viewport) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
-    await page.goto(base);
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('ControlOrMeta+k');
     const input = page.getByRole('combobox', { name: 'Search commands' });
     await input.fill('no matching command zzz');

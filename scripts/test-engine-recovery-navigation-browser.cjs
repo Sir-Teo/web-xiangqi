@@ -34,7 +34,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
           };
         ` }));
         await page.clock.install();
-        await page.goto(base);
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('e');
         await page.getByTestId('engine-pv-0-move-0').waitFor();
         await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));

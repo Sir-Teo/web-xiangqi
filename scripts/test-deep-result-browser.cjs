@@ -50,7 +50,7 @@ async function check(browser, width) {
         };
       };
     ` }));
-    await page.goto(base + '?moves=h2e2');
+    await page.goto(base + '?moves=h2e2'); await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     const pv = page.getByTestId('engine-pv-line-0');
     const waitDepth = depth => page.waitForFunction(value => document.querySelector('[data-testid="engine-pv-line-0"]')?.getAttribute('aria-label').includes(`depth ${value},`), depth);
@@ -137,7 +137,7 @@ async function check(browser, width) {
 async function checkReal(browser) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
-    await page.goto(base + '?moves=h2e2');
+    await page.goto(base + '?moves=h2e2'); await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     const pv = page.getByTestId('engine-pv-line-0');
     await pv.waitFor({ timeout: 60000 });
