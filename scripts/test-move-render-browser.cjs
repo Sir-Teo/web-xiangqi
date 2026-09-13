@@ -58,10 +58,12 @@ async function noteIs(page, note) {
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: plies }, (_, i) => cycle[i % 4]).join('+'));
+        await page.locator('.xiangqi-board').waitFor();
+        await page.keyboard.press('t');
         await page.waitForFunction(plies => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n' + plies, plies);
         assert.ok(await page.evaluate(() => window.__moveWork.some(item => item.name === 'MoveChip') && window.__moveWork.some(item => item.name === 'BreadcrumbChip')), 'Both render probes must observe the initial study');
-        await page.evaluate(() => { window.__moveWork = []; });
-        await page.locator('button[aria-label="Go to previous move"]:visible').first().click();
+        await page.evaluate(() => { document.activeElement?.blur(); window.__moveWork = []; });
+        await page.keyboard.press('ArrowLeft');
         await page.waitForFunction(plies => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n' + (plies - 1), plies);
         const work = await page.evaluate(() => window.__moveWork);
         assert.ok(work.some(item => item.name === 'MoveChip'), 'Navigation must redraw the active move');

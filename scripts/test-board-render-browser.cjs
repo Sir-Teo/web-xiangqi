@@ -58,6 +58,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.keyboard.press('e');
         await page.waitForFunction(() => document.querySelector('[data-testid="engine-pv-score-0"] strong')?.textContent === '+1.0');
         assert.ok(await page.evaluate(() => window.__boardWork.some(item => item.rendered)), 'The render probe did not observe the Board');
+        await page.getByTestId('engine-pv-score-0').waitFor();
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         await page.evaluate(() => { window.__boardWork = []; });
         for (let n = 2; n <= 11; n++) {
           await page.evaluate(n => window.__pulse(n), n);
@@ -75,6 +77,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.waitForFunction(() => document.querySelectorAll('.board-arrow-group').length > 0);
         await page.keyboard.press('e');
         const previousArrow = await page.locator('.board-arrow-engine').first().innerHTML();
+        await page.getByTestId('engine-pv-score-0').waitFor();
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         await page.evaluate(() => { window.__boardWork = []; });
         for (let n = 12; n <= 21; n++) {
           await page.evaluate(n => window.__pulse(n), n);

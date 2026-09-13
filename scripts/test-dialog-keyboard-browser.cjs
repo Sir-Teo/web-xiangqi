@@ -51,7 +51,7 @@ async function editorKeyboard(browser, viewport) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
-    await page.goto(base);
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
     const trigger = page.getByTestId(viewport.width < 900 ? 'mobile-more-actions-btn' : 'command-palette-btn');
     await trigger.focus();
     await page.keyboard.press('ControlOrMeta+k');
@@ -103,7 +103,7 @@ async function modalShortcutGuard(browser, viewport) {
         assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true);
       }
     };
-    await page.goto(base);
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
     for (const command of ['Settings', 'Set up a position']) {
       await page.keyboard.press('ControlOrMeta+k');
       await page.getByRole('combobox').fill(command);

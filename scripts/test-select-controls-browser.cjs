@@ -9,6 +9,13 @@ async function command(page, text) {
 }
 async function measure(page, target, label, width) {
   await target.first().waitFor();
+  // A visible dialog can still be scaled by its entrance animation. Measure
+  // the settled control, not the transient 0.97-scale rectangle.
+  await target.first().evaluate(async el => {
+    const animations = [];
+    for (let node = el; node; node = node.parentElement) animations.push(...node.getAnimations());
+    await Promise.all(animations.filter(a => a.effect?.getComputedTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})));
+  });
   for (const fontSize of [16, 32, 16]) {
     await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, fontSize);
     for (const field of await target.all()) {

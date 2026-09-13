@@ -4,8 +4,10 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
-  const current = await page.getByRole('option').first().getAttribute('aria-disabled') === 'true';
-  await page.keyboard.press(current ? 'Escape' : 'Enter');
+  const option = page.getByRole('option').filter({ hasText: label }).first();
+  await option.waitFor();
+  if (await option.getAttribute('aria-disabled') === 'true') await page.keyboard.press('Escape');
+  else await option.click();
   await page.getByRole('combobox', { name: 'Search commands' }).waitFor({ state: 'hidden' });
 }
 async function assertFits(page, label) {
@@ -40,8 +42,9 @@ async function assertFits(page, label) {
             } };
           };` }));
         await page.goto(base + '?moves=h2e2+h9g7+h0g2+b9c7');
-        await page.getByTestId('move-tree-active').waitFor({ state: 'attached' });
+        await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
+        await page.getByTestId('move-tree-active').waitFor();
         await page.getByTestId('move-comment-input').fill('Q'.repeat(500));
         await page.getByTestId('move-comment-input').blur();
         await page.locator('.mtree-comment').waitFor();

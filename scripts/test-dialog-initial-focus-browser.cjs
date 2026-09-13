@@ -47,6 +47,7 @@ async function assertVisibleFocus(modal, label) {
      },kind);
      await page.goto(base+'?moves=b2e2');
      if(kind==='result') {
+      await page.locator('.xiangqi-board').waitFor();
       await page.keyboard.press('ControlOrMeta+k');
       await page.getByRole('combobox',{name:'Search commands'}).fill('Library');
       await page.keyboard.press('Enter');await page.getByTestId('load-saved-stalemate').click();

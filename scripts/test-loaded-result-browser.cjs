@@ -37,7 +37,7 @@ async function copyPgn(page) { await command(page, 'Copy PGN'); return page.eval
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base);
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         for (const fixture of fixtures) {
           await command(page, 'Library');
           await page.getByTestId(`load-saved-${fixture.id}`).click();
