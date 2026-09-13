@@ -1,0 +1,11 @@
+name: Restore tested application build
+description: Download the shared build and expose identical engine bytes to dev-server tests
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v5
+      with:
+        name: application-build
+        path: dist
+    - run: cp dist/pikafish* public/
+      shell: bash

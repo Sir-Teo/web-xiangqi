@@ -1,145 +1,176 @@
 name: CI
 
-# Pull requests, and pushes to main.
-#
-# `push` was unrestricted here once, which fired alongside `pull_request` for
-# the same branch and ran this job twice per change; scoping it to main fixes
-# that -- a pull request gets one run, and the merge gets a separate run on
-# different content.
-#
-# The comment this replaces said a push to main was "already covered by the
-# deploy workflow, which runs the same gates". That was false, and it is the
-# gap this trigger closes: the deploy runs audit, lint, unit tests and the
-# build, but no deploy in any of the three sibling repos runs a browser suite.
-# Those live only here, so without a push trigger nothing browser-level ever
-# ran against main.
-#
-# This workflow deploys nothing. If it goes red the site still publishes, which
-# is the reason the browser suites belong here rather than in the deploy.
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
 
-# A new push to the same pull request supersedes the run in flight. This is the
-# longest job of the three repos — it installs emsdk, builds the WASM and drives
-# a browser — so it is the one that most needs not to queue behind itself.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
+  checks:
+    name: App and build-script checks
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      EMSDK_VERSION: 6.0.1
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-
-      - name: Cache npm
-        uses: actions/cache@v5
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: React app checks
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - name: Check application and build configuration
         run: |
           npm run audit
+          npm run typecheck
           npm run lint
           npm test
           npm run test:openings
           npm run test:library
           npm run test:build:publication
-          npm run build:react
+          node --test scripts/test-ui-audit-shards.cjs
 
-      - name: Cache emsdk
+  build:
+    name: Build application once
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EMSDK_VERSION: 6.0.1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      # Exact hits only: never substitute an engine built with other sources,
+      # flags, weights, wrapper or toolchain. Save before the browser jobs so a
+      # test failure does not throw away a successful four-flavor compilation.
+      - name: Restore compiled engine
+        id: engine
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/engine
+          key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.EMSDK_VERSION }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/build-pikafish.sh', 'scripts/install-emsdk.sh', 'templates/**', 'patches/**', 'public/pikafish.nnue') }}
+      - name: Cache emsdk on cold engine builds
+        if: steps.engine.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
           path: .deps/emsdk
           key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('scripts/install-emsdk.sh') }}
-
-      - name: Install emsdk
-        run: bash scripts/install-emsdk.sh
-
-      - name: Build WASM demo
-        run: npm run build
-
-      # Static, so it runs where the browser suites cannot: it reads the
-      # artifacts that were just built and checks them against what
-      # templates/pikafish.js and analysisProfile.ts assume. This is the only
-      # gate that sees a toolchain silently dropping a Module key the wrapper
-      # depends on -- Node never takes the worker path, the browser suite below
-      # is single-threaded, and a release build says nothing.
-      - name: Engine artifact contract
-        run: npm run test:engine:contract
-
-      - name: Node parity and smoke tests
+      - name: Compile all engine variants on cache miss
+        if: steps.engine.outputs.cache-hit != 'true'
         run: |
+          bash scripts/install-emsdk.sh
+          npm run build
+          mkdir -p .cache/engine
+          cp dist/pikafish* .cache/engine/
+      - name: Assemble engine and demo files
+        run: |
+          mkdir -p dist
+          cp .cache/engine/* dist/
+          cp .cache/engine/* public/
+          cp demo/*.html dist/
+          printf '%s\n' '{"type":"commonjs"}' > dist/package.json
+          npm run test:engine:contract
+      - name: Save verified engine cache
+        if: steps.engine.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/engine
+          key: ${{ steps.engine.outputs.cache-primary-key }}
+      - name: Build React application
+        run: npm run build:react
+      - name: Share application with all test and deployment jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-build
+          path: dist
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+
+  node:
+    name: Engine parity and server contracts
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/restore-build
+      - run: |
+          npm run test:engine:contract
           npm run test:parity
           npm run test:review:parity
           npm run test:smoke:all
           npm run test:bench:quick
+          npm run test:server:headers
 
-      # Playwright has to be installed before anything that drives a browser.
-      # test:serve-demo does, and used to run in the step below this one — so it
-      # failed on "Executable doesn't exist" every time, before the install had
-      # happened. Caching does not save it either: the restore also came after.
-      - name: Cache Playwright browsers
-        uses: actions/cache@v5
+  browser:
+    name: Browser ${{ matrix.label }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: audit-1, command: 'npm run test:ui:audit -- --shard=1/8' }
+          - { label: audit-2, command: 'npm run test:ui:audit -- --shard=2/8' }
+          - { label: audit-3, command: 'npm run test:ui:audit -- --shard=3/8' }
+          - { label: audit-4, command: 'npm run test:ui:audit -- --shard=4/8' }
+          - { label: audit-5, command: 'npm run test:ui:audit -- --shard=5/8' }
+          - { label: audit-6, command: 'npm run test:ui:audit -- --shard=6/8' }
+          - { label: audit-7, command: 'npm run test:ui:audit -- --shard=7/8' }
+          - { label: audit-8, command: 'npm run test:ui:audit -- --shard=8/8' }
+          - { label: layout, command: 'npm run test:ui:layout' }
+          - { label: review-fixtures, command: 'npm run test:review:fixtures' }
+          - { label: review, command: 'npm run test:review:browser' }
+          - { label: review-calibration, command: 'npm run test:review:calibration' }
+          - { label: worker, command: 'npm run test:worker-parity:browser' }
+          - { label: production, command: 'npm run test:prod:smoke' }
+          - { label: server, command: 'npm run test:serve-demo' }
+    env:
+      PIKAFISH_BROWSER_VARIANT: single
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/restore-build
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Run browser checks
+        run: ${{ matrix.command }}
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics-${{ matrix.label }}
+          path: |
+            .cache/ui-audit-*.json
+            /tmp/xiangqi-*.png
+          retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Install Playwright (Chromium)
-        run: npx playwright install --with-deps chromium
-
-      - name: Rebuild React app with fresh WASM
-        run: |
-          npm run build:react
-          npm run test:serve-demo
-
-      # The bundle that gets uploaded is otherwise the one thing no check loads:
-      # every browser suite here drives the *dev* server. Shallow on purpose --
-      # does the shell paint, does the engine reach ready from base-relative
-      # URLs, did anything throw.
-      - name: Production build smoke
-        run: npm run test:prod:smoke
-
-      - name: Focused browser audit regressions
-        run: npm run test:ui:audit
-
-      - name: Browser suites (review fixtures, layout, worker parity)
-        # The step name used to say only "Browser worker parity", which is the
-        # last of the five commands below; `test:ui:layout` is the big one and
-        # a reader looking for where it runs in CI would not have found it here.
-        #
-        # PIKAFISH_BROWSER_VARIANT is read by `test-worker-parity-browser.cjs`
-        # and by nothing else in this list — the other four ignore it — so the
-        # note below is about that command alone:
-        #
-        # Single-threaded in the browser. The threaded build initialises fine in
-        # Node here — the smoke test above runs it — and fine in a browser
-        # locally, but the worker never reports ready on a runner and init times
-        # out. Raising the limit to 240s and giving Chromium a real /dev/shm
-        # both made no difference, so it is the threaded browser path itself.
-        # Threaded stays covered by test:smoke; this covers the worker protocol.
+  verify:
+    name: verify
+    if: always()
+    needs: [checks, build, node, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to pass
         env:
-          PIKAFISH_BROWSER_VARIANT: single
-        run: |
-          npm run test:review:fixtures
-          npm run test:review:browser
-          npm run test:review:calibration
-          npm run test:ui:layout
-          npm run test:worker-parity:browser
+          RESULTS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success")' <<< "$RESULTS"
+
+  deploy:
+    name: Deploy verified build
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml

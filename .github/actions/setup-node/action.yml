@@ -1,0 +1,11 @@
+name: Install Node dependencies
+description: Shared Node and npm setup for CI jobs
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '20'
+        cache: npm
+    - run: npm ci --no-audit --no-fund
+      shell: bash

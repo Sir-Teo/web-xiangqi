@@ -140,6 +140,11 @@ npm run test:prod:smoke            # loads the built dist/ in a browser
 npm run build                      # rebuilds the WASM; needs emsdk
 ```
 
+CI builds once, caches the compiled engine, and runs browser audits in eight
+independent shards. Pages publishes only after all checks pass. See
+[CI and deployment](docs/ci.md) for reproduction commands and diagnostics.
+
+
 `npm run build:react` cleans only the React HTML/assets/favicon and any legacy demo `sw.js` from `dist/` before building, preserving the checked-in Pikafish JS/WASM/NNUE artifacts.
 
 Artifacts are written to `dist/`:

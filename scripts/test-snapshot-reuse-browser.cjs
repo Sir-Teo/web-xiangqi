@@ -59,7 +59,8 @@ async function savedAtPly(page, ply) {
               if (command.startsWith('go ') || command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
             } };
           };` }));
-        await page.goto(base); await command(page, 'Library');
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+        await command(page, 'Library');
         await page.getByTestId('load-saved-snapshot-study').click();
         await page.waitForFunction(() => window.__snapshot?.moves.length === 1024 && window.__snapshot.moveTree?.length);
         if (width < 900) await page.getByTestId('mobile-view-board').click();

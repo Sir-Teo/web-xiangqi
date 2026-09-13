@@ -1843,10 +1843,11 @@ whole suite rather than isolate a claim.
 
 ### Which gate is upstream of a deploy
 
-The distinction that matters is not local-versus-CI but **what runs before
-`dist` is uploaded**. `ci.yml` is not upstream of the Pages job, so a red suite
-there does not stop a publish — which is exactly how a broken engine could have
-shipped.
+The distinction that matters is **what runs before the tested build is
+published**. CI now builds once, shares that artifact with all test jobs, and
+calls the reusable Pages workflow only after its aggregate `verify` job passes.
+A failed, cancelled or skipped gate prevents publication. See [CI and
+deployment](ci.md) for cache inputs, sharding and reproduction commands.
 
 Two checks were added for that reason, and both sit where the deploy will see
 them:
@@ -1856,9 +1857,9 @@ them:
   it runs inside `verify` without a browser or a toolchain.
 - `test:prod:smoke` serves `dist` with `vite preview` and loads it. Every other
   browser suite here drives the *dev* server, so the bundle that gets uploaded
-  was the one thing nothing had ever loaded. It runs as its own step in
-  `deploy-pages.yml`, after `verify`, with a Chromium install — deliberately
-  shallow, because its job is to catch a broken deploy, not to re-test the UI.
+  was the one thing nothing had ever loaded. It now runs in its own CI browser
+  job against the shared artifact before deployment. The Pages workflow reuses
+  that artifact without compiling or testing it again.
 - `test:review:calibration` runs an engine self-play game through the whole
   review pipeline and asserts strong play still scores strongly. The scoring
   *functions* were already covered by fixtures; what was not was the pipeline

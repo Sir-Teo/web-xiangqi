@@ -19,6 +19,7 @@ async function command(page, label) {
           { id: 'second-study', savedAt: 1, gameMode: 'PvP', moves: ['b2e2', 'b9c7'] },
         ])));
         await page.goto(base + '?moves=h2e2%20h9g7%20h0g2');
+        await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
         const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
         await command(page, 'Delete this move and what follows');
@@ -31,6 +32,8 @@ async function command(page, label) {
         }
         await page.getByRole('button', { name: 'Undo', exact: true }).click();
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
+        await command(page, 'Move tree');
+        await page.locator('.mtree-chip').first().waitFor();
         assert.equal(await page.locator('.mtree-chip').count(), 3);
 
         await command(page, 'Delete this move and what follows');
@@ -40,6 +43,7 @@ async function command(page, label) {
         assert.equal(await page.getByRole('button', { name: 'Undo', exact: true }).count(), 0,
           'Deletion from another study can still be undone into this game');
         await page.keyboard.press('t');
+        await page.locator('.mtree-chip').first().waitFor();
         assert.equal(await page.locator('.mtree-chip').count(), 2);
 
         await command(page, 'Delete this move and what follows');
