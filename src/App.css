@@ -5666,7 +5666,8 @@ summary:active {
 .board-wrap {
   width: min(100cqw, 90cqh, 620px);
   max-width: 100%;
-  filter: drop-shadow(0 20px 38px rgba(0, 0, 0, 0.28));
+  /* The board surface already casts its own box-shadow. Filtering this whole
+     subtree leaves a black paint tile in WebKit when it scrolls offscreen. */
 }
 
 .mobile-board-center {
