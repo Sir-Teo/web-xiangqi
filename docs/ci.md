@@ -28,6 +28,7 @@ to the shared artifact wastes work.
 The 105 focused audit scripts are assigned to eight disjoint shards using
 `scripts/ui-audit-suites.cjs`. Tests prove that the workflow's actual shard
 arguments cover every registered script exactly once. Scripts within a shard
+are ordered using hosted timings to spread slower checks across the shards and
 remain serial; parallelism comes from separate runners, preserving CPU and
 port isolation. The 158 layout checks run in four disjoint shards, with the
 same coverage guarantee. Review fixtures, review, calibration, worker parity,
