@@ -154,7 +154,8 @@ async function importPgn(page, width, source, fromFile = false) {
         const beforeReview = (await readSaved()).moveTree;
         await page.keyboard.press('r');
         await page.locator('.review-panel [data-testid="start-review-btn"]').click();
-        await page.getByTestId('notice-announcement').filter({ hasText: 'returned no evaluation' }).waitFor();
+        // Assert the persistent review error, not the transient live announcement.
+        await page.locator('.review-panel').getByText(/Review stopped: the engine returned no evaluation/).waitFor();
         await command(page, 'Save game');
         const cancelledReview = await readSaved();
         assert.deepEqual(cancelledReview.moveTree, beforeReview, 'A cancelled review changed saved annotations');
