@@ -30,6 +30,7 @@ const path = require('node:path');
       'test-metadata-layout-browser.cjs',
       'test-snapshot-reuse-browser.cjs',
       'test-repetition-cache-browser.cjs',
+      'test-halfmove-clock-browser.cjs',
       'test-fen-reuse-browser.cjs',
       'test-autosave-error-browser.cjs',
       'test-autosave-limit-browser.cjs',

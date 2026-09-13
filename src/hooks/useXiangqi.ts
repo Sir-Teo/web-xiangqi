@@ -25,6 +25,7 @@ import {
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
+import { halfmoveClockAtNode } from '../utils/moveHalfmoveClock';
 import { removeSubtree } from '../utils/moveTreeEdit';
 import { getStudyMainLine, pinStudyMainLine, unpinStudyMainLine } from '../utils/studyMainLine';
 import { restoreRemovedSubtree } from '../utils/restoreRemovedSubtree';
@@ -199,14 +200,7 @@ function halfmoveForNode(
     nodeId: string,
     rootPosition: RootPosition
 ): number {
-    const path = findPathToNode(treeNodes, nodeId);
-    let clock = rootPosition.halfmove;
-    for (const id of path) {
-        const record = treeNodes[id]?.record;
-        if (!record) continue;
-        clock = record.captured ? 0 : clock + 1;
-    }
-    return clock;
+    return halfmoveClockAtNode(treeNodes, nodeId, ROOT_NODE_ID, rootPosition.halfmove);
 }
 
 function findPathToNode(treeNodes: Record<string, MoveTreeNode>, nodeId: string): string[] {
