@@ -1386,47 +1386,47 @@ function App() {
     [currentLineSignature, rootFen]
   );
 
-  const breadcrumbNodeIds = useMemo(() => {
-    const path: string[] = [];
-    let cursor: string | null = currentNodeId;
-    while (cursor && cursor !== rootNodeId) {
-      path.unshift(cursor);
-      cursor = treeNodes[cursor]?.parentId ?? null;
-    }
-    return [rootNodeId, ...path];
-  }, [currentNodeId, rootNodeId, treeNodes]);
-
+  const rightPanelOpen = rightWidth > 0;
+  const moveTreeVisible = isMobile
+    ? mobileView === 'analysis' && mobileAnalysisTab === 'moves'
+    : rightPanelOpen;
+  const breadcrumbVisible = moveTreeVisible && analysisTab === 'tree';
+  // The hook already maintains this ordered path. Reuse it instead of walking
+  // parents and prepending every node; hidden panels need no breadcrumb list.
+  const breadcrumbNodeIds = useMemo(() => breadcrumbVisible
+    ? [rootNodeId, ...activeLineNodeIds.slice(0, currentMoveIndex + 1)]
+    : [], [activeLineNodeIds, breadcrumbVisible, currentMoveIndex, rootNodeId]);
 
   useEffect(() => {
     const container = treeBreadcrumbRef.current;
     const active = container?.querySelector('.tree-breadcrumb-chip-active') as HTMLElement | null;
     if (!container || !active) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const activeRect = active.getBoundingClientRect();
-    const activeCenter = container.scrollLeft
-      + activeRect.left
-      - containerRect.left
-      + activeRect.width / 2;
-    const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-    const targetLeft = Math.max(0, Math.min(maxLeft, activeCenter - container.clientWidth / 2));
-    const distance = Math.abs(targetLeft - container.scrollLeft);
-    const activeFullyVisible = activeRect.left >= containerRect.left && activeRect.right <= containerRect.right;
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const behavior: ScrollBehavior = prefersReducedMotion || !activeFullyVisible || distance > container.clientWidth
-      ? 'auto'
-      : 'smooth';
-
-    if (distance > 1) {
-      container.scrollTo({ left: targetLeft, behavior });
-    }
-    // The panel holding this strip is not always mounted. On a phone the moves
-    // are played on the board view, where the breadcrumb does not exist, so the
-    // ref is null and this returns early; switching to the moves tab mounts it
-    // but changes neither dependency, leaving the strip parked at scrollLeft 0
-    // with the current node a thousand pixels off the right edge. Re-run when
-    // the view that carries it comes back.
-  }, [breadcrumbNodeIds.length, currentNodeId, mobileView, mobileAnalysisTab, analysisTab]);
+    const centerActive = (resized = false) => {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      const activeCenter = container.scrollLeft
+        + activeRect.left
+        - containerRect.left
+        + activeRect.width / 2;
+      const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      const targetLeft = Math.max(0, Math.min(maxLeft, activeCenter - container.clientWidth / 2));
+      const distance = Math.abs(targetLeft - container.scrollLeft);
+      const activeFullyVisible = activeRect.left >= containerRect.left && activeRect.right <= containerRect.right;
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const behavior: ScrollBehavior = resized || prefersReducedMotion || !activeFullyVisible || distance > container.clientWidth
+        ? 'auto'
+        : 'smooth';
+      if (distance > 1) container.scrollTo({ left: targetLeft, behavior });
+    };
+    centerActive();
+    // Reopening initially sees a collapsed panel width. Recenter as it grows,
+    // and when enlarged text changes the active chip's dimensions.
+    const observer = new ResizeObserver(() => centerActive(true));
+    observer.observe(container);
+    observer.observe(active);
+    return () => observer.disconnect();
+  }, [breadcrumbNodeIds.length, currentNodeId, breadcrumbVisible]);
 
   /**
    * The breadcrumb is one composite widget, so it gets one tab stop.
@@ -1500,10 +1500,6 @@ function App() {
   const graphVisible = isMobile
     ? mobileView === 'analysis' && mobileAnalysisTab === 'graph'
     : leftPanelOpen;
-  const rightPanelOpen = rightWidth > 0;
-  const moveTreeVisible = isMobile
-    ? mobileView === 'analysis' && mobileAnalysisTab === 'moves'
-    : rightPanelOpen;
 
   // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
   //
@@ -6934,7 +6930,7 @@ function App() {
                       bottom command bar, half of those breadcrumb chips. A real
                       100-ply game put a hundred of them between the toolbar and
                       "Save". */}
-                  <div
+                  {breadcrumbVisible && <div
                     className="tree-breadcrumb"
                     ref={treeBreadcrumbRef}
                     role="toolbar"
@@ -6956,7 +6952,7 @@ function App() {
                         onFocusIndex={setRovingBreadcrumbIndex}
                         onKeyDown={handleBreadcrumbKeyDown} />;
                     })}
-                  </div>
+                  </div>}
                   {!isMobile && beginnerGuide ? beginnerGuide : moveTreeVisible && <MoveListTree
                     treeNodes={treeNodes}
                     rootNodeId={rootNodeId}

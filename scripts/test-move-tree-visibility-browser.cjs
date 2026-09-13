@@ -24,7 +24,15 @@ const command = async (page, label) => {
       const page = await browser.newPage({ viewport: { width, height }, hasTouch: mobile, reducedMotion: 'reduce' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
-        await page.addInitScript(raw => localStorage.setItem('xiangqi:library:v1', raw), JSON.stringify([saved]));
+        await page.addInitScript(raw => {
+          localStorage.setItem('xiangqi:library:v1', raw);
+          const unshift = Array.prototype.unshift;
+          window.__breadcrumbShiftedEntries = 0;
+          Array.prototype.unshift = function(...items) {
+            if (typeof items[0] === 'string' && /^n\d+$/.test(items[0])) window.__breadcrumbShiftedEntries += this.length;
+            return Reflect.apply(unshift, this, items);
+          };
+        }, JSON.stringify([saved]));
         await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
           window.Pikafish = function() {};
           window.Pikafish.createWorkerEngine = async () => {
@@ -45,9 +53,13 @@ const command = async (page, label) => {
         };
         await hideTree();
         const hiddenChips = await page.locator('.mtree-chip').count();
+        const hiddenBreadcrumbs = await page.locator('.tree-breadcrumb-chip').count();
         await page.evaluate(() => {
-          window.__treeChanges = 0;
-          new MutationObserver(changes => { window.__treeChanges += changes.filter(change => change.target instanceof Element && change.target.matches('.mtree-chip')).length; })
+          window.__treeChanges = 0; window.__breadcrumbChanges = 0; window.__breadcrumbShiftedEntries = 0;
+          new MutationObserver(changes => {
+            window.__treeChanges += changes.filter(change => change.target instanceof Element && change.target.matches('.mtree-chip')).length;
+            window.__breadcrumbChanges += changes.filter(change => change.target instanceof Element && change.target.matches('.tree-breadcrumb-chip')).length;
+          })
             .observe(document.body, { subtree: true, attributes: true });
         });
         for (let step = 0; step < 10; step++) {
@@ -57,10 +69,30 @@ const command = async (page, label) => {
         }
         const mutations = await page.evaluate(() => window.__treeChanges);
         console.log(`${browserType.name()} ${width}px: hidden tree retained ${hiddenChips} move buttons and changed ${mutations} attributes across ten board steps`);
+        const breadcrumbWork = await page.evaluate(() => ({ changes: window.__breadcrumbChanges, shifted: window.__breadcrumbShiftedEntries }));
+        console.log(`${browserType.name()} ${width}px: hidden breadcrumbs retained ${hiddenBreadcrumbs} buttons, changed ${breadcrumbWork.changes} attributes and prepended across ${breadcrumbWork.shifted} existing entries`);
         if (process.env.XIANGQI_QA_MEASURE_ONLY) continue;
+        assert.equal(hiddenBreadcrumbs, 0, 'Hidden breadcrumbs must release their controls');
+        assert.deepEqual(breadcrumbWork, { changes: 0, shifted: 0 }, 'Hidden navigation must not update breadcrumb controls or prepend ancestry');
         assert.equal(hiddenChips, 0, 'A hidden move list must release its controls');
         assert.equal(mutations, 0, 'Board navigation must not update a hidden move list');
+        const checkBreadcrumbs = async (length, firstNode) => {
+          const strip = page.locator('.tree-breadcrumb');
+          const chips = strip.locator('.tree-breadcrumb-chip');
+          assert.equal(await chips.count(), length);
+          assert.equal(await chips.first().getAttribute('data-breadcrumb-node-id'), 'root');
+          assert.equal(await chips.nth(1).getAttribute('data-breadcrumb-node-id'), firstNode);
+          assert.deepEqual(await chips.evaluateAll(nodes => nodes.map(n => Number(n.dataset.breadcrumbIndex))), Array.from({ length }, (_, i) => i));
+          assert.equal(await chips.last().getAttribute('aria-current'), 'true');
+          assert.equal(await strip.locator('[tabindex="0"]').count(), 1);
+          await page.waitForFunction(() => {
+            const chip = document.querySelector('.tree-breadcrumb-chip-active');
+            const r = chip?.getBoundingClientRect(); const strip = chip?.parentElement?.getBoundingClientRect();
+            return r && strip && strip.width > 0 && r.left >= strip.left - 1 && r.right <= strip.right + 1;
+          });
+        };
         await command(page, 'Move tree');
+        await checkBreadcrumbs(503, 'n1');
         await page.locator('.mtree-chip').first().waitFor();
         assert.equal(await page.locator('.mtree-chip').count(), 1712, 'Reopening must restore all main moves and bounded branch previews');
         const active = page.locator('.mtree-chip[aria-current="step"]');
@@ -79,6 +111,16 @@ const command = async (page, label) => {
         await page.waitForFunction(() => document.querySelector('[data-testid="move-comment-input"]')?.value === 'Line 16 end');
         await hideTree(); await command(page, 'Move tree');
         await page.waitForFunction(() => document.querySelector('[data-testid="move-comment-input"]')?.value === 'Line 16 end');
+        await checkBreadcrumbs(513, 'n7681');
+        // Navigate through the reopened strip, then back to the saved endpoint.
+        await page.locator('.tree-breadcrumb-chip-active').focus();
+        await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Enter');
+        await checkBreadcrumbs(512, 'n7681');
+        assert.equal(await page.locator('.tree-breadcrumb-chip-active').evaluate(n => n === document.activeElement), true);
+        await page.keyboard.press('Home'); await page.keyboard.press('Enter');
+        assert.equal(await page.locator('.tree-breadcrumb-chip').count(), 1);
+        await command(page, 'Go to latest move');
+        await checkBreadcrumbs(513, 'n7681');
         // The newly mounted list must have a usable keyboard entry point.
         const tabStop = page.locator('.mtree-chip[tabindex="0"]');
         assert.equal(await tabStop.count(), 1);
@@ -87,7 +129,10 @@ const command = async (page, label) => {
         for (const size of [16, 32]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
           await hideTree(); await command(page, 'Move tree');
-          await page.locator('.mtree-chip[aria-current="step"]').scrollIntoViewIfNeeded();
+          await checkBreadcrumbs(512, 'n7681');
+          await page.locator('.tree-breadcrumb-chip-active').scrollIntoViewIfNeeded();
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          await checkBreadcrumbs(512, 'n7681');
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
           await page.screenshot({ path: `/tmp/xiangqi-move-tree-visibility-${browserType.name()}-${width}-${size}.png` });
         }
