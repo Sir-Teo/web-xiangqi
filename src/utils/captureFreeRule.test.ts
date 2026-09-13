@@ -60,9 +60,9 @@ describe('describeCaptureFree', () => {
 describe('what the notice reads', () => {
     it('names the count and what the engine will do with it', () => {
         const report = describeCaptureFree(90)!;
-        expect(formatCaptureFreeHeadline(report)).toBe('45 moves without a capture');
+        expect(formatCaptureFreeHeadline(report)).toBe('45 counted moves without a capture');
         expect(formatCaptureFreeRule(report)).toContain('15 moves left');
-        expect(formatCaptureFreeRule(report)).toContain('drawn at 60');
+        expect(formatCaptureFreeRule(report)).toContain('draw at 60 counted moves');
     });
 
     it('does not pluralise the last move', () => {
@@ -77,6 +77,7 @@ describe('what the notice reads', () => {
     it('reports the engine rather than adjudicating the game', () => {
         const rule = formatCaptureFreeRule(describeCaptureFree(CAPTURE_FREE_DRAW_PLIES)!);
         expect(rule).toContain('Play is not stopped');
-        expect(rule).toContain('The engine scores this drawn');
+        expect(rule).toContain('The engine can score a draw');
+        expect(rule).toContain('mate and repetition rulings take precedence');
     });
 });

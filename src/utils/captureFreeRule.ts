@@ -4,8 +4,8 @@
  * `gameResultForPosition` deliberately never returns a draw: which repetition
  * and move-limit rules apply is the tournament's decision, and guessing would
  * put a wrong verdict on a real game. The engine has no such reticence.
- * Pikafish adjudicates the limit itself -- `rule60 >= 120` in `position.cpp`
- * is a hard draw -- and, less visibly, `evaluate.cpp` shades every evaluation
+ * Pikafish adjudicates the limit itself -- `rule60 >= 120` in `position.cpp`,
+ * subject to mate and prior repetition rulings -- and, less visibly, `evaluate.cpp` shades every evaluation
  * towards level on the way there:
  *
  *     v -= (v * pos.rule60_count()) / 253;
@@ -18,7 +18,8 @@
  * This module says it. It reports the count and what the engine will do with
  * it; it does not end the game, for the same reason the repetition notice does
  * not. `docs/architecture.md` records this as a reporting gap and says the
- * clock is already on the board's FEN, which is where the count comes from --
+ * clock is already on the board's FEN, including its extended-check adjustment,
+ * which is where the count comes from --
  * there is no second copy to fall out of step.
  */
 
@@ -36,13 +37,13 @@ export const CAPTURE_FREE_DRAW_PLIES = 120;
 export const CAPTURE_FREE_REPORT_PLIES = 60;
 
 export interface CaptureFreeReport {
-    /** Plies since the last capture, as the FEN's fifth field counts them. */
+    /** Counted plies since the last capture, discounting extended checking sequences. */
     plies: number;
     /** The same in full moves, which is the unit the rule is named for. */
     moves: number;
-    /** Full moves left before the engine calls it drawn; 0 once it has. */
+    /** Additional counted full moves before the limit; extended checks can delay it. */
     movesLeft: number;
-    /** Whether the engine now scores this position as a draw. */
+    /** Whether the counter reached the limit; mate/repetition rulings can take precedence. */
     reached: boolean;
 }
 
@@ -67,15 +68,16 @@ export function describeCaptureFree(plies: number | null): CaptureFreeReport | n
 }
 
 export function formatCaptureFreeHeadline(report: CaptureFreeReport): string {
-    return `${report.moves} moves without a capture`;
+    return `${report.moves} counted moves without a capture`;
 }
 
 export function formatCaptureFreeRule(report: CaptureFreeReport): string {
     if (report.reached) {
-        return 'The engine scores this drawn under the 60-move rule, whatever the material. ' +
+        return 'The 60-move counter has reached its limit. The engine can score a draw here; ' +
+            'mate and repetition rulings take precedence. ' +
             'Play is not stopped here: which ruleset applies is the tournament\'s to decide.';
     }
     const remaining = report.movesLeft === 1 ? '1 move left' : `${report.movesLeft} moves left`;
-    return `The engine calls the game drawn at 60 and shades its evaluation towards level ` +
-        `on the way there, so a won position reads flatter than it is. ${remaining}.`;
+    return `The engine can draw at 60 counted moves and shades its evaluation towards level ` +
+        `as the counter rises. ${remaining}. Extended checking sequences can delay the limit.`;
 }

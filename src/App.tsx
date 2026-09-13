@@ -6679,7 +6679,7 @@ function App() {
                   </div>
                 ) : null}
                 {/* The other rule the app will not adjudicate but the engine
-                    does. Pikafish draws the game at sixty capture-free moves
+                    does. Pikafish can draw at sixty counted capture-free moves
                     and discounts its evaluation all the way there, so without
                     this a ground-out ending simply reads flatter than it is
                     with nothing on screen to say why. */}

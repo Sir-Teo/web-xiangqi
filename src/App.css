@@ -6514,6 +6514,12 @@ summary:active {
   display: none;
 }
 
+/* Rule explanations carry the counting exceptions and verdict limits. Keep
+   them readable in Pro mode and short viewports, where ordinary subtitles hide. */
+.position-dock .position-stat-repetition em {
+  display: block;
+}
+
 [data-assist-mode="pro"] .position-stat-selection .position-warning {
   display: -webkit-box;
   overflow: hidden;

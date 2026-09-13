@@ -5026,7 +5026,7 @@ async function assertCaptureFreeCountExplainsALevelEnding(page) {
   if (
     !counting.present ||
     counting.reached !== "false" ||
-    !counting.text.includes("49 moves without a capture") ||
+    !counting.text.includes("49 counted moves without a capture") ||
     !counting.text.includes("11 moves left")
   ) {
     throw new Error(`The 60-move notice did not count a capture-free ending: ${JSON.stringify(counting)}`);
@@ -5039,7 +5039,7 @@ async function assertCaptureFreeCountExplainsALevelEnding(page) {
     if (
       !reached.present ||
       reached.reached !== "true" ||
-      !reached.text.includes("62 moves without a capture") ||
+      !reached.text.includes("62 counted moves without a capture") ||
       !reached.text.includes("Play is not stopped")
     ) {
       throw new Error(`The 60-move notice did not report the limit at ${where}: ${JSON.stringify(reached)}`);

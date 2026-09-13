@@ -188,7 +188,7 @@ function fullmoveForPly(rootPosition: RootPosition, ply: number) {
 }
 
 /**
- * The halfmove clock at a node: plies since the last capture.
+ * Pikafish’s rule-60 counter at a node, reset by captures and adjusted for checks.
  *
  * Walked from the node's own ancestry rather than stored on the record, so it
  * stays right when a line is replayed, branched or loaded, and there is no
