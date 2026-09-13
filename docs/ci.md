@@ -16,8 +16,10 @@ does not discard a successful engine compilation.
 
 The React build runs once per commit. An uncompressed workflow artifact carries
 `dist` to the engine checks, browser jobs and deployment. Browser jobs also copy
-its engine files to `public` for the Vite development server; they do not test
-older checked-in binaries. The network is already compressed, so applying zip
+its engine files to `public` for tests that own a Vite development server;
+they do not test older checked-in binaries. Focused audit shards use Vite
+preview against `dist`, avoiding repeated development transforms and React
+StrictMode's extra rendering work in production performance measurements. The network is already compressed, so applying zip
 compression to the shared artifact wastes work.
 
 ## Browser checks
@@ -35,6 +37,8 @@ boundaries and writes per-script timings/results to `.cache/ui-audit-*.json`
 and the Actions job summary. Failed jobs upload these results and screenshots.
 The stable `verify` job rejects failed, cancelled or skipped checks before
 Pages can run.
+
+Build the app first (`npm run build:react`) when reproducing locally.
 
 ```sh
 npm run test:ui:audit -- --shard=3/8       # reproduce one CI shard

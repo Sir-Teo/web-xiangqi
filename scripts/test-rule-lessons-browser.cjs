@@ -90,6 +90,8 @@ async function openCommand(page) {
         await page.waitForFunction(() => document.querySelector('[data-testid="lesson-feedback"]')?.getAttribute('data-solved') === 'true');
         await dialog.getByRole('button', { name: 'Back to your board' }).click();
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen);
+        await page.keyboard.press('t');
+        await page.locator('.mtree-chip').first().waitFor();
         assert.equal(await page.locator('.mtree-chip').count(), 1);
 
         // A quota error must announce the failure and preserve session progress.

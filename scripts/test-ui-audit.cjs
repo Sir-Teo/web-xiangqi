@@ -13,11 +13,11 @@ const { scripts, selectShard } = require('./ui-audit-suites.cjs');
   const shard = args.find(arg => arg.startsWith('--shard='))?.slice(8) || '1/1';
   const selected = selectShard(scripts, shard);
   if (args.includes('--list')) { console.log(selected.join('\n')); return; }
-  const { createServer } = await import('vite');
-  const server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
+  // Match production performance and test the exact artifact CI will publish.
+  const { preview } = await import('vite');
+  const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   const results = [];
   try {
-    await server.listen();
     const env = { ...process.env, XIANGQI_QA_URL: server.resolvedUrls.local[0] };
     for (const script of selected) {
       const start = Date.now();
@@ -35,7 +35,7 @@ const { scripts, selectShard } = require('./ui-audit-suites.cjs');
       } finally { console.log('::endgroup::'); }
     }
   } finally {
-    await server.close();
+    await new Promise((resolve, reject) => server.httpServer.close(error => error ? reject(error) : resolve()));
     fs.mkdirSync(path.join(__dirname, '../.cache'), { recursive: true });
     fs.writeFileSync(path.join(__dirname, `../.cache/ui-audit-${shard.replace('/', '-of-')}.json`), JSON.stringify(results, null, 2));
     if (process.env.GITHUB_STEP_SUMMARY) {

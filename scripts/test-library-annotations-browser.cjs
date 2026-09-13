@@ -18,7 +18,7 @@ const games = [
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
         await page.addInitScript(games => localStorage.setItem('xiangqi:library:v1', JSON.stringify(games)), games);
-        await page.goto(base);
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         const command = async label => {
           await page.keyboard.press('ControlOrMeta+k');
           await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
