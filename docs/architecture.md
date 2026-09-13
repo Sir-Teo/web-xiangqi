@@ -882,7 +882,7 @@ left in the tree as variations, which a study of the game wants anyway.
 
 ### The halfmove clock is load-bearing
 
-The fifth field of a FEN — plies since the last capture — looks like the one
+The fifth field of a FEN — counted plies since the last capture — looks like the one
 nobody reads, because xiangqi has no fifty-move rule to hang on it. Pikafish
 reads it. It adjudicates the natural limit from it, and the difference is not
 subtle. The same endgame, searched at depth 14, differing only in that field:
@@ -903,24 +903,28 @@ startpos moves ...`, and the engine counts the plies itself. A custom start
 goes as `position fen <root> moves ...`, so the root's clock is the only part
 the engine cannot work out — which is exactly the case a pasted endgame is.
 
-The clock is derived from a node's ancestry rather than stored on each record:
-a capture resets it, anything else adds one, and the root's value is whatever
-its FEN said. There is no second copy to fall out of step, and it stays right
-when a line is replayed or branched.
+`utils/moveHalfmoveClock.ts` derives the clock from a node's ancestry rather
+than storing it on every record. A capture resets it, quiet soldier moves
+advance it, and the root's value is whatever its FEN said. Following Pikafish's
+`check10` logic, checks beyond the first ten by either side and their replies
+do not advance the clock. The helper stops at the latest capture and only
+makes a second backward scan when excess checks need to be deducted. It does
+not allocate an ancestry array. A FEN cannot preserve earlier check history;
+both the app and the engine start fresh check counters at that root.
 
-The engine and the app still disagree about one thing, deliberately. Pikafish
-will call a position drawn once that clock is high enough; `gameResultForPosition`
-never returns a draw at all, for the same reason it does not adjudicate a
-repetition — the rule depends on which ruleset you are playing, and guessing
-would put a wrong verdict on a real game.
+The engine can score a draw at 120 counted plies, subject to earlier repetition
+rulings and a terminal loss at the limit. `gameResultForPosition` deliberately
+never returns a draw: the applicable tournament ruleset determines the game
+verdict. The app reports Pikafish's counter without ending play.
 
 **The game is still not ended, but the board no longer stays silent.**
 `utils/captureFreeRule.ts` reports the count beside the repetition notice from
-thirty capture-free moves on, and names what the engine will do with it. That
-was recorded here as a reporting gap that needed a decision about *which* limit
-to name; the decision is that there is nothing to decide, because the notice
-reports the *engine's* rule rather than adjudicating the game — and the engine's
-rule is readable, `rule60 >= 120` in `position.cpp`.
+thirty counted capture-free moves on. The notice explains the extended-check
+adjustment and the precedence of mate and repetition rulings. Its explanation
+remains visible in Pro mode and short viewports. The rule is verified against
+[pinned Pikafish source](https://github.com/official-pikafish/Pikafish/blob/beeca5cc785ceb2026c5f9248f6e057573b12906/src/position.cpp#L471)
+and every prefix of real-engine browser fixtures, including captures and
+custom roots; the browser regression also compares exported FENs.
 
 Naming it turned out to matter more than the draw itself. `evaluate.cpp` shades
 every evaluation towards level all the way there:
