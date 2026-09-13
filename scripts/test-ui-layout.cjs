@@ -8944,7 +8944,14 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
     // is re-evaluated on a style recalculation, and a stylesheet is what
     // reliably triggers one here.
     await page.addStyleTag({ content: `html { font-size: ${rootPx}px; }` });
-    await page.waitForTimeout(200);
+    // Font-size changes also transition the tab padding. A fixed delay can
+    // expire before a loaded CI browser starts that transition.
+    await page.locator(".analysis-tab-strip").last().evaluate(async strip => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await Promise.all(strip.getAnimations({ subtree: true })
+        .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map(animation => animation.finished.catch(() => {})));
+    });
     return page.evaluate(() => {
       const strip = [...document.querySelectorAll(".analysis-tab-strip")].pop();
       const tabs = [...strip.querySelectorAll(".analysis-tab-btn")];

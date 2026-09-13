@@ -96,6 +96,7 @@ async function modalShortcutGuard(browser, viewport) {
     const assertPaletteBlocked = async () => {
       const dialog = page.getByRole('dialog');
       await dialog.waitFor();
+      await page.waitForFunction(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement));
       for (const shortcut of ['Control+k', 'Meta+k']) {
         await page.keyboard.press(shortcut);
         assert.equal(await dialog.count(), 1, `${shortcut} opened a second modal`);
