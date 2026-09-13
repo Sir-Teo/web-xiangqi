@@ -28,13 +28,16 @@ The 105 focused audit scripts are assigned to eight disjoint shards using
 `scripts/ui-audit-suites.cjs`. Tests prove that the workflow's actual shard
 arguments cover every registered script exactly once. Scripts within a shard
 remain serial; parallelism comes from separate runners, preserving CPU and
-port isolation. Layout, review fixtures, review, calibration, worker parity,
-production smoke and server tests have their own jobs.
+port isolation. The 158 layout checks run in four disjoint shards, with the
+same coverage guarantee. Review fixtures, review, calibration, worker parity,
+production smoke and server tests have their own jobs. The matrix uses 18
+browser runners; checks remain serial within each runner.
 
 A failing script does not cancel other shards or later scripts in its shard.
 Each script retains a three-minute process limit. The runner prints script
 boundaries and writes per-script timings/results to `.cache/ui-audit-*.json`
-and the Actions job summary. Failed jobs upload these results and screenshots.
+and the Actions job summary. Layout shards record the same diagnostics in
+`.cache/ui-layout-*.json`. Failed jobs upload these results and screenshots.
 The stable `verify` job rejects failed, cancelled or skipped checks before
 Pages can run.
 
@@ -43,6 +46,7 @@ Build the app first (`npm run build:react`) when reproducing locally.
 ```sh
 npm run test:ui:audit -- --shard=3/8       # reproduce one CI shard
 npm run test:ui:audit -- --shard=3/8 --list
+npm run test:ui:layout -- --shard=2/4     # or omit --shard to run all checks
 node --test scripts/test-ui-audit-shards.cjs
 ```
 

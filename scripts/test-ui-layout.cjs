@@ -12672,7 +12672,177 @@ async function assertEvalGraphTooltipIsNotMeasuredPerMove(browser) {
   }
 }
 
+function layoutChecks(page, browser) {
+  return [
+    { name: "assertDesktopBoardLayout 1024", run: () => assertDesktopBoardLayout(page, { width: 1024, height: 720 }) },
+    { name: "assertLargeDisplayBoardAndEvalBar", run: () => assertLargeDisplayBoardAndEvalBar(page) },
+    { name: "assertForcedColoursRemainReadable", run: () => assertForcedColoursRemainReadable(browser) },
+    { name: "assertSkipLinkReachesTheBoard", run: () => assertSkipLinkReachesTheBoard(page) },
+    { name: "assertDialogsReturnFocusOnClose", run: () => assertDialogsReturnFocusOnClose(page) },
+    { name: "assertBoardMatchesThePlyItIsOn", run: () => assertBoardMatchesThePlyItIsOn(page) },
+    { name: "assertAdvertisedMoveShortcuts", run: () => assertAdvertisedMoveShortcuts(page) },
+    { name: "assertNotationStylesRenderDifferently", run: () => assertNotationStylesRenderDifferently(page) },
+    { name: "assertThePieceStyleSettingDrawsLetters", run: () => assertThePieceStyleSettingDrawsLetters(page) },
+    { name: "assertLibraryExplorerCountsOwnGames", run: () => assertLibraryExplorerCountsOwnGames(page) },
+    { name: "assertDataFromBeforeTheKeyRenameStillArrives", run: () => assertDataFromBeforeTheKeyRenameStillArrives(page) },
+    { name: "assertPlayFromHereKeepsThePosition", run: () => assertPlayFromHereKeepsThePosition(page) },
+    { name: "assertNoDanglingAriaControls", run: () => assertNoDanglingAriaControls(page) },
+    { name: "assertOpeningBookArrowsGuideBoard", run: () => assertOpeningBookArrowsGuideBoard(page) },
+    { name: "assertBoardKeyboardNavigation", run: () => assertBoardKeyboardNavigation(page) },
+    { name: "assertBoardKeyboardNavigationFlipped", run: () => assertBoardKeyboardNavigationFlipped(page) },
+    { name: "assertDesktopResizeFeedback", run: () => assertDesktopResizeFeedback(page) },
+    { name: "assertPausedAiTurnBlocksManualMove", run: () => assertPausedAiTurnBlocksManualMove(page) },
+    { name: "assertIllegalMoveShowsRuleHint", run: () => assertIllegalMoveShowsRuleHint(page) },
+    { name: "assertAiPlayModeShowsEngineStatus", run: () => assertAiPlayModeShowsEngineStatus(page) },
+    { name: "assertAiNewGameSwitchesToPlayWorkspace", run: () => assertAiNewGameSwitchesToPlayWorkspace(page) },
+    { name: "assertTakeBackRemovesTheExchange", run: () => assertTakeBackRemovesTheExchange(page) },
+    { name: "assertBeginnerAiUsesCandidatePv", run: () => assertBeginnerAiUsesCandidatePv(browser) },
+    { name: "assertAnalysisWorkspaceDoesNotAutoPlayAi", run: () => assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) },
+    { name: "assertEngineLoaderFailureShowsNotice", run: () => assertEngineLoaderFailureShowsNotice(browser) },
+    { name: "assertEngineCreateTimeoutShowsNotice", run: () => assertEngineCreateTimeoutShowsNotice(browser) },
+    { name: "assertEngineReadyTimeoutShowsNotice", run: () => assertEngineReadyTimeoutShowsNotice(browser) },
+    { name: "assertAnalysisResumesAfterVisibilityReturn", run: () => assertAnalysisResumesAfterVisibilityReturn(browser) },
+    { name: "assertAiPlayPausesWhileHidden", run: () => assertAiPlayPausesWhileHidden(browser) },
+    { name: "assertEnginePvLineControl", run: () => assertEnginePvLineControl(page) },
+    { name: "assertClickingIntoAnEngineLinePlaysItUpToThere", run: () => assertClickingIntoAnEngineLinePlaysItUpToThere(browser) },
+    { name: "assertAnEngineLineIsOneTabStop", run: () => assertAnEngineLineIsOneTabStop(browser) },
+    { name: "assertEngineTelemetryDashboard", run: () => assertEngineTelemetryDashboard(browser) },
+    { name: "assertTwoEngineLinesFitAtLaptopHeight", run: () => assertTwoEngineLinesFitAtLaptopHeight(page) },
+    { name: "assertTheHeadingOutlineHasNoGaps", run: () => assertTheHeadingOutlineHasNoGaps(browser) },
+    { name: "assertADeepSearchSurvivesAHiddenTab", run: () => assertADeepSearchSurvivesAHiddenTab(browser) },
+    { name: "assertAMoveNoteSurvivesAReload", run: () => assertAMoveNoteSurvivesAReload(browser) },
+    { name: "assertANoteSurvivesTheMoveChangingUnderIt", run: () => assertANoteSurvivesTheMoveChangingUnderIt(page) },
+    { name: "assertADiscardedTabKeepsTheLastThingDone", run: () => assertADiscardedTabKeepsTheLastThingDone(browser) },
+    { name: "assertSteppingBackAndReloadingKeepsTheRestOfTheGame", run: () => assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser) },
+    { name: "assertShareLinkSaysWhyItDidNotLoad", run: () => assertShareLinkSaysWhyItDidNotLoad(page) },
+    { name: "assertACommaSeparatedShareLinkLoads", run: () => assertACommaSeparatedShareLinkLoads(page) },
+    { name: "assertLargeTextKeepsAUsableBoard", run: () => assertLargeTextKeepsAUsableBoard(browser) },
+    { name: "assertCrossingTheBreakpointKeepsABoard", run: () => assertCrossingTheBreakpointKeepsABoard(page) },
+    { name: "assertCaptureFreeCountExplainsALevelEnding", run: () => assertCaptureFreeCountExplainsALevelEnding(page) },
+    { name: "assertEngineDownloadReportsItsProgress", run: () => assertEngineDownloadReportsItsProgress(browser) },
+    { name: "assertEngineMateScoresRenderAsMate", run: () => assertEngineMateScoresRenderAsMate(browser) },
+    { name: "assertEngineRestartDropsBufferedInfo", run: () => assertEngineRestartDropsBufferedInfo(browser) },
+    { name: "assertEngineRestartRestoresDetailOptions", run: () => assertEngineRestartRestoresDetailOptions(browser) },
+    { name: "assertPlayedEnginePvDoesNotStoreRootEval", run: () => assertPlayedEnginePvDoesNotStoreRootEval(browser) },
+    { name: "assertPreferencePersistence", run: () => assertPreferencePersistence(page) },
+    { name: "assertBottomNewGameMenuResetsDraft", run: () => assertBottomNewGameMenuResetsDraft(page) },
+    { name: "assertInvalidFenToastTimerResets", run: () => assertInvalidFenToastTimerResets(page) },
+    { name: "assertDisabledControlsLookInactive", run: () => assertDisabledControlsLookInactive(page) },
+    { name: "assertPanelTabAccessibility", run: () => assertPanelTabAccessibility(page) },
+    { name: "assertLibraryLoadsAnalysisWorkspace", run: () => assertLibraryLoadsAnalysisWorkspace(page) },
+    { name: "assertTheBottomBarKeepsItsBadgesAfterAReview", run: () => assertTheBottomBarKeepsItsBadgesAfterAReview(page) },
+    { name: "assertNewGameDialogFocusTrap", run: () => assertNewGameDialogFocusTrap(page) },
+    { name: "assertMobileNewGameStartButtonVisible", run: () => assertMobileNewGameStartButtonVisible(page) },
+    { name: "assertBlackToMoveTreeNumbering", run: () => assertBlackToMoveTreeNumbering(page) },
+    { name: "assertMoveLineImport", run: () => assertMoveLineImport(page) },
+    { name: "assertNotationImportSaysWhatItCouldNotRead", run: () => assertNotationImportSaysWhatItCouldNotRead(page) },
+    { name: "assertANotationRecordCanStartFromAGivenPosition", run: () => assertANotationRecordCanStartFromAGivenPosition(page) },
+    { name: "assertADhtmlXqRecordImports", run: () => assertADhtmlXqRecordImports(page) },
+    { name: "assertAnXqfFileImports", run: () => assertAnXqfFileImports(page) },
+    { name: "assertMoveLineImportPreservesVariations", run: () => assertMoveLineImportPreservesVariations(page) },
+    { name: "assertMoveLineImportRecoversUnclosedVariation", run: () => assertMoveLineImportRecoversUnclosedVariation(page) },
+    { name: "assertMoveLineImportRejectsInvalidVariation", run: () => assertMoveLineImportRejectsInvalidVariation(page) },
+    { name: "assertReviewBestMoveBranchAction", run: () => assertReviewBestMoveBranchAction(page) },
+    { name: "assertTheStudyFocusIsAboveTheFoldAtLaptopHeight", run: () => assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page) },
+    { name: "assertTheReviewMomentsAreOneTabStop", run: () => assertTheReviewMomentsAreOneTabStop(page) },
+    { name: "assertLearnFromMistakesAsksAndGrades", run: () => assertLearnFromMistakesAsksAndGrades(page) },
+    { name: "assertLastMoveArrowUsesPracticalReviewQuality", run: () => assertLastMoveArrowUsesPracticalReviewQuality(page) },
+    { name: "assertRunningReviewCancelsOnLineChange", run: () => assertRunningReviewCancelsOnLineChange(browser) },
+    { name: "assertARunningReviewSurvivesAHiddenTab", run: () => assertARunningReviewSurvivesAHiddenTab(browser) },
+    { name: "assertReviewMomentFiltersResetOnLoad", run: () => assertReviewMomentFiltersResetOnLoad(browser) },
+    { name: "assertReviewRevisitRefreshesDecisionBestMove", run: () => assertReviewRevisitRefreshesDecisionBestMove(browser) },
+    { name: "assertReviewRevisitIgnoresGoodScoreSwings", run: () => assertReviewRevisitIgnoresGoodScoreSwings(browser) },
+    { name: "assertCompletedReviewRerunRespectsEngineState", run: () => assertCompletedReviewRerunRespectsEngineState(page) },
+    { name: "assertMoveLineImportErrorAccessibility", run: () => assertMoveLineImportErrorAccessibility(page) },
+    { name: "assertRootMoveVariationsVisible", run: () => assertRootMoveVariationsVisible(page) },
+    { name: "assertReplayedMoveKeepsChosenContinuation", run: () => assertReplayedMoveKeepsChosenContinuation(page) },
+    { name: "assertReplayingAMoveKeepsTheLineBeingRead", run: () => assertReplayingAMoveKeepsTheLineBeingRead(page) },
+    { name: "assertReplayingAMoveKeepsItsEvaluation", run: () => assertReplayingAMoveKeepsItsEvaluation(page) },
+    { name: "assertMoveTreeRespectsReducedMotion", run: () => assertMoveTreeRespectsReducedMotion(page) },
+    { name: "assertPgnTreeVariationExport", run: () => assertPgnTreeVariationExport(page) },
+    { name: "assertCurrentPgnDownload", run: () => assertCurrentPgnDownload(page) },
+    { name: "assertMainExportFailureFeedback", run: () => assertMainExportFailureFeedback(page) },
+    { name: "assertShareLinkRoundTrip", run: () => assertShareLinkRoundTrip(page) },
+    { name: "assertShareTreeRoundTrip", run: () => assertShareTreeRoundTrip(page) },
+    { name: "assertRootStudyTreeShareExportSave", run: () => assertRootStudyTreeShareExportSave(page) },
+    { name: "assertOversizedShareTreeWarning", run: () => assertOversizedShareTreeWarning(page) },
+    { name: "assertLongShareVariationVisible", run: () => assertLongShareVariationVisible(page) },
+    { name: "assertInvalidShareTreeFallsBackToMainline", run: () => assertInvalidShareTreeFallsBackToMainline(page) },
+    { name: "assertMismatchedShareTreeFallsBackToMainline", run: () => assertMismatchedShareTreeFallsBackToMainline(page) },
+    { name: "assertInvalidShareLinkFeedback", run: () => assertInvalidShareLinkFeedback(page) },
+    { name: "assertMoveLineFileImport", run: () => assertMoveLineFileImport(page) },
+    { name: "assertTheCommandPaletteDoesNotClaimAnEmptyPopup", run: () => assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page) },
+    { name: "assertPaletteImportsAGameRecord", run: () => assertPaletteImportsAGameRecord(page) },
+    { name: "assertArrowsCanBeTurnedOffOnAPhone", run: () => assertArrowsCanBeTurnedOffOnAPhone(page) },
+    { name: "assertSoundCanBeMutedFromThePalette", run: () => assertSoundCanBeMutedFromThePalette(page) },
+    { name: "assertNotationCanBeChosenFromThePalette", run: () => assertNotationCanBeChosenFromThePalette(page) },
+    { name: "assertAPhoneCanPinchTheBoard", run: () => assertAPhoneCanPinchTheBoard(browser) },
+    { name: "assertAPhoneCanTapTheBoardActionsSlightlyHigh", run: () => assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) },
+    { name: "assertTheBoardEditorBrushesAreThumbSized", run: () => assertTheBoardEditorBrushesAreThumbSized(browser) },
+    { name: "assertTheBottomBarChipsSurviveAReview", run: () => assertTheBottomBarChipsSurviveAReview(browser) },
+    { name: "assertTheRecoveryModalHoldsTheKeyboard", run: () => assertTheRecoveryModalHoldsTheKeyboard(browser) },
+    { name: "assertChoosingAnEngineOptionDoesNotRenameIt", run: () => assertChoosingAnEngineOptionDoesNotRenameIt(page) },
+    { name: "assertTheAppIsInstallable", run: () => assertTheAppIsInstallable(browser) },
+    { name: "assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails", run: () => assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) },
+    { name: "assertACloudRulingItDoesNotHaveIsNotAFailure", run: () => assertACloudRulingItDoesNotHaveIsNotAFailure(browser) },
+    { name: "assertTheAnalysisTabsAdvertiseTheirShortcuts", run: () => assertTheAnalysisTabsAdvertiseTheirShortcuts(page) },
+    { name: "assertScaledUpTextDoesNotCutTheTabLabels", run: () => assertScaledUpTextDoesNotCutTheTabLabels(page) },
+    { name: "assertOversizedMoveLineFileRejected", run: () => assertOversizedMoveLineFileRejected(page) },
+    { name: "assertOversizedMoveLinePasteRejected", run: () => assertOversizedMoveLinePasteRejected(page) },
+    { name: "assertFenTaggedMoveLineImport", run: () => assertFenTaggedMoveLineImport(page) },
+    { name: "assertDialogsBlockMoveShortcuts", run: () => assertDialogsBlockMoveShortcuts(page) },
+    { name: "assertAnOpenDialogHoldsTheMoveShortcuts", run: () => assertAnOpenDialogHoldsTheMoveShortcuts(page) },
+    { name: "assertTheBoardEditorStandsAloneAndKeepsTheChosenMode", run: () => assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) },
+    { name: "assertBoardMarkersSurviveSelection", run: () => assertBoardMarkersSurviveSelection(page) },
+    { name: "assertMobileBoardLayout 596", run: () => assertMobileBoardLayout(page, { width: 596, height: 668 }) },
+    { name: "assertMobileBoardLayout 390", run: () => assertMobileBoardLayout(page, { width: 390, height: 844 }) },
+    { name: "assertSaveFailureFeedback", run: () => assertSaveFailureFeedback(page) },
+    { name: "assertMobileSaveLibraryActions", run: () => assertMobileSaveLibraryActions(page) },
+    { name: "assertLibraryPgnCopy", run: () => assertLibraryPgnCopy(page) },
+    { name: "assertSavedStudyTreeRoundTrip", run: () => assertSavedStudyTreeRoundTrip(page) },
+    { name: "assertVariationPreviewMatchesNavigation", run: () => assertVariationPreviewMatchesNavigation(page) },
+    { name: "assertLibraryPgnFailureFeedback", run: () => assertLibraryPgnFailureFeedback(page) },
+    { name: "assertLibraryInvalidSavedGameLoadFeedback", run: () => assertLibraryInvalidSavedGameLoadFeedback(page) },
+    { name: "assertLibraryMutationFailureFeedback", run: () => assertLibraryMutationFailureFeedback(page) },
+    { name: "assertLibraryDeleteConfirmation", run: () => assertLibraryDeleteConfirmation(page) },
+    { name: "assertLibraryRespondsToStorageChanges", run: () => assertLibraryRespondsToStorageChanges(page) },
+    { name: "assertLibrarySavedGameSorting", run: () => assertLibrarySavedGameSorting(page) },
+    { name: "assertLibrarySortsByBlackAccuracyAndByAge", run: () => assertLibrarySortsByBlackAccuracyAndByAge(page) },
+    { name: "assertAReviewSaysWhenTheBoardHasLeftItsLine", run: () => assertAReviewSaysWhenTheBoardHasLeftItsLine(page) },
+    { name: "assertTheSavedLibraryIsOneTabStop", run: () => assertTheSavedLibraryIsOneTabStop(page) },
+    { name: "assertLargeLibraryRendersProgressively", run: () => assertLargeLibraryRendersProgressively(page) },
+    { name: "assertDenseEvalGraphLimitsPointMarkers", run: () => assertDenseEvalGraphLimitsPointMarkers(page) },
+    { name: "assertSimpleRepetitionDoesNotAutoDraw", run: () => assertSimpleRepetitionDoesNotAutoDraw(page) },
+    { name: "assertPerpetualCheckIsNamedAndBinding", run: () => assertPerpetualCheckIsNamedAndBinding(page) },
+    { name: "assertStalemateLossIsLabeled", run: () => assertStalemateLossIsLabeled(page) },
+    { name: "assertSettingsExplainTheirOwnOptions", run: () => assertSettingsExplainTheirOwnOptions(page) },
+    { name: "assertTheFenBoxRefusesImpossiblePositions", run: () => assertTheFenBoxRefusesImpossiblePositions(page) },
+    { name: "assertAPastedHalfmoveClockIsKeptAndCounted", run: () => assertAPastedHalfmoveClockIsKeptAndCounted(page) },
+    { name: "assertCheckmateByPlayingTheMove", run: () => assertCheckmateByPlayingTheMove(page) },
+    { name: "assertPlayedMovesAreNumberedFromOne", run: () => assertPlayedMovesAreNumberedFromOne(page) },
+    { name: "assertBoardAnimatesAMoveInBothDirections", run: () => assertBoardAnimatesAMoveInBothDirections(page) },
+    { name: "assertBreadcrumbAndMoveListAgreeOnMoveNumbers", run: () => assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page) },
+    { name: "assertTheMoveTreeIsOneTabStop", run: () => assertTheMoveTreeIsOneTabStop(page) },
+    { name: "assertPiecesCanBeDraggedWithoutBreakingClicks", run: () => assertPiecesCanBeDraggedWithoutBreakingClicks(page) },
+    { name: "assertShowThreatIsSeparateFromTheAnalysis", run: () => assertShowThreatIsSeparateFromTheAnalysis(page) },
+    { name: "assertAPlayedCaptureRecordsWhatItDid", run: () => assertAPlayedCaptureRecordsWhatItDid(page) },
+    { name: "assertALoadedCaptureRecordsWhatItDid", run: () => assertALoadedCaptureRecordsWhatItDid(page) },
+    { name: "assertGameOverReviewPreservesResult", run: () => assertGameOverReviewPreservesResult(page) },
+    { name: "assertMobileGameOverReviewOpensReviewTab", run: () => assertMobileGameOverReviewOpensReviewTab(page) },
+    { name: "assertAppErrorBoundaryFallback", run: () => assertAppErrorBoundaryFallback(browser) },
+    { name: "assertSoundUnlockIsNotOnTheFirstTap", run: () => assertSoundUnlockIsNotOnTheFirstTap(browser) },
+    { name: "assertEvalGraphTooltipIsNotMeasuredPerMove", run: () => assertEvalGraphTooltipIsNotMeasuredPerMove(browser) },
+  ];
+}
+
 async function main() {
+  const args = process.argv.slice(2);
+  if (args.some(arg => arg !== "--list" && !arg.startsWith("--shard=")) || args.filter(arg => arg.startsWith("--shard=")).length > 1) throw new Error("Usage: test-ui-layout.cjs [--shard=INDEX/TOTAL] [--list]");
+  const shard = args.find(arg => arg.startsWith("--shard="))?.slice(8) || "1/1";
+  const { selectShard } = require("./ui-audit-suites.cjs");
+  const names = selectShard(layoutChecks(), shard).map(check => check.name);
+  if (args.includes("--list")) { console.log(names.join("\n")); return; }
+  const results = [];
   let playwright;
   try {
     playwright = require("playwright");
@@ -12684,7 +12854,7 @@ async function main() {
 
   const root = path.resolve(__dirname, "..");
   const viteBin = path.join(root, "node_modules", "vite", "bin", "vite.js");
-  const server = spawn(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", "8192"], {
+  const server = spawn(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", "8192", "--strictPort"], {
     cwd: root,
     env: { ...process.env },
     stdio: ["ignore", "pipe", "pipe"],
@@ -12703,6 +12873,7 @@ async function main() {
       args: ["--no-sandbox"],
     });
     const page = await browser.newPage();
+    const selected = selectShard(layoutChecks(page, browser), shard);
     await clearAutoSaveBetweenNavigations(page);
     const pageConsole = [];
     page.on("console", (msg) => {
@@ -12710,164 +12881,20 @@ async function main() {
     });
     page.on("pageerror", (err) => pageConsole.push(err && err.stack ? err.stack : String(err)));
 
-    await assertDesktopBoardLayout(page, { width: 1024, height: 720 });
-    await assertLargeDisplayBoardAndEvalBar(page);
-    await assertForcedColoursRemainReadable(browser);
-    await assertSkipLinkReachesTheBoard(page);
-    await assertDialogsReturnFocusOnClose(page);
-    await assertBoardMatchesThePlyItIsOn(page);
-    await assertAdvertisedMoveShortcuts(page);
-    await assertNotationStylesRenderDifferently(page);
-    await assertThePieceStyleSettingDrawsLetters(page);
-    await assertLibraryExplorerCountsOwnGames(page);
-    await assertDataFromBeforeTheKeyRenameStillArrives(page);
-    await assertPlayFromHereKeepsThePosition(page);
-    await assertNoDanglingAriaControls(page);
-    await assertOpeningBookArrowsGuideBoard(page);
-    await assertBoardKeyboardNavigation(page);
-    await assertBoardKeyboardNavigationFlipped(page);
-    await assertDesktopResizeFeedback(page);
-    await assertPausedAiTurnBlocksManualMove(page);
-    await assertIllegalMoveShowsRuleHint(page);
-    await assertAiPlayModeShowsEngineStatus(page);
-    await assertAiNewGameSwitchesToPlayWorkspace(page);
-    await assertTakeBackRemovesTheExchange(page);
-    await assertBeginnerAiUsesCandidatePv(browser);
-    await assertAnalysisWorkspaceDoesNotAutoPlayAi(browser);
-    await assertEngineLoaderFailureShowsNotice(browser);
-    await assertEngineCreateTimeoutShowsNotice(browser);
-    await assertEngineReadyTimeoutShowsNotice(browser);
-    await assertAnalysisResumesAfterVisibilityReturn(browser);
-    await assertAiPlayPausesWhileHidden(browser);
-    await assertEnginePvLineControl(page);
-    await assertClickingIntoAnEngineLinePlaysItUpToThere(browser);
-    await assertAnEngineLineIsOneTabStop(browser);
-    await assertEngineTelemetryDashboard(browser);
-    await assertTwoEngineLinesFitAtLaptopHeight(page);
-    await assertTheHeadingOutlineHasNoGaps(browser);
-    await assertADeepSearchSurvivesAHiddenTab(browser);
-    await assertAMoveNoteSurvivesAReload(browser);
-    await assertANoteSurvivesTheMoveChangingUnderIt(page);
-    await assertADiscardedTabKeepsTheLastThingDone(browser);
-    await assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser);
-    await assertShareLinkSaysWhyItDidNotLoad(page);
-    await assertACommaSeparatedShareLinkLoads(page);
-    await assertLargeTextKeepsAUsableBoard(browser);
-    await assertCrossingTheBreakpointKeepsABoard(page);
-    await assertCaptureFreeCountExplainsALevelEnding(page);
-    await assertEngineDownloadReportsItsProgress(browser);
-    await assertEngineMateScoresRenderAsMate(browser);
-    await assertEngineRestartDropsBufferedInfo(browser);
-    await assertEngineRestartRestoresDetailOptions(browser);
-    await assertPlayedEnginePvDoesNotStoreRootEval(browser);
-    await assertPreferencePersistence(page);
-    await assertBottomNewGameMenuResetsDraft(page);
-    await assertInvalidFenToastTimerResets(page);
-    await assertDisabledControlsLookInactive(page);
-    await assertPanelTabAccessibility(page);
-    await assertLibraryLoadsAnalysisWorkspace(page);
-    await assertTheBottomBarKeepsItsBadgesAfterAReview(page);
-    await assertNewGameDialogFocusTrap(page);
-    await assertMobileNewGameStartButtonVisible(page);
-    await assertBlackToMoveTreeNumbering(page);
-    await assertMoveLineImport(page);
-    await assertNotationImportSaysWhatItCouldNotRead(page);
-    await assertANotationRecordCanStartFromAGivenPosition(page);
-    await assertADhtmlXqRecordImports(page);
-    await assertAnXqfFileImports(page);
-    await assertMoveLineImportPreservesVariations(page);
-    await assertMoveLineImportRecoversUnclosedVariation(page);
-    await assertMoveLineImportRejectsInvalidVariation(page);
-    await assertReviewBestMoveBranchAction(page);
-    await assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page);
-    await assertTheReviewMomentsAreOneTabStop(page);
-    await assertLearnFromMistakesAsksAndGrades(page);
-    await assertLastMoveArrowUsesPracticalReviewQuality(page);
-    await assertRunningReviewCancelsOnLineChange(browser);
-    await assertARunningReviewSurvivesAHiddenTab(browser);
-    await assertReviewMomentFiltersResetOnLoad(browser);
-    await assertReviewRevisitRefreshesDecisionBestMove(browser);
-    await assertReviewRevisitIgnoresGoodScoreSwings(browser);
-    await assertCompletedReviewRerunRespectsEngineState(page);
-    await assertMoveLineImportErrorAccessibility(page);
-    await assertRootMoveVariationsVisible(page);
-    await assertReplayedMoveKeepsChosenContinuation(page);
-    await assertReplayingAMoveKeepsTheLineBeingRead(page);
-    await assertReplayingAMoveKeepsItsEvaluation(page);
-    await assertMoveTreeRespectsReducedMotion(page);
-    await assertPgnTreeVariationExport(page);
-    await assertCurrentPgnDownload(page);
-    await assertMainExportFailureFeedback(page);
-    await assertShareLinkRoundTrip(page);
-    await assertShareTreeRoundTrip(page);
-    await assertRootStudyTreeShareExportSave(page);
-    await assertOversizedShareTreeWarning(page);
-    await assertLongShareVariationVisible(page);
-    await assertInvalidShareTreeFallsBackToMainline(page);
-    await assertMismatchedShareTreeFallsBackToMainline(page);
-    await assertInvalidShareLinkFeedback(page);
-    await assertMoveLineFileImport(page);
-    await assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page);
-    await assertPaletteImportsAGameRecord(page);
-    await assertArrowsCanBeTurnedOffOnAPhone(page);
-    await assertSoundCanBeMutedFromThePalette(page);
-    await assertNotationCanBeChosenFromThePalette(page);
-    await assertAPhoneCanPinchTheBoard(browser);
-    await assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser);
-    await assertTheBoardEditorBrushesAreThumbSized(browser);
-    await assertTheBottomBarChipsSurviveAReview(browser);
-    await assertTheRecoveryModalHoldsTheKeyboard(browser);
-    await assertChoosingAnEngineOptionDoesNotRenameIt(page);
-    await assertTheAppIsInstallable(browser);
-    await assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser);
-    await assertACloudRulingItDoesNotHaveIsNotAFailure(browser);
-    await assertTheAnalysisTabsAdvertiseTheirShortcuts(page);
-    await assertScaledUpTextDoesNotCutTheTabLabels(page);
-    await assertOversizedMoveLineFileRejected(page);
-    await assertOversizedMoveLinePasteRejected(page);
-    await assertFenTaggedMoveLineImport(page);
-    await assertDialogsBlockMoveShortcuts(page);
-    await assertAnOpenDialogHoldsTheMoveShortcuts(page);
-    await assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page);
-    await assertBoardMarkersSurviveSelection(page);
-    await assertMobileBoardLayout(page, { width: 596, height: 668 });
-    await assertMobileBoardLayout(page, { width: 390, height: 844 });
-    await assertSaveFailureFeedback(page);
-    await assertMobileSaveLibraryActions(page);
-    await assertLibraryPgnCopy(page);
-    await assertSavedStudyTreeRoundTrip(page);
-    await assertVariationPreviewMatchesNavigation(page);
-    await assertLibraryPgnFailureFeedback(page);
-    await assertLibraryInvalidSavedGameLoadFeedback(page);
-    await assertLibraryMutationFailureFeedback(page);
-    await assertLibraryDeleteConfirmation(page);
-    await assertLibraryRespondsToStorageChanges(page);
-    await assertLibrarySavedGameSorting(page);
-    await assertLibrarySortsByBlackAccuracyAndByAge(page);
-    await assertAReviewSaysWhenTheBoardHasLeftItsLine(page);
-    await assertTheSavedLibraryIsOneTabStop(page);
-    await assertLargeLibraryRendersProgressively(page);
-    await assertDenseEvalGraphLimitsPointMarkers(page);
-    await assertSimpleRepetitionDoesNotAutoDraw(page);
-    await assertPerpetualCheckIsNamedAndBinding(page);
-    await assertStalemateLossIsLabeled(page);
-    await assertSettingsExplainTheirOwnOptions(page);
-    await assertTheFenBoxRefusesImpossiblePositions(page);
-    await assertAPastedHalfmoveClockIsKeptAndCounted(page);
-    await assertCheckmateByPlayingTheMove(page);
-    await assertPlayedMovesAreNumberedFromOne(page);
-    await assertBoardAnimatesAMoveInBothDirections(page);
-    await assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page);
-    await assertTheMoveTreeIsOneTabStop(page);
-    await assertPiecesCanBeDraggedWithoutBreakingClicks(page);
-    await assertShowThreatIsSeparateFromTheAnalysis(page);
-    await assertAPlayedCaptureRecordsWhatItDid(page);
-    await assertALoadedCaptureRecordsWhatItDid(page);
-    await assertGameOverReviewPreservesResult(page);
-    await assertMobileGameOverReviewOpensReviewTab(page);
-    await assertAppErrorBoundaryFallback(browser);
-    await assertSoundUnlockIsNotOnTheFirstTap(browser);
-    await assertEvalGraphTooltipIsNotMeasuredPerMove(browser);
+    for (const check of selected) {
+      const started = Date.now();
+      console.log(`::group::${check.name}`);
+      try {
+        await check.run();
+        results.push({ name: check.name, status: "passed", seconds: (Date.now() - started) / 1000 });
+      } catch (error) {
+        results.push({ name: check.name, status: "failed", seconds: (Date.now() - started) / 1000 });
+        throw error;
+      } finally {
+        console.log(`${check.name}: ${((Date.now() - started) / 1000).toFixed(1)}s`);
+        console.log("::endgroup::");
+      }
+    }
 
     // This shared page is navigated some eighty times over the run and boots
     // the real engine on each one, and every console error from any of them
@@ -12888,7 +12915,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
-    console.log("Desktop/mobile board layout, opening book board arrows, board keyboard navigation/flipped orientation, adaptive mobile actions, touch-reachable command palette, aria-controls targets, AI-turn lock, illegal-move rule hint, AI Play engine status, AI new-game workspace routing, beginner AI candidate-PV play, Analysis workspace AI auto-play guard, engine loader failure, boot-timeout, and ready-timeout notices, visibility-return analysis resume, hidden-tab AI pause/resume, engine PV controls, engine telemetry and mate-score labels, engine restart detail restoration, PV play eval integrity, preference persistence, panel tab accessibility, saved-study workspace routing, mobile analysis tab sync, dialog focus trap, mobile new-game start visibility, dialog shortcut guard, resize feedback, new-game reset, inactive disabled controls, invalid-FEN/share-link feedback timing, custom-FEN move numbering/graph labels, UCI/FEN-tag/file import with variation and unclosed-variation recovery, oversized import guard/file and paste guards, and accessible errors, actionable review suggestions, decisive review arrow quality, running review cancellation, review revisit best-move refresh, review revisit loss filtering, review engine metadata, and rerun state, root move variations, active continuation replay, reduced-motion move tree scroll, tree PGN variation export, long variation display, current-line PGN download/share link and root-study PGN/share/save with study trees, oversized-tree share warning, invalid/mismatched-tree fallback, export failure feedback, board marker persistence, save/library mutation failure feedback and PGN actions, invalid saved-game load feedback, saved study-tree round-trip, variation preview navigation, storage-synced library refresh, saved-game sorting, progressive large-library rendering, simple repetition playability, board move animation, piece dragging, show-threat separation, breadcrumb move numbering, terminal result labels, game-over review state, app error boundary fallback, idle sound priming, eval graph tooltip measurement, and library delete checks passed.");
+    console.log(`Layout shard ${shard}: ${selected.length} checks passed.`);
   } catch (e) {
     throw new Error(
       (e && e.stack ? e.stack : String(e)) +
@@ -12896,6 +12923,11 @@ async function main() {
       "\nServer stderr:\n" + serverStderr.slice(-4000)
     );
   } finally {
+    fs.mkdirSync(path.join(root, ".cache"), { recursive: true });
+    fs.writeFileSync(path.join(root, `.cache/ui-layout-${shard.replace("/", "-of-")}.json`), JSON.stringify({ shard, planned: names, results }, null, 2));
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Layout ${shard}\n\n| Check | Result | Seconds |\n| --- | --- | ---: |\n${results.map(row => `| ${row.name} | ${row.status} | ${row.seconds.toFixed(1)} |`).join("\n")}\n`);
+    }
     try { if (browser) await browser.close(); } catch (_) {}
     if (!server.killed) {
       server.kill("SIGTERM");
@@ -12913,7 +12945,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+module.exports = { layoutChecks };
+
+if (require.main === module) main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
