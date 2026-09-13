@@ -1,0 +1,43 @@
+name: Build or restore Pikafish
+description: Cache all four engine variants using their exact build inputs
+runs:
+  using: composite
+  steps:
+    # Exact hits only: never substitute an engine built with other sources,
+    # flags, weights, wrapper or toolchain. Save before the browser jobs so a
+    # test failure does not throw away a successful four-flavor compilation.
+    - name: Restore compiled engine
+      id: engine
+      uses: actions/cache/restore@v5
+      with:
+        path: .cache/engine
+        key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.EMSDK_VERSION }}-${{ hashFiles('.github/actions/build-engine/action.yml', 'scripts/build-pikafish.sh', 'scripts/install-emsdk.sh', 'templates/**', 'patches/**', 'public/pikafish.nnue') }}
+    - name: Cache emsdk on cold engine builds
+      if: steps.engine.outputs.cache-hit != 'true'
+      uses: actions/cache@v5
+      with:
+        path: .deps/emsdk
+        key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('scripts/install-emsdk.sh') }}
+    - name: Compile all engine variants on cache miss
+      if: steps.engine.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        bash scripts/install-emsdk.sh
+        bash scripts/build-pikafish.sh
+        mkdir -p .cache/engine
+        cp dist/pikafish* .cache/engine/
+    - name: Assemble engine and demo files
+      shell: bash
+      run: |
+        mkdir -p dist
+        cp .cache/engine/* dist/
+        cp .cache/engine/* public/
+        cp demo/*.html dist/
+        printf '%s\n' '{"type":"commonjs"}' > dist/package.json
+        npm run test:engine:contract
+    - name: Save verified engine cache
+      if: steps.engine.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: .cache/engine
+        key: ${{ steps.engine.outputs.cache-primary-key }}

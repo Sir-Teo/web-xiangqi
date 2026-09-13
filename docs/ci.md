@@ -9,18 +9,19 @@ same application artifact that the tests used.
 
 App checks run alongside one build job. That job compiles all four Pikafish
 variants only when the exact engine cache key is absent. The key includes the
-runner platform, pinned emsdk version, workflow, build/install scripts,
+runner platform, pinned emsdk version, engine-build action, build/install scripts,
 templates, patches and NNUE weights. There are no partial-key restores. Engine
 contract checks run before saving the cache, so an unrelated browser failure
-does not discard a successful engine compilation.
+does not discard a successful engine compilation. Unrelated workflow edits do
+not invalidate that cache.
 
 The React build runs once per commit. An uncompressed workflow artifact carries
 `dist` to the engine checks, browser jobs and deployment. Browser jobs also copy
 its engine files to `public` for tests that own a Vite development server;
 they do not test older checked-in binaries. Focused audit shards use Vite
 preview against `dist`, avoiding repeated development transforms and React
-StrictMode's extra rendering work in production performance measurements. The network is already compressed, so applying zip
-compression to the shared artifact wastes work.
+StrictMode's extra rendering work in production performance measurements. The neural-network weights are already compressed, so applying zip compression
+to the shared artifact wastes work.
 
 ## Browser checks
 

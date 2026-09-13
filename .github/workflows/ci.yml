@@ -41,42 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node
-      # Exact hits only: never substitute an engine built with other sources,
-      # flags, weights, wrapper or toolchain. Save before the browser jobs so a
-      # test failure does not throw away a successful four-flavor compilation.
-      - name: Restore compiled engine
-        id: engine
-        uses: actions/cache/restore@v5
-        with:
-          path: .cache/engine
-          key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.EMSDK_VERSION }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/build-pikafish.sh', 'scripts/install-emsdk.sh', 'templates/**', 'patches/**', 'public/pikafish.nnue') }}
-      - name: Cache emsdk on cold engine builds
-        if: steps.engine.outputs.cache-hit != 'true'
-        uses: actions/cache@v5
-        with:
-          path: .deps/emsdk
-          key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('scripts/install-emsdk.sh') }}
-      - name: Compile all engine variants on cache miss
-        if: steps.engine.outputs.cache-hit != 'true'
-        run: |
-          bash scripts/install-emsdk.sh
-          npm run build
-          mkdir -p .cache/engine
-          cp dist/pikafish* .cache/engine/
-      - name: Assemble engine and demo files
-        run: |
-          mkdir -p dist
-          cp .cache/engine/* dist/
-          cp .cache/engine/* public/
-          cp demo/*.html dist/
-          printf '%s\n' '{"type":"commonjs"}' > dist/package.json
-          npm run test:engine:contract
-      - name: Save verified engine cache
-        if: steps.engine.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: .cache/engine
-          key: ${{ steps.engine.outputs.cache-primary-key }}
+      - uses: ./.github/actions/build-engine
       - name: Build React application
         run: npm run build:react
       - name: Share application with all test and deployment jobs
@@ -150,6 +115,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: browser-diagnostics-${{ matrix.label }}
+          include-hidden-files: true
           path: |
             .cache/ui-audit-*.json
             .cache/ui-layout-*.json
