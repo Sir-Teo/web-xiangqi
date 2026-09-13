@@ -7877,7 +7877,7 @@ async function assertMoveLineImportErrorAccessibility(page) {
 
   await input.fill(Array.from({ length: 1025 }, () => "b2e2").join(" "));
   await page.getByTestId("import-uci-line-btn").click();
-  await error.getByText("Move line is too large").waitFor({ timeout: 5000 });
+  await error.getByText("Study is too large").waitFor({ timeout: 5000 });
   const oversizedState = await page.evaluate(() => ({
     errorText: document.querySelector("#new-game-line-error")?.textContent?.trim() || "",
     invalid: document.querySelector('[data-testid="uci-line-input"]')?.getAttribute("aria-invalid") || "",
@@ -7885,7 +7885,7 @@ async function assertMoveLineImportErrorAccessibility(page) {
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
-    !oversizedState.errorText.includes("1024 moves or fewer") ||
+    !oversizedState.errorText.includes("1024 moves per line and 8192 across all variations") ||
     oversizedState.invalid !== "true" ||
     oversizedState.moveRows !== 0 ||
     oversizedState.overflowX > 2
@@ -10253,7 +10253,7 @@ async function assertOversizedMoveLineFileRejected(page) {
       state.describedBy !== "new-game-line-error" ||
       state.fileNameVisible ||
       !state.importDisabled ||
-      !state.error.includes("1024 moves or fewer") ||
+      !state.error.includes("Library → Import PGN collection, then Open on board.") ||
       state.overflowX > 2
     ) {
       throw new Error(`Oversized move-line file was not rejected cleanly: ${JSON.stringify(state)}`);
