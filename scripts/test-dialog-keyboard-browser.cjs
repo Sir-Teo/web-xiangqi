@@ -96,7 +96,20 @@ async function modalShortcutGuard(browser, viewport) {
     const assertPaletteBlocked = async () => {
       const dialog = page.getByRole('dialog');
       await dialog.waitFor();
-      await page.waitForFunction(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement));
+      // Settled, not merely present. A lazily loaded dialog -- Set up a
+      // position is one -- mounts `dialog-load` first and swaps the real one
+      // in underneath when its chunk resolves. Focus transits `body` across
+      // that swap, so a shortcut pressed on the placeholder read as having
+      // escaped the modal: one run in three, and the same failure on main.
+      // The guard being tested still held every time, as the two assertions
+      // below it record -- no second modal, no palette -- so what fails here
+      // is the wait, not the app.
+      await page.waitForFunction(() => {
+        const open = document.querySelector('[role="dialog"]');
+        if (!open || !open.contains(document.activeElement)) return false;
+        if (window.__settledDialog !== open) { window.__settledDialog = open; window.__settledSince = performance.now(); return false; }
+        return performance.now() - window.__settledSince > 100;
+      });
       for (const shortcut of ['Control+k', 'Meta+k']) {
         await page.keyboard.press(shortcut);
         assert.equal(await dialog.count(), 1, `${shortcut} opened a second modal`);

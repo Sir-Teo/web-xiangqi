@@ -3779,7 +3779,15 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
     await page.waitForFunction(
       // b2e2 is the cannon on Red's file 8, so C8=5 -- not the C2=5 of h2e2.
       () => document.querySelector('[data-testid="engine-pv-0-move-0"]')?.textContent?.trim() === "C8=5",
-      null, { timeout: 5000 },
+      // 10s, the deadline the two waits for engine lines earlier in this same
+      // function already use. This one was left at 5s and is the harder of the
+      // three: the others wait for the first search to report, this one waits
+      // for the engine to start over on a new position after ArrowUp. It is
+      // the wait CI timed out on, twice, taking 7.4s over work that takes 0.9s
+      // here. The predicate is untouched -- the line must still read C8=5
+      // before Space is pressed -- so this only changes how long to wait for
+      // something that has to happen, not what counts as happening.
+      null, { timeout: 10000 },
     );
     await page.keyboard.press("Space");
     await page.waitForFunction(
