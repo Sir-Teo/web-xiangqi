@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { annotationTokensForMove } from './pgnAnnotations';
-import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
+import { extractUciMoveTree } from './moveImport';
 import { exportPgnFromMoveTree } from './gameExport';
 import { MAX_MOVE_COMMENT_LENGTH } from './moveComment';
+import type { SavedMoveTreeNode } from './gameLibrary';
 
 /**
  * A note has to survive the exporter and the importer, because a study that is
@@ -20,26 +21,45 @@ function pgnFor(moves: Array<{ uci: string; comment?: string; evalScore?: number
         .join(' ');
 }
 
+
+/**
+ * The main line as nodes, so a test can ask about the note on each move.
+ * `extractUciMoveTree` is the reader the import box uses; the separate
+ * annotated reader these tests used to call had no caller of its own.
+ */
+function mainLine(pgn: string) {
+    const { moves, moveTree } = extractUciMoveTree(pgn);
+    const nodes: SavedMoveTreeNode[] = [];
+    let cursor = moveTree;
+    for (const uci of moves) {
+        const node = cursor.find(child => child.uci === uci);
+        if (!node) break;
+        nodes.push(node);
+        cursor = node.children ?? [];
+    }
+    return { moves, nodes };
+}
+
 describe('a note through a PGN and back', () => {
     it('comes back the way it went out', () => {
         const note = 'Chariot belongs here first, or the horse has no square.';
         const pgn = pgnFor([{ uci: 'b2e2', comment: note }, { uci: 'h9g7' }]);
         expect(pgn).toContain(note);
 
-        const read = extractAnnotatedMainLine(pgn);
+        const read = mainLine(pgn);
         expect(read.moves).toEqual(['b2e2', 'h9g7']);
-        expect(read.annotations[0].comment).toBe(note);
-        expect(read.annotations[1].comment).toBeUndefined();
+        expect(read.nodes[0]?.comment).toBe(note);
+        expect(read.nodes[1]?.comment).toBeUndefined();
     });
 
     it('rides beside the review the same comment carries', () => {
         const pgn = pgnFor([
             { uci: 'b2e2', comment: 'Book, but the follow-up matters more.', evalScore: 42, quality: 'blunder' },
         ]);
-        const read = extractAnnotatedMainLine(pgn);
-        expect(read.annotations[0].evalScore).toBe(42);
-        expect(read.annotations[0].quality).toBe('blunder');
-        expect(read.annotations[0].comment).toBe('Book, but the follow-up matters more.');
+        const read = mainLine(pgn);
+        expect(read.nodes[0].evalScore).toBe(42);
+        expect(read.nodes[0].quality).toBe('blunder');
+        expect(read.nodes[0]?.comment).toBe('Book, but the follow-up matters more.');
     });
 
     /**
@@ -49,43 +69,43 @@ describe('a note through a PGN and back', () => {
      */
     it("does not read the app's own commands as a note", () => {
         const pgn = pgnFor([{ uci: 'b2e2', evalScore: 42 }, { uci: 'h9g7', evalScore: -900, quality: 'blunder' }]);
-        const read = extractAnnotatedMainLine(pgn);
-        expect(read.annotations[0].comment).toBeUndefined();
-        expect(read.annotations[1].comment).toBeUndefined();
-        expect(read.annotations[1].evalScore).toBe(-900);
+        const read = mainLine(pgn);
+        expect(read.nodes[0]?.comment).toBeUndefined();
+        expect(read.nodes[1]?.comment).toBeUndefined();
+        expect(read.nodes[1].evalScore).toBe(-900);
     });
 
     /** A `}` in a note would end the comment and spill the rest into the moves. */
     it('cannot be made to end its own comment', () => {
         const pgn = pgnFor([{ uci: 'b2e2', comment: 'closes } here b9c7 b0c2' }, { uci: 'h9g7' }]);
-        const read = extractAnnotatedMainLine(pgn);
+        const read = mainLine(pgn);
         // Two moves, not four: the note's text stayed inside the comment.
         expect(read.moves).toEqual(['b2e2', 'h9g7']);
-        expect(read.annotations[0].comment).toBe('closes here b9c7 b0c2');
+        expect(read.nodes[0]?.comment).toBe('closes here b9c7 b0c2');
     });
 
     it('bounds a note written by something other than this app', () => {
         const long = 'x'.repeat(MAX_MOVE_COMMENT_LENGTH + 400);
-        const read = extractAnnotatedMainLine(`b2e2 { ${long} } h9g7`);
-        expect(read.annotations[0].comment).toHaveLength(MAX_MOVE_COMMENT_LENGTH);
+        const read = mainLine(`b2e2 { ${long} } h9g7`);
+        expect(read.nodes[0]?.comment).toHaveLength(MAX_MOVE_COMMENT_LENGTH);
     });
 
     it('handles a full-size note with unclosed annotation commands without backtracking', () => {
         const source = `h2e2 {${'[%'.repeat(99_000)}} h9g7`;
         const started = performance.now();
-        const read = extractAnnotatedMainLine(source);
+        const read = mainLine(source);
         expect(performance.now() - started).toBeLessThan(1000);
         expect(read.moves).toEqual(['h2e2', 'h9g7']);
-        expect(read.annotations[0].comment).toBe('[%'.repeat(MAX_MOVE_COMMENT_LENGTH / 2));
-        expect(read.annotations[1].comment).toBeUndefined();
+        expect(read.nodes[0]?.comment).toBe('[%'.repeat(MAX_MOVE_COMMENT_LENGTH / 2));
+        expect(read.nodes[1]?.comment).toBeUndefined();
     });
 
     /** A variation's comment must not land on the main line's last move. */
     it('leaves a note inside a variation where it was', () => {
-        const read = extractAnnotatedMainLine('b2e2 { main note } (b0c2 { side note }) h9g7');
+        const read = mainLine('b2e2 { main note } (b0c2 { side note }) h9g7');
         expect(read.moves).toEqual(['b2e2', 'h9g7']);
-        expect(read.annotations[0].comment).toBe('main note');
-        expect(read.annotations[1].comment).toBeUndefined();
+        expect(read.nodes[0]?.comment).toBe('main note');
+        expect(read.nodes[1]?.comment).toBeUndefined();
     });
 
     it('round-trips every nested variation note through the normal tree importer', () => {
@@ -106,7 +126,7 @@ describe('a note through a PGN and back', () => {
             { uci: 'h2e2', comment: 'First second third', children: [{ uci: 'h9g7', comment: 'Last note' }] },
             { uci: 'b2e2', comment: 'Side continuation with h9g7 (not moves)', children: [{ uci: 'a9a8', comment: 'Rook' }] },
         ]);
-        expect(extractAnnotatedMainLine(source).annotations.map(a => a.comment)).toEqual(['First second third', 'Last note']);
+        expect(mainLine(source).nodes.map(node => node.comment)).toEqual(['First second third', 'Last note']);
     });
 
     it('does not assign a variation preface to its parent move', () => {

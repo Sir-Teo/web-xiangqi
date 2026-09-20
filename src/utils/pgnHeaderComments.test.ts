@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractPgnHeaders, extractPgnMetadata } from './gameMetadata';
-import { extractAnnotatedMainLine, extractFenTag, extractUciMoveLine, extractUciMoveTree } from './moveImport';
+import { extractFenTag, extractUciMoveLine, extractUciMoveTree } from './moveImport';
 import { planMoveLineImport } from './moveLineImportPlan';
 import { extractPgnResult } from './pgnResult';
 import { START_POSITION_FEN } from './xiangqi';
@@ -12,7 +12,6 @@ describe('comments around the first PGN headers', () => {
     it.each(['{Preparation note}', '; Preparation note'])('keeps moves and metadata after %s', comment => {
         const source = `${comment}\r\n[Event "Training"]\r\nh2e2 $1 {Move note} h9g7 *`;
         expect(extractUciMoveLine(source)).toEqual(['h2e2', 'h9g7']);
-        expect(extractAnnotatedMainLine(source)).toMatchObject({ moves: ['h2e2', 'h9g7'], annotations: [{ nags: [1], comment: 'Move note' }, {}] });
         expect(extractUciMoveTree(source)).toMatchObject({ rootComment: 'Preparation note', hadMoreGames: false,
             moveTree: [{ uci: 'h2e2', nags: [1], comment: 'Move note', children: [{ uci: 'h9g7' }] }] });
         expect(planMoveLineImport(source, '', validators)).toMatchObject({ kind: 'line', moves: ['h2e2', 'h9g7'], rootComment: 'Preparation note' });

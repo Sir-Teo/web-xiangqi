@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest';
 import {
-    extractAnnotatedMainLine,
     extractFenTag,
     extractUciMoveLine,
     extractUciMoveTree,
@@ -79,7 +78,6 @@ for (const [name, input] of NASTY) {
         // scanner for `{...}` comments and `$` glyphs, and now pulls prose out
         // of every comment it finds. `many braces` and `alternating` are the
         // inputs that pass the most work through it.
-        extractAnnotatedMainLine(input);
         normalizeMoveComment(input);
 
         try { parseFenBoard(input); } catch { /* invalid FEN is expected to throw */ }

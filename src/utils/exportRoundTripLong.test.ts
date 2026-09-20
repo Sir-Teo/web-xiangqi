@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { exportPgnFromUci } from './gameExport';
-import { extractUciMoveTree, extractAnnotatedMainLine } from './moveImport';
+import { extractUciMoveTree } from './moveImport';
 
 /**
  * A whole game out and back in.
@@ -38,11 +38,6 @@ describe('a full-length game exported and read back', () => {
     it('comes back with every move', () => {
         const pgn = exportPgnFromUci(LONG, { date: '2026.08.31' });
         expect(extractUciMoveTree(pgn).moves).toEqual(LONG);
-    });
-
-    it('comes back with every move on the annotated path too', () => {
-        const pgn = exportPgnFromUci(LONG, { date: '2026.08.31' });
-        expect(extractAnnotatedMainLine(pgn).moves).toEqual(LONG);
     });
 
     it('is not reported as holding more than one game', () => {
