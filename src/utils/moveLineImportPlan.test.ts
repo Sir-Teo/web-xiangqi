@@ -163,6 +163,36 @@ describe('what the reader is told when it will not import', () => {
     });
 });
 
+describe('a Chinese record whose non-move text reads as moves', () => {
+    // The notation reader only runs when no coordinates were found, and it is
+    // handed `stripRecordMetadata(source)`. Anything that scanner fails to take
+    // out reaches it as notation -- and a `%` escape line or a `;` remark can
+    // hold a real Chinese move, so the failure is not a stray token but a
+    // different game, imported without a word.
+    const GAME = '1. \u70ae\u4e8c\u5e73\u4e94 \u9a6c8\u8fdb7 2. \u9a6c\u4e8c\u8fdb\u4e09 \u8f669\u5e738';
+    const PLAYED = ['h2e2', 'h9g7', 'h0g2', 'i9h9'];
+
+    it('reads the game itself, so the cases below mean something', () => {
+        expect(plan(GAME)).toMatchObject({ kind: 'line', moves: PLAYED, importedFromNotation: true });
+    });
+
+    it('ignores a % escape line even when it holds a legal Chinese move', () => {
+        // Read as notation, this line used to turn the record into
+        // ['b0c2', 'b7e7'] -- not the game on the page, and no error either.
+        for (const ending of ['\n', '\r', '\r\n']) {
+            expect(plan(`% \u9a6c8\u8fdb7 \u5ffd\u7565${ending}${GAME}`), JSON.stringify(ending))
+                .toMatchObject({ kind: 'line', moves: PLAYED });
+        }
+    });
+
+    it('ends a ; remark at the line ending even when it holds a legal Chinese move', () => {
+        for (const ending of ['\n', '\r', '\r\n']) {
+            const source = `1. \u70ae\u4e8c\u5e73\u4e94 ; \u9a6c8\u8fdb7 \u6ce8${ending}\u9a6c8\u8fdb7 2. \u9a6c\u4e8c\u8fdb\u4e09 \u8f669\u5e738`;
+            expect(plan(source), JSON.stringify(ending)).toMatchObject({ kind: 'line', moves: PLAYED });
+        }
+    });
+});
+
 describe('a DhtmlXQ record, which is read before anything else', () => {
     // Its digits look like coordinates to one reader and like notation to the
     // other, so whichever ran first would claim it and import a different game.
