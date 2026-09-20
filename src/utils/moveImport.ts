@@ -292,10 +292,10 @@ export function extractAnnotatedMainLine(text: string): {
     };
 
     // The same walk of tags, comments and escape lines the coordinate readers
-    // use, so all three agree on where the movetext is. Sharing it is the point:
-    // this reader and `extractUciMoveTree` are cross-checked against each other
-    // by `planMoveLineImport`, and two scanners disagreeing about one malformed
-    // header shows up there as an import that will not load.
+    // use, so all three agree on where the movetext is. Sharing it matters
+    // because this reader is a second parser of the same format: it drifted
+    // from the other two over CR line endings, quoted `]` and escape lines, and
+    // nothing downstream would have said so.
     const spans = pgnMetadataSpans(source);
     let span = spans.next();
 

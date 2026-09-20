@@ -1,6 +1,7 @@
 import { parseResultTag, readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { stripDelimited } from './stripDelimited';
+import { atPgnLineStart, pgnLineEnd } from './pgnText';
 import { extractPgnEvalCommands, parsePgnMoveQuality } from './pgnEvaluation';
 import { appendPgnGlyph } from './moveGlyphs';
 import { readStudyAnalysisPgn } from './studyAnalysis';
@@ -24,12 +25,17 @@ function* tokens(text: string): Generator<Token> {
     let i = 0;
     while (i < text.length) {
         if (/\s|\uFEFF/.test(text[i])) { i++; continue; }
-        if (text[i] === '%' && (i === 0 || text[i - 1] === '\n')) {
-            const end = text.indexOf('\n', i); i = end < 0 ? text.length : end + 1; continue;
+        // A line ends at CR as well as LF. Asking only for LF made a whole
+        // CR-separated file one escape line -- every game in it gone, reported
+        // as "No games found" -- and ran a `;` remark to end of file, taking
+        // the moves after it. Plain CR-separated records parse fine otherwise,
+        // so these were gaps rather than an unsupported format.
+        if (text[i] === '%' && atPgnLineStart(text, i)) {
+            i = pgnLineEnd(text, i) + 1; continue;
         }
         if (text[i] === ';' || text[i] === '{') {
             const brace = text[i] === '{';
-            const end = text.indexOf(brace ? '}' : '\n', i + 1);
+            const end = brace ? text.indexOf('}', i + 1) : pgnLineEnd(text, i + 1);
             if (brace && end < 0) throw new Error('Unclosed PGN comment. Nothing was imported.');
             yield { kind: 'comment', value: text.slice(i + 1, end < 0 ? text.length : end) };
             i = end < 0 ? text.length : end + 1;

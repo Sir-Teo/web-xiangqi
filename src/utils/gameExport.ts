@@ -61,11 +61,20 @@ function parsePgnStartPosition(startFen?: string): PgnStartPosition {
     };
 }
 
+/**
+ * A tag value fit for one line, because a tag pair is one line.
+ *
+ * Line breaks fold to a space. `\r?\n` missed a lone CR, which is a real line
+ * ending -- a label pasted from an old Mac or out of a spreadsheet cell carries
+ * one -- and the tag pair was written split across two lines, which no other
+ * PGN reader will accept. Same gap as the one the importer had at the other
+ * end of the round trip.
+ */
 function escapeTagValue(value: string): string {
     return String(value)
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
-        .replace(/\r?\n/g, ' ');
+        .replace(/[\r\n]+/g, ' ');
 }
 
 function tagLine(name: string, value: string): string {

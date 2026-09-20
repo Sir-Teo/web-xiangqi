@@ -94,6 +94,44 @@ describe('strict Xiangqi PGN collections', () => {
   it('accepts a self-delimiting result without spaces', () => {
     expect(parsePgnCollection('1.h2e2*1.b2e2*')).toHaveLength(2);
   });
+  describe.each([['LF', '\n'], ['CRLF', '\r\n'], ['CR', '\r']])('a file whose lines end with %s', (_label, nl) => {
+    // A record separated by CR alone -- saved by an old Mac editor, or pasted
+    // out of one -- parses fine when it holds no `;` remark and no `%` escape
+    // line, so these are gaps in two line-end checks rather than a format the
+    // importer does not take. Each case is paired with the plain file above it
+    // to keep that distinction asserted rather than assumed.
+    const file = (body: string) => `[Event "D"]${nl}[Result "*"]${nl}${nl}${body}${nl}`;
+
+    it('reads a plain game', () => {
+      expect(parsePgnCollection(file('1. h2e2 h9g7 *'))[0].moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('ends a ; remark at the line ending, not at end of file', () => {
+      // The remark used to swallow the rest of the file, and Black's move with
+      // it -- one game came back holding a single move, with nothing said.
+      expect(parsePgnCollection(file('1. h2e2 ; note' + nl + 'h9g7 *'))[0].moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('ignores a % escape line without eating the games after it', () => {
+      // Asking only for LF made the whole file one escape line: every game in
+      // it disappeared and the reader was told "No games found."
+      const games = parsePgnCollection(`% ignored${nl}` + file('1. h2e2 h9g7 *'));
+      expect(games).toHaveLength(1);
+      expect(games[0].moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('ignores a % escape line that is not the first line of the file', () => {
+      // A separate case from the one above, and it has to be: an escape line at
+      // offset zero satisfies the line-start check by being at offset zero, so
+      // that fixture never exercises the check itself. Only a `%` reached after
+      // a line ending does -- and with LF-only detection it stops being an
+      // escape line at all and is read as movetext, which the strict reader
+      // then refuses.
+      const games = parsePgnCollection(file(`1. h2e2${nl}% ignored${nl}h9g7 *`));
+      expect(games).toHaveLength(1);
+      expect(games[0].moves).toEqual(['h2e2', 'h9g7']);
+    });
+  });
   it('keeps unclosed analysis commands as prose and removes only closed commands', () => {
     const [game] = parsePgnCollection('h2e2 {before[%xqanalysis invalid]after [%eval 0.42] [%xqanalysis unfinished} *');
     expect(game.moveTree?.[0].comment).toBe('beforeafter [%xqanalysis unfinished');
