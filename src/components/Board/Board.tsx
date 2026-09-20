@@ -354,6 +354,9 @@ export const Board = React.memo(function Board({
     }, [focusSquare, onSquareClick, onToggleHighlight, orientation]);
 
     const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
+        // A cancelled gesture may never produce a click. Its suppression must
+        // not swallow the first click of a new gesture.
+        suppressNextClickRef.current = false;
         if (event.button === 2 && (onToggleHighlight || onAddArrow)) {
             event.preventDefault();
             markerDragStartRef.current = { file, rank };
@@ -361,6 +364,9 @@ export const Board = React.memo(function Board({
         }
 
         if (event.pointerType === 'mouse' && event.button === 0 && canDragFrom(file, rank)) {
+            // Capture before the first movement: it may already be outside
+            // every hitbox, including outside the board entirely.
+            event.currentTarget.setPointerCapture(event.pointerId);
             // Armed, not started. Whether this is a drag or a click is not yet
             // known, and it is the pointer's next few pixels that decide.
             dragStartRef.current = {
@@ -396,14 +402,15 @@ export const Board = React.memo(function Board({
     const handleMarkerPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
         const dragStart = dragStartRef.current;
         if (dragStart && dragStart.pointerId === event.pointerId) {
+            if ((event.buttons & 1) === 0) {
+                endDrag();
+                return;
+            }
             const dx = event.clientX - dragStart.clientX;
             const dy = event.clientY - dragStart.clientY;
             if (!dragStart.started) {
                 if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
                 dragStart.started = true;
-                // Capture so the piece keeps following a pointer that has left
-                // the square it was picked up from -- which it does immediately.
-                event.currentTarget.setPointerCapture?.(event.pointerId);
                 // Selecting here is what puts the legal destinations on the
                 // board, and it is skipped when this piece is already the
                 // selected one, because `onSquareClick` reads a second call on
@@ -422,7 +429,7 @@ export const Board = React.memo(function Board({
         if (moved > TOUCH_MARKER_MOVE_TOLERANCE_PX) {
             cancelTouchMarker();
         }
-    }, [cancelTouchMarker, onSquareClick, selected]);
+    }, [cancelTouchMarker, endDrag, onSquareClick, selected]);
 
     const handleMarkerPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
         const dragStart = dragStartRef.current;
@@ -475,6 +482,11 @@ export const Board = React.memo(function Board({
         endDrag();
         cancelTouchMarker();
     }, [cancelTouchMarker, endDrag]);
+
+    useEffect(() => {
+        window.addEventListener('blur', handleMarkerPointerCancel);
+        return () => window.removeEventListener('blur', handleMarkerPointerCancel);
+    }, [handleMarkerPointerCancel]);
 
     const handleContextMenu = useCallback((event: React.MouseEvent) => {
         if (!onToggleHighlight && !onAddArrow) return;
@@ -590,6 +602,7 @@ export const Board = React.memo(function Board({
                                     onPointerMove={handleMarkerPointerMove}
                                     onPointerUp={(event) => handleMarkerPointerUp(event, file, rank)}
                                     onPointerCancel={handleMarkerPointerCancel}
+                                    onLostPointerCapture={handleMarkerPointerCancel}
                                 />
                             );
                         })

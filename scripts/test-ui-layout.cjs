@@ -1654,6 +1654,41 @@ async function assertPiecesCanBeDraggedWithoutBreakingClicks(page) {
     return lifted;
   };
 
+  // A fast first movement can leave the entire board before another pointer
+  // event hits a square. Releasing there must still end the gesture.
+  const cannon = await centre(7, 2);
+  await page.mouse.move(cannon.x, cannon.y);
+  await page.mouse.down();
+  await page.mouse.move(2, 2);
+  await page.mouse.up();
+  await page.mouse.move(cannon.x, cannon.y - 12);
+  if (await page.locator('.piece.dragging').count()) {
+    throw new Error('A released piece follows the mouse after a fast drag outside the board.');
+  }
+
+  for (const cancellation of ['blur', 'capture-loss', 'pointercancel']) {
+    await page.mouse.move(cannon.x, cannon.y);
+    await page.evaluate(() => {
+      document.querySelector('.hitbox[data-file="7"][data-rank="2"]').addEventListener('pointerdown', event => {
+        window.__movementPointerId = event.pointerId;
+      }, { once: true });
+    });
+    await page.mouse.down();
+    await page.mouse.move(cannon.x - 12, cannon.y);
+    await page.evaluate(kind => {
+      const square = document.querySelector('.hitbox[data-file="7"][data-rank="2"]');
+      if (kind === 'blur') window.dispatchEvent(new Event('blur'));
+      else if (kind === 'capture-loss') square.releasePointerCapture(window.__movementPointerId);
+      else square.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: window.__movementPointerId }));
+    }, cancellation);
+    // Native capture loss is delivered with the next pointer event.
+    await page.mouse.move(cannon.x - 14, cannon.y);
+    if (await page.locator('.piece.dragging').count()) {
+      throw new Error(`A piece remains attached to the pointer after ${cancellation}.`);
+    }
+    await page.mouse.up();
+  }
+
   // Red's centre cannon, dragged.
   const lifted = await dragSquare(7, 2, 4, 2);
   if (lifted !== 1) {
