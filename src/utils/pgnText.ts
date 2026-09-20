@@ -24,13 +24,20 @@ const TAG_PAIR = new RegExp(TAG_PAIR_SOURCE, 'y');
  */
 const LINE_END = /[\n\r]/g;
 
-function lineEnd(source: string, from: number): number {
+/**
+ * Where the line holding `from` ends: the index of its terminator, or the end
+ * of the text. Shared so every reader of this format agrees what a line is --
+ * they did not, and a `;` remark in a CR-separated record ran to end of file
+ * in two of them, taking the moves after it.
+ */
+export function pgnLineEnd(source: string, from: number): number {
     LINE_END.lastIndex = from;
     const terminator = LINE_END.exec(source);
     return terminator ? terminator.index : source.length;
 }
 
-function atLineStart(source: string, index: number): boolean {
+/** Whether `index` begins a line, which is what makes a `%` an escape line. */
+export function atPgnLineStart(source: string, index: number): boolean {
     return index === 0 || source[index - 1] === '\n' || source[index - 1] === '\r';
 }
 
@@ -43,7 +50,7 @@ export function* pgnTokens(source: string): Generator<PgnToken> {
             yield { kind: 'tag', text, start: match.index, name: match[1], value: match[2] };
         } else {
             const kind = text[0] === '{' || text[0] === ';' ? 'comment'
-                : text[0] === '%' && atLineStart(source, match.index) ? 'escape' : 'text';
+                : text[0] === '%' && atPgnLineStart(source, match.index) ? 'escape' : 'text';
             yield { kind, text, start: match.index };
         }
     }
@@ -93,10 +100,10 @@ export function* pgnMetadataSpans(source: string): Generator<PgnMetadataSpan> {
         let comment: string | undefined;
         if (opener[0] === '%') {
             // Only at the start of a line. Elsewhere it is ordinary text.
-            if (!atLineStart(source, start)) continue;
-            end = lineEnd(source, start);
+            if (!atPgnLineStart(source, start)) continue;
+            end = pgnLineEnd(source, start);
         } else if (opener[0] === ';') {
-            end = lineEnd(source, start);
+            end = pgnLineEnd(source, start);
             comment = source.slice(start + 1, end);
         } else if (opener[0] === '{') {
             const close = noBrace ? -1 : source.indexOf('}', start + 1);

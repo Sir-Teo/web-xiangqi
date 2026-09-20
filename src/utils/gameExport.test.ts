@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { exportPgn, exportPgnFromMoveTree, exportPgnFromUci, formatPgnDate } from './gameExport';
 import { extractFenTag, extractUciMoveLine, extractUciMoveTree, stripRecordMetadata } from './moveImport';
 import type { SavedMoveTreeNode } from './gameLibrary';
+import { extractPgnHeaders } from './gameMetadata';
 import type { MoveRecord } from '../hooks/useXiangqi';
 
 const OPTIONS = { date: '2026.08.28' };
@@ -121,6 +122,32 @@ describe('exported PGN reads back in', () => {
     it('does not mistake a header or a comment for a move', () => {
         const pgn = exportPgnFromUci(['h2e2'], { ...OPTIONS, label: 'a3a4 looks like a move' });
         expect(extractUciMoveLine(pgn)).toEqual(['h2e2']);
+    });
+
+    it('keeps a tag pair on one line whatever line ending the label carried', () => {
+        // A label is trimmed and truncated on its way into the library, not
+        // stripped of control characters, so a name pasted from an old Mac or
+        // out of a spreadsheet cell arrives here with a line ending inside it.
+        // A tag pair split across two lines is not a tag pair to anyone else.
+        for (const ending of ['\r', '\n', '\r\n']) {
+            const pgn = exportPgnFromUci(['h2e2'], { ...OPTIONS, label: `Red${ending}Study` });
+            const tags = pgn.split('\n\n')[0];
+            expect(tags.split('\n').filter(line => line.trim()).every(line => /^\[\w+ ".*"\]$/.test(line)), JSON.stringify(ending)).toBe(true);
+            expect(tag(pgn, 'White'), JSON.stringify(ending)).toBe('Red Study');
+            expect(extractUciMoveLine(pgn), JSON.stringify(ending)).toEqual(['h2e2']);
+        }
+    });
+
+    it('carries a label through the round trip when it holds PGN punctuation', () => {
+        // `]` is legal inside a quoted value and the exporter rightly does not
+        // escape it, so the importer has to read the value as a quoted string.
+        for (const label of ['Demo ] a3a4', 'Quote " mark', 'Back \\ slash', 'Semi ; colon']) {
+            const pgn = exportPgnFromUci(['h2e2', 'h9g7'], { ...OPTIONS, label });
+            // Both halves matter: the name survives, and none of it leaks into
+            // the movetext as a move nobody played.
+            expect(extractPgnHeaders(pgn).white, label).toBe(label);
+            expect(extractUciMoveLine(pgn), label).toEqual(['h2e2', 'h9g7']);
+        }
     });
 });
 
