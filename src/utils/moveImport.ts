@@ -1,4 +1,4 @@
-import { firstPgnGame as firstGameOnly } from './pgnText';
+import { firstPgnGame as firstGameOnly, pgnMetadataSpans } from './pgnText';
 import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { extractPgnHeaders } from './gameMetadata';
 import { readRecordedResultPgn, type RecordedResult } from './recordedResult';
@@ -49,8 +49,14 @@ export function stripRecordMetadata(text: string): string {
 }
 
 function stripPgnMetadata(text: string): string {
-    const withoutTags = stripDelimited(firstGameOnly(text).text, '[', ']');
-    return stripDelimited(withoutTags, '{', '}').replace(/;.*$/gm, ' ');
+    const source = firstGameOnly(text).text;
+    let out = '';
+    let cursor = 0;
+    for (const span of pgnMetadataSpans(source)) {
+        out += source.slice(cursor, span.start) + ' ';
+        cursor = span.end;
+    }
+    return cursor === 0 ? source : out + source.slice(cursor);
 }
 
 const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
@@ -111,24 +117,11 @@ export function extractUciMoveLine(text: string): string[] {
 
 /** Read comments separately so their parentheses/coordinates cannot become moves. */
 function* uciTreeTokens(source: string): Generator<{ comment: string } | { match: RegExpMatchArray }> {
-    const delimiters = /[[{;]/g;
-    const missingClosers = new Set<string>();
     let cursor = 0;
-    for (let delimiter = delimiters.exec(source); delimiter; delimiter = delimiters.exec(source)) {
-        const start = delimiter.index;
-        const opener = delimiter[0];
-        const close = opener === '[' ? ']' : opener === '{' ? '}' : '\n';
-        const end = missingClosers.has(close) ? -1 : source.indexOf(close, start + 1);
-        if (end < 0 && opener !== ';') {
-            // Preserve the coordinate reader's existing incomplete-delimiter
-            // recovery without repeatedly scanning the remaining suffix.
-            missingClosers.add(close);
-            continue;
-        }
-        for (const match of source.slice(cursor, start).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
-        if (opener !== '[') yield { comment: source.slice(start + 1, end < 0 ? source.length : end) };
-        cursor = end < 0 ? source.length : end + 1;
-        delimiters.lastIndex = cursor;
+    for (const span of pgnMetadataSpans(source)) {
+        for (const match of source.slice(cursor, span.start).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
+        if (span.comment !== undefined) yield { comment: span.comment };
+        cursor = span.end;
     }
     for (const match of source.slice(cursor).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
 }
@@ -298,26 +291,32 @@ export function extractAnnotatedMainLine(text: string): {
         Object.assign(current, patch);
     };
 
-    while (index < source.length) {
-        const ch = source[index];
+    // The same walk of tags, comments and escape lines the coordinate readers
+    // use, so all three agree on where the movetext is. Sharing it is the point:
+    // this reader and `extractUciMoveTree` are cross-checked against each other
+    // by `planMoveLineImport`, and two scanners disagreeing about one malformed
+    // header shows up there as an import that will not load.
+    const spans = pgnMetadataSpans(source);
+    let span = spans.next();
 
-        if (ch === '{' || ch === ';') {
-            const end = source.indexOf(ch === '{' ? '}' : '\n', index + 1);
-            const comment = source.slice(index + 1, end < 0 ? source.length : end);
-            const evaluation = parseEvalCommand(comment);
-            if (evaluation !== undefined) {
-                annotate({ ...evaluation, evalDepth: evaluation.evalDepth, evalScoreKind: evaluation.evalScoreKind });
+    while (index < source.length) {
+        while (!span.done && span.value.start < index) span = spans.next();
+        if (!span.done && span.value.start === index) {
+            const { comment, end } = span.value;
+            if (comment !== undefined) {
+                const evaluation = parseEvalCommand(comment);
+                if (evaluation !== undefined) {
+                    annotate({ ...evaluation, evalDepth: evaluation.evalDepth, evalScoreKind: evaluation.evalScoreKind });
+                }
+                const note = parseFreeTextComment(comment);
+                if (note) annotate({ comment: note });
             }
-            const note = parseFreeTextComment(comment);
-            if (note) annotate({ comment: note });
-            index = end < 0 ? source.length : end + 1;
+            index = end;
+            span = spans.next();
             continue;
         }
-        if (ch === '[') {
-            const end = source.indexOf(']', index + 1);
-            index = end < 0 ? source.length : end + 1;
-            continue;
-        }
+
+        const ch = source[index];
         if (ch === '(') { depth += 1; index += 1; continue; }
         if (ch === ')') { depth = Math.max(0, depth - 1); index += 1; continue; }
         if (ch === '$') {

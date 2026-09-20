@@ -3,6 +3,7 @@ import {
     MAX_MOVE_IMPORT_TEXT_LENGTH,
     MAX_MOVE_IMPORT_TREE_NODES,
     MAX_MOVE_IMPORT_UCI_MOVES,
+    extractAnnotatedMainLine,
     extractFenTag,
     extractUciMoveLine,
     extractUciMoveTree,
@@ -202,5 +203,74 @@ describe('telling an oversized source from a full one', () => {
     it('says nothing is oversized about ordinary input', () => {
         expect(hasTooManyUciMoves('h2e2 h9g7')).toBe(false);
         expect(hasTooManyUciMoves('')).toBe(false);
+    });
+});
+
+describe('parts of a record that are not moves', () => {
+    /**
+     * All three readers, because they are separate walks of the same text and
+     * `planMoveLineImport` cross-checks two of them against each other. A fix
+     * applied to one and not the others reads as an import that will not load.
+     */
+    const readers = {
+        line: (text: string) => extractUciMoveLine(text),
+        tree: (text: string) => extractUciMoveTree(text).moves,
+        annotated: (text: string) => extractAnnotatedMainLine(text).moves,
+    };
+    const allReaders = (text: string) =>
+        Object.fromEntries(Object.entries(readers).map(([name, read]) => [name, read(text)]));
+    const onlyTheGame = (text: string) =>
+        expect(allReaders(text), text).toEqual({ line: ['h2e2', 'h9g7'], tree: ['h2e2', 'h9g7'], annotated: ['h2e2', 'h9g7'] });
+
+    it('ends a ; remark at the line ending the file actually uses', () => {
+        // A record saved with CR alone -- an old Mac editor, or a paste out of
+        // one. Terminating the remark only at LF swallowed the rest of the file
+        // into it, and every move after the first comment vanished.
+        onlyTheGame('1. h2e2 ; comment\rh9g7 *');
+        onlyTheGame('1. h2e2 ; comment\nh9g7 *');
+        onlyTheGame('1. h2e2 ; comment\r\nh9g7 *');
+    });
+
+    it('keeps the remark itself, wherever the line ended', () => {
+        for (const ending of ['\r', '\n', '\r\n']) {
+            const read = extractAnnotatedMainLine(`h2e2 ; A note${ending}h9g7 *`);
+            expect(read.annotations[0].comment, JSON.stringify(ending)).toBe('A note');
+        }
+    });
+
+    it('does not end a header at a ] inside its quoted value', () => {
+        // `]` is legal inside a tag value. Ending the tag at the first one left
+        // `a3a4"]` behind as movetext, and the game was rejected at the move
+        // after it with "not your piece".
+        onlyTheGame('[Event "Demo ] a3a4"]\n\n1. h2e2 h9g7 *');
+        onlyTheGame('[Event "Demo"]\n\n1. h2e2 h9g7 *');
+        expect(extractFenTag('[Event "] a3a4"]\n[FEN "4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1"]'))
+            .toBe('4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1');
+    });
+
+    it('still strips a header that is not a well-formed pair', () => {
+        // The fallback rule -- everything to the first `]` -- has to stay, or a
+        // malformed header's contents start reading as moves.
+        onlyTheGame('[Event a3a4]\n\n1. h2e2 h9g7 *');
+        onlyTheGame('[a3a4]\n\n1. h2e2 h9g7 *');
+    });
+
+    it('ignores a % escape line instead of reading it as moves', () => {
+        // The format reserves a line starting with `%` for other software. It
+        // was being walked for coordinates, which inserted a move nobody played
+        // and rejected the real ones.
+        onlyTheGame('% a3a4 is ignored\n[Event "Demo"]\n\n1. h2e2 h9g7 *');
+        onlyTheGame('% a3a4 is ignored\r[Event "Demo"]\r\r1. h2e2 h9g7 *');
+        onlyTheGame('1. h2e2\n% a3a4 is ignored\nh9g7 *');
+    });
+
+    it('does not drop the escape line\'s note as if it were a comment', () => {
+        expect(extractUciMoveTree('% Not a comment\nh2e2 *').rootComment).toBeUndefined();
+        expect(extractAnnotatedMainLine('h2e2\n% Not a comment\nh9g7 *').annotations)
+            .toEqual([{}, {}]);
+    });
+
+    it('reads a % that is not at the start of a line as ordinary text', () => {
+        expect(extractUciMoveLine('h2e2 % h9g7')).toEqual(['h2e2', 'h9g7']);
     });
 });
