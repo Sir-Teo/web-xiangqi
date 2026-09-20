@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import { appendPgnGlyph, chooseMoveGlyph, describeGlyph, normalizeMoveGlyphs, parsePgnGlyph } from './moveGlyphs';
-import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
+import { extractUciMoveTree } from './moveImport';
 import { normalizeSavedGame, normalizeSavedMoveTree } from './gameLibrary';
 import { serializeSavedMoveTree } from './savedMoveTree';
 import { encodeSavedMoveTreeParam, decodeSavedMoveTreeParam } from './shareTree';
@@ -44,7 +44,6 @@ describe('durable supplied PGN glyphs', () => {
             { uci: 'h2e2', nags: [1, 14], children: [{ uci: 'h9g7', nags: [6, 15], quality: 'inaccuracy' }] },
             { uci: 'b2e2', nags: [3], children: [{ uci: 'a9a8', nags: [5] }, { uci: 'i9i8', nags: [255] }] },
         ]);
-        expect(extractAnnotatedMainLine(source).annotations).toEqual([{ nags: [1, 14] }, { nags: [6, 15], quality: 'inaccuracy' }]);
         expect(normalizeSavedMoveTree(parsePgnCollection(exportPgnFromMoveTree(tree)!)[0].moveTree)).toEqual(tree);
     });
     it('retains every numeric code through normal import, collection, storage, sharing and export', () => {

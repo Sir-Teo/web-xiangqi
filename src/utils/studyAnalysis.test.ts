@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { captureStudyAnalysis, normalizeStudyAnalysis, sameStudyAnalysis, studyAnalysisScore, studyAnalysisEffort, studyAnalysisPgn, readStudyAnalysisPgn } from './studyAnalysis';
 import { exportPgnFromMoveTree } from './gameExport';
-import { extractUciMoveTree, extractAnnotatedMainLine } from './moveImport';
+import { extractUciMoveTree } from './moveImport';
 import { parsePgnCollection } from './pgnCollection';
 import { encodeSavedMoveTreeParam, decodeSavedMoveTreeParam } from './shareTree';
 import { normalizeSavedMoveTree } from './gameLibrary';
@@ -92,7 +92,6 @@ describe('saved study analysis', () => {
     const tree = [{ uci: 'h2e2', children: [{ uci: 'a9a8', analysis: a }, { uci: 'i9i8', analysis: { ...a, move: 'i9i8' } }] }];
     const pgn = exportPgnFromMoveTree(tree, { date: '2026.09.11' })!;
     expect(extractUciMoveTree(pgn).moveTree).toEqual(tree);
-    expect(extractAnnotatedMainLine(pgn).annotations.every(annotation => annotation.evalScore === undefined)).toBe(true);
   });
   it('captures directional bounds in Red perspective and preserves them through study formats', () => {
     for (const bound of ['lower', 'upper'] as const) {

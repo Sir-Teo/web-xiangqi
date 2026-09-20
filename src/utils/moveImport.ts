@@ -4,11 +4,9 @@ import { extractPgnHeaders } from './gameMetadata';
 import { readRecordedResultPgn, type RecordedResult } from './recordedResult';
 import { stripDelimited } from './stripDelimited';
 import { parseEvalCommand, parsePgnMoveQuality } from './pgnEvaluation';
-import { appendPgnGlyph, normalizeMoveGlyphs, parsePgnGlyph, type MoveGlyphs } from './moveGlyphs';
+import { appendPgnGlyph } from './moveGlyphs';
 import { readStudyAnalysisPgn } from './studyAnalysis';
-import type { MoveEvaluation } from './moveEvaluation';
 import type { SavedMoveTreeNode } from './gameLibrary';
-import type { ReviewMoveQuality } from './review';
 import { normalizeMoveComment } from './moveComment';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
@@ -225,15 +223,6 @@ export function extractUciMoveTree(text: string): {
 }
 
 
-/** A move's review as a record carried it, for the moves that had one. */
-export interface ImportedMoveAnnotation extends MoveEvaluation, MoveGlyphs {
-    /** Red-positive centipawns after the move, as this app stores an eval. */
-    evalScore?: number;
-    quality?: ReviewMoveQuality;
-    /** Whatever prose the comment carried once the commands were taken out. */
-    comment?: string;
-}
-
 /**
  * The prose left in a PGN comment once the machine-readable parts are removed.
  *
@@ -252,114 +241,6 @@ function parseFreeTextComment(comment: string): string | undefined {
     const prose = stripDelimited(comment, '[%', ']')
         .replace(/\bBetter was\s+[a-i][0-9][a-i][0-9]\b/gi, ' ');
     return normalizeMoveComment(prose);
-}
-
-/**
- * The main line *with* whatever each move was annotated with.
- *
- * A separate pass from `extractUciMoveLine`, and it returns the moves as well
- * as the annotations so a caller can check the two agree rather than trusting
- * two parsers to have walked the same line.
- *
- * It has to tokenise rather than strip, and the order matters: `[%eval 0.38]`
- * lives *inside* a `{...}` comment, so stripping `[...]` tags first -- which is
- * what the plain extractor does, and must do, because a FEN tag contains
- * substrings that read as coordinates -- would remove the evaluation along with
- * the headers. Consuming `{` before `[` means a comment is taken whole and the
- * `[` inside it is never seen as a tag.
- *
- * Variations are skipped. An annotation inside one belongs to a move that was
- * not played, and this reports the game.
- */
-export function extractAnnotatedMainLine(text: string): {
-    moves: string[];
-    annotations: ImportedMoveAnnotation[];
-} {
-    // This one reads the raw text rather than going through stripPgnMetadata,
-    // so it needs the same game boundary applied on its own.
-    const source = firstGameOnly(String(text)).text;
-    const moves: string[] = [];
-    const annotations: ImportedMoveAnnotation[] = [];
-    let depth = 0;
-    let index = 0;
-
-    const annotate = (patch: ImportedMoveAnnotation) => {
-        if (depth > 0 || annotations.length === 0) return;
-        const current = annotations[annotations.length - 1];
-        if (patch.nags) patch.nags = normalizeMoveGlyphs([...(current.nags ?? []), ...patch.nags]);
-        if (patch.comment && current.comment) patch.comment = normalizeMoveComment(`${current.comment} ${patch.comment}`);
-        Object.assign(current, patch);
-    };
-
-    // The same walk of tags, comments and escape lines the coordinate readers
-    // use, so all three agree on where the movetext is. Sharing it matters
-    // because this reader is a second parser of the same format: it drifted
-    // from the other two over CR line endings, quoted `]` and escape lines, and
-    // nothing downstream would have said so.
-    const spans = pgnMetadataSpans(source);
-    let span = spans.next();
-
-    while (index < source.length) {
-        while (!span.done && span.value.start < index) span = spans.next();
-        if (!span.done && span.value.start === index) {
-            const { comment, end } = span.value;
-            if (comment !== undefined) {
-                const evaluation = parseEvalCommand(comment);
-                if (evaluation !== undefined) {
-                    annotate({ ...evaluation, evalDepth: evaluation.evalDepth, evalScoreKind: evaluation.evalScoreKind });
-                }
-                const note = parseFreeTextComment(comment);
-                if (note) annotate({ comment: note });
-            }
-            index = end;
-            span = spans.next();
-            continue;
-        }
-
-        const ch = source[index];
-        if (ch === '(') { depth += 1; index += 1; continue; }
-        if (ch === ')') { depth = Math.max(0, depth - 1); index += 1; continue; }
-        if (ch === '$') {
-            const nag = source.slice(index).match(/^\$\d+/);
-            if (nag) {
-                const code = parsePgnGlyph(nag[0]);
-                if (code !== undefined) annotate({ nags: [code] });
-                const quality = parsePgnMoveQuality(nag[0]);
-                if (quality) annotate({ quality });
-                index += nag[0].length;
-                continue;
-            }
-        }
-        if (ch === '?' || ch === '!') {
-            const suffix = source.slice(index).match(/^[!?]+/);
-            if (suffix) {
-                const code = parsePgnGlyph(suffix[0]);
-                if (code !== undefined) annotate({ nags: [code] });
-                const quality = parsePgnMoveQuality(suffix[0]);
-                if (quality) annotate({ quality });
-                index += suffix[0].length;
-                continue;
-            }
-        }
-
-        const move = source.slice(index).match(/^([a-i][0-9])\s*(?:->|=>|[-x:\u2192\u2013\u2014])?\s*([a-i][0-9])/i);
-        if (move && (index === 0 || !/[a-z0-9]/i.test(source[index - 1]))) {
-            const after = source[index + move[0].length];
-            if (after === undefined || !/[a-z0-9]/i.test(after)) {
-                if (depth === 0) {
-                    if (moves.length >= MAX_MOVE_IMPORT_UCI_MOVES) break;
-                    moves.push(`${move[1]}${move[2]}`.toLowerCase());
-                    annotations.push({});
-                }
-                index += move[0].length;
-                continue;
-            }
-        }
-
-        index += 1;
-    }
-
-    return { moves, annotations };
 }
 
 export function extractFenTag(text: string): string | null {

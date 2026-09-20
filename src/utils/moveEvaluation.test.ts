@@ -1,7 +1,7 @@
 import { computeReviewArtifacts } from './review';
 import { describe, expect, it } from 'vitest';
 import { normalizeMoveEvaluation, replaceMoveEvaluation } from './moveEvaluation';
-import { extractAnnotatedMainLine, extractUciMoveTree } from './moveImport';
+import { extractUciMoveTree } from './moveImport';
 import { exportPgnFromMoveTree } from './gameExport';
 import { normalizeSavedGame } from './gameLibrary';
 import { encodeSavedMoveTreeParam, decodeSavedMoveTreeParam } from './shareTree';
@@ -26,8 +26,9 @@ describe('durable move evaluations', () => {
     });
     it('keeps the current depth with its score when replacing annotations', () => {
         expect(replaceMoveEvaluation({ evalScore: 42, evalDepth: 18 }, -75, 21)).toEqual({ evalScore: -75, evalDepth: 21 });
-        const read = extractAnnotatedMainLine('h2e2 {[%eval 0.42,18]} {[%eval -0.75]}');
-        expect(read.annotations[0]).toEqual({ evalScore: -75, evalDepth: undefined });
+        const read = extractUciMoveTree('h2e2 {[%eval 0.42,18]} {[%eval -0.75]}');
+        expect(read.moveTree[0].evalScore).toBe(-75);
+        expect(read.moveTree[0].evalDepth).toBeUndefined();
     });
     it('preserves evaluations and glyph qualities on nested moves through PGN, storage and sharing', () => {
         const source = 'h2e2 $6 {[%eval +0.42,18] Main} h9g7 {[%eval -0.75,21]} (b9c7 $4 {[%eval #-0,0] Branch}) *';
@@ -68,7 +69,6 @@ it('clears a previous score kind when an evaluation is replaced', () => {
     const numeric = { evalScore: 20000, evalDepth: 18, evalScoreKind: 'cp' as const };
     expect(replaceMoveEvaluation(numeric, 20000, undefined, 'mate').evalScoreKind).toBeUndefined();
     expect(replaceMoveEvaluation(numeric, 20000, 20, 'cp').evalScoreKind).toBe('cp');
-    expect(extractAnnotatedMainLine('h2e2 {[%eval 200.00]} {[%eval #10000]}').annotations[0].evalScoreKind).toBeUndefined();
     expect(extractUciMoveTree('h2e2 {[%eval 200.00]} {[%eval #10000]}').moveTree[0].evalScoreKind).toBeUndefined();
     expect(normalizeMoveEvaluation({ evalScore: 20000, evalScoreKind: 'invented' })).toEqual({ evalScore: 20000 });
     expect(normalizeMoveEvaluation({ evalScore: 20000, evalScoreKind: 'cp' })).toEqual({ evalScore: 20000, evalScoreKind: 'cp' });

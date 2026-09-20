@@ -3,7 +3,6 @@ import {
     MAX_MOVE_IMPORT_TEXT_LENGTH,
     MAX_MOVE_IMPORT_TREE_NODES,
     MAX_MOVE_IMPORT_UCI_MOVES,
-    extractAnnotatedMainLine,
     extractFenTag,
     extractUciMoveLine,
     extractUciMoveTree,
@@ -208,19 +207,19 @@ describe('telling an oversized source from a full one', () => {
 
 describe('parts of a record that are not moves', () => {
     /**
-     * All three readers, because they are separate walks of the same text and
-     * `planMoveLineImport` cross-checks two of them against each other. A fix
-     * applied to one and not the others reads as an import that will not load.
+     * Both readers, because they are separate walks of the same text: one
+     * strips the metadata and scans what is left, one tokenises as it goes. A
+     * fix applied to one and not the other is a disagreement about what the
+     * movetext is.
      */
     const readers = {
         line: (text: string) => extractUciMoveLine(text),
         tree: (text: string) => extractUciMoveTree(text).moves,
-        annotated: (text: string) => extractAnnotatedMainLine(text).moves,
     };
     const allReaders = (text: string) =>
         Object.fromEntries(Object.entries(readers).map(([name, read]) => [name, read(text)]));
     const onlyTheGame = (text: string) =>
-        expect(allReaders(text), text).toEqual({ line: ['h2e2', 'h9g7'], tree: ['h2e2', 'h9g7'], annotated: ['h2e2', 'h9g7'] });
+        expect(allReaders(text), text).toEqual({ line: ['h2e2', 'h9g7'], tree: ['h2e2', 'h9g7'] });
 
     it('ends a ; remark at the line ending the file actually uses', () => {
         // A record saved with CR alone -- an old Mac editor, or a paste out of
@@ -233,8 +232,8 @@ describe('parts of a record that are not moves', () => {
 
     it('keeps the remark itself, wherever the line ended', () => {
         for (const ending of ['\r', '\n', '\r\n']) {
-            const read = extractAnnotatedMainLine(`h2e2 ; A note${ending}h9g7 *`);
-            expect(read.annotations[0].comment, JSON.stringify(ending)).toBe('A note');
+            const read = extractUciMoveTree(`h2e2 ; A note${ending}h9g7 *`);
+            expect(read.moveTree[0].comment, JSON.stringify(ending)).toBe('A note');
         }
     });
 
@@ -266,8 +265,9 @@ describe('parts of a record that are not moves', () => {
 
     it('does not drop the escape line\'s note as if it were a comment', () => {
         expect(extractUciMoveTree('% Not a comment\nh2e2 *').rootComment).toBeUndefined();
-        expect(extractAnnotatedMainLine('h2e2\n% Not a comment\nh9g7 *').annotations)
-            .toEqual([{}, {}]);
+        const around = extractUciMoveTree('h2e2\n% Not a comment\nh9g7 *').moveTree;
+        expect(around[0].comment).toBeUndefined();
+        expect(around[0].children?.[0].comment).toBeUndefined();
     });
 
     it('reads a % that is not at the start of a line as ordinary text', () => {
