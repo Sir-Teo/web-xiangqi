@@ -89,6 +89,23 @@ const NASTY: Array<[string, string]> = [
     ['cloud reply, long pv', `score:1,depth:1,pv:${Array.from({ length: 40_000 }, () => 'h2e2').join('|')}`],
     ['stored json, wide object', `{${Array.from({ length: 40_000 }, (_, i) => `"k${i}":1`).join(',')}}`],
     ['stored json, huge array', `[${Array.from({ length: 100_000 }, () => '1').join(',')}]`],
+    // The shapes the shared metadata scanner in `pgnText.ts` introduced. It
+    // walks `[`, `{`, `;` and `%` openers, reads a tag pair with a sticky
+    // quoted-string pattern, and falls back to the first `]` when that does not
+    // match -- so a paste made of openers with no closer, or of tag pairs whose
+    // quotes swallow the `]` that would end them, is where it would go
+    // quadratic. The brace and bracket runs above cover the two older openers.
+    // `many open braces` above is 20,000 characters, and at that size the
+    // quadratic brace scan this sweep is meant to catch now finishes inside the
+    // bound -- removing the guard leaves every case green. The importer accepts
+    // 200,000, so the sweep asks at the size a reader can actually reach.
+    ['many open braces at the import limit', '{'.repeat(200_000)],
+    ['many escape lines', '%\n'.repeat(100_000)],
+    ['many semicolon remarks', ';\n'.repeat(100_000)],
+    ['escape line never terminated', '%' + 'a'.repeat(200_000)],
+    ['tag openers with no closer', '[A "'.repeat(50_000)],
+    ['tag pairs whose quotes eat the bracket', '[A "]" '.repeat(28_000)],
+    ['quote run with one bracket at the end', '[A "' + '"'.repeat(100_000) + ']'],
 ];
 
 for (const [name, input] of NASTY) {
