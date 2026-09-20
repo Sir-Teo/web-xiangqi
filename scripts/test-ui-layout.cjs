@@ -9907,8 +9907,40 @@ async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
     await page.waitForTimeout(500);
     const opened = await page.evaluate(() => Boolean(document.querySelector('.settings-body[role="dialog"]')));
     if (!opened) {
+      // Say what was actually there rather than naming a cause. The old message
+      // asserted the bleed had been clipped back to the chrome, and that is not
+      // established by the tap missing: measured on a passing run the geometry
+      // is identical to the failing one -- button {x:312,y:10,w:36,h:36}, tap
+      // {x:330,y:7} -- and `elementFromPoint` returns the button, so the bleed
+      // was there. Whatever differs on CI, the message was pointing away from
+      // it. The margin is one pixel: `--tap-bleed` is 4px and the tap is 3px
+      // above, so sub-pixel layout decides this.
+      const why = await page.evaluate(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        const chain = [];
+        for (let node = hit; node && chain.length < 4; node = node.parentElement) {
+          chain.push(`${node.tagName.toLowerCase()}.${String(node.className || "").trim().split(/\s+/)[0] || ""}`);
+        }
+        const button = [...document.querySelectorAll(".mobile-board-actions .mobile-action-btn")]
+          .find((candidate) => /settings/i.test(candidate.getAttribute("aria-label") || ""));
+        const header = button && button.closest(".mobile-board-header");
+        const style = button && getComputedStyle(button, "::after");
+        const headerStyle = header && getComputedStyle(header);
+        return {
+          atPoint: chain.length ? chain : ["nothing"],
+          bleed: button && getComputedStyle(button).getPropertyValue("--tap-bleed").trim(),
+          afterInset: style && `${style.top} ${style.right} ${style.bottom} ${style.left}`,
+          headerClip: headerStyle && `${headerStyle.overflow} / clip-margin ${headerStyle.overflowClipMargin}`,
+          headerRect: header && JSON.stringify(header.getBoundingClientRect().toJSON()),
+          dialogs: document.querySelectorAll('[role="dialog"]').length,
+        };
+      }, [point.x, point.y]);
+      await page.screenshot({ path: `/tmp/xiangqi-tap-bleed-failure-${Date.now()}.png` });
       throw new Error(
-        `A tap ${Math.round(box.y) - point.y}px above the settings button missed it: the 44x44 hit area is being clipped back to the 36px chrome. Tapped ${JSON.stringify(point)} for a button at ${JSON.stringify(box)}.`
+        `A tap ${Math.round(box.y) - point.y}px above the settings button did not open Settings. ` +
+        `Tapped ${JSON.stringify(point)} for a button at ${JSON.stringify(box)}. ` +
+        `At that point: ${why.atPoint.join(" < ")}. --tap-bleed ${why.bleed}, ::after inset ${why.afterInset}, ` +
+        `header ${why.headerClip} rect ${why.headerRect}, dialogs open ${why.dialogs}.`
       );
     }
   } finally {
