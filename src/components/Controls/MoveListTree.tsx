@@ -11,7 +11,7 @@ import {
 } from '../../utils/review';
 import { getMoveListQuality } from '../../utils/moveListQuality';
 import { isMoveListNodeVisible, MAX_VISIBLE_VARIATION_PLIES } from '../../utils/moveListVisibility';
-import { formatMoveRecordLabel, formatMoveRecordTitle, formatUciMove } from '../../utils/moveNotation';
+import { describeMoveWithCheck, formatMoveRecordLabel, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveGlyphs, glyphSymbol } from '../../utils/moveGlyphs';
 import { describeMoveNumber } from '../../utils/moveNumbering';
@@ -478,7 +478,7 @@ function formatMoveTitle(record: NonNullable<MoveTreeNode['record']>, quality?: 
     // there with no way at all to read it. The aria-label already carries the
     // quality; give the tooltip the same, which also spares a mouse user from
     // matching a colour against the legend.
-    const title = formatMoveRecordTitle(record);
+    const title = describeMoveWithCheck(record);
     const description = qualityDescription(record, quality);
     return [title, description, describeMoveGlyphs(record.nags)].filter(Boolean).join(' - ');
 }
@@ -516,7 +516,7 @@ function formatMoveAriaLabel(
     const notation = formatMoveNotation(record, notationStyle);
     const parts = [
         isCurrent ? 'Current move' : '',
-        formatMoveRecordTitle(record),
+        describeMoveWithCheck(record),
         notationStyle === 'uci' ? '' : notation,
         `UCI ${formatUciMove(record.uci)}`,
         qualityDescription(record, quality),

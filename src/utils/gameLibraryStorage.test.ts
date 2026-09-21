@@ -4,6 +4,7 @@ import {
     deleteGame,
     loadAllGames,
     renameGame,
+    restoreGame,
     saveGame,
 } from './gameLibrary';
 
@@ -55,6 +56,40 @@ describe('how many games the library keeps', () => {
         expect(deleteGame(oldest.id)).toBe(true);
         expect(save(['b2e2'], 'game-500')).not.toBeNull();
         expect(loadAllGames()).toHaveLength(500);
+    });
+});
+
+describe('renaming one saved game', () => {
+    /**
+     * `renameGame` was called three times in this file and its effect was
+     * never checked -- only its return value. Found by mutation: inverting
+     * `g.id === id` to `!==` relabels **every other game in the library** and
+     * still returns true, so the rename reports success while quietly
+     * overwriting the names of everything the player did not touch.
+     */
+    it('changes that game and leaves the rest alone', () => {
+        expect(save(['h2e2'], 'first')).not.toBeNull();
+        expect(save(['b2e2'], 'second')).not.toBeNull();
+        expect(save(['c3c4'], 'third')).not.toBeNull();
+        const target = loadAllGames().find((game) => game.opening === 'second')!;
+
+        expect(renameGame(target.id, 'My repertoire')).toBe(true);
+
+        const after = loadAllGames();
+        expect(after.find((game) => game.id === target.id)?.label).toBe('My repertoire');
+        for (const game of after) {
+            if (game.id === target.id) continue;
+            expect(game.label ?? '').not.toBe('My repertoire');
+        }
+    });
+
+    it('clears a label when renamed to nothing', () => {
+        expect(save(['h2e2'], 'only')).not.toBeNull();
+        const target = loadAllGames()[0];
+        expect(renameGame(target.id, 'Named')).toBe(true);
+        expect(loadAllGames()[0].label).toBe('Named');
+        expect(renameGame(target.id, '   ')).toBe(true);
+        expect(loadAllGames()[0].label ?? '').toBe('');
     });
 });
 
@@ -126,4 +161,53 @@ it('preserves legacy records rejected by stricter setup validation', () => {
     store.set(GAME_LIBRARY_STORAGE_KEY, raw);
     expect(save(['h2e2'])).toBeNull();
     expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe(raw);
+});
+
+describe('restoreGame', () => {
+    /**
+     * Undo after deleting a saved study. The record has to come back as
+     * itself: `saveGame` mints a fresh id and timestamp, so restoring through
+     * it would leave a copy at the top of the list and orphan anything holding
+     * the old id -- an open study, a saved review.
+     */
+    it('puts a deleted game back under its own id and time', () => {
+        const saved = saveGame({ gameMode: 'PvP', moves: ['h2e2', 'h9g7'], label: 'Kept' })!;
+        expect(saved).not.toBeNull();
+        expect(deleteGame(saved.id)).toBe(true);
+        expect(loadAllGames()).toHaveLength(0);
+
+        expect(restoreGame(saved)).toBe(true);
+        const back = loadAllGames();
+        expect(back).toHaveLength(1);
+        expect(back[0].id).toBe(saved.id);
+        expect(back[0].savedAt).toBe(saved.savedAt);
+        expect(back[0].label).toBe('Kept');
+        expect(back[0].moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('is safe to press twice', () => {
+        const saved = saveGame({ gameMode: 'PvP', moves: ['h2e2'] })!;
+        deleteGame(saved.id);
+        expect(restoreGame(saved)).toBe(true);
+        expect(restoreGame(saved)).toBe(true);
+        expect(loadAllGames()).toHaveLength(1);
+    });
+
+    it('will not write over a library it cannot read', () => {
+        // `mutationBlocked`: the stored value is not a library, so the games in
+        // it are unknown. Restoring by rewriting the whole array would throw
+        // away whatever is actually in there -- which is the situation the
+        // reader is being told to download a recovery file from.
+        const saved = saveGame({ gameMode: 'PvP', moves: ['h2e2'] })!;
+        store.set(GAME_LIBRARY_STORAGE_KEY, '{ this is not a library');
+        expect(restoreGame(saved)).toBe(false);
+        expect(store.get(GAME_LIBRARY_STORAGE_KEY)).toBe('{ this is not a library');
+    });
+
+    it('refuses a record the library would not have accepted in the first place', () => {
+        // Same door as every other write: an undo must not be a way to put
+        // something unreadable into the library.
+        expect(restoreGame({ id: 'x', savedAt: 1, gameMode: 'PvP', moves: ['nonsense'] } as never)).toBe(false);
+        expect(loadAllGames()).toHaveLength(0);
+    });
 });

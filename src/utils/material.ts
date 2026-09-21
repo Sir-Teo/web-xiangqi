@@ -29,9 +29,25 @@ const PIECE_VALUES_TENTHS: Record<PieceCode, number> = {
     k: 0, a: 20, b: 20, n: 40, r: 90, c: 45, p: 10,
 };
 
+/**
+ * The piece types that can be taken, in the order a captured tray shows them.
+ * The general is not among them: the game ends before it comes off.
+ *
+ * One list, mirrored, rather than two written out. They were two, and the two
+ * could disagree: dropping the soldier from Red's list -- so captured soldiers
+ * stop counting towards the material readout -- passed the whole suite, while
+ * the same omission on Black's list was caught. Nothing about the rules is
+ * asymmetric, so neither should this be.
+ *
+ * `satisfies` keeps every entry a real lowercase, non-general code; the count
+ * is checked against `PIECE_CODES` in the tests, which is the part a type
+ * cannot state.
+ */
+const CAPTURABLE_TYPES = ['r', 'n', 'c', 'a', 'b', 'p'] as const satisfies readonly Lowercase<Exclude<PieceCode, 'K' | 'k'>>[];
+
 /** Black's pieces, which are the ones Red can have taken. */
-const CAPTURED_BY_RED: PieceCode[] = ['r', 'n', 'c', 'a', 'b', 'p'];
-const CAPTURED_BY_BLACK: PieceCode[] = ['R', 'N', 'C', 'A', 'B', 'P'];
+const CAPTURED_BY_RED: PieceCode[] = [...CAPTURABLE_TYPES];
+const CAPTURED_BY_BLACK: PieceCode[] = CAPTURABLE_TYPES.map((type) => type.toUpperCase() as PieceCode);
 
 const PIECE_CODES = Object.keys(PIECE_VALUES_TENTHS) as PieceCode[];
 

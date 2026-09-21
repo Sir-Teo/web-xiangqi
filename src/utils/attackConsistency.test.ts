@@ -51,6 +51,15 @@ const POSITIONS = [
     // advisor sits on d1 in between. Without this, breaking the eye test inside
     // `attacksSquare` passed every check here as well as every perft.
     ['a blocked elephant eye facing an enemy piece', '4k4/9/9/9/9/9/9/4c4/3A5/2B1K4'],
+    // Crossed soldiers with an enemy piece on each of the squares they can
+    // turn onto. This comparison only looks at squares that *hold* an enemy
+    // piece, and no position above put anything beside a soldier past the
+    // river -- so the sideways rule inside `attacksSquare` was never compared
+    // with the one inside `validatePieceMove`. Breaking it made the app blind
+    // to a check delivered sideways by a soldier, and every test here and
+    // every perft count passed. Both colours, since the two are coded
+    // separately a few lines apart.
+    ['crossed soldiers beside what they can take', '3k5/9/2pPp4/9/9/9/9/2Pp4p/9/3K5'],
 ] as const;
 
 /** Every position reachable within `depth` plies, so the comparison is not

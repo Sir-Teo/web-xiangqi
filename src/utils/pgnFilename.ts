@@ -24,6 +24,10 @@ export function pgnDownloadFilename(
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 48)
+        // Again, because the cut can put one back: trimming before the slice
+        // leaves `web-xiangqi-2026-01-02-aaaa....aaa-.pgn` for any name whose
+        // 49th character is the space or punctuation that became this hyphen.
+        .replace(/-+$/, '')
         // A name of nothing but punctuation slugs to empty, and
         // `web-xiangqi-2026-01-02-.pgn` is not a filename anyone wants.
         || fallback;

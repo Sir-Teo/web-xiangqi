@@ -237,7 +237,7 @@ test("the CLI exposes comparison context in JSON and withholds legacy text delta
   assert.equal(legacy.status, 0, legacy.stderr);
   assert.match(legacy.stdout, /recorded FEN\/depth: unknown/);
   assert.match(legacy.stdout, /Search deltas withheld/);
-  assert.match(legacy.stdout, /avg nps delta:  n\/a/);
+  assert.match(legacy.stdout, /avg nps delta: {2}n\/a/);
   assert.match(legacy.stdout, /avg wall delta: n\/a/);
   assert.doesNotMatch(legacy.stdout, /NaN|undefined/);
   fs.writeFileSync(file, 'null');

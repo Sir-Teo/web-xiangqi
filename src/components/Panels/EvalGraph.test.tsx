@@ -162,3 +162,62 @@ describe('unevaluated graph positions', () => {
         expect(live).not.toContain('NaN');
     });
 });
+
+/**
+ * Two marks on the graph that no test named.
+ *
+ * A point the engine never scored is drawn differently from one it did, and
+ * each point's accessible label carries the winning-chance drop for the move
+ * that reached it -- except the start, where nobody has moved yet. Found by
+ * mutation: inverting either condition passed the whole suite.
+ */
+describe('what the graph marks on each point', () => {
+    const unknownPoints = (html: string) => (html.match(/graph-point-unknown/g) ?? []).length;
+
+    it('marks only the positions with no evaluation as unknown', () => {
+        const history = [move('h2e2', 1, 40), move('h9g7', 2), move('b0c2', 3, -60), move('b9c7', 4)];
+        const html = render({ history, currentMoveIndex: 3, currentEval: null });
+        // Counted, not merely present: inverting the test moves the class onto
+        // the evaluated points instead, and "contains" would still pass.
+        // Three: the two unscored moves, and the start, which no search ever
+        // reaches because no move has been played there.
+        expect(unknownPoints(html)).toBe(3);
+    });
+
+    it('marks only the start when every move was scored', () => {
+        const history = [move('h2e2', 1, 40), move('h9g7', 2, -10), move('b0c2', 3, -60)];
+        expect(unknownPoints(render({ history, currentMoveIndex: 2, currentEval: null }))).toBe(1);
+    });
+
+    /** The slider's spoken description of the point the reader is on. */
+    const valueText = (html: string) => html.match(/aria-valuetext="([^"]*)"/)?.[1] ?? '';
+
+    it('states the winning-chance drop in the point description', () => {
+        // Scoped to `aria-valuetext`, not to the whole document: the tooltip
+        // carries the same sentence in its own `aria-label`, so a loose
+        // `toContain` passes even when the description drops it entirely.
+        const history = [
+            move('h2e2', 1, 40),
+            { ...move('h9g7', 2, -600), winPercentLoss: 32.5 },
+        ];
+        const html = render({ history, currentMoveIndex: 1, currentEval: null });
+        expect(valueText(html)).toContain('winning chance dropped by');
+    });
+
+    it('says nothing about a drop on a move no review has graded', () => {
+        // Every move before the reader runs a review. Without both halves of
+        // the test, the description reports a drop "by 0 percentage points"
+        // for a move nothing has measured.
+        const history = [move('h2e2', 1, 40), move('h9g7', 2, -60)];
+        const html = render({ history, currentMoveIndex: 1, currentEval: null });
+        expect(valueText(html)).toContain('H9→G7');
+        expect(valueText(html)).not.toContain('winning chance dropped by');
+    });
+
+    it('says nothing about a drop at the start, where nobody has moved', () => {
+        const history = [{ ...move('h2e2', 1, -600), winPercentLoss: 32.5 }];
+        const html = render({ history, currentMoveIndex: -1, currentEval: null });
+        expect(valueText(html)).toContain('Start position');
+        expect(valueText(html)).not.toContain('winning chance dropped by');
+    });
+});

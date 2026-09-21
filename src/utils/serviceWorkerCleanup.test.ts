@@ -19,6 +19,34 @@ describe('deciding which service worker is the stale demo', () => {
         expect(isLegacyWebXiangqiServiceWorker(registration(`${HREF}sw.js`), BASE, HREF)).toBe(true);
     });
 
+    it('spares a worker registered outside this app’s base path', () => {
+        // Another app on the same origin. Its worker is not ours to
+        // unregister, and this is the guard that says so -- found by mutation,
+        // which could invert the scope test and have the cleanup reach out of
+        // its own directory on every load.
+        const elsewhere = 'https://example.github.io/other-app/';
+        expect(isLegacyWebXiangqiServiceWorker(
+            registration(`${elsewhere}sw.js`, elsewhere), BASE, HREF,
+        )).toBe(false);
+        // And the case the scope test alone decides: a script that does live
+        // in our directory, claimed by a scope that does not. The worker-path
+        // check passes here, so this is the only assertion that can tell the
+        // scope test is still being applied.
+        expect(isLegacyWebXiangqiServiceWorker(
+            registration(`${HREF}sw.js`, elsewhere), BASE, HREF,
+        )).toBe(false);
+    });
+
+    it('still reaches a worker registered below the base path', () => {
+        // The scope test is `startsWith`, not equality: the old demo could be
+        // registered on a sub-path and still be ours to clear. Asserting only
+        // the exact-scope case let that widen to equality unnoticed.
+        const below = `${HREF}play/`;
+        expect(isLegacyWebXiangqiServiceWorker(
+            registration(`${below}sw.js`, below), BASE, HREF,
+        )).toBe(true);
+    });
+
     it('spares the app’s own worker', () => {
         // The whole point of narrowing it. Unregistering this one would undo
         // cross-origin isolation on every load, and the only symptom would be a

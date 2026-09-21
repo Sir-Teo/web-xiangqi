@@ -5,7 +5,7 @@ import { normalizeMoveEvaluation, replaceMoveEvaluation, type MoveEvaluation } f
 import { normalizeMoveGlyphs, type MoveGlyphs } from '../utils/moveGlyphs';
 import { normalizeStudyAnalysis, type StudyAnalysis } from '../utils/studyAnalysis';
 import type { GameMetadata } from '../utils/gameMetadata';
-import { describeSetupProblem } from '../utils/positionSetup';
+import { describeFenProblem } from '../utils/positionSetup';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import type {
     BoardState,
@@ -154,13 +154,14 @@ function createStartRootPosition(): RootPosition {
 
 function parseRootPositionFromFen(fen: string): RootPosition | null {
     try {
+        // One decision, made once: `describeFenProblem` answers exactly the
+        // questions this used to ask inline, and the New Game field shows the
+        // sentence it returns. Asking twice is how a field comes to explain a
+        // refusal that did not happen, or refuse without explaining.
+        if (describeFenProblem(fen)) return null;
         const parts = fen.trim().split(/\s+/);
-        if (parts.length < 2) return null;
         const board = parseFenBoard(parts[0]);
-        const sideChar = parts[1];
-        if (sideChar !== 'w' && sideChar !== 'b') return null;
-        const side: Side = sideChar;
-        if (describeSetupProblem(board, side)) return null;
+        const side = parts[1] as Side;
         const parsedFullmove = Number(parts[5]);
         const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
             ? Math.trunc(parsedFullmove)

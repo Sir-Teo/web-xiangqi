@@ -83,4 +83,31 @@ describe('explicit score kinds', () => {
         expect(mate.kind).toBeUndefined();
         expect(takeEvalReading(mate, 20000, false, 'cp')).toEqual(numeric);
     });
+
+    /**
+     * The identity shortcut, in both directions.
+     *
+     * "Returns the same object when nothing changes" is what lets `useEngine`
+     * skip a render for every repeated reading in a search, and the tests
+     * above only ever ask for the *same* object back. Nothing asked what
+     * happens when the score moves -- so a reading that returned `current`
+     * whenever the score *differed*, freezing the eval for the rest of the
+     * search, passed the file.
+     */
+    it('keeps the object only while the reading is the same one', () => {
+        const held = takeEvalReading(emptyEvalReading(), 35, false);
+        expect(takeEvalReading(held, 35, false)).toBe(held);
+
+        const moved = takeEvalReading(held, 36, false);
+        expect(moved).not.toBe(held);
+        expect(moved.score).toBe(36);
+
+        // The exactness is half of "the same reading" too: an exact score and
+        // a bound with the same number are different readings.
+        const bound = takeEvalReading(emptyEvalReading(), 35, true);
+        expect(bound.exact).toBe(false);
+        const exact = takeEvalReading(bound, 35, false);
+        expect(exact).not.toBe(bound);
+        expect(exact.exact).toBe(true);
+    });
 });

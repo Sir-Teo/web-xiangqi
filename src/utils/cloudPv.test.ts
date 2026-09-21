@@ -57,6 +57,16 @@ describe('parseCloudPvResponse', () => {
         expect(parseCloudPvResponse('checkmate').status).toBe('terminal');
         expect(parseCloudPvResponse('').status).toBe('unreadable');
         expect(parseCloudPvResponse('score:1,depth:5,pv:').status).toBe('unreadable');
+    });
+
+    it('refuses a reading that is missing either number, not only both', () => {
+        // Found by mutation: `||` joined to `&&` accepts a response carrying a
+        // score and no depth, and the depth reaches the panel as NaN. This app
+        // has a rule about that -- see `isFiniteNumber` in review.ts.
+        expect(parseCloudPvResponse('score:1,pv:c3c4').status).toBe('unreadable');
+        expect(parseCloudPvResponse('depth:20,pv:c3c4').status).toBe('unreadable');
+        // The control: both present and the same line reads.
+        expect(parseCloudPvResponse('score:1,depth:20,pv:c3c4').status).toBe('ok');
         expect(parseCloudPvResponse('<html>').status).toBe('unreadable');
     });
 });

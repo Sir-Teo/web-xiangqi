@@ -171,3 +171,51 @@ describe('material as a number on the board', () => {
         expect(formatMaterialValue(25)).toContain('.');
     });
 });
+
+/**
+ * Every piece a side can lose is counted, for both sides.
+ *
+ * The two capture lists are now mirrored from one, but a *short* list still
+ * compiles, and the failure is quiet: a type missing from the list is simply
+ * never counted, so the material readout is wrong by that piece's value for
+ * the rest of the game and nothing says so. Stated against the board rather
+ * than against the list, so it is not the same list read twice.
+ */
+describe('material counts every capturable piece', () => {
+    const capturableTypes = ['r', 'n', 'c', 'a', 'b', 'p'] as const;
+
+    it('notices each piece type going missing, for each side', () => {
+        for (const type of capturableTypes) {
+            for (const [side, code] of [['Red takes', type], ['Black takes', type.toUpperCase()]] as const) {
+                const board = start();
+                let removed = false;
+                for (let rank = 0; rank < 10 && !removed; rank += 1) {
+                    for (let file = 0; file < 9 && !removed; file += 1) {
+                        if (board[rank][file] !== code) continue;
+                        board[rank][file] = '';
+                        removed = true;
+                    }
+                }
+                expect(removed, `${code} is not on the opening board`).toBe(true);
+
+                const summary = summarizeMaterial(board, start());
+                const taken = code === code.toLowerCase() ? summary.redCaptured : summary.blackCaptured;
+                expect(taken.map((entry) => entry.piece), `${side} ${code}`).toContain(code);
+                // And it moves the number a reader sees, in the right
+                // direction: taking a black piece puts Red ahead.
+                const takenValue = code === code.toLowerCase() ? summary.redMaterialTenths : summary.blackMaterialTenths;
+                expect(takenValue, `${side} ${code} counted for nothing`).toBeGreaterThan(0);
+                const expectedSign = code === code.toLowerCase() ? 1 : -1;
+                expect(Math.sign(summary.deltaTenths), `${side} ${code} moved the lead the wrong way`).toBe(expectedSign);
+            }
+        }
+    });
+
+    it('counts every piece on the board except the two generals', () => {
+        const board = start();
+        const onBoard = new Set(board.flat().filter(Boolean));
+        const counted = new Set([...capturableTypes, ...capturableTypes.map((t) => t.toUpperCase())]);
+        const uncounted = [...onBoard].filter((code) => !counted.has(code));
+        expect(uncounted.sort()).toEqual(['K', 'k']);
+    });
+});

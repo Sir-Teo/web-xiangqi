@@ -79,7 +79,9 @@ describe('planning an import', () => {
 
     it('takes the FEN the reader typed over the one in the record', () => {
         const withTag = '[FEN "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"]\n1. h2e2';
-        const typed = '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
+        // Off the e-file: on it the two generals face each other, which is not
+        // a position a game can start from and is now refused here.
+        const typed = '3k5/9/9/9/9/9/9/9/9/4K4 w - - 0 1';
         const result = plan(withTag, typed);
         expect(result.kind).toBe('line');
         if (result.kind !== 'line') return;
@@ -88,6 +90,51 @@ describe('planning an import', () => {
 });
 
 describe('what the reader is told when it will not import', () => {
+    /**
+     * The position a record starts from is checked here, before its moves are,
+     * and it is checked on both paths. A `[FEN "..."]` header with no moves
+     * after it used to come back as a `diagram` plan carrying an unusable FEN:
+     * the caller then refused it and set the error belonging to the FEN field,
+     * so a record pasted into the move box was rejected under a different box,
+     * and one imported from a file with no dialog open said nothing at all.
+     */
+    it('refuses a record whose own FEN cannot start a game, and says which part', () => {
+        for (const [fen, expected] of [
+            ['not a position at all', /piece layout is unreadable/],
+            ['3k5/9/9/9/9/9/9/9/9/4KR3 x - - 0 1', /side to move must be "w" or "b"/],
+            ['3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1', /generals face each other/],
+            ['3k5/9/9/9/9/9/1P7/9/9/4K4 w - - 0 1', /must be on its starting file/],
+        ] as const) {
+            // No moves: the diagram path, which had no check at all.
+            const diagram = plan(`[FEN "${fen}"]`);
+            expect(diagram.kind, fen).toBe('error');
+            if (diagram.kind !== 'error') continue;
+            expect(diagram.message, fen).toMatch(/^This record's FEN cannot start a game\./);
+            expect(diagram.message, fen).toMatch(expected);
+
+            // And with moves, where the validator used to answer "Invalid
+            // start FEN" a step later.
+            const line = plan(`[FEN "${fen}"]\n1. h2e2`);
+            expect(line.kind, fen).toBe('error');
+            if (line.kind !== 'error') continue;
+            expect(line.message, fen).toMatch(expected);
+        }
+    });
+
+    it('blames the field the reader filled when that is where the FEN came from', () => {
+        const result = plan('1. h2e2', '3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1');
+        expect(result.kind).toBe('error');
+        if (result.kind !== 'error') return;
+        expect(result.message).toMatch(/^The FEN above cannot start a game\. .*generals face each other/);
+    });
+
+    it('still takes a record with a FEN that is fine', () => {
+        const ok = plan('[FEN "3k5/9/9/9/9/9/9/9/9/4KR3 w - - 0 1"]');
+        expect(ok.kind).toBe('diagram');
+        if (ok.kind !== 'diagram') return;
+        expect(ok.startFen).toBe('3k5/9/9/9/9/9/9/9/9/4KR3 w - - 0 1');
+    });
+
     it('refuses a paste too large to walk, and names the limit', () => {
         const huge = 'h2e2 '.repeat(60_000);
         const result = plan(huge);

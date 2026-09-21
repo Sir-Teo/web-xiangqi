@@ -60,6 +60,22 @@ describe('deciding which phase a move belongs to', () => {
         expect(getMovePhaseForRecord(record(oneHorsePairOff), 11)).toBe('opening');
     });
 
+    /**
+     * The threshold itself. `OPENING_MIN_MATERIAL` is 62, which is exactly
+     * `FULL_ATTACKING_MATERIAL` less one cannon a side -- the trade the
+     * constant's own comment says the opening survives. The horse-pair test
+     * above sits at 64 and the chariot test below at 54, so neither of them
+     * can tell `>=` from `>`, and the phase of a symmetrical cannon trade on
+     * move 6 is decided by which one it is.
+     */
+    it('survives exactly one pair of cannons coming off', () => {
+        const oneCannonPairOff = 'rnbakabnr/9/1c7/p1p1p1p1p/9/9/P1P1P1P1P/1C7/9/RNBAKABNR';
+        expect(getMovePhaseForRecord(record(oneCannonPairOff), 11)).toBe('opening');
+        // And one horse more takes it under the line.
+        const andAHorse = 'rnbakab1r/9/1c7/p1p1p1p1p/9/9/P1P1P1P1P/1C7/9/RNBAKAB1R';
+        expect(getMovePhaseForRecord(record(andAHorse), 11)).toBe('middleGame');
+    });
+
     it('ends the opening when the chariots come off', () => {
         const rooksOff = '1nbakabn1/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/1NBAKABN1';
         expect(getMovePhaseForRecord(record(rooksOff), 11)).toBe('middleGame');

@@ -8,8 +8,7 @@ import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
 import { normalizeMoveGlyphs, type MoveGlyphs } from './moveGlyphs';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
 import type { GameMode } from '../App';
-import { parseFenBoard } from './xiangqi';
-import { describeSetupProblem } from './positionSetup';
+import { describeFenProblem } from './positionSetup';
 import type {
     ReviewCriticalQuality,
     ReviewEngineSummary,
@@ -25,11 +24,42 @@ import { normalizeMoveComment } from './moveComment';
 import { bestLineForMove } from './engineBestLine';
 
 export { GAME_LIBRARY_STORAGE_KEY };
-const SAVED_GAME_MODES = ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'] as const;
-const REVIEW_MOVE_QUALITIES: ReviewMoveQuality[] = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'];
-const REVIEW_CRITICAL_QUALITIES: ReviewCriticalQuality[] = ['inaccuracy', 'mistake', 'blunder'];
+/**
+ * The allowlists a stored record is checked against, written so that leaving a
+ * value out is a compile error rather than a quiet loss.
+ *
+ * Each of these is the runtime half of a union declared somewhere else, and
+ * the two were kept in step by hand. That is a worse bargain than it looks,
+ * because every omission fails silently and differently: a `gameMode` missing
+ * from its list makes `normalizeSavedGame` return null, which drops **the
+ * whole saved game** from the library; a quality missing from its list makes
+ * `asMoveQuality` reject that grade, so a review loads with holes in it; a
+ * critical quality missing makes the review's key moments quietly skip a
+ * grade. None of the three is a type error on its own -- a short array is
+ * still a valid array of the right element type -- and dropping a value from
+ * any of them passed the entire test suite.
+ *
+ * `satisfies Record<Union, true>` is what fixes that: the keys have to be
+ * exactly the union, so a value added to the union and not here stops the
+ * build, and so does one removed from here.
+ */
+const listOf = <T extends string>(members: Record<T, true>) => Object.keys(members) as T[];
+
+const SAVED_GAME_MODES = listOf({
+    'PvP': true, 'PvAI-Black': true, 'PvAI-Red': true, 'AIvAI': true,
+} satisfies Record<GameMode, true>);
+
+const REVIEW_MOVE_QUALITIES = listOf({
+    best: true, good: true, inaccuracy: true, mistake: true, blunder: true,
+} satisfies Record<ReviewMoveQuality, true>);
+
+const REVIEW_CRITICAL_QUALITIES = listOf({
+    inaccuracy: true, mistake: true, blunder: true,
+} satisfies Record<ReviewCriticalQuality, true>);
 const REVIEW_ENGINE_TIERS: ReviewEngineSummary['tier'][] = ['low', 'mid', 'high'];
-const SAVED_RESULTS = ['red', 'black', 'draw', 'ongoing'] as const;
+const SAVED_RESULTS = listOf({
+    red: true, black: true, draw: true, ongoing: true,
+} satisfies Record<'red' | 'black' | 'draw' | 'ongoing', true>);
 export const MAX_LIBRARY_JSON_LENGTH = 3_000_000;
 export const MAX_SAVED_GAMES = 500;
 export const MAX_SAVED_MOVES = MAX_STUDY_LINE_MOVES;
@@ -185,19 +215,16 @@ export function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | un
     return tree.filter((node): node is SavedMoveTreeNode => Boolean(node));
 }
 
+/**
+ * `undefined` for "no start FEN, use the opening", `null` for one that cannot
+ * start a game. The test used to be spelled out here, and identically in
+ * `parseRootPositionFromFen`; three copies of one rule is two chances for a
+ * position the library accepts and the board refuses to load.
+ */
 function normalizeStartFen(value: unknown): string | undefined | null {
     const fen = asString(value)?.trim();
     if (!fen) return undefined;
-    try {
-        const parts = fen.split(/\s+/);
-        if (parts.length < 2) return null;
-        const board = parseFenBoard(parts[0]);
-        if (parts[1] !== 'w' && parts[1] !== 'b') return null;
-        if (describeSetupProblem(board, parts[1])) return null;
-        return fen;
-    } catch {
-        return null;
-    }
+    return describeFenProblem(fen) ? null : fen;
 }
 
 function asMoveQuality(value: unknown): ReviewMoveQuality | undefined {
@@ -564,6 +591,30 @@ export function deleteGame(id: string): boolean {
         return false;
     }
     return writeAll(games.filter((g) => g.id !== id));
+}
+
+/**
+ * Put a deleted game back exactly as it was.
+ *
+ * Symmetric with `deleteGame`, and deliberately not `saveGame`: that mints a
+ * fresh `id` and `savedAt`, so an undo through it would leave a *copy* at the
+ * top of the list rather than the record the reader just lost, and anything
+ * pointing at the old id -- an open study, a review snapshot -- would not find
+ * it again.
+ *
+ * Returns true when the game is in the library afterwards, including when it
+ * was already there: an undo pressed twice is not a failure.
+ */
+export function restoreGame(game: SavedGame): boolean {
+    const { games, mutationBlocked } = readAllResult();
+    if (mutationBlocked) return false;
+    if (games.some((existing) => existing.id === game.id)) return true;
+    if (games.length >= MAX_SAVED_GAMES) return false;
+    // Through the same door everything else comes in by, so an undo cannot
+    // put back a record the reader could not have saved.
+    const normalized = normalizeSavedGame(game);
+    if (!normalized) return false;
+    return writeAll([...games, normalized]);
 }
 
 export function renameGame(id: string, label: string): boolean {

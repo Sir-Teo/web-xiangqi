@@ -216,3 +216,35 @@ describe('a game that did not begin from the standard array', () => {
         expect(isOpeningBookStart('')).toBe(false);
     });
 });
+
+/**
+ * How the candidate list is ordered: most distinct lines first, then the
+ * deepest line, then the move itself.
+ *
+ * Found by mutation: both tie-breaks could be dropped and the whole suite
+ * passed, the same shape as the review key-moment sort. Nothing asserted an
+ * order at all, so `count` alone could have decided everything -- or nothing.
+ */
+describe('ordering the book candidates', () => {
+    const after = (history: string[]) => getOpeningCandidates(history, 12);
+
+    it('lists the most-branched move first', () => {
+        const counts = after(['h2e2']).map((candidate) => candidate.count);
+        expect(counts.length).toBeGreaterThan(3);
+        for (let i = 1; i < counts.length; i += 1) {
+            expect(counts[i]).toBeLessThanOrEqual(counts[i - 1]);
+        }
+    });
+
+    it('breaks a tie on the deeper line, not on the move name', () => {
+        // After the central cannon, `h7e7` and `b9c7` carry the same number of
+        // distinct lines, and `h7e7` sorts *after* `b9c7` alphabetically. It
+        // comes first, so the longest-line tie-break is what placed it --
+        // which is the only way to see that tie-break from outside.
+        const moves = after(['h2e2']).map((candidate) => candidate.move);
+        const counts = new Map(after(['h2e2']).map((candidate) => [candidate.move, candidate.count]));
+        expect(counts.get('h7e7')).toBe(counts.get('b9c7'));
+        expect('h7e7'.localeCompare('b9c7')).toBeGreaterThan(0);
+        expect(moves.indexOf('h7e7')).toBeLessThan(moves.indexOf('b9c7'));
+    });
+});

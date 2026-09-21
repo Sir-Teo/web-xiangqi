@@ -34,6 +34,14 @@ describe('describeCaptureFree', () => {
         expect(describeCaptureFree(0)).toBeNull();
         expect(describeCaptureFree(CAPTURE_FREE_REPORT_PLIES - 1)).toBeNull();
         expect(describeCaptureFree(null)).toBeNull();
+        // `null` is not the only way to have no count. This is exported and
+        // takes `number`, so NaN and Infinity reach it from anywhere that
+        // arithmetic went wrong upstream, and both are larger-than or
+        // unordered against the report threshold rather than smaller: the
+        // `null` and `< threshold` tests above pass with the finite check
+        // removed, and a NaN would go on to build a report of NaN moves.
+        expect(describeCaptureFree(Number.NaN)).toBeNull();
+        expect(describeCaptureFree(Number.POSITIVE_INFINITY)).toBeNull();
     });
 
     it('counts in full moves once it is worth saying', () => {

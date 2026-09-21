@@ -23,7 +23,7 @@ beside it in its own section; what is listed here is the question.
 | Question | What is wanted |
 | --- | --- |
 | [A four-core desktop is graded as a phone](#a-four-core-desktop-is-graded-as-a-phone-open-question) | Nodes/second and engine-ready time on a real four-core machine running the threaded core. |
-| [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px viewport currently takes the single-threaded core whatever the hardware says. |
+| [The phone half of that clause](#the-phone-half-of-that-clause-has-never-been-measured) | The same, on a real phone, plus what a sustained threaded search does to battery. A 390px *screen* currently takes the single-threaded core whatever the hardware says. |
 | [Whether collapsing a toolbar should give its row back](#there-is-a-third-option-and-it-is-the-one-still-open) | A decision about how the collapse should feel. It vacates a row and hands the board nothing, which is a control that does not do what it looks like it does — but reclaiming the row resizes the board on every toggle. No longer urgent: the board's floor fixes the reader this was for. |
 
 ## The one thing that leaves the machine
@@ -420,6 +420,21 @@ The browser reported 18 cores, 32GB and `crossOriginIsolated: true` in all
 three. Nothing but `minViewport < 700` sent the first one to the single-threaded
 core — hardware does not get a vote. By the table above that is 430k nodes per
 second against 1.32M, on a `movetime` budget, so it is a third of the search.
+
+**"Viewport" here is the screen, not the window.** The measurement above varied
+the viewport through device emulation, which moves `window.screen` with it, so
+the table is what a 390px *device* gets. A desktop window merely dragged narrow
+keeps its threaded core: `detectDeviceScreen` reads `window.screen.width` and
+only falls back to `innerWidth` when the screen reports nothing. That is
+deliberate, and both `useEngine.ts` and `analysisProfile.ts` carry a comment
+about the version that did not do it — sizing the engine from the window
+rebooted it single-threaded when a window was resized or devtools opened, on
+hardware that had not changed, and an off-screen tab reporting 0 looked like
+the weakest device there is. `analysisProfile.test.ts` now pins the choice;
+before it did so, reverting to `innerWidth` passed the whole suite.
+
+The same call decides `defaultSearchDepth` in `App.tsx` — 14 below 900px
+against 22 above — so the distinction is worth two things, not one.
 
 This is emulation on desktop hardware, which is exactly the case that cannot
 settle it: a real flagship phone reports eight cores, not eighteen, and has

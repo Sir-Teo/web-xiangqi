@@ -136,4 +136,37 @@ it('clamps the window at both ends, so short and long games both behave', () => 
     it('falls back to an even weight when a weight is missing', () => {
         expect(weightedMean([50, 100], [])).toBeCloseTo(75, 5)
     })
+
+    it('has no weight to report when nothing finite was passed', () => {
+        // `total > 0` is the guard. Without it this divides by zero and hands
+        // back NaN, which reads as a number all the way to the accuracy shown
+        // on screen. The length check above cannot see the difference.
+        expect(weightedMean([], [])).toBeNull()
+        expect(weightedMean([Number.NaN, Number.POSITIVE_INFINITY], [1, 1])).toBeNull()
+    })
+
+    /**
+     * The sliding windows already number exactly one per move -- the
+     * `windowSize - 2` borrowed opening windows plus the
+     * `length - windowSize + 1` real ones come to `length - 1` -- so the pad
+     * loop at the end of `volatilityWeights` should never run.
+     *
+     * Only the *last* move can tell. Dropping one window still returns the
+     * right number of weights, because the pad quietly supplies the missing
+     * one at `MIN_WEIGHT`; every existing test here reads a length, a clamp
+     * range, or a weight from the middle, and all of them pass either way. So
+     * this asks the one question that separates them: is the final move
+     * measured, or floored?
+     */
+    it('measures the last move rather than padding it', () => {
+        const quiet = Array.from({ length: 54 }, () => 50)
+        const series = [...quiet, 50, 90, 10, 90, 10, 90]
+        const weights = volatilityWeights(series)
+        expect(weights).toHaveLength(series.length - 1)
+        expect(weights[weights.length - 1]).toBeGreaterThan(MIN_WEIGHT)
+        // And the quiet stretch it followed is still at the floor, so the
+        // number above came from the final window and not from the series
+        // being volatile throughout.
+        expect(weights[20]).toBe(MIN_WEIGHT)
+    })
 })

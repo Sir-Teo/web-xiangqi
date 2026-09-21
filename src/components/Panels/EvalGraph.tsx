@@ -44,6 +44,36 @@ interface EvalGraphProps {
 const PADDING = { top: 18, right: 20, bottom: 44, left: 50 } as const;
 const MIN_POINT_MARKER_GAP_PX = 7;
 
+/**
+ * The ring around a reviewed move grows with how bad the move was.
+ *
+ * Only the three critical grades are ringed at all, so "ringed or not" already
+ * separates them from `best` and `good`. Between the three, the stroke colour
+ * was the whole distinction -- amber, orange, red -- which are close enough
+ * together that the readers who most need the marks are the ones who cannot
+ * separate them. The move tree's dots carry severity in their size for the
+ * same reason; this is the same ramp on the same scale, so the two readings of
+ * one review agree.
+ *
+ * Ramped *down* from the old 6.4 rather than up through it, so the largest
+ * ring is still the size every ring used to be. These already overlap on a
+ * long game -- measured, the closest pair of a thirty-move review sits 5.2px
+ * inside each other at 1280 -- and a ramp centred on 6.4 would have made that
+ * 6.4px. Nothing about the fix needs the marks to get bigger overall.
+ *
+ * Stroke weight carries the same ramp, because 0.7px of radius between
+ * neighbouring grades is not much on its own -- in `App.css` beside the stroke
+ * colours, not as an attribute here: `.graph-review-marker` sets
+ * `stroke-width`, and a stylesheet beats a presentation attribute, so setting
+ * it on the element did nothing at all.
+ */
+const REVIEW_MARKER_RADIUS: Record<string, number> = {
+    inaccuracy: 5,
+    mistake: 5.7,
+    blunder: 6.4,
+};
+
+
 type EvalPoint = {
     moveIndex: number;
     eval: number | null;
@@ -675,7 +705,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                                                     className={`graph-review-marker ${getMoveQualityClassName(pt.quality)}`}
                                                     cx={pt.x}
                                                     cy={pt.y}
-                                                    r={6.4}
+                                                    r={REVIEW_MARKER_RADIUS[pt.quality] ?? 6.4}
                                                 />
                                             ) : null}
                                             <circle

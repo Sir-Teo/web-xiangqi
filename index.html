@@ -14,7 +14,16 @@
        one because a platform may crop to a circle and only the middle 80% of an
        icon is guaranteed to survive. -->
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="./icon.svg" />
+  <!-- The one icon that cannot be the SVG. iOS does not read SVG for
+       `apple-touch-icon`, and when it cannot read the icon it puts a
+       screenshot of the page on the home screen instead -- which on a board
+       app is a thumbnail of the board, unrecognisable at that size. 180x180 is
+       what iOS asks for; it applies its own corner mask over the top, and the
+       square's own corners are already the same near-black, so the double
+       rounding does not show. Rasterised from `icon.svg`, so the two stay the
+       same picture. Every other platform reads the manifest and gets the SVG.
+       -->
+  <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
   <!-- viewport-fit=cover is required for env(safe-area-inset-*) to report real
        values; without it they resolve to 0 and the safe-area padding on the top
        bar, bottom panel, mobile tab bar and modals never takes effect. -->
@@ -104,6 +113,30 @@
 
 <body>
   <div id="root"></div>
+  <!-- Both ways this page can end up blank with nothing said.
+       `#root` is empty until React fills it, so a reader who never gets that
+       far sees the background colour and no explanation at all.
+
+       `noscript` covers scripting being off. The `nomodule` script covers the
+       browser being older than this app's floor: a browser that understands
+       ES modules ignores a `nomodule` script entirely, and one that does not
+       also skipped the module above, so it is exactly the set that would
+       otherwise see nothing. Neither can start the app -- the engine is WASM
+       in a worker -- so both only say why. -->
+  <noscript>
+    <div style="max-width:32rem;margin:15vh auto;padding:0 1.5rem;color:#e7e7e7;font:16px/1.6 system-ui,sans-serif">
+      <h1 style="font-size:1.4rem;margin:0 0 .6rem">Web Xiangqi needs JavaScript</h1>
+      <p style="margin:0;color:#a7a7a7">The board, the Pikafish engine and every saved study run in your browser,
+        so there is nothing to show without scripting enabled. Turn it on for this site and reload.</p>
+    </div>
+  </noscript>
+  <script nomodule>
+    document.getElementById('root').innerHTML =
+      '<div style="max-width:32rem;margin:15vh auto;padding:0 1.5rem;color:#e7e7e7;font:16px/1.6 system-ui,sans-serif">' +
+      '<h1 style="font-size:1.4rem;margin:0 0 .6rem">This browser is too old for Web Xiangqi</h1>' +
+      '<p style="margin:0;color:#a7a7a7">The board needs a browser from 2023 or later — Safari 16.4, Chrome 111, ' +
+      'Edge 111 or Firefox 114. Updating, or opening the link in a newer browser, is all it takes.</p></div>';
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

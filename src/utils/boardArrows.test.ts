@@ -202,3 +202,26 @@ describe('buildBoardArrows', () => {
         });
     });
 });
+
+/**
+ * A move string whose halves are not both squares draws nothing.
+ *
+ * Found by mutation: `if (!from || !to) return null` joined with `&&` still
+ * rejects a move where *both* halves are unreadable, which is the only shape
+ * anything tested. Where one half reads and the other does not -- a truncated
+ * or half-corrupted move out of a share link or an imported study -- it builds
+ * an arrow with a null endpoint and hands it to the renderer.
+ */
+describe('a move that is not two squares', () => {
+    it.each(['a0zz', 'zza0', 'a0', 'a0b', ''])('draws no arrow for %o', (move) => {
+        const arrows = buildBoardArrows(input({ threatMove: move }));
+        expect(kinds(arrows)).not.toContain('threat');
+        expect(arrows.every((arrow) => arrow.from && arrow.to)).toBe(true);
+    });
+
+    it('still draws the same move written properly', () => {
+        // The control: the rejection above is about the move, not about
+        // threatMove being ignored.
+        expect(kinds(buildBoardArrows(input({ threatMove: 'a0a1' })))).toContain('threat');
+    });
+});

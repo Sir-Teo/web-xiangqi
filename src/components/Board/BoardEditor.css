@@ -120,12 +120,70 @@
   color: var(--text-secondary);
 }
 
+/* The field and its two buttons on one line while a line will hold them.
+   `flex: 1 1 12rem` is what decides that, and it has to be a length rather
+   than `auto`: with `auto` the field gives up everything the buttons ask for,
+   and at 320px with 200% text -- 237px of row against two 95px buttons -- it
+   was squeezed to 31 pixels and the second button hung 6px past the edge. A
+   FEN is unreadable and unfixable in 31px. Asking for 12rem instead means the
+   field wraps onto a line of its own the moment 12rem will not fit, which at
+   200% text is exactly when it stops being usable, and the buttons follow it
+   down. Sized in rem so it wraps with the reader's text, not with the
+   viewport. */
+.board-editor-fen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.board-editor-fen-row .pill-btn {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding-inline: 0.6rem;
+}
+
 .board-editor-fen {
+  flex: 1 1 12rem;
+  min-width: 0;
+  /* The field's own tap-target floor. Redundant today -- the row's buttons are
+     44px and the field stretches to the line, and on a line of its own it is
+     only there because the text is large enough to make it taller anyway -- but
+     stated here so the field does not depend on what is standing next to it. */
+  min-height: 44px;
   margin: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-input, #1f2937);
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  /* The size `.new-game-fen-input` uses, which is the same content in the same
+     kind of field. 0.62rem was inherited from the inert paragraph this
+     replaced, and a size that is fine to read is not the same as a size to
+     type a correction into -- it was the smallest editable field in the app. */
+  font-size: 0.74rem;
   color: var(--text-muted, #7b8794);
-  word-break: break-all;
+}
+
+.board-editor-fen:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+
+/* Touch keyboards zoom a field under 16px and never zoom back; see the
+   `pointer: coarse` block in `App.css` for the rest of them. */
+@media (pointer: coarse) {
+  .board-editor-fen {
+    font-size: max(16px, 1rem);
+  }
+}
+
+.board-editor-fen-notice {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--danger, #f87171);
 }
 
 @media (max-width: 640px) {

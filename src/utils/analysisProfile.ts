@@ -132,7 +132,8 @@ export const HIGH_TIER_MAX_THREADS = 8;
  * How many threads a machine with this many cores gets.
  *
  * Both tiers used to be a constant, so every desktop above the tier boundary
- * got 3 threads whether it had 9 cores or 64. The clamp to
+ * got 3 threads whether it had 9 cores or 64.
+ *
  * The clamp to `MAX_ENGINE_THREADS` is here rather than at the call sites so
  * that no caller can raise a tier into the hang described above without also
  * raising the build.

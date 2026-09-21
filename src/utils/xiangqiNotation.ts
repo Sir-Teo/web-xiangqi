@@ -236,7 +236,10 @@ export function formatChineseMove(board: BoardState, uci: string): string | null
 
     const labels = CHINESE_STACK_LABELS[shape.stackSize];
     // Four and five deep run out of 前中後 and are counted from the front.
-    const marker = labels?.[shape.stackIndex] ?? numeral('w', shape.stackIndex + 1);
+    // In the mover's own numerals, like every other number in the move: Red
+    // writes 一兵進一, Black 1卒進1. Mixing the two scripts inside one move --
+    // which a marker fixed to Red's numerals did -- is not a convention.
+    const marker = labels?.[shape.stackIndex] ?? numeral(shape.side, shape.stackIndex + 1);
     const file = shape.needsFileWithMarker ? fileNumeral : '';
     return `${marker}${file}${glyph}${action}${target}`;
 }
@@ -488,6 +491,20 @@ export function canonicaliseNotationToken(text: string): string | null {
  * `formatChineseMove` produced 一兵進一 for a four-deep file and nothing could
  * read it back -- a record written in Chinese stopped dead at that move, while
  * the same game in WXF imported cleanly.
+ *
+ * The seventh shape closes the last corner of that same hole: a counted
+ * soldier on a *named* file, which is what `needsFileWithMarker` adds once
+ * more than one file carries a stack. WXF writes `15+1` and Chinese
+ * 一五兵進一, which folds to `15P+1` -- the counted pair above with the piece
+ * in the middle, and the one arrangement the list did not have.
+ *
+ * No position a game can reach needs it: four soldiers on one file and two on
+ * another is six, and a side has five. It is listed anyway because the
+ * invariant this parser is built on is that it can never disagree with the
+ * formatter, and the piece count that makes the gap unreachable is enforced
+ * somewhere else entirely -- in `positionSetup.ts`, on the way onto the board.
+ * An invariant that holds only because of a rule in another file is one
+ * careless day from not holding.
  */
 const MOVE_TOKEN_SHAPE = new RegExp(
     '^(?:' + [
@@ -497,6 +514,7 @@ const MOVE_TOKEN_SHAPE = new RegExp(
         '[+\\-M][1-9][KAEHRCP][+\\-=][1-9]', // -9P+1
         '[1-9][1-9][+\\-=][1-9]',            // 35+1
         '[1-9][KAEHRCP][+\\-=][1-9]',        // 3P+1, the Chinese half of it
+        '[1-9][1-9][KAEHRCP][+\\-=][1-9]',   // 15P+1, the same on a named file
     ].join('|') + ')$'
 );
 

@@ -50,6 +50,26 @@ export function unlockSoundEffects() {
     }
 }
 
+/**
+ * Let the audio device go while sound is off.
+ *
+ * A `running` AudioContext keeps the audio render thread and the output device
+ * alive whether or not anything is playing -- a render callback every 128
+ * frames, and a device the machine cannot power down. Nothing played a sound
+ * while sound was off, but the context built for it kept running for the life
+ * of the page: turning sound off dropped the unlock listeners and cancelled a
+ * prime that had usually already happened, and left the device spinning.
+ *
+ * `suspend()` rather than `close()`, because a closed context cannot be
+ * reused: turning sound back on would pay the ~125ms of device startup again,
+ * which is the cost `prepareSoundEffects` exists to keep off the interaction
+ * path. Suspended, it is the same sub-millisecond `resume()` as the first
+ * gesture.
+ */
+export function suspendSoundEffects() {
+    if (ctx?.state === 'running') ctx.suspend().catch(() => {});
+}
+
 function getUnlockedCtx(): AudioContext | null {
     if (!ctx || ctx.state !== 'running') return null;
     return ctx;

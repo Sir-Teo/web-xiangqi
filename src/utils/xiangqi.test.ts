@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
     START_FEN,
+    attacksSquare,
     boardToFen,
+    inBounds,
     hasCrossedRiver,
     inPalace,
     kingsFacing,
@@ -56,11 +58,57 @@ describe('board coordinates', () => {
         expect(parseMove('h2e')).toBeNull();
     });
 
+    /**
+     * The guards themselves, which only a wrong caller reaches.
+     *
+     * Every test above hands these well-formed input, so the length test in
+     * `uciToSquare` and the upper bounds in `inBounds` could each be removed
+     * or loosened and the suite would not notice -- and the thing on the far
+     * side of `inBounds` is `state[rank][file]`, which throws on rank 10
+     * rather than returning a wrong answer.
+     */
+    it('turns away input that is off the board or not a square', () => {
+        expect(uciToSquare('')).toBeNull();
+        expect(uciToSquare('e')).toBeNull();
+        expect(uciToSquare('e33')).toBeNull();
+        expect(uciToSquare('ee')).toBeNull();
+
+        expect(inBounds(0, 0)).toBe(true);
+        expect(inBounds(8, 9)).toBe(true);
+        expect(inBounds(9, 0)).toBe(false);
+        expect(inBounds(0, 10)).toBe(false);
+        expect(inBounds(-1, 0)).toBe(false);
+        expect(inBounds(0, -1)).toBe(false);
+
+        // A target off the board is refused before the board is indexed.
+        const state = board('3k5/9/9/9/9/9/9/9/9/4K4');
+        expect(attacksSquare(state, 4, 0, 'K', 4, 10)).toBe(false);
+        expect(attacksSquare(state, 4, 0, 'K', 9, 0)).toBe(false);
+        expect(attacksSquare(state, 4, 0, '', 4, 1)).toBe(false);
+    });
+
+    /**
+     * Both bounds of both palaces, not one corner of each.
+     *
+     * This used to check Red's rank bound and Black's *file* bound, which
+     * leaves Black's ranks unstated -- and `rank >= 7 && rank <= 9` rewritten
+     * as `||` is true for every rank on the board, so a black general or
+     * advisor could stand anywhere on files 3-5 and the whole suite passed.
+     */
     it('knows where the palaces and the river are', () => {
-        expect(inPalace('w', 4, 1)).toBe(true);
-        expect(inPalace('w', 4, 3)).toBe(false);
-        expect(inPalace('b', 4, 8)).toBe(true);
-        expect(inPalace('b', 2, 8)).toBe(false);
+        for (const file of [3, 4, 5]) {
+            for (const rank of [0, 1, 2]) expect(inPalace('w', file, rank), `w ${file},${rank}`).toBe(true);
+            for (const rank of [3, 4, 5, 6, 7, 8, 9]) expect(inPalace('w', file, rank), `w ${file},${rank}`).toBe(false);
+            for (const rank of [7, 8, 9]) expect(inPalace('b', file, rank), `b ${file},${rank}`).toBe(true);
+            for (const rank of [0, 1, 2, 3, 4, 5, 6]) expect(inPalace('b', file, rank), `b ${file},${rank}`).toBe(false);
+        }
+        // And no file outside 3-5 is in either palace, at any rank.
+        for (const file of [0, 1, 2, 6, 7, 8]) {
+            for (const rank of [0, 1, 2, 7, 8, 9]) {
+                expect(inPalace('w', file, rank), `w ${file},${rank}`).toBe(false);
+                expect(inPalace('b', file, rank), `b ${file},${rank}`).toBe(false);
+            }
+        }
         expect(hasCrossedRiver('w', 5)).toBe(true);
         expect(hasCrossedRiver('w', 4)).toBe(false);
         expect(hasCrossedRiver('b', 4)).toBe(true);
@@ -181,6 +229,35 @@ describe('the generals', () => {
     it('stays inside its own palace', () => {
         expect(legal(facingRisk, 'e0e3')).toBe(false);
         expect(legal('3k5/9/9/9/9/9/9/4K4/9/9', 'e2e3')).toBe(false);
+    });
+
+    /**
+     * The same for Black, which was only ever asserted for Red.
+     *
+     * Every general test above starts from a board where Black's general is
+     * already at the back of its palace and is never asked to leave it, so
+     * `rank >= 7 && rank <= 9` rewritten as `||` -- true for every rank there
+     * is -- passed the whole suite. Red's floor was covered; Black's was not.
+     *
+     * The red general sits on f0 in both boards so that a lateral step by
+     * Black is refused for being outside the palace and not for putting the
+     * two generals on one file, which is a different rule with its own test.
+     */
+    it('holds the Black general and its advisors in the far palace too', () => {
+        // Black general on d7, the near rank of its palace.
+        const general = '9/9/3k5/9/9/9/9/9/9/5K3';
+        expect(legal(general, 'd7d8', 'b')).toBe(true);
+        expect(legal(general, 'd7e7', 'b')).toBe(true);
+        expect(legal(general, 'd7d6', 'b')).toBe(false);
+        expect(legal(general, 'd7c7', 'b')).toBe(false);
+
+        // Advisor on e7: its four diagonals are d8 and f8 inside, d6 and f6
+        // one rank past the palace.
+        const advisor = '3k5/9/4a4/9/9/9/9/9/9/5K3';
+        expect(legal(advisor, 'e7d8', 'b')).toBe(true);
+        expect(legal(advisor, 'e7f8', 'b')).toBe(true);
+        expect(legal(advisor, 'e7d6', 'b')).toBe(false);
+        expect(legal(advisor, 'e7f6', 'b')).toBe(false);
     });
 });
 

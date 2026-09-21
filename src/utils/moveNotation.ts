@@ -36,6 +36,8 @@ export interface MoveNotationRecord {
     uci: string;
     piece: string;
     captured?: string;
+    /** Whether this move left the opponent in check; see `describeMoveWithCheck`. */
+    inCheck?: boolean;
 }
 
 function splitUciMove(uci: string) {
@@ -81,4 +83,31 @@ export function formatMoveRecordTitle(record: MoveNotationRecord): string {
     return captured
         ? `${piece} from ${from} captures ${captured} on ${to}`
         : `${piece} from ${from} captures on ${to}`;
+}
+
+/**
+ * The same description, with the check the notations do not write.
+ *
+ * `inCheck` is on every record and the board draws its CHECK badge from it,
+ * but the badge speaks only for the position on screen -- so reading down the
+ * move list or along the breadcrumb, which is how a game is actually read,
+ * gave no sign of which moves were checks. In xiangqi that is the shape of the
+ * game: it is what perpetual check is made of, and what the repetition verdict
+ * is read off.
+ *
+ * Said in words rather than added to the move on purpose. A record prints a
+ * check with no marker at all, and WXF gives the sharper reason: the `+` in
+ * `R2+3` already means *advance*, so a `+` appended for check would be one
+ * character meaning two things inside one token -- ambiguous to a reader, and
+ * to this repo's own parser, which reads a token by asking the formatter what
+ * it writes. The visible move stays exactly what a record would print.
+ *
+ * Kept apart from `formatMoveRecordTitle` rather than folded into it because
+ * the board's live region composes its own sentence and already has a `Check.`
+ * clause of its own -- and a `Checkmate.` that replaces it. One function that
+ * always appended the phrase made that announcement say it twice.
+ */
+export function describeMoveWithCheck(record: MoveNotationRecord): string {
+    const title = formatMoveRecordTitle(record);
+    return record.inCheck ? `${title}, giving check` : title;
 }

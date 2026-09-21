@@ -40,9 +40,10 @@ import { CandidatePanel } from './components/CandidatePanel';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
-import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove } from './utils/xiangqi';
+import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove, type BoardState, type Side } from './utils/xiangqi';
+import { describeFenProblem, readFenBoard } from './utils/positionSetup';
 import { WdlBar } from './components/Panels/WdlBar';
-import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, unlockSoundEffects } from './utils/sounds';
+import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, suspendSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { PIECE_NAMES, formatCapturedTrayLabel, formatMaterialValue, isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
 import { serializeSavedMoveTree } from './utils/savedMoveTree';
@@ -370,6 +371,25 @@ function isAiGameModeValue(mode: GameMode) {
 }
 
 /**
+ * The workspace a newly started game belongs in, or null to leave it alone.
+ *
+ * An AI game needs the Play workspace and takes it. A local game does not --
+ * and this is the half that was missing: starting one after an AI game left
+ * the reader in Play with the analysis engine off, no eval bar, no Engine tab
+ * and nothing on screen tying that to the AI game they had just left. Every
+ * other way of opening a game says which workspace it wants; the New Game
+ * menu said so for three of its four options.
+ *
+ * It gives back only what the app took. A Play workspace the reader chose for
+ * themselves -- two people at one board, with the engine quiet, which is what
+ * the pill is for -- is left where they put it, because nothing here moved it.
+ */
+function workspaceForNewGame(nextMode: GameMode, previousMode: GameMode): WorkspaceMode | null {
+  if (isAiGameModeValue(nextMode)) return 'play';
+  return isAiGameModeValue(previousMode) ? 'analysis' : null;
+}
+
+/**
  * Which way up the board should be for the person playing it.
  *
  * "You play Black" used to leave Red at the bottom, so the human played from
@@ -540,6 +560,14 @@ function App() {
    * palette, where the current game's mode is the right answer.
    */
   const [editorGameMode, setEditorGameMode] = useState<GameMode | null>(null);
+  /**
+   * The board the editor opens on, when it is not the board on screen.
+   *
+   * Set only by the "fix this position" route out of a refused FEN. The editor
+   * otherwise starts from the current position, which is what someone reaching
+   * for it from a game wants.
+   */
+  const [editorSeed, setEditorSeed] = useState<{ board: BoardState; sideToMove: Side } | null>(null);
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -592,6 +620,9 @@ function App() {
       cancelPrepare();
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      // Sound is off (or the page is going away). Cancelling the prime is not
+      // enough once it has run: the device stays open until it is suspended.
+      suspendSoundEffects();
     };
   }, [soundEnabled]);
 
@@ -2208,6 +2239,38 @@ function App() {
       if (moved) {
         clearBoardMarkers();
         clearMoveRuleHint();
+      } else if (!selected && Boolean(board[rank]?.[file]) && pieceSide(board[rank]?.[file] || '') !== sideToMove) {
+        /**
+         * Picking up the other side's piece, which the board cannot do and
+         * used to answer with nothing at all.
+         *
+         * Every other refusal on this board says why: a piece that cannot
+         * reach a square, a move that leaves the general in check, a general
+         * facing its opposite. This one -- the commonest mistake a beginner
+         * makes, and the one that looks most like the board being broken --
+         * selected nothing, drew nothing and said nothing. The sentence is
+         * already written for the case where a piece *is* selected; it just
+         * never reached the case where none is.
+         *
+         * An empty square is still silent. Tapping the board where there is
+         * nothing is not a mistake and does not need answering.
+         */
+        //
+        // Coach mode answers the question behind the tap as well. A learner
+        // reaching for the other side's horse wants to know what a horse does,
+        // and the hint line already says exactly that for a piece of their own
+        // -- same table, same `·`, so the two taps teach the same way. Pro mode
+        // gets the bare sentence; it did not ask to be taught.
+        //
+        // The reason comes first and the lesson second, which is the opposite
+        // of the order the line uses for a piece of your own. This line is
+        // `-webkit-line-clamp: 2`, and at 320px with 200% text two lines hold
+        // about fifty characters -- so whichever half is second is the half a
+        // reader with large text does not get. The answer to "why did nothing
+        // happen" is not the half to lose.
+        const reached = board[rank]?.[file] || '';
+        const lesson = assistMode === 'coach' && isPieceCode(reached) ? ` · ${PIECE_MOVE_HINTS[reached]}` : '';
+        showMoveRuleHint(`${formatMoveRuleHint('not your piece')}${lesson}`);
       } else if (
         !selected ||
         (selected.file === file && selected.rank === rank) ||
@@ -2216,17 +2279,16 @@ function App() {
         clearMoveRuleHint();
       }
     }
-  }, [board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
+  }, [assistMode, board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
 
   const applyMode = useCallback((mode: GameMode) => {
-    if (isAiGameModeValue(mode)) {
-      setWorkspaceMode('play');
-    }
+    const nextWorkspace = workspaceForNewGame(mode, gameMode);
+    if (nextWorkspace) setWorkspaceMode(nextWorkspace);
     setGameMode(mode);
     const facing = orientationForHuman(mode);
     if (facing) setOrientation(facing);
     resetGame();
-  }, [resetGame]);
+  }, [gameMode, resetGame]);
 
   /**
    * Keep this position and start playing it against the engine.
@@ -2632,6 +2694,7 @@ function App() {
     isReady,
     pageVisible: isPageVisible,
     deepSearchRunning: deepDiveActive,
+    reviewRunning: reviewStatus === 'running',
     isSearchQueued,
     isSearching,
   });
@@ -2721,6 +2784,27 @@ function App() {
   // A forbidden move is worth saying at the first repetition, before it is
   // played, whatever the threshold for an unforced one.
   const visibleRepetition = shouldReportRepetition(repetition) || cloudRuleHasVerdict ? repetition : null;
+  /**
+   * The one question about a repetition this app will not answer, offered
+   * where it is open.
+   *
+   * `repetition.ts` classifies perpetual check and deliberately stops there:
+   * deciding a chase needs to know which piece is being chased, whether it is
+   * protected, and whether the chaser is threatening it, with a rulebook of
+   * exceptions. chessdb has that machinery and `useCloudRule` asks it -- but
+   * only once the reader has the cloud book on, and a reader who has not is
+   * simply told the position "is a draw unless one side is perpetually
+   * chasing" with nothing saying who could settle it.
+   *
+   * A button rather than a lookup, because turning the book on sends the
+   * position and the moves that reached it off the machine. That is the one
+   * thing this app does that leaves it, and it stays the reader's choice.
+   *
+   * Only for an unforced cycle: a perpetual check is already adjudicated
+   * above, and offering to look one up would be noise on a verdict that is
+   * not in doubt.
+   */
+  const canAskCloudAboutChase = visibleRepetition?.verdict === 'unforced' && !cloudBookEnabled;
   /**
    * Why a won ending reads level. The clock is already the fifth field of the
    * FEN the board hands the engine, so this needs no state of its own.
@@ -2841,7 +2925,7 @@ function App() {
   );
 
   // Game library
-  const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, rename: renameGameInLibrary } = useGameLibrary();
+  const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, restore: restoreGameToLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
   const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped, retry: retryLibraryExplorer } =
     useLibraryExplorer(savedGames, board, sideToMove, graphVisible && leftPanelTab === 'graph');
@@ -3174,7 +3258,8 @@ function App() {
     handleCancelReview();
     resetReview();
     setAiMoveError(null);
-    if (isAiGameModeValue(nextGameMode)) setWorkspaceMode('play');
+    const nextWorkspace = workspaceForNewGame(nextGameMode, gameMode);
+    if (nextWorkspace) setWorkspaceMode(nextWorkspace);
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
@@ -3191,7 +3276,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
 
   const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -3868,23 +3953,42 @@ function App() {
 
   const handleApplyEditedPosition = useCallback((fen: string) => {
     setShowBoardEditor(false);
+    setEditorSeed(null);
     // The editor only offers Done for a legal position, so this succeeds;
     // the mode is the one picked in the New Game dialog, or the current one
     // when the editor was opened from the palette.
     handleLoadFenRef.current?.(fen, editorGameMode ?? gameMode);
   }, [editorGameMode, gameMode]);
 
+  /**
+   * The board behind a refused FEN, when there is one to show.
+   *
+   * Only while the refusal is on screen, and only for a FEN whose layout
+   * parsed -- a broken layout draws nothing, and the editor would silently
+   * open on the current game instead, which looks like the button ignoring
+   * the paste.
+   */
+  const refusedPosition = useMemo(
+    () => (fenError ? readFenBoard(fenInput) : null),
+    [fenError, fenInput],
+  );
+
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode, note?: string) => {
     const ok = loadFen(fen.trim(), note);
     if (!ok) {
+      // No timer on this one. The message is now a specific thing to fix --
+      // which soldier, which general -- and two seconds was already short for
+      // the old one sentence. It goes when the reader answers it: typing in
+      // the field clears it, and so does opening or closing the dialog, which
+      // is what keeps a refusal from an import or a share link out of the way.
       if (fenErrorTimerRef.current !== null) {
         window.clearTimeout(fenErrorTimerRef.current);
-      }
-      setFenError('FEN must describe a legal Xiangqi position with both generals and a side to move.');
-      fenErrorTimerRef.current = window.setTimeout(() => {
         fenErrorTimerRef.current = null;
-        setFenError(null);
-      }, 2000);
+      }
+      setFenError(
+        describeFenProblem(fen.trim())
+          ?? 'FEN must describe a legal Xiangqi position with both generals and a side to move.'
+      );
       return false;
     }
     setLoadedSavedStudy(null);
@@ -3892,9 +3996,8 @@ function App() {
     handleCancelReview();
     resetReview();
     setAiMoveError(null);
-    if (isAiGameModeValue(nextGameMode)) {
-      setWorkspaceMode('play');
-    }
+    const nextWorkspace = workspaceForNewGame(nextGameMode, gameMode);
+    if (nextWorkspace) setWorkspaceMode(nextWorkspace);
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
@@ -3930,9 +4033,8 @@ function App() {
     handleCancelReview();
     resetReview();
     setAiMoveError(null);
-    if (isAiGameModeValue(nextGameMode)) {
-      setWorkspaceMode('play');
-    }
+    const nextWorkspace = workspaceForNewGame(nextGameMode, gameMode);
+    if (nextWorkspace) setWorkspaceMode(nextWorkspace);
     setGameMode(nextGameMode);
     const facing = orientationForHuman(nextGameMode);
     if (facing) setOrientation(facing);
@@ -3976,7 +4078,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, gameMode, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -4047,7 +4149,7 @@ function App() {
     const validation = validateMoveSequence(moves, rawFen);
     if (!validation.ok) {
       failShareLink(validation.reason === 'Invalid start FEN'
-        ? { kind: 'bad-start-position' }
+        ? { kind: 'bad-start-position', reason: describeFenProblem(rawFen ?? '') ?? undefined }
         : { kind: 'illegal-move', moveNumber: (validation.failedIndex ?? 0) + 1, reason: validation.reason });
       logDiagnosticWarning('Ignored invalid shared Xiangqi link:', validation);
       return;
@@ -4267,6 +4369,61 @@ function App() {
       setDeleteUndo(null);
     }, 10000);
   }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
+
+  /**
+   * Deleting a saved study is the most expensive thing a reader can do here,
+   * and it was the only destructive action with no way back.
+   *
+   * Removing a move offers ten seconds of Undo; removing a *study* -- which
+   * may be an evening of analysis, its variations, notes and review -- offered
+   * a confirm step and then nothing. A confirm guards against the click you
+   * did not mean to make; it does nothing about the one you did mean and
+   * regret. This is the same toast, on the more valuable object.
+   *
+   * The record is captured before the delete rather than read back after, and
+   * `restoreGameToLibrary` puts it back under its own id, so an open study or
+   * a saved review still points at the same game.
+   */
+  const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean } | null>(null);
+  const libraryUndoTimerRef = useRef<number | null>(null);
+  const dismissLibraryUndo = useCallback(() => {
+    if (libraryUndoTimerRef.current !== null) {
+      window.clearTimeout(libraryUndoTimerRef.current);
+      libraryUndoTimerRef.current = null;
+    }
+    setLibraryUndo(null);
+  }, []);
+  useEffect(() => () => {
+    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
+  }, []);
+
+  const handleDeleteSavedGame = useCallback((id: string): boolean => {
+    const removed = savedGames.find((game) => game.id === id);
+    if (!deleteGameFromLibrary(id)) return false;
+    if (!removed) return true;
+    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
+    setLibraryUndo({ game: removed });
+    libraryUndoTimerRef.current = window.setTimeout(() => {
+      libraryUndoTimerRef.current = null;
+      setLibraryUndo(null);
+    }, 10000);
+    return true;
+  }, [deleteGameFromLibrary, savedGames]);
+
+  const handleUndoLibraryDelete = useCallback(() => {
+    if (!libraryUndo) return;
+    if (restoreGameToLibrary(libraryUndo.game)) {
+      dismissLibraryUndo();
+      return;
+    }
+    // Storage can refuse -- it is full, or blocked, or unreadable. Say so and
+    // leave the toast up rather than closing it on a delete that stands.
+    if (libraryUndoTimerRef.current !== null) {
+      window.clearTimeout(libraryUndoTimerRef.current);
+      libraryUndoTimerRef.current = null;
+    }
+    setLibraryUndo({ game: libraryUndo.game, failed: true });
+  }, [dismissLibraryUndo, libraryUndo, restoreGameToLibrary]);
 
   const handleUndoDelete = useCallback(() => {
     if (!deleteUndo) return;
@@ -4776,6 +4933,61 @@ function App() {
   const aDialogIsOpen = Boolean(
     showSettings || showNewGameMenu || showCommandPalette || visibleGameResult || autoSaveRecovery || showBoardEditor || showRuleLessons || practiceStudy
   );
+  /**
+   * While a dialog is up, take the rest of the page out of the accessibility
+   * tree as well as out of the tab order.
+   *
+   * Every dialog here already declares `aria-modal="true"`, which is what the
+   * spec says to do, and `keepTabWithin` already holds the Tab key inside. But
+   * `aria-modal` is honoured unevenly -- VoiceOver in particular has long let
+   * a reader swipe straight past it -- and neither of those two things touches
+   * browse mode. Measured with a dialog open: **151 controls behind it were
+   * still reachable**, including the whole top bar and every square of the
+   * board. A reader navigating by control or by heading could work the game
+   * underneath a Settings panel without ever being told it was there.
+   *
+   * `inert` is the one attribute that covers focus, browse mode and pointer
+   * events together, and it is supported everywhere this app runs.
+   *
+   * Applied to the shell's children rather than the shell, because the dialogs
+   * render inside it -- inerting the shell would inert the dialog too. A child
+   * holding *any* open dialog is left alone, so two stacked dialogs (the
+   * recovery modal over the New Game menu, which is reachable) both stay live.
+   *
+   * A *layout* effect, and that is load-bearing. Closing a dialog restores
+   * focus to whatever opened it, from the cleanup of the `useEffect` at the
+   * top of this file -- and `focus()` on an inert element does nothing, so
+   * with a passive effect here the launcher was still inert at that moment
+   * and focus fell to `document.body`. Layout-effect cleanups run before
+   * passive ones in the same commit, which is a guarantee about phases rather
+   * than about which effect happens to be declared first.
+   *
+   * Re-run whenever a dialog opens or closes: the dialog has to be in the DOM
+   * for `contains` to find it.
+   */
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return;
+    const shell = document.querySelector('.app-shell');
+    if (!shell) return;
+    const marked: Element[] = [];
+    if (aDialogIsOpen) {
+      const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+      // Nothing found means the dialog has not rendered yet; the next run of
+      // this effect catches it, and inerting everything meanwhile would take
+      // the whole app away for a frame.
+      if (dialogs.length) {
+        for (const child of shell.children) {
+          if (dialogs.some((dialog) => child.contains(dialog))) continue;
+          child.setAttribute('inert', '');
+          marked.push(child);
+        }
+      }
+    }
+    return () => {
+      for (const child of marked) child.removeAttribute('inert');
+    };
+  }, [aDialogIsOpen, showSettings, showNewGameMenu, showCommandPalette, visibleGameResult, autoSaveRecovery, showBoardEditor, showRuleLessons, practiceStudy]);
+
   const [autoSaveChecked, setAutoSaveChecked] = useState(false);
 
   useEffect(() => {
@@ -4861,10 +5073,74 @@ function App() {
     };
   }, [autoSaveChecked, autoSaveRecovery, persistAutoSave, rootNodeId, snapshotForStorage]);
 
+  /**
+   * "Start fresh" throws away the only copy of an unfinished game.
+   *
+   * It is the sharpest of the app's destructive actions and had the least
+   * around it. The library's delete asks twice and now offers an undo; a
+   * deleted move offers an undo. This deleted six moves of play -- measured --
+   * on one click of a button that arrives unbidden the moment the page opens,
+   * sits beside Restore with the same weight, and is the kind of thing a
+   * reader dismisses reflexively. The game was never saved anywhere else;
+   * there is nothing to go back to.
+   *
+   * So the snapshot is kept for the length of the toast instead of dropped on
+   * the spot, and Undo restores it the way Restore would have.
+   */
+  const [discardedAutoSave, setDiscardedAutoSave] = useState<{ snapshot: AutoSavedGame; failed?: boolean } | null>(null);
+  const discardedAutoSaveTimerRef = useRef<number | null>(null);
+  const dismissDiscardedAutoSave = useCallback(() => {
+    if (discardedAutoSaveTimerRef.current !== null) {
+      window.clearTimeout(discardedAutoSaveTimerRef.current);
+      discardedAutoSaveTimerRef.current = null;
+    }
+    setDiscardedAutoSave(null);
+  }, []);
+  useEffect(() => () => {
+    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
+  }, []);
+
   const dismissAutoSaveRecovery = useCallback(() => {
+    const discarded = autoSaveRecovery;
     clearAutoSavedGame();
     setAutoSaveRecovery(null);
-  }, []);
+    if (!discarded || discarded.game.moves.length === 0) return;
+    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
+    setDiscardedAutoSave({ snapshot: discarded });
+    // Longer than the ten seconds the other two undos run for: this one has to
+    // survive the reader starting to look at the fresh board and realising
+    // what they have lost, rather than an immediate "no, not that one".
+    discardedAutoSaveTimerRef.current = window.setTimeout(() => {
+      discardedAutoSaveTimerRef.current = null;
+      setDiscardedAutoSave(null);
+    }, 30000);
+  }, [autoSaveRecovery]);
+
+  const undoDiscardedAutoSave = useCallback(() => {
+    if (!discardedAutoSave) return;
+    // The same path Restore takes, so an undone discard and a Restore leave
+    // the board in the same state.
+    if (!handleLoadGame(discardedAutoSave.snapshot.game)) {
+      // Keep the toast. Dismissing it here would throw away the only copy of
+      // the game a second time, with nothing on the board to show for it.
+      if (discardedAutoSaveTimerRef.current !== null) {
+        window.clearTimeout(discardedAutoSaveTimerRef.current);
+        discardedAutoSaveTimerRef.current = null;
+      }
+      setDiscardedAutoSave({ snapshot: discardedAutoSave.snapshot, failed: true });
+      return;
+    }
+    // Written back at once rather than left to the effect below, which is
+    // debounced by `AUTO_SAVE_DEBOUNCE_MS`. Putting the game on the board and
+    // waiting six hundred milliseconds to write it down leaves a window in
+    // which closing the tab loses it again -- which is the exact loss this
+    // undo exists to prevent. Through `persistAutoSave` so that a storage
+    // refusal is reported the way every other auto-save failure is: the game
+    // is on the board by then, so that notice and its Download PGN are the
+    // right place for it rather than a second message here.
+    persistAutoSave(discardedAutoSave.snapshot.game);
+    dismissDiscardedAutoSave();
+  }, [discardedAutoSave, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave]);
 
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
@@ -5759,19 +6035,28 @@ function App() {
                 </span>
               ) : null}
               {/* For the position nobody has a FEN for: the endgame in a
-                  book, a composed problem, the one a friend described. */}
+                  book, a composed problem, the one a friend described -- and,
+                  when a pasted FEN drew a board and broke a rule, for that
+                  board. Being told the generals face each other and then having
+                  to rebuild the whole position to move one of them is the long
+                  way round; the editor holds an illegal board on purpose, says
+                  the same sentence about it, and keeps Done disabled until it
+                  is answered. Only when the layout itself parsed: there is
+                  nothing to hand over otherwise, and the button goes back to
+                  meaning what it always meant. */}
               <button
                 type="button"
                 className="new-game-file-btn"
                 style={{ marginTop: '0.5rem' }}
                 onClick={() => {
                   setEditorGameMode(pendingGameMode);
+                  setEditorSeed(refusedPosition);
                   closeNewGameMenu();
                   setShowBoardEditor(true);
                 }}
                 data-testid="open-board-editor-btn"
               >
-                Set up the board by hand
+                {refusedPosition ? 'Fix this position by hand' : 'Set up the board by hand'}
               </button>
             </div>
             <div className="new-game-fen-section">
@@ -6163,7 +6448,7 @@ function App() {
                   <LazyLibraryPanel
                     savedGames={savedGames}
                     onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
-                    onDeleteSavedGame={deleteGameFromLibrary}
+                    onDeleteSavedGame={handleDeleteSavedGame}
                     onRenameSavedGame={renameGameInLibrary}
                     loadedStudy={loadedSavedStudy ? {
                       id: loadedSavedStudy.id, canUpdate: canSaveCurrentPosition,
@@ -6671,6 +6956,16 @@ function App() {
                       <em className="position-stat-cloud-rule" title={cloudRuleText} data-testid="repetition-cloud-rule">
                         {cloudRuleText}
                       </em>
+                    ) : canAskCloudAboutChase ? (
+                      <button
+                        type="button"
+                        className="position-stat-cloud-ask"
+                        onClick={() => setCloudBookEnabled(true)}
+                        data-testid="repetition-ask-cloud"
+                        title={`Look this repetition up on ${CLOUD_BOOK_SITE_NAME}. The position and the moves that reached it leave this machine, and the cloud book stays on until you turn it off.`}
+                      >
+                        Ask {CLOUD_BOOK_SITE_NAME} whether this is a chase
+                      </button>
                     ) : null}
                   </div>
                 ) : null}
@@ -7482,6 +7777,39 @@ function App() {
             zero; an iPhone's 34px inset takes that back. In here it is
             positioned against the workspace, which ends exactly where the
             chrome below it begins, on both. */}
+        {discardedAutoSave ? (
+          <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
+            <span>
+              {discardedAutoSave.failed
+                ? 'Could not put the game back on the board.'
+                : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
+                  ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
+            </span>
+            {discardedAutoSave.failed ? null : (
+              <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
+            )}
+            <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
+              <IconX />
+            </button>
+          </div>
+        ) : null}
+        {libraryUndo ? (
+          <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
+            <span>
+              {libraryUndo.failed
+                ? 'Could not put it back: browser storage is full or blocked.'
+                : libraryUndo.game.label
+                  ? `Deleted “${libraryUndo.game.label}”`
+                  : 'Deleted that saved game'}
+            </span>
+            {libraryUndo.failed ? null : (
+              <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete} data-testid="library-undo-btn">Undo</button>
+            )}
+            <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
+              <IconX />
+            </button>
+          </div>
+        ) : null}
         {deleteUndo ? (
           <div className="undo-toast" role="status" data-testid="delete-undo-toast">
             <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
@@ -7841,10 +8169,10 @@ function App() {
 
       {showBoardEditor && (
         <BoardEditor
-          initialBoard={board}
-          initialSide={sideToMove}
+          initialBoard={editorSeed?.board ?? board}
+          initialSide={editorSeed?.sideToMove ?? sideToMove}
           pieceStyle={pieceStyle}
-          onCancel={() => setShowBoardEditor(false)}
+          onCancel={() => { setShowBoardEditor(false); setEditorSeed(null); }}
           onApply={handleApplyEditedPosition}
         />
       )}

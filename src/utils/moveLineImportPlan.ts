@@ -11,6 +11,7 @@ import {
 import { extractPgnHeaders, extractPgnMetadata } from './gameMetadata';
 import { normalizeMoveComment } from './moveComment';
 import { START_POSITION_FEN } from './xiangqi';
+import { describeFenProblem } from './positionSetup';
 import { parseDhtmlXqRecord } from './dhtmlxq';
 import { parseNotationRecord } from './xiangqiNotation';
 import type { SavedMoveTreeNode } from './gameLibrary';
@@ -95,6 +96,25 @@ export function planMoveLineImport(
         ? { moves: dhtml.moves, moveTree: [] as SavedMoveTreeNode[], hasVariations: false, tooLarge: false, hadMoreGames: false, rootComment: undefined, rootResult: undefined }
         : extractUciMoveTree(source);
     const startFen = fenInput.trim() || dhtml?.startFen || extractFenTag(source) || undefined;
+
+    // Before anything is read as moves. The position a record starts from is
+    // the ground everything else stands on, and it arrives from two places
+    // that can both be wrong: the FEN field, and a `[FEN "..."]` header. The
+    // move path used to catch this a step later, through the validator, which
+    // said only "Invalid start FEN"; the diagram path -- a header and no moves
+    // -- did not catch it at all. `handleLoadFen` refused it and set the error
+    // belonging to the FEN field, so a record pasted into the move box was
+    // rejected with a message under a different box, or, imported from a file
+    // with no dialog open, with no message at all.
+    const fenProblem = startFen === undefined ? null : describeFenProblem(startFen);
+    if (fenProblem) {
+        return {
+            kind: 'error',
+            message: fenInput.trim()
+                ? `The FEN above cannot start a game. ${fenProblem}`
+                : `This record's FEN cannot start a game. ${fenProblem}`,
+        };
+    }
 
     const rootResult = importedLine.rootResult;
     const rootComment = dhtml ? normalizeMoveComment(dhtml.comments.get(0)) : importedLine.rootComment;

@@ -32,7 +32,7 @@ describe('saved study analysis', () => {
     const a = snapshot();
     expect(normalizeStudyAnalysis(a, 'position startpos', a.move)).toBeUndefined();
     expect(normalizeStudyAnalysis(a, a.position, 'i9i8')).toBeUndefined();
-    for (const patch of [{ depth: 999 }, { score: Infinity }, { savedAt: NaN }, { candidates: ['a9a8', 'a9a8'] }, { multiPv: 5 }, { position: 'position startpos\nquit' }, { version: 2 }, { bound: 'sideways' }, { bounded: false, bound: 'lower' }, { engine: { ...engine, name: 'x'.repeat(121) } }]) {
+    for (const patch of [{ depth: 999 }, { score: Infinity }, { savedAt: NaN }, { candidates: ['a9a8', 'a9a8'] }, { multiPv: 5 }, { position: 'position startpos\nquit' }, { version: 2 }, { bound: 'sideways' }, { bounded: false, bound: 'lower' }, { engine: { ...engine, name: 'x'.repeat(121) } }, { engine: { ...engine, name: '' } }, { engine: { ...engine, variant: '' } }]) {
       expect(normalizeStudyAnalysis({ ...a, ...patch })).toBeUndefined();
     }
     expect(normalizeStudyAnalysis({ ...a, extra: 'discard', engine: { ...engine, extra: 'discard' } })).toEqual(a);

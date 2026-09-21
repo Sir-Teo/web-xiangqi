@@ -22,6 +22,31 @@ describe('durable supplied PGN glyphs', () => {
         for (const invalid of [-1, 256, NaN, 1.5]) expect(chooseMoveGlyph(source, invalid)).toBe(source);
         expect(source).toEqual([1, 3, 14, 255]);
     });
+
+    it('replaces a group at its edges, not only in its middle', () => {
+        // The judgement group is 1-9 and the position group 10-19. Found by
+        // mutation: every case above picks a code inside a group, so each of
+        // the four bounds could move by one and pass. A bound one short leaves
+        // the old judgement on the move beside the new one.
+        expect(chooseMoveGlyph([5], 1)).toEqual([1]);
+        expect(chooseMoveGlyph([5], 9)).toEqual([9]);
+        expect(chooseMoveGlyph([15], 10)).toEqual([10]);
+        expect(chooseMoveGlyph([15], 19)).toEqual([19]);
+        // Across the boundary each group is left alone: 9 and 10 belong to
+        // different groups, so both survive, the new code appended last.
+        expect(chooseMoveGlyph([9], 10)).toEqual([9, 10]);
+        expect(chooseMoveGlyph([10], 9)).toEqual([10, 9]);
+    });
+
+    it('accepts the last code in the PGN range', () => {
+        // The case above asks for 255 on a list that already holds 255, so
+        // refusing it and accepting it return the same array and `code > 255`
+        // could read `>= 255` unnoticed. Ask for it where it is not already
+        // there.
+        expect(chooseMoveGlyph([5], 255)).toEqual([5, 255]);
+        expect(chooseMoveGlyph([5], 256)).toEqual([5]);
+    });
+
     it('normalizes the complete standard code range without interpreting unknown codes', () => {
         const all = Array.from({ length: 256 }, (_, code) => code);
         expect(normalizeMoveGlyphs([...all, ...all])).toEqual(all);

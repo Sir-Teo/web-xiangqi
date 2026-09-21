@@ -576,3 +576,35 @@
 
 .lib-pgn-filename { overflow-wrap: anywhere; }
 .lib-open-study { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .4rem 0; color: var(--text-secondary); font-size: .75rem; }
+
+/* The two text fields in this panel, brought up to what everything around
+   them already is.
+ 
+   **Height.** `.lib-study-matches .chip-btn`, `.lib-study-match summary`,
+   `.lib-details-toggle` and `.lib-pgn-game > button` all carry
+   `min-height: 44px`, unconditionally -- this file already decided that a
+   mouse gets the same target a thumb does. The search box and the rename box
+   were left out at 27px, and they are the two controls here that have to be
+   hit exactly rather than anywhere within a card.
+
+   **Size on touch.** iOS Safari zooms the page in when it focuses a field
+   computing under 16px, and does not zoom back out: tapping the library
+   search left the reader on a board they had to pinch to see.
+   `StudyNotes.css`, `GameMetadataEditor.css`, `ImportedGlyphs.css` and
+   `StudyPracticeDialog.css` all set `max(16px, 1rem)` for exactly this; these
+   two predate that. Scoped to `pointer: coarse` because the zoom is a property
+   of the input method, not the window -- a narrow desktop window does not zoom
+   and only loses room. Here rather than in `App.css` because a media query
+   adds no specificity, so an override has to sit after the rule it overrides;
+   in another file that would depend on bundler order. */
+.lib-search,
+.lib-rename-input {
+  min-height: 44px;
+}
+
+@media (pointer: coarse) {
+  .lib-search,
+  .lib-rename-input {
+    font-size: max(16px, 1rem);
+  }
+}

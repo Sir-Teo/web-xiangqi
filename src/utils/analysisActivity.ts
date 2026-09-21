@@ -43,6 +43,15 @@ export interface AnalysisActivityInput {
      * that are not the analysis panel.
      */
     deepSearchRunning: boolean;
+    /**
+     * A Game Review pass is running -- the other search the tab going away
+     * does not stop. `App.tsx` returns early from `visibilitychange` for a
+     * review exactly as it does for a deep search, and for the same reason:
+     * the reader started it by hand and expects it finished, not abandoned
+     * one move short. Reporting "Paused" over it is the same lie, and it is
+     * the one this file was written to stop telling.
+     */
+    reviewRunning: boolean;
 }
 
 /**
@@ -54,11 +63,16 @@ export interface AnalysisActivityInput {
  * A deep search is the exception to that exception. It is not stopped when the
  * tab goes away, so `isSearching` staying true is not a straggler -- it is the
  * truth, and "Paused" would be the lie.
+ *
+ * A running review is the same exception, and was missed when this was
+ * written: `visibilitychange` has always returned early for both, but only the
+ * deep search had an input here, so hiding the tab mid-review put "Paused" and
+ * a still-advancing progress bar on screen together.
  */
 export function resolveAnalysisActivity(input: AnalysisActivityInput): AnalysisActivity {
     if (!input.engineEnabled) return 'analysis-off';
     if (!input.isReady) return 'loading';
-    if (!input.pageVisible) return input.deepSearchRunning ? 'searching' : 'background';
+    if (!input.pageVisible) return input.deepSearchRunning || input.reviewRunning ? 'searching' : 'background';
     if (input.isSearchQueued) return 'queued';
     if (input.isSearching) return 'searching';
     return 'idle';

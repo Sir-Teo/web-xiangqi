@@ -76,3 +76,44 @@ describe('tone classes', () => {
         for (const value of classes) expect(value).toContain('review-narrative');
     });
 });
+
+/**
+ * The three boundaries here that a test can actually stand on.
+ *
+ * A mutation sweep flagged all nine thresholds in this file. Six of them are
+ * unreachable by construction: the values compared are `getWinningChancePercent`
+ * outputs, and no integer centipawn score maps to exactly 85, 30, 15 or 52, so
+ * `>= MISSED_WIN_HIGH` and `> MISSED_WIN_HIGH` cannot be told apart by any
+ * input the engine produces. These three can be stood on, so they are.
+ */
+describe('the edges of the arc thresholds', () => {
+    it('counts a lead that only ever touched even as wire-to-wire', () => {
+        // An evaluation of exactly 0 is exactly 50%, which is the one place
+        // WIRE_LEVEL can be met rather than passed -- and 0 is the commonest
+        // evaluation there is, being the value carried forward before the
+        // engine has said anything.
+        const tags = narrativeTags([0, 0, 0, 0, 0, 0, 0, 600], 'red-wins');
+        expect(tags.map((tag) => tag.id)).toEqual(['wire']);
+    });
+
+    it('names the side that was winning when both sides peaked equally', () => {
+        // The tie-break in the title reads `maxRed >= 100 - minRed`, so it is
+        // only live where those are exactly equal. +/-500 is not such a pair:
+        // the two percentages sum to exactly 100 yet `hi === 100 - lo` is
+        // false by 1.4e-14, because the sum and the subtraction round
+        // differently. +/-474 does satisfy it, and clears 85 so the tag is
+        // reached at all.
+        const tags = narrativeTags([474, -474, 474, -474, 474, -474, 0, 0], 'draw');
+        expect(tags.map((tag) => tag.id)).toEqual(['draw', 'missedWin']);
+        expect(tags[1].title).toBe('Red reached a winning position and drew.');
+    });
+
+    it('carries the last real evaluation past one that is not a number', () => {
+        // NaN is a number by `typeof`, so only the `Number.isFinite` half of
+        // the guard rejects it. Without that half NaN poisons the whole series
+        // and every comparison below goes false, leaving the game with no arc
+        // at all.
+        const tags = narrativeTags([600, 600, 600, Number.NaN, 600, 600, 600, 600], 'red-wins');
+        expect(tags.map((tag) => tag.id)).toEqual(['wire']);
+    });
+});

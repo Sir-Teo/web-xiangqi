@@ -115,3 +115,41 @@ describe('moveTreeContainsLine', () => {
     expect(moveTreeContainsLine(tree, ['h2e2', 'b2e2'])).toBe(false);
   });
 });
+
+/**
+ * A note goes into the link as a query parameter, and readers write notes with
+ * the characters that break query parameters.
+ *
+ * `&` starts another parameter and `#` starts the fragment, so a note built by
+ * string concatenation is truncated at the first `#` and split at the first
+ * `&` -- the recipient opens the link and the note is half there, or gone. `%`
+ * is worse than either: it makes the whole parameter undecodable.
+ *
+ * `url.searchParams.set` handles all of it, and nothing checked that it is
+ * what is being used. Replacing that one line with `url.search += ...` passed
+ * the entire suite.
+ */
+describe('a note survives the trip through the link', () => {
+    const noteIn = (note: string) => {
+        const { url } = buildShareUrl(HERE, START_POSITION_FEN, ['h2e2'], 'PvP', undefined, note);
+        return new URL(url).searchParams.get('note');
+    };
+
+    it('carries the characters that would otherwise cut the link short', () => {
+        expect(noteIn('a & b = c')).toBe('a & b = c');
+        expect(noteIn('hash # and plus + and percent %')).toBe('hash # and plus + and percent %');
+        expect(noteIn('quote " and apostrophe \'')).toBe('quote " and apostrophe \'');
+    });
+
+    it('carries the scripts this app is written for', () => {
+        expect(noteIn('炮二平五 is the central cannon')).toBe('炮二平五 is the central cannon');
+        expect(noteIn('emoji 🐴 horse')).toBe('emoji 🐴 horse');
+    });
+
+    it('normalises the note on the way in, as a stored one is normalised', () => {
+        // One line and no padding: the same shape `normalizeMoveComment` gives
+        // a note saved with the game, so a note does not change by being shared.
+        expect(noteIn('line one\nline two')).toBe('line one line two');
+        expect(noteIn('  padded  ')).toBe('padded');
+    });
+});

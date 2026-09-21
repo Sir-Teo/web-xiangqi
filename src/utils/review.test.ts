@@ -97,10 +97,31 @@ describe('quality classification', () => {
         expect(classifyMoveQuality(REVIEW_THRESHOLDS.mistake + 1)).toBe('blunder');
     });
 
+    /**
+     * Every threshold, on the value itself and just past it.
+     *
+     * The thresholds are inclusive -- a loss *equal* to the `good` figure is
+     * still `good` -- and this only said so for `best`. The two middle bands
+     * could each be turned exclusive without a single test noticing, which
+     * moves the label a reader is shown on the move that sits exactly on the
+     * line, in both the review list and the accuracy score built from it.
+     */
     it('places a win-percent loss on the right side of each threshold', () => {
-        expect(classifyWinPercentLoss(REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.best)).toBe('best');
-        expect(classifyWinPercentLoss(REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.best + 0.1)).toBe('good');
-        expect(classifyWinPercentLoss(REVIEW_WIN_PERCENT_LOSS_THRESHOLDS.mistake + 0.1)).toBe('blunder');
+        const T = REVIEW_WIN_PERCENT_LOSS_THRESHOLDS;
+        for (const [name, quality, next] of [
+            ['best', 'best', 'good'],
+            ['good', 'good', 'inaccuracy'],
+            ['inaccuracy', 'inaccuracy', 'mistake'],
+            ['mistake', 'mistake', 'blunder'],
+        ] as const) {
+            expect(classifyWinPercentLoss(T[name]), `at ${name}`).toBe(quality);
+            expect(classifyWinPercentLoss(T[name] + 0.1), `past ${name}`).toBe(next);
+        }
+        // And the bands are in the order the names imply, so the loop above is
+        // reading four distinct lines rather than the same one four times.
+        expect(T.best).toBeLessThan(T.good);
+        expect(T.good).toBeLessThan(T.inaccuracy);
+        expect(T.inaccuracy).toBeLessThan(T.mistake);
     });
 
     it('marks only the three qualities a review should surface as critical', () => {

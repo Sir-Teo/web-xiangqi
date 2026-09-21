@@ -153,7 +153,7 @@ function main() {
   for (const dir of SHIPPED_DIRS) {
     const file = path.join(ROOT, dir, 'pikafish.js');
     if (fs.existsSync(file)) {
-      const markers = [...fs.readFileSync(file, 'utf8').matchAll(/^  const BUILD_HAS_SIMD = (true|false);$/gm)];
+      const markers = [...fs.readFileSync(file, 'utf8').matchAll(/^ {2}const BUILD_HAS_SIMD = (true|false);$/gm)];
       if (markers.length !== 1) fail(`${dir}/pikafish.js must declare one BUILD_HAS_SIMD setting`);
       else buildModes.set(dir, markers[0][1] === 'true');
     }
@@ -197,7 +197,7 @@ function main() {
       if (dir === "public") fail(`${dir}/pikafish.js is missing`);
       continue;
     }
-    const normalized = fs.readFileSync(shipped, "utf8").replace(/^  const BUILD_HAS_SIMD = false;$/m, '  const BUILD_HAS_SIMD = true;');
+    const normalized = fs.readFileSync(shipped, "utf8").replace(/^ {2}const BUILD_HAS_SIMD = false;$/m, '  const BUILD_HAS_SIMD = true;');
     if (normalized !== wrapper) {
       fail(
         `${dir}/pikafish.js does not match templates/pikafish.js apart from its build flag. The build writes the ` +

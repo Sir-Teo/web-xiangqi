@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    detectDeviceScreen,
     ENGINE_PTHREAD_POOL_SIZE,
     ENGINE_THREAD_HEADROOM,
     HIGH_TIER_MAX_THREADS,
@@ -283,6 +284,39 @@ describe('the engine hash a device may be asked for', () => {
     });
 });
 
+describe('the second, deeper pass live analysis schedules', () => {
+    /**
+     * `deepen` is extra engine work, so what turns it on matters. Nothing
+     * asserted it: the policy tests above read `primary` only, so the mode and
+     * tier conditions guarding it could both be rewritten and pass.
+     */
+    const policy = (over: Partial<Parameters<typeof resolveLiveAnalysisPolicy>[0]>) =>
+        resolveLiveAnalysisPolicy({ tier: 'high', mode: 'optimized', searchDepth: 99, detailEnabled: true, ...over });
+
+    it('schedules one for a desktop asking for detail', () => {
+        expect(policy({ tier: 'high' }).deepen).toMatchObject({ delayMs: 1000, depth: 26, moveTimeMs: 3200 });
+        expect(policy({ tier: 'mid' }).deepen).toMatchObject({ delayMs: 1200, depth: 22, moveTimeMs: 2200 });
+    });
+
+    it('schedules none for a phone, whatever it asks for', () => {
+        expect(policy({ tier: 'low' }).deepen).toBeNull();
+    });
+
+    it('schedules none unless the reader is looking at the detail', () => {
+        expect(policy({ detailEnabled: false }).deepen).toBeNull();
+        expect(policy({ tier: 'mid', detailEnabled: false }).deepen).toBeNull();
+    });
+
+    it('schedules none outside the optimized mode', () => {
+        expect(policy({ mode: 'stable' }).deepen).toBeNull();
+    });
+
+    it('never deepens past the depth the reader chose', () => {
+        expect(policy({ tier: 'high', searchDepth: 8 }).deepen).toMatchObject({ depth: 8 });
+        expect(policy({ tier: 'mid', searchDepth: 8 }).deepen).toMatchObject({ depth: 8 });
+    });
+});
+
 describe('a deep dive on one position', () => {
     it('gives every tier far more time than live analysis has', () => {
         for (const tier of ['low', 'mid', 'high'] as const) {
@@ -330,6 +364,22 @@ describe('the engine threads a machine may be asked for', () => {
     it('honours a count the machine offers', () => {
         const config = resolveEngineBootConfig(detectDeviceTier(DESKTOP), { threads: 2 });
         expect(config.threads).toBe(2);
+    });
+
+    it('honours the two counts at the ends of the range', () => {
+        // Found by mutation: `>= 1` could tighten to `> 1` and pass, because 2
+        // was the only accepted count under test. One thread is the answer to
+        // "stop the fans", which the ladder's own comment calls out.
+        //
+        // The ceiling line below documents intent rather than guarding it: an
+        // accepted count equal to the default assigns the value it already
+        // had, so `<= threads` and `< threads` cannot be told apart by any
+        // test. Recorded so the next sweep does not chase it.
+        const desktop = detectDeviceTier(DESKTOP);
+        const ceiling = resolveEngineBootConfig(desktop).threads;
+        expect(ceiling).toBeGreaterThan(1);
+        expect(resolveEngineBootConfig(desktop, { threads: 1 }).threads).toBe(1);
+        expect(resolveEngineBootConfig(desktop, { threads: ceiling }).threads).toBe(ceiling);
     });
 
     it('ignores a count above what the machine was going to take', () => {
@@ -391,5 +441,57 @@ describe('a page that is not cross-origin isolated', () => {
         expect(isolated).toEqual(resolveEngineBootConfig(detectDeviceTier(DESKTOP)));
         expect(isThreadedVariant(isolated.variant)).toBe(true);
         expect(isolated.threads).toBeGreaterThan(1);
+    });
+});
+
+/**
+ * The engine is sized from the *screen*, not from the window.
+ *
+ * `detectDeviceTier` takes a number called `viewportWidth`, and everything
+ * above feeds it one. What decides which number that is lives here, and it is
+ * the whole of the fix two comments in this repo describe: sizing from
+ * `window.innerWidth` means a window dragged narrow, or one with devtools
+ * open, crosses the mobile threshold and reboots the engine single-threaded on
+ * hardware that has not changed -- and an off-screen tab reports 0 and looks
+ * like the weakest device there is.
+ *
+ * Nothing tested it. Changing `detectDeviceScreen` back to `innerWidth` passed
+ * the entire suite, and it moves two things at once: the engine tier, and the
+ * default search depth, which `App.tsx` reads off the same call and halves
+ * from 22 to 14 below 900px.
+ */
+describe('detectDeviceScreen', () => {
+    const withWindow = <T,>(stub: Record<string, unknown>, run: () => T): T => {
+        const globals = globalThis as unknown as Record<string, unknown>;
+        const had = 'window' in globals;
+        const previous = globals.window;
+        globals.window = stub;
+        try {
+            return run();
+        } finally {
+            if (had) globals.window = previous;
+            else delete globals.window;
+        }
+    };
+
+    it('reads the screen, so a narrow window does not downgrade the machine', () => {
+        const size = withWindow(
+            { screen: { width: 1920, height: 1080 }, innerWidth: 390, innerHeight: 500 },
+            () => detectDeviceScreen(),
+        );
+        expect(size).toEqual({ width: 1920, height: 1080 });
+        // And that is what keeps the tier where the hardware puts it.
+        expect(detectDeviceTier({ viewportWidth: size.width, viewportHeight: size.height, hardwareConcurrency: 16, deviceMemoryGB: 8 }).mobileLike).toBe(false);
+    });
+
+    it('falls back to the window when the screen reports nothing', () => {
+        // `screen.width` is 0 in some embedded contexts; 0 would otherwise
+        // read as the narrowest device there is.
+        expect(withWindow({ screen: { width: 0, height: 0 }, innerWidth: 1440, innerHeight: 900 }, () => detectDeviceScreen()))
+            .toEqual({ width: 1440, height: 900 });
+    });
+
+    it('assumes a desktop when there is no window at all', () => {
+        expect(detectDeviceScreen()).toEqual({ width: 1280, height: 800 });
     });
 });

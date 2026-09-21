@@ -13,6 +13,30 @@ function fixture(): Record<string, MoveTreeNode> {
 }
 
 describe('restore a deleted branch into the current study', () => {
+    it('keeps the newer review when the deleted move has since been played again', () => {
+        // The merge rule: a re-played move's own review wins over the one the
+        // deleted copy carried. Found by mutation -- joining the two halves of
+        // `quality !== undefined || bestMove !== undefined` with `&&` means a
+        // review that graded the move but named no better one does not count
+        // as a review at all, and restoring the branch resurrects the stale
+        // grade on top of it.
+        const before = fixture();
+        before.b = { ...before.b, record: { ...before.b.record!, quality: 'blunder', bestMove: 'h2e2', reviewNote: 'old' } };
+        const { tree: current } = removeSubtree(before, 'root', 'b');
+        // The same move played again, graded, with no better move named.
+        current.replayed = node('replayed', 'a', [], 'b');
+        current.replayed = { ...current.replayed, record: { ...current.replayed.record!, quality: 'good', reviewNote: 'new' } };
+        current.a = { ...current.a, childrenIds: [...current.a.childrenIds, 'replayed'] };
+
+        const restored = restoreRemovedSubtree(current, before, 'b')!;
+        const merged = restored.tree.replayed.record!;
+        expect(merged.quality).toBe('good');
+        expect(merged.reviewNote).toBe('new');
+        // Taken as a set, not field by field: the old best move must not be
+        // left beside the new grade.
+        expect(merged.bestMove).toBeUndefined();
+    });
+
     it('keeps later root/move notes and new branches while restoring the removed line', () => {
         const before = fixture();
         const { tree: current } = removeSubtree(before, 'root', 'b');

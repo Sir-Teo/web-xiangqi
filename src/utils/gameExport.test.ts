@@ -261,3 +261,107 @@ describe('saved study note export', () => {
         expect(pgn).toContain('h9g7 { Reply note }');
     });
 });
+
+/**
+ * The move numbers are worked out twice in `gameExport.ts` and both have to
+ * say the same thing.
+ *
+ * `buildMoveText` carries a counter along the line, for the flat exporter.
+ * `moveNumberAtPly` computes a number from the ply index, for the tree
+ * exporter, which needs to number a variation it jumped into. The two are
+ * independent, and only the first had tests: flipping the Black-root offset
+ * inside `moveNumberAtPly` -- which makes `1. h2e2 2... h9g7` out of an
+ * ordinary game -- passed every test in this repo.
+ *
+ * A single line is the one input both exporters take, so comparing them on it
+ * is the whole check. The Black-to-move start is the case the offset exists
+ * for; the other two are there so a mutation that breaks every start rather
+ * than that one is also named.
+ */
+/**
+ * A tag value that *ends* in a backslash.
+ *
+ * The round trip above already walks a label holding `]`, `"`, `\\` and `;`,
+ * and it passes even with `escapeTagValue`'s backslash arm removed -- because
+ * a backslash in the *middle* survives by accident. Unescaped, `Back \\ slash`
+ * writes `"Back \\ slash"`, and the importer's `(?:\\.|[^"\\])*` reads `\\ `
+ * as an escaped space, then unescapes only `\\"` and `\\\\`, so the space comes
+ * back as itself and the name is unchanged.
+ *
+ * A *trailing* backslash is the one that bites: unescaped it writes
+ * `"ends with a backslash \\"`, where the `\\"` escapes the closing quote, the
+ * tag never terminates, and the rest of the header is swallowed. It is the
+ * only case that separates the arm being there from it not being there.
+ */
+describe('a tag value that ends in a backslash', () => {
+    it('comes back whole, rather than eating the closing quote', () => {
+        const pgn = exportPgnFromUci(['h2e2'], {
+            metadata: { redPlayer: 'ends with a backslash \\' },
+            date: '2026.01.01',
+        });
+        expect(extractPgnHeaders(pgn).white).toBe('ends with a backslash \\');
+        // And the header block is still a header block.
+        expect(pgn.split('\n\n')[0].split('\n').every((line) => /^\[\w+ ".*"\]$/.test(line))).toBe(true);
+    });
+});
+
+/**
+ * The move number a record starts from comes out of a pasted FEN's sixth
+ * field, which is a string a reader controls and nothing upstream validates.
+ *
+ * `Number.isFinite(n) && n > 0` is what stands between that field and the
+ * export. Both halves matter and neither was tested: with the `&&` written as
+ * `||`, a FEN ending `0 -5` numbers the game from **minus five**, and the
+ * whole suite passed.
+ */
+describe('a start FEN cannot carry a nonsense move number into the export', () => {
+    const numberFrom = (fullmove: string) => {
+        const pgn = exportPgnFromUci(['b0c2'], {
+            startFen: `3k5/9/9/9/9/9/9/9/9/4KR3 w - - 0 ${fullmove}`.trim(),
+            date: '2026.01.01',
+        });
+        return pgn.split('\n\n').slice(1).join(' ').trim();
+    };
+
+    it('takes a sensible number as given', () => {
+        expect(numberFrom('7')).toBe('7. b0c2 *');
+        // A FEN would not write this, but `Number` reads it and it is positive
+        // and finite, so there is no reason to refuse it.
+        expect(numberFrom('1e3')).toBe('1000. b0c2 *');
+    });
+
+    it('falls back to move 1 for anything a game cannot start on', () => {
+        for (const fullmove of ['0', '-5', 'abc', '', 'NaN', 'Infinity']) {
+            expect(numberFrom(fullmove), `fullmove ${JSON.stringify(fullmove)}`).toBe('1. b0c2 *');
+        }
+    });
+
+    it('truncates rather than rounding a fractional one', () => {
+        expect(numberFrom('2.9')).toBe('2. b0c2 *');
+    });
+});
+
+describe('the two exporters number the same line the same way', () => {
+    const movetext = (pgn: string) => pgn.split('\n\n').slice(1).join('\n\n').trim();
+    const asLine = (moves: string[]): SavedMoveTreeNode[] =>
+        moves.reduceRight<SavedMoveTreeNode[]>((children, uci) => [{ uci, children }], []);
+
+    for (const [name, startFen, moves, expected] of [
+        ['a game from the opening', undefined, ['b0c2', 'h9g7', 'b2e2'], '1. b0c2 h9g7 2. b2e2 *'],
+        ['a position with Red to move on move 7', '3k5/9/9/9/9/9/9/9/9/4K4 w - - 0 7',
+            ['b0c2', 'h9g7', 'b2e2'], '7. b0c2 h9g7 8. b2e2 *'],
+        ['a position with Black to move on move 7', '3k5/9/9/9/9/9/9/9/9/4K4 b - - 0 7',
+            ['h9g7', 'b0c2', 'b9c7'], '7... h9g7 8. b0c2 b9c7 *'],
+    ] as const) {
+        it(`agree on ${name}`, () => {
+            const options = { startFen, date: '2026.01.01' };
+            const flat = exportPgnFromUci([...moves], options);
+            // Null means the tree exporter refused the tree outright, which is
+            // a different failure from numbering it wrongly and worth saying.
+            const tree = exportPgnFromMoveTree(asLine([...moves]), options);
+            expect(tree, 'the tree exporter refused this line').not.toBeNull();
+            expect(movetext(flat), 'flat exporter').toBe(expected);
+            expect(movetext(tree ?? ''), 'tree exporter').toBe(expected);
+        });
+    }
+});

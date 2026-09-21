@@ -8,6 +8,7 @@ import { readStudyAnalysisPgn } from './studyAnalysis';
 import { normalizeSavedGame, type SavedGame, type SavedMoveTreeNode, MAX_SAVED_GAMES } from './gameLibrary';
 import { extractPgnMetadata } from './gameMetadata';
 import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './moveComment';
+import { describeFenProblem } from './positionSetup';
 import { START_FEN, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
 // Encoded snapshot histories can make a supported study several MB of PGN.
@@ -69,7 +70,12 @@ function parseGame(input: Token[]): CollectionGame {
     if (tags.result && !(Object.hasOwn(RESULTS, tags.result))) throw new Error('Invalid Result header.');
     const fen = tags.fen || `${START_FEN} w - - 0 1`;
     const base = normalizeSavedGame({ id: 'preview', savedAt: 1, gameMode: 'PvP', moves: [], startFen: fen });
-    if (!base) throw new Error('Invalid starting FEN.');
+    // `normalizeSavedGame` only says yes or no, and this reader's whole job is
+    // to say which game and what about it. The same sentence the New Game
+    // field and the editor give; the fallback cannot fire while the library's
+    // own FEN test is this function, and is here so that if they ever part
+    // company the reader still gets a refusal rather than a pass.
+    if (!base) throw new Error(`Invalid starting FEN. ${describeFenProblem(fen) ?? 'It does not describe a position a game could reach.'}`);
     const root: SavedMoveTreeNode[] = [];
     let cursor: Cursor = { board: parseFenBoard(fen), side: fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w', children: root, ply: 0 };
     const stack: Cursor[] = [];
@@ -77,12 +83,34 @@ function parseGame(input: Token[]): CollectionGame {
     let result: string | undefined;
     let rootComment: string | undefined;
     let rootResult: RecordedResult | undefined;
+    /** Inside a variation whose first move has not been read yet. */
+    let awaitingVariationMove = false;
     function addComment(text: string) {
         if (!text.trim()) return;
+        // A note between `(` and the variation's first move is about the
+        // position there, and a move tree has nowhere to put one: notes live
+        // on moves, and only the root has a note about a position.
+        // docs/audit-2026-09-11.md settles what may not happen with it --
+        // "a preface before a variation's first move is not assigned to its
+        // parent; position-preface storage remains unsupported" -- and this
+        // reader's own rule settles the rest: unknown movetext is rejected,
+        // never skipped.
+        //
+        // It did neither. `(` walks the cursor back to the branch point, and
+        // that cursor still carries the *previous* move, so the preface was
+        // attached to the move the variation branches from -- silently, and
+        // with any `[%eval]` inside it, putting a score on a move it says
+        // nothing about. Only where the branch point had no move at all -- a
+        // variation on ply 1 -- did the refusal below fire, so one file
+        // behaved two ways depending on how deep its variations were.
+        if (awaitingVariationMove) throw new Error('Attach a variation note to its first move.');
         const recordedResult = readRecordedResultPgn(text);
         const withoutResult = stripDelimited(text, '[%xqresult ', ']', '');
         if (!cursor.node) {
-            if (nodes > 0 || stack.length > 0) throw new Error('Attach a variation note to its first move.');
+            // Unreachable now that the variation preface is handled above:
+            // outside one, the cursor only lacks a move before the first is
+            // played. Kept as a guard rather than a claim.
+            if (nodes > 0) throw new Error('Attach a variation note to its first move.');
             if (recordedResult) rootResult = recordedResult;
             const { prose } = extractPgnEvalCommands(stripDelimited(withoutResult, '[%xqanalysis ', ']', ''));
             const joined = [rootComment, prose].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
@@ -117,12 +145,12 @@ function parseGame(input: Token[]): CollectionGame {
         }
         if (value === '(') {
             if (!cursor.parent) throw new Error('A variation has no preceding move.');
-            stack.push(cursor); cursor = cursor.parent; continue;
+            stack.push(cursor); cursor = cursor.parent; awaitingVariationMove = true; continue;
         }
         if (value === ')') {
             const previous = stack.pop();
             if (!previous || cursor === previous.parent) throw new Error('Unmatched or empty variation.');
-            cursor = previous; continue;
+            cursor = previous; awaitingVariationMove = false; continue;
         }
         if (Object.hasOwn(RESULTS, value)) {
             if (stack.length) throw new Error('Result marker inside a variation.');
@@ -142,6 +170,7 @@ function parseGame(input: Token[]): CollectionGame {
         const node: SavedMoveTreeNode = { uci, children: [] };
         cursor.children.push(node);
         cursor = { board, side: cursor.side === 'w' ? 'b' : 'w', node, parent: cursor, children: node.children!, ply: cursor.ply + 1 };
+        awaitingVariationMove = false;
     }
     if (stack.length) throw new Error('Unclosed variation.');
     if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result)) throw new Error('No moves found.');

@@ -46,7 +46,22 @@ describe('narrowing the key moments', () => {
 
     it('ignores missing phase information while no phase is chosen', () => {
         // The other filters must keep working before a phase is ever picked.
-        expect(filterKeyMoments(MOMENTS, { ...ALL, quality: 'blunder' })).toHaveLength(2);
+        // Named, not counted: this fixture holds two blunders out of four, so
+        // a quality filter inverted to keep everything it should drop returns
+        // two moments as well. Found by mutation -- the length assertion alone
+        // let `moment.quality !== filters.quality` flip to `===` and pass, and
+        // that is the reader choosing "Blunders" and being shown the rest.
+        expect(filterKeyMoments(MOMENTS, { ...ALL, quality: 'blunder' }).map((m) => m.moveIndex))
+            .toEqual([1, 2]);
+    });
+
+    it('keeps the chosen quality for every band, not only the common one', () => {
+        for (const [quality, expected] of [
+            ['mistake', [0]], ['blunder', [1, 2]], ['inaccuracy', [3]],
+        ] as const) {
+            expect(filterKeyMoments(MOMENTS, { ...ALL, quality }, PHASES).map((m) => m.moveIndex))
+                .toEqual(expected);
+        }
     });
 
     it('accounts for every moment across the phases', () => {

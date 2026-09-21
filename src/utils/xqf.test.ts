@@ -203,6 +203,21 @@ describe('positions', () => {
         expect(parseXqf(writeXqf({ version: 10, slots, tree: [] }))).toBeNull();
     });
 
+    it('refuses a piece placed off the right-hand edge of the board', () => {
+        // A slot byte is `file * 10 + rank`, so anything from 90 up names a
+        // file that does not exist. Found by mutation: the guard reads
+        // `x > 8 || y > 9`, and `y` is `value % 10` so the second half can
+        // never fire -- the first half is the whole check, and nothing
+        // exercised it. Without it the reader writes past the end of a rank.
+        const slots = [...START_SLOTS];
+        slots[0] = 90;
+        expect(parseXqf(writeXqf({ version: 10, slots, tree: [] }))).toBeNull();
+        // The control: the same header with that slot on the board is read.
+        const onBoard = [...START_SLOTS];
+        onBoard[0] = 85;
+        expect(parseXqf(writeXqf({ version: 10, slots: onBoard, tree: [] }))).not.toBeNull();
+    });
+
     it('stops a branch at a move the rules refuse and counts it', () => {
         const record = parseXqf(writeXqf({ version: 10, tree: [{ uci: 'h2e2', children: [{ uci: 'a9a0', children: [{ uci: 'h0g2' }] }] }] }));
         expect(record?.moves).toEqual(['h2e2']);

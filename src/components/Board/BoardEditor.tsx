@@ -3,6 +3,7 @@ import './Board.css';
 import './BoardEditor.css';
 import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../utils/xiangqi';
 import { describeSetupProblem, emptyBoard, setupFen } from '../../utils/positionSetup';
+import { copyToClipboard } from '../../utils/gameExport';
 import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { IconX } from '../icons';
 import { keepTabWithin } from '../../utils/focusTrap';
@@ -51,12 +52,75 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     const letterClass = pieceStyle === 'letters' ? ' piece-letter' : '';
     const [side, setSide] = useState<Side>(initialSide);
     const [brush, setBrush] = useState<EditorBrush>('K');
+    /**
+     * The FEN box, which the editor used to print and nothing more.
+     *
+     * A position is set up here for one of two reasons: it came from somewhere
+     * -- a book diagram, a puzzle, a message -- or it is going somewhere. The
+     * text was selectable in theory and a dead end in practice: no way to put
+     * one in, and taking one out meant pressing Done first and finding the
+     * board's own copy button. The two directions are the same field, so it is
+     * the same field here.
+     *
+     * `null` means "show the board". A draft is what the reader typed, kept
+     * until they load it or touch the board, because a half-typed FEN must not
+     * be overwritten by the board on every keystroke and must not be mistaken
+     * for the position either.
+     */
+    const [fenDraft, setFenDraft] = useState<string | null>(null);
+    const [fenNotice, setFenNotice] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+    const copiedTimerRef = useRef<number | null>(null);
     const dialogRef = useRef<HTMLDivElement | null>(null);
     const [focusedSquare, setFocusedSquare] = useState({ file: 0, rank: 9 });
     const keyboardHelpId = useId();
 
     const problem = useMemo(() => describeSetupProblem(board, side), [board, side]);
     const fen = useMemo(() => setupFen(board, side), [board, side]);
+
+    useEffect(() => () => {
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    }, []);
+
+    /** Any edit to the board means the field is describing the board again. */
+    const followBoard = useCallback(() => {
+        setFenDraft(null);
+        setFenNotice(null);
+    }, []);
+
+    const loadFenDraft = useCallback(() => {
+        const text = (fenDraft ?? fen).trim().replace(/\s+/g, ' ');
+        const parts = text.split(' ');
+        let next: BoardState;
+        try {
+            next = parseFenBoard(parts[0]);
+        } catch {
+            setFenNotice('That is not a position this board can read.');
+            return;
+        }
+        // The side is taken when the FEN names one and left alone when it does
+        // not, so a bare placement row loads without silently flipping the turn.
+        const nextSide: Side = parts[1] === 'b' ? 'b' : parts[1] === 'w' ? 'w' : side;
+        setBoard(next);
+        setSide(nextSide);
+        setFenDraft(null);
+        // Not an error: the editor exists to fix a position, and refusing to
+        // show one because it is not legal yet would defeat that. The problem
+        // line below says what is wrong with it, as it does for any other edit.
+        setFenNotice(null);
+    }, [fen, fenDraft, side]);
+
+    const copyFen = useCallback(async () => {
+        const ok = await copyToClipboard(fen);
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        setCopied(ok);
+        setFenNotice(ok ? null : 'The clipboard refused it. Select the text and copy it by hand.');
+        if (!ok) return;
+        copiedTimerRef.current = window.setTimeout(() => {
+            copiedTimerRef.current = null;
+            setCopied(false);
+        }, 1800);
+    }, [fen]);
 
     useEffect(() => {
         const previouslyFocused = document.activeElement instanceof HTMLElement
@@ -82,13 +146,14 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     }, [onCancel]);
 
     const paint = useCallback((file: number, rank: number) => {
+        followBoard();
         setBoard((previous) => {
             const next = previous.map((row) => row.slice());
             const current = next[rank][file];
             next[rank][file] = brush === 'erase' || current === brush ? '' : brush;
             return next;
         });
-    }, [brush]);
+    }, [brush, followBoard]);
 
     const handleBoardClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         const target = (event.target as Element).closest<HTMLElement>('[data-file][data-rank]');
@@ -229,17 +294,41 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                     </div>
                     <p id={keyboardHelpId} className="board-editor-keyboard-help">Arrow keys move between squares. Enter or Space places or removes a piece. Tab moves to the controls.</p>
                     <div className="board-editor-row" role="group" aria-label="Side to move">
-                        <button type="button" className={`pill-btn ${side === 'w' ? 'pill-btn-active' : ''}`} onClick={() => setSide('w')} aria-pressed={side === 'w'} data-testid="editor-side-red">Red to move</button>
-                        <button type="button" className={`pill-btn ${side === 'b' ? 'pill-btn-active' : ''}`} onClick={() => setSide('b')} aria-pressed={side === 'b'} data-testid="editor-side-black">Black to move</button>
+                        <button type="button" className={`pill-btn ${side === 'w' ? 'pill-btn-active' : ''}`} onClick={() => { followBoard(); setSide('w'); }} aria-pressed={side === 'w'} data-testid="editor-side-red">Red to move</button>
+                        <button type="button" className={`pill-btn ${side === 'b' ? 'pill-btn-active' : ''}`} onClick={() => { followBoard(); setSide('b'); }} aria-pressed={side === 'b'} data-testid="editor-side-black">Black to move</button>
                     </div>
                     <div className="board-editor-row">
-                        <button type="button" className="pill-btn" onClick={() => setBoard(parseFenBoard(START_FEN))} data-testid="editor-start">Start position</button>
-                        <button type="button" className="pill-btn" onClick={() => setBoard(emptyBoard())} data-testid="editor-clear">Clear board</button>
+                        <button type="button" className="pill-btn" onClick={() => { followBoard(); setBoard(parseFenBoard(START_FEN)); }} data-testid="editor-start">Start position</button>
+                        <button type="button" className="pill-btn" onClick={() => { followBoard(); setBoard(emptyBoard()); }} data-testid="editor-clear">Clear board</button>
                     </div>
                     <p className="board-editor-problem" role="status" data-ok={problem ? undefined : 'true'} data-testid="editor-problem">
                         {problem ?? 'The position is legal. Done loads it onto the board.'}
                     </p>
-                    <p className="board-editor-fen" data-testid="editor-fen">{fen}</p>
+                    <div className="board-editor-fen-row">
+                        <label className="sr-only" htmlFor="board-editor-fen">Position as FEN</label>
+                        <input
+                            id="board-editor-fen"
+                            className="board-editor-fen"
+                            data-testid="editor-fen"
+                            type="text"
+                            spellCheck={false}
+                            autoComplete="off"
+                            value={fenDraft ?? fen}
+                            /* Same pairing `.new-game-fen-input` uses for the same job: the
+                               notice below is a live region, which announces once and is gone,
+                               while these two are what a reader gets when they come back to the
+                               field to fix it. */
+                            aria-invalid={fenNotice ? true : undefined}
+                            aria-describedby={fenNotice ? 'board-editor-fen-notice' : undefined}
+                            onChange={(event) => { setFenDraft(event.target.value); setFenNotice(null); }}
+                            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
+                        />
+                        <button type="button" className="pill-btn" onClick={loadFenDraft} data-testid="editor-fen-load">Load</button>
+                        <button type="button" className="pill-btn" onClick={() => void copyFen()} data-testid="editor-fen-copy">
+                            {copied ? 'Copied' : 'Copy'}
+                        </button>
+                    </div>
+                    {fenNotice ? <p id="board-editor-fen-notice" className="board-editor-fen-notice" role="status" data-testid="editor-fen-notice">{fenNotice}</p> : null}
                     <div className="board-editor-row">
                         <button type="button" className="gc-btn" onClick={onCancel}>Cancel</button>
                         <button

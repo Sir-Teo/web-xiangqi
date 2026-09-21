@@ -170,3 +170,43 @@ describe('a whole record', () => {
         expect(parseDhtmlXqRecord('[DhtmlXQ_movelist][/DhtmlXQ_movelist]')).toBeNull();
     });
 });
+
+/**
+ * A movelist is four digits a move, and it comes off a web page.
+ *
+ * Each digit is read on its own, so a file digit can be `9` -- one past the
+ * eight files a board has -- and a list can stop halfway through a move.
+ * `squareFromDigits` is the only thing that notices, and it decides how much
+ * of a damaged record survives: everything read before the bad square, and
+ * nothing after it.
+ *
+ * Its bounds had no test. The `x > 8` arm is the reachable one, since a single
+ * digit cannot be negative and cannot exceed 9, and dropping it turns a file
+ * of `9` into `FILES[9]`, which is `undefined` -- a move reading
+ * `undefined6h5` rather than a record that stops where it stopped making
+ * sense.
+ */
+describe('a damaged movelist gives up what it can', () => {
+    const record = (movelist: string) => `[DhtmlXQ_movelist]${movelist}[/DhtmlXQ_movelist]`;
+    const moves = (movelist: string) => parseDhtmlXqRecord(record(movelist))?.moves ?? null;
+
+    it('reads a clean list', () => {
+        expect(moves('76747367')).toEqual(['h3h5', 'h6g2']);
+    });
+
+    it('stops at a file that is off the board, keeping what came before', () => {
+        expect(moves('76749367')).toEqual(['h3h5']);
+        // And refuses the record outright when the very first square is off it.
+        expect(moves('96747367')).toBeNull();
+    });
+
+    it('stops at a move that is cut short', () => {
+        expect(moves('7674736')).toEqual(['h3h5']);
+        expect(moves('7')).toBeNull();
+    });
+
+    it('refuses a list that is not digits at all', () => {
+        expect(moves('abcdefgh')).toBeNull();
+        expect(moves('')).toBeNull();
+    });
+});

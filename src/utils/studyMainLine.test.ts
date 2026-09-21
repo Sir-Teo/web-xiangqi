@@ -49,3 +49,58 @@ describe('explicit study main line', () => {
         expect(pinStudyMainLine(tree, 'root', ['a', 'root'])).toBe(tree);
     });
 });
+
+/**
+ * A tree that points back at itself.
+ *
+ * `getStudyMainLine` walks first children in a `for (;;)` whose only exit is
+ * one composite guard, and no fixture here was cyclic -- so the loop had never
+ * been asked to stop for that reason at all. A hang is the worst outcome an
+ * app can give a reader, and the one a missing test hides best: the suite does
+ * not go red, it goes quiet.
+ *
+ * **Two arms of that guard each stop a cycle on their own**, and measuring
+ * says so: disabling `seen.has(id)` alone still passes, because a node has one
+ * `parentId` and so can only be reached validly from one parent; disabling the
+ * `parentId` check alone still passes, because `seen` catches the revisit.
+ * Disabling **both** is what this fails on. Neither is therefore dead code --
+ * each is the other's only backstop -- but neither can be tested alone, so do
+ * not read a surviving mutant on either arm as a missing test.
+ *
+ * `pinStudyMainLine` walks the caller's line, which can repeat a node whatever
+ * the tree looks like, and must refuse rather than loop.
+ */
+describe('a move tree that loops back on itself', () => {
+    function cyclic(): Record<string, MoveTreeNode> {
+        const record: MoveRecord = { uci: 'a0a1', piece: 'R', captured: '', board: [], sideToMove: 'b', inCheck: false, ply: 1 };
+        return {
+            root: { id: 'root', parentId: null, childrenIds: ['x'] },
+            // x -> y -> x: every node has a record and a parent that agrees,
+            // so only `seen` can tell this is not a line.
+            x: { id: 'x', parentId: 'root', childrenIds: ['y'], record },
+            y: { id: 'y', parentId: 'x', childrenIds: ['x'], record },
+        };
+    }
+
+    it('stops walking instead of looping forever', () => {
+        const line = getStudyMainLine(cyclic(), 'root');
+        expect(line).toEqual(['x', 'y']);
+    });
+
+    it('refuses to pin a line that revisits a node', () => {
+        const tree = cyclic();
+        expect(pinStudyMainLine(tree, 'root', ['x', 'y', 'x'])).toBe(tree);
+    });
+
+    it('still walks a tree that merely repeats a move', () => {
+        // The control: `seen` is about node identity, not about the move. A
+        // line that plays the same coordinates twice is ordinary.
+        const record: MoveRecord = { uci: 'a0a1', piece: 'R', captured: '', board: [], sideToMove: 'b', inCheck: false, ply: 1 };
+        const tree: Record<string, MoveTreeNode> = {
+            root: { id: 'root', parentId: null, childrenIds: ['p'] },
+            p: { id: 'p', parentId: 'root', childrenIds: ['q'], record },
+            q: { id: 'q', parentId: 'p', childrenIds: [], record },
+        };
+        expect(getStudyMainLine(tree, 'root')).toEqual(['p', 'q']);
+    });
+});

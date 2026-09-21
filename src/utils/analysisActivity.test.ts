@@ -14,6 +14,7 @@ const running: AnalysisActivityInput = {
     isSearchQueued: false,
     isSearching: true,
     deepSearchRunning: false,
+    reviewRunning: false,
 };
 
 describe('resolveAnalysisActivity', () => {
@@ -45,6 +46,21 @@ describe('resolveAnalysisActivity', () => {
         expect(isAnalysisActivityStalled(
             resolveAnalysisActivity({ ...running, pageVisible: false, deepSearchRunning: true })
         )).toBe(false);
+    });
+
+    /**
+     * The other search `visibilitychange` lets run. A review is started by
+     * hand and the handler deliberately does not stop it, so the progress bar
+     * keeps advancing while the tab is away; the three cards that read this
+     * were calling that "Paused" at the same time.
+     */
+    it('does not call a running review paused', () => {
+        const hiddenReview = { ...running, pageVisible: false, reviewRunning: true };
+        expect(resolveAnalysisActivity(hiddenReview)).toBe('searching');
+        expect(isAnalysisActivityStalled(resolveAnalysisActivity(hiddenReview))).toBe(false);
+        // Between two positions the review has no `go` outstanding for an
+        // instant. It is still reviewing, and must not blink to "Paused".
+        expect(resolveAnalysisActivity({ ...hiddenReview, isSearching: false })).toBe('searching');
     });
 
     it('still says paused when the hidden tab has only live analysis to lose', () => {

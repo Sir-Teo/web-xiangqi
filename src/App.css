@@ -2042,11 +2042,58 @@ body.resizing * {
   margin-left: auto;
 }
 
-/* Inherit dot color from quality classes */
+/* Severity in the dot's size, not only in its colour.
+
+   The five grades were told apart by the background of one 5px disc and
+   nothing else. Two of the pairs are the ones colour vision most often cannot
+   separate -- mistake orange against blunder red, best green against blunder
+   red -- and the legend does not help, because comparing two similar colours
+   against a swatch is exactly the comparison that fails. The forced-colours
+   block below already treats this as worth answering; it just only answers it
+   for readers who have forced colours turned on.
+
+   Size says the same thing colour does here -- bigger is worse -- so it reads
+   without the legend at all, and it keeps the disc the design is built around
+   rather than putting a glyph in the middle of every reviewed row. Best is
+   hollow so that it and `good`, the two grades that share a size, are still
+   two different marks.
+
+   The dot sits at the end of a row whose height comes from its text and the
+   chip's own 24px floor, so growing it to 9px moves nothing: measured in the
+   real move list -- thirty reviewed moves, six of each grade -- every row is
+   24px at both 1280 and 1024. (Measured in an injected 320px fragment instead,
+   the rows differ by exactly the dot's growth, because `.mtree-chip` wraps and
+   at that width the dot takes a line of its own. That is the probe, not the
+   list.) */
 .quality-best .mtree-quality-dot {
-  background: var(--quality-best);
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--quality-best);
 }
 
+.quality-good .mtree-quality-dot {
+  width: 5px;
+  height: 5px;
+}
+
+.quality-inaccuracy .mtree-quality-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.quality-mistake .mtree-quality-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.quality-blunder .mtree-quality-dot {
+  width: 9px;
+  height: 9px;
+}
+
+/* Inherit dot color from quality classes. `best` is not here: it is drawn as
+   a ring above, so its colour is the inset shadow rather than a fill. */
 .quality-good .mtree-quality-dot {
   background: var(--quality-good);
 }
@@ -2574,16 +2621,21 @@ summary:active {
   pointer-events: none;
 }
 
+/* Weight ramps with the radius the component sets; see `REVIEW_MARKER_RADIUS`
+   there for why the ramp goes down from 6.4 rather than up through it. */
 .graph-review-marker.quality-inaccuracy {
   stroke: var(--quality-inaccuracy);
+  stroke-width: 1.2;
 }
 
 .graph-review-marker.quality-mistake {
   stroke: var(--quality-mistake);
+  stroke-width: 1.7;
 }
 
 .graph-review-marker.quality-blunder {
   stroke: var(--quality-blunder);
+  stroke-width: 2.4;
 }
 
 .graph-tooltip {
@@ -2909,11 +2961,17 @@ summary:active {
   }
 }
 
+/* Wraps as a row, for the reason `.review-progress-copy` does: two multi-word
+   labels sharing one line both break their own text when the panel is narrow,
+   and the two broken halves sit side by side with nothing between them. At
+   200% text this read down as `Peak Peak / Red Black / +0.38 -0.38`. Stacking
+   the second label under the first costs two lines and keeps both readable. */
 .graph-extrema {
   margin-top: 0.38rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.15rem 0.6rem;
   font-size: 0.68rem;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
@@ -2980,10 +3038,25 @@ summary:active {
   background: var(--bg-card);
 }
 
+/* `flex-wrap` is doing real work here, not tidying.
+
+   Two items with `space-between` and no wrap both shrink to fit the line and
+   then wrap their own text, and the two wrapped halves sit side by side and
+   interleave: at the panel's own 192px this read
+
+       Reviewing      41% complete · 17
+       line...            of 41 positions
+
+   -- three lines of that, and at 200% text a 178px block of it. Neither
+   sentence survives. Wrapping the row instead moves the status onto a line of
+   its own the moment both do not fit, and an item only breaks its own text
+   once it is alone on a line with the whole width to use. Where they do fit,
+   which is a wide panel, nothing changes. */
 .review-progress-copy {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.15rem 0.75rem;
   font-size: 0.74rem;
 }
 
@@ -3114,11 +3187,24 @@ summary:active {
   text-transform: uppercase;
 }
 
+/* `R 62%` is one reading, so it breaks between the two scores and never
+   inside one. The middlegame row is the only one long enough to run out of
+   width -- its label is the longest and its move count the widest -- and it
+   was the only one that wrapped, dropping `62%` and `65%` onto a second line
+   away from the `R` and `B` they belong to, while the rows above and below it
+   stayed on one line. Same shape of fault as the review progress row: two
+   texts sharing a line, each breaking its own words. */
 .review-phase-scores {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 0.5rem;
   font-family: var(--font-mono);
   font-size: 0.74rem;
+}
+
+.review-phase-scores > span {
+  white-space: nowrap;
 }
 
 .review-phase-scores i {
@@ -3631,6 +3717,30 @@ summary:active {
   color: var(--warning, #f59e0b);
 }
 
+/* The offer to settle a chase sits in the same slot the verdict will occupy
+   once the book is on, so the notice does not jump when it arrives. Sized to
+   the 44px touch target the rest of the board chrome keeps. */
+.position-stat-cloud-ask {
+  display: block;
+  margin-top: 0.2rem;
+  min-height: 44px;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  color: var(--warning, #f59e0b);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.position-stat-cloud-ask:hover,
+.position-stat-cloud-ask:focus-visible {
+  color: var(--text-primary);
+}
+
 /* Bottom-left, just above the bottom bar: centred it covered the captured
    pieces tray, and the right is where the move list's own actions are. It
    goes away on its own. */
@@ -3743,6 +3853,20 @@ summary:active {
   font-size: 0.8rem;
   color: var(--text-primary);
   z-index: 8900;
+}
+
+/* The same toast saying the opposite thing: the undo was refused and the
+   deletion stands. Without this it arrived looking exactly like the cheerful
+   "Deleted X — Undo" it replaces, which is the one moment it must not. Border
+   and text only; the danger fill in this app is reserved for buttons that do
+   something destructive, and this one has nothing left to press. */
+.undo-toast-failed {
+  border-color: var(--danger, #f87171);
+  color: var(--danger, #f87171);
+}
+
+.undo-toast-failed .undo-toast-dismiss {
+  color: inherit;
 }
 
 .undo-toast-btn {
@@ -7412,4 +7536,45 @@ summary:active {
     height: auto;
     aspect-ratio: 9 / 10;
   }
+}
+
+/* ── Text fields on a touch screen ──
+   iOS Safari zooms the whole page in when a field it focuses computes below
+   16px, and it does not zoom back out: the reader is left on a board they have
+   to pinch to see, having only tapped a search box. The fix is the field's own
+   size, and this repo already knows it -- `StudyNotes.css`,
+   `GameMetadataEditor.css`, `ImportedGlyphs.css` and `StudyPracticeDialog.css`
+   all set `font-size: max(16px, 1rem)` for exactly this. Six fields were
+   written before that and missed it; the library's two are in
+   `LibraryPanel.css` and the editor's in `BoardEditor.css`, each beside the
+   rule it overrides.
+
+   At the end of the file on purpose: a media query adds no specificity, so an
+   override has to come after the declaration it overrides. Written higher up,
+   next to the touch block it reads like it belongs to, it lost to
+   `.new-game-fen-input` six hundred lines below and did nothing at all.
+
+   Scoped to `pointer: coarse` rather than to a width, because the zoom is a
+   property of the input method and not of the window: a narrow desktop window
+   does not zoom, and growing its fields would only fit less on screen. On
+   touch the fields grow; a FEN that no longer fits scrolls inside its field,
+   which is what a single-line input does. */
+@media (pointer: coarse) {
+  .new-game-fen-input,
+  .new-game-line-input,
+  .move-comment-input {
+    font-size: max(16px, 1rem);
+  }
+}
+
+/* And the target itself. 44px is what this app gives every other control it
+   expects a finger on -- the board hitboxes, the editor brushes, the library
+   buttons all say so in their own comments -- but these two were sized by
+   their padding and came out at 34px and 38px. A text field is the one thing
+   that has to be hit exactly rather than anywhere inside a card. Unconditional,
+   the way the library's buttons are: this file already takes the view that a
+   mouse gets the same target a thumb does. */
+.new-game-fen-input,
+.move-comment-input {
+  min-height: 44px;
 }

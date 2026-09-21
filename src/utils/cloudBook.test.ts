@@ -35,6 +35,17 @@ describe('parseCloudBookResponse', () => {
         expect(reading.status === 'ok' && reading.moves[0].uci).toBe('c3c4');
     });
 
+    it('reads an empty winrate as unknown rather than as zero', () => {
+        // `winrate:` with nothing after it is not a 0% move. Found by
+        // mutation: only the absent-key half of the guard was covered, and
+        // `Number('')` is 0, so the empty field would have drawn a 0% bar.
+        const reading = parseCloudBookResponse('move:c3c4,score:1,rank:2,note:!,winrate:');
+        expect(reading.status === 'ok' && reading.moves[0].winrate).toBeNull();
+        // The control: a real figure in the same position is still read.
+        const filled = parseCloudBookResponse('move:c3c4,score:1,rank:2,note:!,winrate:50.5');
+        expect(filled.status === 'ok' && filled.moves[0].winrate).toBe(50.5);
+    });
+
     it('tolerates a missing winrate and an unknown key', () => {
         const reading = parseCloudBookResponse('move:c3c4,score:1,rank:2,note:,extra:x');
         expect(reading.status === 'ok' && reading.moves[0].winrate).toBeNull();

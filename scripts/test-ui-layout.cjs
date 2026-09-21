@@ -649,6 +649,207 @@ async function assertSkipLinkReachesTheBoard(page) {
 }
 
 /**
+ * An open dialog takes the rest of the page away, not just the Tab key.
+ *
+ * Every dialog here declares `aria-modal="true"` and `keepTabWithin` holds
+ * Tab inside it, and neither of those touches browse mode -- the way a screen
+ * reader user actually moves around a page. Measured before the fix: with the
+ * Settings panel open, **151 controls behind it** were still in the
+ * accessibility tree, the whole top bar and every square of the board
+ * included, so a reader could work the game underneath a dialog without ever
+ * being told it was there.
+ *
+ * The fix is `inert` on the shell's children that hold no dialog. What is
+ * checked here is the outcome rather than the attribute: nothing outside the
+ * open dialog answers as a control.
+ *
+ * The recovery modal is checked too, and over the New Game menu, because two
+ * dialogs can be on screen at once and both have to stay live -- inerting by
+ * "everything but the topmost" would have taken the menu away underneath it.
+ */
+async function assertAnOpenDialogHidesThePageBehindIt(browser) {
+  // An isolated context: the shared page clears the auto-save key on every
+  // navigation, and the last case here needs that key to survive one.
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 900 });
+  try {
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const behind = () => page.evaluate(() => {
+    const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+    if (!dialogs.length) return { dialogs: 0, reachable: [] };
+    const reachable = [];
+    const selector = 'button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+    for (const el of document.querySelectorAll(selector)) {
+      if (dialogs.some((dialog) => dialog.contains(el))) continue;
+      if (el.closest('[aria-hidden="true"]') || el.closest("[inert]")) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 1 || box.height < 1) continue;
+      reachable.push(`${el.tagName.toLowerCase()}:${el.getAttribute("aria-label") || (el.textContent || "").trim().slice(0, 24)}`);
+    }
+    return { dialogs: dialogs.length, reachable: [...new Set(reachable)].slice(0, 6), count: reachable.length };
+  });
+
+  const openings = [
+    ["New game", () => [...document.querySelectorAll("button")]
+      .find((b) => /Start new game/.test(b.getAttribute("aria-label") || ""))?.click()],
+    ["Settings", () => [...document.querySelectorAll("button")]
+      .find((b) => /settings/i.test(b.getAttribute("aria-label") || ""))?.click()],
+  ];
+  for (const [name, open] of openings) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    await page.evaluate(open);
+    await page.waitForTimeout(400);
+    const state = await behind();
+    if (state.dialogs < 1) throw new Error(`${name} did not open a modal dialog to check.`);
+    if (state.count > 0) {
+      throw new Error(`With ${name} open, ${state.count} controls behind it are still in the accessibility tree: ${JSON.stringify(state.reachable)}`);
+    }
+  }
+
+  // The board editor, which renders one level deeper than the others.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  await page.evaluate(() => [...document.querySelectorAll("button")]
+    .find((b) => /Start new game/.test(b.getAttribute("aria-label") || ""))?.click());
+  await page.waitForTimeout(300);
+  await page.getByTestId("open-board-editor-btn").click();
+  await page.waitForSelector('[data-testid="board-editor"]', { timeout: 15000 });
+  await page.waitForTimeout(400);
+  const editor = await behind();
+  if (editor.count > 0) {
+    throw new Error(`With the board editor open, ${editor.count} controls behind it are still reachable: ${JSON.stringify(editor.reachable)}`);
+  }
+
+  // Two dialogs at once: the New Game menu under the recovery modal. Both
+  // have to stay live, which is why the rule is "children holding no dialog"
+  // rather than "everything but the topmost". Produced the way the recovery
+  // modal is produced elsewhere in this file -- play a game, then arrive with
+  // nothing in the URL -- because the key is written by the app.
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.waitForTimeout(1500);
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".auto-save-modal", { timeout: 15000 });
+  await page.evaluate(() => [...document.querySelectorAll("button")]
+    .find((b) => /Start new game/.test(b.getAttribute("aria-label") || ""))?.click());
+  await page.waitForTimeout(400);
+  const stacked = await page.evaluate(() => {
+    const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+    return {
+      dialogs: dialogs.length,
+      inerted: dialogs.filter((dialog) => dialog.closest("[inert]"))
+        .map((dialog) => dialog.getAttribute("aria-label") || String(dialog.className)),
+    };
+  });
+  if (stacked.dialogs < 2) {
+    throw new Error(`Expected the recovery modal and the New Game menu open together; saw ${stacked.dialogs}.`);
+  }
+  if (stacked.inerted.length) {
+    throw new Error(`One of two open dialogs was made inert by the other: ${JSON.stringify(stacked)}`);
+  }
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Everything the keyboard can reach shows that it has been reached.
+ *
+ * One rule does all of this -- `.app-shell :is(button, summary, input, select,
+ * textarea, a, [role="button"], [role="separator"]):focus-visible` in
+ * `App.css` -- so the risk is not a ring going missing but a *new kind* of
+ * control appearing outside that selector list. A focusable `div` with a
+ * `tabindex` and no role, or an `svg`, takes focus and shows nothing, and
+ * nothing else in this suite would notice.
+ *
+ * A pixel sweep of 79 stops across the board, library, new game, settings and
+ * review panels found no stop without a visible change on focus, and was
+ * proved able to report one (six planted). That sweep takes minutes, so what
+ * is kept here is the cheap half: walk the order with real Tab presses and ask
+ * each stop for a painted outline.
+ *
+ * Real Tab presses, not `element.focus()`: `:focus-visible` does not apply to
+ * programmatic focus, so a probe that focuses elements itself reports every
+ * ring missing.
+ *
+ * `document.body.focus()` does not reset the tab position -- body is not
+ * focusable, the call does nothing, and Tab carries on from wherever focus
+ * already was. The first version of this walk started in the middle of the
+ * page and never saw the top bar at all.
+ */
+async function assertEveryTabStopShowsItsFocus(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const read = () => page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return null;
+    const style = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    const cls = String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className || "");
+    const transparent = /^rgba\(.*,\s*0\)$/.test(style.outlineColor);
+    return {
+      key: `${el.tagName.toLowerCase()}.${cls.trim().split(/\s+/).slice(0, 2).join(".")}` +
+        `|${el.getAttribute("data-testid") || ""}|${(el.getAttribute("aria-label") || (el.textContent || "").trim()).slice(0, 28)}`,
+      focusVisible: el.matches(":focus-visible"),
+      outline: `${style.outlineWidth} ${style.outlineStyle} ${style.outlineColor}`,
+      painted: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 1 && !transparent,
+      shadowed: style.boxShadow !== "none",
+      sized: box.width >= 2 && box.height >= 2,
+    };
+  });
+
+  const bare = [];
+  const unsized = [];
+  let stops = 0;
+  for (const [panel, open] of [
+    ["board", null],
+    ["library", () => document.querySelector('button[aria-label="Open game library"]')?.click()],
+    ["settings", () => [...document.querySelectorAll("button")].find((b) => /settings/i.test(b.getAttribute("aria-label") || ""))?.click()],
+  ]) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    if (open) await page.evaluate(open);
+    await page.waitForTimeout(400);
+    // Body takes a tabindex so focusing it actually lands, which is what puts
+    // the next Tab at the start of the order rather than wherever focus was.
+    await page.evaluate(() => {
+      document.activeElement?.blur?.();
+      document.body.setAttribute("tabindex", "-1");
+      document.body.focus();
+    });
+    const seen = new Set();
+    for (let i = 0; i < 90; i += 1) {
+      await page.keyboard.press("Tab");
+      const stop = await read();
+      if (!stop) continue;
+      if (seen.has(stop.key)) { if (seen.size > 4) break; continue; }
+      seen.add(stop.key);
+      stops += 1;
+      if (!stop.sized) { unsized.push(`${panel} ${stop.key}`); continue; }
+      if (!stop.focusVisible) continue;
+      if (!stop.painted && !stop.shadowed) bare.push(`${panel} ${stop.key} outline=${stop.outline}`);
+    }
+  }
+
+  if (stops < 40) {
+    throw new Error(`Only ${stops} tab stops were walked; the order should be far longer, so the walk did not start at the top.`);
+  }
+  if (bare.length) {
+    throw new Error(
+      `A control takes keyboard focus and paints nothing to say so. Add it to the ` +
+      `\`:focus-visible\` selector list in App.css:\n  ${bare.slice(0, 8).join("\n  ")}`
+    );
+  }
+  if (unsized.length) {
+    throw new Error(`A tab stop has no box to show a ring on:\n  ${unsized.slice(0, 6).join("\n  ")}`);
+  }
+}
+
+/**
  * Where focus goes when a dialog closes.
  *
  * A keyboard reader opens a dialog from a button and expects to be put back on
@@ -988,20 +1189,6 @@ async function assertNotationStylesRenderDifferently(page) {
 }
 
 /**
- * "From your library": what *your own* saved games did from here.
- *
- * It is the one panel that speaks about the reader's own play rather than the
- * engine's opinion, so a wrong count is not a cosmetic slip -- it tells them
- * they have played a line more or less often than they have. And it is derived
- * data: an index built over every saved game, looked up by position, which is
- * exactly the kind of thing that can go quietly wrong while still rendering a
- * confident number.
- *
- * The library is seeded through storage rather than by saving three games
- * through the UI: faster, and it keeps the check about the lookup rather than
- * about the save button.
- */
-/**
  * A reader whose data predates the storage keys being versioned.
  *
  * Three keys were renamed when they were namespaced: preferences, the
@@ -1158,6 +1345,20 @@ async function assertDataFromBeforeTheKeyRenameStillArrives(page) {
   }
 }
 
+/**
+ * "From your library": what *your own* saved games did from here.
+ *
+ * It is the one panel that speaks about the reader's own play rather than the
+ * engine's opinion, so a wrong count is not a cosmetic slip -- it tells them
+ * they have played a line more or less often than they have. And it is derived
+ * data: an index built over every saved game, looked up by position, which is
+ * exactly the kind of thing that can go quietly wrong while still rendering a
+ * confident number.
+ *
+ * The library is seeded through storage rather than by saving three games
+ * through the UI: faster, and it keeps the check about the lookup rather than
+ * about the save button.
+ */
 async function assertLibraryExplorerCountsOwnGames(page) {
   const GAMES = [
     ["h2e2", "h9g7", "c3c4", "c6c5", "b0c2"],
@@ -1221,7 +1422,7 @@ async function assertLibraryExplorerCountsOwnGames(page) {
   const absent = await readCard(["b2e2", "b9c7"]);
   if (absent) throw new Error(`Library card appeared for a position no saved game reached: ${JSON.stringify(absent)}`);
 
-  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:library:v1"); } catch (e) { /* ignore */ } });
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:library:v1"); } catch { /* ignore */ } });
 }
 
 /**
@@ -1302,43 +1503,6 @@ async function assertPlayFromHereKeepsThePosition(page) {
   await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
 }
 
-/**
- * Checkmate arrived at by playing the move, rather than loaded already over.
- *
- * The two terminal checks beside this one both `goto` a position that is
- * finished before the page opens, which tests the labelling and nothing else.
- * The path a player actually takes is a legal move that happens to end the
- * game: the move is applied, `gameResultForPosition` is asked about the
- * position it produced, the modal appears, and the live region says what
- * happened. A regression that only detected terminal positions on load would
- * pass both of those and fail every real game.
- *
- * Red chariot a1 to a9 is mate: the chariot arriving on the ninth rank covers
- * the Black general's file and both squares beside it, and the chariot on b8
- * covers the rank behind. The generals stand on different files, so the
- * position is legal before the move as well as after.
- */
-/**
- * The ply number a move gets when a player plays it, rather than loads it.
- *
- * `record.ply` is not decoration. It numbers the move list, the breadcrumb
- * chips and the eval graph, and it is the index `getMovePhaseForRecord` reads
- * to decide whether a move belongs to the opening, the middlegame or the
- * endgame -- which the review then reports against.
- *
- * It does *not* decide which side played the move, though this comment said so
- * when it was written. `getReviewSideForRecord` reads `record.piece` first and
- * takes the side from its case; the `ply % 2` line below it is a fallback for a
- * record with no piece, which the loader and the interactive path both always
- * set. An off-by-one here misnumbers and misphases a game. It does not swap the
- * players over.
- *
- * Nothing covered it, because every other test that needs a game loads one
- * through `?moves=`, and the loader numbers plies on a line of its own.
- * Changing `ply: activePrefix.length + 1` to `activePrefix.length` left the
- * entire suite green: loaded games stayed correctly numbered, and every move a
- * player made was off by one and credited to the wrong side.
- */
 /**
  * The board's move animation, checked by where the piece is actually painted.
  *
@@ -1477,22 +1641,6 @@ async function assertBoardAnimatesAMoveInBothDirections(page) {
 }
 
 /**
- * The breadcrumb and the move list must call a move by the same number.
- *
- * They did not. `nodeLabel` rendered `${record.ply}.` -- a ply index, written
- * with the full stop a move number uses -- while `MoveListTree` numbered the
- * same moves properly two rows below it. On a 40-ply game the last chip read
- * "39. C8-6" and the move list called that move "20. C8-6", on one screen, in
- * a tool whose users say "move 20" to each other.
- *
- * Asserted as agreement between the two surfaces rather than against a literal,
- * so it holds for a study loaded from a FEN at move 20 as well as for a game
- * from the opening. The chips' `aria-label` still says "Ply N" and is asserted
- * by `assertPlayedMovesAreNumberedFromOne`; a strip with one chip per ply is
- * exactly what that should say, and it is only the visible number that had to
- * agree with the list beside it.
- */
-/**
  * The move list is one tab stop, and the arrow keys walk it: Left and Right
  * in reading order, Up and Down by row to the nearest chip, Home and End to
  * the ends. Every chip used to be a stop of its own, one per ply.
@@ -1553,6 +1701,22 @@ async function assertTheMoveTreeIsOneTabStop(page) {
   await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 8", null, { timeout: 5000 });
 }
 
+/**
+ * The breadcrumb and the move list must call a move by the same number.
+ *
+ * They did not. `nodeLabel` rendered `${record.ply}.` -- a ply index, written
+ * with the full stop a move number uses -- while `MoveListTree` numbered the
+ * same moves properly two rows below it. On a 40-ply game the last chip read
+ * "39. C8-6" and the move list called that move "20. C8-6", on one screen, in
+ * a tool whose users say "move 20" to each other.
+ *
+ * Asserted as agreement between the two surfaces rather than against a literal,
+ * so it holds for a study loaded from a FEN at move 20 as well as for a game
+ * from the opening. The chips' `aria-label` still says "Ply N" and is asserted
+ * by `assertPlayedMovesAreNumberedFromOne`; a strip with one chip per ply is
+ * exactly what that should say, and it is only the visible number that had to
+ * agree with the list beside it.
+ */
 async function assertBreadcrumbAndMoveListAgreeOnMoveNumbers(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto(
@@ -1904,6 +2068,27 @@ async function assertShowThreatIsSeparateFromTheAnalysis(page) {
   }
 }
 
+/**
+ * The ply number a move gets when a player plays it, rather than loads it.
+ *
+ * `record.ply` is not decoration. It numbers the move list, the breadcrumb
+ * chips and the eval graph, and it is the index `getMovePhaseForRecord` reads
+ * to decide whether a move belongs to the opening, the middlegame or the
+ * endgame -- which the review then reports against.
+ *
+ * It does *not* decide which side played the move, though this comment said so
+ * when it was written. `getReviewSideForRecord` reads `record.piece` first and
+ * takes the side from its case; the `ply % 2` line below it is a fallback for a
+ * record with no piece, which the loader and the interactive path both always
+ * set. An off-by-one here misnumbers and misphases a game. It does not swap the
+ * players over.
+ *
+ * Nothing covered it, because every other test that needs a game loads one
+ * through `?moves=`, and the loader numbers plies on a line of its own.
+ * Changing `ply: activePrefix.length + 1` to `activePrefix.length` left the
+ * entire suite green: loaded games stayed correctly numbered, and every move a
+ * player made was off by one and credited to the wrong side.
+ */
 async function assertPlayedMovesAreNumberedFromOne(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -1964,6 +2149,8 @@ async function assertCaptureAndCheckAreRecorded(page, how) {
   const state = await page.evaluate(() => ({
     announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
     title: [...document.querySelectorAll(".tree-breadcrumb-chip")].slice(-1)[0]?.getAttribute("aria-label") || "",
+    listTitle: [...document.querySelectorAll(".mtree-chip")].slice(-1)[0]?.getAttribute("title") || "",
+    listLabel: [...document.querySelectorAll(".mtree-chip")].slice(-1)[0]?.getAttribute("aria-label") || "",
     badge: document.body.innerText.includes("Check"),
   }));
 
@@ -1981,6 +2168,15 @@ async function assertCaptureAndCheckAreRecorded(page, how) {
   }
   if (!state.badge) {
     throw new Error(`The board showed no Check badge after a ${how} move that gives check.`);
+  }
+  // The badge and the announcement are both about the position on screen. The
+  // move list and the breadcrumb are how a game is *read*, and a check is not
+  // written into either notation -- in WXF a trailing `+` already means
+  // advance -- so the description is the only place one can appear there.
+  for (const [where, text] of [["breadcrumb", state.title], ["move list tooltip", state.listTitle], ["move list label", state.listLabel]]) {
+    if (!/giving check/i.test(text)) {
+      throw new Error(`A ${how} checking move read as "${text}" in the ${where}; nothing there says it was a check.`);
+    }
   }
 }
 
@@ -2069,21 +2265,6 @@ async function assertAPlayedCaptureRecordsWhatItDid(page) {
   await assertCaptureAndCheckAreRecorded(page, "played");
 }
 
-/**
- * The halfmove clock a pasted position arrived with, kept and counted.
- *
- * That field is how Pikafish adjudicates the natural limit. The same endgame
- * searched at depth 14 answers mate in 3 when the field says 0 or 45, and 0.00
- * when it says 119 -- so a position pasted mid-endgame whose clock is thrown
- * away is a different position to the engine than the one the reader pasted,
- * and the engine will claim a win in a game that is heading for a draw.
- *
- * The app wrote a flat 0 into every FEN it produced and ignored the one it was
- * given. What the engine is handed for a custom start is `position fen <root>
- * moves ...`, so the root's clock is the part that has to be right; the engine
- * counts the moves itself. The displayed FEN counts them too, which is what
- * this checks, because that is the number a reader copies out.
- */
 /**
  * The settings that need explaining explain themselves on screen.
  *
@@ -2232,6 +2413,21 @@ async function assertTheFenBoxRefusesImpossiblePositions(page) {
   }
 }
 
+/**
+ * The halfmove clock a pasted position arrived with, kept and counted.
+ *
+ * That field is how Pikafish adjudicates the natural limit. The same endgame
+ * searched at depth 14 answers mate in 3 when the field says 0 or 45, and 0.00
+ * when it says 119 -- so a position pasted mid-endgame whose clock is thrown
+ * away is a different position to the engine than the one the reader pasted,
+ * and the engine will claim a win in a game that is heading for a draw.
+ *
+ * The app wrote a flat 0 into every FEN it produced and ignored the one it was
+ * given. What the engine is handed for a custom start is `position fen <root>
+ * moves ...`, so the root's clock is the part that has to be right; the engine
+ * counts the moves itself. The displayed FEN counts them too, which is what
+ * this checks, because that is the number a reader copies out.
+ */
 async function assertAPastedHalfmoveClockIsKeptAndCounted(page) {
   // Black general e9, red chariot a1, red general d0, and a black soldier on
   // i1 for the chariot to take. Nobody is in check and the generals do not
@@ -2286,6 +2482,22 @@ async function assertAPastedHalfmoveClockIsKeptAndCounted(page) {
   }
 }
 
+/**
+ * Checkmate arrived at by playing the move, rather than loaded already over.
+ *
+ * The two terminal checks beside this one both `goto` a position that is
+ * finished before the page opens, which tests the labelling and nothing else.
+ * The path a player actually takes is a legal move that happens to end the
+ * game: the move is applied, `gameResultForPosition` is asked about the
+ * position it produced, the modal appears, and the live region says what
+ * happened. A regression that only detected terminal positions on load would
+ * pass both of those and fail every real game.
+ *
+ * Red chariot a1 to a9 is mate: the chariot arriving on the ninth rank covers
+ * the Black general's file and both squares beside it, and the chariot on b8
+ * covers the rank behind. The generals stand on different files, so the
+ * position is legal before the move as well as after.
+ */
 async function assertCheckmateByPlayingTheMove(page) {
   const fen = encodeURIComponent("4k4/1R7/9/9/9/9/9/9/R8/3K5 w - - 0 1");
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -2902,6 +3114,98 @@ async function assertPausedAiTurnBlocksManualMove(page) {
   }
 }
 
+/**
+ * Reaching for the other side's piece, which used to be answered with silence.
+ *
+ * Every other refusal this board makes says why -- a horse that cannot reach a
+ * square, a move that leaves the general in check. Picking up a piece that is
+ * not yours to move said nothing: no selection, no dots, no sentence. It is
+ * the commonest thing a beginner does and the one that looks most like the
+ * board having stopped working.
+ *
+ * The empty square is the other half and is why this is not just "say
+ * something on every tap": tapping the board where there is nothing is not a
+ * mistake, and answering it would make the hint line chatter.
+ */
+async function assertReachingForTheOtherSideSaysWhy(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const hint = () => page.evaluate(() =>
+    document.querySelector(".position-stat-selection em")?.textContent?.trim() || "");
+  const beforeFen = await page.locator(".bottombar-fen").getAttribute("title");
+
+  // Red to move; b9 is a black horse. Nothing is selected.
+  await page.locator('.hitbox[data-file="1"][data-rank="9"]').click();
+  await page.waitForFunction(
+    () => /Move the side whose turn it is/i.test(document.querySelector(".position-stat-selection em")?.textContent || ""),
+    null,
+    { timeout: 5000 },
+  ).catch(async () => {
+    throw new Error(`Tapping the other side's piece said ${JSON.stringify(await hint())} instead of whose turn it is.`);
+  });
+
+  const state = await page.evaluate(() => ({
+    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
+    selected: Boolean(document.querySelector(".piece.selected")),
+    targets: document.querySelectorAll(".target-dot, .target-ring").length,
+    hint: document.querySelector(".position-stat-selection em")?.textContent?.trim() || "",
+  }));
+  if (state.fen !== beforeFen) throw new Error("Tapping the other side's piece changed the position.");
+  if (state.selected || state.targets > 0) {
+    throw new Error(`Tapping the other side's piece selected something: ${JSON.stringify(state)}`);
+  }
+  // Coach mode answers the question behind the tap as well: a learner reaching
+  // for the other side's horse wants to know what a horse does, and the hint
+  // line says exactly that for a piece of their own.
+  if (!/Horse:/i.test(state.hint)) {
+    throw new Error(`Coach mode should also say what the piece does: ${JSON.stringify(state.hint)}`);
+  }
+  // The reason first, the lesson second. This line is `-webkit-line-clamp: 2`
+  // and two lines hold about fifty characters at 320px with 200% text, so
+  // whichever half is second is the half a reader with large text never sees.
+  if (!/^Move the side whose turn it is/i.test(state.hint)) {
+    throw new Error(
+      `The reason has to survive the two-line clamp, so it comes first: ${JSON.stringify(state.hint)}`
+    );
+  }
+
+  // An empty square is not a mistake and stays silent.
+  await page.locator('.hitbox[data-file="4"][data-rank="5"]').click();
+  await page.waitForFunction(
+    () => !/Move the side whose turn it is/i.test(document.querySelector(".position-stat-selection em")?.textContent || ""),
+    null,
+    { timeout: 5000 },
+  ).catch(async () => {
+    throw new Error(`An empty square kept the hint up: ${JSON.stringify(await hint())}`);
+  });
+
+  // And picking up your own piece still just selects it.
+  await page.locator('.hitbox[data-file="1"][data-rank="0"]').click();
+  const own = await page.evaluate(() => ({
+    hint: document.querySelector(".position-stat-selection em")?.textContent?.trim() || "",
+    targets: document.querySelectorAll(".target-dot, .target-ring").length,
+  }));
+  if (/Move the side whose turn it is/i.test(own.hint) || own.targets === 0) {
+    throw new Error(`Selecting your own horse went wrong: ${JSON.stringify(own)}`);
+  }
+
+  // Pro mode did not ask to be taught, and still gets the reason.
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi:preferences:v1", JSON.stringify({ assistMode: "pro" }));
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('.hitbox[data-file="1"][data-rank="9"]').click();
+  const proHint = await page.evaluate(() =>
+    document.querySelector(".position-stat-selection em")?.textContent?.trim() || "");
+  if (!/Move the side whose turn it is/i.test(proHint) || /Horse:/i.test(proHint)) {
+    throw new Error(`Pro mode should get the reason without the lesson: ${JSON.stringify(proHint)}`);
+  }
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
+}
+
 async function assertIllegalMoveShowsRuleHint(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -3149,6 +3453,63 @@ async function assertTakeBackRemovesTheExchange(page) {
   if (await meta() !== "No moves") {
     throw new Error(`The engine moved after the take back: ${await meta()}`);
   }
+
+  // And the half this used to only claim: taken back *while the engine is
+  // still thinking*, only the human's move goes.
+  //
+  // `takeBackPlies` is what decides that, and it is what this pins -- pegging
+  // it to 2, or to 1, or inverting its turn test all fail here. The trailing
+  // wait below is weaker and is labelled as such: the reply never lands, but
+  // no single change makes it land. `handleTakeBack` clears the queued search,
+  // stops the running one and drops `applyBestMoveRef`, and the apply site
+  // separately requires the tag's position to still be the current one and
+  // the AI to still be on move. Removing all of those together still produces
+  // no move, so something upstream of them is also stopping the search when
+  // the position changes. Kept as a regression check on the behaviour, not as
+  // a check on any of those guards.
+  //
+  // At whatever strength the dialog already has, which is the point.
+  //
+  // This used to pick "Full strength" to widen the window, and that was wrong
+  // twice over. `aiStrength` is a persisted preference and this file shares
+  // one page across every assertion, so the choice leaked: every later
+  // assertion that played the AI inherited the heaviest search in the suite,
+  // on a real engine, for the rest of the run. It also cost the most CPU of
+  // anything here and is the likeliest reason this assertion killed its own
+  // browser on a loaded machine.
+  //
+  // The window does not need it. Measured on this machine: the engine answers
+  // in ~0.9s at the default and ~4.8s at full strength, against a press that
+  // lands within ~50ms of the wait below resolving. A loaded machine makes the
+  // engine slower, which widens the window rather than closing it.
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByRole("button", { name: /You play Red/i }).click();
+  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  await page.getByLabel("h2, red cannon").click();
+  await page.getByLabel("e2, empty, legal move").click();
+  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 1", null, { timeout: 30000 });
+  await takeBack.click();
+  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "No moves", null, { timeout: 5000 });
+  const mid = await page.evaluate(() => ({
+    toast: document.querySelector('[data-testid="delete-undo-toast"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    disabled: document.querySelector('[data-testid="take-back-btn"]')?.disabled,
+  }));
+  // `(?!s)` because the toast reads `Removed 1 moveUndo` -- the Undo button's
+  // own text runs straight on -- and `Removed 1 moves` is the wrong answer.
+  if (!/Removed 1 move(?!s)/.test(mid.toast)) {
+    throw new Error(`Taking back during the engine's search should remove one ply, not two: ${JSON.stringify(mid)}`);
+  }
+  if (mid.disabled !== true) {
+    throw new Error(`Nothing is left to take back, so the button should be disabled: ${JSON.stringify(mid)}`);
+  }
+  // Past the search it was running when the move went away. See the note
+  // above: this has never been shown to be able to fail.
+  await page.waitForTimeout(6000);
+  const settled = await meta();
+  if (settled !== "No moves") {
+    throw new Error(`The engine played the reply it was computing for a move that had been taken back: ${settled}`);
+  }
 }
 
 async function assertAiNewGameSwitchesToPlayWorkspace(page) {
@@ -3181,6 +3542,168 @@ async function assertAiNewGameSwitchesToPlayWorkspace(page) {
   // The orientation is a stored preference, and this page is shared with the
   // assertions that follow; the board keyboard checks walk a red-at-bottom
   // board and would find their arrows reversed.
+  await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
+}
+
+
+/**
+ * A refused FEN says which thing is wrong, and says it until it is answered.
+ *
+ * `describeSetupProblem` had worked out the reason all along -- the editor,
+ * standing one button away from this field, has always said "A Red soldier
+ * that has not crossed the river must be on its starting file." -- and the FEN
+ * reader threw it away and returned null. Every paste path then printed the
+ * same sentence naming four requirements at once, none of them usually the one
+ * that failed.
+ *
+ * The second half matters as much as the first. The message used to clear
+ * itself after two seconds, which is short for one sentence and far too short
+ * for a specific one, and it left the field looking accepted while nothing had
+ * loaded. It now goes when the reader answers it: a keystroke in the field, or
+ * closing the dialog.
+ */
+async function assertARefusedFenSaysWhichThingIsWrong(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const field = page.locator(".new-game-fen-input");
+  const read = () => page.evaluate(() => {
+    const input = document.querySelector(".new-game-fen-input");
+    const error = document.querySelector("#new-game-fen-error");
+    return {
+      said: error?.textContent?.trim() || "",
+      invalid: input?.getAttribute("aria-invalid") || "",
+      describedBy: input?.getAttribute("aria-describedby") || "",
+      // The board behind the dialog must not have moved.
+      pieces: document.querySelectorAll(".board-stage .pieces-layer .piece").length,
+      open: Boolean(document.querySelector(".new-game-menu")),
+    };
+  });
+
+  // One case per branch: a layout that is not a layout, a side that is not a
+  // side, and a position that reads perfectly and could not have happened.
+  const cases = [
+    ["not a position at all", /piece layout is unreadable/],
+    ["3k5/9/9/9/9/9/9/9/9/4KR3 x - - 0 1", /side to move must be "w" or "b", not "x"/],
+    ["3k5/9/9/9/9/9/1P7/9/9/4K4 w - - 0 1", /Red soldier that has not crossed the river must be on its starting file/],
+    ["3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1", /generals face each other/],
+  ];
+  for (const [fen, expected] of cases) {
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.waitForSelector(".new-game-fen-input", { timeout: 10000 });
+    await field.fill(fen);
+    await page.locator(".new-game-fen-form button[type=submit]").click();
+    const refused = await read();
+    if (!expected.test(refused.said)) {
+      throw new Error(`Refusing ${JSON.stringify(fen)} should say what is wrong; it said ${JSON.stringify(refused.said)}.`);
+    }
+    if (refused.invalid !== "true" || refused.describedBy !== "new-game-fen-error") {
+      throw new Error(`A refused FEN left the field unmarked for a screen reader: ${JSON.stringify(refused)}`);
+    }
+    if (refused.pieces !== 32 || !refused.open) {
+      throw new Error(`A refused FEN should leave the board and the dialog alone: ${JSON.stringify(refused)}`);
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".new-game-menu", { state: "detached", timeout: 5000 });
+  }
+
+  // And it waits. Two seconds used to be the whole life of this message.
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForSelector(".new-game-fen-input", { timeout: 10000 });
+  await field.fill("3k5/9/9/9/9/9/1P7/9/9/4K4 w - - 0 1");
+  await page.locator(".new-game-fen-form button[type=submit]").click();
+  await page.waitForTimeout(2600);
+  const later = await read();
+  if (!/starting file/.test(later.said)) {
+    throw new Error(`The reason was gone 2.6s after the refusal: ${JSON.stringify(later)}`);
+  }
+
+  // A keystroke is the reader answering it.
+  await field.click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("x");
+  const answered = await read();
+  if (answered.said || answered.invalid || answered.describedBy) {
+    throw new Error(`Editing the FEN should retire the refusal: ${JSON.stringify(answered)}`);
+  }
+
+  // A FEN with nothing wrong with it still loads, from this same field.
+  await field.fill("3k5/9/9/9/9/9/9/9/9/4KR3 w - - 0 1");
+  await page.locator(".new-game-fen-form button[type=submit]").click();
+  await page.waitForSelector(".new-game-menu", { state: "detached", timeout: 5000 });
+  const loaded = await page.evaluate(() => document.querySelectorAll(".board-stage .pieces-layer .piece").length);
+  if (loaded !== 3) {
+    throw new Error(`The three-piece endgame did not load from the New Game field; the board holds ${loaded} pieces.`);
+  }
+}
+/**
+ * Leaving an AI game for a local board gives back the workspace the AI game
+ * took, and only that one.
+ *
+ * The sibling above covers the half that was always there: an AI mode needs
+ * the Play workspace and takes it. The other half was missing, so a reader who
+ * played the engine and then started a local board stayed in Play with the
+ * analysis engine off -- no eval bar, no Engine tab, the graph panel reading
+ * "Analysis off" -- and nothing on screen connected that to the AI game they
+ * had just left.
+ *
+ * The second half of this check is why the fix is narrow rather than a mirror
+ * of the AI branch: a Play workspace the reader chose from the pill, with two
+ * people at one board and the engine quiet, is theirs and must survive New
+ * Game. Only a workspace the app forced is handed back.
+ */
+async function assertLocalNewGameReturnsTheWorkspaceAiTook(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const readWorkspace = () => page.evaluate(() => ({
+    workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() || "",
+    engineTab: Boolean(document.querySelector('[data-testid="analysis-tab-engine"]')),
+  }));
+  const startNewGame = async (modeName) => {
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByRole("button", { name: modeName }).click();
+    await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+    await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  };
+
+  // "You play Red" keeps Red at the bottom, so this leaves no stored
+  // orientation behind for the assertions that share this page.
+  await startNewGame(/You play Red/i);
+  const afterAi = await readWorkspace();
+  if (afterAi.workspace !== "Play") {
+    throw new Error(`An AI new game should enter Play: ${JSON.stringify(afterAi)}`);
+  }
+
+  await startNewGame(/Local board/i);
+  const afterLocal = await readWorkspace();
+  if (afterLocal.workspace !== "Analysis" || !afterLocal.engineTab) {
+    throw new Error(
+      `A local new game after an AI one should return to Analysis with the engine panel available: ${JSON.stringify(afterLocal)}`
+    );
+  }
+
+  // The reader's own choice of Play, with no AI game to hand it back from,
+  // survives the next local game.
+  await page.locator(".top-mode-pills button", { hasText: /^Play$/ }).click();
+  const chosenPlay = await readWorkspace();
+  if (chosenPlay.workspace !== "Play") {
+    throw new Error(`The Play pill did not take: ${JSON.stringify(chosenPlay)}`);
+  }
+  await startNewGame(/Local board/i);
+  const afterSecondLocal = await readWorkspace();
+  if (afterSecondLocal.workspace !== "Play") {
+    throw new Error(
+      `A local new game must not overrule a Play workspace the reader chose: ${JSON.stringify(afterSecondLocal)}`
+    );
+  }
+
+  await page.locator(".top-mode-pills button", { hasText: /^Analysis$/ }).click();
   await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
 }
 
@@ -3676,12 +4199,6 @@ async function assertEnginePvLineControl(page) {
 }
 
 /**
- * An engine line is a line into the position: clicking its second move plays
- * both moves, and Space plays the first choice from wherever the board is,
- * without leaving the Engine panel. The fake engine answers every search
- * with the line b2e2 h9g7.
- */
-/**
  * An engine line is one tab stop, and the arrow keys walk it.
  *
  * Each move of a line is a button that plays the line up to it. Three lines
@@ -3733,6 +4250,12 @@ async function assertAnEngineLineIsOneTabStop(browser) {
   }
 }
 
+/**
+ * An engine line is a line into the position: clicking its second move plays
+ * both moves, and Space plays the first choice from wherever the board is,
+ * without leaving the Engine panel. The fake engine answers every search
+ * with the line b2e2 h9g7.
+ */
 async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
   const { context, page } = await newIsolatedPage(browser);
   try {
@@ -4103,35 +4626,6 @@ async function assertEngineTelemetryDashboard(browser) {
 }
 
 /**
- * A ground-out ending reads level, and the board has to say why.
- *
- * `gameResultForPosition` never adjudicates a draw -- which move-limit edition
- * applies is the tournament's decision. Pikafish has no such reticence: it
- * calls the game drawn at `rule60 >= 120` and shades every evaluation towards
- * level on the way there. Without a notice, a won ending simply drifts to 0.00
- * with nothing on screen to account for it.
- *
- * Page-level, so it runs without an engine: the count is the fifth field of
- * the FEN the board already hands the engine.
- */
-/**
- * Rotating a tablet must not flash a 36-pixel board.
- *
- * The stylesheet switches layouts on `@media (max-width: 900px)`, which applies
- * on the resize itself. The markup used to switch on `viewportWidth <= 900`,
- * and that width arrives through a 50ms debounce -- so for about a tenth of a
- * second the desktop dock and toolbars were laid out at phone width, wrapped
- * onto enough rows to eat the stage, and the board (whose height is its row's
- * and whose width follows from 9:10) collapsed to 36x36 before the mobile
- * markup arrived.
- *
- * The bar is one animation frame, which is what the fix actually buys and what
- * a reader can perceive: after it the board is a board. Measured on the code
- * this replaced, the speck was still there two frames later and for about six.
- * A check that settles first cannot see any of it, which is why it went
- * unnoticed.
- */
-/**
  * A 53MB download has to say how far it has got.
  *
  * `pikafish.nnue` is 97.6% of a first visit and nothing in the app works
@@ -4235,66 +4729,6 @@ async function assertEngineDownloadReportsItsProgress(browser) {
 }
 
 /**
- * The reader who asks for larger text must not get a smaller board than anyone.
- *
- * The desktop board takes its height from the row it sits in, which is what
- * stops it sliding up behind the toolbar. The cost is that it absorbs every
- * pixel the surrounding chrome takes, and the chrome grows with the reader's
- * default font size while the window does not. Measured before the floor
- * below: 1024x600 went 314px at 16px text to 98px at 24px and **36px** at 32px.
- * Ten ranks in 36 pixels is not a small board, it is no board -- and WCAG 1.4.4
- * asks for 200% text without loss of function.
- *
- * The floor is `--board-min-width`, and the stage scrolls where the floor and
- * the chrome do not both fit. Both halves are required: the CSS comments record
- * a floor being tried on its own, which put the board under the toolbar because
- * `.board-stage` clipped what would not fit.
- *
- * Chrome's own font setting is what has to move, not `html { font-size }` --
- * the second moves `rem` but not the `em` basis of a media query, and does not
- * reproduce this at all.
- */
-/**
- * A link that does not load has to say why.
- *
- * The recipient did not write the link and cannot see the sender's console,
- * which is where the reason went: five different failures all produced
- * "Shared link not loaded" and nothing else. The import box beside it has said
- * which move stopped it since it was written.
- *
- * The chip stays short -- its slot is 192px, about 25 characters of the mono
- * face it uses -- so the sentence is on the label and the tooltip, which is the
- * shape the import chip next to it already uses, and it is what the live region
- * announces.
- */
-/**
- * A note a person writes on a move has to survive the app being closed.
- *
- * Everything attached to a move here was written by the engine -- an
- * evaluation, a best move, a review note it overwrites on every re-run -- so a
- * study built on this board carried the line and none of the reasoning for it.
- *
- * The half that is easy to get wrong is storage, not editing. A straight line
- * is auto-saved as a list of moves, which is compact and cannot carry anything
- * else; a note only survives because a game holding one is stored as a tree
- * instead. Written, shown, and silently dropped by the next save is exactly
- * what this asserts against, which is why it reloads rather than reading the
- * field back.
- */
-/**
- * A search the reader asked for by name keeps running when the tab goes away.
- *
- * Live analysis stops when the page is hidden, and should: it runs on its own
- * and nobody is looking. A deep search is different -- it is started by hand,
- * it can run for thirty seconds or until stopped, and the reason to start one
- * is usually so you can do something else while it runs. On a browser, doing
- * something else means another tab, which used to kill it: hiding the page
- * cleared the analysis stage the search was holding and stopped the engine.
- *
- * Asserted on the depth, which is the only thing that proves the search
- * carried on rather than being restarted on return.
- */
-/**
  * The heading outline survives the phone's own tab bar.
  *
  * A screen reader navigating by heading is reading the only structure a phone
@@ -4365,6 +4799,19 @@ async function assertTheHeadingOutlineHasNoGaps(browser) {
   }
 }
 
+/**
+ * A search the reader asked for by name keeps running when the tab goes away.
+ *
+ * Live analysis stops when the page is hidden, and should: it runs on its own
+ * and nobody is looking. A deep search is different -- it is started by hand,
+ * it can run for thirty seconds or until stopped, and the reason to start one
+ * is usually so you can do something else while it runs. On a browser, doing
+ * something else means another tab, which used to kill it: hiding the page
+ * cleared the analysis stage the search was holding and stopped the engine.
+ *
+ * Asserted on the depth, which is the only thing that proves the search
+ * carried on rather than being restarted on return.
+ */
 async function assertADeepSearchSurvivesAHiddenTab(browser) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   try {
@@ -4440,27 +4887,6 @@ async function assertADeepSearchSurvivesAHiddenTab(browser) {
   }
 }
 
-/**
- * A note is committed by blur, and clicking another move blurs the field --
- * so the blur path covers the way a mouse leaves a note. It does not cover the
- * way the current move changes while the field *keeps* focus, which happens
- * for real every time the engine plays its reply while you are still typing
- * about your own move. That path is held by the effect on `currentNodeId`,
- * which flushes the draft before loading the next move's note.
- *
- * The whole race runs inside one page task, so the 600ms debounce provably
- * cannot fire in between and rescue the note by another route.
- */
-/**
- * The auto-save is debounced by 600ms, and a phone does not promise the tab
- * lives long enough to pay it -- iOS discards a backgrounded tab without
- * running an unload handler. `pagehide` is the event that does fire, and this
- * checks the app writes there rather than trusting the timer.
- *
- * Both halves read storage immediately *before* the flush and require the new
- * state to be absent. Without that the test would pass on a slow machine for
- * the wrong reason: the debounce would simply have got there first.
- */
 /**
  * The auto-save stores the line only as far as the cursor, so that restoring
  * puts the reader back on the move they were looking at. Everything past the
@@ -4550,6 +4976,16 @@ async function assertSteppingBackAndReloadingKeepsTheRestOfTheGame(browser) {
   }
 }
 
+/**
+ * The auto-save is debounced by 600ms, and a phone does not promise the tab
+ * lives long enough to pay it -- iOS discards a backgrounded tab without
+ * running an unload handler. `pagehide` is the event that does fire, and this
+ * checks the app writes there rather than trusting the timer.
+ *
+ * Both halves read storage immediately *before* the flush and require the new
+ * state to be absent. Without that the test would pass on a slow machine for
+ * the wrong reason: the debounce would simply have got there first.
+ */
 async function assertADiscardedTabKeepsTheLastThingDone(browser) {
   // Its own context: the shared page wipes the auto-save between navigations,
   // which is the thing being read here.
@@ -4653,6 +5089,17 @@ async function assertADiscardedTabKeepsTheLastThingDone(browser) {
   }
 }
 
+/**
+ * A note is committed by blur, and clicking another move blurs the field --
+ * so the blur path covers the way a mouse leaves a note. It does not cover the
+ * way the current move changes while the field *keeps* focus, which happens
+ * for real every time the engine plays its reply while you are still typing
+ * about your own move. That path is held by the effect on `currentNodeId`,
+ * which flushes the draft before loading the next move's note.
+ *
+ * The whole race runs inside one page task, so the 600ms debounce provably
+ * cannot fire in between and rescue the note by another route.
+ */
 async function assertANoteSurvivesTheMoveChangingUnderIt(page) {
   const NOTE = "Cannon first, or the horse never gets out.";
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=b2b4+b7c7+b4d4+e9e8", {
@@ -4738,6 +5185,20 @@ async function assertANoteSurvivesTheMoveChangingUnderIt(page) {
   }
 }
 
+/**
+ * A note a person writes on a move has to survive the app being closed.
+ *
+ * Everything attached to a move here was written by the engine -- an
+ * evaluation, a best move, a review note it overwrites on every re-run -- so a
+ * study built on this board carried the line and none of the reasoning for it.
+ *
+ * The half that is easy to get wrong is storage, not editing. A straight line
+ * is auto-saved as a list of moves, which is compact and cannot carry anything
+ * else; a note only survives because a game holding one is stored as a tree
+ * instead. Written, shown, and silently dropped by the next save is exactly
+ * what this asserts against, which is why it reloads rather than reading the
+ * field back.
+ */
 async function assertAMoveNoteSurvivesAReload(browser) {
   // Its own context, because the shared page carries an init script that wipes
   // the auto-save on every navigation -- which is exactly the thing under test.
@@ -4844,6 +5305,19 @@ async function assertACommaSeparatedShareLinkLoads(page) {
   console.log("PASS: a comma-separated share link loads its moves");
 }
 
+/**
+ * A link that does not load has to say why.
+ *
+ * The recipient did not write the link and cannot see the sender's console,
+ * which is where the reason went: five different failures all produced
+ * "Shared link not loaded" and nothing else. The import box beside it has said
+ * which move stopped it since it was written.
+ *
+ * The chip stays short -- its slot is 192px, about 25 characters of the mono
+ * face it uses -- so the sentence is on the label and the tooltip, which is the
+ * shape the import chip next to it already uses, and it is what the live region
+ * announces.
+ */
 async function assertShareLinkSaysWhyItDidNotLoad(page) {
   const expectations = [
     {
@@ -4910,6 +5384,26 @@ async function assertShareLinkSaysWhyItDidNotLoad(page) {
   }
 }
 
+/**
+ * The reader who asks for larger text must not get a smaller board than anyone.
+ *
+ * The desktop board takes its height from the row it sits in, which is what
+ * stops it sliding up behind the toolbar. The cost is that it absorbs every
+ * pixel the surrounding chrome takes, and the chrome grows with the reader's
+ * default font size while the window does not. Measured before the floor
+ * below: 1024x600 went 314px at 16px text to 98px at 24px and **36px** at 32px.
+ * Ten ranks in 36 pixels is not a small board, it is no board -- and WCAG 1.4.4
+ * asks for 200% text without loss of function.
+ *
+ * The floor is `--board-min-width`, and the stage scrolls where the floor and
+ * the chrome do not both fit. Both halves are required: the CSS comments record
+ * a floor being tried on its own, which put the board under the toolbar because
+ * `.board-stage` clipped what would not fit.
+ *
+ * Chrome's own font setting is what has to move, not `html { font-size }` --
+ * the second moves `rem` but not the `em` basis of a media query, and does not
+ * reproduce this at all.
+ */
 async function assertLargeTextKeepsAUsableBoard(browser) {
   const FLOOR = 272;
   const cases = [
@@ -5016,6 +5510,23 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
   }
 }
 
+/**
+ * Rotating a tablet must not flash a 36-pixel board.
+ *
+ * The stylesheet switches layouts on `@media (max-width: 900px)`, which applies
+ * on the resize itself. The markup used to switch on `viewportWidth <= 900`,
+ * and that width arrives through a 50ms debounce -- so for about a tenth of a
+ * second the desktop dock and toolbars were laid out at phone width, wrapped
+ * onto enough rows to eat the stage, and the board (whose height is its row's
+ * and whose width follows from 9:10) collapsed to 36x36 before the mobile
+ * markup arrived.
+ *
+ * The bar is one animation frame, which is what the fix actually buys and what
+ * a reader can perceive: after it the board is a board. Measured on the code
+ * this replaced, the speck was still there two frames later and for about six.
+ * A check that settles first cannot see any of it, which is why it went
+ * unnoticed.
+ */
 async function assertCrossingTheBreakpointKeepsABoard(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -5051,6 +5562,18 @@ async function assertCrossingTheBreakpointKeepsABoard(page) {
   }
 }
 
+/**
+ * A ground-out ending reads level, and the board has to say why.
+ *
+ * `gameResultForPosition` never adjudicates a draw -- which move-limit edition
+ * applies is the tournament's decision. Pikafish has no such reticence: it
+ * calls the game drawn at `rule60 >= 120` and shades every evaluation towards
+ * level on the way there. Without a notice, a won ending simply drifts to 0.00
+ * with nothing on screen to account for it.
+ *
+ * Page-level, so it runs without an engine: the count is the fifth field of
+ * the FEN the board already hands the engine.
+ */
 async function assertCaptureFreeCountExplainsALevelEnding(page) {
   const ENDING = "3k5/9/9/9/9/9/9/9/4A4/3AK1R2 w - -";
   const load = async (clock, viewport) => {
@@ -5689,7 +6212,24 @@ async function assertBottomNewGameMenuResetsDraft(page) {
   }
 }
 
-async function assertInvalidFenToastTimerResets(page) {
+/**
+ * The Load button says a refusal happened, and stops saying it when answered.
+ *
+ * The button's own label is half this feedback -- `Load` becomes `Invalid FEN`
+ * -- and it used to be all of it that lasted, because the sentence underneath
+ * cleared itself after two seconds. Both now stay until the reader answers
+ * them, which is what this pins: the pair go up together, survive a wait far
+ * longer than that old timer, and come down together on the keystroke that
+ * answers them, not on a clock.
+ *
+ * This is deliberately a change from what this file used to assert. Two
+ * seconds was already short for the one generic sentence the field used to
+ * show; the sentence now names the thing to fix -- which soldier, which
+ * general -- and a reader cannot act on what has been taken away.
+ * `assertARefusedFenSaysWhichThingIsWrong` covers the wording and the
+ * screen-reader pairing; this covers the button and the waiting.
+ */
+async function assertARefusedFenMarksTheLoadButtonUntilAnswered(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
     waitUntil: "domcontentloaded",
@@ -5698,52 +6238,58 @@ async function assertInvalidFenToastTimerResets(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
 
   await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByLabel("FEN string").fill("not a legal fen");
   const loadButton = page.locator(".new-game-fen-form button");
+  if (String(await loadButton.textContent() || "").trim() !== "Load") {
+    throw new Error("The FEN button should read Load before anything is refused.");
+  }
+
+  await page.getByLabel("FEN string").fill("not a legal fen");
   await loadButton.click();
   await page.waitForFunction(
     () => document.querySelector(".new-game-fen-form button")?.textContent?.trim() === "Invalid FEN",
     null,
     { timeout: 5000 }
   );
-  const fenError = page.locator("#new-game-fen-error");
-  await fenError.waitFor({ timeout: 5000 });
-  const initialErrorState = await page.evaluate(() => ({
-    text: document.querySelector("#new-game-fen-error")?.textContent?.trim() || "",
-    role: document.querySelector("#new-game-fen-error")?.getAttribute("role") || "",
-    invalid: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-invalid") || "",
-    describedBy: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-describedby") || "",
+  await page.locator("#new-game-fen-error").waitFor({ timeout: 5000 });
+
+  // Comfortably past the two seconds this used to last.
+  await page.waitForTimeout(3200);
+  const waited = await page.evaluate(() => ({
+    button: document.querySelector(".new-game-fen-form button")?.textContent?.trim() || "",
+    said: document.querySelector("#new-game-fen-error")?.textContent?.trim() || "",
   }));
-  if (
-    !initialErrorState.text.includes("legal Xiangqi position") ||
-    initialErrorState.role !== "alert" ||
-    initialErrorState.invalid !== "true" ||
-    initialErrorState.describedBy !== "new-game-fen-error"
-  ) {
-    throw new Error(`Invalid FEN feedback was not accessible: ${JSON.stringify(initialErrorState)}`);
+  if (waited.button !== "Invalid FEN" || !waited.said) {
+    throw new Error(`The refusal went away on its own: ${JSON.stringify(waited)}`);
   }
 
-  await page.waitForTimeout(800);
-  await loadButton.click();
-  await page.waitForTimeout(1400);
-
-  const stillInvalid = String(await loadButton.textContent() || "").trim();
-  if (stillInvalid !== "Invalid FEN") {
-    throw new Error(`Invalid FEN feedback did not reset its timer after a repeated submit: ${stillInvalid}`);
-  }
-
-  await page.waitForTimeout(1000);
-  const cleared = String(await loadButton.textContent() || "").trim();
-  if (cleared !== "Load") {
-    throw new Error(`Invalid FEN feedback did not clear after the reset timer: ${cleared}`);
-  }
-  const clearedErrorState = await page.evaluate(() => ({
+  // The keystroke that answers it takes both down.
+  await page.getByLabel("FEN string").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("x");
+  const answered = await page.evaluate(() => ({
+    button: document.querySelector(".new-game-fen-form button")?.textContent?.trim() || "",
     errorVisible: Boolean(document.querySelector("#new-game-fen-error")),
     invalid: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-invalid") || "",
     describedBy: document.querySelector('[aria-label="FEN string"]')?.getAttribute("aria-describedby") || "",
   }));
-  if (clearedErrorState.errorVisible || clearedErrorState.invalid || clearedErrorState.describedBy) {
-    throw new Error(`Invalid FEN accessibility state did not clear: ${JSON.stringify(clearedErrorState)}`);
+  if (answered.button !== "Load" || answered.errorVisible || answered.invalid || answered.describedBy) {
+    throw new Error(`Editing the FEN should retire the refusal: ${JSON.stringify(answered)}`);
+  }
+
+  // And closing the dialog does too, so an untouched refusal is not waiting
+  // inside the next time it is opened.
+  await loadButton.click();
+  await page.waitForSelector("#new-game-fen-error", { timeout: 5000 });
+  await page.keyboard.press("Escape");
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.waitForSelector(".new-game-fen-form", { timeout: 5000 });
+  const reopened = await page.evaluate(() => ({
+    button: document.querySelector(".new-game-fen-form button")?.textContent?.trim() || "",
+    errorVisible: Boolean(document.querySelector("#new-game-fen-error")),
+  }));
+  if (reopened.button !== "Load" || reopened.errorVisible) {
+    throw new Error(`The dialog reopened still holding the last refusal: ${JSON.stringify(reopened)}`);
   }
 }
 
@@ -6437,11 +6983,6 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
 }
 
 /**
- * The DhtmlXQ block a dpxq.com game page carries. Six moves from a real
- * record, with a note on the second, pasted into the import box: the line
- * has to load, and the note has to land on its move.
- */
-/**
  * An XQF file through the file picker: version 10, written in the clear
  * here so the check can say what the file holds -- h2e2 with a note, then
  * h9g7 h0g2 as the main line and h7e7 as a variation on Black's reply.
@@ -6501,6 +7042,11 @@ async function assertAnXqfFileImports(page) {
   }
 }
 
+/**
+ * The DhtmlXQ block a dpxq.com game page carries. Six moves from a real
+ * record, with a note on the second, pasted into the import box: the line
+ * has to load, and the note has to land on its move.
+ */
 async function assertADhtmlXqRecordImports(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -6698,6 +7244,572 @@ async function assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page) {
   }
   await page.evaluate(() => localStorage.removeItem("xiangqi:library:v1"));
   console.log(`PASS: the study focus is above the fold at 1280x720 (${JSON.stringify(layout)})`);
+}
+
+/**
+ * No row puts two sentences side by side and lets both break their own words.
+ *
+ * Three rows in this app had the same shape -- `display: flex` with
+ * `space-between` and no wrap, two multi-word children -- and all three failed
+ * the same way. When the row is too narrow the children shrink and wrap their
+ * own text instead of the row wrapping, and the two broken halves sit side by
+ * side with nothing between them, so reading across gives
+ *
+ *     Reviewing      41% complete · 17
+ *     line...            of 41 positions
+ *
+ * They were found by hand, one at a time, in the review progress card, the
+ * phase breakdown and the eval graph's peaks. This is the rule rather than a
+ * fourth example: the next row written that way fails here instead of being
+ * noticed by someone reading a panel.
+ *
+ * Lines are counted from `Range.getClientRects()`, not box height over
+ * line-height -- a padded button is one line in a tall box, and counting that
+ * way reported forty rows of which every one was a false positive.
+ *
+ * Only flagged when the wrapping child shares its line with another *sentence*.
+ * A heading beside a count badge -- `BOOK / CONTINUATIONS` with a `4` at the
+ * right of the first line -- wraps and reads correctly, and is not this fault.
+ */
+async function assertNoRowInterleavesTwoSentences(browser) {
+  const scan = `(${function () {
+    const describe = (el) => {
+      const bits = [];
+      for (let n = el; n && n !== document.body && bits.length < 3; n = n.parentElement) {
+        bits.unshift(typeof n.className === "string" && n.className.trim()
+          ? "." + n.className.trim().split(/\s+/).slice(0, 2).join(".")
+          : n.tagName.toLowerCase());
+      }
+      return bits.join(" > ");
+    };
+    const lineCount = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const tops = new Set();
+      for (const rect of range.getClientRects()) {
+        if (rect.width < 0.5 || rect.height < 0.5) continue;
+        tops.add(Math.round(rect.top));
+      }
+      return tops.size || 1;
+    };
+    // Its own text is what renders: nothing inside it is a box of its own.
+    const isTextLeafish = (el) => ![...el.querySelectorAll("*")].some((d) =>
+      /block|flex|grid|list-item|table/.test(getComputedStyle(d).display));
+    const words = (el) => (el.textContent || "").trim().split(/\s+/).length;
+
+    const found = [];
+    for (const el of document.querySelectorAll("*")) {
+      const style = getComputedStyle(el);
+      if (!/flex/.test(style.display) || style.flexWrap !== "nowrap") continue;
+      if (/column/.test(style.flexDirection)) continue;
+      const kids = [...el.children].filter((child) => {
+        const box = child.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && (child.textContent || "").trim() && isTextLeafish(child);
+      });
+      if (kids.length < 2) continue;
+      const byLine = new Map();
+      for (const kid of kids) {
+        const top = Math.round(kid.getBoundingClientRect().top);
+        if (!byLine.has(top)) byLine.set(top, []);
+        byLine.get(top).push({ text: (kid.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40), lines: lineCount(kid), words: words(kid) });
+      }
+      for (const group of byLine.values()) {
+        if (group.length < 2) continue;
+        const wrapped = group.filter((kid) => kid.lines > 1);
+        if (!wrapped.length) continue;
+        const sentencesOnTheLine = group.filter((kid) => kid.words > 1).length;
+        if (wrapped.length >= 2 || sentencesOnTheLine >= 2) found.push({ row: describe(el), group });
+      }
+    }
+    return found;
+  }})()`;
+
+  const GAME = "/web-xiangqi/?moves=h2h9,i9h9,b2b9,b7b5,a0a1,h7i7,b9d9,h9h4,d9d6,i7i3";
+  const problems = [];
+  for (const [name, viewport] of [["desktop", { width: 1280, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+    const context = await browser.newContext({ viewport, hasTouch: viewport.width < 500, isMobile: viewport.width < 500, deviceScaleFactor: 2 });
+    try {
+      const page = await context.newPage();
+      await clearAutoSaveBetweenNavigations(page);
+      // 200% text, the size at which a row runs out of width. Chrome's own
+      // setting rather than `html { font-size }`, for the reason the
+      // board-floor check records: the second moves `rem` and not the `em`
+      // basis of a media query.
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Page.setFontSizes", { fontSizes: { standard: 32, fixed: 32 } });
+
+      for (const route of ["/web-xiangqi/", GAME]) {
+        await page.goto(`http://127.0.0.1:8192${route}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+        await page.waitForTimeout(500);
+        // The phone's five analysis sub-tabs are deliberately not swept here.
+        // Measured: with no review loaded they contain exactly one wrapping
+        // multi-child flex row between them -- the sub-tab strip itself, whose
+        // children are single words -- so the pass cost eight seconds and
+        // could not have reported anything. The rows that *do* live in that
+        // panel, and that actually broke, are the review progress card and the
+        // phase breakdown; both have assertions of their own with the saved
+        // review a real one needs.
+        for (const state of ["plain", "library", "newgame"]) {
+          if (state === "library") await page.evaluate(() => document.querySelector('button[aria-label="Open game library"]')?.click());
+          if (state === "newgame") await page.evaluate(() => [...document.querySelectorAll("button")]
+            .find((button) => /Start new game|Open new game menu/.test(button.getAttribute("aria-label") || ""))?.click());
+          await page.waitForTimeout(300);
+          for (const hit of await page.evaluate(scan)) {
+            problems.push(`${name} ${route === "/web-xiangqi/" ? "board" : "game"}/${state} ${hit.row}: ` +
+              hit.group.map((kid) => `[${kid.text}] ${kid.lines} lines`).join("  "));
+          }
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(150);
+        }
+      }
+    } finally {
+      await context.close();
+    }
+  }
+  if (problems.length) {
+    throw new Error(
+      "A row let two sentences break their own words side by side, which interleaves them. " +
+      "Give the row `flex-wrap: wrap` so the second goes to a line of its own:\n  " +
+      [...new Set(problems)].slice(0, 6).join("\n  ")
+    );
+  }
+}
+
+/**
+ * Two texts sharing a row wrap as a row, not as two columns of broken words.
+ *
+ * `.review-progress-copy` is `display: flex` with `space-between` and no
+ * wrap, so both children shrank to fit one line and then broke their own
+ * text. The two wrapped halves sat side by side and interleaved. At the
+ * analysis panel's own width this read
+ *
+ *     Reviewing      41% complete · 17
+ *     line...            of 41 positions
+ *
+ * -- neither sentence readable, for the whole length of a review, and at 200%
+ * text a block of it 178px tall. It was not a narrow-screen case: the desktop
+ * panel is 192px and showed the worst of it.
+ *
+ * The property, stated so it survives a re-layout: while a child is sharing
+ * its line with another, it must not be broken across lines. Either they fit
+ * side by side, or the second goes to a line of its own and may then use the
+ * full width.
+ */
+async function assertAReviewInProgressReadsAsTwoSentences(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7 2. h0g2');
+  await page.getByTestId("import-uci-line-btn").click();
+  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
+  await page.getByTestId("analysis-tab-review").click();
+  // This engine never answers `go`, so the review stays on screen showing its
+  // progress card for as long as the assertion needs it.
+  await page.getByTestId("start-review-btn").click();
+  await page.waitForSelector(".review-progress-copy", { timeout: 10000 });
+
+  const measure = () => page.evaluate(() => {
+    const row = document.querySelector(".review-progress-copy");
+    if (!row) return null;
+    const rowBox = row.getBoundingClientRect();
+    const kids = [...row.children].map((child) => {
+      const box = child.getBoundingClientRect();
+      // One line's worth, from the element's own line-height, so this does not
+      // depend on a pixel figure that a font change would move.
+      const lineHeight = parseFloat(getComputedStyle(child).lineHeight) || box.height;
+      return {
+        text: child.textContent.replace(/\s+/g, " ").trim().slice(0, 40),
+        top: Math.round(box.top),
+        lines: Math.max(1, Math.round(box.height / lineHeight)),
+        right: box.right,
+      };
+    });
+    return {
+      kids,
+      sharingALine: kids.length > 1 && kids.every((kid) => kid.top === kids[0].top),
+      overflow: Math.round(Math.max(...kids.map((kid) => kid.right)) - rowBox.right),
+      panelWidth: Math.round(rowBox.width),
+    };
+  });
+
+  for (const width of [1280, 1024, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(250);
+    const state = await measure();
+    if (!state) throw new Error(`The review progress card was not on screen at ${width}px.`);
+    const broken = state.kids.filter((kid) => kid.lines > 1);
+    if (state.sharingALine && broken.length > 0) {
+      throw new Error(
+        `At ${width}px the progress row is ${state.panelWidth}px and both halves broke their own text on one line, ` +
+        `which interleaves them: ${JSON.stringify(state.kids)}`
+      );
+    }
+    if (state.overflow > 1) {
+      throw new Error(`At ${width}px the progress row spills ${state.overflow}px past the card: ${JSON.stringify(state.kids)}`);
+    }
+  }
+}
+
+/**
+ * Clearing a review takes back what the engine said, and nothing the reader
+ * wrote.
+ *
+ * `clearReviewData` strips six fields -- `bestMove`, `bestLine`, `quality`,
+ * `swing`, `winPercentLoss`, `reviewNote` -- and deliberately leaves `comment`
+ * and `nags` alone. That line is the whole difference between Clear being a
+ * cheap action and an expensive one: everything it removes comes back from
+ * `Re-run`, sitting right beside it, while a reader's note and glyphs have no
+ * other copy anywhere.
+ *
+ * Nothing enforced it. Adding `comment: undefined` and `nags: undefined` to
+ * that list -- so pressing Clear silently eats every note on the line --
+ * passed the whole unit suite and every review and note assertion in this
+ * file.
+ *
+ * Driven from a saved review because this file's engine never answers a `go`,
+ * so no review started here can finish and offer its Clear.
+ *
+ * What each half is worth, since the two are not equal. The reader's note and
+ * glyphs are the point, and both are pinned: adding `comment: undefined` or
+ * `nags: undefined` to `clearReviewData` fails here. The engine-note half is
+ * weaker than it looks -- the tree renders `.mtree-review-note` only when the
+ * record has *both* a critical quality and a `reviewNote`, so its absence
+ * afterwards proves `reviewNote` was cleared and says nothing about `quality`.
+ * Dropping `quality: undefined` from that list passes this assertion.
+ *
+ * `quality` is deliberately not checked through the dots either: clearing the
+ * review leaves the eval scores in place and the tree then shows an
+ * *estimated* grade from them -- the fallback the legend calls "Estimates
+ * compare separate position scores", not a mark Clear failed to remove.
+ * Measured: four graded moves before, and after Clear the same four chips
+ * reading pending/best/best/inaccuracy.
+ */
+async function assertClearingAReviewKeepsWhatTheReaderWrote(page) {
+  const NOTE = "My own note: the chariot has to come out first.";
+  const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7"];
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate((moves) => {
+    const savedAt = 1710000011000;
+    const grades = ["mistake", "good", "blunder", "inaccuracy"];
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "clear-keeps-notes", savedAt, gameMode: "PvP", moves, result: "ongoing", label: "Clear QA",
+      // A tree as well as the cursor path, so the moves can carry glyphs the
+      // reader added by hand -- the other thing Clear must not take.
+      moveTree: moves.reduceRight((children, uci) => [{ uci, nags: [1], children }], []),
+      review: {
+        summary: {
+          totalMoves: moves.length, accuracy: 50, averageCentipawnLoss: 200,
+          redAccuracy: 45, blackAccuracy: 55, redAverageCentipawnLoss: 250, blackAverageCentipawnLoss: 150,
+          bestCount: 0, goodCount: 1, inaccuracyCount: 1, mistakeCount: 1, blunderCount: 1,
+          reviewedAt: savedAt, lineSignature: moves.join(" "),
+          engine: { tier: "high", baseDepth: 16, baseMoveTimeMs: 1500, revisitDepth: 18, revisitMoveTimeMs: 3000 },
+          keyMoments: [],
+        },
+        annotations: moves.map((uci, moveIndex) => ({
+          moveIndex, evalScore: -120, bestMove: uci, quality: grades[moveIndex],
+          swing: 120, winPercentLoss: 9, reviewNote: "The engine's note.",
+        })),
+      },
+    }]));
+  }, MOVES);
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-clear-keeps-notes").click();
+  await page.waitForTimeout(700);
+  // The note field belongs to a move, and loading leaves the cursor at the
+  // start position, where there is no move to write on.
+  await page.getByTestId("analysis-tab-tree").click();
+  await page.waitForTimeout(300);
+  await page.locator(".mtree-chip").last().click();
+  await page.waitForTimeout(400);
+
+  // A note of the reader's own, on the move the cursor is sitting on.
+  const field = page.getByTestId("move-comment-input");
+  if (await field.isDisabled()) throw new Error("The note field was disabled, so there was nothing to write on.");
+  await field.fill(NOTE);
+  await page.evaluate(() => document.querySelector('[data-testid="move-comment-input"]').blur());
+  await page.waitForFunction(
+    (note) => [...document.querySelectorAll(".mtree-comment")].some((el) => el.getAttribute("title") === note),
+    NOTE, { timeout: 5000 });
+
+  const look = () => page.evaluate(() => ({
+    // What the engine wrote, and what the reader wrote. Deliberately not the
+    // quality dots: clearing the review leaves the eval scores on the records,
+    // and the tree then shows an *estimated* grade from them -- which is the
+    // documented fallback the legend calls "Estimates compare separate
+    // position scores", not a mark Clear failed to remove.
+    engineNotes: [...document.querySelectorAll(".mtree-review-note")].map((el) => (el.textContent || "").trim()),
+    readerNotes: [...document.querySelectorAll(".mtree-comment")].map((el) => el.getAttribute("title")),
+    glyphs: [...document.querySelectorAll(".mtree-glyphs")].map((el) => (el.textContent || "").trim()),
+  }));
+  const before = await look();
+  if (!before.engineNotes.length) throw new Error("Expected the loaded review to put its own notes on the moves.");
+  if (!before.glyphs.length) throw new Error("Expected the saved moves to carry the reader's glyphs.");
+
+  await page.getByTestId("analysis-tab-review").click();
+  await page.waitForTimeout(300);
+  await page.getByTestId("clear-review-btn").click();
+  await page.waitForTimeout(700);
+  await page.getByTestId("analysis-tab-tree").click();
+  await page.waitForTimeout(400);
+
+  const after = await look();
+  if (after.engineNotes.length) {
+    throw new Error(`Clear should take the engine's notes off the tree; ${JSON.stringify(after.engineNotes)} remain.`);
+  }
+  if (after.glyphs.length !== before.glyphs.length) {
+    throw new Error(`Clear took the reader's glyphs with it: ${before.glyphs.length} before, ${after.glyphs.length} after.`);
+  }
+  if (!after.readerNotes.includes(NOTE)) {
+    throw new Error(
+      `Clear took the reader's own note with it. Everything Clear removes comes back from Re-run; a note does not: ` +
+      `${JSON.stringify(after.readerNotes)}`
+    );
+  }
+}
+
+/**
+ * The five review grades are told apart by something other than their colour.
+ *
+ * Each reviewed move in the tree carries a dot, and the dot's background was
+ * the whole of the distinction: `best` green, `good` a lighter green,
+ * `inaccuracy` amber, `mistake` orange, `blunder` red. Two of those pairs are
+ * the ones colour vision most often cannot separate, and the legend is no help
+ * because comparing two similar colours against a swatch is exactly the
+ * comparison that fails. WCAG 2.1 SC 1.4.1.
+ *
+ * The app already answered this for `forced-colors: active`, where the dot
+ * becomes `?!` / `?` / `??`; everyone else got the disc. Now severity is in
+ * the dot's size too -- bigger is worse, which reads without the legend at
+ * all -- and `best` is a ring rather than a fill so that it and `good`, the
+ * two grades that share a size, are still two different marks.
+ *
+ * Checked as "no two grades look the same with colour removed", not as a list
+ * of pixel sizes, so the sizes can be retuned without editing this.
+ *
+ * Row height is checked in the same pass: the size ramp must not move the
+ * rows. A 320px injected fragment *does* show them moving, because
+ * `.mtree-chip` wraps and the dot takes a line of its own at that width --
+ * which is why this measures the real list.
+ */
+async function assertReviewGradesAreNotColourAlone(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    const moves = ("h2h9 i9h9 b2b9 b7b5 a0a1 h7i7 b9d9 h9h4 d9d6 i7i3 i0i2 i3e3 e0e1 h4h0 b0a2 " +
+      "e3a3 i2i4 a3a1 d6a6 a9a6 i4i3 h0i0 i3i6 a6a2 i6h6 i0g0 h6g6 f9e8 g6e6 g0f0").split(" ");
+    const savedAt = 1710000009000;
+    const grades = ["best", "good", "inaccuracy", "mistake", "blunder"];
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "grade-dots", savedAt, gameMode: "PvP", moves, result: "ongoing", label: "Grade dots QA",
+      review: {
+        summary: {
+          totalMoves: moves.length, accuracy: 54, averageCentipawnLoss: 328,
+          redAccuracy: 50, blackAccuracy: 58, redAverageCentipawnLoss: 350, blackAverageCentipawnLoss: 306,
+          bestCount: 6, goodCount: 6, inaccuracyCount: 6, mistakeCount: 6, blunderCount: 6,
+          reviewedAt: savedAt, lineSignature: moves.join(" "),
+          engine: { tier: "high", baseDepth: 16, baseMoveTimeMs: 1500, revisitDepth: 18, revisitMoveTimeMs: 3000 },
+          keyMoments: [],
+        },
+        annotations: moves.map((uci, moveIndex) => ({
+          moveIndex, evalScore: (moveIndex % 7) * 40 - 120, bestMove: uci,
+          quality: grades[moveIndex % grades.length], swing: 40, winPercentLoss: (moveIndex % 9) * 3, reviewNote: "",
+        })),
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-grade-dots").click();
+  await page.getByTestId("analysis-tab-tree").click();
+  await page.waitForFunction(() => document.querySelectorAll(".mtree-chip .mtree-quality-dot").length > 10, null, { timeout: 15000 });
+  await page.waitForTimeout(400);
+
+  const grades = await page.evaluate(() => {
+    const seen = new Map();
+    const rowHeights = new Set();
+    for (const chip of document.querySelectorAll(".mtree-chip")) {
+      const grade = [...chip.classList].find((c) => c.startsWith("quality-") && c !== "quality-pending");
+      const dot = chip.querySelector(".mtree-quality-dot");
+      if (!grade || !dot) continue;
+      const box = chip.getBoundingClientRect();
+      if (box.height < 1) continue;
+      rowHeights.add(Math.round(box.height));
+      if (seen.has(grade)) continue;
+      const style = getComputedStyle(dot);
+      // Everything about the mark except its colour.
+      seen.set(grade, {
+        shape: `${Math.round(parseFloat(style.width))}x${Math.round(parseFloat(style.height))}` +
+          `|radius:${style.borderRadius}` +
+          `|filled:${style.backgroundColor !== "rgba(0, 0, 0, 0)"}` +
+          `|ring:${style.boxShadow === "none" ? "no" : "yes"}`,
+      });
+    }
+    return { grades: [...seen].map(([grade, v]) => ({ grade, shape: v.shape })), rowHeights: [...rowHeights] };
+  });
+
+  if (grades.grades.length < 5) {
+    throw new Error(`Expected all five grades in the tree; found ${grades.grades.map((g) => g.grade).join(", ")}.`);
+  }
+  const shapes = new Map();
+  for (const { grade, shape } of grades.grades) {
+    if (shapes.has(shape)) {
+      throw new Error(
+        `"${grade}" and "${shapes.get(shape)}" are the same mark once colour is taken away (${shape}), ` +
+        `so a reader who cannot separate the two colours cannot tell the grades apart.`
+      );
+    }
+    shapes.set(shape, grade);
+  }
+  if (grades.rowHeights.length !== 1) {
+    throw new Error(`The grade marks changed the row height: ${grades.rowHeights.sort((a, b) => a - b).join(", ")}px.`);
+  }
+
+  // The eval graph rings the same three critical grades, and had the same
+  // fault: one radius, one stroke weight, three colours. `best` and `good` get
+  // no ring at all, so those two are already separated from these by presence.
+  const rings = await page.evaluate(() => {
+    const byGrade = new Map();
+    const circles = [];
+    for (const mark of document.querySelectorAll(".graph-review-marker")) {
+      const grade = [...mark.classList].find((c) => c.startsWith("quality-"));
+      if (!grade) continue;
+      const style = getComputedStyle(mark);
+      circles.push({ x: Number(mark.getAttribute("cx")), y: Number(mark.getAttribute("cy")), r: Number(mark.getAttribute("r")) });
+      if (byGrade.has(grade)) continue;
+      byGrade.set(grade, `r:${mark.getAttribute("r")}|w:${style.strokeWidth}`);
+    }
+    // Growing a ring must not push the closest pair further into each other
+    // than the largest ring allows; the old design used 6.4 for all three.
+    let widest = 0;
+    for (const c of circles) widest = Math.max(widest, c.r);
+    return { grades: [...byGrade], widest };
+  });
+  if (rings.grades.length < 3) {
+    throw new Error(`Expected the three critical grades ringed on the graph; found ${rings.grades.map(([g]) => g).join(", ") || "none"}.`);
+  }
+  const ringShapes = new Map();
+  for (const [grade, shape] of rings.grades) {
+    if (ringShapes.has(shape)) {
+      throw new Error(`Graph rings for "${grade}" and "${ringShapes.get(shape)}" are identical without colour (${shape}).`);
+    }
+    ringShapes.set(shape, grade);
+  }
+  if (rings.widest > 6.4) {
+    throw new Error(
+      `The largest review ring is now r=${rings.widest}; these already overlap on a long game, ` +
+      `so the ramp is capped at the 6.4 every ring used to be.`
+    );
+  }
+}
+
+/**
+ * `R 62%` is one reading and breaks as one.
+ *
+ * The phase rows are a three-column grid -- label, the two scores, the move
+ * count -- and the scores are the only column that may shrink. Middlegame has
+ * both the longest label and the widest count, so it was the only row that ran
+ * out of width, and it broke *inside* the scores: `62%` and `65%` dropped to a
+ * second line, away from the `R` and `B` they belong to, between two rows that
+ * stayed on one line. The reader is left matching numbers to letters by
+ * position.
+ *
+ * Same fault as `assertAReviewInProgressReadsAsTwoSentences` one card above:
+ * a text allowed to break its own words when the row should have broken
+ * instead. Stated as a property rather than a pixel count: each score is one
+ * line, whatever the row has to do around it.
+ *
+ * The review is loaded from a saved snapshot because this file's engine never
+ * answers a `go`, so no review started here can finish. Thirty moves and a
+ * lot of captures, so the game reaches a second phase and the block renders
+ * at all -- it is hidden for a game that never leaves the opening.
+ */
+async function assertEachPhaseScoreStaysOnOneLine(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.evaluate(() => {
+    const moves = ("h2h9 i9h9 b2b9 b7b5 a0a1 h7i7 b9d9 h9h4 d9d6 i7i3 i0i2 i3e3 e0e1 h4h0 b0a2 " +
+      "e3a3 i2i4 a3a1 d6a6 a9a6 i4i3 h0i0 i3i6 a6a2 i6h6 i0g0 h6g6 f9e8 g6e6 g0f0").split(" ");
+    const savedAt = 1710000007000;
+    const qualities = ["best", "good", "inaccuracy", "mistake", "blunder"];
+    const annotations = moves.map((move, moveIndex) => ({
+      moveIndex,
+      evalScore: (moveIndex % 7) * 40 - 120,
+      bestMove: move,
+      quality: qualities[moveIndex % qualities.length],
+      swing: 40,
+      winPercentLoss: (moveIndex % 9) * 3,
+      reviewNote: "",
+    }));
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "review-phases",
+      savedAt,
+      gameMode: "PvP",
+      moves,
+      result: "ongoing",
+      label: "Review phases QA",
+      review: {
+        summary: {
+          totalMoves: moves.length, accuracy: 54, averageCentipawnLoss: 328,
+          redAccuracy: 50, blackAccuracy: 58, redAverageCentipawnLoss: 350, blackAverageCentipawnLoss: 306,
+          bestCount: 6, goodCount: 6, inaccuracyCount: 6, mistakeCount: 6, blunderCount: 6,
+          reviewedAt: savedAt, lineSignature: moves.join(" "),
+          engine: { tier: "high", baseDepth: 16, baseMoveTimeMs: 1500, revisitDepth: 18, revisitMoveTimeMs: 3000 },
+          keyMoments: [],
+        },
+        annotations,
+      },
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByTestId("load-saved-review-phases").click();
+  await page.getByTestId("analysis-tab-review").click();
+  await page.waitForSelector(".review-phase-row", { timeout: 15000 });
+
+  const measure = () => page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".review-phase-row")];
+    return rows.map((row) => {
+      const label = row.querySelector(".review-phase-label")?.textContent?.trim() || "";
+      const scores = [...(row.querySelector(".review-phase-scores")?.children ?? [])].map((score) => {
+        const box = score.getBoundingClientRect();
+        const lineHeight = parseFloat(getComputedStyle(score).lineHeight) || box.height;
+        return { text: score.textContent.replace(/\s+/g, " ").trim(), lines: Math.max(1, Math.round(box.height / lineHeight)) };
+      });
+      const rowBox = row.getBoundingClientRect();
+      const spill = Math.round(Math.max(0, ...[...row.children].map((child) => child.getBoundingClientRect().right - rowBox.right)));
+      return { label, scores, spill };
+    });
+  });
+
+  // Every width the analysis panel is given, including the one it opens at.
+  for (const width of [1280, 1100, 960, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(250);
+    const rows = await measure();
+    if (rows.length < 2) {
+      throw new Error(`At ${width}px the review showed ${rows.length} phase rows; this fixture spans at least two.`);
+    }
+    for (const row of rows) {
+      const broken = row.scores.filter((score) => score.lines > 1);
+      if (broken.length > 0) {
+        throw new Error(
+          `At ${width}px the ${row.label} row split a score across lines, which separates the number from its side: ` +
+          `${JSON.stringify(row.scores)}`
+        );
+      }
+      if (row.spill > 1) {
+        throw new Error(`At ${width}px the ${row.label} row spills ${row.spill}px past its own box.`);
+      }
+    }
+  }
 }
 
 async function assertTheReviewMomentsAreOneTabStop(page) {
@@ -7981,24 +9093,6 @@ async function assertRootMoveVariationsVisible(page) {
 }
 
 /**
- * Replaying a move keeps the line you are reading, not the one you added last.
- *
- * `applyUciMoveAtNode` has a branch for playing a move that is already in the
- * tree, and inside it a choice: if the line you are on continues with that very
- * move, keep the rest of your line; otherwise follow the most recently explored
- * branch. Collapsing that choice to "always follow the most recent branch"
- * survived the whole suite.
- *
- * `assertReplayedMoveKeepsChosenContinuation` next door does not reach it,
- * because there the line being kept and the most recent branch are the same
- * thing, so both sides of the choice give the same answer.
- *
- * Telling them apart needs the reader sitting on the *older* branch: build two
- * replies to the same move, go back to the first one, then replay the move
- * leading into them. Keeping the line means the first reply is still ahead;
- * following the newest branch means being moved silently onto the second.
- */
-/**
  * Replaying a move keeps the evaluation the move already had.
  *
  * `applyUciMoveAtNode`, on the branch for a move already in the tree, carries
@@ -8065,6 +9159,24 @@ async function assertReplayingAMoveKeepsItsEvaluation(page) {
   }
 }
 
+/**
+ * Replaying a move keeps the line you are reading, not the one you added last.
+ *
+ * `applyUciMoveAtNode` has a branch for playing a move that is already in the
+ * tree, and inside it a choice: if the line you are on continues with that very
+ * move, keep the rest of your line; otherwise follow the most recently explored
+ * branch. Collapsing that choice to "always follow the most recent branch"
+ * survived the whole suite.
+ *
+ * `assertReplayedMoveKeepsChosenContinuation` next door does not reach it,
+ * because there the line being kept and the most recent branch are the same
+ * thing, so both sides of the choice give the same answer.
+ *
+ * Telling them apart needs the reader sitting on the *older* branch: build two
+ * replies to the same move, go back to the first one, then replay the move
+ * leading into them. Keeping the line means the first reply is still ahead;
+ * following the newest branch means being moved silently onto the second.
+ */
 async function assertReplayingAMoveKeepsTheLineBeingRead(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -8904,6 +10016,8 @@ async function assertInvalidShareLinkFeedback(page) {
 
   const impossibleFenState = await page.evaluate(() => ({
     warning: document.querySelector('[data-testid="share-link-warning"]')?.textContent?.trim() || "",
+    // The chip's slot is 192px, so the sentence lives on its label.
+    detail: document.querySelector('[data-testid="share-link-warning"]')?.getAttribute("aria-label") || "",
     activePoint: document.querySelector('[data-testid="graph-current-point"]')?.textContent?.trim() || "",
     fen: document.querySelector(".bottombar-fen")?.getAttribute("title") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
@@ -8915,6 +10029,12 @@ async function assertInvalidShareLinkFeedback(page) {
     impossibleFenState.overflowX > 2
   ) {
     throw new Error(`Impossible checked-side FEN did not show feedback: ${JSON.stringify(impossibleFenState)}`);
+  }
+  // And which impossibility. A recipient cannot fix the link, but this is what
+  // tells them whether it arrived damaged or the sender built something no
+  // game could reach -- two problems with different answers.
+  if (!/Black's general is in check, but it is Red's move/.test(impossibleFenState.detail)) {
+    throw new Error(`The share notice named no reason: ${JSON.stringify(impossibleFenState.detail)}`);
   }
 }
 
@@ -8954,28 +10074,6 @@ async function assertMoveLineFileImport(page) {
   }
 }
 
-/**
- * The palette takes a record *out* five ways and, until this command, brought
- * one back in by none: the paste field lives inside New game, which is where a
- * reader goes to throw a game away rather than to open one. Gated on three
- * things -- the command exists, "import" is the word that finds it, and
- * running it leaves the caret in the field. That last one is the fragile part:
- * the palette restores focus to whatever opened it as it closes, so a command
- * that merely opens the panel hands focus back to the toolbar button.
- */
-/**
- * Arrows and markers are a persisted preference, so a board left covered in
- * engine suggestions stays that way across visits and the control that clears
- * it has to be findable. At 390px the top bar carrying it is gone --
- * MOBILE_LAYOUT_QUERY drops that bar at 900px -- and the phone has two other
- * routes instead: "Hide arrows" in the board's More menu, and the palette.
- *
- * Both are gated here, because the More menu had no coverage at all and the
- * palette command was added on the mistaken belief that it was the only way.
- * It is not; it is the searchable one. Each route is checked both ways, since
- * a preference a reader cannot restore is a worse trap than one they cannot
- * reach.
- */
 /**
  * The analysis tabs cut their own labels once a reader scales their text up:
  * at a 24px root font on a 1024px window the right panel gave "Review" and
@@ -9046,46 +10144,6 @@ async function assertScaledUpTextDoesNotCutTheTabLabels(page) {
 }
 
 /**
- * Sound is on by default, and its only control was a row inside the settings
- * dialog. Muting is the preference a reader reaches for in a hurry, so it is
- * now in the palette too. Gated on the three things that make that worth
- * having: the command is what "mute" finds, it actually silences the app rather
- * than only relabelling itself, and it survives a reload -- a mute that comes
- * undone on the next visit is worse than no mute at all.
- *
- * The settings row is checked alongside, because two controls for one
- * preference are only an improvement while they agree.
- */
-/**
- * A phone reader must be able to pinch the board. It is the densest thing on
- * the screen and the one part of it worth magnifying, the viewport meta
- * deliberately permits zooming, and the board covers 30-53% of a phone
- * viewport -- so a rule that opts it out of zooming takes the gesture away
- * exactly where it is wanted. `.board-wrap` carried `touch-action: none`,
- * inherited from the web-chess layout in df1a233 where a touch drag needed it;
- * this board has no touch drag, and Board.tsx names that exact CSS value as the
- * reason it was never built.
- *
- * Gated on the behaviour rather than the declaration, because the declaration
- * is a proxy and this needed a real two-finger gesture to settle. Note the
- * instrument: `Input.synthesizePinchGesture` zooms whatever the CSS says, so it
- * passes identically before and after the fix and proves nothing. Raw
- * `Input.dispatchTouchEvent` goes through hit testing and honours touch-action;
- * measured 1 -> 5 with the fix and 1 -> 1 without it.
- */
-/**
- * The app is installable, which for a board people use on a phone is worth
- * having: launched from the home screen it opens standalone, and the vertical
- * space the browser chrome gives back is space the board gets.
- *
- * Checked through Chrome's own manifest parser rather than by reading the JSON,
- * because JSON parsing is the part least likely to be wrong. What breaks is
- * resolution: `start_url` and `scope` are relative so they work at the
- * /web-xiangqi/ subpath and at the demo's root alike, and a change to vite's
- * `base` or a stray leading slash would leave a manifest that parses perfectly
- * and installs nothing.
- */
-/**
  * Every control the app gives a single-letter shortcut says so on itself: Flip
  * carries `aria-keyshortcuts="F"`, deep dive "D", the threat "X", the hint "H".
  * The three analysis tabs had the shortcuts -- T, R and E switch them from
@@ -9141,18 +10199,114 @@ async function assertTheAnalysisTabsAdvertiseTheirShortcuts(page) {
 }
 
 /**
- * The cloud book is the one feature that sends anything anywhere, and its own
- * copy makes a promise about it: "Sends this position -- and, once a position
- * repeats, the moves that led to it -- and nothing else, to chessdb.cn." This
- * gates that promise, and the failure the reader sees when the answer never
- * comes.
+ * The chase question, asked where it is open.
  *
- * Both halves matter and neither is covered elsewhere. A stray parameter would
- * quietly break a privacy claim the reader was shown before agreeing to turn it
- * on; and a request that fails with no reply must not leave the card saying
- * "Asking chessdb.cn..." for ever, because the reader would be waiting on
- * something that is never coming.
+ * `repetition.ts` classifies perpetual check and stops: a chase needs a
+ * rulebook this app does not carry, and chessdb has it. But the only way to
+ * reach that ruling was the Cloud book card, which lives in the other panel --
+ * and on a phone, on another tab entirely -- so a reader looking at "this is a
+ * draw unless one side is perpetually chasing" was told the question was open
+ * and given nothing to open it with.
+ *
+ * Three things are gated, and the last two are the design rather than the
+ * feature: nothing may reach chessdb before the reader presses it, and it is
+ * not offered on a perpetual check, where the verdict is already decided and
+ * an offer to look it up would be noise.
  */
+async function assertARepeatedPositionCanAskAboutAChase(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+
+    const asks = [];
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      if (!url.includes("chessdb.cn")) return route.continue();
+      asks.push(url);
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "unknown" });
+    });
+
+    const load = async (query) => {
+      await page.goto(`http://127.0.0.1:8192/web-xiangqi/${query}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.waitForSelector('[data-testid="repetition-notice"]', { timeout: 10000 });
+    };
+
+    // A chariot shuffle: repeated, and nobody is checking in it.
+    await load("?moves=a0a1,a9a8,a1a0,a8a9,a0a1,a9a8,a1a0,a8a9");
+    const offered = await page.evaluate(() => {
+      const button = document.querySelector('[data-testid="repetition-ask-cloud"]');
+      return {
+        verdict: document.querySelector('[data-testid="repetition-notice"]')?.getAttribute("data-verdict") || "",
+        present: Boolean(button),
+        title: button?.getAttribute("title") || "",
+        height: button ? Math.round(button.getBoundingClientRect().height) : 0,
+      };
+    });
+    if (offered.verdict !== "unforced") {
+      throw new Error(`The shuffle was ruled "${offered.verdict}"; this check needs the cycle nobody is forcing.`);
+    }
+    if (!offered.present) {
+      throw new Error("An unforced repetition offered no way to ask chessdb whether it is a chase.");
+    }
+    if (!/chessdb\.cn/i.test(offered.title) || !/leave this machine/i.test(offered.title)) {
+      throw new Error(
+        `The offer must name where the position goes before it goes there: ${JSON.stringify(offered.title)}`
+      );
+    }
+    if (offered.height < 44) {
+      throw new Error(`The offer is ${offered.height}px tall; a touch target is 44.`);
+    }
+    if (asks.length > 0) {
+      throw new Error(`Nothing may reach chessdb.cn before the reader asks: ${JSON.stringify(asks.slice(0, 2))}`);
+    }
+
+    await page.getByTestId("repetition-ask-cloud").click();
+    await page.waitForFunction(
+      () => {
+        const said = document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent?.trim() ?? "";
+        return said.length > 0 && !/checking/i.test(said);
+      },
+      null,
+      { timeout: 20000 },
+    ).catch(() => { throw new Error("Pressing the offer never produced a ruling, settled or otherwise."); });
+
+    const after = await page.evaluate(() => ({
+      stillOffered: Boolean(document.querySelector('[data-testid="repetition-ask-cloud"]')),
+      said: document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      stored: (() => { try { return localStorage.getItem("xiangqi:preferences:v1") || ""; } catch { return ""; } })(),
+    }));
+    if (after.stillOffered) throw new Error("The offer stayed on screen after the book was turned on.");
+    if (!after.said) throw new Error("The ruling did not take the offer's place in the notice.");
+    if (!/"cloudBookEnabled":true/.test(after.stored)) {
+      throw new Error(`Pressing the offer did not turn the cloud book on: ${JSON.stringify(after.stored)}`);
+    }
+    if (!asks.some((url) => new URL(url).searchParams.get("action") === "queryrule")) {
+      throw new Error("The cloud book came on but no ruling was ever asked for.");
+    }
+
+    // A perpetual check is already adjudicated; offering a lookup there is noise.
+    await page.evaluate(() => { try { localStorage.removeItem("xiangqi:preferences:v1"); } catch {} });
+    await load(
+      "?fen=3k5%2F9%2F9%2F9%2F9%2F9%2F9%2F9%2F9%2F4KR3%20w%20-%20-%200%201" +
+      "&moves=f0f9,d9d8,f9f8,d8d9,f8f9,d9d8,f9f8,d8d9"
+    );
+    const forced = await page.evaluate(() => ({
+      verdict: document.querySelector('[data-testid="repetition-notice"]')?.getAttribute("data-verdict") || "",
+      present: Boolean(document.querySelector('[data-testid="repetition-ask-cloud"]')),
+    }));
+    if (forced.verdict !== "red-perpetual-check") {
+      throw new Error(`The perpetual-check fixture was ruled "${forced.verdict}"; this half of the check proves nothing.`);
+    }
+    if (forced.present) {
+      throw new Error("A perpetual check is already decided; it must not offer to look the ruling up.");
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 /**
  * "chessdb has no ruling" is an answer, not a failure.
  *
@@ -9242,6 +10396,19 @@ async function assertACloudRulingItDoesNotHaveIsNotAFailure(browser) {
   }
 }
 
+/**
+ * The cloud book is the one feature that sends anything anywhere, and its own
+ * copy makes a promise about it: "Sends this position -- and, once a position
+ * repeats, the moves that led to it -- and nothing else, to chessdb.cn." This
+ * gates that promise, and the failure the reader sees when the answer never
+ * comes.
+ *
+ * Both halves matter and neither is covered elsewhere. A stray parameter would
+ * quietly break a privacy claim the reader was shown before agreeing to turn it
+ * on; and a request that fails with no reply must not leave the card saying
+ * "Asking chessdb.cn..." for ever, because the reader would be waiting on
+ * something that is never coming.
+ */
 async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   try {
@@ -9334,6 +10501,18 @@ async function assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) {
   }
 }
 
+/**
+ * The app is installable, which for a board people use on a phone is worth
+ * having: launched from the home screen it opens standalone, and the vertical
+ * space the browser chrome gives back is space the board gets.
+ *
+ * Checked through Chrome's own manifest parser rather than by reading the JSON,
+ * because JSON parsing is the part least likely to be wrong. What breaks is
+ * resolution: `start_url` and `scope` are relative so they work at the
+ * /web-xiangqi/ subpath and at the demo's root alike, and a change to vite's
+ * `base` or a stray leading slash would leave a manifest that parses perfectly
+ * and installs nothing.
+ */
 async function assertTheAppIsInstallable(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   try {
@@ -9390,11 +10569,57 @@ async function assertTheAppIsInstallable(browser) {
     if (appleCapable !== "yes") {
       throw new Error(`iOS needs apple-mobile-web-app-capable="yes" to launch standalone; found ${JSON.stringify(appleCapable)}.`);
     }
+
+    // And the icon it launches with, which is the one icon the manifest does
+    // not cover. iOS does not read SVG here: given one it falls back to a
+    // screenshot of the page, so the home screen gets a thumbnail of the board
+    // rather than the icon. A raster type and a 200 are the whole check.
+    const appleIcon = await page.evaluate(async () => {
+      const link = document.querySelector('link[rel="apple-touch-icon"]');
+      if (!link) return { missing: true };
+      const href = link.getAttribute("href");
+      try {
+        const response = await fetch(new URL(href, document.baseURI).href);
+        return { href, status: response.status, type: response.headers.get("content-type") || "" };
+      } catch (error) {
+        return { href, error: String(error) };
+      }
+    });
+    if (appleIcon.missing) {
+      throw new Error("No apple-touch-icon, so an iOS home-screen launch gets a screenshot of the page.");
+    }
+    if (appleIcon.status !== 200) {
+      throw new Error(`The apple-touch-icon does not resolve: ${JSON.stringify(appleIcon)}`);
+    }
+    // Must be a raster image, and that is two failures in one test: an SVG,
+    // which iOS cannot read, and a path that 404s into the dev server's
+    // index.html fallback -- which answers 200 with `text/html` and would
+    // otherwise pass as a working icon.
+    if (!/^image\/(png|jpeg|webp)\b/i.test(appleIcon.type)) {
+      throw new Error(`The apple-touch-icon must be a raster image iOS can read; it is served as ${JSON.stringify(appleIcon)}`);
+    }
   } finally {
     await context.close();
   }
 }
 
+/**
+ * A phone reader must be able to pinch the board. It is the densest thing on
+ * the screen and the one part of it worth magnifying, the viewport meta
+ * deliberately permits zooming, and the board covers 30-53% of a phone
+ * viewport -- so a rule that opts it out of zooming takes the gesture away
+ * exactly where it is wanted. `.board-wrap` carried `touch-action: none`,
+ * inherited from the web-chess layout in df1a233 where a touch drag needed it;
+ * this board has no touch drag, and Board.tsx names that exact CSS value as the
+ * reason it was never built.
+ *
+ * Gated on the behaviour rather than the declaration, because the declaration
+ * is a proxy and this needed a real two-finger gesture to settle. Note the
+ * instrument: `Input.synthesizePinchGesture` zooms whatever the CSS says, so it
+ * passes identically before and after the fix and proves nothing. Raw
+ * `Input.dispatchTouchEvent` goes through hit testing and honours touch-action;
+ * measured 1 -> 5 with the fix and 1 -> 1 without it.
+ */
 async function assertAPhoneCanPinchTheBoard(browser) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -9523,6 +10748,171 @@ async function assertChoosingAnEngineOptionDoesNotRenameIt(page) {
 
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
+}
+
+/**
+ * The two destructive actions that could not be taken back now can be.
+ *
+ * Removing a move has offered an Undo for a long time. The two actions that
+ * destroy far more offered none:
+ *
+ * - **Start fresh**, on the recovery modal, throws away the only copy of an
+ *   unfinished game. Measured before the fix: six moves of play, one click,
+ *   gone -- from a button that arrives unbidden as the page opens, sits beside
+ *   Restore with the same weight, and is the kind of thing a reader dismisses
+ *   reflexively.
+ * - **Deleting a saved study**, which may be an evening of analysis with its
+ *   variations, notes and review. It asks twice, which guards the click you
+ *   did not mean; it did nothing about the one you meant and regret.
+ *
+ * Checked through to storage in both cases, because an undo that only repairs
+ * the screen leaves the loss in place the moment the tab is reloaded.
+ */
+async function assertDestructiveActionsCanBeTakenBack(browser) {
+  // Isolated: the shared page clears the auto-save key on every navigation,
+  // and half of this is about that key surviving one.
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 900 });
+  try {
+    const autoSaved = () => page.evaluate(() => {
+      const raw = localStorage.getItem("xiangqi:auto-saved-game:v1");
+      if (!raw) return null;
+      try { return JSON.parse(raw).game?.moves?.length ?? null; } catch { return null; }
+    });
+    const savedGames = () => page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem("xiangqi:library:v1") || "[]").map((game) => game.id); } catch { return ["(unreadable)"]; }
+    });
+
+    // ── Start fresh ──────────────────────────────────────────────────────
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2,b9c7,a0b0,a9b9", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.waitForTimeout(1500);
+    for (const name of [/keep the link|start fresh/i, /restore/i]) {
+      const button = page.getByRole("button", { name });
+      if (await button.count()) { await button.first().click().catch(() => {}); break; }
+    }
+    await page.waitForTimeout(1200);
+    if (await autoSaved() !== 6) throw new Error(`Expected the six played moves to be auto-saved; found ${await autoSaved()}.`);
+
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".auto-save-modal", { timeout: 15000 });
+    await page.getByRole("button", { name: /start fresh/i }).click();
+    await page.waitForTimeout(600);
+    if (await autoSaved() !== null) throw new Error("Start fresh should clear the auto-save.");
+
+    const toast = page.getByTestId("discard-undo-toast");
+    if (!(await toast.count())) {
+      throw new Error("Discarding an unfinished game offered no way back: the only copy of it is gone on one click.");
+    }
+    if (!/6 moves/.test((await toast.textContent()) || "")) {
+      throw new Error(`The discard notice should say how much is at stake: ${await toast.textContent()}`);
+    }
+    await page.getByTestId("discard-undo-btn").click();
+    // Inside the auto-save debounce (600ms), on purpose. Undo has to write the
+    // game down immediately: leaving it to the debounced effect means closing
+    // the tab in the next half second loses it again, which is the loss the
+    // undo exists to prevent. Waiting longer here would pass either way.
+    await page.waitForTimeout(250);
+    const restored = await page.evaluate(() => ({
+      board: (document.querySelector(".wc-meta strong")?.textContent || "").trim(),
+      stored: (() => {
+        const raw = localStorage.getItem("xiangqi:auto-saved-game:v1");
+        try { return raw ? JSON.parse(raw).game?.moves?.length ?? null : null; } catch { return null; }
+      })(),
+    }));
+    if (restored.board !== "6 / 6") throw new Error(`Undo should put the six moves back on the board; it shows ${JSON.stringify(restored.board)}.`);
+    if (restored.stored !== 6) {
+      throw new Error(`Undo repaired the board but not the auto-save, so the game is still one closed tab from gone: ${restored.stored}.`);
+    }
+
+    // ── Deleting a saved study ───────────────────────────────────────────
+    await page.getByTestId("save-game-btn").click();
+    await page.waitForTimeout(700);
+    await page.locator('button[aria-label="Open game library"]').click();
+    await page.waitForTimeout(500);
+    const before = await savedGames();
+    if (before.length !== 1) throw new Error(`Expected one saved study to delete; found ${before.length}.`);
+    const id = before[0];
+
+    // Cancelling the confirm must change nothing.
+    await page.getByTestId(`delete-saved-${id}`).click();
+    await page.waitForTimeout(300);
+    await page.getByTestId(`cancel-delete-saved-${id}`).click();
+    await page.waitForTimeout(400);
+    if ((await savedGames()).length !== 1) throw new Error("Cancelling the delete removed the study anyway.");
+
+    await page.getByTestId(`delete-saved-${id}`).click();
+    await page.waitForTimeout(300);
+    await page.getByTestId(`confirm-delete-saved-${id}`).click();
+    await page.waitForTimeout(600);
+    if ((await savedGames()).length !== 0) throw new Error("Confirming the delete left the study in storage.");
+
+    if (!(await page.getByTestId("library-undo-toast").count())) {
+      throw new Error("Deleting a saved study offered no way back.");
+    }
+    await page.getByTestId("library-undo-btn").click();
+    await page.waitForTimeout(700);
+    const after = await savedGames();
+    if (after.length !== 1) throw new Error(`Undo restored ${after.length} studies, expected 1.`);
+    // Its own id, so an open study or a saved review still points at it.
+    if (after[0] !== id) throw new Error(`Undo restored a copy (${after[0]}) rather than the study that was deleted (${id}).`);
+
+    // ── And when storage refuses the undo ────────────────────────────────
+    //
+    // An undo that cannot be carried out is the one moment the toast must not
+    // look like the cheerful "Deleted X — Undo" it replaces: the deletion
+    // stands, and a reader who reads the old wording walks away believing it
+    // did not. So the toast has to stay up, say what happened, and stop
+    // offering a button that will not work.
+    await page.getByTestId(`delete-saved-${id}`).click();
+    await page.waitForTimeout(300);
+    await page.getByTestId(`confirm-delete-saved-${id}`).click();
+    await page.waitForTimeout(500);
+    await page.evaluate(() => {
+      const real = Storage.prototype.setItem;
+      Storage.prototype.setItem = function refuseLibraryWrites(key, value) {
+        if (String(key).includes("library")) {
+          const error = new Error("QuotaExceededError");
+          error.name = "QuotaExceededError";
+          throw error;
+        }
+        return real.call(this, key, value);
+      };
+    });
+    await page.getByTestId("library-undo-btn").click();
+    await page.waitForTimeout(600);
+    const refused = await page.evaluate(() => {
+      const toast = document.querySelector('[data-testid="library-undo-toast"]');
+      if (!toast) return null;
+      return {
+        text: (toast.textContent || "").replace(/\s+/g, " ").trim(),
+        stillOffersUndo: Boolean(toast.querySelector('[data-testid="library-undo-btn"]')),
+        marked: toast.className.includes("undo-toast-failed"),
+        borderColour: getComputedStyle(toast).borderTopColor,
+      };
+    });
+    if (!refused) {
+      throw new Error("A refused undo closed its toast, so the deletion stands with nothing said about it.");
+    }
+    if (!/could not put it back/i.test(refused.text) || refused.stillOffersUndo) {
+      throw new Error(`A refused undo should say so and stop offering the button: ${JSON.stringify(refused)}`);
+    }
+    if (!refused.marked) throw new Error("The refused toast is not marked as a failure.");
+    // And the marking has to be visible, not just a class name.
+    const plain = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.className = "undo-toast";
+      probe.style.position = "absolute";
+      document.body.appendChild(probe);
+      const colour = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return colour;
+    });
+    if (refused.borderColour === plain) {
+      throw new Error(`The refused toast is drawn exactly like the ordinary one (${plain}), which is the one moment it must not be.`);
+    }
+  } finally {
+    await context.close();
+  }
 }
 
 /**
@@ -10053,6 +11443,17 @@ async function assertNotationCanBeChosenFromThePalette(page) {
   }
 }
 
+/**
+ * Sound is on by default, and its only control was a row inside the settings
+ * dialog. Muting is the preference a reader reaches for in a hurry, so it is
+ * now in the palette too. Gated on the three things that make that worth
+ * having: the command is what "mute" finds, it actually silences the app rather
+ * than only relabelling itself, and it survives a reload -- a mute that comes
+ * undone on the next visit is worse than no mute at all.
+ *
+ * The settings row is checked alongside, because two controls for one
+ * preference are only an improvement while they agree.
+ */
 async function assertSoundCanBeMutedFromThePalette(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10135,6 +11536,19 @@ async function assertSoundCanBeMutedFromThePalette(page) {
   }
 }
 
+/**
+ * Arrows and markers are a persisted preference, so a board left covered in
+ * engine suggestions stays that way across visits and the control that clears
+ * it has to be findable. At 390px the top bar carrying it is gone --
+ * MOBILE_LAYOUT_QUERY drops that bar at 900px -- and the phone has two other
+ * routes instead: "Hide arrows" in the board's More menu, and the palette.
+ *
+ * Both are gated here, because the More menu had no coverage at all and the
+ * palette command was added on the mistaken belief that it was the only way.
+ * It is not; it is the searchable one. Each route is checked both ways, since
+ * a preference a reader cannot restore is a worse trap than one they cannot
+ * reach.
+ */
 async function assertArrowsCanBeTurnedOffOnAPhone(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7", {
@@ -10276,6 +11690,15 @@ async function assertTheCommandPaletteDoesNotClaimAnEmptyPopup(page) {
   }
 }
 
+/**
+ * The palette takes a record *out* five ways and, until this command, brought
+ * one back in by none: the paste field lives inside New game, which is where a
+ * reader goes to throw a game away rather than to open one. Gated on three
+ * things -- the command exists, "import" is the word that finds it, and
+ * running it leaves the caret in the field. That last one is the fragile part:
+ * the palette restores focus to whatever opened it as it closes, so a command
+ * that merely opens the panel hands focus back to the toolbar button.
+ */
 async function assertPaletteImportsAGameRecord(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
@@ -10552,6 +11975,381 @@ async function assertAnOpenDialogHoldsTheMoveShortcuts(page) {
 }
 
 /**
+ * A FEN refused for breaking a rule can be carried into the editor to be fixed.
+ *
+ * Two kinds of refusal come out of `describeFenProblem` and only one is a dead
+ * end. A layout that will not parse leaves nothing to show. A layout that
+ * parses and breaks a rule of the game is a board -- and being told "the
+ * generals face each other on an open file" and then having to rebuild that
+ * whole position by hand, to move one general one square, is the long way
+ * round when the editor holds illegal boards on purpose, says the same
+ * sentence about them, and keeps Done disabled until they are answered.
+ *
+ * So the button under the refusal changes what it says and what it carries,
+ * and this pins both halves: it carries the refused board when there is one,
+ * and it still means the old thing -- start from the game on screen -- when
+ * the paste drew no board at all.
+ */
+async function assertARefusedFenCanBeFixedByHand(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+
+  const editorButton = page.getByTestId("open-board-editor-btn");
+  const openDialog = async () => {
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.waitForSelector(".new-game-fen-input", { timeout: 10000 });
+  };
+
+  // Nothing refused: the button means what it always meant.
+  await openDialog();
+  if (String(await editorButton.textContent() || "").trim() !== "Set up the board by hand") {
+    throw new Error(`With nothing refused the button should offer a fresh board: ${await editorButton.textContent()}`);
+  }
+  await page.keyboard.press("Escape");
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+
+  // A layout that draws no board is still a dead end, and must not pretend.
+  await openDialog();
+  await page.locator(".new-game-fen-input").fill("not a position at all");
+  await page.locator(".new-game-fen-form button[type=submit]").click();
+  await page.waitForSelector("#new-game-fen-error", { timeout: 5000 });
+  if (String(await editorButton.textContent() || "").trim() !== "Set up the board by hand") {
+    throw new Error(`An unreadable layout has no position to carry: ${await editorButton.textContent()}`);
+  }
+  await page.keyboard.press("Escape");
+  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
+
+  // A board that breaks a rule: two generals on the d-file, facing.
+  await openDialog();
+  await page.locator(".new-game-fen-input").fill("3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1");
+  await page.locator(".new-game-fen-form button[type=submit]").click();
+  await page.waitForSelector("#new-game-fen-error", { timeout: 5000 });
+  if (String(await editorButton.textContent() || "").trim() !== "Fix this position by hand") {
+    throw new Error(`A refused board should be offered for fixing: ${await editorButton.textContent()}`);
+  }
+
+  await editorButton.click();
+  await page.waitForSelector('[data-testid="board-editor"]', { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const carried = await page.evaluate(() => ({
+    fen: document.querySelector('[data-testid="editor-fen"]')?.value || "",
+    pieces: document.querySelectorAll(".board-editor .pieces-layer .piece").length,
+    problem: document.querySelector('[data-testid="editor-problem"]')?.textContent?.trim() || "",
+    done: document.querySelector('[data-testid="editor-done"]')?.disabled,
+  }));
+  if (carried.fen !== "3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1" || carried.pieces !== 2) {
+    throw new Error(`The editor opened on something other than the refused position: ${JSON.stringify(carried)}`);
+  }
+  if (!/generals face each other/.test(carried.problem) || carried.done !== true) {
+    throw new Error(`The editor should repeat the refusal and hold Done: ${JSON.stringify(carried)}`);
+  }
+
+  // One general one square sideways, and it is a position again.
+  await page.locator('.board-editor .hitbox[data-file="4"][data-rank="0"]').click();
+  await page.waitForTimeout(200);
+  await page.locator('.board-editor .hitbox[data-file="3"][data-rank="0"]').click();
+  await page.waitForTimeout(300);
+  const fixed = await page.evaluate(() => ({
+    fen: document.querySelector('[data-testid="editor-fen"]')?.value || "",
+    problem: document.querySelector('[data-testid="editor-problem"]')?.textContent?.trim() || "",
+    done: document.querySelector('[data-testid="editor-done"]')?.disabled,
+  }));
+  if (fixed.done !== false || /face each other/.test(fixed.problem)) {
+    throw new Error(`Moving the general off the file should answer the refusal: ${JSON.stringify(fixed)}`);
+  }
+  await page.getByTestId("editor-done").click();
+  await page.waitForSelector('[data-testid="board-editor"]', { state: "detached", timeout: 5000 });
+  const onBoard = await page.evaluate(() =>
+    document.querySelector(".bottombar-fen")?.getAttribute("title") || "");
+  if (!/^3k5\/9\/9\/9\/9\/9\/9\/9\/9\/4K4 w/.test(onBoard)) {
+    throw new Error(`Done loaded ${JSON.stringify(onBoard)} rather than the position as fixed.`);
+  }
+
+  // And the carried board does not outlive its errand. The command palette is
+  // the other way in and says nothing about a seed, so whatever the last
+  // refusal left behind is what it would open on.
+  const openFromPalette = async () => {
+    await page.keyboard.press("Control+k");
+    await page.waitForTimeout(400);
+    await page.keyboard.type("Set up a position");
+    await page.waitForTimeout(400);
+    await page.keyboard.press("Enter");
+    await page.waitForSelector('[data-testid="board-editor"]', { timeout: 15000 });
+    await page.waitForTimeout(400);
+    return page.evaluate(() => document.querySelector('[data-testid="editor-fen"]')?.value || "");
+  };
+
+  const afterApply = await openFromPalette();
+  if (!afterApply.startsWith("3k5/9/9/9/9/9/9/9/9/4K4")) {
+    throw new Error(`After a fix was applied the palette opened on a stale board: ${JSON.stringify(afterApply)}`);
+  }
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.waitForSelector('[data-testid="board-editor"]', { state: "detached", timeout: 5000 });
+
+  // Same again for a refusal that was carried in and then abandoned.
+  await openDialog();
+  await page.locator(".new-game-fen-input").fill("4k4/9/9/9/9/9/9/9/9/4KR3 w - - 0 1");
+  await page.locator(".new-game-fen-form button[type=submit]").click();
+  await page.waitForSelector("#new-game-fen-error", { timeout: 5000 });
+  await editorButton.click();
+  await page.waitForSelector('[data-testid="board-editor"]', { timeout: 10000 });
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.waitForSelector('[data-testid="board-editor"]', { state: "detached", timeout: 5000 });
+
+  const afterCancel = await openFromPalette();
+  if (!afterCancel.startsWith("3k5/9/9/9/9/9/9/9/9/4K4")) {
+    throw new Error(`After a carried board was abandoned the palette opened on it anyway: ${JSON.stringify(afterCancel)}`);
+  }
+}
+
+/**
+ * The editor's FEN box, which used to print a position and take none.
+ *
+ * A position is set up here for one of two reasons: it came from somewhere --
+ * a book diagram, a puzzle, a message -- or it is going somewhere. Neither
+ * direction worked: the text was inert, so a position had to be pasted into
+ * New Game's own FEN field before the editor could adjust it, and taking one
+ * out meant pressing Done first and finding the board's copy button.
+ *
+ * The third case is the one that makes it a field rather than a display: a
+ * half-typed FEN must survive the next keystroke, and must stop pretending to
+ * describe the board the moment a piece is placed.
+ */
+async function assertTheBoardEditorTakesAndGivesAFen(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await page.getByRole("button", { name: "Start new game" }).click();
+  await page.getByTestId("open-board-editor-btn").click();
+  await page.waitForSelector('[data-testid="board-editor"]', { timeout: 5000 });
+
+  const field = page.getByTestId("editor-fen");
+  const read = () => page.evaluate(() => ({
+    fen: document.querySelector('[data-testid="editor-fen"]')?.value || "",
+    pieces: document.querySelectorAll(".board-editor .pieces-layer .piece").length,
+    black: document.querySelector('[data-testid="editor-side-black"]')?.getAttribute("aria-pressed") === "true",
+    notice: document.querySelector('[data-testid="editor-fen-notice"]')?.textContent?.trim() || "",
+    // A `role="status"` announces once and is gone. These are what a reader
+    // who tabs back to the field to fix it is told.
+    invalid: document.querySelector('[data-testid="editor-fen"]')?.getAttribute("aria-invalid") || "",
+    describedBy: (() => {
+      const id = document.querySelector('[data-testid="editor-fen"]')?.getAttribute("aria-describedby");
+      return id ? (document.getElementById(id)?.textContent?.trim() || "(no such element)") : "";
+    })(),
+    problem: document.querySelector('[data-testid="editor-problem"]')?.textContent?.trim() || "",
+    done: document.querySelector('[data-testid="editor-done"]')?.disabled,
+  }));
+
+  const opened = await read();
+  if (!/^rnbakabnr\/9\/1c5c1/.test(opened.fen) || opened.pieces !== 32) {
+    throw new Error(`The editor opened showing ${JSON.stringify(opened)} rather than the position it was given.`);
+  }
+  const box = await field.boundingBox();
+  if (!box || box.height < 44) throw new Error(`The FEN field is ${box && Math.round(box.height)}px tall; a touch target is 44.`);
+
+  // An endgame typed in by hand, side and all.
+  await field.fill("3k5/9/9/9/9/9/9/9/9/4KR3 b - - 0 1");
+  await page.getByTestId("editor-fen-load").click();
+  const loaded = await read();
+  if (loaded.pieces !== 3) throw new Error(`Loading a three-piece endgame left ${loaded.pieces} pieces.`);
+  if (!loaded.black) throw new Error("The FEN named Black to move and the editor did not take it.");
+  if (loaded.done !== false) throw new Error(`A legal loaded position left Done disabled: ${JSON.stringify(loaded)}`);
+  if (loaded.fen !== "3k5/9/9/9/9/9/9/9/9/4KR3 b - - 0 1") {
+    throw new Error(`After loading, the field should describe the board: ${JSON.stringify(loaded.fen)}`);
+  }
+
+  // Something that is not a position leaves the board alone and says so.
+  await field.fill("not a position at all");
+  await page.getByTestId("editor-fen-load").click();
+  const refused = await read();
+  if (!refused.notice) throw new Error("An unreadable FEN was refused silently.");
+  if (refused.invalid !== "true" || refused.describedBy !== refused.notice) {
+    throw new Error(`A refused FEN left the field unmarked for a screen reader: ${JSON.stringify(refused)}`);
+  }
+  if (refused.pieces !== 3) throw new Error(`An unreadable FEN changed the board to ${refused.pieces} pieces.`);
+  if (refused.fen !== "not a position at all") {
+    throw new Error(`A refused draft was overwritten rather than left to be corrected: ${JSON.stringify(refused.fen)}`);
+  }
+
+  // Placing a piece means the field is describing the board again.
+  await page.locator('.board-editor .hitbox[data-file="0"][data-rank="0"]').click();
+  const painted = await read();
+  if (painted.notice) throw new Error(`The refusal outlived the edit that answered it: ${JSON.stringify(painted.notice)}`);
+  if (painted.invalid || painted.describedBy) {
+    throw new Error(`The field still reads as invalid after the edit that answered it: ${JSON.stringify(painted)}`);
+  }
+  if (painted.pieces !== 4 || !/^3k5/.test(painted.fen)) {
+    throw new Error(`After placing a piece the field should follow the board: ${JSON.stringify(painted)}`);
+  }
+
+  // And the position the editor hands over is the one the field showed.
+  await field.fill("3k5/9/9/9/9/9/9/9/9/4KR3 w - - 0 1");
+  await page.getByTestId("editor-fen-load").click();
+  await page.getByTestId("editor-done").click();
+  await page.waitForSelector('[data-testid="board-editor"]', { state: "detached", timeout: 5000 });
+  const onBoard = await page.evaluate(() =>
+    document.querySelector(".bottombar-fen")?.getAttribute("title") || "");
+  if (!onBoard.startsWith("3k5/9/9/9/9/9/9/9/9/4KR3 w")) {
+    throw new Error(`Done loaded ${JSON.stringify(onBoard)} rather than the position in the field.`);
+  }
+}
+
+/**
+ * The FEN field at the size it is least usable: 320px with 200% text.
+ *
+ * A field and two buttons on one row is fine until the row is 237px and the
+ * buttons want 95px each. Written as `flex: 1 1 auto` the field gives up
+ * everything they ask for: measured, it was **31 pixels** wide and the second
+ * button hung 6px past the row. A FEN cannot be read or corrected in 31px, and
+ * this is the reader most likely to be correcting one.
+ *
+ * Chrome's own font setting rather than `html { font-size }`, for the reason
+ * the board-floor check above records: the second moves `rem` and not the `em`
+ * basis of a media query, so it does not reproduce what a reader actually has.
+ */
+async function assertTheBoardEditorFenFieldSurvivesLargeText(browser) {
+  const context = await browser.newContext({ viewport: { width: 320, height: 640 } });
+  try {
+    const page = await context.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Page.enable");
+    await cdp.send("Page.setFontSizes", { fontSizes: { standard: 32, fixed: 32 } });
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    // The top bar is display:none below 900px, so the phone route in is the
+    // board-actions button rather than the toolbar's.
+    await page.getByRole("button", { name: "Open new game menu" }).click();
+    await page.getByTestId("open-board-editor-btn").click();
+    await page.waitForSelector('[data-testid="editor-fen"]', { timeout: 15000 });
+    await page.waitForTimeout(300);
+
+    const measured = await page.evaluate(() => {
+      const box = (selector) => {
+        const element = document.querySelector(selector);
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { w: Math.round(rect.width), h: Math.round(rect.height), right: Math.round(rect.right) };
+      };
+      return {
+        row: box(".board-editor-fen-row"),
+        field: box('[data-testid="editor-fen"]'),
+        load: box('[data-testid="editor-fen-load"]'),
+        copy: box('[data-testid="editor-fen-copy"]'),
+        overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    const { row, field, load, copy } = measured;
+    if (!row || !field || !load || !copy) throw new Error(`The FEN row did not render: ${JSON.stringify(measured)}`);
+    if (field.w < row.w * 0.6) {
+      throw new Error(
+        `The FEN field is ${field.w}px of a ${row.w}px row; the buttons squeezed it out. ${JSON.stringify(measured)}`
+      );
+    }
+    for (const [name, control] of [["field", field], ["Load", load], ["Copy", copy]]) {
+      if (control.right > row.right + 1) {
+        throw new Error(`The ${name} runs ${control.right - row.right}px past its row. ${JSON.stringify(measured)}`);
+      }
+      if (control.h < 44) {
+        throw new Error(`The ${name} is ${control.h}px tall at 200% text; a touch target is 44. ${JSON.stringify(measured)}`);
+      }
+    }
+    if (measured.overflowX > 2) {
+      throw new Error(`The editor pushed the page ${measured.overflowX}px sideways. ${JSON.stringify(measured)}`);
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Every text field a thumb reaches is 16px and 44px tall.
+ *
+ * Two separate rules, checked together because one fix serves both and one
+ * regression breaks both.
+ *
+ * The 16px is not a readability preference. iOS Safari zooms the whole page in
+ * when it focuses a field computing under 16px, and it does not zoom back out
+ * when the field is blurred: tapping the library's search box leaves the
+ * reader on a board they have to pinch to see. Four of this app's dialogs
+ * already carry `font-size: max(16px, 1rem)` for this reason and say so; the
+ * fields here were written before that and missed it.
+ *
+ * The 44px is WCAG 2.5.5 and the size every other tappable thing in this app
+ * is built to -- board hitboxes, editor brushes, library buttons all state it
+ * in their own comments. A text field is the one control that has to be hit
+ * exactly rather than anywhere inside a card.
+ *
+ * Measured with `offsetHeight`, not `getBoundingClientRect`. The new-game menu
+ * animates in from `scale(0.97)`, so a rect read on the opening frame reports
+ * a 44px field as 42.68px and every control in that dialog 3% short. That
+ * reading cost three fixes to a field that was already the right size.
+ *
+ * Each dialog gets its own page: an open panel covers the button for the next.
+ */
+async function assertThumbSizedTextFields(browser) {
+  const measure = (page, selector) =>
+    page.evaluate((s) => {
+      const el = document.querySelector(s);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { px: Number(parseFloat(cs.fontSize).toFixed(1)), h: el.offsetHeight };
+    }, selector);
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
+    const context = await browser.newContext({ viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+    try {
+      const fresh = async () => {
+        const page = await context.newPage();
+        await clearAutoSaveBetweenNavigations(page);
+        await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+        await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+        return page;
+      };
+      const found = [];
+
+      let page = await fresh();
+      await page.getByRole("button", { name: "Open game library" }).click();
+      await page.waitForSelector(".lib-search", { timeout: 20000 });
+      found.push(["library search", await measure(page, ".lib-search")]);
+      await page.close();
+
+      // Below 900px the top bar is `display: none`, so the phone's way into the
+      // new-game dialog is the board's own action row.
+      page = await fresh();
+      await page.getByRole("button", { name: "Open new game menu" }).click();
+      await page.waitForSelector(".new-game-fen-input", { timeout: 20000 });
+      found.push(["new-game FEN", await measure(page, ".new-game-fen-input")]);
+      found.push(["new-game move line", await measure(page, ".new-game-line-input")]);
+      await page.getByTestId("open-board-editor-btn").click();
+      await page.waitForSelector('[data-testid="editor-fen"]', { timeout: 25000 });
+      await page.waitForTimeout(300);
+      found.push(["editor FEN", await measure(page, '[data-testid="editor-fen"]')]);
+      await page.close();
+
+      for (const [name, info] of found) {
+        if (!info) {
+          throw new Error(`At ${viewport.width}px the ${name} field was not on screen to measure.`);
+        }
+        if (info.px < 16) {
+          throw new Error(
+            `At ${viewport.width}px the ${name} field computes ${info.px}px; iOS Safari zooms the page in on anything under 16px and never zooms back out.`
+          );
+        }
+        if (info.h < 44) {
+          throw new Error(
+            `At ${viewport.width}px the ${name} field is ${info.h}px tall; a text field a thumb has to hit exactly wants the 44px every other control here gets.`
+          );
+        }
+      }
+    } finally {
+      await context.close();
+    }
+  }
+}
+
+/**
  * "Set up the board by hand" is reached from inside the New Game menu, and the
  * menu used to stay open behind the editor -- two `aria-modal` dialogs at once,
  * which is a state a screen reader has no answer for, and one Tab out of the
@@ -10721,6 +12519,269 @@ async function assertMobileBoardLayout(page, viewport) {
     throw new Error(`Mobile move navigation labels were unclear: ${JSON.stringify(layout)}`);
   }
   rectWithinLayout(layout);
+}
+
+/**
+ * Keyboard shortcuts drive the board, and must not do so while the reader is
+ * typing. Two separate window listeners: arrow keys in `WatchControls`, and
+ * the letter shortcuts in `App.tsx`.
+ *
+ * `WatchControls` registers its navigation shortcuts on `window`, so every
+ * keystroke anywhere on the page reaches them. The guard that spares text
+ * fields is a `tagName` test inside that listener, and nothing held it: the
+ * unit suite renders components with `renderToStaticMarkup`, which never runs
+ * effects, and this gate had no assertion for it either. Removing the `INPUT`
+ * arm passes all 174 checks -- and leaves a reader who types in the library
+ * search watching the board jump to the start of the game under their hands.
+ *
+ * The library search is the field to use: it is a plain `input` outside any
+ * dialog, so it is decided by this guard alone. A field inside a dialog is
+ * spared twice over, by the dialog arm here and by `shortcutsEnabled`.
+ */
+async function assertTypingDoesNotDriveTheBoard(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.evaluate(() => {
+    localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
+      id: "qa-typing-game",
+      savedAt: 1710000000000,
+      gameMode: "PvP",
+      moves: ["b2e2"],
+      result: "ongoing",
+      label: "Typing guard QA",
+    }]));
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+
+  const activeMove = () => page.evaluate(() =>
+    document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || "");
+  await page.waitForFunction(() =>
+    Boolean(document.querySelector('[data-testid="move-tree-active"]')), null, { timeout: 10000 });
+  const atStart = await activeMove();
+
+  await page.locator('button[aria-label="Open game library"]').click();
+  await page.getByLabel("Search library").click();
+  await page.keyboard.type("typ");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  const whileTyping = await activeMove();
+
+  if (whileTyping !== atStart) {
+    throw new Error(
+      `Arrow keys navigated the game while typing in the library search: "${atStart}" -> "${whileTyping}"`
+    );
+  }
+
+  // The letter shortcuts are a second window listener, in `App.tsx`, with a
+  // text-field guard of its own: `f` flips the board, `t`/`r`/`e` switch
+  // panels, space plays the engine's move. Typing a player's name into the
+  // search must not do any of it.
+  const piecePlacement = () => page.evaluate(() =>
+    document.querySelector('[class*="piece"][style]')?.getAttribute("style") || "");
+  const placedBefore = await piecePlacement();
+  await page.keyboard.type("ftre");
+  await page.waitForTimeout(150);
+  const placedAfter = await piecePlacement();
+  if (!placedBefore || placedAfter !== placedBefore) {
+    throw new Error(
+      `Letter shortcuts fired while typing in the library search: board went "${placedBefore}" -> "${placedAfter}"`
+    );
+  }
+  if (await page.getByLabel("Search library").inputValue() === "") {
+    throw new Error("The search field took none of the typing, so the check above proves nothing");
+  }
+
+  // The note field, which is a textarea on the analysis panel rather than in a
+  // dialog -- so it is spared by the `TEXTAREA` arm alone, exactly as the
+  // search field is by the `INPUT` arm.
+  await page.locator('button[aria-label="Open game library"]').click();
+  const note = page.locator('[data-testid="move-comment-input"]');
+  if (await note.count()) {
+    await note.first().click();
+    await page.keyboard.type("note");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    const whileWritingNote = await activeMove();
+    if (whileWritingNote !== atStart) {
+      throw new Error(
+        `Arrow keys navigated the game while writing a move note: "${atStart}" -> "${whileWritingNote}"`
+      );
+    }
+  } else {
+    throw new Error("Move note field not found; this check no longer covers the textarea guard");
+  }
+
+  // The annotation dropdown, a `select` on the analysis panel. Arrow keys in a
+  // select change the option; navigating the game as well would do two things
+  // for one press.
+  await page.evaluate(() => {
+    // Opened directly rather than by clicking the summary: a click *toggles*,
+    // so if the panel is already open the click shuts it, `focus()` on the
+    // hidden select does nothing, and the key lands on the summary instead --
+    // which is not a field the guard spares, so the check reports a bug that
+    // is really its own setup.
+    document.querySelector('[data-testid="imported-glyphs"]')?.setAttribute("open", "");
+  });
+  const picker = page.getByLabel("Add study annotation");
+  if (await picker.count()) {
+    await picker.first().focus();
+    const focused = await page.evaluate(() => document.activeElement?.tagName || "");
+    if (focused !== "SELECT") {
+      throw new Error(`Annotation select did not take focus (got ${focused}); this check proves nothing`);
+    }
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    const whileChoosing = await activeMove();
+    if (whileChoosing !== atStart) {
+      throw new Error(
+        `Arrow keys navigated the game while choosing an annotation: "${atStart}" -> "${whileChoosing}"`
+      );
+    }
+  }
+
+  // A modifier chord belongs to the browser, not to us: Cmd+Left and Alt+Left
+  // are Back. Navigating the game as well would do two things for one press.
+  await page.locator(".board-grid, .board-wrap, body").first().click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Control+ArrowLeft");
+  await page.keyboard.press("Alt+ArrowLeft");
+  await page.waitForTimeout(150);
+  const afterChord = await activeMove();
+  if (afterChord !== atStart) {
+    throw new Error(
+      `A modifier chord navigated the game: "${atStart}" -> "${afterChord}"`
+    );
+  }
+
+  // The control. Without it "nothing moved" could mean the shortcut is broken
+  // everywhere, or that this line never had a move to step back from.
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(150);
+  const afterBoardArrow = await activeMove();
+  if (afterBoardArrow === atStart) {
+    throw new Error(
+      `Arrow key did not navigate with focus outside a text field, so the checks above prove nothing (still "${afterBoardArrow}")`
+    );
+  }
+}
+
+/**
+ * Arrow keys at the ends of the line do nothing.
+ *
+ * `WatchControls` binds Left/Right to `onPrev`/`onNext` **unconditionally** --
+ * the buttons are disabled at the ends, the key handler is not -- so at the
+ * last move `goToNextMove` calls `jumpToMove(activeLineNodeIds.length)`. The
+ * only thing that stops it is the bound check at the top of `jumpToMove`, and
+ * nothing held it: `useXiangqi.ts` is not loadable by the unit suite, and
+ * widening `index >= length` to `index > length` **passed all 175 checks
+ * here**.
+ *
+ * Widened, pressing Right at the end of a game shows "Move 5 / 4" and leaves
+ * the move list with nothing selected, because `activeLineNodeIds[length]` is
+ * undefined and the board falls back to the start position.
+ */
+async function assertArrowsStopAtTheEndsOfTheLine(page) {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto("http://127.0.0.1:8192/web-xiangqi/?moves=h2e2,h9g7,b0c2,b9c7", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForSelector('[data-testid="move-tree-active"]', { timeout: 10000 });
+  const read = () => page.evaluate(() => ({
+    counter: document.querySelector(".wc-meta strong")?.textContent?.trim() || "",
+    active: document.querySelector('[data-testid="move-tree-active"]')?.textContent?.trim() || "",
+  }));
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+
+  const atEnd = await read();
+  if (atEnd.counter !== "4 / 4" || !atEnd.active) {
+    throw new Error(`Did not start at the end of the line: ${JSON.stringify(atEnd)}`);
+  }
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(150);
+  const pastEnd = await read();
+  if (pastEnd.counter !== atEnd.counter || pastEnd.active !== atEnd.active) {
+    throw new Error(`Right past the last move moved the game: ${JSON.stringify(atEnd)} -> ${JSON.stringify(pastEnd)}`);
+  }
+
+  // And the other end, which is the `index < -1` half of the same guard.
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(150);
+  const pastStart = await read();
+  if (pastStart.counter !== "Start / 4") {
+    throw new Error(`Left past the first move did not settle at the start: ${JSON.stringify(pastStart)}`);
+  }
+
+  // The control: the keys work at all, so "nothing moved" means the guard and
+  // not a broken shortcut.
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(150);
+  const stepped = await read();
+  if (stepped.counter !== "1 / 4") {
+    throw new Error(`ArrowRight did not step forward from the start: ${JSON.stringify(stepped)}`);
+  }
+}
+
+/**
+ * The two ways this page can come up blank, and what it says instead.
+ *
+ * `#root` is empty until React fills it, so a reader who never gets that far
+ * sees the background colour and nothing else. `noscript` covers scripting
+ * being off; a `nomodule` script covers a browser older than this app's floor,
+ * which skipped the module bundle for the same reason it will run this.
+ *
+ * The second half of the check matters as much as the first: a `nomodule`
+ * script that loses its attribute, or a fallback moved out of `noscript`,
+ * would print "this browser is too old" underneath a perfectly working board.
+ */
+async function assertABlankPageExplainsItself(browser) {
+  const withoutJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+  try {
+    const page = await withoutJs.newPage();
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    const text = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
+    if (!/needs JavaScript/i.test(text)) {
+      throw new Error(`With scripting off the page said ${JSON.stringify(text.slice(0, 120)) || "nothing at all"}`);
+    }
+  } finally {
+    await withoutJs.close();
+  }
+
+  const withJs = await browser.newContext({ viewport: { width: 1280, height: 820 } });
+  try {
+    const page = await withJs.newPage();
+    await clearAutoSaveBetweenNavigations(page);
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    const text = await page.locator("body").innerText();
+    if (/needs JavaScript|too old for Web Xiangqi/i.test(text)) {
+      throw new Error("A fallback message is showing on a browser that ran the app.");
+    }
+
+    // The attribute itself, because the rendered page cannot show its loss:
+    // without `nomodule` the script runs, writes its message into `#root`, and
+    // React overwrites it a moment later -- a flash on every load that leaves
+    // no trace to assert on afterwards.
+    const guarded = await page.evaluate(() => {
+      const fallback = [...document.querySelectorAll("script")]
+        .find((script) => /too old for Web Xiangqi/.test(script.textContent || ""));
+      return fallback ? fallback.hasAttribute("nomodule") : null;
+    });
+    if (guarded === null) {
+      throw new Error("The old-browser fallback script is gone, so an unsupported browser gets a blank page.");
+    }
+    if (!guarded) {
+      throw new Error("The old-browser fallback lost its `nomodule` attribute, so it runs on every browser.");
+    }
+  } finally {
+    await withJs.close();
+  }
 }
 
 async function assertLibraryDeleteConfirmation(page) {
@@ -10904,21 +12965,6 @@ async function assertTheSavedLibraryIsOneTabStop(page) {
 }
 
 /**
- * The two saved-game sorts the sorting gate does not reach, on data that can
- * tell them apart.
- *
- * `assertLibrarySavedGameSorting` covers five of the seven. `oldest` and
- * `black-accuracy-high` are not among them -- and its fixture could not have
- * covered the second one usefully anyway: its three reviewed games rank
- * 90/88/35 by red and 99/95/70 by black, which is the same order, so a
- * `black-accuracy-high` that read `redAccuracy` by a copy-paste slip would
- * sort identically and pass.
- *
- * Here the two are deliberately opposed -- red ascends as black descends --
- * and the run asserts red's order as well, so the check carries its own proof
- * that the two sorts are distinguishable on this data.
- */
-/**
  * A finished review says when the board has left the line it covers.
  *
  * The figures stay on screen once a reader steps into a variation, and that is
@@ -11039,6 +13085,21 @@ async function assertAReviewSaysWhenTheBoardHasLeftItsLine(page) {
   }
 }
 
+/**
+ * The two saved-game sorts the sorting gate does not reach, on data that can
+ * tell them apart.
+ *
+ * `assertLibrarySavedGameSorting` covers five of the seven. `oldest` and
+ * `black-accuracy-high` are not among them -- and its fixture could not have
+ * covered the second one usefully anyway: its three reviewed games rank
+ * 90/88/35 by red and 99/95/70 by black, which is the same order, so a
+ * `black-accuracy-high` that read `redAccuracy` by a copy-paste slip would
+ * sort identically and pass.
+ *
+ * Here the two are deliberately opposed -- red ascends as black descends --
+ * and the run asserts red's order as well, so the check carries its own proof
+ * that the two sorts are distinguishable on this data.
+ */
 async function assertLibrarySortsByBlackAccuracyAndByAge(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -12777,6 +14838,8 @@ function layoutChecks(page, browser) {
     { name: "assertForcedColoursRemainReadable", run: () => assertForcedColoursRemainReadable(browser) },
     { name: "assertSkipLinkReachesTheBoard", run: () => assertSkipLinkReachesTheBoard(page) },
     { name: "assertDialogsReturnFocusOnClose", run: () => assertDialogsReturnFocusOnClose(page) },
+    { name: "assertEveryTabStopShowsItsFocus", run: () => assertEveryTabStopShowsItsFocus(page) },
+    { name: "assertAnOpenDialogHidesThePageBehindIt", run: () => assertAnOpenDialogHidesThePageBehindIt(browser) },
     { name: "assertBoardMatchesThePlyItIsOn", run: () => assertBoardMatchesThePlyItIsOn(page) },
     { name: "assertAdvertisedMoveShortcuts", run: () => assertAdvertisedMoveShortcuts(page) },
     { name: "assertNotationStylesRenderDifferently", run: () => assertNotationStylesRenderDifferently(page) },
@@ -12791,8 +14854,11 @@ function layoutChecks(page, browser) {
     { name: "assertDesktopResizeFeedback", run: () => assertDesktopResizeFeedback(page) },
     { name: "assertPausedAiTurnBlocksManualMove", run: () => assertPausedAiTurnBlocksManualMove(page) },
     { name: "assertIllegalMoveShowsRuleHint", run: () => assertIllegalMoveShowsRuleHint(page) },
+    { name: "assertReachingForTheOtherSideSaysWhy", run: () => assertReachingForTheOtherSideSaysWhy(page) },
     { name: "assertAiPlayModeShowsEngineStatus", run: () => assertAiPlayModeShowsEngineStatus(page) },
     { name: "assertAiNewGameSwitchesToPlayWorkspace", run: () => assertAiNewGameSwitchesToPlayWorkspace(page) },
+    { name: "assertLocalNewGameReturnsTheWorkspaceAiTook", run: () => assertLocalNewGameReturnsTheWorkspaceAiTook(page) },
+    { name: "assertARefusedFenSaysWhichThingIsWrong", run: () => assertARefusedFenSaysWhichThingIsWrong(page) },
     { name: "assertTakeBackRemovesTheExchange", run: () => assertTakeBackRemovesTheExchange(page) },
     { name: "assertBeginnerAiUsesCandidatePv", run: () => assertBeginnerAiUsesCandidatePv(browser) },
     { name: "assertAnalysisWorkspaceDoesNotAutoPlayAi", run: () => assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) },
@@ -12824,7 +14890,7 @@ function layoutChecks(page, browser) {
     { name: "assertPlayedEnginePvDoesNotStoreRootEval", run: () => assertPlayedEnginePvDoesNotStoreRootEval(browser) },
     { name: "assertPreferencePersistence", run: () => assertPreferencePersistence(page) },
     { name: "assertBottomNewGameMenuResetsDraft", run: () => assertBottomNewGameMenuResetsDraft(page) },
-    { name: "assertInvalidFenToastTimerResets", run: () => assertInvalidFenToastTimerResets(page) },
+    { name: "assertARefusedFenMarksTheLoadButtonUntilAnswered", run: () => assertARefusedFenMarksTheLoadButtonUntilAnswered(page) },
     { name: "assertDisabledControlsLookInactive", run: () => assertDisabledControlsLookInactive(page) },
     { name: "assertPanelTabAccessibility", run: () => assertPanelTabAccessibility(page) },
     { name: "assertLibraryLoadsAnalysisWorkspace", run: () => assertLibraryLoadsAnalysisWorkspace(page) },
@@ -12843,6 +14909,11 @@ function layoutChecks(page, browser) {
     { name: "assertReviewBestMoveBranchAction", run: () => assertReviewBestMoveBranchAction(page) },
     { name: "assertTheStudyFocusIsAboveTheFoldAtLaptopHeight", run: () => assertTheStudyFocusIsAboveTheFoldAtLaptopHeight(page) },
     { name: "assertTheReviewMomentsAreOneTabStop", run: () => assertTheReviewMomentsAreOneTabStop(page) },
+    { name: "assertReviewGradesAreNotColourAlone", run: () => assertReviewGradesAreNotColourAlone(page) },
+    { name: "assertClearingAReviewKeepsWhatTheReaderWrote", run: () => assertClearingAReviewKeepsWhatTheReaderWrote(page) },
+    { name: "assertAReviewInProgressReadsAsTwoSentences", run: () => assertAReviewInProgressReadsAsTwoSentences(page) },
+    { name: "assertEachPhaseScoreStaysOnOneLine", run: () => assertEachPhaseScoreStaysOnOneLine(page) },
+    { name: "assertNoRowInterleavesTwoSentences", run: () => assertNoRowInterleavesTwoSentences(browser) },
     { name: "assertLearnFromMistakesAsksAndGrades", run: () => assertLearnFromMistakesAsksAndGrades(page) },
     { name: "assertLastMoveArrowUsesPracticalReviewQuality", run: () => assertLastMoveArrowUsesPracticalReviewQuality(page) },
     { name: "assertRunningReviewCancelsOnLineChange", run: () => assertRunningReviewCancelsOnLineChange(browser) },
@@ -12879,10 +14950,12 @@ function layoutChecks(page, browser) {
     { name: "assertTheBoardEditorBrushesAreThumbSized", run: () => assertTheBoardEditorBrushesAreThumbSized(browser) },
     { name: "assertTheBottomBarChipsSurviveAReview", run: () => assertTheBottomBarChipsSurviveAReview(browser) },
     { name: "assertTheRecoveryModalHoldsTheKeyboard", run: () => assertTheRecoveryModalHoldsTheKeyboard(browser) },
+    { name: "assertDestructiveActionsCanBeTakenBack", run: () => assertDestructiveActionsCanBeTakenBack(browser) },
     { name: "assertChoosingAnEngineOptionDoesNotRenameIt", run: () => assertChoosingAnEngineOptionDoesNotRenameIt(page) },
     { name: "assertTheAppIsInstallable", run: () => assertTheAppIsInstallable(browser) },
     { name: "assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails", run: () => assertTheCloudBookKeepsItsPromiseAndSaysWhenItFails(browser) },
     { name: "assertACloudRulingItDoesNotHaveIsNotAFailure", run: () => assertACloudRulingItDoesNotHaveIsNotAFailure(browser) },
+    { name: "assertARepeatedPositionCanAskAboutAChase", run: () => assertARepeatedPositionCanAskAboutAChase(browser) },
     { name: "assertTheAnalysisTabsAdvertiseTheirShortcuts", run: () => assertTheAnalysisTabsAdvertiseTheirShortcuts(page) },
     { name: "assertScaledUpTextDoesNotCutTheTabLabels", run: () => assertScaledUpTextDoesNotCutTheTabLabels(page) },
     { name: "assertOversizedMoveLineFileRejected", run: () => assertOversizedMoveLineFileRejected(page) },
@@ -12891,6 +14964,10 @@ function layoutChecks(page, browser) {
     { name: "assertDialogsBlockMoveShortcuts", run: () => assertDialogsBlockMoveShortcuts(page) },
     { name: "assertAnOpenDialogHoldsTheMoveShortcuts", run: () => assertAnOpenDialogHoldsTheMoveShortcuts(page) },
     { name: "assertTheBoardEditorStandsAloneAndKeepsTheChosenMode", run: () => assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) },
+    { name: "assertTheBoardEditorTakesAndGivesAFen", run: () => assertTheBoardEditorTakesAndGivesAFen(page) },
+    { name: "assertARefusedFenCanBeFixedByHand", run: () => assertARefusedFenCanBeFixedByHand(page) },
+    { name: "assertTheBoardEditorFenFieldSurvivesLargeText", run: () => assertTheBoardEditorFenFieldSurvivesLargeText(browser) },
+    { name: "assertThumbSizedTextFields", run: () => assertThumbSizedTextFields(browser) },
     { name: "assertBoardMarkersSurviveSelection", run: () => assertBoardMarkersSurviveSelection(page) },
     { name: "assertMobileBoardLayout 596", run: () => assertMobileBoardLayout(page, { width: 596, height: 668 }) },
     { name: "assertMobileBoardLayout 390", run: () => assertMobileBoardLayout(page, { width: 390, height: 844 }) },
@@ -12902,6 +14979,9 @@ function layoutChecks(page, browser) {
     { name: "assertLibraryPgnFailureFeedback", run: () => assertLibraryPgnFailureFeedback(page) },
     { name: "assertLibraryInvalidSavedGameLoadFeedback", run: () => assertLibraryInvalidSavedGameLoadFeedback(page) },
     { name: "assertLibraryMutationFailureFeedback", run: () => assertLibraryMutationFailureFeedback(page) },
+    { name: "assertTypingDoesNotDriveTheBoard", run: () => assertTypingDoesNotDriveTheBoard(page) },
+    { name: "assertArrowsStopAtTheEndsOfTheLine", run: () => assertArrowsStopAtTheEndsOfTheLine(page) },
+    { name: "assertABlankPageExplainsItself", run: () => assertABlankPageExplainsItself(browser) },
     { name: "assertLibraryDeleteConfirmation", run: () => assertLibraryDeleteConfirmation(page) },
     { name: "assertLibraryRespondsToStorageChanges", run: () => assertLibraryRespondsToStorageChanges(page) },
     { name: "assertLibrarySavedGameSorting", run: () => assertLibrarySavedGameSorting(page) },

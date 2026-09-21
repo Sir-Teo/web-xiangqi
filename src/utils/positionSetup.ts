@@ -1,6 +1,7 @@
 import {
     boardToFen,
     findKing,
+    parseFenBoard,
     inPalace,
     isInCheck,
     kingsFacing,
@@ -94,6 +95,67 @@ export function describeSetupProblem(board: BoardState, sideToMove: Side): strin
         return `${sideName(waiting)}'s general is in check, but it is ${sideName(sideToMove)}'s move.`;
     }
     return null;
+}
+
+/**
+ * Why a FEN could not be loaded, in the same one sentence, or null when it can.
+ *
+ * `describeSetupProblem` already worked all of this out and the FEN readers
+ * threw the answer away: every path that takes a pasted position -- the New
+ * Game field, a share link, an import -- said only "FEN must describe a legal
+ * Xiangqi position with both generals and a side to move", which names four
+ * things at once and none of the ones that are usually wrong. The editor,
+ * standing next to the same field, has always said `A Red soldier that has not
+ * crossed the river must be on its starting file.` This is that sentence, for
+ * the field a reader actually pastes into.
+ *
+ * The three cases above the legality check are the ones `parseFenBoard` and the
+ * side field reject before a board exists to describe. `parseFenBoard`'s own
+ * throws are deliberately not forwarded -- they name ranks and files as the
+ * parser counts them -- and are replaced with what a reader has to fix.
+ */
+export function describeFenProblem(fen: string): string | null {
+    const parts = fen.trim().split(/\s+/);
+    if (parts.length < 2 || !parts[0]) {
+        return 'A FEN is the pieces, then a space, then "w" or "b" for the side to move.';
+    }
+    let board: BoardState;
+    try {
+        board = parseFenBoard(parts[0]);
+    } catch {
+        return 'The piece layout is unreadable: ten ranks separated by "/", each adding up to nine files.';
+    }
+    if (parts[1] !== 'w' && parts[1] !== 'b') {
+        // Quoted and clipped: this is whatever was pasted, and a paste that
+        // went wrong can be a whole file.
+        const seen = parts[1].length > 12 ? `${parts[1].slice(0, 12)}…` : parts[1];
+        return `The side to move must be "w" or "b", not "${seen}".`;
+    }
+    return describeSetupProblem(board, parts[1]);
+}
+
+/**
+ * The board a FEN draws, even when it is not a position a game could reach.
+ *
+ * `describeFenProblem` says no to two different kinds of thing, and only one
+ * of them is a dead end. A layout that will not parse leaves nothing to show.
+ * A layout that parses perfectly and breaks a rule of the game -- the generals
+ * facing, a soldier off its file, two of something -- is a board a reader can
+ * see and drag one piece on, and the editor already holds exactly such a board
+ * and says what is wrong with it. This is what lets a refusal hand it over.
+ *
+ * The side falls back to Red when the FEN's own side field is unreadable,
+ * since the editor has a toggle for it and no board at all is worse.
+ */
+export function readFenBoard(fen: string): { board: BoardState; sideToMove: Side } | null {
+    const parts = fen.trim().split(/\s+/);
+    try {
+        // No empty-string guard above it: `parseFenBoard('')` throws on the
+        // rank count, which is the same answer by the same route.
+        return { board: parseFenBoard(parts[0]), sideToMove: parts[1] === 'b' ? 'b' : 'w' };
+    } catch {
+        return null;
+    }
 }
 
 /** The FEN for a set-up position: fresh clocks, since no game led to it. */

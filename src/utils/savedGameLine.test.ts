@@ -51,6 +51,31 @@ describe('the primary line of a saved game', () => {
         expect(libraryPositionSignature([{ ...study, moves: [], result: 'ongoing' }])).toBe(signature);
     });
 
+    it('prefers an endpoint result to the saved one when the line reaches the end', () => {
+        // Found by mutation: `moves.length < game.moves.length` widened to
+        // `<=` returns early here with the *saved* result, so a game whose
+        // final move carries its own recorded outcome shows the stale one on
+        // its library card.
+        const game: SavedGame = {
+            id: 'ends', savedAt: 1, gameMode: 'PvP', moves: ['h2e2', 'h9g7'], result: 'ongoing',
+            moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'draw' }] }],
+        };
+        expect(savedGameLine(game)).toEqual({ moves: ['h2e2', 'h9g7'], result: 'draw' });
+    });
+
+    it('withholds the saved result from a pinned line that stops short of it', () => {
+        // `atSavedEndpoint` needs both halves: the lengths must match *and* the
+        // moves must agree. Joined with `||`, a pinned line that is merely a
+        // prefix of the saved path inherits the saved result, putting a
+        // decisive badge on a line that never reaches the end.
+        const game: SavedGame = {
+            id: 'short', savedAt: 1, gameMode: 'PvP', moves: ['h2e2', 'h9g7'], result: 'red',
+            mainLinePinned: true,
+            moveTree: [{ uci: 'h2e2' }],
+        };
+        expect(savedGameLine(game)).toEqual({ moves: ['h2e2'], result: undefined });
+    });
+
     it('leaves malformed saved paths for the existing legality checks', () => {
         expect(savedGameLine({ ...study, mainLinePinned: undefined, moves: ['h2e2', 'a5a6'] }))
             .toEqual({ moves: ['h2e2', 'a5a6'], result: 'black' });

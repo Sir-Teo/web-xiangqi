@@ -17,6 +17,21 @@ describe('which item carries the tab stop', () => {
     it('ignores a remembered index the list has since outgrown', () => {
         // The line shortens when you step back and play a different move.
         expect(rovingTabStopIndex(3, 9, 1)).toBe(1);
+    });
+
+    it('accepts both ends of the range it calls valid', () => {
+        // Found by mutation: `index >= 0` and `index < count` could each move
+        // by one and pass, because every case above used an index in the
+        // middle. Rejecting 0 sends the tab stop to the last item instead of
+        // the first; accepting `count` points it at an element that is not
+        // there.
+        expect(rovingTabStopIndex(5, 0, 3)).toBe(0);
+        expect(rovingTabStopIndex(5, 4, 3)).toBe(4);
+        expect(rovingTabStopIndex(5, 5, 3)).toBe(3);
+        expect(rovingTabStopIndex(5, -1, 3)).toBe(3);
+        // And the same two ends for the fallback argument.
+        expect(rovingTabStopIndex(5, null, 0)).toBe(0);
+        expect(rovingTabStopIndex(5, null, 5)).toBe(4);
         expect(rovingTabStopIndex(3, -1, null)).toBe(2);
         expect(rovingTabStopIndex(3, 1.5, null)).toBe(2);
     });

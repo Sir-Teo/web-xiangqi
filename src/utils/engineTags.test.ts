@@ -205,3 +205,29 @@ describe('the position command', () => {
         expect(makeEnginePositionCommand(`  ${START_FEN}   w - - 0 1  `, [])).toBe('position startpos');
     });
 });
+
+/**
+ * Every parser here takes `string | null`, because that is what a UCI line
+ * carries when the engine answers with no tag at all.
+ *
+ * Found by mutation: `!tag || !tag.startsWith(...)` joined with `&&` still
+ * returns null for every *wrong* tag -- the parse below rejects it anyway --
+ * and throws only on null, which nothing passed. A throw here is not a bad
+ * parse, it is an unhandled error inside the engine message handler.
+ */
+describe('a tag that is absent or belongs to something else', () => {
+  it('reads as no tag rather than throwing', () => {
+    for (const parse of [parseReviewTag, parseAiTag]) {
+      expect(parse(null)).toBeNull();
+      expect(parse('')).toBeNull();
+      expect(parse('something-else|base|n1')).toBeNull();
+    }
+  });
+
+  it('still reads the tag it is for, in the same shape', () => {
+    // The control: the guard above rejects everything, so a pass there means
+    // nothing unless the parsers still accept their own tags.
+    expect(parseReviewTag(makeReviewTag('base', 'n1'))).toEqual({ phase: 'base', nodeId: 'n1' });
+    expect(parseAiTag(makeAiTag(POSITION, 14, 5))).toEqual({ depth: 14, strength: 5, positionCommand: POSITION });
+  });
+});

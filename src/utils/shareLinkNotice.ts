@@ -25,8 +25,13 @@ export type ShareLinkFailure =
     | { kind: 'too-many-moves' }
     /** A token in the move list is not a move. */
     | { kind: 'unreadable-move'; token?: string }
-    /** The `fen` parameter does not describe a position. */
-    | { kind: 'bad-start-position' }
+    /**
+     * The `fen` parameter does not describe a position a game could reach.
+     * `reason` is `describeFenProblem`'s sentence, which tells the recipient
+     * whether the link arrived damaged or the sender built something illegal
+     * -- two problems with different answers, and the same notice otherwise.
+     */
+    | { kind: 'bad-start-position'; reason?: string }
     /** The moves are readable and one of them cannot be played. */
     | { kind: 'illegal-move'; moveNumber: number; reason?: string }
     /** The main line loaded; the variations did not. */
@@ -59,7 +64,9 @@ export function describeShareLinkFailure(failure: ShareLinkFailure): string {
                 ? `The move list reads "${failure.token}", which is not a move. A link cut short in transit looks like this — ask for it again.`
                 : 'The move list contains something that is not a move. A link cut short in transit looks like this — ask for it again.';
         case 'bad-start-position':
-            return 'The starting position in the link is not one a game could reach.';
+            return failure.reason
+                ? `The starting position in the link is not one a game could reach. ${failure.reason}`
+                : 'The starting position in the link is not one a game could reach.';
         case 'illegal-move':
             return `The moves stop being playable at ${moveOrdinal(failure.moveNumber)}. ` +
                 `${formatMoveRuleHint(failure.reason)}`;

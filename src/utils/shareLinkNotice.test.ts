@@ -13,6 +13,7 @@ const ALL: ShareLinkFailure[] = [
     { kind: 'unreadable-move', token: 'z9z9' },
     { kind: 'unreadable-move' },
     { kind: 'bad-start-position' },
+    { kind: 'bad-start-position', reason: 'The generals face each other on an open file.' },
     { kind: 'illegal-move', moveNumber: 7, reason: 'rook path blocked' },
     { kind: 'variations' },
     { kind: 'variations-only' },
@@ -31,6 +32,18 @@ describe('describeShareLinkFailure', () => {
         const seen = new Set(ALL.map(describeShareLinkFailure));
         // The two `unreadable-move` shapes differ only by the token.
         expect(seen.size).toBe(ALL.length);
+    });
+
+    /**
+     * The two problems a bad `fen` parameter can be -- the link arrived damaged,
+     * or the sender built a position no game could reach -- get the same notice
+     * and want different answers, so the reason distinguishes them.
+     */
+    it('carries the reason a start position was refused, when there is one', () => {
+        expect(describeShareLinkFailure({ kind: 'bad-start-position', reason: 'The generals face each other on an open file.' }))
+            .toBe('The starting position in the link is not one a game could reach. The generals face each other on an open file.');
+        expect(describeShareLinkFailure({ kind: 'bad-start-position' }))
+            .toBe('The starting position in the link is not one a game could reach.');
     });
 
     /**

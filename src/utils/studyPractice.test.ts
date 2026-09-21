@@ -102,6 +102,25 @@ describe('saved study practice', () => {
     expect(attemptPracticeMove(study, done, 'b', 'b9c7').session).toBe(done);
     expect(playPracticeReply(study, done, 'b')).toBe(done);
   });
+  /**
+   * The other half of that guard. `playPracticeReply` refuses for two separate
+   * reasons -- the line is finished, or it is the practising side's own turn --
+   * and only the first was asserted, so the two conditions could be joined with
+   * `&&` instead of `||` and the suite passed. Joined that way the app plays
+   * the reader's own move for them the moment they ask for a reply.
+   *
+   * Reachable in the app only through a stale click -- the button is not
+   * rendered on the reader's turn -- which is exactly the kind of guard that
+   * stops being true when the button's condition is next edited.
+   */
+  it('will not play the practising side its own move', () => {
+    const study = preparePracticeStudy(game({ moves: ['h2e2', 'h9g7'] })).study!;
+    const start = startPracticeLine(study, 0);
+    expect(start.side).toBe('w');
+    expect(playPracticeReply(study, start, 'w')).toBe(start);
+    // And still replies for the other side from the same position.
+    expect(playPracticeReply(study, start, 'b')).not.toBe(start);
+  });
   it('does not silently omit an illegal side branch', () => {
     expect(preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2' }, { uci: 'h0h2' }] })).error).toMatch(/illegal/);
     expect(preparePracticeStudy(game()).error).toMatch(/with moves/);

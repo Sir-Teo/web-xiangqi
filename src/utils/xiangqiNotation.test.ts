@@ -139,6 +139,25 @@ describe('soldiers stacked more than two deep', () => {
         expect(formatChineseMove(four, 'e4e5')).toBe('四兵進一');
         expect(formatWxfMove(four, 'e4e5')).toBe('45+1');
     });
+
+    /**
+     * Black counts in Arabic numerals, and the stack marker is a numeral like
+     * any other. Every fixture above is Red, which is why a marker that always
+     * came out in Red's numerals read as correct: `一卒進1` mixes the two
+     * scripts inside one move, which no convention writes.
+     */
+    it('counts a black stack in black numerals', () => {
+        const fourBlack = board('4k4/9/9/9/4p4/4p4/4p4/4p4/9/4K4');
+        expect(formatChineseMove(fourBlack, 'e2e1')).toBe('1卒進1');
+        expect(formatChineseMove(fourBlack, 'e5e4')).toBe('4卒進1');
+        expect(formatWxfMove(fourBlack, 'e5e4')).toBe('45+1');
+        // The shape has to read back, or the app writes records it cannot open.
+        // Only the front soldier can advance -- the rest are blocked by their
+        // own stack -- so the deeper markers are exercised sideways.
+        expect(parseMoveInNotation(fourBlack, 'b', '1卒進1')).toBe('e2e1');
+        expect(formatChineseMove(fourBlack, 'e4d4')).toBe('3卒平4');
+        expect(parseMoveInNotation(fourBlack, 'b', '3卒平4')).toBe('e4d4');
+    });
 });
 
 describe('two stacked files at once, which WXF has no answer for', () => {
@@ -149,6 +168,66 @@ describe('two stacked files at once, which WXF has no answer for', () => {
         expect(formatWxfMove(twoStacks, 'a3a4')).toBe('+P9+1');
         expect(formatWxfMove(twoStacks, 'e3e4')).toBe('+P5+1');
         expect(formatChineseMove(twoStacks, 'a0a1')).toBe('後九兵進一');
+    });
+});
+
+/**
+ * The other half of the rule above, which nothing held.
+ *
+ * Only a *second stack* makes `+P+1` ambiguous. A lone soldier standing on
+ * some other file is not one, and the marker stays bare. Found by mutation:
+ * widening `stackedFileCount` to count every file holding a soldier -- rather
+ * than every file holding a stack -- passed the whole suite, because each
+ * stack fixture here had either one stacked file or two, never a stack beside
+ * a loner. That is the ordinary shape of a real game.
+ */
+describe('a lone piece on another file is not a second stack', () => {
+    // A pair on the e file, one more soldier alone on h.
+    const stackAndLoner = board('4k4/9/9/9/9/4P2P1/4P4/9/9/4K4');
+
+    it('leaves the file number off the marker', () => {
+        expect(formatWxfMove(stackAndLoner, 'e4e5')).toBe('+P+1');
+        expect(formatWxfMove(stackAndLoner, 'e3e4')).toBe('-P+1');
+        expect(formatChineseMove(stackAndLoner, 'e4e5')).toBe('前兵進一');
+    });
+
+    it('still names the lone soldier by its own file', () => {
+        expect(formatWxfMove(stackAndLoner, 'h4h5')).toBe('P2+1');
+        expect(formatChineseMove(stackAndLoner, 'h4h5')).toBe('兵二進一');
+    });
+});
+
+/**
+ * Counted from the front *and* on a named file, which is the two rules above
+ * applying at once.
+ *
+ * It takes six soldiers -- four on one file and two on another -- so no game
+ * reaches it, and `describeSetupProblem` refuses to put a sixth on the board.
+ * It is pinned anyway because what the parser promises is that it never
+ * disagrees with the formatter about what a move is called, and that promise
+ * is the parser's own; leaning on a piece-count check in `positionSetup.ts` to
+ * keep it true is leaning on another file. Chinese wrote 一五兵平六 here and
+ * the reader returned null for it, which `parseMoveLineInNotation` treats as
+ * decoration: the move would have been skipped in silence and every move after
+ * it read against a position one ply behind.
+ */
+describe('a counted soldier on a named file, which needs both rules at once', () => {
+    // Four red soldiers on the e file, two more on c: not a legal set, and the
+    // only shape that asks the formatter for a numeral and a file together.
+    const sixSoldiers = board('4k4/9/9/2P1P4/2P1P4/4P4/4P4/9/9/4K4');
+
+    it('writes the file beside the count in both notations', () => {
+        expect(formatWxfMove(sixSoldiers, 'e6e7')).toBe('15+1');
+        expect(formatChineseMove(sixSoldiers, 'e6e7')).toBe('一五兵進一');
+    });
+
+    it('reads back everything it writes', () => {
+        for (const uci of everyLegalMove(sixSoldiers, 'w')) {
+            for (const style of ['wxf', 'chinese'] as const) {
+                const text = formatMoveInStyle(sixSoldiers, uci, style);
+                expect(parseMoveInNotation(sixSoldiers, 'w', text), `${style} ${text}`).toBe(uci);
+            }
+        }
     });
 });
 
@@ -178,6 +257,10 @@ describe('no two legal moves may share a notation', () => {
         // counting from the front instead -- a different shape, and the one
         // the parser had no rule for.
         ['soldiers four deep on one file', '4k4/9/4P4/4P4/4P4/4P4/9/9/9/4K4', 'w'],
+        // And the same shape for Black, whose markers are Arabic. Every other
+        // stack fixture is Red, so `1卒進1` is a token shape this app emits and
+        // nothing here had ever asked the parser to read back.
+        ['soldiers four deep on one file, black', '4k4/9/9/9/4p4/4p4/4p4/4p4/9/4K4', 'b'],
         ['black doubled on a file', 'r2ak4/r3a4/9/9/9/9/9/9/9/3AKA3', 'b'],
         ['advisors and elephants both able to move', '3ak4/4a4/2b1b4/9/9/9/9/2B1B4/4A4/3AK4', 'w'],
     ];
@@ -358,6 +441,10 @@ describe('every legal move survives a round trip', () => {
         // counting from the front instead -- a different shape, and the one
         // the parser had no rule for.
         ['soldiers four deep on one file', '4k4/9/4P4/4P4/4P4/4P4/9/9/9/4K4', 'w'],
+        // And the same shape for Black, whose markers are Arabic. Every other
+        // stack fixture is Red, so `1卒進1` is a token shape this app emits and
+        // nothing here had ever asked the parser to read back.
+        ['soldiers four deep on one file, black', '4k4/9/9/9/4p4/4p4/4p4/4p4/9/4K4', 'b'],
         ['advisors and elephants both able to move', '3ak4/4a4/2b1b4/9/9/9/9/2B1B4/4A4/3AK4', 'w'],
     ];
 

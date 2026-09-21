@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePgnCollection, MAX_COLLECTION_TEXT_LENGTH } from './pgnCollection';
 import { exportPgnFromMoveTree } from './gameExport';
 import { normalizeSavedGame, type SavedMoveTreeNode } from './gameLibrary';
+import { MAX_STUDY_LINE_MOVES } from './studyLimits';
 
 describe('strict Xiangqi PGN collections', () => {
   it('reopens a dense analysis backup larger than the old collection limit without losing snapshots', () => {
@@ -91,6 +92,52 @@ describe('strict Xiangqi PGN collections', () => {
   ])('rejects damaged or unsupported records: %s', (source, message) => {
     expect(() => parsePgnCollection(source)).toThrow(message);
   });
+  /**
+   * A note between `(` and the variation's first move, refused at any depth.
+   *
+   * Two rules meet here. `docs/audit-2026-09-11.md`: "a preface before a
+   * variation's first move is not assigned to its parent; position-preface
+   * storage remains unsupported." And this reader's own, at the top of the
+   * file: unknown movetext is rejected, never skipped.
+   *
+   * It followed neither past ply 1. `(` walks the cursor back to the branch
+   * point, which still carries the *previous* move, so the preface was
+   * attached to the move the variation branches from -- silently, and with any
+   * `[%eval]` inside it, putting a score on a move it says nothing about. The
+   * refusal fired only when the branch point had no move at all, so one file
+   * behaved two ways depending on how deep its variations were.
+   */
+  it('refuses a note that opens a variation wherever the variation starts', () => {
+    // Ply 1, where the branch point is the root: this half always refused.
+    expect(() => parsePgnCollection('1. h2e2 ({Instead} 1. b2e2) *')).toThrow(/variation note/i);
+    // Deeper, where the branch point carries a move: this half did not.
+    expect(() => parsePgnCollection('1. h2e2 h9g7 ({Better was} 1... b9c7) *')).toThrow(/variation note/i);
+    expect(() => parsePgnCollection('1. h2e2 h9g7 2. h0g2 (2. b0c2 ({Deeper} 2. c3c4)) *')).toThrow(/variation note/i);
+  });
+
+  it('never lets a refused preface reach the move the variation branches from', () => {
+    // The refusal is what a reader sees; this is what must not have happened
+    // quietly instead -- the note, and its score, on the previous move.
+    for (const source of [
+      '1. h2e2 h9g7 ({Better was} 1... b9c7) *',
+      '1. h2e2 h9g7 ({[%eval -1.50,12]} 1... b9c7) *',
+    ]) {
+      let parsed: ReturnType<typeof parsePgnCollection> | null = null;
+      try { parsed = parsePgnCollection(source); } catch { parsed = null; }
+      if (!parsed) continue;
+      expect(parsed[0].moveTree?.[0].comment).toBeUndefined();
+      expect(parsed[0].moveTree?.[0].evalScore).toBeUndefined();
+    }
+  });
+
+  it('still takes a note that follows the variation\'s first move', () => {
+    const [game] = parsePgnCollection('1. h2e2 h9g7 (1... b9c7 {and not this}) 2. h0g2 *');
+    const [played, alternative] = game.moveTree?.[0].children ?? [];
+    expect(played).toMatchObject({ uci: 'h9g7' });
+    expect(played.comment).toBeUndefined();
+    expect(alternative).toMatchObject({ uci: 'b9c7', comment: 'and not this' });
+  });
+
   it('accepts a self-delimiting result without spaces', () => {
     expect(parsePgnCollection('1.h2e2*1.b2e2*')).toHaveLength(2);
   });
@@ -153,6 +200,44 @@ describe('strict Xiangqi PGN collections', () => {
     expect(parsePgnCollection(`[FEN "${fen}"] 20...h7e7 *`)[0].startFen).toBe(fen);
     expect(() => parsePgnCollection('[FEN "bad"] 1.h2e2 *')).toThrow('Invalid starting FEN');
   });
+  /**
+   * This reader names the game and the problem, and the start position was the
+   * one thing it would not name. A collection is imported in bulk, so "game 7
+   * has a bad FEN" is where the reader stops and "and its generals face each
+   * other" is what lets them carry on.
+   */
+  it('says which thing is wrong with a starting FEN, and which game', () => {
+    // One word: not even a board and a side, which is the first thing to say.
+    expect(() => parsePgnCollection('[FEN "bad"] 1.h2e2 *'))
+      .toThrow(/Invalid starting FEN\. A FEN is the pieces, then a space/);
+    expect(() => parsePgnCollection('[FEN "bad w"] 1.h2e2 *'))
+      .toThrow(/Invalid starting FEN\. The piece layout is unreadable/);
+    expect(() => parsePgnCollection('[FEN "3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1"] *'))
+      .toThrow(/Invalid starting FEN\. The generals face each other on an open file\./);
+    expect(() => parsePgnCollection('1.h2e2 *\n\n[FEN "3k5/9/9/9/9/9/9/9/9/3K5 w - - 0 1"] *'))
+      .toThrow(/^Game 2: Invalid starting FEN\. The generals face each other/);
+  });
+  /**
+   * The line cap the error message names, on both sides of it.
+   *
+   * `cursor.ply >= MAX_STUDY_LINE_MOVES` is checked before the move is added,
+   * so 1,024 fits and the 1,025th is refused -- which is what "A line exceeds
+   * 1,024 moves." promises. Written as `>` it would take 1,025, one past the
+   * number in its own message and past the cap the library stores against,
+   * and nothing noticed.
+   *
+   * A chariot shuttling on an empty file is the cheap way to a legal line of
+   * any length: the importer checks legality, not repetition.
+   */
+  it('takes a line of exactly the stated length and refuses the next move', () => {
+    const shuttle = (plies: number) => {
+      const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
+      return Array.from({ length: plies }, (_, index) => cycle[index % 4]).join(' ') + ' *';
+    };
+    expect(parsePgnCollection(shuttle(MAX_STUDY_LINE_MOVES))[0].moves).toHaveLength(MAX_STUDY_LINE_MOVES);
+    expect(() => parsePgnCollection(shuttle(MAX_STUDY_LINE_MOVES + 1))).toThrow('A line exceeds 1,024 moves.');
+  });
+
   it('rejects overlarge text and imports supported annotation fields', () => {
     expect(() => parsePgnCollection(' '.repeat(MAX_COLLECTION_TEXT_LENGTH+1))).toThrow('exceeds');
     expect(parsePgnCollection('1.h2e2 $2 {[%eval 0.42]} *')[0].moveTree?.[0]).toMatchObject({ evalScore: 42, quality: 'mistake', comment: undefined });

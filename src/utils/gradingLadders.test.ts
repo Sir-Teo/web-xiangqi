@@ -50,6 +50,28 @@ describe('what each centipawn boundary really costs in winning chances', () => {
     });
 });
 
+describe('the centipawn ladder is inclusive at every step', () => {
+    /**
+     * Each band takes the value that sits exactly on its own threshold. Only
+     * the boundaries can tell `<=` from `<`, and the fixtures above all sit
+     * between them -- the mistake step could be read either way and the whole
+     * suite passed, which moves the label on a move landing on the line.
+     */
+    it('puts a delta equal to a threshold in the milder band', () => {
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.best)).toBe('best');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.good)).toBe('good');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.inaccuracy)).toBe('inaccuracy');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.mistake)).toBe('mistake');
+    });
+
+    it('puts one past a threshold in the next band up', () => {
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.best + 1)).toBe('good');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.good + 1)).toBe('inaccuracy');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.inaccuracy + 1)).toBe('mistake');
+        expect(classifyMoveQuality(REVIEW_THRESHOLDS.mistake + 1)).toBe('blunder');
+    });
+});
+
 describe('where the disagreement changes a grade', () => {
     it('grades a 190cp loss at equality below its own centipawn ladder', () => {
         // The centipawn ladder calls anything past 180 a mistake. The milder

@@ -24,9 +24,13 @@ async function main() {
   let playwright;
   try {
     playwright = require("playwright");
-  } catch (e) {
+  } catch (error) {
+    // Keep the cause. `require` throws here for a broken install or a native
+    // binding mismatch as readily as for a missing package, and the old
+    // message named the one answer that would not have helped in those cases.
     throw new Error(
-      "Missing playwright dependency. Install it first (e.g. `npm install --no-save playwright`) before running this script."
+      "Could not load playwright. If it is not installed, install it first (e.g. `npm install --no-save playwright`) before running this script.",
+      { cause: error }
     );
   }
 
@@ -42,16 +46,11 @@ async function main() {
   });
 
   let browser;
-  let serverStdout = "";
-  let serverStderr = "";
-  server.stdout.on("data", (chunk) => {
-    serverStdout += String(chunk);
-    process.stdout.write(chunk);
-  });
-  server.stderr.on("data", (chunk) => {
-    serverStderr += String(chunk);
-    process.stderr.write(chunk);
-  });
+  // Straight through rather than buffered: this script streams the server's
+  // output as it arrives, and the two strings that used to collect it as well
+  // were read by nothing and grew for the length of the run.
+  server.stdout.on("data", (chunk) => process.stdout.write(chunk));
+  server.stderr.on("data", (chunk) => process.stderr.write(chunk));
 
   try {
     await waitForHttp(`http://${host}:${port}${basePath}`, 30000);

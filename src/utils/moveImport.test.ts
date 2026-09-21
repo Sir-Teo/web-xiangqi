@@ -274,3 +274,38 @@ describe('parts of a record that are not moves', () => {
         expect(extractUciMoveLine('h2e2 % h9g7')).toEqual(['h2e2', 'h9g7']);
     });
 });
+
+/**
+ * A record whose brackets do not balance still gives up its moves.
+ *
+ * Someone pastes half a game: the copy stopped inside a variation, or a
+ * messaging app ate a character. `extractUciMoveTree` finishes with whatever
+ * it has, and `recoverFinalMainLine` decides what the main line was --
+ * the outermost frame if anything was played there, and otherwise the line it
+ * ended on.
+ *
+ * That second half had no test. The first is the common shape
+ * (`h2e2 h9g7 (b0c2`), where the outermost frame holds two moves; the case
+ * where the record *opens* with `(` leaves that frame empty, and taking it
+ * anyway hands back nothing. Dropping the `.length > 0` check loses every move
+ * of such a paste, and the whole suite passed.
+ */
+describe('a paste with unbalanced brackets keeps its moves', () => {
+    const line = (text: string) => extractUciMoveTree(text).moves;
+
+    it('keeps the outer line when a variation is left open inside it', () => {
+        expect(line('h2e2 h9g7 (b0c2 b9c7')).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('keeps the moves when the record opens with the bracket', () => {
+        // The outermost frame never received a move, so it is the wrong answer
+        // even though it exists.
+        expect(line('(h2e2 h9g7')).toEqual(['h2e2', 'h9g7']);
+        expect(line('((h2e2 h9g7')).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('is not upset by a bracket that closes nothing, or by one alone', () => {
+        expect(line(') h2e2 h9g7')).toEqual(['h2e2', 'h9g7']);
+        expect(line('(')).toEqual([]);
+    });
+});

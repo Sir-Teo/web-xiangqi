@@ -79,6 +79,20 @@ describe('the note under a reviewed move', () => {
         expect(note({ quality: 'mistake', swing: 240, bestMove: 'b0c2' })).not.toMatch(/\+cp/);
     });
 
+    it('leaves the note alone when the best move is not a coordinate', () => {
+        // The guard is what keeps a move string out of `new RegExp`. Anything
+        // that is not four coordinate characters is refused before it can be
+        // spliced into a pattern; `(` would otherwise throw and `+` would
+        // quietly match something else. Only an empty best move was covered,
+        // and empty is the one value that cannot carry a metacharacter.
+        const note = 'Big miss. B0→C2 was stronger by 520cp.';
+        for (const bestMove of ['C2(', 'b0c2+', 'not a move', 'b0c', 'b0c2b0c2']) {
+            expect(formatReviewNoteForDisplay(note, bestMove)).toBe(note);
+        }
+        // The control: the valid spelling of the same move still rewrites it.
+        expect(formatReviewNoteForDisplay(note, 'b0c2')).not.toBe(note);
+    });
+
     it('normalizes coordinate prose from saved reviews', () => {
         expect(formatReviewNoteForDisplay(
             'Big miss. B0→C2 was stronger by 520cp.',
