@@ -1799,7 +1799,10 @@ function App() {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(retryTimer);
       document.removeEventListener('keydown', onDialogKeyDown);
-      if (previouslyFocused && document.contains(previouslyFocused)) {
+      // Never `body`: inerting the page behind a dialog blurs the launcher, so
+      // this can have captured `body`, and focusing it would undo the give-back
+      // the inert effect already did.
+      if (previouslyFocused && previouslyFocused !== document.body && document.contains(previouslyFocused)) {
         previouslyFocused.focus({ preventScroll: true });
       }
     };
@@ -4970,6 +4973,12 @@ function App() {
     const shell = document.querySelector('.app-shell');
     if (!shell) return;
     const marked: Element[] = [];
+    // Inerting an ancestor of the focused element blurs it to `body`, and every
+    // dialog reads `document.activeElement` to learn who opened it. Remember
+    // the launcher here, before that happens, and hand focus back when the page
+    // stops being inert -- otherwise `body` propagates into each dialog's
+    // "restore" and the opener is lost for good.
+    const launcher = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (aDialogIsOpen) {
       const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
       // Nothing found means the dialog has not rendered yet; the next run of
@@ -4985,6 +4994,13 @@ function App() {
     }
     return () => {
       for (const child of marked) child.removeAttribute('inert');
+      // Only when nothing else has claimed focus: a dialog that tracked its own
+      // launcher restores from a passive cleanup, which runs after this.
+      if (!marked.length) return;
+      if (document.activeElement && document.activeElement !== document.body) return;
+      if (launcher && launcher !== document.body && launcher.isConnected) {
+        launcher.focus({ preventScroll: true });
+      }
     };
   }, [aDialogIsOpen, showSettings, showNewGameMenu, showCommandPalette, visibleGameResult, autoSaveRecovery, showBoardEditor, showRuleLessons, practiceStudy]);
 

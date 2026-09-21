@@ -122,13 +122,22 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         }, 1800);
     }, [fen]);
 
+    /**
+     * `App` inerts every shell child that holds no open dialog, and inerting an
+     * ancestor of the focused element blurs it to `document.body`. So by the
+     * time this runs, `document.activeElement` may be `body` rather than the
+     * control that opened us -- and focusing `body` on close is how the opener
+     * got lost. Record it, but never hand focus to `body`: the effect in
+     * `App.tsx` that removed `inert` has already put focus back where it was.
+     */
     useEffect(() => {
         const previouslyFocused = document.activeElement instanceof HTMLElement
             ? document.activeElement
             : null;
         dialogRef.current?.querySelector<HTMLElement>('[data-editor-first]')?.focus({ preventScroll: true });
         return () => {
-            if (previouslyFocused?.isConnected) previouslyFocused.focus({ preventScroll: true });
+            if (!previouslyFocused || previouslyFocused === document.body) return;
+            if (previouslyFocused.isConnected) previouslyFocused.focus({ preventScroll: true });
         };
     }, []);
 

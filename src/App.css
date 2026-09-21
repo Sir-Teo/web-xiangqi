@@ -3853,6 +3853,16 @@ summary:active {
   font-size: 0.8rem;
   color: var(--text-primary);
   z-index: 8900;
+  /* A transient status message must not become a dead zone. This is pinned to
+     the bottom of `.main-container`, so while it is up it sits over whatever
+     content is scrolled under it -- and it swallowed a click meant for the
+     analysis panel beneath. Only the buttons take the pointer. */
+  pointer-events: none;
+}
+
+.undo-toast-btn,
+.undo-toast-dismiss {
+  pointer-events: auto;
 }
 
 /* The same toast saying the opposite thing: the undo was refused and the

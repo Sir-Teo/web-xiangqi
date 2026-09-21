@@ -114,7 +114,9 @@ async function setup(page) {
         await page.waitForFunction(fen => document.querySelector('.bottombar-fen').getAttribute('title') !== fen, before);
         const after = await page.locator('.bottombar-fen').getAttribute('title');
         release(); await page.getByTestId('editor-fen').waitFor();
-        assert.equal((await page.getByTestId('editor-fen').innerText()).split(' ').slice(0, 2).join(' '), before.split(' ').slice(0, 2).join(' '));
+        // The FEN is an editable field now, not a paragraph; innerText on an
+        // input is always empty, which read as "the editor opened blank".
+        assert.equal((await page.getByTestId('editor-fen').inputValue()).split(' ').slice(0, 2).join(' '), before.split(' ').slice(0, 2).join(' '));
         await page.keyboard.press('Escape'); await page.getByTestId('board-editor').waitFor({ state: 'hidden' });
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), after, 'Cancel must leave the main game at its latest position');
         console.log(`${browserType.name()} ${width}px: an AI-turn reply during download preserves the editor's opening position and Cancel leaves the game intact`);
