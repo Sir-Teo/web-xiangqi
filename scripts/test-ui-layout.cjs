@@ -8017,6 +8017,7 @@ async function assertReviewBestMoveBranchAction(page) {
   }
   await page.getByTestId("load-saved-review-best-branch").click();
   await page.getByTestId("review-try-best-0").waitFor({ timeout: 5000 });
+  await page.locator(".winrate-graph").focus();
   const reviewReadout = await page.evaluate(() => ({
     focus: document.querySelector('[data-testid="review-focus-card"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     focusEval: document.querySelector('[data-testid="review-focus-eval"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -14775,6 +14776,10 @@ async function assertEvalGraphTooltipIsNotMeasuredPerMove(browser) {
       `http://127.0.0.1:8192/web-xiangqi/?moves=${MOVES.join("+")}`,
       { waitUntil: "domcontentloaded", timeout: 60000 }
     );
+    // Details appear only while the graph is active. Keyboard stepping keeps
+    // that focus and exercises resizing without remounting the tooltip.
+    const graph = page.locator(".winrate-graph");
+    await graph.focus();
     await page.waitForSelector(".graph-tooltip", { timeout: 20000 });
     // The engine streams evals into the tooltip for a while after the board is
     // up; let that settle so what follows is measuring the click and not the
@@ -14788,7 +14793,7 @@ async function assertEvalGraphTooltipIsNotMeasuredPerMove(browser) {
 
     await page.evaluate(() => { window.__tip = { measured: 0, forced: 0 }; });
     for (let step = 0; step < 4; step += 1) {
-      await page.click('[aria-label="Go to previous move"]:not([disabled])');
+      await graph.press("ArrowLeft");
       await page.waitForTimeout(180);
     }
     await page.waitForTimeout(600);
@@ -14803,7 +14808,7 @@ async function assertEvalGraphTooltipIsNotMeasuredPerMove(browser) {
       );
     }
 
-    await page.click('[aria-label="Go to first position"]:not([disabled])');
+    await graph.press("Home");
     await page.waitForTimeout(1600);
 
     const placement = await page.evaluate(() => {

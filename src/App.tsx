@@ -6586,7 +6586,6 @@ function App() {
                   <IconRefresh />
                 </button>
                 <button
-
                   className="mobile-action-btn"
                   type="button"
                   onClick={openLibraryPanel}
@@ -6729,14 +6728,13 @@ function App() {
                   onClick={handleSaveGame}
                   disabled={!canSaveCurrentPosition}
                   role="menuitem"
-                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : 'Save current game'}
+                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
                   aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
                   data-testid="mobile-save-game-btn"
                 >
                   {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
                   <span>{saveFailedToast ? 'Save failed' : savedToast ? 'Saved game' : 'Save game'}</span>
                 </button>
-
                 {showMobilePgnAction ? (
                   <button
                     className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
@@ -6806,7 +6804,6 @@ function App() {
                 </button>
                 {/* No shortcut in the label here: this menu only exists on
                     touch, where there is no modifier key to press. */}
-
                 <button
                   className="mobile-action-menu-btn"
                   type="button"
@@ -6838,7 +6835,6 @@ function App() {
                 >
                   <IconSettings />
                   <span>Settings</span>
-
                 </button>
               </div>
             </>

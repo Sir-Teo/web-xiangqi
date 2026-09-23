@@ -94,7 +94,8 @@ describe('bounded graph readings', () => {
         const html = render({ history: [], currentMoveIndex: -1, currentEval: 150, currentEvalBoundText: bound, isSearching: true });
         expect(html).toContain('Red POV +1.50 · Bound');
         expect(html).toContain('Red POV evaluation +1.50, Lower bound, not an exact score');
-        expect(html).toContain('<em>Lower bound, not an exact score</em>');
+        expect(html).toContain('title="Lower bound, not an exact score"');
+        expect(html).not.toContain('class="graph-tooltip"');
         expect(html).toContain('graph-point-bound');
         expect(html).toContain('Peak Red n/a');
         expect(html).toContain('Peak Black n/a');

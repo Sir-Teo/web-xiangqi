@@ -315,11 +315,11 @@ export const EvalGraph = React.memo(function EvalGraph({
     const swing = highestEval === null || lowestEval === null ? null : clampToPlot(highestEval) - clampToPlot(lowestEval);
     const shouldCompressBadges = pixelsPerPoint < 26;
 
-    const nearestPointForEvent = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
+    const nearestPointForClientX = useCallback((clientX: number, element: SVGSVGElement) => {
         if (computedPoints.length === 0) return 0;
-        const rect = event.currentTarget.getBoundingClientRect();
+        const rect = element.getBoundingClientRect();
         const scaleX = chartWidth / rect.width;
-        const x = (event.clientX - rect.left) * scaleX;
+        const x = (clientX - rect.left) * scaleX;
         // Binary search — computedPoints are ordered by ascending x
         let lo = 0;
         let hi = computedPoints.length - 1;
@@ -347,6 +347,9 @@ export const EvalGraph = React.memo(function EvalGraph({
         mq.addEventListener('change', apply);
         return () => mq.removeEventListener('change', apply);
     }, []);
+    const nearestPointForEvent = useCallback((event: React.MouseEvent<SVGSVGElement>) => (
+        nearestPointForClientX(event.clientX, event.currentTarget)
+    ), [nearestPointForClientX]);
 
     useEffect(() => {
         const element = viewportRef.current;
@@ -453,6 +456,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     const onTouchStart = (event: React.TouchEvent<SVGSVGElement>) => {
         const t = event.touches[0];
         touchStartRef.current = { x: t.clientX, y: t.clientY };
+        setHoverPointIndex(nearestPointForClientX(t.clientX, event.currentTarget));
     };
 
     const onTouchEnd = (event: React.TouchEvent<SVGSVGElement>) => {
@@ -462,6 +466,7 @@ export const EvalGraph = React.memo(function EvalGraph({
         const dy = Math.abs(t.clientY - touchStartRef.current.y);
         touchStartRef.current = null;
         if (Math.abs(dx) < 30 || dy > 60) return;
+        setHoverPointIndex(null);
         const delta = dx < 0 ? 1 : -1;
         const target = Math.max(-1, Math.min(history.length - 1, currentMoveIndex + delta));
         onNavigate(target);
@@ -469,11 +474,11 @@ export const EvalGraph = React.memo(function EvalGraph({
 
     const tooltipRef = useRef<HTMLDivElement>(null);
     const [tooltipSize, setTooltipSize] = useState({ width: 150, height: 52 });
-    const tooltipPoint = hoveredPoint ?? currentPoint;
+    const tooltipPoint = hoveredPoint;
     // Only whether the tooltip is on screen, so the effect below re-runs when
     // the element it observes is created or destroyed and at no other time.
     const tooltipVisible = tooltipPoint != null;
-    const tooltipIndex = hoveredPoint ? hoverPointIndex ?? currentPointIndex : currentPointIndex;
+    const tooltipIndex = hoverPointIndex ?? currentPointIndex;
     const tooltipBranchCount = tooltipPoint?.branchCount ?? 0;
     const tooltipQualityClass = tooltipPoint?.quality ? getMoveQualityClassName(tooltipPoint.quality) : '';
 
@@ -605,6 +610,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             onKeyDown={onChartKeyDown}
                             onTouchStart={onTouchStart}
                             onTouchEnd={onTouchEnd}
+                            onTouchCancel={() => setHoverPointIndex(null)}
                             style={{ cursor: onNavigate ? 'pointer' : 'default' }}
                             aria-label="Evaluation graph move navigator"
                             aria-describedby="evaluation-graph-instructions"
