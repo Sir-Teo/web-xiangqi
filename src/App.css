@@ -7633,3 +7633,43 @@ summary:active {
     width: 100%;
   }
 }
+
+@media (max-width: 900px) and (max-height: 700px) {
+  [data-mobile-view="board"] .position-dock,
+  [data-mobile-view="board"][data-assist-mode="pro"] .position-dock {
+    height: 6rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 3.75rem) minmax(0, 1.95rem);
+  }
+
+  [data-mobile-view="board"] .position-stat-selection,
+  [data-mobile-view="board"][data-assist-mode="pro"] .position-stat-selection {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  [data-mobile-view="board"] .position-stat-turn {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  [data-mobile-view="board"] .position-stat-material {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  [data-mobile-view="board"] .position-stat-selection strong {
+    font-size: 0.76rem;
+  }
+
+  [data-mobile-view="board"] .position-stat-selection em,
+  [data-mobile-view="board"][data-assist-mode="pro"] .position-stat-selection em {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.62rem;
+    line-height: 1.25;
+  }
+}
