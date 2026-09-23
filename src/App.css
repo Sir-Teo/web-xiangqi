@@ -7702,3 +7702,26 @@ summary:active {
   border-color: var(--accent-subtle);
   background: var(--accent-muted);
 }
+
+@media (max-width: 900px) {
+  .mobile-board-turn-info {
+    flex-wrap: wrap;
+    align-content: center;
+    column-gap: 6px;
+    row-gap: 2px;
+  }
+
+  .mobile-opening-pill {
+    display: block;
+    flex: 0 0 100%;
+    max-width: 100%;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+
+  .mobile-board-action-menu {
+    max-height: calc(100dvh - 112px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

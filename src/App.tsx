@@ -568,6 +568,8 @@ function App() {
    * for it from a game wants.
    */
   const [editorSeed, setEditorSeed] = useState<{ board: BoardState; sideToMove: Side } | null>(null);
+  const mobileMoreActionsButtonRef = useRef<HTMLButtonElement | null>(null);
+
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
@@ -6584,17 +6586,7 @@ function App() {
                   <IconRefresh />
                 </button>
                 <button
-                  className={`mobile-action-btn ${savedToast ? 'mobile-action-btn-active' : ''} ${saveFailedToast ? 'mobile-action-btn-warn' : ''}`}
-                  type="button"
-                  onClick={handleSaveGame}
-                  disabled={!canSaveCurrentPosition}
-                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
-                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
-                  data-testid="mobile-save-game-btn"
-                >
-                  {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
-                </button>
-                <button
+
                   className="mobile-action-btn"
                   type="button"
                   onClick={openLibraryPanel}
@@ -6610,6 +6602,7 @@ function App() {
                   </button>
                 )}
                 <button
+                  ref={mobileMoreActionsButtonRef}
                   className={`mobile-action-btn ${showMobileBoardActionMenu ? 'mobile-action-btn-active' : ''}`}
                   type="button"
                   onClick={() => setShowMobileBoardActionMenu((open) => !open)}
@@ -6621,18 +6614,6 @@ function App() {
                   data-testid="mobile-more-actions-btn"
                 >
                   <IconMore />
-                </button>
-                <button
-                  className="mobile-action-btn"
-                  type="button"
-                  onClick={toggleSettings}
-                  title="Settings"
-                  aria-label="Open settings"
-                  aria-haspopup="dialog"
-                  aria-expanded={showSettings}
-                  aria-controls="settings-dialog"
-                >
-                  <IconSettings />
                 </button>
               </div>
               {(importNotice || shareLinkNotice) ? (
@@ -6742,6 +6723,20 @@ function App() {
                     <span>{exportFailureKey === 'copy-pgn' ? 'Copy failed' : copiedToast ? 'Copied' : 'Copy PGN'}</span>
                   </button>
                 ) : null}
+                <button
+                  className={`mobile-action-menu-btn ${savedToast ? 'mobile-action-menu-btn-active' : ''} ${saveFailedToast ? 'mobile-action-menu-btn-warn' : ''}`}
+                  type="button"
+                  onClick={handleSaveGame}
+                  disabled={!canSaveCurrentPosition}
+                  role="menuitem"
+                  title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : 'Save current game'}
+                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
+                  data-testid="mobile-save-game-btn"
+                >
+                  {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
+                  <span>{saveFailedToast ? 'Save failed' : savedToast ? 'Saved game' : 'Save game'}</span>
+                </button>
+
                 {showMobilePgnAction ? (
                   <button
                     className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
@@ -6811,6 +6806,7 @@ function App() {
                 </button>
                 {/* No shortcut in the label here: this menu only exists on
                     touch, where there is no modifier key to press. */}
+
                 <button
                   className="mobile-action-menu-btn"
                   type="button"
@@ -6825,6 +6821,24 @@ function App() {
                 >
                   <IconSearch />
                   <span>Commands</span>
+                </button>
+                <button
+                  className="mobile-action-menu-btn"
+                  type="button"
+                  onClick={() => {
+                    mobileMoreActionsButtonRef.current?.focus({ preventScroll: true });
+                    toggleSettings();
+                  }}
+                  role="menuitem"
+                  aria-label="Open settings"
+                  aria-haspopup="dialog"
+                  aria-expanded={showSettings}
+                  aria-controls="settings-dialog"
+                  data-testid="mobile-open-settings-btn"
+                >
+                  <IconSettings />
+                  <span>Settings</span>
+
                 </button>
               </div>
             </>

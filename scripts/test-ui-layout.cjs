@@ -13963,14 +13963,15 @@ async function assertMobileSaveLibraryActions(page) {
   const saveButton = page.getByTestId("mobile-save-game-btn");
   const libraryButton = page.getByTestId("mobile-open-library-btn");
   const moreButton = page.getByTestId("mobile-more-actions-btn");
-  await saveButton.waitFor({ timeout: 10000 });
+  if ((await saveButton.count()) !== 0) throw new Error("Save action should stay in the More menu until opened.");
   await libraryButton.waitFor({ timeout: 10000 });
   await moreButton.waitFor({ timeout: 10000 });
+  await moreButton.click();
 
   const mobileTriggerA11y = await page.evaluate(() => {
     const actions = document.querySelector(".mobile-board-actions");
     const newGame = actions?.querySelector('[aria-label="Open new game menu"]');
-    const settings = actions?.querySelector('[aria-label="Open settings"]');
+    const settings = document.querySelector('.mobile-board-action-menu [aria-label="Open settings"]');
     return {
       newGamePopup: newGame?.getAttribute("aria-haspopup") || "",
       newGameExpanded: newGame?.getAttribute("aria-expanded") || "",
@@ -14001,12 +14002,13 @@ async function assertMobileSaveLibraryActions(page) {
     throw new Error("Mobile share action should stay hidden until there is a line or custom root.");
   }
 
+  await moreButton.click();
   await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
   await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+  await moreButton.click();
   if (await saveButton.isDisabled()) {
     throw new Error("Mobile save action stayed disabled after a legal move.");
   }
-  await moreButton.click();
   await page.getByTestId("mobile-download-pgn-btn").waitFor({ timeout: 5000 });
   await page.getByTestId("mobile-copy-share-link-btn").waitFor({ timeout: 5000 });
   const actionStrip = await page.evaluate(() => {
@@ -14103,6 +14105,8 @@ async function assertMobileSaveLibraryActions(page) {
     null,
     { timeout: 2000 },
   );
+
+  await moreButton.click();
 
   await saveButton.click();
   const savedGame = await page.waitForFunction(() => {
