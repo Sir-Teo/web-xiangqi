@@ -5099,8 +5099,10 @@ summary:active {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
@@ -5110,15 +5112,15 @@ summary:active {
 }
 
 .settings-close-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .settings-close-btn:hover {
-  background: var(--bg-card-hover) !important;
-  color: var(--text-primary);
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary);
   }
 }
 
