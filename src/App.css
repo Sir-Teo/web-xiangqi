@@ -7673,3 +7673,32 @@ summary:active {
     line-height: 1.25;
   }
 }
+
+.move-tree-empty {
+  padding-top: 3rem;
+}
+
+.move-tree-empty strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.move-tree-empty p {
+  max-width: 240px;
+}
+
+.move-tree-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.panel .move-tree-empty-actions button {
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  color: var(--accent);
+  border-color: var(--accent-subtle);
+  background: var(--accent-muted);
+}

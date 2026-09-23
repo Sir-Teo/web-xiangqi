@@ -34,6 +34,8 @@ type Props = {
     onNavigateNode: (nodeId: string) => void;
     /** Offered on each variation row; the main line is never deletable from here. */
     onDeleteNode?: (nodeId: string) => void;
+    onShowBoard?: () => void;
+    onOpenLibrary?: () => void;
 };
 
 type MoveSide = 'w' | 'b';
@@ -55,6 +57,8 @@ export const MoveListTree = memo(function MoveListTree({
     notationStyle = 'uci',
     onNavigateNode,
     onDeleteNode,
+    onShowBoard,
+    onOpenLibrary,
 }: Props) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const pendingVariationFocus = useRef<{ nodeId: string; element: Element } | null>(null);
@@ -223,8 +227,13 @@ export const MoveListTree = memo(function MoveListTree({
 
     if (activeLineNodeIds.length === 0) {
         return (
-            <div className="empty-state">
-                <p>No moves yet.</p>
+            <div className="empty-state move-tree-empty">
+                <strong>No moves yet</strong>
+                <p>Play a move on the board or open a game to explore its move tree.</p>
+                <div className="move-tree-empty-actions">
+                    {onShowBoard ? <button type="button" onClick={onShowBoard}>Go to board</button> : null}
+                    {onOpenLibrary ? <button type="button" onClick={onOpenLibrary}>Open library</button> : null}
+                </div>
             </div>
         );
     }

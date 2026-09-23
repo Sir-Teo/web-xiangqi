@@ -7274,6 +7274,8 @@ function App() {
                     notationStyle={notationStyle}
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
+                    onShowBoard={isMobile ? () => setMobileView('board') : undefined}
+                    onOpenLibrary={openLibraryPanel}
                   />}
                   {lineRecordedResult && <p className="recorded-line-result" data-testid="recorded-line-result">
                     Recorded line result: {lineRecordedResult === 'draw' ? 'Draw' : lineRecordedResult === 'red-wins' ? 'Red wins' : 'Black wins'} ({RESULT_TAG[lineRecordedResult]})
