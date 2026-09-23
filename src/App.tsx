@@ -5331,7 +5331,7 @@ function App() {
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const selectBoardArrows = useMemo(createBoardArrowSelector, []);
-  const boardArrows = useMemo(() => !showArrows ? undefined : selectBoardArrows({
+  const allBoardArrows = useMemo(() => !showArrows ? undefined : selectBoardArrows({
     showArrows,
     lastMove: lastMoveFrom && lastMoveTo ? { from: lastMoveFrom, to: lastMoveTo, color: lastMoveArrowColor } : null,
     threatMove,
@@ -5345,6 +5345,19 @@ function App() {
     assistMode,
     userArrows,
   }), [selectBoardArrows, candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  const boardArrows = useMemo(() => selected
+    ? allBoardArrows?.filter((arrow) => arrow.kind === 'last' || arrow.kind === 'user')
+    : allBoardArrows, [allBoardArrows, selected]);
+  const boardArrowHint = boardArrows?.some((arrow) => arrow.kind === 'engine-focus')
+    ? 'Blue arrow: focused engine line'
+    : boardArrows?.some((arrow) => arrow.kind === 'engine')
+      ? 'Green arrows: engine lines'
+      : boardArrows?.some((arrow) => arrow.kind === 'book')
+        ? 'Amber arrows: opening book'
+        : boardArrows?.some((arrow) => arrow.kind === 'last')
+          ? 'Arrow: last move'
+          : null;
+  const boardDetailText = moveRuleHint ?? (selectedPiece ? legalMoveText : boardArrowHint ?? legalMoveText);
 
   return (
     <main
@@ -6941,9 +6954,9 @@ function App() {
                   <strong>{selectedPieceText}</strong>
                   <em
                     className={moveRuleHint ? 'position-warning' : undefined}
-                    title={moveRuleHint ?? legalMoveText}
+                    title={boardDetailText}
                   >
-                    {moveRuleHint ?? legalMoveText}
+                    {boardDetailText}
                   </em>
                 </div>
                 <div className="position-stat position-stat-material">
