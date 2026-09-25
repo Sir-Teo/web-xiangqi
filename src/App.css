@@ -1636,6 +1636,18 @@ body.resizing * {
   flex-shrink: 0;
 }
 
+/* Except the opening badge, which is built to ellipsise its English name and
+   carries the full one in its title. Held rigid like the chips, it was the
+   last item in the row and the first to be cut by the window edge: at 1024px
+   "中炮對馬 Central Car" stopped mid-word with no ellipsis, and the row only
+   scrolled to it for whoever thought to try. It gives way first now, down to
+   the Chinese name and the start of the English one, and the row scrolls only
+   past that. */
+.game-controls > .opening-badge {
+  flex-shrink: 1;
+  min-width: 7rem;
+}
+
 .review-progress {
   display: inline-flex;
   align-items: center;
