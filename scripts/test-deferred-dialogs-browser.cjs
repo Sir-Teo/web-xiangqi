@@ -104,6 +104,11 @@ async function setup(page) {
         await open(page, 'Settings');
         // The shared link opens analysis. Count only searches started after
         // switching to Play, so the held reply belongs to an actual AI turn.
+        // Wait for the analysis search to start first: under load the engine
+        // becomes ready late, its analysis `go` landed after this reset and was
+        // taken for the AI's, and the reply was released into a search that
+        // had already been stopped.
+        await page.waitForFunction(() => window.__goCount > 0);
         await page.evaluate(() => { window.__goCount = 0; });
         await page.locator('#settings-workspace-mode').selectOption('play');
         await page.getByRole('button', { name: 'Close settings', exact: true }).click();
