@@ -87,6 +87,8 @@ async function command(page, label) {
         for (const input of await editor.locator('input').all()) await input.fill('   ');
         await page.waitForFunction(() => !localStorage.getItem('xiangqi:auto-saved-game:v1'));
         if (width < 900) await page.getByTestId('mobile-view-board').click();
+        // On a phone Save lives in the board's overflow menu.
+        if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();
         assert.equal(await page.getByTestId(width < 900 ? 'mobile-save-game-btn' : 'save-game-btn').isEnabled(), false);
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}px: metadata-only recovery, save, library search/load, PGN round-trip and empty reset passed`);

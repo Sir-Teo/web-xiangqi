@@ -44,6 +44,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
    await page.screenshot({path:`/tmp/xiangqi-metadata-${width}.png`});
    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
    if (width < 900) await page.getByTestId('mobile-view-board').click();
+   // On a phone Save lives in the board's overflow menu.
+   if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();
    await page.getByTestId(width < 900 ? 'mobile-save-game-btn' : 'save-game-btn').click();
    await page.getByTestId(width < 900 ? 'mobile-open-library-btn' : 'left-panel-tab-library').click();
    await page.getByRole('searchbox', { name: 'Search library' }).fill('Autumn Invitational');

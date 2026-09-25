@@ -12,6 +12,8 @@ async function fullLibrary(browser, width) {
     )));
     await page.goto(base + '?moves=h2e2');
     const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+    // On a phone Save lives in the board's overflow menu.
+    if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();
     await page.getByTestId(width < 900 ? 'mobile-save-game-btn' : 'save-game-btn').click();
     const notice = page.getByTestId('save-game-error');
     await notice.waitFor();
@@ -835,8 +837,9 @@ async function cutoutClearance(browser, width, height, view) {
 
 // A landscape phone is short and wide, and the move nav spent the scarce axis:
 // a full-width bar under the board, 38px plus a 12px gap, while 375px of the
-// stage sat empty beside the board and its status column. It rides the header's
-// row now. Check the board actually got the height -- against the same board in
+// stage sat empty beside the board and its status column. It first rode the
+// header's row; since d83b312 the header, status cards and nav stack in a
+// column of their own beside the board, which gives the board the full height. Check the board actually got the height -- against the same board in
 // portrait at the same area, which is the only figure that cannot drift with the
 // rest of the layout -- and that the action menu followed the buttons it hangs
 // off, which moved with the header into a column of their own.
@@ -860,8 +863,8 @@ async function landscapeNavRidesHeader(browser, width, height) {
         if (!top || !top.closest('.mobile-board-action-menu')) coveredMenuItems += 1;
       }
       return {
-        onHeaderRow: Math.abs(nav.top - header.top) < 4 && nav.left >= header.right - 1,
-        boardBelow: board.top >= Math.max(header.bottom, nav.bottom) - 1,
+        navInHeaderColumn: Math.abs(nav.left - header.left) < 4 && nav.top >= header.bottom - 1,
+        boardBeside: board.right <= Math.min(header.left, nav.left) + 1,
         boardHeight: board.height,
         menuFollowsButtons: Math.abs(menu.right - header.right) < 2,
         menuBelowHeader: menu.top >= header.bottom - 1,
@@ -870,8 +873,8 @@ async function landscapeNavRidesHeader(browser, width, height) {
         hscroll: document.documentElement.scrollWidth > innerWidth,
       };
     });
-    assert.equal(box.onHeaderRow, true, `The move nav is not beside the header at ${width}x${height}`);
-    assert.equal(box.boardBelow, true, `The board runs under the top bar at ${width}x${height}`);
+    assert.equal(box.navInHeaderColumn, true, `The move nav is not in the header's column at ${width}x${height}`);
+    assert.equal(box.boardBeside, true, `The board runs under the header column at ${width}x${height}`);
     assert.equal(box.menuFollowsButtons, true,
       `The action menu did not follow the header's right edge at ${width}x${height}`);
     assert.equal(box.menuBelowHeader, true, `The action menu covers the header at ${width}x${height}`);
