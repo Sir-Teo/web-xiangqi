@@ -105,8 +105,11 @@ export function buildBoardArrows(input: BoardArrowInput): BoardArrow[] {
 
     // The book answers "what is played here", which the engine's own line
     // already answers when it has one. Two answers to one question read as a
-    // disagreement, so the book speaks only in the silence.
-    if (!hasEngineMoveArrows) {
+    // disagreement, so the book speaks only in the silence. A hint is the same
+    // answer asked for by hand: beside it the book drew two other moves, so a
+    // stuck beginner who pressed Hint got three suggestions and no way to tell
+    // which one the hint was.
+    if (!hasEngineMoveArrows && !input.hintMove) {
         input.openingCandidates.slice(0, BOOK_ARROW_LIMIT[input.assistMode]).forEach((candidate, index) => {
             const arrow = arrowForUci(candidate.move, index === 0 ? STYLE.bookFirst : STYLE.bookRest, 'book');
             if (arrow) result.push(arrow);

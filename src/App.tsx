@@ -5350,7 +5350,10 @@ function App() {
   const boardArrows = useMemo(() => selected
     ? allBoardArrows?.filter((arrow) => arrow.kind === 'last' || arrow.kind === 'user')
     : allBoardArrows, [allBoardArrows, selected]);
-  const boardArrowHint = boardArrows?.some((arrow) => arrow.kind === 'engine-focus')
+  // The hint is drawn in the focused-line colour, so name it for what it is.
+  const boardArrowHint = hintMove && boardArrows?.some((arrow) => arrow.kind === 'engine-focus')
+    ? 'Blue arrow: hint'
+    : boardArrows?.some((arrow) => arrow.kind === 'engine-focus')
     ? 'Blue arrow: focused engine line'
     : boardArrows?.some((arrow) => arrow.kind === 'engine')
       ? 'Green arrows: engine lines'

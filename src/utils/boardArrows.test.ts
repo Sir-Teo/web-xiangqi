@@ -139,6 +139,11 @@ describe('buildBoardArrows', () => {
             expect(kinds(arrows)).toEqual(['engine']);
         });
 
+        it('stays quiet beside a hint, which answers the same question', () => {
+            const arrows = buildBoardArrows(input({ openingCandidates: candidates, hintMove: 'g3g4' }));
+            expect(kinds(arrows)).toEqual(['engine-focus']);
+        });
+
         it('is not silenced by a line that has no first move', () => {
             const arrows = buildBoardArrows(input({ openingCandidates: candidates, analysisPvLines: [{ moves: [] }] }));
             expect(kinds(arrows)).toEqual(['book', 'book']);
