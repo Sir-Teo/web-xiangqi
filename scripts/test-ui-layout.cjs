@@ -7404,7 +7404,20 @@ async function assertNoRowInterleavesTwoSentences(browser) {
  * side by side, or the second goes to a line of its own and may then use the
  * full width.
  */
-async function assertAReviewInProgressReadsAsTwoSentences(page) {
+async function assertAReviewInProgressReadsAsTwoSentences(browser) {
+  // Its own page and an engine that never finishes a review. The shared page
+  // runs the real engine, which reviews these three moves in a few seconds, so
+  // by the 900px measurement the progress card had often become the result.
+  const { context, page } = await newIsolatedPage(browser);
+  try {
+    await installFakePikafish(page, { variant: "fake-review-hangs" });
+    await measureReviewInProgress(page);
+  } finally {
+    await context.close();
+  }
+}
+
+async function measureReviewInProgress(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
@@ -7446,6 +7459,9 @@ async function assertAReviewInProgressReadsAsTwoSentences(page) {
   for (const width of [1280, 1024, 900]) {
     await page.setViewportSize({ width, height: 900 });
     await page.waitForTimeout(250);
+    // 900px is the phone layout, which remounts the review panel from its lazy
+    // chunk; a fixed pause sometimes measured before it was back.
+    await page.waitForSelector(".review-progress-copy", { timeout: 5000 }).catch(() => {});
     const state = await measure();
     if (!state) throw new Error(`The review progress card was not on screen at ${width}px.`);
     const broken = state.kids.filter((kid) => kid.lines > 1);
@@ -14929,7 +14945,7 @@ function layoutChecks(page, browser) {
     { name: "assertTheReviewMomentsAreOneTabStop", run: () => assertTheReviewMomentsAreOneTabStop(page) },
     { name: "assertReviewGradesAreNotColourAlone", run: () => assertReviewGradesAreNotColourAlone(page) },
     { name: "assertClearingAReviewKeepsWhatTheReaderWrote", run: () => assertClearingAReviewKeepsWhatTheReaderWrote(page) },
-    { name: "assertAReviewInProgressReadsAsTwoSentences", run: () => assertAReviewInProgressReadsAsTwoSentences(page) },
+    { name: "assertAReviewInProgressReadsAsTwoSentences", run: () => assertAReviewInProgressReadsAsTwoSentences(browser) },
     { name: "assertEachPhaseScoreStaysOnOneLine", run: () => assertEachPhaseScoreStaysOnOneLine(page) },
     { name: "assertNoRowInterleavesTwoSentences", run: () => assertNoRowInterleavesTwoSentences(browser) },
     { name: "assertLearnFromMistakesAsksAndGrades", run: () => assertLearnFromMistakesAsksAndGrades(page) },
