@@ -134,6 +134,9 @@
     font-size: clamp(0.9rem, 6cqi, 1.55rem);
     font-family: var(--font-cjk-serif);
     letter-spacing: 0.6em;
+    /* Two characters with a space between them: on a narrow board the space
+       was a break opportunity, and 楚 stacked over 河. */
+    white-space: nowrap;
     text-shadow:
         0 1px 0 rgba(255, 220, 120, 0.55),
         0 -1px 0 rgba(0, 0, 0, 0.38),
