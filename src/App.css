@@ -7758,13 +7758,27 @@ summary:active {
 }
 
 @media (pointer: coarse) {
-  .settings-body .pill-btn {
+  .settings-body .pill-btn,
+  .board-editor .pill-btn {
     min-height: 44px;
     padding-inline: 0.9rem;
   }
 
-  .settings-body .gc-btn {
+  .settings-body .gc-btn,
+  .board-editor .gc-btn {
     min-height: 44px;
+    justify-content: center;
+  }
+
+  /* The same holds for New Game's secondary actions and the library card's
+     delete, which was 27px wide beside 44px siblings. */
+  .new-game-file-btn,
+  .new-game-line-actions .new-game-strength-btn {
+    min-height: 44px;
+  }
+
+  .lib-card .chip-btn-danger {
+    min-width: 44px;
     justify-content: center;
   }
 }

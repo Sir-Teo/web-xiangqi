@@ -453,6 +453,14 @@
   white-space: normal;
 }
 
+/* The same trick, wider for a thumb: a 36px rename target, title unmoved. */
+@media (pointer: coarse) {
+  .lib-panel .lib-game-name-button {
+    padding: 10px 0;
+    margin: -10px 0;
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .lib-panel .lib-game-name-button:hover {
   color: var(--accent, #10b981);
