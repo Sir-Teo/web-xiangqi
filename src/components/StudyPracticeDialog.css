@@ -26,4 +26,6 @@
 .study-practice-line-notes strong { font-size: .78rem; overflow-wrap: anywhere; }
 .study-practice-line-notes p { color: var(--text-primary); }
 @container (max-width: 36rem) { .study-practice-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "controls" "board" "feedback"; } }
-@media (max-height: 520px) and (min-width: 700px) { .study-practice-board .xiangqi-board-container { --board-max-width: 65vh; } }
+/* Any short window, not only those 700px and wider: at 667x375 the board was
+   still 440px wide and 442px tall on a 375px screen. */
+@media (max-height: 520px) { .study-practice-board .xiangqi-board-container { --board-max-width: 65vh; } }
