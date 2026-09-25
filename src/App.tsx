@@ -232,6 +232,7 @@ const LazyLibraryPanel = React.lazy(() =>
  * once.
  */
 const MOBILE_LAYOUT_QUERY = '(max-width: 900px)';
+const NO_OPENING_CANDIDATES: readonly { move: string }[] = [];
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
@@ -5343,10 +5344,14 @@ function App() {
     analysisPvLines: candidateActive ? candidatePvLines : currentAnalysisPvLines,
     spotlightPvIndex,
     spotlightPvLine,
-    openingCandidates,
+    // Not in a game against the engine. The book drew the moves the player
+    // might make and, on the engine's turn, the replies it was weighing -- the
+    // same help the rest of play mode withholds until Hint is asked for. The
+    // book continuations list in the side panel is still there to read.
+    openingCandidates: aiPlayActive ? NO_OPENING_CANDIDATES : openingCandidates,
     assistMode,
     userArrows,
-  }), [selectBoardArrows, candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
+  }), [selectBoardArrows, candidateActive, candidatePvLines, assistMode, drillAsking, hintMove, lastMoveFrom, lastMoveTo, lastMoveArrowColor, currentAnalysisPvLines, engineEnabled, openingCandidates, aiPlayActive, showArrows, spotlightPvIndex, spotlightPvLine, threatMove, userArrows]);
   const boardArrows = useMemo(() => selected
     ? allBoardArrows?.filter((arrow) => arrow.kind === 'last' || arrow.kind === 'user')
     : allBoardArrows, [allBoardArrows, selected]);
