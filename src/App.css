@@ -7676,7 +7676,10 @@ summary:active {
     grid-template-columns: minmax(0, 45%) minmax(0, 1fr);
     grid-template-rows: 52px minmax(0, 1fr) 44px;
     column-gap: 16px;
-    padding: 8px 14px;
+    /* The side pads carry the safe-area insets; a bare 14px put the header's
+       overflow button and the Material card under a landscape cutout. */
+    --mobile-stage-pad-x: 14px;
+    padding: 8px var(--mobile-stage-pad-right) 8px var(--mobile-stage-pad-left);
     align-items: center;
   }
 
