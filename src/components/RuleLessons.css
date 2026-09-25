@@ -5,7 +5,21 @@
 .rule-lessons header span { font-size: .8rem; color: var(--text-secondary); }
 .rule-lessons-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(240px, 1fr); grid-template-areas: "board intro" "board feedback"; gap: 0 1.5rem; align-content: start; }
 .rule-lessons-board { grid-area: board; min-width: 0; align-self: start; padding: 12px; }
-.rule-lessons-board .xiangqi-board-container { --board-max-width: 460px; }
+/* Bounded by the dialog's height too: on a phone held sideways a 460px-wide
+   board is ~510px tall in a 390px screen, and the goal square could be below
+   the fold. The height term is the dialog's 94vh less its header (~4.5rem),
+   its padding, this box's 12px and the frame ring, through the board's 9:10.
+   Pinned while the lesson text beside it scrolls. */
+.rule-lessons { --lessons-max-height: 94dvh; }
+.rule-lessons-board .xiangqi-board-container { --board-max-width: min(460px, calc((var(--lessons-max-height) - 6.5rem - 50px) * 0.9)); }
+.rule-lessons-board { position: sticky; top: 0; }
+/* A phone held sideways has no height to spare for the dialog's margins or
+   the board box's padding, and the board is what the lesson is done on. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .rule-lessons { --lessons-max-height: calc(100dvh - 8px); top: 4px; max-height: var(--lessons-max-height); padding-block: .5rem; }
+  .rule-lessons-board { padding: 6px; }
+  .rule-lessons-board .xiangqi-board-container { --board-max-width: min(460px, calc((var(--lessons-max-height) - 5rem - 28px) * 0.9)); }
+}
 .rule-lessons-intro, .rule-lessons-content { min-width: 0; font-size: .85rem; line-height: 1.5; }
 .rule-lessons-intro { grid-area: intro; }
 .rule-lessons-content { grid-area: feedback; }
@@ -20,4 +34,4 @@
 .rule-lessons-hint { color: var(--text-secondary); }
 .rule-lessons-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .rule-lessons-return { margin-top: .75rem; width: 100%; }
-@media (max-width: 640px) { .rule-lessons-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "board" "feedback"; gap: .5rem; } .rule-lessons { padding: .75rem; } .rule-lessons-board .xiangqi-board-container { --board-max-width: 320px; } }
+@media (max-width: 640px) { .rule-lessons-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "board" "feedback"; gap: .5rem; } .rule-lessons { padding: .75rem; } .rule-lessons-board .xiangqi-board-container { --board-max-width: 320px; } .rule-lessons-board { position: static; } }
