@@ -224,6 +224,11 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
     await ai.getByRole('button', { name: 'Open game library' }).waitFor();
     await ai.keyboard.press('ControlOrMeta+k');
     await ai.getByRole('combobox', { name: 'Search commands' }).fill('Settings'); await ai.keyboard.press('Enter');
+    // Let the analysis search start before resetting, or under load its late
+    // `go` is taken for the AI's and the reply is released into a search that
+    // was already stopped -- ignored for the wrong reason, so a pass proved
+    // nothing. Same fix as test-deferred-dialogs.
+    await ai.waitForFunction(() => window.__goCount > 0);
     await ai.evaluate(() => { window.__goCount = 0; });
     await ai.locator('#settings-workspace-mode').selectOption('play');
     await ai.getByRole('button', { name: 'Close settings', exact: true }).click();
