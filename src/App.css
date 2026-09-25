@@ -7672,8 +7672,17 @@ summary:active {
 }
 
 @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
-  [data-mobile-view="board"] .board-stage {
-    grid-template-columns: minmax(0, 45%) minmax(0, 1fr);
+  /* Listed with the guide variant because the earlier landscape rule is: the
+     minifier folds that pair into one :is(), which takes the :has() argument's
+     specificity for both, so in the production build it outranked this bare
+     selector and the stage kept the old columns and rows. Matching the pair
+     keeps this rule ahead in dev and production alike. */
+  [data-mobile-view="board"] .board-stage,
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) {
+    /* A fixed share, not minmax(0, 45%): that track is sized from its
+       content, and in practice the board sizes itself from the track, so with
+       enlarged text the column resolved to 0px and the board to 36px. */
+    grid-template-columns: 45% minmax(0, 1fr);
     grid-template-rows: 52px minmax(0, 1fr) 44px;
     column-gap: 16px;
     /* The side pads carry the safe-area insets; a bare 14px put the header's
