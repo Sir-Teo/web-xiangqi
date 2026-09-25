@@ -11275,13 +11275,13 @@ async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
 
     const box = await page.evaluate(() => {
       const el = [...document.querySelectorAll(".mobile-board-actions .mobile-action-btn")]
-        .find((candidate) => /settings/i.test(candidate.getAttribute("aria-label") || ""));
+        .find((candidate) => /more board actions/i.test(candidate.getAttribute("aria-label") || ""));
       if (!el) return null;
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     });
     if (!box) {
-      throw new Error("The phone header has no settings button to tap.");
+      throw new Error("The phone header has no overflow button to tap.");
     }
     if (Math.round(box.height) !== 36 || Math.round(box.width) !== 36) {
       throw new Error(
@@ -11296,7 +11296,7 @@ async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
 
     await page.mouse.click(point.x, point.y);
     await page.waitForTimeout(500);
-    const opened = await page.evaluate(() => Boolean(document.querySelector('.settings-body[role="dialog"]')));
+    const opened = await page.evaluate(() => Boolean(document.querySelector('#mobile-board-action-menu[role="menu"]')));
     if (!opened) {
       // Say what was actually there rather than naming a cause. The old message
       // asserted the bleed had been clipped back to the chrome, and that is not
@@ -11313,7 +11313,7 @@ async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
           chain.push(`${node.tagName.toLowerCase()}.${String(node.className || "").trim().split(/\s+/)[0] || ""}`);
         }
         const button = [...document.querySelectorAll(".mobile-board-actions .mobile-action-btn")]
-          .find((candidate) => /settings/i.test(candidate.getAttribute("aria-label") || ""));
+          .find((candidate) => /more board actions/i.test(candidate.getAttribute("aria-label") || ""));
         const header = button && button.closest(".mobile-board-header");
         const style = button && getComputedStyle(button, "::after");
         const headerStyle = header && getComputedStyle(header);
@@ -11328,7 +11328,7 @@ async function assertAPhoneCanTapTheBoardActionsSlightlyHigh(browser) {
       }, [point.x, point.y]);
       await page.screenshot({ path: `/tmp/xiangqi-tap-bleed-failure-${Date.now()}.png` });
       throw new Error(
-        `A tap ${Math.round(box.y) - point.y}px above the settings button did not open Settings. ` +
+        `A tap ${Math.round(box.y) - point.y}px above the overflow button did not open its menu. ` +
         `Tapped ${JSON.stringify(point)} for a button at ${JSON.stringify(box)}. ` +
         `At that point: ${why.atPoint.join(" < ")}. --tap-bleed ${why.bleed}, ::after inset ${why.afterInset}, ` +
         `header ${why.headerClip} rect ${why.headerRect}, dialogs open ${why.dialogs}.`
