@@ -3,6 +3,7 @@ import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame 
 import { MAX_SAVED_GAMES, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { formatRatedPlayer } from '../../utils/gameMetadata';
+import { unpackCollectionGames, type PackedGame } from '../../utils/moveTreeTransfer';
 
 export function LibraryPgnImport({ state, onChange, onOpenGame }: {
   state: LibraryState; onChange: () => void; onOpenGame: (game: CollectionGame) => boolean;
@@ -38,11 +39,14 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
       };
       parser.onerror = () => fail('The collection reader could not start. Please try again.');
       parser.onmessageerror = () => fail('The collection reader returned an unreadable response. Please try again.');
-      parser.onmessage = (event: MessageEvent<{games?: CollectionGame[]; error?: string}>) => {
+      parser.onmessage = (event: MessageEvent<{games?: PackedGame<CollectionGame>[]; error?: string}>) => {
         if (generation.current !== id) return;
         stop(); setBusy(false);
         if (event.data.error || !event.data.games?.length) setError(event.data.error || 'No games found.');
-        else { setGames(event.data.games); setSelected(new Set(event.data.games.map((_, index) => index))); }
+        else {
+          const parsed = unpackCollectionGames(event.data.games);
+          setGames(parsed); setSelected(new Set(parsed.map((_, index) => index)));
+        }
       };
       timeout.current = setTimeout(() => fail('Reading this collection took too long. Split it into smaller files.'), 30_000);
       parser.postMessage(text);
