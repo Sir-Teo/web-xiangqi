@@ -1,4 +1,5 @@
 import './BeginnerGuide.css';
+import { IconX } from './icons';
 
 export function BeginnerGuide({ letters, compact, onToggleLetters, onPlay, onLearn, onDismiss }: {
   letters: boolean;
@@ -12,7 +13,7 @@ export function BeginnerGuide({ letters, compact, onToggleLetters, onPlay, onLea
     <>
       <div className="beginner-guide-heading">
         <strong>Your first move</strong>
-        <button type="button" onClick={onDismiss} aria-label="Dismiss first-move guide">×</button>
+        <button type="button" onClick={onDismiss} aria-label="Dismiss first-move guide"><IconX width={18} height={18} /></button>
       </div>
       <p>Select a red piece, then a highlighted point to move. Select a piece to see how it moves.</p>
       <div className="beginner-guide-actions">

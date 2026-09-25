@@ -4,6 +4,7 @@ import { keepTabWithin } from '../utils/focusTrap';
 import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress } from '../utils/ruleLessons';
 import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
 import './RuleLessons.css';
+import { IconX } from './icons';
 
 export function RuleLessons({ onClose }: { onClose: () => void }) {
     const [completed, setCompleted] = useState(readRuleLessonProgress);
@@ -60,7 +61,7 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
         <div className="rule-lessons-backdrop" onClick={onClose} aria-hidden="true" />
         <div className="rule-lessons" role="dialog" aria-modal="true" aria-labelledby="rule-lessons-title" ref={dialog} data-testid="rule-lessons">
             <header><div><h2 id="rule-lessons-title">Learn the rules</h2><span data-testid="lesson-progress">{completed.length} of {RULE_LESSONS.length} completed</span></div>
-                <button type="button" onClick={onClose} aria-label="Close rule lessons">×</button></header>
+                <button type="button" onClick={onClose} aria-label="Close rule lessons"><IconX width={18} height={18} /></button></header>
             <div className="rule-lessons-layout">
                 <div className="rule-lessons-intro">
                     <label>Choose a lesson<select className="app-select app-select-roomy" value={index} onChange={event => openLesson(Number(event.target.value))} data-testid="lesson-select">
