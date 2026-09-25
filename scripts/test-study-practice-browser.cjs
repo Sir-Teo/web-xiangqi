@@ -177,11 +177,14 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         await move('h9g7', true);
         assert.match(await progress.innerText(), /1 of 1/);
         assert.equal(await dialog.getByRole('button', { name: 'Practice again' }).evaluate(node => node === document.activeElement), true, 'Black completion must focus Practice again');
+        // Reduced motion shortens the ring's transition to 0.01ms rather than
+        // removing it; read it once it has settled, not in focus's own frame.
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         const focusStyle = await dialog.getByRole('button', { name: 'Practice again' }).evaluate(node => {
           const style = getComputedStyle(node);
           return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
         });
-        assert.ok(focusStyle.style !== 'none' && focusStyle.width >= 2, 'The focused next action needs a visible outline');
+        assert.ok(focusStyle.style !== 'none' && focusStyle.width >= 2, 'The focused next action needs a visible outline ' + JSON.stringify(focusStyle));
         await page.waitForFunction(() => {
           const node = document.activeElement;
           if (node?.textContent !== 'Practice again') return false;
