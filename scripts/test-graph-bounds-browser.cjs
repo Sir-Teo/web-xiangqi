@@ -38,6 +38,9 @@ async function command(page, label) {
         const graph = page.locator('.graph-wrap');
         const navigator = page.getByRole('slider', { name: 'Evaluation graph move navigator' });
         await navigator.waitFor();
+        // Details appear only while the graph is active (8cb0862); focus keeps
+        // them up for the whole check, as the layout suite does.
+        await page.locator('.winrate-graph').focus();
         for (const [wire, label, direction] of [
           ['cp 150 lowerbound', black ? '-1.50' : '+1.50', black ? 'Upper' : 'Lower'],
           ['cp 150 upperbound', black ? '-1.50' : '+1.50', black ? 'Lower' : 'Upper'],
