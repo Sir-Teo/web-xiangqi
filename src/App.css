@@ -6052,6 +6052,22 @@ summary:active {
   }
 }
 
+/* On a phone held sideways the dialog is ~410px tall, and the footer stacked
+   "Selected" over a full-width Start button: 120px of it pinned, and room for
+   three of the four modes above. Height is the scarce axis there and width is
+   not, so lay the footer out in one row, as the desktop dialog does. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .new-game-menu-footer {
+    flex-direction: row;
+    align-items: center;
+    padding-block: 0.6rem calc(0.6rem + env(safe-area-inset-bottom));
+  }
+
+  .new-game-start-btn {
+    width: auto;
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    brand-badge
    ═══════════════════════════════════════════════════ */
