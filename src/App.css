@@ -259,7 +259,8 @@ body.resizing * {
   width: 100%;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .top .compact-grid {
     /* Mobile keeps the single scrolling strip it already had -- wrapping there
        would spend vertical space the phone layout has less of than the page. */
@@ -1312,7 +1313,8 @@ body.resizing * {
 /* ═══════════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════════ */
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .app-shell {
     height: 100dvh;
     width: 100vw;
@@ -4315,7 +4317,8 @@ summary:active {
 }
 
 /* Responsive tweaks for Xiangqi-specific elements */
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .top-engine-state {
     display: none;
   }
@@ -4352,7 +4355,8 @@ summary:active {
   display: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-tab-bar {
     display: flex;
     position: relative;
@@ -4402,7 +4406,8 @@ summary:active {
 }
 
 /* ── Board view (fills full screen above tab bar) ── */
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   [data-mobile-view="board"] .panel.top,
   [data-mobile-view="board"] .panel.bottom,
   [data-mobile-view="board"] .panel.left,
@@ -4695,7 +4700,8 @@ summary:active {
 
 .mobile-board-center { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-board-nav {
     height: 44px; flex-shrink: 0; position: relative;
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -4735,7 +4741,8 @@ summary:active {
   display: none; /* hidden on desktop */
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   [data-mobile-view="analysis"] .panel.top { display: none; }
   [data-mobile-view="analysis"] .board-stage { display: none; }
 
@@ -4866,7 +4873,8 @@ summary:active {
    stacked one together, drew the dock from one and the grid from the other,
    and collapsed the board to 36x36. `>=` here and `<` there partition the
    range with no overlap and no gap. */
-@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio >= 6/5) {
   /* Landscape phones are wide and short. Stacking the status row under the
      board squeezed it from both directions — on an 844x390 handset the board
      came out 154px wide with ~690px of empty width beside it. Put the status
@@ -4910,7 +4918,8 @@ summary:active {
    600, 620 and 640 wide and at 16, 24 and 32px root text: in-header is larger
    at every one of them and smaller at none, with no header overflow and every
    intersection reachable. */
-@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio >= 6/5) {
   /* Two row templates, because the beginner guide adds a row to this grid from
      its own stylesheet and that rule out-specifies a bare `.board-stage`. Match
      its shape rather than fight it: with the guide up, the guide takes row 2
@@ -4978,7 +4987,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 500px) {
+@media (max-width: 900px) and (max-height: 500px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   [data-mobile-view="board"] .board-stage {
     --mobile-stage-pad-x: 10px;
     padding: 4px var(--mobile-stage-pad-right) 6px var(--mobile-stage-pad-left);
@@ -5998,7 +6008,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .board-stage {
     gap: 0.75rem;
   }
@@ -6387,7 +6398,7 @@ summary:active {
      Desktop only. The stacked layout derives the board from height as well but
    holds up: 390x844 measures 362px at every size from 16 to 32, and its worst
    case is the 272px this floor is taken from. */
-@media (min-width: 901px) {
+@media (min-width: 901px) and (not ((max-width: 960px) and (max-height: 500px) and (pointer: coarse))) {
   .board-workspace {
     /* The floor has to move the layout, not paint over it. `minmax(0, 1fr)`
        lets the board row shrink to nothing, so a board held at its floor simply
@@ -6845,7 +6856,7 @@ summary:active {
   }
 }
 
-@media (min-width: 901px) and (max-width: 1100px) {
+@media (min-width: 901px) and (max-width: 1100px) and (not ((max-width: 960px) and (max-height: 500px) and (pointer: coarse))) {
   .board-stage {
     padding: 0.75rem var(--space-lg);
   }
@@ -6855,7 +6866,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   /* Measured at 375x812: the pill renders 25px-51px while the board header
      occupies 8px-48px — a 23px overlap. The Turn card carries this text on
      mobile instead. */
@@ -6978,7 +6990,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 700px) {
+@media (max-width: 900px) and (max-height: 700px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (max-height: 700px) {
   .position-dock {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -7047,7 +7060,8 @@ summary:active {
    its used width, so the board is only ever sized against a column at least as
    wide as the one it gets. `!important` on the width because the declaration it
    overrides carries one. */
-@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio >= 6/5) {
   [data-mobile-view="board"] .board-workspace .board-wrap {
     width: min(
       calc(100cqw - var(--landscape-dock-rail) - var(--landscape-dock-gap)),
@@ -7076,7 +7090,8 @@ summary:active {
    want the stacked treatment -- the dock as a compact row under the board
    rather than a 232px column beside it. */
 @media (max-width: 900px) and (min-height: 501px),
-       (max-width: 900px) and (aspect-ratio < 6/5) {
+       (max-width: 900px) and (aspect-ratio < 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio < 6/5) {
   /* `height: 100%` + `max-width: 100%` cannot both be honoured by an
      aspect-ratio box: on a tall phone the row is taller than 9:10 allows, so
      the board filled the height, clamped the width, and the grid SVG
@@ -7137,7 +7152,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5) {
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio >= 6/5) {
   /* In landscape the board already has a separate column. Scroll the status
      rail rather than shrinking the board to accommodate wrapped card text. */
   [data-mobile-view="board"] .board-workspace .position-dock {
@@ -7150,7 +7166,7 @@ summary:active {
 /* Stacked desktop docks need the same text-aware minimum. The fractional
    floor preserves the normal three/four-column layout even when a capture
    tray spans the row; larger text can reduce the number of columns. */
-@media (min-width: 901px) and (min-height: 701px) {
+@media (min-width: 901px) and (min-height: 701px) and (not ((max-width: 960px) and (max-height: 500px) and (pointer: coarse))) {
   .board-workspace .position-dock {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, max(6rem, calc((100% - 0.96rem) / 3))), 1fr));
   }
@@ -7637,7 +7653,8 @@ summary:active {
   align-self: safe center;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   [data-mobile-view="board"] .board-workspace.board-workspace-drill .board-wrap {
     width: 100% !important;
     height: 100%;
@@ -7711,7 +7728,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (orientation: landscape) {
   /* Listed with the guide variant because the earlier landscape rule is: the
      minifier folds that pair into one :is(), which takes the :has() argument's
      specificity for both, so in the production build it outranked this bare
@@ -7795,7 +7813,8 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 700px) {
+@media (max-width: 900px) and (max-height: 700px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (max-height: 700px) {
   [data-mobile-view="board"] .position-dock,
   [data-mobile-view="board"][data-assist-mode="pro"] .position-dock {
     /* Floors, not fixed sizes: at normal text the cards fit these exactly,
@@ -7908,7 +7927,8 @@ summary:active {
   background: var(--accent-muted);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
   .mobile-board-turn-info {
     flex-wrap: wrap;
     align-content: center;

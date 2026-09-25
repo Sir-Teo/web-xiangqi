@@ -227,11 +227,17 @@ const LazyLibraryPanel = React.lazy(() =>
 
 /**
  * The one breakpoint the app has. Written here and read by `matchMedia` so the
- * markup switches on the same condition `@media (max-width: 900px)` does in
- * App.css; two copies of a breakpoint is two layouts that can be on screen at
- * once.
+ * markup switches on the same condition the stylesheets' mobile queries do;
+ * two copies of a breakpoint is two layouts that can be on screen at once.
+ *
+ * Width alone left the largest phones out when held sideways: 915x412,
+ * 926x428 and 932x430 are all past 900, so they got the three-panel desktop
+ * in a 430px-tall window, with a third of the board under the bottom bar. A
+ * short touch screen up to 960px is a phone on its side, and gets the phone
+ * layout; each `(max-width: 900px)` query in the CSS carries the same second
+ * condition, and each `(min-width: 901px)` one excludes it.
  */
-const MOBILE_LAYOUT_QUERY = '(max-width: 900px)';
+const MOBILE_LAYOUT_QUERY = '(max-width: 900px), (max-width: 960px) and (max-height: 500px) and (pointer: coarse)';
 const NO_OPENING_CANDIDATES: readonly { move: string }[] = [];
 
 export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
