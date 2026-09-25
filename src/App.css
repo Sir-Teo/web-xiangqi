@@ -7715,6 +7715,17 @@ summary:active {
     grid-row: 3;
     width: 100%;
   }
+
+  /* The menu hangs off the header's overflow button, and the header is in
+     column 2 here. The earlier landscape rule anchored it to column 1, which
+     this layout gave to the board, so it opened over the board 400px from its
+     button. Both lines are named so `right: 0` is column 2's own edge. */
+  [data-mobile-view="board"] .mobile-board-action-menu {
+    grid-column: 2 / 3;
+    grid-row: 2 / 4;
+    right: 0;
+    width: min(286px, 100%);
+  }
 }
 
 @media (max-width: 900px) and (max-height: 700px) {
