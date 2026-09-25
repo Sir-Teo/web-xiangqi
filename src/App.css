@@ -5884,7 +5884,9 @@ summary:active {
 
 .new-game-menu-header {
   display: flex;
-  align-items: flex-start;
+  /* The copy is the title alone now, so centre it on the close button rather
+     than hanging it 10px above the button's middle. */
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
@@ -5920,9 +5922,20 @@ summary:active {
   align-items: center;
   justify-content: space-between;
   gap: 0.85rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
+  /* Pinned at every width, not only on a phone: the dialog scrolls, and at
+     1280x720 the Start button sat 110px below its bottom edge, so picking a
+     mode left the one action that uses it out of sight. The negative margin
+     carries the fill out to the dialog's edges; the bottom padding replaces
+     the dialog's own, which a sticky footer would otherwise float above. */
+  position: sticky;
+  bottom: -1.25rem;
+  z-index: 1;
+  margin: 1rem -1.25rem -1.25rem;
+  padding: 1rem 1.25rem 1.25rem;
   border-top: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, rgba(12, 14, 17, 0.94), rgba(6, 8, 10, 0.99)),
+    var(--bg-surface);
 }
 
 .new-game-selection {
