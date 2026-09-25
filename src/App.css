@@ -7757,6 +7757,13 @@ summary:active {
     min-width: 36px;
     min-height: 36px;
   }
+
+  /* A native range answers a touch anywhere in its box, so the box is the
+     target: the move scrubber and the depth slider were 24px tall. */
+  .wc-scrubber,
+  .premium-slider {
+    min-height: 36px;
+  }
 }
 
 /* The move list is the main way through a game on a phone, and its chips and
