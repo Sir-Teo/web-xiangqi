@@ -552,6 +552,17 @@ body.resizing * {
   transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The transform only moved the bar's paint: its box kept its height, so a
+   collapsed bar left an empty band of the same size -- 189px at 1024x768 with
+   both collapsed -- and the board, which is sized from the stage's height,
+   gained nothing. Give the height up too. The re-expand handle sits on the
+   bar's inner edge, which is the screen edge either way, so it stays put. */
+.top.hidden,
+.bottom.hidden {
+  height: 0;
+  border-width: 0;
+}
+
 .top.hidden .panel-inner,
 .bottom.hidden .panel-inner {
   opacity: 0;
