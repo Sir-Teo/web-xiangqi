@@ -7051,8 +7051,10 @@ summary:active {
 
   [data-mobile-view="board"] .board-workspace .board-wrap {
     /* A scroll container clips shadows at its edge. Reserve the decorative
-       frame inside the board's measuring box without narrowing the dock. */
-    padding-inline: 13px;
+       frame inside the board's measuring box without narrowing the dock --
+       on every side: with only the inline gutter, a width-bound board (820x1100)
+       filled its row exactly and the workspace clipped the frame's top ring. */
+    padding: 13px;
   }
 }
 
