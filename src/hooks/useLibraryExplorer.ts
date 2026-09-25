@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
 import { savedGameLine } from '../utils/savedGameLine';
 import type { LibraryPositionReport } from '../utils/positionExplorer';
@@ -21,7 +21,8 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
   const [result, setResult] = useState<(ExplorerReply & { source: SavedGame[] }) | null>(null);
   const [failedSource, setFailedSource] = useState<SavedGame[] | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
-  const key = positionKey(board, side);
+  // Serialises the whole board, and App re-renders for far more than a move.
+  const key = useMemo(() => positionKey(board, side), [board, side]);
 
   const retry = useCallback(() => {
     if (!enabled || failedSourceRef.current !== games) return;
