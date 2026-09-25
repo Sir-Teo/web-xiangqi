@@ -28,8 +28,20 @@
 }
 
 .board-editor-board {
-  --board-max-width: 520px;
-  align-self: center;
+  /* Bounded by the dialog's height as well as its width. Only the width was,
+     so on a phone held sideways the board came out ~530px tall in a 390px
+     screen and the dialog scrolled half of it out of reach. The height term
+     is the dialog's 94vh less its padding and the board's 13px frame ring on
+     both sides, converted through the board's 9:10. */
+  --board-max-width: min(520px, calc((94dvh - 2rem - 26px) * 0.9));
+  width: 100%;
+  justify-self: center;
+  /* The row is as tall as the palette column, which outgrows a short screen;
+     centred in it the board sat below the fold. Keep it at the top and in
+     view while the column beside it scrolls. */
+  align-self: start;
+  position: sticky;
+  top: 0;
 }
 
 .board-editor-board .hitbox {
@@ -189,6 +201,11 @@
 @media (max-width: 640px) {
   .board-editor {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column: the palette is below the board, so a pinned board would sit
+     on top of it as it scrolled past. */
+  .board-editor-board {
+    position: static;
   }
   /* Eight fixed columns sized the brushes by the viewport rather than by the
      hand using them, and got it backwards at both ends: 37px on a 375px
