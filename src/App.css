@@ -7642,6 +7642,22 @@ summary:active {
   min-height: 44px;
 }
 
+/* Settings is where a phone reader changes notation, pieces and orientation,
+   and its choices were drawn 26-29px tall -- a pill row the thumb has to aim
+   at, beside the 44px this app gives every other touch control. Grown on
+   touch only, so a desktop dialog keeps its density. */
+@media (pointer: coarse) {
+  .settings-body .pill-btn {
+    min-height: 44px;
+    padding-inline: 0.9rem;
+  }
+
+  .settings-body .gc-btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
   [data-mobile-view="board"] .board-stage {
     grid-template-columns: minmax(0, 45%) minmax(0, 1fr);
