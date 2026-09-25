@@ -22,6 +22,9 @@ async function measure(page, target, label, width) {
       await field.scrollIntoViewIfNeeded();
       await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
       await field.focus();
+      // Reduced motion shortens every transition to 0.01ms rather than removing
+      // it, so the ring is read at its 0px start in the frame focus lands in.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const info = await field.evaluate(el => {
         const style = getComputedStyle(el); const box = el.getBoundingClientRect();
         const panel = el.closest('[role="dialog"], .lib-panel, .candidate-panel, .review-panel');
