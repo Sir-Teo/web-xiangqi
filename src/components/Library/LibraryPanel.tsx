@@ -431,6 +431,10 @@ export function LibraryPanel({
   }, [visibleSaved.length]);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
   const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
+  // The bundled set is empty on purpose (see historicalGames.ts). A heading, a
+  // caveat, a "0 classics" pill and a line saying there is nothing were four
+  // pieces of chrome about an absence, on the panel's first screen.
+  const hasBundledClassics = HISTORICAL_GAMES.length > 0;
   const reviewedGameSummaryLabel = reviewInsight?.reviewedCount === 1 ? 'reviewed game' : 'reviewed games';
   const savedSortLabel = SAVED_SORT_LABELS[savedSort];
   const reviewInsightLabel = reviewInsight
@@ -600,7 +604,7 @@ export function LibraryPanel({
         className="lib-summary-row"
         aria-label={[
           `${filteredSaved.length} ${savedGameSummaryLabel}.`,
-          `${filteredHistorical.length} ${classicGameSummaryLabel}.`,
+          hasBundledClassics ? `${filteredHistorical.length} ${classicGameSummaryLabel}.` : '',
           reviewInsightLabel ? `${reviewInsightLabel}.` : '',
           `Sorted by ${savedSortLabel}.`,
         ].filter(Boolean).join(' ')}
@@ -608,9 +612,11 @@ export function LibraryPanel({
         <span className="lib-summary-pill">
           <strong>{filteredSaved.length}</strong> saved
         </span>
-        <span className="lib-summary-pill" data-testid="library-classics-count">
-          <strong>{filteredHistorical.length}</strong> classics
-        </span>
+        {hasBundledClassics ? (
+          <span className="lib-summary-pill" data-testid="library-classics-count">
+            <strong>{filteredHistorical.length}</strong> classics
+          </span>
+        ) : null}
         {reviewInsight ? (
           <>
             <span
@@ -983,67 +989,66 @@ export function LibraryPanel({
         </button>
       ) : null}
 
-      {/* ── Classic Openings ──
-          Called openings, not games, because that is what they are: each entry
-          is the first eight to twelve moves a side of a real game, not the
-          whole thing. Labelling them "Classic Games" next to a decisive result
-          badge claimed something twenty-odd plies cannot show, and Game Review
-          then scored the excerpt as if it were a finished game -- which is how
-          a Hu Ronghua opening came out at 25% accuracy with twelve blunders. */}
-      <div className="lib-section-header">Classic Openings</div>
-      <p className="lib-section-note">
-        Opening excerpts from famous games. The result shown is how the full
-        game finished, not the position these moves reach.
-      </p>
-      <div className="lib-list" data-testid="historical-game-list">
-        {filteredHistorical.length === 0 ? (
-          // Two different nothings. "No games match your search" in front of a
-          // section that has no games at all sends someone hunting for a filter
-          // to clear.
-          <p className="lib-empty">
-            {HISTORICAL_GAMES.length === 0
-              ? 'No classic games are bundled yet.'
-              : 'No games match your search.'}
+      {hasBundledClassics ? (
+        <>
+          {/* ── Classic Openings ──
+              Called openings, not games, because that is what they are: each entry
+              is the first eight to twelve moves a side of a real game, not the
+              whole thing. Labelling them "Classic Games" next to a decisive result
+              badge claimed something twenty-odd plies cannot show, and Game Review
+              then scored the excerpt as if it were a finished game -- which is how
+              a Hu Ronghua opening came out at 25% accuracy with twelve blunders. */}
+          <div className="lib-section-header">Classic Openings</div>
+          <p className="lib-section-note">
+            Opening excerpts from famous games. The result shown is how the full
+            game finished, not the position these moves reach.
           </p>
-        ) : (
-          filteredHistorical.map((game) => (
-            <div key={game.id} className="lib-card lib-card-aside-action">
-              <div className="lib-card-title">
-                <span className="lib-matchup">
-                  {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}
-                </span>
-                <span
-                  className={`lib-result lib-result--${game.result}`}
-                  title={`${resultLabel(game.result)} — the full game's result. These moves are the opening only.`}
-                >
-                  {resultLabel(game.result)}
-                </span>
-              </div>
-              <div className="lib-card-meta">
-                <span>{game.event}</span>
-                <span>{game.date}</span>
-                <span>opening · {game.moves.length} plies</span>
-                {game.opening && (
-                  <>
-                    <span className="lib-opening">{game.opening}</span>
-                  </>
-                )}
-              </div>
-              <div className="lib-card-actions">
-                <button
-                  type="button"
-                  className="chip-btn chip-btn-primary"
-                  onClick={() => onLoadHistorical(game)}
-                  data-testid={`load-historical-${game.id}`}
-                  aria-label={`Load the opening of ${game.redPlayer} versus ${game.blackPlayer}, ${game.moves.length} plies`}
-                >
-                  <IconRefresh /> Load
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+          <div className="lib-list" data-testid="historical-game-list">
+            {filteredHistorical.length === 0 ? (
+              // Only a search can empty it: the section is not drawn at all
+              // when nothing is bundled.
+              <p className="lib-empty">No games match your search.</p>
+            ) : (
+              filteredHistorical.map((game) => (
+                <div key={game.id} className="lib-card lib-card-aside-action">
+                  <div className="lib-card-title">
+                    <span className="lib-matchup">
+                      {game.redPlayer} <span className="lib-vs">vs</span> {game.blackPlayer}
+                    </span>
+                    <span
+                      className={`lib-result lib-result--${game.result}`}
+                      title={`${resultLabel(game.result)} — the full game's result. These moves are the opening only.`}
+                    >
+                      {resultLabel(game.result)}
+                    </span>
+                  </div>
+                  <div className="lib-card-meta">
+                    <span>{game.event}</span>
+                    <span>{game.date}</span>
+                    <span>opening · {game.moves.length} plies</span>
+                    {game.opening && (
+                      <>
+                        <span className="lib-opening">{game.opening}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="lib-card-actions">
+                    <button
+                      type="button"
+                      className="chip-btn chip-btn-primary"
+                      onClick={() => onLoadHistorical(game)}
+                      data-testid={`load-historical-${game.id}`}
+                      aria-label={`Load the opening of ${game.redPlayer} versus ${game.blackPlayer}, ${game.moves.length} plies`}
+                    >
+                      <IconRefresh /> Load
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

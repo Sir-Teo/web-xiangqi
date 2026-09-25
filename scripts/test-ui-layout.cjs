@@ -13390,7 +13390,8 @@ async function assertLargeLibraryRendersProgressively(page) {
     // its own summary rather than with a count of whatever happens to be
     // bundled. It used to require exactly 10, which is a fact about the data
     // set and not about progressive rendering, which is what this asserts.
-    historicalClaimed: Number(document.querySelector('[data-testid="library-classics-count"] strong')?.textContent || "-1"),
+    // With nothing bundled the pill is not drawn, which claims none.
+    historicalClaimed: Number(document.querySelector('[data-testid="library-classics-count"] strong')?.textContent || "0"),
     showMoreText: document.querySelector('[data-testid="library-show-more-saved"]')?.textContent?.trim() || "",
     needleVisible: document.body.textContent?.includes("Needle hidden QA") || false,
     overflowX: document.body.scrollWidth - document.body.clientWidth,
