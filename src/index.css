@@ -1,4 +1,9 @@
 :root {
+  /* Native checkboxes, radios and sliders take the app's accent rather than
+     the browser's default blue; the PGN collection's game checkboxes were the
+     one blue thing on the page. The sliders that already set it are unchanged. */
+  accent-color: var(--accent);
+
   /* ── Base surfaces ─────────────────────────────── */
   --bg-base: #050505;
   --bg-surface: #0a0a0a;
