@@ -534,6 +534,32 @@
   cursor: pointer;
 }
 
+/* The native picker drew the browser's light-grey button in a dark panel, and
+   beside it "No file chosen" -- which stays true after a pick, because the
+   input is cleared so the same file can be read again, and so sat above the
+   preview of the very file it said was not chosen. Draw the button as this
+   panel's own and drop the file-name text; the preview names the file. */
+.lib-backup-file input {
+  justify-self: start;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.lib-backup-file input::file-selector-button {
+  min-height: 40px;
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  background: var(--bg-tertiary, #252525);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lib-backup-file input:disabled::file-selector-button { opacity: 0.5; cursor: default; }
+
 .lib-transfer button:disabled { opacity: 0.5; cursor: default; }
 .lib-transfer button:focus-visible,
 .lib-transfer summary:focus-visible,
