@@ -7732,6 +7732,31 @@ summary:active {
    and its choices were drawn 26-29px tall -- a pill row the thumb has to aim
    at, beside the 44px this app gives every other touch control. Grown on
    touch only, so a desktop dialog keeps its density. */
+/* The move list is the main way through a game on a phone, and its chips and
+   breadcrumbs were 24px tall; the moves inside an engine line, 17px. The
+   chips and breadcrumbs grow. The line's moves are running text, so they
+   keep their size and take a taller hit area instead, the way the header's
+   action buttons do. Touch only: a mouse is precise at 24px. */
+@media (pointer: coarse) {
+  .mtree-chip {
+    min-height: 36px;
+  }
+
+  .tree-breadcrumb-chip {
+    min-height: 32px;
+  }
+
+  .pv-move-btn {
+    position: relative;
+  }
+
+  .pv-move-btn::after {
+    content: '';
+    position: absolute;
+    inset: -8px 0;
+  }
+}
+
 @media (pointer: coarse) {
   .settings-body .pill-btn {
     min-height: 44px;
