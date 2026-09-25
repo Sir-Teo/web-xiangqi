@@ -3054,6 +3054,14 @@ async function assertDesktopResizeFeedback(page) {
     const handle = document.querySelector('[data-testid="left-panel-resize-handle"]');
     return handle?.getAttribute("aria-valuenow") === "320" && (handle.getAttribute("aria-label") || "").includes("Resize left graph and library panel");
   }, null, { timeout: 5000 });
+  // The value is 320 at once, but the panel eases out to it over 220ms, and
+  // the handle rides its edge: read the box now and the press lands where the
+  // handle was, which on a loaded runner is off it.
+  await page.evaluate(() => Promise.all(
+    document.getAnimations()
+      .filter((animation) => animation instanceof CSSTransition)
+      .map((animation) => animation.finished.catch(() => {}))
+  ));
 
   const box = await handle.boundingBox();
   if (!box) {
