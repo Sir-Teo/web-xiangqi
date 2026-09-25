@@ -2349,7 +2349,7 @@ function App() {
 
   const openGraphPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
-    setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
+    setLeftWidth((width) => width === 0 ? initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH) : width);
     setLeftPanelTab('graph');
     setMobileAnalysisTab('graph');
     setMobileView('analysis');
@@ -2357,7 +2357,7 @@ function App() {
 
   const openLibraryPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
-    setLeftWidth((width) => width === 0 ? DEFAULT_LEFT_PANEL_WIDTH : width);
+    setLeftWidth((width) => width === 0 ? initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH) : width);
     setLeftPanelTab('library');
     setMobileAnalysisTab('library');
     setMobileView('analysis');
@@ -2365,18 +2365,18 @@ function App() {
 
   const openAnalysisPanel = useCallback((tab: 'tree' | 'review' | 'engine') => {
     setShowMobileBoardActionMenu(false);
-    setRightWidth(width => width === 0 ? DEFAULT_RIGHT_PANEL_WIDTH : width);
+    setRightWidth(width => width === 0 ? initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH) : width);
     setAnalysisTab(tab);
     setMobileAnalysisTab(tab === 'tree' ? 'moves' : tab);
     setMobileView('analysis');
   }, []);
 
   const adjustLeftPanelWidth = useCallback((delta: number) => {
-    setLeftWidth((width) => stepPanelWidth(width, delta, DEFAULT_LEFT_PANEL_WIDTH));
+    setLeftWidth((width) => stepPanelWidth(width, delta, initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)));
   }, []);
 
   const adjustRightPanelWidth = useCallback((delta: number) => {
-    setRightWidth((width) => stepPanelWidth(width, delta, DEFAULT_RIGHT_PANEL_WIDTH));
+    setRightWidth((width) => stepPanelWidth(width, delta, initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH)));
   }, []);
 
   // The tab strips announce role="tablist"; arrow, Home and End keys are part of
@@ -2413,7 +2413,7 @@ function App() {
       setLeftWidth(0);
     } else if (event.key === 'End' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH);
+      setLeftWidth(initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH));
     }
   }, [adjustLeftPanelWidth]);
 
@@ -2429,7 +2429,7 @@ function App() {
       setRightWidth(0);
     } else if (event.key === 'End' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH);
+      setRightWidth(initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH));
     }
   }, [adjustRightPanelWidth]);
 
@@ -5758,7 +5758,7 @@ function App() {
                 <button
                   type="button"
                   className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setLeftWidth(w => w > 0 ? 0 : DEFAULT_LEFT_PANEL_WIDTH)}
+                  onClick={() => setLeftWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH))}
                   aria-pressed={leftPanelOpen}
                 >
                   Graph Panel
@@ -5766,7 +5766,7 @@ function App() {
                 <button
                   type="button"
                   className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setRightWidth(w => w > 0 ? 0 : DEFAULT_RIGHT_PANEL_WIDTH)}
+                  onClick={() => setRightWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH))}
                   aria-pressed={rightPanelOpen}
                 >
                   Tree Panel
@@ -6193,7 +6193,7 @@ function App() {
             role="separator"
             tabIndex={0}
             onPointerDown={startLeftResize}
-            onClick={() => { if (leftWidth === 0) setLeftWidth(DEFAULT_LEFT_PANEL_WIDTH); }}
+            onClick={() => { if (leftWidth === 0) setLeftWidth(initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)); }}
             onKeyDown={handleLeftResizeKeyDown}
             aria-label={leftPanelOpen ? `Resize left graph and library panel, ${Math.round(leftWidth)} pixels wide` : 'Expand left graph and library panel'}
             aria-orientation="vertical"
@@ -7181,7 +7181,7 @@ function App() {
             role="separator"
             tabIndex={0}
             onPointerDown={startRightResize}
-            onClick={() => { if (rightWidth === 0) setRightWidth(DEFAULT_RIGHT_PANEL_WIDTH); }}
+            onClick={() => { if (rightWidth === 0) setRightWidth(initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH)); }}
             onKeyDown={handleRightResizeKeyDown}
             aria-label={rightPanelOpen ? `Resize right analysis panel, ${Math.round(rightWidth)} pixels wide` : 'Expand right analysis panel'}
             aria-orientation="vertical"
