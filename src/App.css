@@ -7720,9 +7720,12 @@ summary:active {
 @media (max-width: 900px) and (max-height: 700px) {
   [data-mobile-view="board"] .position-dock,
   [data-mobile-view="board"][data-assist-mode="pro"] .position-dock {
-    height: 6rem;
+    /* Floors, not fixed sizes: at normal text the cards fit these exactly,
+       and with enlarged text the dock grows into the workspace's scroll
+       rather than cutting a selected piece's name to its first line. */
+    min-height: 6rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: minmax(0, 3.75rem) minmax(0, 1.95rem);
+    grid-template-rows: minmax(3.75rem, auto) minmax(1.95rem, auto);
   }
 
   [data-mobile-view="board"] .position-stat-selection,
@@ -7774,6 +7777,16 @@ summary:active {
 
   [data-mobile-view="board"] .position-stat-selection strong {
     font-size: 0.76rem;
+  }
+
+  /* The row fixes this card's height, and an overflow-hidden grid item may
+     shrink to nothing, so with enlarged text the value was squeezed to one of
+     its two lines ("No piece" and the rest cut away). Size the label and value
+     to their content and let the detail line -- clamped, with a tooltip --
+     take whatever height is left. */
+  [data-mobile-view="board"] .position-stat-selection {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: start;
   }
 
   [data-mobile-view="board"] .position-stat-selection em,
