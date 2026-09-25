@@ -10,10 +10,13 @@ interface GameOverModalProps {
   onReview: () => void;
 }
 
-const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; color: string }> = {
-  'red-wins':   { title: 'Red Wins',   color: '#c0392b' },
-  'black-wins': { title: 'Black Wins', color: '#1a1a2e' },
-  'draw':       { title: 'Draw',       color: '#6b7280' },
+// The icon is the winner's general as the board draws it, ivory with the
+// side's own ink. It was a coloured disc, and Black's #1a1a2e all but vanished
+// against this dark dialog.
+const RESULT_CONFIG: Record<NonNullable<GameResult>, { title: string; tone: 'red' | 'black' | 'draw' }> = {
+  'red-wins':   { title: 'Red Wins',   tone: 'red' },
+  'black-wins': { title: 'Black Wins', tone: 'black' },
+  'draw':       { title: 'Draw',       tone: 'draw' },
 };
 
 function resultSubtitle(result: NonNullable<GameResult>, reason?: GameOverModalProps['reason']) {
@@ -70,7 +73,7 @@ export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverM
         aria-labelledby="game-over-title"
         aria-describedby="game-over-subtitle"
       >
-        <div className="game-over-icon" style={{ background: cfg.color }} aria-hidden="true">
+        <div className={`game-over-icon game-over-icon-${cfg.tone}`} aria-hidden="true">
           {/* The winner's own general, on the winner's colour. These were
               swapped: "Red Wins" showed 將, which is Black's. */}
           {result === 'red-wins'

@@ -6063,9 +6063,9 @@ summary:active {
   position: fixed;
   inset: 0;
   z-index: 9500;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* Dimmed but not blurred: the position that ended the game is the thing a
+     player wants to look at next to the result, and a blur hid the mate. */
+  background: rgba(0, 0, 0, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6116,6 +6116,28 @@ summary:active {
   color: rgba(255, 255, 255, 0.92);
   box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.4);
   margin-bottom: 0.3rem;
+}
+
+/* The board's own piece: ivory, carved ring, the side's ink. */
+.game-over-icon-red,
+.game-over-icon-black {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.12) 32%, transparent 52%),
+    radial-gradient(circle at 50% 50%, #fdf8e6 0%, #edd898 40%, #c8a850 78%, #b08838 100%);
+  outline: 2px solid #8c6e28;
+  outline-offset: -1px;
+}
+
+.game-over-icon-red {
+  color: #b81515;
+}
+
+.game-over-icon-black {
+  color: #150e04;
+}
+
+.game-over-icon-draw {
+  background: #6b7280;
 }
 
 .game-over-title {
