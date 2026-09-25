@@ -7743,6 +7743,22 @@ summary:active {
    and its choices were drawn 26-29px tall -- a pill row the thumb has to aim
    at, beside the 44px this app gives every other touch control. Grown on
    touch only, so a desktop dialog keeps its density. */
+/* A tablet on its side gets the desktop layout under a finger: its panel
+   tabs and command bar were 24px tall and the move arrows 31x24. The phone
+   layout does not draw these, so this is the desktop chrome alone. */
+@media (pointer: coarse) {
+  .analysis-tab-btn,
+  .panel.bottom .gc-btn,
+  .bottombar-fen-copy {
+    min-height: 36px;
+  }
+
+  .wc-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
 /* The move list is the main way through a game on a phone, and its chips and
    breadcrumbs were 24px tall; the moves inside an engine line, 17px. The
    chips and breadcrumbs grow. The line's moves are running text, so they
