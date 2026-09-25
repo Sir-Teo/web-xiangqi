@@ -3683,6 +3683,29 @@ summary:active {
   min-width: 0;
 }
 
+/* Six buttons beside a label wrapped into a right-aligned staircase -- three
+   rows at 1280px, five at 980px -- with the label idling in half the card. Give
+   the label its own line and let the buttons share the card's full width. */
+.engine-runtime-controls {
+  flex-wrap: wrap;
+  row-gap: 0.36rem;
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+}
+
+.engine-runtime-controls .engine-runtime-buttons {
+  flex: 1 1 100%;
+  justify-content: stretch;
+}
+
+.engine-runtime-controls .engine-runtime-buttons > button {
+  flex: 1 1 auto;
+}
+
+.engine-runtime-controls .engine-runtime-buttons > .engine-infinite-btn {
+  flex-grow: 0;
+}
+
 .engine-pv-btn {
   min-height: 1.55rem;
   padding: 0 0.42rem;
