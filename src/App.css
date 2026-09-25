@@ -163,7 +163,9 @@ body.resizing * {
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -653,7 +655,10 @@ body.resizing * {
   height: 32px;
   border-radius: 2px;
   background: rgba(110, 118, 129, 0.15);
-  transition: all 200ms ease;
+  /* The pill grows on hover, so its size is animated too. */
+  transition-property: background-color, box-shadow, width, height;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
 }
 
 .resize-pill.horizontal {
@@ -1471,7 +1476,9 @@ body.resizing * {
     color: var(--text-primary);
     padding: 0;
     cursor: pointer;
-    transition: all 140ms ease;
+    transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+    transition-duration: 140ms;
+    transition-timing-function: ease;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -1703,7 +1710,9 @@ body.resizing * {
   font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 140ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 140ms;
+  transition-timing-function: ease;
   white-space: nowrap;
 }
 
@@ -1743,7 +1752,9 @@ body.resizing * {
   font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 130ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 130ms;
+  transition-timing-function: ease;
   white-space: nowrap;
 }
 
@@ -1923,7 +1934,9 @@ body.resizing * {
   font-size: 0.67rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -5108,7 +5121,9 @@ summary:active {
   background: transparent !important;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
 }
 
 .settings-close-btn svg {
@@ -5165,7 +5180,9 @@ summary:active {
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
 }
 
 .pill-btn-active {
@@ -5285,7 +5302,9 @@ summary:active {
   font-size: 0.76rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
   white-space: nowrap;
 }
 
@@ -5607,7 +5626,9 @@ summary:active {
   background: var(--bg-elevated);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
   white-space: nowrap;
 }
 
@@ -6097,7 +6118,9 @@ summary:active {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border-default);
-  transition: all 150ms ease;
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
 }
 
 .game-over-btn-primary {
