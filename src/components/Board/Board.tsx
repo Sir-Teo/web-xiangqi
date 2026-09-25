@@ -99,14 +99,18 @@ function clampSquare(value: number, max: number) {
 function firstOccupiedSquare(
     board: BoardState,
     ranks: readonly number[],
-    files: readonly number[]
+    files: readonly number[],
+    preferred?: (file: number, rank: number) => boolean
 ): { file: number; rank: number } | null {
+    let first: { file: number; rank: number } | null = null;
     for (const rank of ranks) {
         for (const file of files) {
-            if (board[rank]?.[file]) return { file, rank };
+            if (!board[rank]?.[file]) continue;
+            if (!preferred || preferred(file, rank)) return { file, rank };
+            first ??= { file, rank };
         }
     }
-    return null;
+    return first;
 }
 
 interface BoardProps {
@@ -495,7 +499,10 @@ export const Board = React.memo(function Board({
     // Preference order: wherever focus was last left, then the selected piece,
     // then the default landing square. A board with no pieces at all has no tab
     // stop, which is correct -- there is nothing on it to reach.
-    const fallbackRovingSquare = firstOccupiedSquare(board, ranks, files);
+    // A piece the reader can move, where there is one: reading order starts in
+    // the far corner, which is the opponent's, so a keyboard player's first
+    // Enter picked up a piece that could not move.
+    const fallbackRovingSquare = firstOccupiedSquare(board, ranks, files, draggableSide ? canDragFrom : undefined);
     const tabStopSquare = rovingSquare ?? selected ?? fallbackRovingSquare;
 
     const squareKeyshortcuts = onToggleHighlight
