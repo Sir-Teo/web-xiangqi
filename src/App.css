@@ -7704,9 +7704,40 @@ summary:active {
     grid-row: 2;
   }
 
+  /* To the last line, not column 2: a portrait phone keeps the stacked dock's
+     auto-fit columns, which are three at 320px, and left the third empty. */
   [data-mobile-view="board"] .position-stat-material {
-    grid-column: 2;
+    grid-column: 2 / -1;
     grid-row: 2;
+  }
+
+  /* The 1.95rem row holds one line, and these cards stack three: label, value
+     and detail. The row clipped them to half a word (Turn read "Bla" at
+     320x568 and 844x390). Run each onto a single line instead, the detail
+     truncating last, so "Check" or the AI's state is still read when it fits. */
+  [data-mobile-view="board"] .position-dock .position-stat-turn,
+  [data-mobile-view="board"] .position-dock .position-stat-material {
+    display: flex;
+    align-items: center;
+    gap: 0.34rem;
+    min-height: 0;
+    padding-block: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  [data-mobile-view="board"] .position-dock .position-stat-turn > *,
+  [data-mobile-view="board"] .position-dock .position-stat-material > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  [data-mobile-view="board"] .position-dock .position-stat-turn em,
+  [data-mobile-view="board"] .position-dock .position-stat-material em {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   [data-mobile-view="board"] .position-stat-selection strong {
