@@ -6672,10 +6672,16 @@ summary:active {
      runs out first as a height and let the 9:10 above derive the width. */
   .board-workspace .board-wrap {
     width: auto;
+    /* Less the eval bar's room as well: once the board filled this column the
+       bar, drawn to its left, landed outside the stage under the left panel --
+       at 1280x600 all but its last pixel. Only one side's room, taken as a
+       start margin: the margin box is what is centred, so a narrow column
+       leaves exactly the bar's room and a wide one still centres the board. */
     height: min(
       100cqh,
-      calc((100cqw - var(--short-dock-rail) - var(--short-dock-gap)) * 10 / 9)
+      calc((100cqw - var(--short-dock-rail) - var(--short-dock-gap) - var(--eval-bar-room)) * 10 / 9)
     );
+    margin-inline: var(--eval-bar-room) 0;
     max-height: none;
     /* `safe` for the same reason the desktop floor uses it: below the floor the
        wrap outgrows its row, and centred overflow puts half of it above the
