@@ -2254,6 +2254,34 @@ Down move to the same button of the card above or below, falling back to its
 Load, and Home and End reach the ends. The rename input is left alone so its
 own arrow keys still edit text. `assertTheSavedLibraryIsOneTabStop` holds it.
 
+## A phone is narrow, or short and touched
+
+The phone layout used to switch on width alone, `(max-width: 900px)`. The
+largest phones are past that on their side -- 915x412, 926x428, 932x430 --
+so they were given the three-panel desktop in a 430px-tall window, with 27 of
+the board's 90 points under the bottom bar. The breakpoint is now two
+conditions: `(max-width: 900px), (max-width: 960px) and (max-height: 500px)
+and (pointer: coarse)`. A short window driven by a mouse keeps the desktop.
+
+It lives in three kinds of place, and all three have to agree, or two layouts
+end up on screen at once:
+
+- `MOBILE_LAYOUT_QUERY` in `App.tsx`, which decides the markup.
+- Every `(max-width: 900px)` query in `App.css` and `BeginnerGuide.css`, which
+  carries the second condition as an alternative (combined with whatever
+  else that query tests).
+- Every `(min-width: 901px)` query, which excludes it with
+  `and (not (...))`.
+
+A new mobile rule copies the pair; a rule written with the width alone will
+silently skip the big landscape phones. `test-audit-followup-browser`'s
+landscape checks and the layout suite's phone checks are where a mismatch
+shows first.
+
+The dialogs that draw a board -- the editor, rule lessons, study practice --
+size it from the dialog's height as well as its width for the same reason: on
+a phone held sideways a width-sized board is taller than the screen.
+
 ## Project Invariants
 
 - Ranks are bottom-up and evaluations are Red-positive. When in doubt, write
