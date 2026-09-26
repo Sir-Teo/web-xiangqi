@@ -2589,7 +2589,7 @@ function App() {
   const evalBarText = currentEvalText ?? (matedEvalScore === null ? null : formatEvaluationText(matedEvalScore, 1));
   const liveEvalLabel = currentEvalText
     ? `Live engine evaluation, ${redPerspectiveEvalText}${displayEvalBoundText ? `, ${displayEvalBoundText}` : ''}`
-    : undefined;
+    : evalBarText ? `Engine evaluation, Red POV ${evalBarText}` : undefined;
   // Only where the board leaves room beside it. On a phone the board is the
   // full width of the screen and there is no gutter to sit in; the eval is on
   // the mobile header chip and in the analysis tab there instead.
@@ -2603,11 +2603,11 @@ function App() {
   // No eval to show, nothing wrong, and not ready yet: the wait itself.
   const mobileEngineLoading = engineEnabled && !isReady && displayEvalScore === null;
 
-  const displayEvalClass = displayEvalScore === null
+  const displayEvalClass = evalBarScore === null
     ? ''
-    : displayEvalScore > 0
+    : evalBarScore > 0
       ? 'eval-positive'
-      : displayEvalScore < 0
+      : evalBarScore < 0
         ? 'eval-negative'
         : '';
 
@@ -6544,13 +6544,15 @@ function App() {
               <div className="mobile-board-turn-info">
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
-                {engineEnabled && displayEvalScore !== null && (
+                {/* The phone's stand-in for the eval bar, so it reads the same
+                    value -- the mate included once the board is mated. */}
+                {engineEnabled && evalBarScore !== null && (
                   <span
                     className={`mobile-eval-chip ${displayEvalClass}`}
                     aria-label={liveEvalLabel}
                     title={liveEvalLabel}
                   >
-                    {currentEvalText}
+                    {evalBarText}
                     {displayEvalBoundText && <span className="board-eval-bound" data-testid="board-eval-bound" aria-hidden="true">Bound</span>}
                   </span>
                 )}
