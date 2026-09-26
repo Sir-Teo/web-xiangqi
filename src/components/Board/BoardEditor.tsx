@@ -279,7 +279,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                 </div>
 
                 <div className="board-editor-side">
-                    <div className="board-editor-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="board-editor-row board-editor-titlebar">
                         <h2>Set up a position</h2>
                         <button type="button" className="settings-close-btn" onClick={onCancel} aria-label="Close the editor">
                             <IconX />

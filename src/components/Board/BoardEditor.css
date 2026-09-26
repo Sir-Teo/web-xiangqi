@@ -107,6 +107,24 @@
   gap: 0.35rem;
 }
 
+/* The title and its close button share a line whatever the column's width.
+   Allowed to wrap as a row, the landscape phone's narrow side column put the
+   close button on a line of its own under the title; the title wraps inside
+   itself instead, and the button keeps its corner. */
+.board-editor-titlebar {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.board-editor-titlebar h2 {
+  min-width: 0;
+}
+
+.board-editor-titlebar .settings-close-btn {
+  flex-shrink: 0;
+}
+
 .board-editor-row .pill-btn,
 .board-editor-row .gc-btn {
   flex: 1 1 auto;
