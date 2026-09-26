@@ -671,8 +671,10 @@ export function LibraryPanel({
       <div className="lib-list" data-testid="saved-game-list" ref={savedListRef} onKeyDown={handleSavedListKeyDown}>
         {filteredSaved.length === 0 ? (
           <p className="lib-empty">
+            {/* Not "the Save button": a phone has none, only Save game in the
+                board's overflow menu, so name where games come from instead. */}
             {savedGames.length === 0
-              ? 'No saved games yet. Use the Save button to save the current game.'
+              ? 'No saved games yet. Games you save from the board appear here.'
               : 'No games match your search.'}
           </p>
         ) : (

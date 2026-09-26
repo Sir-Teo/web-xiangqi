@@ -12877,7 +12877,7 @@ async function assertLibraryDeleteConfirmation(page) {
 
   await page.getByTestId("delete-saved-qa-delete-game").click();
   await page.getByTestId("confirm-delete-saved-qa-delete-game").click();
-  await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 5000 });
+  await page.getByText("No saved games yet. Games you save from the board appear here.").waitFor({ timeout: 5000 });
   const remaining = await page.evaluate(() => {
     const raw = localStorage.getItem("xiangqi:library:v1");
     return raw ? JSON.parse(raw).length : 0;
@@ -12899,7 +12899,7 @@ async function assertLibraryRespondsToStorageChanges(page) {
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
 
   await page.locator('button[aria-label="Open game library"]').click();
-  await page.getByText("No saved games yet. Use the Save button to save the current game.").waitFor({ timeout: 10000 });
+  await page.getByText("No saved games yet. Games you save from the board appear here.").waitFor({ timeout: 10000 });
 
   await page.evaluate(() => {
     const key = "xiangqi:library:v1";
