@@ -2582,8 +2582,11 @@ function App() {
   // engine idle. Either way the bar sat at a dimmed 50/50 reading "—" beside
   // a graph and a Current card that already had this position's score. With
   // no live line, fall back to that stored reading -- the same one they show.
+  // Not while comparing candidates or showing a threat: those pause the
+  // position's reading on purpose, and "—" is what says so.
   const currentNodeRecord = treeNodes[currentNodeId]?.record;
-  const storedEvalScore = !topAnalysisPv && typeof currentNodeRecord?.evalScore === 'number'
+  const storedEvalScore = !topAnalysisPv && !candidateActive && !threatActive
+    && typeof currentNodeRecord?.evalScore === 'number'
     ? currentNodeRecord.evalScore : null;
   const evalBarScore = displayEvalScore ?? storedEvalScore;
   const evalBarText = currentEvalText
