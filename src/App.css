@@ -4244,6 +4244,23 @@ summary:active {
   font-family: var(--font-mono);
 }
 
+/* Once a game has moves the command row gains Play From Here, Review Game and
+   the opening, and from 1024px to 1440px the playback controls wrap onto a
+   line of their own -- where the scrubber kept its 170px floor and left the
+   rest of the line empty. Let the controls take the line they are given and
+   the scrubber grow with it, to a length a thumb still crosses quickly. Above
+   900px only: under it the bar is a column, where growing means height. */
+@media (min-width: 901px) {
+  .bottom .watch-controls {
+    flex: 1 1 auto;
+  }
+
+  .bottom .wc-timeline {
+    flex: 1 1 170px;
+    max-width: 26rem;
+  }
+}
+
 .wc-scrubber {
   width: 100%;
   min-height: 24px;
