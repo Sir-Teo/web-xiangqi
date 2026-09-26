@@ -7352,6 +7352,20 @@ function App() {
                       value={moveCommentDraft}
                       onChange={(event) => handleMoveCommentChange(event.target.value)}
                       onBlur={commitMoveComment}
+                      onKeyDown={(event) => {
+                        // Every single-key shortcut stands down while this has
+                        // focus, and nothing but the mouse gave it back: Escape
+                        // kept the caret here. Escape, or Ctrl/Cmd+Enter, now
+                        // leaves the note -- the blur saves it -- so F, T and
+                        // the arrows answer again. Not mid-composition: an IME
+                        // uses Escape to cancel its candidate, and pinyin is how
+                        // many readers write these notes.
+                        if (event.nativeEvent.isComposing) return;
+                        if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
+                          event.preventDefault();
+                          event.currentTarget.blur();
+                        }
+                      }}
                       disabled={!moveCommentTarget}
                       maxLength={MAX_MOVE_COMMENT_LENGTH}
                       rows={2}
