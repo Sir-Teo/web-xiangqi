@@ -10103,7 +10103,7 @@ async function assertMoveLineFileImport(page) {
  * The analysis tabs cut their own labels once a reader scales their text up:
  * at a 24px root font on a 1024px window the right panel gave "Review" and
  * "Engine" 47px of box for 56px of word, and the icons beside them had already
- * been squeezed from 16px to 7px trying to make room. A container step at 15rem
+ * been squeezed from 16px to 7px trying to make room. A container step at 16.25rem
  * of panel per root em drops the icons and tightens the padding, which is what
  * this gate pins -- from both sides, since a step that fires at the default
  * size would be its own regression.

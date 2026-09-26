@@ -81,8 +81,8 @@ body.resizing * {
 
    The threshold is in rem, not px, because what matters is whether the labels
    fit, and they grow with the user's text size. Measured at the default size,
-   the widest tab ("Review", icon included) needs 5rem and the equal columns
-   need three of those plus two gaps, about 15.6rem, inside the header's 1.5rem
+   the widest tab ("Review", icon included) needs 4.7rem and the equal columns
+   need three of those plus two gaps, about 14.8rem, inside the header's 1.5rem
    of padding; the heading adds another 4.9rem with its spacing. 18.75rem let
    the heading stay on the default 319px desktop panel, where each tab then got
    69px and the Review and Engine icons were squeezed to nothing. 22rem gives
@@ -813,7 +813,11 @@ body.resizing * {
   color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.34rem 0.46rem;
+  /* Trimmed from 0.46rem sides and the buttons' 0.4rem gap so three tabs
+     keep whole icons in the 265px panel of a 1024px window: they needed
+     79.5px each there and were given 77. */
+  gap: 0.3rem;
+  padding: 0.34rem 0.36rem;
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
@@ -847,11 +851,11 @@ body.resizing * {
 
    In rem for the same reason the heading rule above is: what decides this is
    the ratio of label size to panel width, not the panel width alone. Every
-   combination that fits needs about 17.1rem of panel per root em (three 5rem
-   columns, two gaps and the header's padding), so the step goes just above
-   that. At 15rem a 1024px window's 265px panel kept its icons and had them
-   shrunk to a few pixels each. */
-@container panel-col (max-width: 17.25rem) {
+   combination that fits needs about 16.3rem of panel per root em (three
+   4.7rem columns, two gaps and the header's padding), so the step goes just
+   under that. At 15rem a 1024px window's 265px panel kept icons that did not
+   fit, and they were shrunk to a few pixels each. */
+@container panel-col (max-width: 16.25rem) {
   .analysis-tab-btn > svg {
     display: none;
   }
