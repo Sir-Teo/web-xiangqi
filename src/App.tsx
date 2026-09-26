@@ -295,6 +295,8 @@ const ASSIST_MODE_COPY: Record<AssistMode, { ariaLabel: string; title: string }>
   },
 };
 const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
+/** index.html's own title, which the tab returns to between prompts. */
+const DOCUMENT_TITLE = 'Web Xiangqi | Pikafish Analysis Board';
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
 const DEFAULT_LEFT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
 const DEFAULT_RIGHT_PANEL_WIDTH = DEFAULT_PANEL_WIDTH;
@@ -2696,6 +2698,17 @@ function App() {
   const gameOverKey = gameResult ? `${gameResult}:${currentFen}:${moveHistory.length}` : null;
   const [dismissedGameOverKey, setDismissedGameOverKey] = useState<string | null>(null);
   const visibleGameResult = gameResult && gameOverKey !== dismissedGameOverKey ? gameResult : null;
+  // The tab's title was fixed, so a game against the engine left in a
+  // background tab never said the engine had replied, or that the game had
+  // ended. Lead with what wants the reader back; the name stays after it.
+  useEffect(() => {
+    const prefix = gameResult === 'draw' ? 'Draw'
+      : gameResult === 'red-wins' ? 'Red wins'
+        : gameResult === 'black-wins' ? 'Black wins'
+          : aiPlayActive && gameMode !== 'AIvAI' && !isAiTurn ? 'Your move'
+            : null;
+    document.title = prefix ? `${prefix} · ${DOCUMENT_TITLE}` : DOCUMENT_TITLE;
+  }, [aiPlayActive, gameMode, gameResult, isAiTurn]);
   const visibleGameOverReason = useMemo(() => {
     if (!visibleGameResult || visibleGameResult === 'draw') return undefined;
     if (hasAnyLegalMove(board, sideToMove)) return 'result';
