@@ -861,11 +861,11 @@ body.resizing * {
   }
 
   .analysis-tab-btn {
-    /* The side padding goes with them, which is another 0.44rem a tab, and an
+    /* The side padding goes with them, another 0.32rem a tab, and an
        ellipsis takes over past the point where even that is not enough -- a
        reader who has pushed their text size far enough should see that a word
        has been shortened rather than read a confidently wrong one. */
-    padding-inline: 0.24rem;
+    padding-inline: 0.2rem;
     text-overflow: ellipsis;
   }
 }
