@@ -3,7 +3,7 @@ description: Download the shared build and expose identical engine bytes to dev-
 runs:
   using: composite
   steps:
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v7
       with:
         name: application-build
         path: dist

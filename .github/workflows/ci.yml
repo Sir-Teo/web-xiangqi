@@ -45,7 +45,7 @@ jobs:
       - name: Build React application
         run: npm run build:react
       - name: Share application with all test and deployment jobs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: application-build
           path: dist
@@ -112,7 +112,7 @@ jobs:
         run: ${{ matrix.command }}
       - name: Upload browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: browser-diagnostics-${{ matrix.label }}
           include-hidden-files: true
