@@ -6224,7 +6224,7 @@ function App() {
                   aria-controls="left-panel-content"
                   data-testid="left-panel-tab-graph"
                 >
-                  <IconBarChart style={{ marginRight: '0.3rem' }} />Graph
+                  <IconBarChart />Graph
                 </button>
                 <button
                   type="button"
@@ -6236,7 +6236,7 @@ function App() {
                   aria-controls="left-panel-content"
                   data-testid="left-panel-tab-library"
                 >
-                  <IconLibrary style={{ marginRight: '0.3rem' }} />Library
+                  <IconLibrary />Library
                 </button>
               </div>
             </header>
@@ -7221,7 +7221,7 @@ function App() {
                   aria-controls="right-analysis-content"
                   data-testid="analysis-tab-tree"
                 >
-                  <IconTree style={{ marginRight: '0.3rem' }} />Tree
+                  <IconTree />Tree
                 </button>
                 <button
                   type="button"
@@ -7239,7 +7239,7 @@ function App() {
                   aria-controls="right-analysis-content"
                   data-testid="analysis-tab-review"
                 >
-                  <IconBarChart style={{ marginRight: '0.3rem' }} />Review
+                  <IconBarChart />Review
                 </button>
                 {engineEnabled ? (
                   <button
@@ -7258,7 +7258,7 @@ function App() {
                     aria-controls="right-analysis-content"
                     data-testid="analysis-tab-engine"
                   >
-                    <IconBot style={{ marginRight: '0.3rem' }} />Engine
+                    <IconBot />Engine
                   </button>
                 ) : null}
               </div>

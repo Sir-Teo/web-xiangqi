@@ -80,10 +80,19 @@ body.resizing * {
    .panel.right is aria-labelledby it.
 
    The threshold is in rem, not px, because what matters is whether the labels
-   fit, and they grow with the user's text size. 18.75rem is the same 300px at
-   the default size, but at 150% text it also frees the heading's width on a
-   320px panel, where three labels would otherwise be cut by 21px each. */
-@container panel-col (max-width: 18.75rem) {
+   fit, and they grow with the user's text size. Measured at the default size,
+   the widest tab ("Review", icon included) needs 5rem and the equal columns
+   need three of those plus two gaps, about 15.6rem, inside the header's 1.5rem
+   of padding; the heading adds another 4.9rem with its spacing. 18.75rem let
+   the heading stay on the default 319px desktop panel, where each tab then got
+   69px and the Review and Engine icons were squeezed to nothing. 22rem gives
+   the tabs their room first, and the strip takes the width the heading left. */
+@container panel-col (max-width: 22rem) {
+  .panel-header-tabs > .analysis-tab-strip {
+    flex: 1;
+    min-width: 0;
+  }
+
   .panel-header-tabs > h2 {
     position: absolute;
     width: 1px;
@@ -816,6 +825,13 @@ body.resizing * {
   }
 }
 
+/* The button's own gap already spaces the icon from its word; a flex item's
+   default shrink let a tight column crush the icon to zero width instead of
+   letting the rules below drop it cleanly. */
+.analysis-tab-btn > svg {
+  flex-shrink: 0;
+}
+
 .analysis-tab-btn.active {
   border-color: var(--accent-muted);
   background: var(--accent-subtle);
@@ -831,9 +847,11 @@ body.resizing * {
 
    In rem for the same reason the heading rule above is: what decides this is
    the ratio of label size to panel width, not the panel width alone. Every
-   combination that fits sits at 16rem of panel per root em or wider, every one
-   that does not at 13.3rem or narrower, so the step goes between them. */
-@container panel-col (max-width: 15rem) {
+   combination that fits needs about 17.1rem of panel per root em (three 5rem
+   columns, two gaps and the header's padding), so the step goes just above
+   that. At 15rem a 1024px window's 265px panel kept its icons and had them
+   shrunk to a few pixels each. */
+@container panel-col (max-width: 17.25rem) {
   .analysis-tab-btn > svg {
     display: none;
   }
