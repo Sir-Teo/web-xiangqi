@@ -8034,6 +8034,19 @@ summary:active {
   }
 }
 
+/* The landscape rail rule sets its dock to one column through
+   .board-workspace, which outranked the two columns above: Selection spanned
+   only that column and Material fell into an implicit auto one, a 326px +
+   101px split with a gap beside Selection at 844x390. Match its selector and
+   media so the two-row dock gets both columns. Portrait keeps its auto-fit
+   columns, which the rule above is written to leave alone. */
+@media (max-width: 900px) and (max-height: 500px) and (aspect-ratio >= 6/5),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (aspect-ratio >= 6/5) {
+  [data-mobile-view="board"] .board-workspace .position-dock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .move-tree-empty {
   padding-top: 3rem;
 }
