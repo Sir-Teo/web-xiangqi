@@ -1,5 +1,5 @@
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
-import { evaluationKindOverride, formatEvaluationText, mateDistanceFromScore, type EvaluationScoreKind } from './utils/engineEvalReading';
+import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
@@ -2576,19 +2576,18 @@ function App() {
   const displayEvalBoundText = topAnalysisPv?.bounded
     ? `${displayEvalBound === 'lower' ? 'Lower bound' : displayEvalBound === 'upper' ? 'Upper bound' : 'Bound'}, not an exact score`
     : undefined;
-  // A mated position has no line to read: the engine answers `score mate 0`
-  // with no pv, a moveless line is dropped, and the bar sat at a dimmed 50/50
-  // reading "—" beside a graph that already said +M0. With no live line, the
-  // bar takes this position's stored reading when that reading is the mate
-  // itself -- a finished game, which no later search can revise.
+  // The bar and the phone's chip read the live line, and there is not always
+  // one: a mated position has none (the engine answers `score mate 0` with no
+  // pv, and a moveless line is dropped), and a finished review leaves the
+  // engine idle. Either way the bar sat at a dimmed 50/50 reading "—" beside
+  // a graph and a Current card that already had this position's score. With
+  // no live line, fall back to that stored reading -- the same one they show.
   const currentNodeRecord = treeNodes[currentNodeId]?.record;
-  const matedEvalScore = !topAnalysisPv
-    && typeof currentNodeRecord?.evalScore === 'number'
-    && currentNodeRecord.evalScoreKind !== 'cp'
-    && mateDistanceFromScore(currentNodeRecord.evalScore) === 0
+  const storedEvalScore = !topAnalysisPv && typeof currentNodeRecord?.evalScore === 'number'
     ? currentNodeRecord.evalScore : null;
-  const evalBarScore = displayEvalScore ?? matedEvalScore;
-  const evalBarText = currentEvalText ?? (matedEvalScore === null ? null : formatEvaluationText(matedEvalScore, 1));
+  const evalBarScore = displayEvalScore ?? storedEvalScore;
+  const evalBarText = currentEvalText
+    ?? (storedEvalScore === null ? null : formatEvaluationText(storedEvalScore, 1, currentNodeRecord?.evalScoreKind));
   const liveEvalLabel = currentEvalText
     ? `Live engine evaluation, ${redPerspectiveEvalText}${displayEvalBoundText ? `, ${displayEvalBoundText}` : ''}`
     : evalBarText ? `Engine evaluation, Red POV ${evalBarText}` : undefined;
@@ -6558,7 +6557,7 @@ function App() {
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {/* The phone's stand-in for the eval bar, so it reads the same
-                    value -- the mate included once the board is mated. */}
+                    value, the stored one included when no line is live. */}
                 {engineEnabled && evalBarScore !== null && (
                   <span
                     className={`mobile-eval-chip ${displayEvalClass}`}
