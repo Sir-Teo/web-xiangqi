@@ -7902,8 +7902,15 @@ summary:active {
   }
 }
 
-@media (max-width: 900px) and (max-height: 700px),
-       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (max-height: 700px) {
+/* Not on the shortest portrait phones. Two rows cost the board ~46px of
+   height, which a 568px-tall screen does not have: at 320x568 it took the
+   board from 242px to 200px, under the 220px the beginner check holds it to,
+   and CI has failed on that since. Those screens keep the one-row dock, which
+   is what they had while it passed; landscape phones, and portrait ones from
+   600px tall, keep the two rows. */
+@media (max-width: 900px) and (max-height: 700px) and (min-height: 600px),
+       (max-width: 900px) and (max-height: 700px) and (orientation: landscape),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) and (orientation: landscape) {
   [data-mobile-view="board"] .position-dock,
   [data-mobile-view="board"][data-assist-mode="pro"] .position-dock {
     /* Floors, not fixed sizes: at normal text the cards fit these exactly,
