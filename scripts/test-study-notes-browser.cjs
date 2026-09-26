@@ -158,6 +158,11 @@ async function assertFits(page) {
         assert.equal(await page.getByRole('combobox', { name: 'Search commands' }).evaluate(element => element === document.activeElement), true);
         await page.keyboard.press('Enter');
         await search.waitFor({ state: 'visible' });
+        // The finder moves focus to its search a moment after it is visible.
+        // Filling the note before that let the move land between fill's focus
+        // and its delete, which then cleared the search instead of the note,
+        // and the panel this waits to disappear stayed (about one run in six).
+        await page.waitForFunction(() => document.activeElement?.id === 'study-notes-search');
         await page.getByTestId('move-comment-input').fill('');
         await page.getByTestId('move-comment-input').blur();
         await page.getByTestId('study-notes').waitFor({ state: 'detached' });
