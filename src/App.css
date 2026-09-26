@@ -7883,6 +7883,28 @@ summary:active {
     width: min(286px, 100%);
   }
 
+  /* The first-move guide is another child this grid did not place: it fell
+     into an implicit full-width row under everything, the board's row lost
+     that height while its width -- derived from the viewport -- did not, and
+     the board drew 274x266 instead of 9:10. Give the guide a row of its own
+     in the side column, above the nav, and let the board span every row. */
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) {
+    grid-template-rows: 52px minmax(0, 1fr) auto 44px;
+  }
+
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) > .beginner-guide {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) .mobile-board-nav {
+    grid-row: 4;
+  }
+
+  [data-mobile-view="board"] .board-stage:has(> .beginner-guide) .board-workspace .board-wrap {
+    grid-row: 1 / -1;
+  }
+
   /* Practice adds its question to the workspace, and with the workspace
      flattened into this grid nothing placed it: it fell into an implicit
      fourth row that took the 1fr row's height, so the board shrank to ~120px
