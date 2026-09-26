@@ -7879,12 +7879,28 @@ summary:active {
     display: contents;
   }
 
+  /* The tab bar kept its portrait 56px, stacking icon over label, on a
+     screen 375px tall -- 15% of the height, all of it taken from a board
+     that is sized by height here. Set icon and label side by side in the
+     44px a touch target needs, and give the board the 12px. */
+  .mobile-tab-bar {
+    flex-basis: calc(44px + env(safe-area-inset-bottom));
+    height: calc(44px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-tab-bar-btn {
+    flex-direction: row;
+    gap: 6px;
+  }
+
   [data-mobile-view="board"] .board-workspace .board-wrap {
     grid-column: 1;
     grid-row: 1 / 4;
     align-self: center;
     justify-self: center;
-    width: min(100%, calc((100dvh - 86px) * 0.9)) !important;
+    /* 74px: the 44px tab bar below, the stage's 8px pads and a 14px gap.
+       It read 86px while the bar was 56px tall. */
+    width: min(100%, calc((100dvh - 74px) * 0.9)) !important;
     height: auto;
     max-height: 100%;
   }
