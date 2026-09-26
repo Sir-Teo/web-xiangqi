@@ -8269,7 +8269,11 @@ function App() {
         <AutoSaveRecoveryModal
           savedAt={autoSaveRecovery.savedAt}
           moveCount={autoSaveRecovery.game.moves.length}
-          incomingLink={incomingLink}
+          /* The link's `moves` are only the path to where it opens; a shared
+             tree carries the rest of the line, so "the 1-move game this link
+             opened" was said of a two-move game opened at its first move. By
+             now the link's game is on the board: count its line instead. */
+          incomingLink={incomingLink && { moveCount: Math.max(incomingLink.moveCount, moveHistory.length) }}
           onRestore={restoreAutoSavedGame}
           onDismiss={dismissAutoSaveRecovery}
         />
