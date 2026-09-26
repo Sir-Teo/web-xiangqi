@@ -1,5 +1,5 @@
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
-import { evaluationKindOverride, type EvaluationScoreKind } from './utils/engineEvalReading';
+import { evaluationKindOverride, formatEvaluationText, mateDistanceFromScore, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
@@ -2574,6 +2574,19 @@ function App() {
   const displayEvalBoundText = topAnalysisPv?.bounded
     ? `${displayEvalBound === 'lower' ? 'Lower bound' : displayEvalBound === 'upper' ? 'Upper bound' : 'Bound'}, not an exact score`
     : undefined;
+  // A mated position has no line to read: the engine answers `score mate 0`
+  // with no pv, a moveless line is dropped, and the bar sat at a dimmed 50/50
+  // reading "—" beside a graph that already said +M0. With no live line, the
+  // bar takes this position's stored reading when that reading is the mate
+  // itself -- a finished game, which no later search can revise.
+  const currentNodeRecord = treeNodes[currentNodeId]?.record;
+  const matedEvalScore = !topAnalysisPv
+    && typeof currentNodeRecord?.evalScore === 'number'
+    && currentNodeRecord.evalScoreKind !== 'cp'
+    && mateDistanceFromScore(currentNodeRecord.evalScore) === 0
+    ? currentNodeRecord.evalScore : null;
+  const evalBarScore = displayEvalScore ?? matedEvalScore;
+  const evalBarText = currentEvalText ?? (matedEvalScore === null ? null : formatEvaluationText(matedEvalScore, 1));
   const liveEvalLabel = currentEvalText
     ? `Live engine evaluation, ${redPerspectiveEvalText}${displayEvalBoundText ? `, ${displayEvalBoundText}` : ''}`
     : undefined;
@@ -6863,8 +6876,8 @@ function App() {
                     care to derive that height. */}
                 {showEvalBar ? (
                   <EvalBar
-                    evalScore={displayEvalScore}
-                    evalText={currentEvalText}
+                    evalScore={evalBarScore}
+                    evalText={evalBarText}
                     boundText={displayEvalBoundText}
                     orientation={orientation}
                   />
