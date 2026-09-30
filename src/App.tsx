@@ -7024,6 +7024,7 @@ function App() {
                   // offering the grab cursor.
                   draggableSide={!gameResult && !isAiTurn ? sideToMove : null}
                   pieceStyle={pieceStyle}
+                  notationStyle={notationStyle}
                   orientation={orientation}
                   highlights={showArrows ? userHighlights : undefined}
                   onToggleHighlight={showArrows ? handleToggleHighlight : undefined}

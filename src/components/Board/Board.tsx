@@ -1,3 +1,5 @@
+import { boardFileLabel } from '../../utils/boardCoordinates';
+import type { XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './Board.css';
 import type { BoardState } from '../../utils/xiangqi';
@@ -128,6 +130,7 @@ interface BoardProps {
     draggableSide?: 'w' | 'b' | null;
     /** Characters or WXF letters on the pieces; see `utils/pieceStyle`. */
     pieceStyle?: PieceStyle;
+    notationStyle?: XiangqiNotationStyle;
     selected: { file: number, rank: number } | null;
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
@@ -154,6 +157,7 @@ export const Board = React.memo(function Board({
     board,
     draggableSide = null,
     pieceStyle = 'traditional',
+    notationStyle = 'uci',
     selected,
     validTargets,
     onSquareClick,
@@ -551,17 +555,17 @@ export const Board = React.memo(function Board({
                                 className="coord-label coord-file coord-file-top"
                                 style={{ left: leftFor(file, orientation) }}
                             >
-                                {FILE_LABELS[file]}
+                                {boardFileLabel(file, orientation === 'red' ? 'black' : 'red', notationStyle)}
                             </span>
                             <span
                                 className="coord-label coord-file coord-file-bottom"
                                 style={{ left: leftFor(file, orientation) }}
                             >
-                                {FILE_LABELS[file]}
+                                {boardFileLabel(file, orientation, notationStyle)}
                             </span>
                         </React.Fragment>
                     ))}
-                    {BOARD_RANKS.map(rank => (
+                    {notationStyle === 'uci' && BOARD_RANKS.map(rank => (
                         <React.Fragment key={`coord-rank-${rank}`}>
                             <span
                                 className="coord-label coord-rank coord-rank-left"

@@ -33,7 +33,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 29. [x] Clarify initial task choices
 30. [x] Use a gentler first AI difficulty
 31. [x] Keep board context in phone analysis
-32. [ ] Offer notation-aware board coordinates
+32. [x] Offer notation-aware board coordinates
 33. [ ] Distinguish advantage from win probability
 34. [ ] Group advanced engine controls
 35. [ ] Offer comfortable UI density
@@ -235,3 +235,9 @@ Validation: fresh/default and saved-strength reload checks; AI pause, late repli
 All phone analysis tabs retain a compact current-position preview, turn and timeline label, with one return-to-board control. The preview follows piece style and orientation without adding another interactive square grid.
 
 Validation: piece position, turn, return action and panel visibility at three phone/landscape sizes; screenshot inspection, TypeScript and ESLint.
+
+## 32. Offer notation-aware board coordinates
+
+Board edges follow the selected notation: absolute files/ranks for UCI, player-relative file numbers for WXF, and Red Chinese numerals for Chinese notation. Flipping keeps each side’s labels at its own edge. Accessible square names remain stable UCI coordinates.
+
+Validation: notation mapping tests and all three styles in both orientations at desktop and two phone widths; TypeScript and ESLint.
