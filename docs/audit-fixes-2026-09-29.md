@@ -9,7 +9,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 5. [x] Undo discarding note-only studies
 6. [x] Make recovery Escape non-destructive
 7. [x] Checkpoint studies before replacement
-8. [ ] Preserve failed recovery data
+8. [x] Preserve failed recovery data
 9. [ ] Cancel stale direct imports
 10. [ ] Validate FEN counters
 11. [ ] Preserve reviewed-game cursor
@@ -89,3 +89,9 @@ Validation: browser Escape/reopen/discard/undo, recovery text scaling and focus 
 New games, direct imports, saved/historical game loads, editor positions, and play/practice from here archive a recovery checkpoint before replacement. Checkpoints include pending note text, remain accessible through recovery, and avoid repeating an unchanged checkpoint. If persistence fails, replacement stops and explains how to export the current study.
 
 Validation: browser reset/checkpoint/restore and quota-failure refusal, TypeScript, and ESLint.
+
+## 8. Preserve failed recovery data
+
+A failed Restore keeps the dialog and original data, with a download action. Unreadable or unsupported recovery records show a download notice and are preserved byte-for-byte when a new study saves.
+
+Validation: malformed/unsupported data retention tests, browser downloads of malformed and illegal-move records, component tests, TypeScript, and ESLint.

@@ -1,5 +1,5 @@
 import { isWorthAutoSaving } from './utils/autoSave';
-import { currentDraftId, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
+import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
@@ -4971,6 +4971,9 @@ function App() {
     return { moveCount: extractUciMoveLine(rawMoves).length };
   }, []);
 
+  const [recoveryProblems, setRecoveryProblems] = useState(() => readAutoSaveProblems());
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryDownloadFailed, setRecoveryDownloadFailed] = useState(false);
   const [recoveryDrafts, setRecoveryDrafts] = useState<RecoveryDraft[]>([]);
   const [autoSaveRecovery, setAutoSaveRecovery] = useState<RecoveryDraft | null>(null);
   /**
@@ -5231,6 +5234,11 @@ function App() {
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
     const restored = handleLoadGame(autoSaveRecovery.game);
+    if (!restored) {
+      setRecoveryError('This draft could not be loaded. Its original data is still kept; download it for repair or decide later.');
+      return;
+    }
+    setRecoveryError(null);
     if (restored && writeAutoSaveDraft(autoSaveRecovery.game) === 'saved') {
       clearAutoSaveDraft(autoSaveRecovery.draftId);
       setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== autoSaveRecovery.draftId));
@@ -8298,6 +8306,17 @@ function App() {
         </div>
       ) : null}
 
+      {recoveryProblems.length > 0 && !autoSaveRecovery && (
+        <div className="save-error-notice" role="alert" data-testid="recovery-data-error">
+          <span>{recoveryProblems.length} unreadable recovery {recoveryProblems.length === 1 ? 'copy is' : 'copies are'} preserved. Download the original data for repair.</span>
+          <button type="button" className="undo-toast-btn" onClick={() => {
+            const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
+            setRecoveryDownloadFailed(!ok);
+          }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
+          <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
+        </div>
+      )}
+
       {!autoSaveRecovery && recoveryDrafts.length > 0 && (
         <button className="recovery-drafts-button" type="button" onClick={() => setAutoSaveRecovery(recoveryDrafts[0])}>
           Recovery drafts ({recoveryDrafts.length})
@@ -8332,9 +8351,14 @@ function App() {
 
       {autoSaveRecovery && (
         <AutoSaveRecoveryModal
+          error={recoveryError}
+          onDownload={() => {
+            const raw = readAutoSaveDraftRaw(autoSaveRecovery.draftId) ?? JSON.stringify(autoSaveRecovery);
+            if (!downloadTextFile('xiangqi-recovery.json', raw, 'application/json')) setRecoveryError('Download failed. Your recovery data is still kept; try again.');
+          }}
           drafts={recoveryDrafts}
           draftId={autoSaveRecovery.draftId}
-          onSelectDraft={id => setAutoSaveRecovery(recoveryDrafts.find(draft => draft.draftId === id) ?? null)}
+          onSelectDraft={id => { setRecoveryError(null); setAutoSaveRecovery(recoveryDrafts.find(draft => draft.draftId === id) ?? null); }}
           savedAt={autoSaveRecovery.savedAt}
           moveCount={autoSaveRecovery.game.moves.length}
           /* The link's `moves` are only the path to where it opens; a shared

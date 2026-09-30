@@ -7,6 +7,8 @@ interface AutoSaveRecoveryModalProps {
     drafts?: RecoveryDraft[];
     draftId?: string;
     onSelectDraft?: (id: string) => void;
+    error?: string | null;
+    onDownload?: () => void;
     savedAt: number;
     moveCount: number;
     /**
@@ -40,7 +42,7 @@ function describeWhen(savedAt: number, now = Date.now()): string {
 }
 
 export function AutoSaveRecoveryModal({
-    drafts = [], draftId, onSelectDraft,
+    drafts = [], draftId, onSelectDraft, error, onDownload,
     savedAt,
     moveCount,
     incomingLink = null,
@@ -90,6 +92,8 @@ export function AutoSaveRecoveryModal({
                             : 'the position'} this link opened.`
                         : 'Pick it up where you left off?'}
                 </p>
+                {error && <p role="alert">{error}</p>}
+                {error && onDownload && <button className="auto-save-btn auto-save-btn-secondary" type="button" onClick={onDownload}>Download original data</button>}
                 {drafts.length > 1 && (
                     <label>Recovery draft
                         <select value={draftId} onChange={event => onSelectDraft?.(event.target.value)}>

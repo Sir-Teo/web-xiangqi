@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft } from './autoSaveDrafts';
+import { clearAutoSaveDraft, readAutoSaveDraftRaw, readAutoSaveDrafts, readAutoSaveProblems, writeAutoSaveDraft } from './autoSaveDrafts';
 import { AUTO_SAVED_GAME_KEY, type AutoSaveInput } from './autoSave';
 const game: AutoSaveInput = { gameMode: 'PvP', moves: ['h2e2'] };
 function storageFixture() {
@@ -30,4 +30,14 @@ it('offers legacy snapshots alongside independent drafts without duplicating mir
     expect(readAutoSaveDrafts(storage).map(draft => draft.draftId)).toEqual(['legacy', 'tab-a']);
     clearAutoSaveDraft('legacy', storage);
     expect(readAutoSaveDrafts(storage)).toHaveLength(1);
+});
+
+it.each(['{damaged', JSON.stringify({ version: 99, savedAt: 1, game })])('preserves unreadable legacy bytes when another study autosaves', raw => {
+    const storage = storageFixture();
+    storage.setItem(AUTO_SAVED_GAME_KEY, raw);
+    expect(readAutoSaveProblems(storage)[0].raw).toBe(raw);
+    writeAutoSaveDraft(game, storage, 2, 'new-tab');
+    expect(readAutoSaveDraftRaw('legacy', storage)).toBe(raw);
+    expect(readAutoSaveProblems(storage)[0].raw).toBe(raw);
+    expect(readAutoSaveDrafts(storage).map(draft => draft.draftId)).toEqual(['new-tab']);
 });
