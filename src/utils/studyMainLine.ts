@@ -1,9 +1,9 @@
-import type { MoveTreeNode } from '../hooks/useXiangqi';
+import type { MoveTreeNode, MoveTreeStructure } from '../hooks/useXiangqi';
 
 type Tree = Record<string, MoveTreeNode>;
 
 /** A study's designated line follows first children; navigation is separate. */
-export function getStudyMainLine(tree: Tree, rootId: string): string[] {
+export function getStudyMainLine(tree: MoveTreeStructure, rootId: string): string[] {
     const line: string[] = [];
     const seen = new Set([rootId]);
     let parentId = rootId;

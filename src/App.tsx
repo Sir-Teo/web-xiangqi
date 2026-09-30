@@ -818,6 +818,7 @@ function App() {
     moveCapacityError,
     dismissMoveCapacityError,
     treeNodes,
+    moveStructure,
     activeLineNodeIds,
     currentFen,
     rootFen,
@@ -917,15 +918,15 @@ function App() {
   const currentLineMoves = useMemo(() => {
     return activeLineNodeIds
       .slice(0, currentMoveIndex + 1)
-      .map((nodeId) => treeNodes[nodeId]?.record?.uci)
+      .map((nodeId) => moveStructure[nodeId]?.record?.uci)
       .filter((uci): uci is string => Boolean(uci));
-  }, [activeLineNodeIds, currentMoveIndex, treeNodes]);
+  }, [activeLineNodeIds, currentMoveIndex, moveStructure]);
   const hasMoveTreeMoves = useMemo(() => (
-    Boolean(treeNodes[rootNodeId]?.childrenIds.some((childId) => treeNodes[childId]?.record))
-  ), [rootNodeId, treeNodes]);
+    Boolean(moveStructure[rootNodeId]?.childrenIds.some((childId) => moveStructure[childId]?.record))
+  ), [rootNodeId, moveStructure]);
   const hasStudyBranches = useMemo(() => (
-    Object.values(treeNodes).some((node) => node.childrenIds.length > 1)
-  ), [treeNodes]);
+    Object.values(moveStructure).some((node) => node.childrenIds.length > 1)
+  ), [moveStructure]);
   /**
    * A straight line is stored as a list of moves, which is compact and cannot
    * carry anything else. A note is attached to a move, so a game holding one
@@ -1419,8 +1420,8 @@ function App() {
       ? `Start / ${moveHistory.length}`
       : `${timelinePly} / ${moveHistory.length}`;
   const currentLineSignature = useMemo(
-    () => makeReviewLineSignature(activeLineNodeIds, treeNodes),
-    [activeLineNodeIds, treeNodes]
+    () => makeReviewLineSignature(activeLineNodeIds, moveStructure),
+    [activeLineNodeIds, moveStructure]
   );
   const shareNoticePositionKey = useMemo(
     () => `${rootFen}::${currentLineSignature}`,
@@ -1500,15 +1501,15 @@ function App() {
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
     activeLineNodeIds.forEach((nodeId, idx) => {
-      const children = treeNodes[nodeId]?.childrenIds.length ?? 0;
+      const children = moveStructure[nodeId]?.childrenIds.length ?? 0;
       if (children > 1) {
         counts[idx] = children;
       }
     });
     return counts;
-  }, [activeLineNodeIds, treeNodes]);
+  }, [activeLineNodeIds, moveStructure]);
 
-  const rootGraphBranchCount = treeNodes[rootNodeId]?.childrenIds.length ?? 0;
+  const rootGraphBranchCount = moveStructure[rootNodeId]?.childrenIds.length ?? 0;
   const leftPanelOpen = leftWidth > 0;
   // Match the responsive panel visibility so a hidden chart does not keep
   // rebuilding its SVG or observing layout on every live engine score.
@@ -2650,7 +2651,7 @@ function App() {
   const selectedRecordedResult = treeNodes[currentNodeId]?.record?.recordedResult ?? (currentNodeId === rootNodeId ? rootResult : undefined);
   const lineRecordedResult = activeLineNodeIds.length ? treeNodes[activeLineNodeIds.at(-1)!]?.record?.recordedResult : rootResult;
   const mainLinePinned = treeNodes[rootNodeId]?.mainLinePinned;
-  const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(treeNodes, rootNodeId) : [], [mainLinePinned, treeNodes, rootNodeId]);
+  const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(moveStructure, rootNodeId) : [], [mainLinePinned, moveStructure, rootNodeId]);
   const viewingStudyMainLine = Boolean(mainLinePinned) && activeLineNodeIds.length === studyMainLineNodeIds.length
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !studyControlsDisabled && !viewingStudyMainLine;
@@ -2741,10 +2742,10 @@ function App() {
    */
   const formatReviewMoveText = useCallback((nodeId: string, uci: string) => {
     if (notationStyle === 'uci') return formatUciMove(uci);
-    const record = treeNodes[nodeId]?.record;
+    const record = moveStructure[nodeId]?.record;
     const before = record ? boardBeforeRecord(record) : null;
     return before ? formatMoveInStyle(before, uci, notationStyle) : formatUciMove(uci);
-  }, [notationStyle, treeNodes]);
+  }, [notationStyle, moveStructure]);
 
   /**
    * The engine's line from the position before a move, in the reader's
@@ -2754,11 +2755,11 @@ function App() {
    */
   const formatReviewLineText = useCallback((nodeId: string, moves: string[]) => {
     if (notationStyle === 'uci') return moves.map((uci) => formatUciMove(uci)).join(' ');
-    const record = treeNodes[nodeId]?.record;
+    const record = moveStructure[nodeId]?.record;
     const before = record ? boardBeforeRecord(record) : null;
     if (!before) return moves.map((uci) => formatUciMove(uci)).join(' ');
     return formatLineInStyle(before, moves, notationStyle, moves.length);
-  }, [notationStyle, treeNodes]);
+  }, [notationStyle, moveStructure]);
 
   /**
    * Whether this position has stood here before, and what the rules say about
@@ -2896,16 +2897,14 @@ function App() {
   // Both pass the root: the book names lines from the standard array, and the
   // same four moves from somewhere else are four moves, not that opening.
   const detectedOpening = useMemo(() => {
-    const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
-    return matchOpening(uciMoves, rootFen);
-  }, [moveHistory, currentMoveIndex, rootFen]);
+    return matchOpening(currentLineMoves, rootFen);
+  }, [currentLineMoves, rootFen]);
   const exportOpeningName = useMemo(() => mainLinePinned
-    ? matchOpening(studyMainLineNodeIds.map(id => treeNodes[id].record!.uci), rootFen)?.name
-    : detectedOpening?.name, [mainLinePinned, studyMainLineNodeIds, treeNodes, rootFen, detectedOpening]);
+    ? matchOpening(studyMainLineNodeIds.map(id => moveStructure[id].record!.uci), rootFen)?.name
+    : detectedOpening?.name, [mainLinePinned, studyMainLineNodeIds, moveStructure, rootFen, detectedOpening]);
   const openingCandidates = useMemo(() => {
-    const uciMoves = moveHistory.slice(0, currentMoveIndex + 1).map(r => r.uci);
-    return getOpeningCandidates(uciMoves, assistMode === 'pro' ? 6 : 4, rootFen);
-  }, [assistMode, currentMoveIndex, moveHistory, rootFen]);
+    return getOpeningCandidates(currentLineMoves, assistMode === 'pro' ? 6 : 4, rootFen);
+  }, [assistMode, currentLineMoves, rootFen]);
 
   // The cloud book answers the same question the local book does -- what is
   // played here -- from a database no bundled table could match. Asked only

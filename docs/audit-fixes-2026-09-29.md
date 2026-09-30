@@ -19,7 +19,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 15. [x] Ignore repeated action shortcuts
 16. [x] Serialize concurrent library mutations
 17. [x] Isolate engine telemetry rendering
-18. [ ] Narrow tree-derived invalidation
+18. [x] Narrow tree-derived invalidation
 19. [ ] Avoid whole-library mutation/reload costs
 20. [ ] Skip duplicate autosave work
 21. [ ] Move direct imports to a worker
@@ -151,3 +151,9 @@ Validation: simultaneous two-tab saves under both coordination mechanisms, recov
 Search counters and raw logs now update subscribed leaf components rather than App state. Effort-only PV updates reuse the board reading, while explicit Keep Line captures the latest effort. Recommendations, score changes, bounds, and WDL changes still publish normally.
 
 Validation: instrumented browser recorded zero App renders across four counter/log flushes; engine-line keep/replay/save/recovery on desktop and phone; 2,099 unit tests, TypeScript, and ESLint. Existing browser assertions now await asynchronous library persistence.
+
+## 18. Narrow tree-derived invalidation
+
+A separate immutable move-structure snapshot changes only when moves or main-line order change. Notes and stored evaluations no longer invalidate path signatures, opening lookups, branch counts, notation callbacks, or FEN clocks.
+
+Validation: structural identity browser regression; main-line and halfmove-clock suites at 1440, 390, and 320px; focused unit tests, TypeScript, and ESLint. Save assertions await asynchronous persistence.

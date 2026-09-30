@@ -3,9 +3,11 @@ const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
 const fixture = '{Root plan} 1.h2e2 {Old main} (1.b2e2 {Chosen line} b9c7 {Chosen reply}) h9g7 {Old reply} (1...b9c7 {Nested alternative}) *';
 async function command(page, label) {
+  const savedCount = label === 'Save game' ? await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length) : null;
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
   await page.keyboard.press('Enter');
+  if (savedCount !== null) await page.waitForFunction(count => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length === count + 1, savedCount);
 }
 const move = (page, uci) => page.locator('.mtree-chip').filter({ has: page.locator('.move-uci', { hasText: uci }) });
 const line = page => page.locator('.mtree-row .move-uci').allTextContents();

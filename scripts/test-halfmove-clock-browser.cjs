@@ -68,6 +68,7 @@ const command = async (page, label) => {
         await command(page, 'Go to latest move'); await atClock(20);
         await page.waitForFunction(expected => window.__enginePosition === 'position startpos moves ' + expected, moves.join(' '));
         await command(page, 'Save game');
+        await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).length === 3);
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.deepEqual(saved.moves, moves, 'Saving must keep the history before the capture');
         await load('black-clock'); await atClock(0, 45);

@@ -83,6 +83,11 @@ export interface MoveTreeNode {
     record?: MoveRecord;
 }
 
+/** Physical moves and child order; annotations deliberately cannot be read here. */
+export type MoveTreeStructure = Record<string, Pick<MoveTreeNode, 'id' | 'parentId' | 'childrenIds' | 'mainLinePinned'> & {
+    record?: Pick<MoveRecord, 'uci' | 'piece' | 'captured' | 'board' | 'sideToMove' | 'inCheck' | 'ply'>;
+}>;
+
 export type MoveTreeSnapshot = {
     treeNodes: Record<string, MoveTreeNode>;
     activeLineNodeIds: string[];
@@ -192,7 +197,7 @@ function fullmoveForPly(rootPosition: RootPosition, ply: number) {
  * FEN the game started from.
  */
 function halfmoveForNode(
-    treeNodes: Record<string, MoveTreeNode>,
+    treeNodes: MoveTreeStructure,
     nodeId: string,
     rootPosition: RootPosition
 ): number {
@@ -258,6 +263,7 @@ function gameResultForPosition(board: BoardState, sideToMove: Side): GameResult 
 
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
+    const [moveStructure, setMoveStructure] = useState<MoveTreeStructure>(treeNodes);
     const [moveCapacityError, setMoveCapacityError] = useState<string | null>(null);
     const [gameMetadata, setGameMetadata] = useState<GameMetadata>();
     const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
@@ -284,8 +290,8 @@ export function useXiangqi() {
         board,
         sideToMove,
         fullmoveForPly(rootPosition, currentMoveIndex + 1),
-        halfmoveForNode(treeNodes, currentNodeId, rootPosition)
-    ), [board, sideToMove, rootPosition, currentMoveIndex, treeNodes, currentNodeId]);
+        halfmoveForNode(moveStructure, currentNodeId, rootPosition)
+    ), [board, sideToMove, rootPosition, currentMoveIndex, moveStructure, currentNodeId]);
     const rootFen = useMemo(() => boardToFen(
         rootPosition.board,
         rootPosition.sideToMove,
@@ -306,6 +312,7 @@ export function useXiangqi() {
         const rootTree = createRootTree();
         const root = createStartRootPosition();
         setTreeNodes(rootTree);
+        setMoveStructure(rootTree);
         setRootPosition(root);
         setGameMetadata(undefined);
         setMoveCapacityError(null);
@@ -326,6 +333,7 @@ export function useXiangqi() {
         const rootTree = createRootTree(rootComment);
         const nextGameResult = gameResultForPosition(root.board, root.sideToMove);
         setTreeNodes(rootTree);
+        setMoveStructure(rootTree);
         setRootPosition(root);
         setGameMetadata(undefined);
         setMoveCapacityError(null);
@@ -501,6 +509,7 @@ export function useXiangqi() {
         setGameMetadata(undefined);
         setMoveCapacityError(null);
         setTreeNodes(tree);
+        setMoveStructure(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(selectedPly - 1);
         setBoard(position.board);
@@ -628,6 +637,7 @@ export function useXiangqi() {
         setGameMetadata(undefined);
         setMoveCapacityError(null);
         setTreeNodes(tree);
+        setMoveStructure(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(shouldKeepRootSelected ? -1 : cursorIndex);
         setBoard(position.board);
@@ -661,12 +671,14 @@ export function useXiangqi() {
     }, [activeLineNodeIds, rootPosition, treeNodes, syncPositionForNode]);
 
     const pinActiveStudyLine = useCallback(() => {
-        setTreeNodes(tree => pinStudyMainLine(tree, ROOT_NODE_ID, activeLineNodeIds));
-    }, [activeLineNodeIds]);
+        const next = pinStudyMainLine(treeNodes, ROOT_NODE_ID, activeLineNodeIds);
+        setTreeNodes(next); setMoveStructure(next);
+    }, [activeLineNodeIds, treeNodes]);
 
     const unpinMainLine = useCallback(() => {
-        setTreeNodes(tree => unpinStudyMainLine(tree, ROOT_NODE_ID));
-    }, []);
+        const next = unpinStudyMainLine(treeNodes, ROOT_NODE_ID);
+        setTreeNodes(next); setMoveStructure(next);
+    }, [treeNodes]);
 
     const openStudyMainLine = useCallback(() => {
         const line = getStudyMainLine(treeNodes, ROOT_NODE_ID);
@@ -694,6 +706,7 @@ export function useXiangqi() {
         const removed = new Set(removedIds);
         const cutAt = activeLineNodeIds.findIndex((id) => removed.has(id));
         setTreeNodes(nextTree);
+        setMoveStructure(nextTree);
         if (cutAt === -1) return true;
 
         const prefix = activeLineNodeIds.slice(0, cutAt);
@@ -743,6 +756,7 @@ export function useXiangqi() {
             parentId = id;
         }
         setTreeNodes(restored.tree);
+        setMoveStructure(restored.tree);
         // Preserve the selected continuation, including when Undo returns to
         // the root. Any new moves beyond its old tip remain available too.
         setActiveLineNodeIds([...line, ...preferredContinuation(restored.tree, parentId)]);
@@ -877,6 +891,7 @@ export function useXiangqi() {
         };
 
         setTreeNodes(nextTree);
+        setMoveStructure(nextTree);
         setActiveLineNodeIds([...activePrefix, newNodeId]);
         setCurrentMoveIndex(activePrefix.length);
         setGameResult(gameResultForPosition(nextBoard, nextSide));
@@ -909,6 +924,7 @@ export function useXiangqi() {
         nodeCounterRef.current = counter;
         const path = findPathToNode(tree, cursor);
         setTreeNodes(tree);
+        setMoveStructure(tree);
         setActiveLineNodeIds([...path, ...preferredContinuation(tree, cursor)]);
         setCurrentMoveIndex(path.length - 1);
         setGameResult(gameResultForPosition(position.board, position.sideToMove));
@@ -935,6 +951,7 @@ export function useXiangqi() {
         if (snapshot) nextTree[firstId] = { ...nextTree[firstId], record: { ...nextTree[firstId].record!, analysis: snapshot } };
         nodeCounterRef.current = result.nextNodeId;
         setTreeNodes(nextTree);
+        if (result.tree !== treeNodes) setMoveStructure(result.tree);
         if (parentNodeId === currentNodeId && currentMoveIndex === activeLineNodeIds.length - 1) {
             setActiveLineNodeIds([...activeLineNodeIds, ...preferredContinuation(result.tree, currentNodeId)]);
         }
@@ -1246,6 +1263,7 @@ export function useXiangqi() {
         moveCapacityError,
         dismissMoveCapacityError: () => setMoveCapacityError(null),
         treeNodes,
+        moveStructure,
         activeLineNodeIds,
         selected,
         validTargets,
