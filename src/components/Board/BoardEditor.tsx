@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { editorHistory } from '../../utils/editorHistory';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useReducer } from 'react';
 import './Board.css';
 import './BoardEditor.css';
 import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../utils/xiangqi';
@@ -48,9 +49,13 @@ export interface BoardEditorProps {
  * diagram, and diagrams are printed one way.
  */
 export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'traditional', onCancel, onApply }: BoardEditorProps) {
-    const [board, setBoard] = useState<BoardState>(() => initialBoard.map((row) => row.slice()));
+    const [history, dispatch] = useReducer(editorHistory, { past: [], present: { board: initialBoard, side: initialSide }, future: [] });
+    const { board, side } = history.present;
+    const setBoard = useCallback((value: BoardState | ((board: BoardState) => BoardState)) => {
+        dispatch({ type: 'edit', update: p => ({ ...p, board: typeof value === 'function' ? value(p.board) : value }) });
+    }, []);
+    const setSide = useCallback((value: Side) => dispatch({ type: 'edit', update: p => ({ ...p, side: value }) }), []);
     const letterClass = pieceStyle === 'letters' ? ' piece-letter' : '';
-    const [side, setSide] = useState<Side>(initialSide);
     const [brush, setBrush] = useState<EditorBrush>('K');
     /**
      * The FEN box, which the editor used to print and nothing more.
@@ -101,8 +106,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         // The side is taken when the FEN names one and left alone when it does
         // not, so a bare placement row loads without silently flipping the turn.
         const nextSide: Side = parts[1] === 'b' ? 'b' : parts[1] === 'w' ? 'w' : side;
-        setBoard(next);
-        setSide(nextSide);
+        dispatch({ type: 'edit', update: () => ({ board: next, side: nextSide }) });
         setFenDraft(null);
         // Not an error: the editor exists to fix a position, and refusing to
         // show one because it is not legal yet would defeat that. The problem
@@ -144,6 +148,15 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             keepTabWithin(dialogRef.current, event);
+            const target = event.target;
+            if ((event.metaKey || event.ctrlKey) && !event.altKey && !(target instanceof HTMLElement && (target.matches('input, textarea') || target.isContentEditable))) {
+                const key = event.key.toLowerCase();
+                if (key === 'z' || key === 'y') {
+                    event.preventDefault(); event.stopPropagation(); followBoard();
+                    dispatch({ type: key === 'y' || event.shiftKey ? 'redo' : 'undo' });
+                    return;
+                }
+            }
             if (event.key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -152,7 +165,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         };
         window.addEventListener('keydown', onKeyDown, true);
         return () => window.removeEventListener('keydown', onKeyDown, true);
-    }, [onCancel]);
+    }, [onCancel, followBoard]);
 
     const paint = useCallback((file: number, rank: number) => {
         followBoard();
@@ -162,7 +175,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
             next[rank][file] = brush === 'erase' || current === brush ? '' : brush;
             return next;
         });
-    }, [brush, followBoard]);
+    }, [brush, followBoard, setBoard]);
 
     const handleBoardClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         const target = (event.target as Element).closest<HTMLElement>('[data-file][data-rank]');
@@ -302,6 +315,10 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                         {BLACK_PIECES.map(brushButton)}
                     </div>
                     <p id={keyboardHelpId} className="board-editor-keyboard-help">Arrow keys move between squares. Enter or Space places or removes a piece. Tab moves to the controls.</p>
+                    <div className="board-editor-row" role="group" aria-label="Position history">
+                        <button type="button" className="pill-btn" disabled={!history.past.length} onClick={() => { followBoard(); dispatch({ type: 'undo' }); }} data-testid="editor-undo">Undo</button>
+                        <button type="button" className="pill-btn" disabled={!history.future.length} onClick={() => { followBoard(); dispatch({ type: 'redo' }); }} data-testid="editor-redo">Redo</button>
+                    </div>
                     <div className="board-editor-row" role="group" aria-label="Side to move">
                         <button type="button" className={`pill-btn ${side === 'w' ? 'pill-btn-active' : ''}`} onClick={() => { followBoard(); setSide('w'); }} aria-pressed={side === 'w'} data-testid="editor-side-red">Red to move</button>
                         <button type="button" className={`pill-btn ${side === 'b' ? 'pill-btn-active' : ''}`} onClick={() => { followBoard(); setSide('b'); }} aria-pressed={side === 'b'} data-testid="editor-side-black">Black to move</button>

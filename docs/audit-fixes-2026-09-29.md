@@ -39,7 +39,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 35. [x] Offer comfortable UI density
 36. [x] Show persistent save/modified state
 37. [x] Track study modification dates
-38. [ ] Add editor Undo/Redo
+38. [x] Add editor Undo/Redo
 39. [ ] Apply pending editor FEN on Done
 40. [ ] Respect notation during practice
 41. [ ] Persist practice progress
@@ -271,3 +271,9 @@ Validation: content identity tests and browser save/navigation/pending-note/upda
 Study edits and renames set a separate modification date while retaining creation time. Recently modified sorting and Updated labels use it; older records fall back to creation time. Renames still preserve recovery/update identity.
 
 Validation: 29 library/cache/source/backup/date tests and saved-study update/conflict/copy browser workflows at three widths; TypeScript and ESLint.
+
+## 38. Add editor Undo/Redo
+
+Position edits have a bounded 100-step history. Undo/Redo covers painting, clearing, start-position resets, side changes and atomic FEN loads. Ctrl/Cmd-Z, Shift-Z and Y work on board controls while text fields retain native editing shortcuts.
+
+Validation: history branching/bounds tests plus editor keyboard, undo/redo, clear recovery, focus trap and layout at four sizes; TypeScript and ESLint.
