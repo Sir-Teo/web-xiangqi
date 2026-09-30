@@ -37,6 +37,7 @@ export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, boundT
             className={`eval-bar${measured ? '' : ' eval-bar-idle'}`}
             role="img"
             aria-label={describeEvalBar(evalScore, evalText, boundText)}
+            title="Normalized engine advantage, not a calibrated win probability. Actual engine win/draw/loss estimates appear separately when available."
             data-testid="eval-bar"
         >
             <div className="eval-bar-track">

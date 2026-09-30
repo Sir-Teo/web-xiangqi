@@ -4469,7 +4469,7 @@ async function assertEngineTelemetryDashboard(browser) {
       // half-pawn from level, which is most of an opening.
       telemetry.firstScoreText !== "+0.4Red POV" ||
       !telemetry.evalBarPainted ||
-      telemetry.evalBarLabel !== "Engine evaluation, Red POV +0.4, red winning chances 54%" ||
+      telemetry.evalBarLabel !== "Engine evaluation, Red POV +0.4, red advantage indicator 54 out of 100" ||
       !telemetry.firstLineLabel.includes("depth 8") ||
       !telemetry.firstLineLabel.includes("moves C8=5 H8+7") ||
       telemetry.firstLineActionsLabel !== "Actions for engine line 1, depth 8, moves C8=5 H8+7" ||
@@ -5668,7 +5668,7 @@ async function assertEngineMateScoresRenderAsMate(browser) {
         firstScoreTitle: document.querySelector('[data-testid="engine-pv-score-0"]')?.getAttribute("title") || "",
         firstScoreText: document.querySelector('[data-testid="engine-pv-score-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
         // Same substitution as the telemetry gate above, and for the same reason.
-        // "red winning chances 100%" is what `eval-positive` was asserting, said
+        // "red advantage indicator 100 out of 100" is what `eval-positive` was asserting, said
         // in terms of the fill a reader can see.
         evalBarLabel: document.querySelector('[data-testid="eval-bar"]')?.getAttribute("aria-label") || "",
         evalBarPainted: (() => {
@@ -5691,7 +5691,7 @@ async function assertEngineMateScoresRenderAsMate(browser) {
       state.firstScoreTitle !== "Red POV score +M3" ||
       state.firstScoreText !== "+M3Red POV" ||
       !state.evalBarPainted ||
-      state.evalBarLabel !== "Engine evaluation, Red POV +M3, red winning chances 100%" ||
+      state.evalBarLabel !== "Engine evaluation, Red POV +M3, red advantage indicator 100 out of 100" ||
       state.overflowX > 2
     ) {
       throw new Error(`Engine mate score did not render as mate on desktop: ${JSON.stringify(state)}`);
@@ -8145,7 +8145,7 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.focusEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
     reviewReadout.focusEvalTitle !== "Red POV: 0.00 → -2.40" ||
     reviewReadout.focusChance !== "Chance-21%" ||
-    reviewReadout.focusChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
+    reviewReadout.focusChanceLabel !== "Red advantage indicator dropped by 21 percentage points" ||
     reviewReadout.focusChanceColour === reviewReadout.accentColour ||
     reviewReadout.focusChanceColour !== reviewReadout.evalTransitionColour ||
     reviewReadout.tooltipChanceColour === reviewReadout.accentColour ||
@@ -8163,8 +8163,8 @@ async function assertReviewBestMoveBranchAction(page) {
     !reviewReadout.momentEval.includes("-2.40") ||
     reviewReadout.momentEvalLabel !== "Red evaluation changed from 0.00 to -2.40" ||
     reviewReadout.momentChance !== "Chance-21%" ||
-    reviewReadout.momentChanceLabel !== "Red practical winning chance dropped by 21 percentage points" ||
-    !reviewReadout.momentLabel.includes("Red practical winning chance dropped by 21 percentage points") ||
+    reviewReadout.momentChanceLabel !== "Red advantage indicator dropped by 21 percentage points" ||
+    !reviewReadout.momentLabel.includes("Red advantage indicator dropped by 21 percentage points") ||
     !reviewReadout.momentLabel.includes("Red evaluation changed from 0.00 to -2.40") ||
     reviewReadout.best !== "Best0" ||
     reviewReadout.good !== "Good1" ||
@@ -8214,7 +8214,7 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.bottomClearLabel !== "Clear completed game review" ||
     reviewReadout.bottomClearTitle !== "Clear completed game review" ||
     !reviewReadout.graphTooltip.includes("Chance -1.5%") ||
-    !reviewReadout.graphValueText.includes("Black practical winning chance dropped by 1.5 percentage points") ||
+    !reviewReadout.graphValueText.includes("Black advantage indicator dropped by 1.5 percentage points") ||
     reviewReadout.overflowX > 2
   ) {
     throw new Error(`Completed review readout did not expose quality breakdown and study focus: ${JSON.stringify(reviewReadout)}`);
@@ -8471,7 +8471,7 @@ async function assertLearnFromMistakesAsksAndGrades(page) {
     null, { timeout: 30000 },
   );
   const graded = await read();
-  if (!/winning chance/i.test(graded.text) || !graded.summary) {
+  if (!/advantage change/i.test(graded.text) || !graded.summary) {
     throw new Error(`A move of the reader's own was not graded against the review: ${JSON.stringify(graded)}`);
   }
   await page.getByTestId("drill-stop-btn").click();

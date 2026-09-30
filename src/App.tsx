@@ -3978,7 +3978,7 @@ function App() {
       case 'wrong':
         return {
           headline: `Not ${attemptText}.`,
-          detail: `${formatReviewQuality(verdict.quality)} on the review's scale, winning chance ${formatWinPercentLoss(verdict.winPercentLoss)}. Try again, or see the answer.`,
+          detail: `${formatReviewQuality(verdict.quality)} on the review's scale, advantage change ${formatWinPercentLoss(verdict.winPercentLoss)}. Try again, or see the answer.`,
         };
       case 'repeat':
         return { headline: `${attemptText} is the move from the game.`, detail: 'Look for something better.' };

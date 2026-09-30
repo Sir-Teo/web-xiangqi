@@ -109,7 +109,7 @@ async function main() {
       if (review.formatWinPercentLoss(winLoss) !== "-5.9%") {
         throw new Error(`Unexpected formatted win loss: ${review.formatWinPercentLoss(winLoss)}`);
       }
-      if (review.formatWinPercentLossLabel(winLoss, "red") !== "Red practical winning chance dropped by 5.9 percentage points") {
+      if (review.formatWinPercentLossLabel(winLoss, "red") !== "Red advantage indicator dropped by 5.9 percentage points") {
         throw new Error(`Unexpected formatted win loss label: ${review.formatWinPercentLossLabel(winLoss, "red")}`);
       }
       const moveAccuracy = review.getMoveAccuracyForWinPercentLoss(winLoss);

@@ -41,7 +41,7 @@ describe('the eval bar reading', () => {
 describe('what a screen reader is told', () => {
     it('gives the reading and which way it leans', () => {
         expect(describeEvalBar(250, '+2.5'))
-            .toBe('Engine evaluation, Red POV +2.5, red winning chances 72%');
+            .toBe('Engine evaluation, Red POV +2.5, red advantage indicator 72 out of 100');
     });
 
     it('says so plainly when there is nothing to report', () => {

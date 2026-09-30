@@ -202,7 +202,7 @@ describe('what the graph marks on each point', () => {
             { ...move('h9g7', 2, -600), winPercentLoss: 32.5 },
         ];
         const html = render({ history, currentMoveIndex: 1, currentEval: null });
-        expect(valueText(html)).toContain('winning chance dropped by');
+        expect(valueText(html)).toContain('advantage indicator dropped by');
     });
 
     it('says nothing about a drop on a move no review has graded', () => {
@@ -212,13 +212,13 @@ describe('what the graph marks on each point', () => {
         const history = [move('h2e2', 1, 40), move('h9g7', 2, -60)];
         const html = render({ history, currentMoveIndex: 1, currentEval: null });
         expect(valueText(html)).toContain('H9→G7');
-        expect(valueText(html)).not.toContain('winning chance dropped by');
+        expect(valueText(html)).not.toContain('advantage indicator dropped by');
     });
 
     it('says nothing about a drop at the start, where nobody has moved', () => {
         const history = [{ ...move('h2e2', 1, -600), winPercentLoss: 32.5 }];
         const html = render({ history, currentMoveIndex: -1, currentEval: null });
         expect(valueText(html)).toContain('Start position');
-        expect(valueText(html)).not.toContain('winning chance dropped by');
+        expect(valueText(html)).not.toContain('advantage indicator dropped by');
     });
 });

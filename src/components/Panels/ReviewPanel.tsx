@@ -283,7 +283,7 @@ export const ReviewPanel = memo(function ReviewPanel({
                     )}
                     <div className="review-summary-grid">
                         <div className="review-summary-card">
-                            <span>Accuracy</span>
+                            <span title="Heuristic move quality based on engine advantage changes, not a win probability">Accuracy</span>
                             <strong>{formatAccuracyPercent(summary.accuracy)}</strong>
                         </div>
                         {isFiniteNumber(summary.averageCentipawnLoss) ? (

@@ -202,7 +202,7 @@ export function formatWinPercentLossLabel(loss: number, side: ReviewSide): strin
     const normalized = clampWinPercentLoss(loss);
     const precision = normalized < 10 ? 1 : 0;
     const formattedLoss = `${Number(normalized.toFixed(precision))} percentage points`;
-    return `${side === 'red' ? 'Red' : 'Black'} practical winning chance dropped by ${formattedLoss}`;
+    return `${side === 'red' ? 'Red' : 'Black'} advantage indicator dropped by ${formattedLoss}`;
 }
 
 export function getMoveAccuracyForWinPercentLoss(loss: number): number {

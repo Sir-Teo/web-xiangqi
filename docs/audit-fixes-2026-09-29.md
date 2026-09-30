@@ -34,7 +34,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 30. [x] Use a gentler first AI difficulty
 31. [x] Keep board context in phone analysis
 32. [x] Offer notation-aware board coordinates
-33. [ ] Distinguish advantage from win probability
+33. [x] Distinguish advantage from win probability
 34. [ ] Group advanced engine controls
 35. [ ] Offer comfortable UI density
 36. [ ] Show persistent save/modified state
@@ -241,3 +241,9 @@ Validation: piece position, turn, return action and panel visibility at three ph
 Board edges follow the selected notation: absolute files/ranks for UCI, player-relative file numbers for WXF, and Red Chinese numerals for Chinese notation. Flipping keeps each side’s labels at its own edge. Accessible square names remain stable UCI coordinates.
 
 Validation: notation mapping tests and all three styles in both orientations at desktop and two phone widths; TypeScript and ESLint.
+
+## 33. Distinguish advantage from win probability
+
+The evaluation bar announces a normalized advantage indicator out of 100 and explains that the centipawn transform is not a calibrated win probability. Review loss and practice feedback use advantage wording; engine-provided WDL remains separate.
+
+Validation: 64 evaluation/review/graph tests, TypeScript and ESLint; browser expectations updated to the explicit indicator wording.
