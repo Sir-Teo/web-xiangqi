@@ -30,7 +30,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 26. [x] Reduce initial bundle
 27. [x] Avoid duplicated practice paths
 28. [x] Defer hidden cloud requests
-29. [ ] Clarify initial task choices
+29. [x] Clarify initial task choices
 30. [ ] Use a gentler first AI difficulty
 31. [ ] Keep board context in phone analysis
 32. [ ] Offer notation-aware board coordinates
@@ -217,3 +217,9 @@ Validation: 14 practice tests, including alternate matching without unrelated pa
 Cloud book and PV requests follow visible graph cards and page visibility. Rule adjudication remains available on the board where it is displayed. Opening the panel resumes the current position without changing the stored preference.
 
 Validation: hidden-panel and background-page request counts; cloud response cancellation, retry, UTF-8 and failed ruling tests at three widths; TypeScript and ESLint.
+
+## 29. Clarify initial task choices
+
+The first-use guide offers play, lessons, import and library entry points. It explains free board exploration, Coach/Pro guidance and explicit engine activation. Import opens and focuses the notation field directly.
+
+Validation: all guide actions, focus, dismissal persistence, real AI reply and board sizing at desktop, phone, short-phone and landscape sizes; TypeScript and ESLint.

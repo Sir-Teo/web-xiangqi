@@ -15,6 +15,15 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       assert.ok(board.width > (height < 500 ? 140 : 220), `Board remains usable at ${width}x${height}: ${board.width}`);
       assert.ok(Math.abs(board.width / board.height - .9) < .03, 'Board retains its aspect ratio');
       if (height < 700) await guide.locator('summary').click();
+      await guide.getByRole('button', { name: 'Import a game', exact: true }).click();
+      await page.locator('#new-game-line-input').waitFor();
+      await page.waitForFunction(() => document.activeElement?.id === 'new-game-line-input');
+      await page.keyboard.press('Escape');
+      await guide.getByRole('button', { name: 'Open library', exact: true }).click();
+      if (width <= 900) {
+        await page.getByTestId('mobile-analysis-tab-library').waitFor();
+        await page.getByTestId('mobile-view-board').click();
+      }
       await guide.getByRole('button', { name: 'Letter pieces' }).click();
       assert.equal(await guide.getByRole('button', { name: 'Letter pieces' }).getAttribute('aria-pressed'), 'true');
       assert.ok(await page.locator('.piece').filter({ hasText: /^K$/ }).count());

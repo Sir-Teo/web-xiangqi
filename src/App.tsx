@@ -2322,16 +2322,7 @@ function App() {
 
   const showBeginnerGuide = !guideDismissed && assistMode === 'coach' && gameMode === 'PvP'
     && moveHistory.length === 0 && rootFen === START_POSITION_FEN;
-  const beginnerGuide = showBeginnerGuide ? (
-    <BeginnerGuide
-      compact={isMobile && viewportSize.height < 700}
-      letters={pieceStyle === 'letters'}
-      onToggleLetters={() => setPieceStyle(style => style === 'letters' ? 'traditional' : 'letters')}
-      onPlay={() => { setAiStrength(1); setAiSpeed('normal'); playFromHere(); }}
-      onLearn={() => setShowRuleLessons(true)}
-      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
-    />
-  ) : null;
+
 
   const openGraphPanel = useCallback(() => {
     setShowMobileBoardActionMenu(false);
@@ -3113,6 +3104,22 @@ function App() {
     setMoveLineError(null);
     setShowNewGameMenu(true);
   }, [clearFenError, gameMode, cancelDirectImport]);
+
+  const beginnerGuide = showBeginnerGuide ? (
+    <BeginnerGuide
+      compact={isMobile && viewportSize.height < 700}
+      letters={pieceStyle === 'letters'}
+      onToggleLetters={() => setPieceStyle(style => style === 'letters' ? 'traditional' : 'letters')}
+      onPlay={() => { setAiStrength(1); setAiSpeed('normal'); playFromHere(); }}
+      onImport={() => {
+        openNewGameMenu();
+        window.setTimeout(() => document.getElementById('new-game-line-input')?.focus(), 0);
+      }}
+      onLibrary={openLibraryPanel}
+      onLearn={() => setShowRuleLessons(true)}
+      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
+    />
+  ) : null;
 
   const toggleNewGameMenu = useCallback(() => {
     if (showNewGameMenu) {
