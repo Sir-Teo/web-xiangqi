@@ -25,7 +25,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 21. [x] Move direct imports to a worker
 22. [x] Prepare library search off the typing path
 23. [x] Defer engine download until requested
-24. [ ] Improve device resource classification
+24. [x] Improve device resource classification
 25. [ ] Bound AI thinking time at every level
 26. [ ] Reduce initial bundle
 27. [ ] Avoid duplicated practice paths
@@ -187,3 +187,9 @@ Validation: controlled first-keystroke test proves zero text preparation during 
 Opening the board, a shared study, or the library no longer starts Pikafish or preloads its loader. Explicit analysis controls, the phone Engine tab, post-game review, and AI play activate it. Desktop, phone and command-palette entry points explain the first-use download.
 
 Validation: zero loader/NNUE/WASM requests before activation at 1440, 390 and 320px; one loader request afterward; startup cancellation, telemetry isolation, and engine-line save/recovery/capacity workflows; TypeScript, ESLint and production build.
+
+## 24. Improve device resource classification
+
+CPU and reported memory determine resource tier. A touch laptop, tablet, or narrow desktop no longer becomes low-tier merely because of its input or dimensions. Small touch devices receive a separate two-thread / 64 MB default ceiling while explicit memory choices and single-thread fallback remain available.
+
+Validation: 52 device-profile tests covering touch laptops/tablets, strong phones, missing readings, low memory, thread ladders and isolation fallback; TypeScript and ESLint.

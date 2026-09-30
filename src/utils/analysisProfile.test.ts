@@ -30,10 +30,10 @@ describe('device tiering', () => {
         expect(detectDeviceTier(PHONE).tier).toBe('low');
     });
 
-    it('treats a coarse pointer or a narrow viewport as mobile', () => {
+    it('requires both a small screen and touch for handheld defaults', () => {
         expect(detectDeviceTier(PHONE).mobileLike).toBe(true);
-        expect(detectDeviceTier({ ...DESKTOP, coarsePointer: true }).mobileLike).toBe(true);
-        expect(detectDeviceTier({ ...DESKTOP, viewportWidth: 600 }).mobileLike).toBe(true);
+        expect(detectDeviceTier({ ...DESKTOP, coarsePointer: true }).mobileLike).toBe(false);
+        expect(detectDeviceTier({ ...DESKTOP, viewportWidth: 600 }).mobileLike).toBe(false);
         expect(detectDeviceTier(DESKTOP).mobileLike).toBe(false);
     });
 
@@ -123,31 +123,24 @@ describe('engine boot configuration', () => {
         expect(threadsForCores(1, 1, 16)).toBe(1);
     });
 
-    it('keeps a phone single-threaded however many cores it reports', () => {
-        // A mobile-like device is always the low tier, so a fast phone still
-        // boots the single-threaded core. resolveEngineBootConfig relies on
-        // that invariant, so pin it here rather than in passing.
-        const strongPhone = detectDeviceTier({ ...DESKTOP, coarsePointer: true });
-        expect(strongPhone.mobileLike).toBe(true);
-        expect(strongPhone.tier).toBe('low');
-
-        const config = resolveEngineBootConfig(strongPhone);
-        expect(config.threads).toBe(1);
-        expect(config.variant).toBe('single-simd');
+    it('uses measured resources for touch laptops and tablets', () => {
+        for (const input of [{ ...DESKTOP, coarsePointer: true }, { ...DESKTOP, viewportWidth: 600 }, { ...DESKTOP, viewportWidth: 1024, coarsePointer: true }]) {
+            const profile = detectDeviceTier(input);
+            expect(profile.tier).toBe('high');
+            expect(resolveEngineBootConfig(profile).threads).toBe(8);
+        }
     });
 
-    it('never reports a mobile-like device above the low tier', () => {
-        const mobileInputs = [
-            PHONE,
-            { ...DESKTOP, coarsePointer: true },
-            { ...DESKTOP, viewportWidth: 600 },
-            { ...LAPTOP, deviceMemoryGB: 3 },
-        ];
-        for (const input of mobileInputs) {
-            const profile = detectDeviceTier(input);
-            expect(profile.mobileLike).toBe(true);
-            expect(profile.tier).toBe('low');
-        }
+    it('limits sustained handheld load separately from CPU tier', () => {
+        const strongPhone = detectDeviceTier({ ...DESKTOP, viewportWidth: 390, coarsePointer: true });
+        expect(strongPhone.mobileLike).toBe(true);
+        expect(strongPhone.tier).toBe('high');
+        const config = resolveEngineBootConfig(strongPhone);
+        expect(config.threads).toBe(2);
+        expect(config.hashMB).toBe(64);
+        expect(threadChoicesForProfile(strongPhone)).toEqual([1, 2]);
+        expect(resolveEngineBootConfig(strongPhone, { allowThreads: false }).threads).toBe(1);
+        expect(detectDeviceTier({ ...DESKTOP, deviceMemoryGB: 3 }).mobileLike).toBe(false);
     });
 
     it('picks the plain core when SIMD is unavailable', () => {

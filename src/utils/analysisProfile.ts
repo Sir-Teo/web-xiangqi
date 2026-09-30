@@ -152,10 +152,12 @@ export function detectDeviceTier(input: DeviceProfileInput = {}): DeviceProfile 
     const hardwareConcurrency = Math.max(1, Math.trunc(finiteNumber(input.hardwareConcurrency, 4)));
     const deviceMemoryGB = Math.max(0, finiteNumber(input.deviceMemoryGB, 0));
     const coarsePointer = Boolean(input.coarsePointer);
-    const mobileLike = coarsePointer || minViewport < 700 || hasLowMemory(deviceMemoryGB, 4);
+    // Touch and screen dimensions describe interaction, not CPU capability.
+    // Require both signals for the separate handheld resource policy.
+    const mobileLike = coarsePointer && minViewport < 700;
 
     let tier: DeviceTier;
-    if (mobileLike || hardwareConcurrency <= 4 || hasLowMemory(deviceMemoryGB, 4)) {
+    if (hardwareConcurrency <= 4 || hasLowMemory(deviceMemoryGB, 4)) {
         tier = 'low';
     } else if (hardwareConcurrency <= 8) {
         // No memory clause here. It used to be `|| hasLowMemory(memory, 8)`,
@@ -259,8 +261,6 @@ export function resolveEngineBootConfig(
         threads = 1;
         hashMB = hasLowMemory(profile.deviceMemoryGB, 4) ? 16 : 24;
     } else if (profile.tier === 'mid') {
-        // Only the low tier is ever mobile-like, so the mid and high tiers are
-        // always a pointer-and-keyboard machine with room for threads.
         variant = resolveThreadedVariant(allowSIMD);
         threads = threadsForCores(profile.hardwareConcurrency, 2, MID_TIER_MAX_THREADS);
         hashMB = 128;
@@ -279,6 +279,13 @@ export function resolveEngineBootConfig(
         // their ladder's top, so a reader on a tight machine can step down,
         // and one who runs infinite searches can step up.
         hashMB = 256;
+    }
+
+    // Keep sustained phone load modest without misclassifying its CPU or
+    // denying the stronger analysis policy to tablets and touch laptops.
+    if (profile.mobileLike) {
+        threads = Math.min(threads, 2);
+        hashMB = Math.min(hashMB, 64);
     }
 
     // An explicit ask, held inside the tier's ladder. Applied before the safer
