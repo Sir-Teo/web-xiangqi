@@ -1722,6 +1722,7 @@ function App() {
       // text field too, which is where a reader often is when they reach for it.
       if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
+        if (event.repeat) return;
         // A second modal would sit behind the editor/settings while stealing
         // keyboard input. Finish the current dialog before opening commands.
         const activeDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
@@ -5292,6 +5293,10 @@ function App() {
       // Space activates a focused button on its own; playing the engine's
       // move as well would do two things for one press.
       if (event.key === ' ' && (tag === 'BUTTON' || tag === 'A' || target?.closest('[role="button"]'))) {
+        return;
+      }
+      if (event.repeat && ['f', 'd', 'x', 'h', ' ', 'e', 't', 'r'].includes(event.key.toLowerCase())) {
+        event.preventDefault();
         return;
       }
       const openEnginePanel = () => {

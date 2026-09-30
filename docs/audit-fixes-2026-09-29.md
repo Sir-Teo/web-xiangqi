@@ -16,7 +16,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 12. [x] Preserve recovered library identity
 13. [x] Validate cloud numeric fields
 14. [x] Timeout stalled library workers
-15. [ ] Ignore repeated action shortcuts
+15. [x] Ignore repeated action shortcuts
 16. [ ] Serialize concurrent library mutations
 17. [ ] Isolate engine telemetry rendering
 18. [ ] Narrow tree-derived invalidation
@@ -133,3 +133,9 @@ Each index/lookup request has a 30-second deadline. A stalled worker terminates 
 Validation: controlled worker browser checks at 1440, 390, and 320px, including timeout/retry/late replies; TypeScript and ESLint.
 
 Follow-up to 9: the dialog visibility itself now invalidates reads, covering Escape and every dismissal path before a late result can run. The delayed-error browser check also checks the closed state before reopening.
+
+## 15. Ignore repeated action shortcuts
+
+Held F/D/X/H/Space/E/T/R keys no longer toggle or replay actions repeatedly, and holding the palette shortcut does not reopen/close it. Arrow-key move navigation still repeats.
+
+Validation: browser key-down/repeat/up checks for board flip, command palette, and repeated navigation; TypeScript and ESLint.
