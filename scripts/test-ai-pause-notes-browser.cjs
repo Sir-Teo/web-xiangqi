@@ -25,7 +25,7 @@ const command = async (page, label) => {
               if (command === 'uci') queueMicrotask(() => emit('uciok'));
               if (command === 'isready') queueMicrotask(() => emit('readyok'));
               // Default Master uses depth 12; live analysis has a time budget.
-              if (command === 'go depth 12') window.__goCount++;
+              if (command === 'go depth 12 movetime 2500') window.__goCount++;
               // Return a legal move on stop, as a real UCI engine can do.
               if (command === 'stop') { window.__stopCount++; queueMicrotask(window.__finishMove); }
             } };
@@ -46,7 +46,7 @@ const command = async (page, label) => {
         await page.locator('#study-notes-search').fill('Cannon plan');
         await page.locator('.study-note-result').waitFor();
         await command(page, 'Settings');
-        const initialSearches = await page.evaluate(() => window.__goCount);
+        const initialSearches = await page.evaluate(() => window.__goCount ?? 0);
         await page.locator('#settings-workspace-mode').selectOption('play');
         await page.getByRole('button', { name: 'Close settings', exact: true }).click();
         await page.waitForFunction(before => window.__goCount > before, initialSearches);
@@ -95,6 +95,7 @@ const command = async (page, label) => {
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen);
         await page.locator('#study-notes-search').fill('Cannon plan');
         await command(page, 'Save game');
+        await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length === 2);
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.deepEqual(saved.moveTree[0].nags, [1]);
         assert.equal(saved.moveTree[0].uci, 'h2e2');

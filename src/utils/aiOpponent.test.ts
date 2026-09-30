@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     AI_DEPTH_LIMIT,
+    AI_MOVE_TIME_LIMIT,
     AI_STRENGTH_LABELS,
     type AiCandidateLine,
     type AiStrength,
@@ -76,6 +77,7 @@ describe('strength settings', () => {
         }
         expect(describeAiStrength(5)).toContain('best move only');
         expect(describeAiStrength(1)).toContain('candidate moves');
+        expect(describeAiStrength(1)).toContain('250ms');
     });
 });
 
@@ -89,11 +91,14 @@ describe('full strength', () => {
         expect(buildAiGoCommand(config)).toBe(`go depth ${FULL_STRENGTH_DEPTH} movetime ${FULL_STRENGTH_MOVE_TIME_MS}`);
     });
 
-    it('is the only rung that sets a time', () => {
-        for (const strength of LADDER) {
-            const config = getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH);
-            expect(config.moveTimeMs).toBeUndefined();
-            expect(buildAiGoCommand(config)).toBe(`go depth ${config.depth}`);
+    it('bounds every level by a finite increasing time budget', () => {
+        for (const strength of STRENGTHS) {
+            const config = getAiSearchConfig(strength, Number.NaN);
+            expect(Number.isFinite(config.depth)).toBe(true);
+            expect(config.moveTimeMs).toBe(AI_MOVE_TIME_LIMIT[strength]);
+            expect(config.moveTimeMs).toBeGreaterThan(0);
+            expect(config.moveTimeMs).toBeLessThanOrEqual(4000);
+            expect(buildAiGoCommand(config)).toBe(`go depth ${config.depth} movetime ${config.moveTimeMs}`);
         }
     });
 

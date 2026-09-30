@@ -41,6 +41,9 @@ export const WORKER_SAFE_MAX_DEPTH = 12;
  */
 export const FULL_STRENGTH_DEPTH = 30;
 export const FULL_STRENGTH_MOVE_TIME_MS = 4000;
+export const AI_MOVE_TIME_LIMIT: Record<AiStrength, number> = {
+  1: 250, 2: 500, 3: 900, 4: 1500, 5: 2500, 6: FULL_STRENGTH_MOVE_TIME_MS,
+};
 
 export const AI_STRENGTH_LABELS: Record<AiStrength, string> = {
   1: 'Beginner',
@@ -94,7 +97,7 @@ export function isAiStrength(value: unknown): value is AiStrength {
 export interface AiSearchConfig {
   depth: number;
   multiPv: number;
-  /** Set only where time, not depth, is meant to be the limit. */
+  /** Every opponent level has a time ceiling as well as a depth ceiling. */
   moveTimeMs?: number;
 }
 
@@ -103,8 +106,9 @@ export function getAiSearchConfig(strength: AiStrength, safeDepth: number): AiSe
     return { depth: FULL_STRENGTH_DEPTH, multiPv: 1, moveTimeMs: FULL_STRENGTH_MOVE_TIME_MS };
   }
   return {
-    depth: Math.max(1, Math.min(safeDepth, AI_DEPTH_LIMIT[strength])),
+    depth: Math.max(1, Math.min(Number.isFinite(safeDepth) ? Math.trunc(safeDepth) : WORKER_SAFE_MAX_DEPTH, AI_DEPTH_LIMIT[strength])),
     multiPv: AI_MULTI_PV_LIMIT[strength],
+    moveTimeMs: AI_MOVE_TIME_LIMIT[strength],
   };
 }
 
@@ -120,7 +124,7 @@ export function describeAiStrength(strength: AiStrength) {
   const config = getAiSearchConfig(strength, WORKER_SAFE_MAX_DEPTH);
   const candidates = config.multiPv === 1 ? 'best move only' : `up to ${config.multiPv} candidate moves`;
   const budget = typeof config.moveTimeMs === 'number'
-    ? `up to ${Math.round(config.moveTimeMs / 1000)}s a move, depth ${config.depth} at most`
+    ? `up to ${config.moveTimeMs < 1000 ? `${config.moveTimeMs}ms` : `${config.moveTimeMs / 1000}s`} a move, depth ${config.depth} at most`
     : `depth ${config.depth}`;
   return `${AI_STRENGTH_LABELS[strength]}: ${budget}, ${candidates}`;
 }

@@ -3753,7 +3753,7 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
     const multiPvIndex = state.commands.findIndex((command) => command === "setoption name MultiPV value 5");
-    const goIndex = state.commands.findIndex((command) => command === "go depth 2");
+    const goIndex = state.commands.findIndex((command) => command === "go depth 2 movetime 250");
     if (multiPvIndex < 0 || goIndex < 0 || multiPvIndex > goIndex) {
       throw new Error(`Beginner AI did not configure candidate PVs before searching: ${JSON.stringify(state.commands)}`);
     }

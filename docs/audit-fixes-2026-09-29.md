@@ -26,7 +26,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 22. [x] Prepare library search off the typing path
 23. [x] Defer engine download until requested
 24. [x] Improve device resource classification
-25. [ ] Bound AI thinking time at every level
+25. [x] Bound AI thinking time at every level
 26. [ ] Reduce initial bundle
 27. [ ] Avoid duplicated practice paths
 28. [ ] Defer hidden cloud requests
@@ -193,3 +193,9 @@ Validation: zero loader/NNUE/WASM requests before activation at 1440, 390 and 32
 CPU and reported memory determine resource tier. A touch laptop, tablet, or narrow desktop no longer becomes low-tier merely because of its input or dimensions. Small touch devices receive a separate two-thread / 64 MB default ceiling while explicit memory choices and single-thread fallback remain available.
 
 Validation: 52 device-profile tests covering touch laptops/tablets, strong phones, missing readings, low memory, thread ladders and isolation fallback; TypeScript and ESLint.
+
+## 25. Bound AI thinking time at every level
+
+All six strengths send both depth and time ceilings: 250, 500, 900, 1,500, 2,500 and 4,000 ms. The strength description shows that budget, including subsecond values. Invalid depth inputs resolve to a finite supported ceiling.
+
+Validation: all 2,104 unit tests; AI pause/late-reply refusal, annotations, persistence and resume at four desktop/phone/landscape sizes and 100/200% text; TypeScript and ESLint.
