@@ -5,7 +5,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 1. [x] Bound complete share links
 2. [x] Enforce study limits for every move path
 3. [x] Keep last good autosave on capacity failures
-4. [ ] Keep separate recovery drafts across tabs
+4. [x] Keep separate recovery drafts across tabs
 5. [ ] Undo discarding note-only studies
 6. [ ] Make recovery Escape non-destructive
 7. [ ] Checkpoint studies before replacement
@@ -65,3 +65,9 @@ Validation: append-line regression tests (8 passing), TypeScript, ESLint, and fu
 Capacity, validation, and storage failures leave the previous recoverable snapshot intact. The warning explicitly distinguishes that snapshot from the latest unsaved edits.
 
 Validation: autosave tests (18 passing), including byte, line, tree, and invalid-data failures; TypeScript.
+
+## 4. Keep separate recovery drafts across tabs
+
+Each document writes an independently owned recovery slot. Legacy recovery remains readable; a compatibility mirror is never the authoritative copy. Recovery offers a draft selector and a way to reopen remaining drafts. Clearing an empty tab or discarding one draft preserves all others.
+
+Validation: independent-tab ownership and legacy/mirror tests (20 autosave tests passing), TypeScript, ESLint, capacity recovery at three widths, and storage failure/download/retry in desktop and phone browsers.

@@ -1,8 +1,12 @@
+import type { RecoveryDraft } from '../utils/autoSaveDrafts';
 import { useEffect, useRef } from 'react';
 import './AutoSaveRecoveryModal.css';
 import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
 
 interface AutoSaveRecoveryModalProps {
+    drafts?: RecoveryDraft[];
+    draftId?: string;
+    onSelectDraft?: (id: string) => void;
     savedAt: number;
     moveCount: number;
     /**
@@ -35,6 +39,7 @@ function describeWhen(savedAt: number, now = Date.now()): string {
 }
 
 export function AutoSaveRecoveryModal({
+    drafts = [], draftId, onSelectDraft,
     savedAt,
     moveCount,
     incomingLink = null,
@@ -83,6 +88,15 @@ export function AutoSaveRecoveryModal({
                             : 'the position'} this link opened.`
                         : 'Pick it up where you left off?'}
                 </p>
+                {drafts.length > 1 && (
+                    <label>Recovery draft
+                        <select value={draftId} onChange={event => onSelectDraft?.(event.target.value)}>
+                            {drafts.map(draft => <option key={draft.draftId} value={draft.draftId}>
+                                {draft.game.label || draft.game.metadata?.event || 'Unfinished study'} · {draft.game.moves.length} moves · {new Date(draft.savedAt).toLocaleString()}
+                            </option>)}
+                        </select>
+                    </label>
+                )}
                 <div className="auto-save-actions">
                     <button
                         className="auto-save-btn auto-save-btn-primary"

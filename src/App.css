@@ -8136,3 +8136,5 @@ summary:active {
     overscroll-behavior: contain;
   }
 }
+
+.recovery-drafts-button { position: fixed; bottom: 3rem; left: .75rem; z-index: 30; padding: .65rem; border-radius: .5rem; background: var(--bg-panel); color: var(--text-primary); border: 1px solid var(--border-subtle); }

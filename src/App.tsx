@@ -1,3 +1,4 @@
+import { clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
@@ -67,10 +68,6 @@ import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
   type AutoSaveInput,
-  clearAutoSavedGame,
-  isWorthAutoSaving,
-  readAutoSavedGame,
-  writeAutoSavedGame,
 } from './utils/autoSave';
 import { decodeSavedMoveTreeParam } from './utils/shareTree';
 import {
@@ -4964,7 +4961,8 @@ function App() {
     return { moveCount: extractUciMoveLine(rawMoves).length };
   }, []);
 
-  const [autoSaveRecovery, setAutoSaveRecovery] = useState<AutoSavedGame | null>(null);
+  const [recoveryDrafts, setRecoveryDrafts] = useState<RecoveryDraft[]>([]);
+  const [autoSaveRecovery, setAutoSaveRecovery] = useState<RecoveryDraft | null>(null);
   /**
    * One list, because there were two. Every keyboard shortcut that moves
    * through the game is held off while a dialog is up, and that condition was
@@ -5054,22 +5052,15 @@ function App() {
   useEffect(() => {
     if (autoSaveCheckedRef.current) return;
     autoSaveCheckedRef.current = true;
-    const snapshot = readAutoSavedGame();
-    if (snapshot && !isWorthAutoSaving(currentGameSnapshot)) {
-      setAutoSaveRecovery(snapshot);
-    } else if (snapshot) {
-      // Something is already on the board, so the snapshot is stale.
-      clearAutoSavedGame();
-    }
+    const drafts = readAutoSaveDrafts();
+    setRecoveryDrafts(drafts);
+    if (drafts.length) setAutoSaveRecovery(drafts[0]);
     setAutoSaveChecked(true);
-    // Deliberately mount-only: this is a one-shot check against the board as
-    // it was before any move was played.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [autoSaveIssue, setAutoSaveIssue] = useState<'failed' | 'too-large' | null>(null);
   const persistAutoSave = useCallback((snapshot: AutoSaveInput) => {
-    const result = writeAutoSavedGame(snapshot);
+    const result = writeAutoSaveDraft(snapshot);
     setAutoSaveIssue(result === 'failed' || result === 'too-large' ? result : null);
   }, []);
 
@@ -5163,7 +5154,8 @@ function App() {
 
   const dismissAutoSaveRecovery = useCallback(() => {
     const discarded = autoSaveRecovery;
-    clearAutoSavedGame();
+    if (discarded) clearAutoSaveDraft(discarded.draftId);
+    setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== discarded?.draftId));
     setAutoSaveRecovery(null);
     if (!discarded || discarded.game.moves.length === 0) return;
     if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
@@ -5206,7 +5198,10 @@ function App() {
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
     const restored = handleLoadGame(autoSaveRecovery.game);
-    if (!restored) clearAutoSavedGame();
+    if (restored && writeAutoSaveDraft(autoSaveRecovery.game) === 'saved') {
+      clearAutoSaveDraft(autoSaveRecovery.draftId);
+      setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== autoSaveRecovery.draftId));
+    }
     setAutoSaveRecovery(null);
   }, [autoSaveRecovery, handleLoadGame]);
 
@@ -8269,6 +8264,12 @@ function App() {
         </div>
       ) : null}
 
+      {!autoSaveRecovery && recoveryDrafts.length > 0 && (
+        <button className="recovery-drafts-button" type="button" onClick={() => setAutoSaveRecovery(recoveryDrafts[0])}>
+          Recovery drafts ({recoveryDrafts.length})
+        </button>
+      )}
+
       {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
         <div className="save-error-notice" role="alert" data-testid="auto-save-error">
           <span>{autoSaveIssue === 'too-large'
@@ -8297,6 +8298,9 @@ function App() {
 
       {autoSaveRecovery && (
         <AutoSaveRecoveryModal
+          drafts={recoveryDrafts}
+          draftId={autoSaveRecovery.draftId}
+          onSelectDraft={id => setAutoSaveRecovery(recoveryDrafts.find(draft => draft.draftId === id) ?? null)}
           savedAt={autoSaveRecovery.savedAt}
           moveCount={autoSaveRecovery.game.moves.length}
           /* The link's `moves` are only the path to where it opens; a shared

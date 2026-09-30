@@ -13,7 +13,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         window.__rejectAutosave = true;
         const original = Storage.prototype.setItem;
         Storage.prototype.setItem = function(key, value) {
-          if (key === 'xiangqi:auto-saved-game:v1' && window.__rejectAutosave) throw new DOMException('Quota full', 'QuotaExceededError');
+          if ((key === 'xiangqi:auto-saved-game:v1' || key.startsWith('xiangqi:recovery-draft:v1:')) && window.__rejectAutosave) throw new DOMException('Quota full', 'QuotaExceededError');
           return original.call(this, key, value);
         };
       });
