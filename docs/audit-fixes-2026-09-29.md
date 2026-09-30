@@ -43,7 +43,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 39. [x] Apply pending editor FEN on Done
 40. [x] Respect notation during practice
 41. [x] Persist practice progress
-42. [ ] Provide guided library salvage
+42. [x] Provide guided library salvage
 43. [ ] Resolve backup conflicts per game
 44. [ ] Detect collection duplicates
 45. [ ] Run cross-browser checks in CI
@@ -295,3 +295,9 @@ Validation: hints/replies/notes in all three notations; complete practice flows 
 Practice resumes the selected side, move prefix, completed lines and recall counts after closing or reloading. Each side is separate and can be reset explicitly. Stored prefixes are validated and replayed; edited studies start fresh, storage is bounded to 50 studies / 512 KB, and write failures are visible.
 
 Validation: 16 practice/progress tests; reload/resume, separate sides, completion and reset at three widths; complete practice regression across four sizes and enlarged text; TypeScript and ESLint.
+
+## 42. Provide guided library salvage
+
+Blocked libraries offer a preview of readable studies, invalid/duplicate entries and conflicting IDs preserved as copies. Repair archives the exact original bytes before replacing data, refuses stale previews or archival failures, and exposes an archived-original download afterward. Structurally unreadable files retain the manual download route.
+
+Validation: salvage/archive/quota/stale-preview tests and guided repair with exact original download at three widths; TypeScript and ESLint.

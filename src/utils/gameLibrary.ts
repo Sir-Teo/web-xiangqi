@@ -730,3 +730,53 @@ export function saveGameCollection(incoming: Omit<SavedGame, 'id' | 'savedAt'>[]
     if (!writeAll(games)) return fail('Browser storage is full, blocked, or the combined library is too large. Nothing was imported.');
     return { added: additions.length, error: null };
 }
+
+const LIBRARY_RECOVERY_PREFIX = 'xiangqi:library-recovery:v1:';
+export function previewLibrarySalvage(raw: string | null): { games: SavedGame[]; skipped: number; copies: number; error: string | null } {
+    const fail = (error: string) => ({ games: [], skipped: 0, copies: 0, error });
+    if (raw === null || raw.length > MAX_LIBRARY_JSON_LENGTH) return fail('Download the original file for manual recovery; it is unavailable or exceeds the repair limit.');
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { return fail('The JSON structure is damaged. Download the original file for manual recovery.'); }
+    if (!Array.isArray(parsed)) return fail('The file is not a list of studies. Download the original file for manual recovery.');
+    const games: SavedGame[] = [];
+    const ids = new Map<string, SavedGame>();
+    let skipped = 0, copies = 0;
+    for (const record of parsed) {
+        let game = normalizeSavedGame(record);
+        if (!game) { skipped++; continue; }
+        const duplicate = ids.get(game.id);
+        if (duplicate) {
+            if (JSON.stringify(duplicate) === JSON.stringify(game)) { skipped++; continue; }
+            game = { ...game, id: createSavedGameId() }; copies++;
+        }
+        ids.set(game.id, game); games.push(game);
+    }
+    if (!games.length) return fail('No readable studies were found. Keep the original file for manual recovery.');
+    if (games.length > MAX_SAVED_GAMES || JSON.stringify(games).length > MAX_LIBRARY_JSON_LENGTH) return fail('The readable studies exceed library capacity. Download the original file to split it into smaller libraries.');
+    return { games, skipped, copies, error: null };
+}
+
+/** Called under the origin mutation lock. Preserve exact bytes before any replacement. */
+export function salvageLibrary(expectedRaw: string): { restored: number; error: string | null } {
+    const current = loadLibraryState();
+    if (!current.mutationBlocked || current.raw !== expectedRaw) return { restored: 0, error: 'The library changed. Review its current recovery preview before repairing.' };
+    const preview = previewLibrarySalvage(current.raw);
+    if (preview.error) return { restored: 0, error: preview.error };
+    try {
+        localStorage.setItem(`${LIBRARY_RECOVERY_PREFIX}${Date.now()}:${createSavedGameId()}`, expectedRaw);
+    } catch { return { restored: 0, error: 'Storage could not preserve the original file. Repair was cancelled; download the recovery file first.' }; }
+    if (!writeAll(preview.games)) return { restored: 0, error: 'Storage refused the repaired library. The original data has been kept.' };
+    return { restored: preview.games.length, error: null };
+}
+
+export function latestLibraryRecovery(): string | null {
+    try {
+        const keys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(LIBRARY_RECOVERY_PREFIX)) keys.push(key);
+        }
+        const latest = keys.sort().at(-1);
+        return latest ? localStorage.getItem(latest) : null;
+    } catch { return null; }
+}

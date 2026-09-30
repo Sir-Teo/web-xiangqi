@@ -1,13 +1,16 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   exportLibraryBackup, loadLibraryState, MAX_LIBRARY_JSON_LENGTH,
+  previewLibrarySalvage, salvageLibrary, latestLibraryRecovery,
   previewLibraryRestore, restoreLibraryBackup,
   type LibraryRestorePreview, type LibraryState,
 } from '../../utils/gameLibrary';
 import { downloadTextFile } from '../../utils/gameExport';
 
 export function LibraryTransfer({ state, onChange }: { state: LibraryState; onChange: () => void }) {
+  const salvage = useMemo(() => state.mutationBlocked ? previewLibrarySalvage(state.raw) : null, [state]);
+  const originalRecovery = latestLibraryRecovery();
   const [pending, setPending] = useState<{ text: string; preview: LibraryRestorePreview } | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -66,16 +69,37 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     else setMessage(`Restored ${result.added} games. Skipped ${result.duplicates} identical games.`);
   }
 
+  async function repair() {
+    if (!state.raw || restoringRef.current) return;
+    restoringRef.current = true; setRestoring(true); setError('');
+    const result = await withLibraryMutation(() => salvageLibrary(state.raw!), { restored: 0, error: LIBRARY_LOCK_ERROR });
+    restoringRef.current = false; setRestoring(false); onChange();
+    if (result.error) setError(result.error);
+    else setMessage(`Recovered ${result.restored} studies. The original data is archived in this browser and can be downloaded below.`);
+  }
+
   return (
     <section className="lib-transfer" aria-label="Library backup and recovery">
       {state.mutationBlocked && (
         <div className="lib-action-error" role="alert">
           Your saved library could not be fully read. Its original data has been preserved. Saving, renaming, deleting, and restoring are paused.
           {state.raw !== null && <button type="button" onClick={() => download(true)}>Download recovery file</button>}
+          {salvage && <details>
+            <summary>Review readable studies for recovery</summary>
+            {salvage.error ? <p>{salvage.error}</p> : <>
+              <p>Keep {salvage.games.length} readable studies; skip {salvage.skipped} invalid or identical entries. Preserve {salvage.copies} conflicting IDs as separate copies. The original data will be archived before replacement.</p>
+              <ul>{salvage.games.slice(0, 10).map(game => <li key={game.id}>{game.label || game.opening || `${game.moves.length} moves`}</li>)}</ul>
+              {salvage.games.length > 10 && <p>And {salvage.games.length - 10} more readable studies.</p>}
+              <button type="button" disabled={restoring} onClick={repair}>Keep {salvage.games.length} readable studies</button>
+            </>}
+          </details>}
         </div>
       )}
       <details>
         <summary>Backup and restore</summary>
+        {originalRecovery && <button type="button" onClick={() => {
+          if (!downloadTextFile('xiangqi-library-original-recovery.json', originalRecovery, 'application/json;charset=utf-8')) setError('The download could not start. Please try again.');
+        }}>Download archived original</button>}
         <p>Keep a copy of all saved games, variations, notes, and reviews, or move them to another browser.</p>
         <button type="button" disabled={state.mutationBlocked} onClick={() => download(false)}>Download library backup</button>
         <label className="lib-backup-file">
