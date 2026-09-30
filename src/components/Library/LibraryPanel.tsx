@@ -306,12 +306,8 @@ export function LibraryPanel({
   // The displayed dates follow the host defaults on each render. Search must
   // follow them too, even when the immutable saved records haven't changed.
   const dateFormatKey = JSON.stringify(getDateFormatter().resolvedOptions());
-  // Format dates, review summaries and variation text once per game, so that
-  // typing re-filters without re-deriving. Populated lazily: an empty search
-  // needs none of this work. Keyed on the game object rather than its id, which
-  // is what makes one map enough while date defaults stay the same -- every library
-  // mutation re-reads storage and hands back fresh objects, so a game that
-  // changed cannot be read back through a stale entry.
+  // Prepare searchable text in small tasks, never in a keystroke's render.
+  // Immutable game identity keeps this work reusable after unrelated edits.
   const savedSearchText = useMemo(() => {
     // Keep the format context with the cache so a changed locale, calendar,
     // numbering system or time zone invalidates localized search text.
@@ -342,6 +338,25 @@ export function LibraryPanel({
     }
     return line;
   }, [savedPrimaryLines]);
+  const [preparedSearch, setPreparedSearch] = useState<{ entries: WeakMap<SavedGame, string> } | null>(null);
+  useEffect(() => {
+    const pending = savedGames.filter(game => !savedSearchText.entries.has(game));
+    if (!pending.length) return;
+    let cursor = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const prepare = () => {
+      const started = performance.now();
+      do {
+        const game = pending[cursor++];
+        savedSearchText.entries.set(game, getSavedGameSearchText(game, getSavedPrimaryLine(game), getSavedStudyLineLabel(game)));
+      } while (cursor < pending.length && performance.now() - started < 4);
+      if (cursor < pending.length) timer = setTimeout(prepare, 0);
+      else setPreparedSearch({ entries: savedSearchText.entries });
+    };
+    timer = setTimeout(prepare, 0);
+    return () => clearTimeout(timer);
+  }, [savedGames, savedSearchText, getSavedPrimaryLine, getSavedStudyLineLabel]);
+  const preparingSearch = searchTerms.length > 0 && savedGames.some(game => !savedSearchText.entries.has(game));
   const filteredSaved = useMemo(() => savedGames
     .filter((g) => {
       const isReviewed = Boolean(g.review);
@@ -349,14 +364,10 @@ export function LibraryPanel({
       if (reviewFilter === 'unreviewed' && isReviewed) return false;
       if (resultFilter !== 'all' && (getSavedPrimaryLine(g).result ?? 'ongoing') !== resultFilter) return false;
       if (searchTerms.length === 0) return true;
-      let text = savedSearchText.entries.get(g);
-      if (text === undefined) {
-        text = getSavedGameSearchText(g, getSavedPrimaryLine(g), getSavedStudyLineLabel(g));
-        savedSearchText.entries.set(g, text);
-      }
-      return matchesSearchTerms(text, searchTerms);
+      const text = preparedSearch?.entries === savedSearchText.entries ? preparedSearch.entries.get(g) : undefined;
+      return text !== undefined && matchesSearchTerms(text, searchTerms);
     })
-    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText, getSavedPrimaryLine, getSavedStudyLineLabel]);
+    .sort((left, right) => compareSavedGames(left, right, savedSort)), [searchTerms, resultFilter, reviewFilter, savedGames, savedSort, savedSearchText, getSavedPrimaryLine, preparedSearch]);
   const reviewInsight = useMemo(() => {
     const reviewed = filteredSaved
       .map((game) => game.review?.summary)
@@ -675,8 +686,9 @@ export function LibraryPanel({
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
+      {preparingSearch && <p role="status">Preparing library search…</p>}
       <div className="lib-list" data-testid="saved-game-list" ref={savedListRef} onKeyDown={handleSavedListKeyDown}>
-        {filteredSaved.length === 0 ? (
+        {filteredSaved.length === 0 && !preparingSearch ? (
           <p className="lib-empty">
             {/* Not "the Save button": a phone has none, only Save game in the
                 board's overflow menu, so name where games come from instead. */}

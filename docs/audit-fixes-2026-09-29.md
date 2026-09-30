@@ -23,7 +23,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 19. [x] Avoid whole-library mutation/reload costs
 20. [x] Skip duplicate autosave work
 21. [x] Move direct imports to a worker
-22. [ ] Prepare library search off the typing path
+22. [x] Prepare library search off the typing path
 23. [ ] Defer engine download until requested
 24. [ ] Improve device resource classification
 25. [ ] Bound AI thinking time at every level
@@ -175,3 +175,9 @@ Validation: 25 autosave/draft tests, recovery Undo browser cases, storage-failur
 Direct PGN, notation, DhtmlXQ, and XQF reading and legality checks run in a dedicated worker. Cancel, dismissal, replacement, input edits and FEN changes terminate pending parsing; a 30-second deadline exposes a retryable error. Deep trees use flat worker messages. The board and worker share the same pure move validators.
 
 Validation: cancellation/timeout/late-response browser test; delayed-file races; XQF metadata/results and 1,024-ply capacity/recovery at three widths; 53 parser/transfer tests, TypeScript, and ESLint.
+
+## 22. Prepare library search off the typing path
+
+Library search text is prepared in short queued tasks as the panel opens. Keystrokes filter prepared strings; an in-progress message avoids false empty results while preparation finishes. Record identity and locale changes still invalidate the appropriate entries.
+
+Validation: controlled first-keystroke test proves zero text preparation during typing; 400-study cache benchmark at 4× CPU slowdown reports zero tree visits for warm queries; saved-analysis search at three widths and two text sizes; TypeScript and ESLint.
