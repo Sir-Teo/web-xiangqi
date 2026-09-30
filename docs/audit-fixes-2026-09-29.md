@@ -6,7 +6,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 2. [x] Enforce study limits for every move path
 3. [x] Keep last good autosave on capacity failures
 4. [x] Keep separate recovery drafts across tabs
-5. [ ] Undo discarding note-only studies
+5. [x] Undo discarding note-only studies
 6. [ ] Make recovery Escape non-destructive
 7. [ ] Checkpoint studies before replacement
 8. [ ] Preserve failed recovery data
@@ -71,3 +71,9 @@ Validation: autosave tests (18 passing), including byte, line, tree, and invalid
 Each document writes an independently owned recovery slot. Legacy recovery remains readable; a compatibility mirror is never the authoritative copy. Recovery offers a draft selector and a way to reopen remaining drafts. Clearing an empty tab or discarding one draft preserves all others.
 
 Validation: independent-tab ownership and legacy/mirror tests (20 autosave tests passing), TypeScript, ESLint, capacity recovery at three widths, and storage failure/download/retry in desktop and phone browsers.
+
+## 5. Undo discarding note-only studies
+
+Discard Undo uses the same meaningful-content predicate as autosave, so notes, variations, metadata, custom positions, and recorded results qualify without a played move.
+
+Validation: browser recovery of note-only, variation-only, metadata-only, and result-only drafts; TypeScript.

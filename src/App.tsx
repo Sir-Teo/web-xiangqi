@@ -1,3 +1,4 @@
+import { isWorthAutoSaving } from './utils/autoSave';
 import { clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
@@ -5157,7 +5158,7 @@ function App() {
     if (discarded) clearAutoSaveDraft(discarded.draftId);
     setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== discarded?.draftId));
     setAutoSaveRecovery(null);
-    if (!discarded || discarded.game.moves.length === 0) return;
+    if (!discarded || !isWorthAutoSaving(discarded.game)) return;
     if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
     setDiscardedAutoSave({ snapshot: discarded });
     // Longer than the ten seconds the other two undos run for: this one has to
