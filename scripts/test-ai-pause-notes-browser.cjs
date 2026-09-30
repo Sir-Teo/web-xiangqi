@@ -24,7 +24,7 @@ const command = async (page, label) => {
             return { variant: 'single-simd', addMessageListener: listener => listeners.push(listener), terminate() {}, postMessage(command) {
               if (command === 'uci') queueMicrotask(() => emit('uciok'));
               if (command === 'isready') queueMicrotask(() => emit('readyok'));
-              // Default Master uses depth 12; live analysis has a time budget.
+              // The saved Master setting uses depth 12; live analysis has a time budget.
               if (command === 'go depth 12 movetime 2500') window.__goCount++;
               // Return a legal move on stop, as a real UCI engine can do.
               if (command === 'stop') { window.__stopCount++; queueMicrotask(window.__finishMove); }
@@ -35,6 +35,7 @@ const command = async (page, label) => {
           rootComment: 'Opening overview', moves: ['h2e2'],
           moveTree: [{ uci: 'h2e2', comment: 'Cannon plan' }, { uci: 'b2e2', comment: 'Other cannon' }],
         }])));
+        await page.addInitScript(() => localStorage.setItem('xiangqi:preferences:v1', JSON.stringify({ aiStrength: 5 })));
         await page.goto(base);
         await page.locator('.xiangqi-board').waitFor();
         if (mobile) {

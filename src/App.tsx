@@ -585,7 +585,7 @@ function App() {
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
-  const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 5);
+  const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 2);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
@@ -720,7 +720,7 @@ function App() {
     setEngineHashMB(preferences.engineHashMB);
     setEngineThreads(preferences.engineThreads);
     setEnginePvLineCount(preferences.enginePvLineCount ?? 3);
-    setAiStrength(preferences.aiStrength ?? 5);
+    setAiStrength(preferences.aiStrength ?? 2);
     setNotationStyle(preferences.notationStyle ?? 'wxf');
     setPieceStyle(preferences.pieceStyle ?? 'traditional');
     setDeepSearchMode(preferences.deepSearchMode ?? 'bounded');

@@ -31,7 +31,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 27. [x] Avoid duplicated practice paths
 28. [x] Defer hidden cloud requests
 29. [x] Clarify initial task choices
-30. [ ] Use a gentler first AI difficulty
+30. [x] Use a gentler first AI difficulty
 31. [ ] Keep board context in phone analysis
 32. [ ] Offer notation-aware board coordinates
 33. [ ] Distinguish advantage from win probability
@@ -223,3 +223,9 @@ Validation: hidden-panel and background-page request counts; cloud response canc
 The first-use guide offers play, lessons, import and library entry points. It explains free board exploration, Coach/Pro guidance and explicit engine activation. Import opens and focuses the notation field directly.
 
 Validation: all guide actions, focus, dismissal persistence, real AI reply and board sizing at desktop, phone, short-phone and landscape sizes; TypeScript and ESLint.
+
+## 30. Use a gentler first AI difficulty
+
+New and reset preferences use Easy instead of Master. Explicit saved strengths are preserved, and the guide still offers Beginner quick start.
+
+Validation: fresh/default and saved-strength reload checks; AI pause, late replies, save and resume at four sizes with enlarged text; TypeScript.
