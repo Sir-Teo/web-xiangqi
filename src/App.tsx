@@ -3028,7 +3028,7 @@ function App() {
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState<string | null>(null);
   const directImportGenerationRef = useRef(0);
-  useEffect(() => { directImportGenerationRef.current++; }, [gameIdentity, pendingGameMode]);
+  useLayoutEffect(() => { directImportGenerationRef.current++; }, [gameIdentity, pendingGameMode, showNewGameMenu]);
   useEffect(() => () => { directImportGenerationRef.current++; }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');

@@ -28,6 +28,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     await input.setInputFiles(file('closing.pgn'));
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.pendingFiles['closing.pgn'](true));
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('#new-game-line-error').count(), 0);
     await open();
     assert.equal(await page.getByTestId('uci-line-input').inputValue(), '');
     assert.equal(await page.locator('#new-game-line-error').count(), 0);

@@ -131,3 +131,5 @@ Validation: 35 cloud-book/PV tests, TypeScript, and ESLint.
 Each index/lookup request has a 30-second deadline. A stalled worker terminates and exposes Retry; completion, replacement, and unmount clean up timers, and late replies cannot publish. Hidden stalled requests remain recoverable when the explorer reopens.
 
 Validation: controlled worker browser checks at 1440, 390, and 320px, including timeout/retry/late replies; TypeScript and ESLint.
+
+Follow-up to 9: the dialog visibility itself now invalidates reads, covering Escape and every dismissal path before a late result can run. The delayed-error browser check also checks the closed state before reopening.
