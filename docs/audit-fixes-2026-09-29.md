@@ -14,7 +14,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 10. [x] Validate FEN counters
 11. [x] Preserve reviewed-game cursor
 12. [x] Preserve recovered library identity
-13. [ ] Validate cloud numeric fields
+13. [x] Validate cloud numeric fields
 14. [ ] Timeout stalled library workers
 15. [ ] Ignore repeated action shortcuts
 16. [ ] Serialize concurrent library mutations
@@ -119,3 +119,9 @@ Validation: 54 autosave/library tests plus browser save/reload/recovery at the r
 Recovery envelopes retain the original library ID and a compact content revision. An unchanged entry reconnects to Update saved study, including after a rename. Changed or deleted source entries recover as a separate study with an explanation; normal update conflict checks remain in place.
 
 Validation: source/rename/conflict and envelope tests, browser save/edit/reload/recover/update of the same library ID, TypeScript, and ESLint.
+
+## 13. Validate cloud numeric fields
+
+Malformed scores and ranks no longer become plausible zero evaluations. Invalid percentages become unavailable, and PV numeric fields must match completely and remain safe integers. Valid entries can still be used when another entry is rejected.
+
+Validation: 35 cloud-book/PV tests, TypeScript, and ESLint.

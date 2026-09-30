@@ -51,10 +51,10 @@ export function parseCloudPvResponse(text: string): CloudPvResult {
     if (lowered.startsWith('invalid')) return { status: 'invalid' };
     if (lowered === 'checkmate' || lowered === 'stalemate') return { status: 'terminal' };
 
-    const score = Number(body.match(/(?:^|,)score:(-?\d+)/)?.[1]);
-    const depth = Number(body.match(/(?:^|,)depth:(\d+)/)?.[1]);
+    const score = Number(body.match(/(?:^|,)score:(-?\d+)(?=,|$)/)?.[1]);
+    const depth = Number(body.match(/(?:^|,)depth:(\d+)(?=,|$)/)?.[1]);
     const pv = body.match(/(?:^|,)pv:([^,]*)/)?.[1] ?? '';
-    if (!Number.isFinite(score) || !Number.isFinite(depth)) return { status: 'unreadable' };
+    if (!Number.isSafeInteger(score) || !Number.isSafeInteger(depth)) return { status: 'unreadable' };
 
     const moves: string[] = [];
     for (const token of pv.split('|')) {

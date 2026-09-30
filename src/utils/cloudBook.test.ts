@@ -89,3 +89,14 @@ describe('CloudBookCache', () => {
         expect(cache.size).toBe(2);
     });
 });
+
+it.each(['', 'oops', '1.5', '1e2', 'NaN', 'Infinity', '9007199254740993'])('does not turn invalid score %s into a level evaluation', score => {
+    expect(parseCloudBookResponse(`move:c3c4,score:${score},rank:2`).status).toBe('unreadable');
+});
+it.each(['', 'oops', '-1', '3', '1.5'])('rejects invalid rank %s', rank => {
+    expect(parseCloudBookResponse(`move:c3c4,score:1,rank:${rank}`).status).toBe('unreadable');
+});
+it.each(['-1', '200', 'Infinity', 'oops'])('treats invalid percentage %s as unavailable', winrate => {
+    const result = parseCloudBookResponse(`move:c3c4,score:1,rank:2,winrate:${winrate}`);
+    expect(result.status === 'ok' && result.moves[0].winrate).toBeNull();
+});

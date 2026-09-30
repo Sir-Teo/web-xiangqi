@@ -82,16 +82,20 @@ export function parseCloudBookResponse(text: string): CloudBookReading {
         }
         const uci = (fields.get('move') ?? '').toLowerCase();
         if (!UCI_MOVE.test(uci)) continue;
-        const score = Number(fields.get('score'));
-        const rank = Number(fields.get('rank'));
+        const scoreRaw = fields.get('score') ?? '';
+        const rankRaw = fields.get('rank') ?? '';
+        const score = Number(scoreRaw);
+        const rank = Number(rankRaw);
+        if (!/^-?\d+$/.test(scoreRaw) || !Number.isSafeInteger(score)
+            || !/^[012]$/.test(rankRaw)) continue;
         const winrateRaw = fields.get('winrate');
         const winrate = winrateRaw === undefined || winrateRaw === '' ? Number.NaN : Number(winrateRaw);
         moves.push({
             uci,
-            score: Number.isFinite(score) ? score : 0,
-            rank: Number.isFinite(rank) ? rank : 0,
+            score,
+            rank,
             note: fields.get('note') ?? '',
-            winrate: Number.isFinite(winrate) ? winrate : null,
+            winrate: Number.isFinite(winrate) && winrate >= 0 && winrate <= 100 ? winrate : null,
         });
     }
     if (moves.length === 0) return { status: 'unreadable' };

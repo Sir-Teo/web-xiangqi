@@ -70,3 +70,8 @@ describe('parseCloudPvResponse', () => {
         expect(parseCloudPvResponse('<html>').status).toBe('unreadable');
     });
 });
+
+it.each(['1.5', '1oops', '1e2', '9007199254740993'])('rejects incomplete or unsafe PV number %s', number => {
+    expect(parseCloudPvResponse(`score:${number},depth:20,pv:c3c4`).status).toBe('unreadable');
+    expect(parseCloudPvResponse(`score:1,depth:${number},pv:c3c4`).status).toBe('unreadable');
+});
