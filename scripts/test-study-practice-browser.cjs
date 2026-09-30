@@ -84,7 +84,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         assert.equal(await dialog.locator('.hitbox[data-file="0"][data-rank="4"]').evaluate(node => node === document.activeElement), true, 'An off-study attempt must retain board focus for correction');
         assert.match(await dialog.locator('.hitbox[data-file="0"][data-rank="3"]').getAttribute('aria-label'), /red soldier/);
         await dialog.getByRole('button', { name: 'Show a saved move' }).click();
-        assert.match(await dialog.getByTestId('study-practice-hint').innerText(), /h2→e2/i);
+        assert.match(await dialog.getByTestId('study-practice-hint').innerText(), /C2=5/);
         await move('h2e2', true);
         assert.equal(await notes.count(), 0);
         assert.equal(await dialog.getByRole('button', { name: 'Play saved reply' }).evaluate(node => node === document.activeElement), true, 'A recalled move must focus the saved reply');

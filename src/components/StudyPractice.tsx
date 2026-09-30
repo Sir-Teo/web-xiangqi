@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { PieceStyle } from '../utils/pieceStyle';
-import { formatUciMove } from '../utils/moveNotation';
+import { formatMoveInStyle, formatLineTokensInStyle, type XiangqiNotationStyle } from '../utils/xiangqiNotation';
 import { isInCheck, legalMovesFrom, pieceSide, squareToUci, uciToSquare, type Side } from '../utils/xiangqi';
 import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine } from '../utils/studyPractice';
 import { Board } from './Board/Board';
 
-export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyle: PieceStyle }) {
+export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
   const study = prepared.study;
   const [side, setSide] = useState<Side>(() => study?.side ?? 'w');
@@ -73,6 +73,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
   const next = nextPracticeLine(study, session, side);
   const nextMove = study.lines[session.line]?.[session.moves.length];
   const completedNotes = complete ? study.notes[session.line] : [];
+  const noteTokens = notesOpen && complete ? formatLineTokensInStyle(study.board, study.lines[session.line], notationStyle, study.lineLengths[session.line]).tokens : [];
   const turnMessage = complete ? 'Line complete.' : asking ? `${side === 'w' ? 'Red' : 'Black'} to move.` : 'Play the saved reply to continue.';
   return <div className="study-practice-layout">
     <div className="study-practice-controls">
@@ -89,18 +90,19 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
       <div className="study-practice-board" ref={boardRef}>
         <Board board={session.board} orientation={side === 'w' ? 'red' : 'black'} selected={selected} validTargets={validTargets}
           draggableSide={asking ? side : null} onSquareClick={clickSquare} inCheck={isInCheck(session.board, session.side)}
+          notationStyle={notationStyle}
           pieceStyle={letters ? 'letters' : pieceStyle === 'letters' ? 'traditional' : pieceStyle}
           highlights={hint && nextMove ? [uciToSquare(nextMove.slice(0, 2))!, uciToSquare(nextMove.slice(2))!] : []} />
       </div>
       <section className="study-practice-feedback" aria-label="Practice feedback">
         <p role="status" ref={feedbackRef} data-testid="study-practice-status">{message ? `${message} ${turnMessage}` : asking
           ? `${turnMessage} Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.` : turnMessage}</p>
-        {hint && nextMove && <p data-testid="study-practice-hint">One saved move: {formatUciMove(nextMove)}</p>}
+        {hint && nextMove && <p data-testid="study-practice-hint">One saved move: {formatMoveInStyle(session.board, nextMove, notationStyle)}</p>}
         <div className="study-practice-actions">
           {asking && <button type="button" onClick={() => { setHint(true); setSession({ ...session, assisted: true }); }}>Show a saved move</button>}
           {!asking && !complete && <button type="button" ref={replyRef} onClick={() => {
             setSession(playPracticeReply(study, session, side)); setSelected(null); setHint(false);
-            setMessage(`${session.side === 'w' ? 'Red' : 'Black'} played ${formatUciMove(nextMove)}.`);
+            setMessage(`${session.side === 'w' ? 'Red' : 'Black'} played ${formatMoveInStyle(session.board, nextMove, notationStyle)}.`);
             focusBoardRef.current = true;
           }}>Play saved reply</button>}
           {complete && next !== undefined && <button type="button" ref={nextRef} onClick={() => reset(next, true)}>
@@ -114,7 +116,7 @@ export function StudyPractice({ game, pieceStyle }: { game: SavedGame; pieceStyl
           onToggle={event => setNotesOpen(event.currentTarget.open)}>
           <summary>Study notes for this line ({completedNotes.length})</summary>
           {notesOpen && <ul>{completedNotes.map(note => <li key={note.ply}>
-            <strong>{note.move ? `Ply ${note.ply} · ${formatUciMove(note.move)}` : 'Start position'}</strong>
+            <strong>{note.move ? `Ply ${note.ply} · ${noteTokens[note.ply - 1] ?? note.move}` : 'Start position'}</strong>
             <p>{note.comment}</p>
           </li>)}</ul>}
         </details>}

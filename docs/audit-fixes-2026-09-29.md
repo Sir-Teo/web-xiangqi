@@ -41,7 +41,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 37. [x] Track study modification dates
 38. [x] Add editor Undo/Redo
 39. [x] Apply pending editor FEN on Done
-40. [ ] Respect notation during practice
+40. [x] Respect notation during practice
 41. [ ] Persist practice progress
 42. [ ] Provide guided library salvage
 43. [ ] Resolve backup conflicts per game
@@ -283,3 +283,9 @@ Validation: history branching/bounds tests plus editor keyboard, undo/redo, clea
 Done validates the latest typed FEN and applies its placement, side and clocks without requiring Load first. Invalid drafts remain open with a specific error, and a valid draft can replace an invalid board preview.
 
 Validation: pending valid/invalid FEN and clock preservation browser checks at desktop and two phone widths; TypeScript and ESLint.
+
+## 40. Respect notation during practice
+
+Practice receives the selected notation for board files, hints, saved replies and completed-line notes. Notes are formatted against each move’s original position so Chinese/WXF piece and file names remain correct.
+
+Validation: hints/replies/notes in all three notations; complete practice flows at four sizes and enlarged text, failed-chunk recovery and AI pause isolation; TypeScript and ESLint.

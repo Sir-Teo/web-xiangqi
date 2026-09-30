@@ -8416,7 +8416,7 @@ function App() {
 
       {showRuleLessons && <RuleLessons onClose={() => setShowRuleLessons(false)} />}
 
-      {practiceStudy && <StudyPracticeDialog game={practiceStudy} pieceStyle={pieceStyle} onClose={() => setPracticeStudy(null)} />}
+      {practiceStudy && <StudyPracticeDialog game={practiceStudy} pieceStyle={pieceStyle} notationStyle={notationStyle} onClose={() => setPracticeStudy(null)} />}
 
       {autoSaveRecovery && (
         <AutoSaveRecoveryModal
