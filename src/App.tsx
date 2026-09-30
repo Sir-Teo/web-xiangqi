@@ -1,3 +1,4 @@
+import { studyContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
@@ -4339,6 +4340,16 @@ function App() {
     };
   }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
+  const fullStudyTree = useMemo(() => serializeSavedMoveTree(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
+  const currentStudyContent = useMemo(() => studyContent({ gameMode, moves: [], moveTree: fullStudyTree,
+    startFen: rootFen, rootComment, rootResult, mainLinePinned, metadata: gameMetadata,
+    review: currentGameSnapshot.review }), [gameMode, fullStudyTree, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
+  const savedStudyContent = useMemo(() => loadedSavedStudy ? studyContent(loadedSavedStudy) : null, [loadedSavedStudy]);
+  const commentStillPending = normalizeMoveComment(moveCommentDraft) !== normalizeMoveComment(
+    currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
+  const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
+  const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
+
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
     ...snapshot,
@@ -5479,6 +5490,14 @@ function App() {
           : null;
   const boardDetailText = moveRuleHint ?? (selectedPiece ? legalMoveText : boardArrowHint ?? legalMoveText);
 
+  const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
+    data-testid="study-save-status" disabled={!canSaveCurrentPosition}
+    title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
+    onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
+    <span role="status">{studySaveLabel}</span>
+    {isMobile && <span>{loadedSavedStudy ? 'Update' : 'Save'}</span>}
+  </button>;
+
   return (
     <main
       className="app-shell"
@@ -5558,6 +5577,7 @@ function App() {
               </button>
             </div>
 
+            {!isMobile && studySaveControl}
             {!isMobile && !engineRequired && workspaceMode === 'analysis' && (
               <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
                 title="Downloads about 53 MB on first use. Board editing and the library work without the engine.">
@@ -8303,6 +8323,7 @@ function App() {
       {/* ── Persistent bottom tab bar (mobile only) ── */}
       {isMobile && (
         <nav className="mobile-tab-bar" aria-label="Mobile view">
+          {studySaveControl}
           <button
             className={`mobile-tab-bar-btn ${mobileView === 'board' ? 'active' : ''}`}
             onClick={() => setMobileView('board')}

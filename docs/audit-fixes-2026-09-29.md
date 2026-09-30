@@ -37,7 +37,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 33. [x] Distinguish advantage from win probability
 34. [x] Group advanced engine controls
 35. [x] Offer comfortable UI density
-36. [ ] Show persistent save/modified state
+36. [x] Show persistent save/modified state
 37. [ ] Track study modification dates
 38. [ ] Add editor Undo/Redo
 39. [ ] Apply pending editor FEN on Done
@@ -259,3 +259,9 @@ Validation: restart/disable during pending boot on desktop and phone; collapsed 
 A persisted Comfortable density enlarges side-panel/settings controls and supporting text. Compact preserves the existing layout. The toolbar and board remain the same size.
 
 Validation: 31 preference tests; actual font/target size, board dimensions, horizontal fit and reload persistence at three widths; TypeScript and ESLint.
+
+## 36. Show persistent save/modified state
+
+Desktop and phone controls show Unsaved, Modified, Saving or Saved study and directly save/update it. Comparison includes notes, variations, metadata and retained analysis while ignoring navigation and automatic readings. Pending note edits mark the study immediately.
+
+Validation: content identity tests and browser save/navigation/pending-note/update checks at three widths; TypeScript and ESLint.
