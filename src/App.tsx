@@ -1520,6 +1520,7 @@ function App() {
   const graphVisible = isMobile
     ? mobileView === 'analysis' && mobileAnalysisTab === 'graph'
     : leftPanelOpen;
+  const cloudPanelVisible = isPageVisible && graphVisible && leftPanelTab === 'graph';
 
   // Sync panel width state → CSS custom property (used for smooth drag via direct DOM updates)
   //
@@ -2790,7 +2791,8 @@ function App() {
     () => moveHistory.slice(0, currentMoveIndex + 1).map((record) => record.uci),
     [currentMoveIndex, moveHistory]
   );
-  const cloudRule = useCloudRule(rootFen, repetitionLineMoves, repetition.occurrences >= 2, cloudBookEnabled);
+  const cloudRule = useCloudRule(rootFen, repetitionLineMoves, repetition.occurrences >= 2,
+    cloudBookEnabled && isPageVisible && (!isMobile || mobileView === 'board' || mobileAnalysisTab === 'graph'));
   const cloudRuleHasVerdict = cloudRule.status === 'ok' && (cloudRule.banned.length > 0 || cloudRule.drawing.length > 0);
   // A forbidden move is worth saying at the first repetition, before it is
   // played, whatever the threshold for an unforced one.
@@ -2913,7 +2915,7 @@ function App() {
   // The cloud book answers the same question the local book does -- what is
   // played here -- from a database no bundled table could match. Asked only
   // when switched on, and only for the position on the board.
-  const cloudBookReading = useCloudBook(currentFen, cloudBookEnabled);
+  const cloudBookReading = useCloudBook(currentFen, cloudBookEnabled && cloudPanelVisible);
   // The hook answers for the position it was last asked about, and for the
   // frame between a navigation and its effect that is the previous one.
   // Drawing that list under the new side's label would put Red's moves
@@ -2924,7 +2926,7 @@ function App() {
   const cloudBookMoveLimit = assistMode === 'pro' ? 6 : 4;
   // The database's own line, to a depth no browser reaches. Same switch,
   // same position sent, same rule about a stale answer.
-  const cloudPvReading = useCloudPv(currentFen, cloudBookEnabled);
+  const cloudPvReading = useCloudPv(currentFen, cloudBookEnabled && cloudPanelVisible);
   const cloudPv = cloudPvReading.fen === currentFen || cloudPvReading.status === 'off'
     ? cloudPvReading
     : { status: 'loading' as const, line: null, fen: currentFen };

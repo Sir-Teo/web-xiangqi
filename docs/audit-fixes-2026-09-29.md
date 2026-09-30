@@ -29,7 +29,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 25. [x] Bound AI thinking time at every level
 26. [x] Reduce initial bundle
 27. [x] Avoid duplicated practice paths
-28. [ ] Defer hidden cloud requests
+28. [x] Defer hidden cloud requests
 29. [ ] Clarify initial task choices
 30. [ ] Use a gentler first AI difficulty
 31. [ ] Keep board context in phone analysis
@@ -211,3 +211,9 @@ Validation: production build, deferred-command cancellation/reopening, candidate
 Practice keeps shared prefix nodes and a move trie instead of eagerly copying every root-to-leaf move/note path. Only the requested line is materialized, with a one-line cache. Answer matching follows the prefix trie and selects an eligible continuation without reading every full line. Duplicate-path and branch-specific note semantics are preserved.
 
 Validation: 14 practice tests, including alternate matching without unrelated path reads and differing notes on duplicate prefixes; complete practice, focus and recall flows at four viewports and enlarged text; failed-chunk handling and AI pause isolation; TypeScript and ESLint.
+
+## 28. Defer hidden cloud requests
+
+Cloud book and PV requests follow visible graph cards and page visibility. Rule adjudication remains available on the board where it is displayed. Opening the panel resumes the current position without changing the stored preference.
+
+Validation: hidden-panel and background-page request counts; cloud response cancellation, retry, UTF-8 and failed ruling tests at three widths; TypeScript and ESLint.
