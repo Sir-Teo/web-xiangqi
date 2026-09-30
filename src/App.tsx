@@ -8311,6 +8311,7 @@ function App() {
           incomingLink={incomingLink && { moveCount: Math.max(incomingLink.moveCount, moveHistory.length) }}
           onRestore={restoreAutoSavedGame}
           onDismiss={dismissAutoSaveRecovery}
+          onLater={() => { setAutoSaveRecovery(null); requestAnimationFrame(focusBoard); }}
         />
       )}
     </main>

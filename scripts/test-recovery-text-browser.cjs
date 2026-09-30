@@ -33,7 +33,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
           const primary=modal.getByRole('button',{name:'Restore',exact:true});
           const secondary=modal.getByRole('button',{name:"Keep the link's game",exact:true});
           await primary.focus(); await page.keyboard.press('Shift+Tab');
-          assert.equal(await secondary.evaluate(el=>el===document.activeElement),true);
+          assert.equal(await modal.getByRole('button',{name:'Decide later'}).evaluate(el=>el===document.activeElement),true);
           await page.keyboard.press('Tab');
           assert.equal(await primary.evaluate(el=>el===document.activeElement),true);
           const chosen=restore?primary:secondary;

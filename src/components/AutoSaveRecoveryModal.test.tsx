@@ -19,6 +19,7 @@ const render = (props: Partial<Parameters<typeof AutoSaveRecoveryModal>[0]> = {}
             moveCount={3}
             onRestore={() => {}}
             onDismiss={() => {}}
+            onLater={() => {}}
             {...props}
         />
     );

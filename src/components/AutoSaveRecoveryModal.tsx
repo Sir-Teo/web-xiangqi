@@ -24,6 +24,7 @@ interface AutoSaveRecoveryModalProps {
     incomingLink?: { moveCount: number } | null;
     onRestore: () => void;
     onDismiss: () => void;
+    onLater: () => void;
 }
 
 function describeWhen(savedAt: number, now = Date.now()): string {
@@ -45,6 +46,7 @@ export function AutoSaveRecoveryModal({
     incomingLink = null,
     onRestore,
     onDismiss,
+    onLater,
 }: AutoSaveRecoveryModalProps) {
     const modalRef = useRef<HTMLDivElement | null>(null);
     const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -56,7 +58,7 @@ export function AutoSaveRecoveryModal({
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                onDismiss();
+                onLater();
                 return;
             }
             keepTabWithin(modalRef.current, event);
@@ -64,7 +66,7 @@ export function AutoSaveRecoveryModal({
 
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [onDismiss]);
+    }, [onLater]);
 
     return (
         <div className="auto-save-backdrop">
@@ -113,6 +115,7 @@ export function AutoSaveRecoveryModal({
                     >
                         {incomingLink ? "Keep the link's game" : 'Start fresh'}
                     </button>
+                    <button className="auto-save-btn auto-save-btn-secondary" type="button" onClick={onLater}>Decide later</button>
                 </div>
             </div>
         </div>

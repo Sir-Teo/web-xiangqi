@@ -7,7 +7,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 3. [x] Keep last good autosave on capacity failures
 4. [x] Keep separate recovery drafts across tabs
 5. [x] Undo discarding note-only studies
-6. [ ] Make recovery Escape non-destructive
+6. [x] Make recovery Escape non-destructive
 7. [ ] Checkpoint studies before replacement
 8. [ ] Preserve failed recovery data
 9. [ ] Cancel stale direct imports
@@ -77,3 +77,9 @@ Validation: independent-tab ownership and legacy/mirror tests (20 autosave tests
 Discard Undo uses the same meaningful-content predicate as autosave, so notes, variations, metadata, custom positions, and recorded results qualify without a played move.
 
 Validation: browser recovery of note-only, variation-only, metadata-only, and result-only drafts; TypeScript.
+
+## 6. Make recovery Escape non-destructive
+
+Escape and Decide later close recovery without deleting its draft. A visible recovery button reopens the decision. Its placement clears the board controls on desktop and phones.
+
+Validation: browser Escape/reopen/discard/undo, recovery text scaling and focus at four viewport sizes, 15 component tests, TypeScript, and ESLint.
