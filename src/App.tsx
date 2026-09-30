@@ -554,6 +554,8 @@ function App() {
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [showRuleLessons, setShowRuleLessons] = useState(false);
   const [practiceStudy, setPracticeStudy] = useState<SavedGame | null>(null);
+  const [libraryWritePending, setLibraryWritePending] = useState(false);
+  const libraryWritePendingRef = useRef(false);
   const [loadedSavedStudy, setLoadedSavedStudy] = useState<SavedGame | null>(null);
   const [lastSaveWasUpdate, setLastSaveWasUpdate] = useState(false);
   /**
@@ -2695,7 +2697,7 @@ function App() {
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !studyControlsDisabled && !viewingStudyMainLine;
   const hasGameMetadata = Boolean(normalizeGameMetadata(gameMetadata));
-  const canSaveCurrentPosition = moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata;
+  const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata);
   const canShareCurrentPosition = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
   const canExportCurrentLine = canShareCurrentPosition || hasGameMetadata;
   // A finished game has nothing to play on from, and the starting position is
@@ -4374,17 +4376,29 @@ function App() {
     }, saved ? 1800 : 8000);
   }, []);
 
-  const handleSaveGame = useCallback(() => {
-    const { gameMode: mode, moves, ...rest } = snapshotForStorage(currentGameSnapshot);
-    setLastSaveWasUpdate(false);
-    reportSaveResult(saveGameToLibrary(mode, moves, rest));
-  }, [currentGameSnapshot, saveGameToLibrary, snapshotForStorage, reportSaveResult]);
-
-  const handleUpdateSavedStudy = useCallback(() => {
-    if (!loadedSavedStudy) return;
-    setLastSaveWasUpdate(true);
-    reportSaveResult(updateGameInLibrary(loadedSavedStudy, snapshotForStorage(currentGameSnapshot)));
-  }, [loadedSavedStudy, currentGameSnapshot, updateGameInLibrary, snapshotForStorage, reportSaveResult]);
+  const currentSaveIdentityRef = useRef(gameIdentity);
+  useLayoutEffect(() => { currentSaveIdentityRef.current = gameIdentity; }, [gameIdentity]);
+  const saveCurrentStudy = useCallback(async (update: boolean) => {
+    if (libraryWritePendingRef.current || (update && !loadedSavedStudy)) return;
+    libraryWritePendingRef.current = true;
+    setLibraryWritePending(true);
+    const snapshot = snapshotForStorage(currentGameSnapshot);
+    setLastSaveWasUpdate(update);
+    try {
+      const { gameMode: mode, moves, ...rest } = snapshot;
+      const saved = update && loadedSavedStudy
+        ? await updateGameInLibrary(loadedSavedStudy, snapshot)
+        : await saveGameToLibrary(mode, moves, rest);
+      // A queued save belongs to the study that requested it, even if another
+      // study was opened while a different tab held the library lock.
+      if (currentSaveIdentityRef.current === gameIdentity) reportSaveResult(saved);
+    } finally {
+      libraryWritePendingRef.current = false;
+      setLibraryWritePending(false);
+    }
+  }, [currentGameSnapshot, gameIdentity, loadedSavedStudy, reportSaveResult, saveGameToLibrary, snapshotForStorage, updateGameInLibrary]);
+  const handleSaveGame = useCallback(() => saveCurrentStudy(false), [saveCurrentStudy]);
+  const handleUpdateSavedStudy = useCallback(() => saveCurrentStudy(true), [saveCurrentStudy]);
 
 
   /**
@@ -4464,9 +4478,9 @@ function App() {
     if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
   }, []);
 
-  const handleDeleteSavedGame = useCallback((id: string): boolean => {
+  const handleDeleteSavedGame = useCallback(async (id: string): Promise<boolean> => {
     const removed = savedGames.find((game) => game.id === id);
-    if (!deleteGameFromLibrary(id)) return false;
+    if (!await deleteGameFromLibrary(id)) return false;
     if (!removed) return true;
     if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
     setLibraryUndo({ game: removed });
@@ -4477,9 +4491,9 @@ function App() {
     return true;
   }, [deleteGameFromLibrary, savedGames]);
 
-  const handleUndoLibraryDelete = useCallback(() => {
+  const handleUndoLibraryDelete = useCallback(async () => {
     if (!libraryUndo) return;
-    if (restoreGameToLibrary(libraryUndo.game)) {
+    if (await restoreGameToLibrary(libraryUndo.game)) {
       dismissLibraryUndo();
       return;
     }

@@ -1,3 +1,4 @@
+import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
 import { useEffect, useRef, useState } from 'react';
 import {
   exportLibraryBackup, loadLibraryState, MAX_LIBRARY_JSON_LENGTH,
@@ -11,6 +12,8 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const generation = useRef(0);
+  const restoringRef = useRef(false);
+  const [restoring, setRestoring] = useState(false);
   useEffect(() => () => { generation.current += 1; }, []);
 
   function download(recovery: boolean) {
@@ -50,13 +53,17 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     }
   }
 
-  function restore() {
-    if (!pending) return;
-    const result = restoreLibraryBackup(pending.text);
+  async function restore() {
+    if (!pending || restoringRef.current) return;
+    restoringRef.current = true; setRestoring(true);
+    const request = generation.current;
+    const result = await withLibraryMutation(() => restoreLibraryBackup(pending.text), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
+    restoringRef.current = false; setRestoring(false);
+    onChange();
+    if (request !== generation.current) return;
     setPending(null);
     if (result.error) setError(result.error);
     else setMessage(`Restored ${result.added} games. Skipped ${result.duplicates} identical games.`);
-    onChange();
   }
 
   return (
@@ -83,7 +90,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
           <div className="lib-restore-preview">
             <p role="status">Ready to add {pending.preview.added} games and skip {pending.preview.duplicates} identical games. Existing games will be kept.</p>
             <div className="lib-transfer-actions">
-              <button type="button" disabled={state.mutationBlocked || pending.preview.added === 0} onClick={restore}>Restore {pending.preview.added} games</button>
+              <button type="button" disabled={restoring || state.mutationBlocked || pending.preview.added === 0} onClick={restore}>Restore {pending.preview.added} games</button>
               <button type="button" onClick={() => { generation.current += 1; setPending(null); }}>Cancel</button>
             </div>
           </div>

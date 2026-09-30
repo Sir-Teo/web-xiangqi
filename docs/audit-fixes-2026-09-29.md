@@ -17,7 +17,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 13. [x] Validate cloud numeric fields
 14. [x] Timeout stalled library workers
 15. [x] Ignore repeated action shortcuts
-16. [ ] Serialize concurrent library mutations
+16. [x] Serialize concurrent library mutations
 17. [ ] Isolate engine telemetry rendering
 18. [ ] Narrow tree-derived invalidation
 19. [ ] Avoid whole-library mutation/reload costs
@@ -139,3 +139,9 @@ Follow-up to 9: the dialog visibility itself now invalidates reads, covering Esc
 Held F/D/X/H/Space/E/T/R keys no longer toggle or replay actions repeatedly, and holding the palette shortcut does not reopen/close it. Arrow-key move navigation still repeats.
 
 Validation: browser key-down/repeat/up checks for board flip, command palette, and repeated navigation; TypeScript and ESLint.
+
+## 16. Serialize concurrent library mutations
+
+Every UI library mutation now runs under an origin-wide Web Lock, with an IndexedDB transaction fallback. Queued operations read the latest library only after acquiring the lock. Save/import submission guards prevent duplicate requests; late save completion cannot attach an old study to a newly opened board.
+
+Validation: simultaneous two-tab saves under both coordination mechanisms, recovery/update, rename/delete focus at three widths, backup restore, PGN collection import, all 2,092 unit tests, TypeScript, and ESLint.

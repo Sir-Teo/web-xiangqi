@@ -1,3 +1,4 @@
+import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../utils/libraryMutation';
 import { useCallback, useEffect, useState } from 'react';
 import { GAME_LIBRARY_STORAGE_KEY, loadLibraryState, saveGameWithResult, updateSavedGameWithResult, deleteGame, renameGame, restoreGame } from '../utils/gameLibrary';
 import type { SavedGame } from '../utils/gameLibrary';
@@ -22,7 +23,7 @@ export function useGameLibrary() {
         return () => window.removeEventListener('storage', onStorage);
     }, [refresh]);
 
-    const save = useCallback((
+    const save = useCallback(async (
         gameMode: GameMode,
         moves: string[],
         options: {
@@ -36,39 +37,39 @@ export function useGameLibrary() {
             moveTree?: SavedGame['moveTree'];
             review?: SavedGame['review'];
         } = {}
-    ): SavedGame | null => {
-        const result = saveGameWithResult({
+    ): Promise<SavedGame | null> => {
+        const result = await withLibraryMutation(() => saveGameWithResult({
             gameMode,
             ...options,
             moves,
             result: options.result ?? 'ongoing',
-        });
+        }), { game: null, error: LIBRARY_LOCK_ERROR });
         setSaveError(result.error);
         if (result.game) setLibraryState(loadLibraryState());
         return result.game;
     }, []);
 
-    const remove = useCallback((id: string): boolean => {
-        const ok = deleteGame(id);
+    const remove = useCallback(async (id: string): Promise<boolean> => {
+        const ok = await withLibraryMutation(() => deleteGame(id), false);
         setLibraryState(loadLibraryState());
         return ok;
     }, []);
 
-    const restore = useCallback((game: SavedGame): boolean => {
-        const ok = restoreGame(game);
+    const restore = useCallback(async (game: SavedGame): Promise<boolean> => {
+        const ok = await withLibraryMutation(() => restoreGame(game), false);
         setLibraryState(loadLibraryState());
         return ok;
     }, []);
 
-    const update = useCallback((source: SavedGame, replacement: Omit<SavedGame, 'id' | 'savedAt'>): SavedGame | null => {
-        const result = updateSavedGameWithResult(source, replacement);
+    const update = useCallback(async (source: SavedGame, replacement: Omit<SavedGame, 'id' | 'savedAt'>): Promise<SavedGame | null> => {
+        const result = await withLibraryMutation(() => updateSavedGameWithResult(source, replacement), { game: null, error: LIBRARY_LOCK_ERROR });
         setSaveError(result.error);
         setLibraryState(loadLibraryState());
         return result.game;
     }, []);
 
-    const rename = useCallback((id: string, label: string): boolean => {
-        const ok = renameGame(id, label);
+    const rename = useCallback(async (id: string, label: string): Promise<boolean> => {
+        const ok = await withLibraryMutation(() => renameGame(id, label), false);
         setLibraryState(loadLibraryState());
         return ok;
     }, []);

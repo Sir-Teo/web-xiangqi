@@ -1,3 +1,4 @@
+import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
 import { useEffect, useRef, useState } from 'react';
 import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
 import { MAX_SAVED_GAMES, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
@@ -14,6 +15,8 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const worker = useRef<Worker | null>(null);
   const timeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const generation = useRef(0);
@@ -55,11 +58,16 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
       stop(); setBusy(false); setError(error instanceof Error ? error.message : 'The file could not be read.');
     }
   }
-  function save() {
-    const result = saveGameCollection(games.filter((_, index) => selected.has(index)));
+  async function save() {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    const request = generation.current;
+    const result = await withLibraryMutation(() => saveGameCollection(games.filter((_, index) => selected.has(index))), { added: 0, error: LIBRARY_LOCK_ERROR });
+    savingRef.current = false; setSaving(false);
+    onChange();
+    if (request !== generation.current) return;
     setError(result.error || '');
     if (!result.error) { setMessage(`Imported ${result.added} ${result.added === 1 ? 'game' : 'games'}.`); setGames([]); setSelected(new Set()); }
-    onChange();
   }
   const tooMany = state.games.length + selected.size > MAX_SAVED_GAMES;
   return <section className="lib-transfer" aria-label="Import PGN collection">
@@ -96,7 +104,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
         </div>
         {tooMany && <p role="alert">Select fewer games. Your library has {MAX_SAVED_GAMES - state.games.length} spaces remaining.</p>}
         <div className="lib-transfer-actions">
-          <button type="button" disabled={state.mutationBlocked || !selected.size || tooMany} onClick={save}>Import {selected.size} {selected.size === 1 ? 'game' : 'games'}</button>
+          <button type="button" disabled={saving || state.mutationBlocked || !selected.size || tooMany} onClick={save}>Import {selected.size} {selected.size === 1 ? 'game' : 'games'}</button>
           <button type="button" onClick={() => { generation.current++; stop(); setGames([]); setError(''); }}>Cancel import</button>
         </div>
       </div>}

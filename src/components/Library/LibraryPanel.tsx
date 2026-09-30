@@ -44,8 +44,8 @@ interface LibraryPanelProps {
   libraryState: LibraryState;
   onLibraryChange: () => void;
   onLoadSavedGame: (game: SavedGame, moves?: string[]) => boolean;
-  onDeleteSavedGame: (id: string) => boolean;
-  onRenameSavedGame: (id: string, label: string) => boolean;
+  onDeleteSavedGame: (id: string) => boolean | Promise<boolean>;
+  onRenameSavedGame: (id: string, label: string) => boolean | Promise<boolean>;
   onPracticeSavedGame: (game: SavedGame) => void;
   loadedStudy?: { id: string; canUpdate: boolean; updated: boolean; dropsReview: boolean; update: () => void };
   onLoadHistorical: (game: HistoricalGame) => void;
@@ -455,8 +455,12 @@ export function LibraryPanel({
     setEditLabel(game.label ?? '');
   };
 
-  const commitEdit = (id: string) => {
-    const ok = onRenameSavedGame(id, editLabel.trim());
+  const mutationPendingRef = useRef(false);
+  const commitEdit = async (id: string) => {
+    if (mutationPendingRef.current) return;
+    mutationPendingRef.current = true;
+    const ok = await onRenameSavedGame(id, editLabel.trim());
+    mutationPendingRef.current = false;
     if (!ok) {
       setActionError('Could not rename this game. Browser storage may be full or blocked.');
       return;
@@ -474,8 +478,11 @@ export function LibraryPanel({
     setEditingId(null);
   };
 
-  const confirmDelete = (id: string) => {
-    const ok = onDeleteSavedGame(id);
+  const confirmDelete = async (id: string) => {
+    if (mutationPendingRef.current) return;
+    mutationPendingRef.current = true;
+    const ok = await onDeleteSavedGame(id);
+    mutationPendingRef.current = false;
     if (!ok) {
       setActionError('Could not delete this game. Browser storage may be full or blocked.');
       return;
