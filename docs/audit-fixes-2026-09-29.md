@@ -44,7 +44,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 40. [x] Respect notation during practice
 41. [x] Persist practice progress
 42. [x] Provide guided library salvage
-43. [ ] Resolve backup conflicts per game
+43. [x] Resolve backup conflicts per game
 44. [ ] Detect collection duplicates
 45. [ ] Run cross-browser checks in CI
 
@@ -301,3 +301,9 @@ Validation: 16 practice/progress tests; reload/resume, separate sides, completio
 Blocked libraries offer a preview of readable studies, invalid/duplicate entries and conflicting IDs preserved as copies. Repair archives the exact original bytes before replacing data, refuses stale previews or archival failures, and exposes an archived-original download afterward. Structurally unreadable files retain the manual download route.
 
 Validation: salvage/archive/quota/stale-preview tests and guided repair with exact original download at three widths; TypeScript and ESLint.
+
+## 43. Resolve backup conflicts per game
+
+Restore previews current and incoming versions and offers Keep current, Replace with backup or Import as a copy for each conflict. Counts and capacity follow the choices. Confirmation rechecks selected replacement/copy sources under the library lock and refuses changed or deleted versions.
+
+Validation: 18 backup/conflict tests; mixed choices at three widths, complete backup/download/recovery browser flow; TypeScript and ESLint.

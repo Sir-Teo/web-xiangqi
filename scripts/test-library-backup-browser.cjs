@@ -63,7 +63,7 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       assert.equal(await page.getByRole('button', { name: 'Restore 0 games', exact: true }).isDisabled(), true);
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await upload(JSON.stringify({ ...downloaded, games: [{ ...game, label: 'Conflict' }] }));
-      await page.getByText(/conflicts with a saved game/).waitFor();
+      await page.getByRole('combobox', { name: 'Resolve Cannon study' }).waitFor();
       assert.equal(await page.evaluate(k => localStorage.getItem(k), key), saved);
       await page.evaluate(k => { localStorage.setItem(k, '{damaged'); window.dispatchEvent(new StorageEvent('storage', { key: k })); }, key);
       await page.getByRole('button', { name: 'Download recovery file', exact: true }).waitFor();

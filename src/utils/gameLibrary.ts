@@ -666,13 +666,18 @@ export function exportLibraryBackup(): string | null {
     return JSON.stringify({ format: 'web-xiangqi-library', version: 1, games: state.games });
 }
 
+export type LibraryRestoreChoices = Record<string, { choice: 'keep' | 'replace' | 'copy'; expected: string }>;
+export type LibraryRestoreConflict = { id: string; current: SavedGame; incoming: SavedGame };
 export type LibraryRestorePreview = {
+    conflicts?: LibraryRestoreConflict[];
+    replaced?: number;
+    kept?: number;
     added: number;
     duplicates: number;
     error: string | null;
 };
 
-function prepareLibraryRestore(text: string): LibraryRestorePreview & { games: SavedGame[] } {
+function prepareLibraryRestore(text: string, choices: LibraryRestoreChoices = {}, committing = false): LibraryRestorePreview & { games: SavedGame[] } {
     const failure = (error: string) => ({ games: [], added: 0, duplicates: 0, error });
     // Leave room for the versioned envelope around a maximum-size library.
     if (text.length > MAX_LIBRARY_JSON_LENGTH + 1024) return failure('This backup is too large.');
@@ -690,30 +695,44 @@ function prepareLibraryRestore(text: string): LibraryRestorePreview & { games: S
     if (current.mutationBlocked) return failure('Your existing library could not be read. Download its recovery file before repairing browser storage.');
     const byId = new Map(current.games.map(game => [game.id, game]));
     const additions: SavedGame[] = [];
-    let duplicates = 0;
+    const replacements = new Map<string, SavedGame>();
+    const conflicts: LibraryRestoreConflict[] = [];
+    let duplicates = 0, kept = 0;
     for (const game of incoming) {
         const existing = byId.get(game.id);
+        const resolution = Object.hasOwn(choices, game.id) ? choices[game.id] : undefined;
+        if (resolution && resolution.choice !== 'keep' && resolution.expected !== JSON.stringify(existing)) {
+            return failure('A conflicting study changed since preview. Choose the backup again to review its current version.');
+        }
         if (!existing) additions.push(game);
         else if (JSON.stringify(existing) === JSON.stringify(game)) duplicates += 1;
-        else return failure('A game in this backup conflicts with a saved game of the same ID. Nothing was restored.');
+        else {
+            conflicts.push({ id: game.id, current: existing, incoming: game });
+            if (committing && !resolution) return failure('This backup has conflicts. Choose keep, replace or import a copy for each study.');
+            if (resolution?.choice === 'replace') replacements.set(game.id, game);
+            else if (resolution?.choice === 'copy') additions.push({ ...game, id: createSavedGameId() });
+            else kept++;
+        }
     }
-    const games = [...current.games, ...additions];
+    const games = [...current.games.map(game => replacements.get(game.id) ?? game), ...additions];
     if (games.length > MAX_SAVED_GAMES) return failure(`Restoring these games would exceed the ${MAX_SAVED_GAMES}-game limit.`);
     if (JSON.stringify(games).length > MAX_LIBRARY_JSON_LENGTH) return failure('The combined library would be too large. Nothing was restored.');
-    return { games, added: additions.length, duplicates, error: null };
+    return { games, added: additions.length, duplicates, error: null,
+        ...(conflicts.length ? { conflicts, kept, replaced: replacements.size } : {}) };
 }
 
-export function previewLibraryRestore(text: string): LibraryRestorePreview {
-    const { added, duplicates, error } = prepareLibraryRestore(text);
-    return { added, duplicates, error };
+export function previewLibraryRestore(text: string, choices: LibraryRestoreChoices = {}): LibraryRestorePreview {
+    const result = prepareLibraryRestore(text, choices);
+    return { added: result.added, duplicates: result.duplicates, error: result.error,
+        ...(result.conflicts ? { conflicts: result.conflicts, kept: result.kept, replaced: result.replaced } : {}) };
 }
 
-export function restoreLibraryBackup(text: string): LibraryRestorePreview {
-    // Re-read at confirmation time so a stale preview cannot replace newer data.
-    const { games, added, duplicates, error } = prepareLibraryRestore(text);
-    if (error) return { added: 0, duplicates, error };
-    if (added && !writeAll(games)) return { added: 0, duplicates, error: 'Browser storage refused the restore. Your existing library has been kept.' };
-    return { added, duplicates, error: null };
+export function restoreLibraryBackup(text: string, choices: LibraryRestoreChoices = {}): LibraryRestorePreview {
+    // Re-read under the mutation lock, including every selected replacement.
+    const { games, ...preview } = prepareLibraryRestore(text, choices, true);
+    if (preview.error) return preview;
+    if ((preview.added || preview.replaced) && !writeAll(games)) return { added: 0, duplicates: preview.duplicates, error: 'Browser storage refused the restore. Your existing library has been kept.' };
+    return preview;
 }
 
 /** Append a reviewed collection in one write, re-reading storage at confirmation. */

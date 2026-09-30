@@ -4,14 +4,14 @@ import {
   exportLibraryBackup, loadLibraryState, MAX_LIBRARY_JSON_LENGTH,
   previewLibrarySalvage, salvageLibrary, latestLibraryRecovery,
   previewLibraryRestore, restoreLibraryBackup,
-  type LibraryRestorePreview, type LibraryState,
+  type LibraryRestorePreview, type LibraryRestoreChoices, type LibraryState,
 } from '../../utils/gameLibrary';
 import { downloadTextFile } from '../../utils/gameExport';
 
 export function LibraryTransfer({ state, onChange }: { state: LibraryState; onChange: () => void }) {
   const salvage = useMemo(() => state.mutationBlocked ? previewLibrarySalvage(state.raw) : null, [state]);
   const originalRecovery = latestLibraryRecovery();
-  const [pending, setPending] = useState<{ text: string; preview: LibraryRestorePreview } | null>(null);
+  const [pending, setPending] = useState<{ text: string; preview: LibraryRestorePreview; choices: LibraryRestoreChoices } | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const generation = useRef(0);
@@ -50,7 +50,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
       if (current !== generation.current) return;
       const preview = previewLibraryRestore(text);
       if (preview.error) setError(preview.error);
-      else setPending({ text, preview });
+      else setPending({ text, preview, choices: Object.fromEntries((preview.conflicts ?? []).map(conflict => [conflict.id, { choice: 'keep', expected: JSON.stringify(conflict.current) }])) });
     } catch {
       if (current === generation.current) setError('This file could not be read. Please try again.');
     }
@@ -60,13 +60,13 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     if (!pending || restoringRef.current) return;
     restoringRef.current = true; setRestoring(true);
     const request = generation.current;
-    const result = await withLibraryMutation(() => restoreLibraryBackup(pending.text), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
+    const result: LibraryRestorePreview = await withLibraryMutation(() => restoreLibraryBackup(pending.text, pending.choices), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
     restoringRef.current = false; setRestoring(false);
     onChange();
     if (request !== generation.current) return;
     setPending(null);
     if (result.error) setError(result.error);
-    else setMessage(`Restored ${result.added} games. Skipped ${result.duplicates} identical games.`);
+    else setMessage(`Restored ${result.added} games. Skipped ${result.duplicates} identical games.${result.conflicts?.length ? ` Replaced ${result.replaced ?? 0}; kept ${result.kept ?? 0} current studies.` : ''}`);
   }
 
   async function repair() {
@@ -112,9 +112,27 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
         </label>
         {pending && (
           <div className="lib-restore-preview">
-            <p role="status">Ready to add {pending.preview.added} games and skip {pending.preview.duplicates} identical games. Existing games will be kept.</p>
+            <p role="status">Ready to add {pending.preview.added} games and skip {pending.preview.duplicates} identical games. Replacements: {pending.preview.replaced ?? 0}. Current versions kept: {pending.preview.kept ?? 0}.</p>
+            {pending.preview.conflicts?.map(conflict => <fieldset key={conflict.id} className="lib-restore-conflict">
+              <legend>{conflict.current.label || conflict.incoming.label || "Conflicting study"}</legend>
+              <p>Current: {conflict.current.moves.length} plies, {new Date(conflict.current.modifiedAt ?? conflict.current.savedAt).toLocaleString()}. Backup: {conflict.incoming.moves.length} plies, {new Date(conflict.incoming.modifiedAt ?? conflict.incoming.savedAt).toLocaleString()}.</p>
+              <details><summary>Compare notes and players</summary>
+                <p>Current: {[conflict.current.metadata?.redPlayer, conflict.current.metadata?.blackPlayer, conflict.current.rootComment, conflict.current.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
+                <p>Backup: {[conflict.incoming.metadata?.redPlayer, conflict.incoming.metadata?.blackPlayer, conflict.incoming.rootComment, conflict.incoming.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
+              </details>
+              <label>Resolve {conflict.current.label || conflict.id}
+                <select value={pending.choices[conflict.id]?.choice ?? "keep"} onChange={event => {
+                  const choices = { ...pending.choices, [conflict.id]: { expected: JSON.stringify(conflict.current), choice: event.target.value as "keep" | "replace" | "copy" } };
+                  const preview = previewLibraryRestore(pending.text, choices);
+                  setPending({ ...pending, choices, preview: preview.error ? { ...pending.preview, error: preview.error } : preview });
+                }}>
+                  <option value="keep">Keep current</option><option value="replace">Replace with backup</option><option value="copy">Import backup as a copy</option>
+                </select>
+              </label>
+            </fieldset>)}
+            {pending.preview.error && <p role="alert">{pending.preview.error}</p>}
             <div className="lib-transfer-actions">
-              <button type="button" disabled={restoring || state.mutationBlocked || pending.preview.added === 0} onClick={restore}>Restore {pending.preview.added} games</button>
+              <button type="button" disabled={restoring || state.mutationBlocked || (pending.preview.added === 0 && !pending.preview.conflicts?.length) || Boolean(pending.preview.error)} onClick={restore}>Restore {pending.preview.added} games</button>
               <button type="button" onClick={() => { generation.current += 1; setPending(null); }}>Cancel</button>
             </div>
           </div>
