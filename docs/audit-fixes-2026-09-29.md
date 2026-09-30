@@ -8,7 +8,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 4. [x] Keep separate recovery drafts across tabs
 5. [x] Undo discarding note-only studies
 6. [x] Make recovery Escape non-destructive
-7. [ ] Checkpoint studies before replacement
+7. [x] Checkpoint studies before replacement
 8. [ ] Preserve failed recovery data
 9. [ ] Cancel stale direct imports
 10. [ ] Validate FEN counters
@@ -83,3 +83,9 @@ Validation: browser recovery of note-only, variation-only, metadata-only, and re
 Escape and Decide later close recovery without deleting its draft. A visible recovery button reopens the decision. Its placement clears the board controls on desktop and phones.
 
 Validation: browser Escape/reopen/discard/undo, recovery text scaling and focus at four viewport sizes, 15 component tests, TypeScript, and ESLint.
+
+## 7. Checkpoint studies before replacement
+
+New games, direct imports, saved/historical game loads, editor positions, and play/practice from here archive a recovery checkpoint before replacement. Checkpoints include pending note text, remain accessible through recovery, and avoid repeating an unchanged checkpoint. If persistence fails, replacement stops and explains how to export the current study.
+
+Validation: browser reset/checkpoint/restore and quota-failure refusal, TypeScript, and ESLint.

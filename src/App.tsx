@@ -1,5 +1,5 @@
 import { isWorthAutoSaving } from './utils/autoSave';
-import { clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
+import { currentDraftId, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
@@ -1612,7 +1612,10 @@ function App() {
     resetReview();
   }, [clearReviewData, resetReview, resetReviewController, reviewedLineNodeIds]);
 
+  const checkpointBeforeReplaceRef = useRef<() => boolean>(() => true);
+
   const resetGame = useCallback(() => {
+    if (!checkpointBeforeReplaceRef.current()) return;
     setLoadedSavedStudy(null);
     stopAnalysis();
     handleCancelReview();
@@ -2320,6 +2323,7 @@ function App() {
    * move 15 of a 40-move game means the moves after 15 did not happen.
    */
   const playFromHere = useCallback(() => {
+    if (!checkpointBeforeReplaceRef.current()) return;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -3300,6 +3304,7 @@ function App() {
       return;
     }
 
+    if (!checkpointBeforeReplaceRef.current()) return;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -3836,6 +3841,7 @@ function App() {
     const practiceMoves = getNodeMoves(parentNodeId);
     const practiceSide = getNodeFen(parentNodeId).trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
 
+    if (!checkpointBeforeReplaceRef.current()) return;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -4020,6 +4026,7 @@ function App() {
   );
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode, note?: string) => {
+    if (!describeFenProblem(fen.trim()) && !checkpointBeforeReplaceRef.current()) return false;
     const ok = loadFen(fen.trim(), note);
     if (!ok) {
       // No timer on this one. The message is now a specific thing to fix --
@@ -4075,6 +4082,7 @@ function App() {
     }
     const { moves, startFen, importedFromNotation, notationRejected } = plan;
 
+    if (!checkpointBeforeReplaceRef.current()) return;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -4509,7 +4517,7 @@ function App() {
   }, [activeLineNodeIds, canTakeBack, clearQueuedSearch, currentMoveIndex, handleDeleteNode, stopSearch, takeBackPlies]);
 
   const paletteCommands = useMemo<Command[]>(() => [
-    { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { setGameResult(null); resetGame(); } },
+    { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
     {
       id: 'save-game',
@@ -4852,7 +4860,7 @@ function App() {
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
-      handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, setGameResult, startGameReview,
+      handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
       stopDeepDive, studyNotes.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
     if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
@@ -4874,6 +4882,7 @@ function App() {
       }
     }
 
+    if (!checkpointBeforeReplaceRef.current()) return false;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -5078,7 +5087,7 @@ function App() {
   }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot, persistAutoSave, snapshotForStorage]);
 
   const currentGameSnapshotRef = useRef(currentGameSnapshot);
-  useEffect(() => {
+  useLayoutEffect(() => {
     currentGameSnapshotRef.current = currentGameSnapshot;
   }, [currentGameSnapshot]);
 
@@ -5095,9 +5104,7 @@ function App() {
    * sitting in the draft ref waiting for its own debounce, and it would
    * otherwise be the one thing this flush failed to save.
    */
-  useEffect(() => {
-    if (!autoSaveChecked || autoSaveRecovery) return;
-    const flush = () => {
+  const recoverySnapshot = useCallback(() => {
       let snapshot = snapshotForStorage(currentGameSnapshotRef.current);
       const pending = moveCommentEditRef.current;
       if (pending) {
@@ -5113,8 +5120,33 @@ function App() {
           snapshot = { ...snapshot, moveTree: serializeSavedMoveTree(patched, rootNodeId) };
         }
       }
-      persistAutoSave(snapshot);
+    return snapshot;
+  }, [rootNodeId, snapshotForStorage]);
+
+  const lastCheckpointRef = useRef<{ signature: string; id: string } | null>(null);
+  useLayoutEffect(() => {
+    checkpointBeforeReplaceRef.current = () => {
+      const snapshot = recoverySnapshot();
+      if (!isWorthAutoSaving(snapshot)) return true;
+      const signature = JSON.stringify(snapshot);
+      if (signature === lastCheckpointRef.current?.signature && readAutoSaveDrafts().some(draft => draft.draftId === lastCheckpointRef.current?.id)) return true;
+      const id = `checkpoint-${globalThis.crypto.randomUUID()}`;
+      const result = writeAutoSaveDraft(snapshot, undefined, Date.now(), id);
+      if (result !== 'saved') {
+        setAutoSaveIssue(result === 'too-large' ? 'too-large' : 'failed');
+        setShowNewGameMenu(false);
+        setShowSettings(false);
+        return false;
+      }
+      lastCheckpointRef.current = { signature, id };
+      setRecoveryDrafts(readAutoSaveDrafts().filter(draft => draft.draftId !== currentDraftId));
+      return true;
     };
+  }, [recoverySnapshot]);
+
+  useEffect(() => {
+    if (!autoSaveChecked || autoSaveRecovery) return;
+    const flush = () => persistAutoSave(recoverySnapshot());
     const onHidden = () => {
       if (document.visibilityState === 'hidden') flush();
     };
@@ -5124,7 +5156,7 @@ function App() {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [autoSaveChecked, autoSaveRecovery, persistAutoSave, rootNodeId, snapshotForStorage]);
+  }, [autoSaveChecked, autoSaveRecovery, persistAutoSave, recoverySnapshot]);
 
   /**
    * "Start fresh" throws away the only copy of an unfinished game.
@@ -5345,6 +5377,7 @@ function App() {
   );
 
   const handleLoadHistoricalGame = useCallback((game: HistoricalGame) => {
+    if (!checkpointBeforeReplaceRef.current()) return;
     stopAnalysis();
     handleCancelReview();
     resetReview();
@@ -8245,7 +8278,7 @@ function App() {
         <GameOverModal
           result={visibleGameResult}
           reason={visibleGameOverReason}
-          onNewGame={() => { setGameResult(null); resetGame(); }}
+          onNewGame={() => { resetGame(); }}
           onReview={dismissGameOverForReview}
         />
       )}
