@@ -114,6 +114,8 @@ export function describeSetupProblem(board: BoardState, sideToMove: Side): strin
  * throws are deliberately not forwarded -- they name ranks and files as the
  * parser counts them -- and are replaced with what a reader has to fix.
  */
+export const MAX_FEN_COUNTER = 1_000_000;
+
 export function describeFenProblem(fen: string): string | null {
     const parts = fen.trim().split(/\s+/);
     if (parts.length < 2 || !parts[0]) {
@@ -130,6 +132,14 @@ export function describeFenProblem(fen: string): string | null {
         // went wrong can be a whole file.
         const seen = parts[1].length > 12 ? `${parts[1].slice(0, 12)}…` : parts[1];
         return `The side to move must be "w" or "b", not "${seen}".`;
+    }
+    for (const [index, minimum, label] of [[4, 0, 'halfmove clock'], [5, 1, 'fullmove number']] as const) {
+        const token = parts[index];
+        if (token === undefined) continue;
+        const value = Number(token);
+        if (!/^\d+$/.test(token) || !Number.isSafeInteger(value) || value < minimum || value > MAX_FEN_COUNTER) {
+            return `The ${label} must be a whole number from ${minimum} to ${MAX_FEN_COUNTER.toLocaleString('en-US')}.`;
+        }
     }
     return describeSetupProblem(board, parts[1]);
 }

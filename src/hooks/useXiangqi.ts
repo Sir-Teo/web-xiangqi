@@ -163,14 +163,8 @@ function parseRootPositionFromFen(fen: string): RootPosition | null {
         const parts = fen.trim().split(/\s+/);
         const board = parseFenBoard(parts[0]);
         const side = parts[1] as Side;
-        const parsedFullmove = Number(parts[5]);
-        const fullmove = Number.isFinite(parsedFullmove) && parsedFullmove > 0
-            ? Math.trunc(parsedFullmove)
-            : 1;
-        const parsedHalfmove = Number(parts[4]);
-        const halfmove = Number.isFinite(parsedHalfmove) && parsedHalfmove > 0
-            ? Math.trunc(parsedHalfmove)
-            : 0;
+        const fullmove = parts[5] === undefined ? 1 : Number(parts[5]);
+        const halfmove = parts[4] === undefined ? 0 : Number(parts[4]);
         return {
             board,
             sideToMove: side,

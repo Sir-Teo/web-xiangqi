@@ -184,3 +184,17 @@ describe('readFenBoard', () => {
         expect(describeSetupProblem(read.board, read.sideToMove)).toBe(describeFenProblem(fen));
     });
 });
+
+describe('FEN move counters', () => {
+    const layout = START_POSITION_FEN.split(' ')[0];
+    it.each(['-12', '1.5', 'Infinity', 'NaN', '1e3', '0x10', '1000001', '9007199254740993'])('rejects invalid counters %s instead of silently resetting them', token => {
+        expect(describeFenProblem(`${layout} w - - ${token} 1`)).toMatch(/halfmove clock/);
+        expect(describeFenProblem(`${layout} w - - 0 ${token}`)).toMatch(/fullmove number/);
+    });
+    it('requires positive fullmove numbers and permits omitted counters', () => {
+        expect(describeFenProblem(`${layout} w - - 0 0`)).toMatch(/fullmove number/);
+        for (const suffix of ['w', 'w - -', 'w - - 0 1', 'b - - 999999 1000000']) {
+            expect(describeFenProblem(`${layout} ${suffix}`)).toBeNull();
+        }
+    });
+});
