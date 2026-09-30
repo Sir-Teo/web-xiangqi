@@ -6,6 +6,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
   try {
     for (const width of [1440, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900 });
+      await page.clock.install();
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       try {
@@ -110,6 +111,17 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.getByTestId('library-continuation-b9c7').scrollIntoViewIfNeeded();
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         await page.screenshot({ path: `/tmp/xiangqi-library-worker-${browserType.name()}-${width}.png` });
+        await publish('stalled');
+        await page.waitForFunction(() => window.__indexReplies.length === 6);
+        await page.clock.fastForward(30_001);
+        await page.getByTestId('library-explorer-status').filter({ hasText: 'unavailable' }).waitFor();
+        assert.equal(await page.evaluate(() => window.__indexWorkers[1].terminated), true);
+        await page.getByTestId('library-explorer-retry').click();
+        await page.waitForFunction(() => window.__indexWorkers.length === 3 && window.__indexReplies.length === 7);
+        await page.evaluate(() => window.__deliverIndex(5));
+        assert.equal(await page.getByTestId('library-continuation-b9c7').count(), 0, 'Timed-out reply was displayed');
+        await page.evaluate(() => window.__deliverIndex(6));
+        await page.getByTestId('library-continuation-b9c7').waitFor({ state: 'visible' });
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()}: 21 library versions used 1 worker/2 builds; stale replies, clearing, failure/recovery and layout passed at ${width}px`);
       } finally { await page.close(); }

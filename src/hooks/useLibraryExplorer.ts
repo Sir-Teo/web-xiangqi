@@ -6,12 +6,18 @@ import type { BoardState, Side } from '../utils/xiangqi';
 import { positionKey } from '../utils/repetition';
 import type { ExplorerRequest, ExplorerReply } from '../workers/positionExplorer.worker';
 
+export const LIBRARY_EXPLORER_TIMEOUT_MS = 30_000;
 const EMPTY_REPORT: LibraryPositionReport = { games: 0, moves: [], hits: [] };
 type Query = { requestId: number; games: SavedGame[]; board: BoardState; side: Side };
 
 /** Reuse the index worker; while busy, keep only the latest library/position query. */
 export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: Side, enabled = true) {
   const workerRef = useRef<Worker | null>(null);
+  const deadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearDeadline = useCallback(() => {
+    if (deadlineRef.current !== null) clearTimeout(deadlineRef.current);
+    deadlineRef.current = null;
+  }, []);
   const indexedSourceRef = useRef<SavedGame[] | null>(null);
   const latestRef = useRef<Query | null>(null);
   const pendingRef = useRef<Query | null>(null);
@@ -35,16 +41,18 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
 
   const failWorker = useCallback((worker: Worker) => {
     if (workerRef.current !== worker) return;
+    const source = latestRef.current?.games ?? inFlightRef.current?.games ?? indexedSourceRef.current;
+    clearDeadline();
     workerRef.current = null;
     indexedSourceRef.current = null;
     inFlightRef.current = null;
     pendingRef.current = null;
-    failedSourceRef.current = latestRef.current?.games ?? null;
+    failedSourceRef.current = source ?? null;
     setFailedSource(failedSourceRef.current);
     setResult(null);
     worker.onmessage = null;
     worker.terminate();
-  }, []);
+  }, [clearDeadline]);
 
   const dispatch = useCallback(() => {
     const worker = workerRef.current;
@@ -52,6 +60,8 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
     if (!worker || !query || inFlightRef.current) return;
     pendingRef.current = null;
     inFlightRef.current = query;
+    clearDeadline();
+    deadlineRef.current = setTimeout(() => failWorker(worker), LIBRARY_EXPLORER_TIMEOUT_MS);
     try {
       if (indexedSourceRef.current !== query.games) {
         // Resolve one primary line before transfer. Other variations and their
@@ -65,7 +75,7 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
       }
       worker.postMessage({ type: 'lookup', requestId: query.requestId, board: query.board, side: query.side } satisfies ExplorerRequest);
     } catch { failWorker(worker); }
-  }, [failWorker]);
+  }, [clearDeadline, failWorker]);
 
   useEffect(() => {
     if (!enabled) {
@@ -98,6 +108,7 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
           if (workerRef.current !== worker) return;
           const completed = inFlightRef.current;
           if (!completed || data?.requestId !== completed.requestId) return;
+          clearDeadline();
           inFlightRef.current = null;
           if (latestRef.current === completed) setResult({ ...data, source: completed.games });
           dispatch();
@@ -111,9 +122,10 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
       }
     }
     dispatch();
-  }, [games, board, side, enabled, retryVersion, dispatch, failWorker]);
+  }, [games, board, side, enabled, retryVersion, dispatch, failWorker, clearDeadline]);
 
   useEffect(() => () => {
+    clearDeadline();
     const worker = workerRef.current;
     workerRef.current = null;
     indexedSourceRef.current = null;
@@ -125,7 +137,7 @@ export function useLibraryExplorer(games: SavedGame[], board: BoardState, side: 
       // worker identity check prevents an abandoned worker updating the UI.
       worker.terminate();
     }
-  }, []);
+  }, [clearDeadline]);
 
   const current = result?.source === games && result.key === key;
   const status = !games.length ? 'ready' : failedSource === games ? 'error' : current ? 'ready' : 'loading';

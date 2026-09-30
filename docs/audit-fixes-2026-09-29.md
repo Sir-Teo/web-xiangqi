@@ -15,7 +15,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 11. [x] Preserve reviewed-game cursor
 12. [x] Preserve recovered library identity
 13. [x] Validate cloud numeric fields
-14. [ ] Timeout stalled library workers
+14. [x] Timeout stalled library workers
 15. [ ] Ignore repeated action shortcuts
 16. [ ] Serialize concurrent library mutations
 17. [ ] Isolate engine telemetry rendering
@@ -125,3 +125,9 @@ Validation: source/rename/conflict and envelope tests, browser save/edit/reload/
 Malformed scores and ranks no longer become plausible zero evaluations. Invalid percentages become unavailable, and PV numeric fields must match completely and remain safe integers. Valid entries can still be used when another entry is rejected.
 
 Validation: 35 cloud-book/PV tests, TypeScript, and ESLint.
+
+## 14. Timeout stalled library workers
+
+Each index/lookup request has a 30-second deadline. A stalled worker terminates and exposes Retry; completion, replacement, and unmount clean up timers, and late replies cannot publish. Hidden stalled requests remain recoverable when the explorer reopens.
+
+Validation: controlled worker browser checks at 1440, 390, and 320px, including timeout/retry/late replies; TypeScript and ESLint.
