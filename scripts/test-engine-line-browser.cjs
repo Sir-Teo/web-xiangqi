@@ -32,6 +32,10 @@ async function followEngineLine(browser, width) {
     ` }));
     await page.goto(base);
     await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Start engine analysis');
+    await page.keyboard.press('Enter');
+    await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     const keep = page.getByTestId('keep-engine-pv-0');
     await keep.waitFor();
@@ -88,6 +92,9 @@ async function followEngineLine(browser, width) {
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.length === 2);
     await page.reload();
     await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Start engine analysis');
+    await page.keyboard.press('Enter');
     assert.deepEqual(await boardState(), initial, 'Restoring kept lines moved the board');
     await page.keyboard.press('t');
     assert.equal(await page.locator('.mtree-chip').count(), 6, 'Restoring lost a kept variation');
@@ -120,6 +127,9 @@ async function followEngineLine(browser, width) {
     });
     await page.reload();
     await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Start engine analysis');
+    await page.keyboard.press('Enter');
     await page.keyboard.press('e');
     await keep.click();
     assert.match(await page.getByTestId('notice-announcement').innerText(), /Study limit reached/);
@@ -141,6 +151,9 @@ async function followEngineLine(browser, width) {
         game: { id: 'deep-study', savedAt: 1, gameMode: 'PvP', moves } }));
     });
     await page.reload(); await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Start engine analysis');
+    await page.keyboard.press('Enter');
     await page.keyboard.press('e'); await keep.click();
     assert.match(await page.getByTestId('notice-announcement').innerText(), /Line limit reached/);
     assert.deepEqual(await boardState(), initial);

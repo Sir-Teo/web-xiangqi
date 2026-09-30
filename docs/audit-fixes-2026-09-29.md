@@ -24,7 +24,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 20. [x] Skip duplicate autosave work
 21. [x] Move direct imports to a worker
 22. [x] Prepare library search off the typing path
-23. [ ] Defer engine download until requested
+23. [x] Defer engine download until requested
 24. [ ] Improve device resource classification
 25. [ ] Bound AI thinking time at every level
 26. [ ] Reduce initial bundle
@@ -181,3 +181,9 @@ Validation: cancellation/timeout/late-response browser test; delayed-file races;
 Library search text is prepared in short queued tasks as the panel opens. Keystrokes filter prepared strings; an in-progress message avoids false empty results while preparation finishes. Record identity and locale changes still invalidate the appropriate entries.
 
 Validation: controlled first-keystroke test proves zero text preparation during typing; 400-study cache benchmark at 4× CPU slowdown reports zero tree visits for warm queries; saved-analysis search at three widths and two text sizes; TypeScript and ESLint.
+
+## 23. Defer engine download until requested
+
+Opening the board, a shared study, or the library no longer starts Pikafish or preloads its loader. Explicit analysis controls, the phone Engine tab, post-game review, and AI play activate it. Desktop, phone and command-palette entry points explain the first-use download.
+
+Validation: zero loader/NNUE/WASM requests before activation at 1440, 390 and 320px; one loader request afterward; startup cancellation, telemetry isolation, and engine-line save/recovery/capacity workflows; TypeScript, ESLint and production build.

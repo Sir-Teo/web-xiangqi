@@ -23,6 +23,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         }};
       };` }));
     await page.goto(base);
+    await page.getByTestId('start-engine-analysis').click();
     await page.waitForFunction(() => typeof window.emitTestEngine === 'function');
     await page.keyboard.press('e');
     await page.getByTestId('engine-output-terminal').waitFor();

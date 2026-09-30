@@ -533,6 +533,11 @@ function App() {
   const [guideDismissed, setGuideDismissed] = useState(() => readStorage(BEGINNER_GUIDE_STORAGE_KEY) === 'true');
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
+  const [engineRequested, setEngineRequested] = useState(false);
+  const startEngineAnalysis = useCallback(() => {
+    setEngineRequested(true);
+    setWorkspaceMode('analysis');
+  }, []);
   const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
   const [leftWidth, setLeftWidth] = useState(() => initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH));
   const [rightWidth, setRightWidth] = useState(() => initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH));
@@ -941,7 +946,7 @@ function App() {
     return makeEnginePositionCommand(rootFen, currentLineMoves);
   }, [currentLineMoves, rootFen]);
   const isAiMode = gameMode !== 'PvP';
-  const engineEnabled = workspaceMode === 'analysis';
+  const engineEnabled = workspaceMode === 'analysis' && engineRequested;
   const aiPlayActive = workspaceMode === 'play' && isAiMode;
   const isAiTurn =
     aiPlayActive &&
@@ -2847,7 +2852,7 @@ function App() {
       ? 'Recovering Engine'
       : 'Engine Loading';
   const reviewStartTitle = !engineEnabled
-    ? 'Switch to Analysis to review this line'
+    ? 'Start engine analysis to review this line'
     : moveHistory.length === 0
       ? 'Play or import moves before running review'
       : !isReady
@@ -4517,6 +4522,8 @@ function App() {
   }, [activeLineNodeIds, canTakeBack, clearQueuedSearch, currentMoveIndex, handleDeleteNode, stopSearch, takeBackPlies]);
 
   const paletteCommands = useMemo<Command[]>(() => [
+    { id: 'start-engine-analysis', label: 'Start engine analysis', keywords: ['download', 'pikafish', 'activate'],
+      hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
     { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
     {
@@ -4856,7 +4863,7 @@ function App() {
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
     { id: 'go-last', label: 'Go to latest move', keywords: ['end', 'last'], shortcut: '↓', run: goToLatestMove },
     { id: 'settings', label: 'Settings', keywords: ['preferences', 'engine', 'options'], run: () => setShowSettings(true) },
-  ], [openAnalysisPanel, studyControlsDisabled, canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
+  ], [startEngineAnalysis, openAnalysisPanel, studyControlsDisabled, canPinStudyMainLine, mainLinePinned, openStudyMainLine, pinActiveStudyLine, unpinMainLine, viewingStudyMainLine, canCompareCandidates, openCandidatePicker, canKeepBestLine, handleKeepPvLine, aiPlayActive, board, canCopyRecord, showArrows, soundEnabled, handleSoundToggle, canDeepDive, canPlayBestMove, canStartDrill, canTakeBack, drillMoments.length, handlePlayPvLine, handleTakeBack, pieceStyle, takeBackPlies, topAnalysisPv, moveCommentTarget, canDeleteCurrentMove, canExportCurrentLine, canHint, canPlayFromHere, canShowThreat, canStartReview, cloudBookEnabled, currentNodeId, handleCopyRecord, handleDeleteNode, isAiTurn, notationStyle, playFromHere, reviewStartTitle, reviewStatus, runHint, startMistakeDrill, canSaveCurrentPosition, canShareCurrentPosition, deepDiveActive, deepSearchMode,
       runThreatSearch, sideToMove, sideToMoveLabel, stopThreat, threatActive, threatFen,
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
@@ -5416,11 +5423,11 @@ function App() {
     if (gameOverKey) {
       setDismissedGameOverKey(gameOverKey);
     }
-    setWorkspaceMode('analysis');
+    startEngineAnalysis();
     setAnalysisTab('review');
     setMobileView('analysis');
     setMobileAnalysisTab('review');
-  }, [gameOverKey]);
+  }, [gameOverKey, startEngineAnalysis]);
 
   // Board arrows: quality-colored last move + engine recommendation lines
   const selectBoardArrows = useMemo(createBoardArrowSelector, []);
@@ -5530,13 +5537,19 @@ function App() {
               <button
                 type="button"
                 className={`gc-pill ${workspaceMode === 'analysis' ? 'gc-pill-active' : ''}`}
-                onClick={() => setWorkspaceMode('analysis')}
+                onClick={startEngineAnalysis}
                 aria-pressed={workspaceMode === 'analysis'}
               >
                 Analysis
               </button>
             </div>
 
+            {!isMobile && !engineRequired && workspaceMode === 'analysis' && (
+              <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
+                title="Downloads about 53 MB on first use. Board editing and the library work without the engine.">
+                Start engine analysis
+              </button>
+            )}
             {engineRequired ? (
               <div
                 className={`top-engine-state ${engineNotice ? `top-engine-state-${engineNotice.tone}` : ''}`}
@@ -5711,7 +5724,7 @@ function App() {
                 id="settings-workspace-mode"
                 className="premium-select app-select"
                 value={workspaceMode}
-                onChange={(e) => setWorkspaceMode(e.target.value as WorkspaceMode)}
+                onChange={(e) => e.target.value === 'analysis' ? startEngineAnalysis() : setWorkspaceMode('play')}
               >
                 <option value="analysis">Analysis</option>
                 <option value="play">Play</option>
@@ -6617,6 +6630,10 @@ function App() {
               <div className="mobile-board-turn-info">
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
+                {!engineRequired && workspaceMode === 'analysis' && (
+                  <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
+                    aria-label="Start engine analysis" title="Downloads about 53 MB on first use">Analyze</button>
+                )}
                 {/* The phone's stand-in for the eval bar, so it reads the same
                     value, the stored one included when no line is live. */}
                 {engineEnabled && evalBarScore !== null && (
@@ -7212,13 +7229,14 @@ function App() {
             >
               <IconBarChart /> Review
             </button>
-            {engineEnabled ? (
+            {workspaceMode === 'analysis' ? (
               <button
                 type="button"
                 role="tab"
                 id="mobile-analysis-tab-engine"
                 className={`mobile-tab-btn ${mobileAnalysisTab === 'engine' ? 'active' : ''}`}
                 onClick={() => {
+                  startEngineAnalysis();
                   setAnalysisTab('engine');
                   setMobileAnalysisTab('engine');
                 }}
@@ -8219,7 +8237,7 @@ function App() {
               </div>
             ) : (
               <div className="bottom-engine-info" data-testid="play-status">
-                {hintText ?? 'Play mode'}
+                {hintText ?? (workspaceMode === 'analysis' ? 'Engine not started' : 'Play mode')}
                 {inCheck ? <span className="check-badge">CHECK</span> : null}
               </div>
             )}
