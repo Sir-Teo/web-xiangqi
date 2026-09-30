@@ -16,6 +16,16 @@ import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_POSITION_FEN } from './xiangqi';
 import type { GameMode } from '../App';
 
+export const MAX_SHARE_QUERY_LENGTH = 6000;
+export const MAX_SHARE_URL_LENGTH = 24000;
+const SHARE_FRAGMENT_PREFIX = '#share=1&';
+
+/** Long study payloads stay in the fragment, which HTTP requests do not send. */
+export function readShareParams(location: Pick<Location, 'search' | 'hash'>): URLSearchParams {
+  return new URLSearchParams(location.hash.startsWith(SHARE_FRAGMENT_PREFIX)
+    ? location.hash.slice(SHARE_FRAGMENT_PREFIX.length) : location.search);
+}
+
 export type ShareUrlBuildResult = {
   url: string;
   /** A tree was asked for and would not fit. The link is still valid without it. */
@@ -55,6 +65,14 @@ export function buildShareUrl(
   if (mainLinePinned && treeIncluded) url.searchParams.set('main', '1');
   if (mode !== 'PvP') {
     url.searchParams.set('mode', mode);
+  }
+  if (url.toString().length > MAX_SHARE_QUERY_LENGTH) {
+    const payload = url.searchParams.toString();
+    url.search = '';
+    url.hash = SHARE_FRAGMENT_PREFIX + payload;
+  }
+  if (url.toString().length > MAX_SHARE_URL_LENGTH) {
+    throw new RangeError('This study is too large for a share link. Export PGN to keep all of it.');
   }
   return {
     url: url.toString(),

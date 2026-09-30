@@ -87,7 +87,7 @@ import {
   parseThreatTag,
   type ReviewPhase,
 } from './utils/engineTags';
-import { buildShareUrl, moveTreeContainsLine } from './utils/shareUrl';
+import { buildShareUrl, moveTreeContainsLine, readShareParams } from './utils/shareUrl';
 import {
   formatRedPovEngineScore,
   normalizeEvalForFen,
@@ -3223,7 +3223,13 @@ function App() {
     const moveTree = hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves || currentLineMoves.length === 0)
       ? serializeSavedMoveTree(treeNodes, rootNodeId)
       : undefined;
-    const share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult);
+    let share: ReturnType<typeof buildShareUrl>;
+    try {
+      share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult);
+    } catch {
+      setShareLinkNotice({ tone: 'warning', text: 'Link not copied', detail: 'This study is too large for a share link. Export PGN to keep all of it.' });
+      return;
+    }
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
     if (!ok) {
@@ -4138,7 +4144,7 @@ function App() {
       });
     };
 
-    const params = new URLSearchParams(window.location.search);
+    const params = readShareParams(window.location);
     const rawFen = params.get('fen')?.trim() || undefined;
     const rawMoves = params.get('moves') || '';
     const rawTree = params.get('tree');
@@ -4949,7 +4955,7 @@ function App() {
 
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
-    const params = new URLSearchParams(window.location.search);
+    const params = readShareParams(window.location);
     const rawMoves = params.get('moves') ?? '';
     const hasLink = Boolean(rawMoves.trim() || params.get('tree') || params.get('fen') || params.get('note') || normalizeRecordedResult(params.get('rootResult')));
     if (!hasLink) return null;

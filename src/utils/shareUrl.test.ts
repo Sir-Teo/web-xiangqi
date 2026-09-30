@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildShareUrl, moveTreeContainsLine } from './shareUrl';
+import { buildShareUrl, moveTreeContainsLine, readShareParams, MAX_SHARE_URL_LENGTH } from './shareUrl';
 import { START_POSITION_FEN } from './xiangqi';
 import type { SavedMoveTreeNode } from './gameLibrary';
 
@@ -152,4 +152,40 @@ describe('a note survives the trip through the link', () => {
         expect(noteIn('line one\nline two')).toBe('line one line two');
         expect(noteIn('  padded  ')).toBe('padded');
     });
+});
+
+
+describe('large share links', () => {
+  it('keeps the complete study out of the HTTP request and reads it back', () => {
+    const moves = Array.from({ length: 240 }, (_, i) => ['b0c2', 'b9c7', 'c2b0', 'c7b9'][i % 4]);
+    let tree: SavedMoveTreeNode[] = [];
+    for (const uci of [...moves].reverse()) tree = [{ uci, ...(tree.length ? { children: tree } : {}) }];
+    let node = tree[0];
+    while (7990 - JSON.stringify(tree).length > 13) {
+      node.comment = 'x'.repeat(Math.min(500, 7990 - JSON.stringify(tree).length - 13));
+      node = node.children![0];
+    }
+    const result = buildShareUrl(HERE, START_POSITION_FEN, moves, 'PvP', tree, '棋'.repeat(500), true);
+    const url = new URL(result.url);
+    expect(result.treeOmitted).toBe(false);
+    expect(url.search).toBe('');
+    expect(url.hash).toMatch(/^#share=1&/);
+    expect(result.url.length).toBeLessThanOrEqual(MAX_SHARE_URL_LENGTH);
+    const received = readShareParams(url);
+    expect(received.get('moves')).toBe(moves.join(' '));
+    expect(received.get('note')).toBe('棋'.repeat(500));
+    expect(received.get('main')).toBe('1');
+    expect(received.get('tree')).toBeTruthy();
+    // URL fragments are excluded from an HTTP request target.
+    expect(url.pathname + url.search).toBe('/web-xiangqi/');
+  });
+
+  it('retains legacy query links and gives an explicit share fragment precedence', () => {
+    expect(readShareParams(new URL('https://example.test/?moves=h2e2#other')).get('moves')).toBe('h2e2');
+    expect(readShareParams(new URL('https://example.test/?moves=h2e2#share=1&moves=b0c2')).get('moves')).toBe('b0c2');
+  });
+
+  it('refuses an oversized complete URL rather than copying an unusable link', () => {
+    expect(() => buildShareUrl('https://example.test/' + 'x'.repeat(MAX_SHARE_URL_LENGTH), START_POSITION_FEN, [], 'PvP')).toThrow(/Export PGN/);
+  });
 });
