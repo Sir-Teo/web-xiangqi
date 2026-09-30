@@ -1,3 +1,4 @@
+import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
 import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
@@ -94,11 +95,7 @@ import {
   normalizeScoreBoundForSide,
   normalizeWdlForSide,
 } from './utils/engineScore';
-import {
-  formatEngineDepthLabel,
-  formatEngineTelemetry,
-  formatEngineTelemetryDetail,
-} from './utils/engineTelemetry';
+
 import type { HistoricalGame } from './utils/historicalGames';
 import { useGameReview } from './hooks/useGameReview';
 import { GameOverModal } from './components/GameOverModal';
@@ -583,7 +580,6 @@ function App() {
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
   const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
-  const engineOutputRef = useRef<HTMLDivElement | null>(null);
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 5);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
@@ -1213,9 +1209,9 @@ function App() {
     trimPvLines,
     clearWdl,
     setOption,
-    outputLines,
+    telemetry,
     pvLines,
-    searchStats,
+    getLatestPvLines,
     assetProgress,
   } = useEngine({
     enabled: engineRequired,
@@ -1500,32 +1496,6 @@ function App() {
     const target = strip?.querySelector<HTMLButtonElement>(`[data-breadcrumb-index="${next}"]`);
     target?.focus();
   }, []);
-
-  // A role="log" that does not follow its tail shows stale lines while the
-  // newest sit below the fold -- measured 42px out of view on desktop. The
-  // panel is display:none off-tab, so pinning while hidden writes scrollTop on
-  // a 0-height box and achieves nothing; re-pin when it is laid out, the same
-  // way the move list does.
-  const pinEngineOutput = useCallback(() => {
-    const el = engineOutputRef.current;
-    if (!el || el.clientHeight === 0) return;
-    el.scrollTop = el.scrollHeight;
-  }, []);
-
-  useEffect(() => { pinEngineOutput(); }, [pinEngineOutput, outputLines]);
-
-  useEffect(() => {
-    const el = engineOutputRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    let wasCollapsed = el.clientHeight === 0;
-    const observer = new ResizeObserver(() => {
-      const collapsed = el.clientHeight === 0;
-      if (wasCollapsed && !collapsed) pinEngineOutput();
-      wasCollapsed = collapsed;
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [pinEngineOutput, assistMode]);
 
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -2519,26 +2489,18 @@ function App() {
   useEffect(() => {
     setSpotlightPvIndex(null);
   }, [analysisRequestKey]);
-  const engineSearchDetail = useMemo(
-    () => formatEngineTelemetryDetail(
-      searchStats,
-      isSearchQueued,
-      isSearching,
-      isReady,
-    ),
-    [isReady, isSearchQueued, isSearching, searchStats]
-  );
   const topAnalysisPv = currentAnalysisPvLines[0] ?? null;
   const canPlayBestMove = engineEnabled && !isAiTurn && !gameResult && Boolean(topAnalysisPv?.moves[0]);
   const analysisForLine = useCallback((moves: string[]) => {
     const lines = candidateActive ? candidatePvLines : currentAnalysisPvLines;
-    const pv = lines.find(line => line.moves.length === moves.length && line.moves.every((move, i) => move === moves[i]));
-    if (!pv) return undefined;
+    const rendered = lines.find(line => line.moves.length === moves.length && line.moves.every((move, i) => move === moves[i]));
+    if (!rendered) return undefined;
+    const pv = getLatestPvLines().find(line => line.searchTag === rendered.searchTag && line.moves.length === moves.length && line.moves.every((move, i) => move === moves[i])) ?? rendered;
     return captureStudyAnalysis(pv, sideToMove, currentPositionCommand, {
       name: engineName || 'Pikafish (version not reported)', variant: engineVariant,
       threads: engineVariant.startsWith('single') ? 1 : engineBootConfig.threads, hashMB: engineBootConfig.hashMB,
     }, candidateActive ? candidateSearch!.moves.length : analysisMultiPv, candidateActive ? candidateSearch!.moves : undefined);
-  }, [analysisMultiPv, candidateActive, candidatePvLines, candidateSearch, currentAnalysisPvLines, currentPositionCommand,
+  }, [getLatestPvLines, analysisMultiPv, candidateActive, candidatePvLines, candidateSearch, currentAnalysisPvLines, currentPositionCommand,
     engineBootConfig.hashMB, engineBootConfig.threads, engineName, engineVariant, sideToMove]);
   const isAnalysisLineKept = useCallback((moves: string[]) => {
     if (!hasMoveTreeLine(treeNodes, currentNodeId, moves)) return false;
@@ -2546,10 +2508,6 @@ function App() {
     return sameStudyAnalysis(first ? treeNodes[first]?.record?.analysis : undefined, analysisForLine(moves));
   }, [analysisForLine, currentNodeId, treeNodes]);
   const canKeepBestLine = isReady && canPlayBestMove && reviewStatus !== 'running' && !isAnalysisLineKept(topAnalysisPv?.moves ?? []);
-  const visibleEngineOutputLineCount = Math.min(outputLines.length, 20);
-  const engineOutputTerminalLabel = visibleEngineOutputLineCount > 0
-    ? `Raw engine UCI output, showing latest ${visibleEngineOutputLineCount} ${visibleEngineOutputLineCount === 1 ? 'line' : 'lines'}`
-    : 'Raw engine UCI output, waiting for engine output';
   const coachBestMoveText = topAnalysisPv?.moves[0]
     ? formatLineInStyle(board, [topAnalysisPv.moves[0]], notationStyle, 1)
     : isSearchQueued || isSearching
@@ -7892,22 +7850,11 @@ function App() {
                       <strong>{analysisEngineMode}</strong>
                       <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
                     </div>
-                    <div
-                      className={`engine-stat${analysisIsStalled ? ' engine-stat-stalled' : ''}`}
-                      title={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
-                      aria-label={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : engineSearchDetail}
-                    >
-                      <span>Search</span>
-                      {/* Depth from a search that has been stopped is stale, and
-                          reading it beside a board that is not moving is what
-                          made a backgrounded tab look broken. */}
-                      <strong data-testid="engine-search-status">{engineRecoveryNotice?.text ?? (analysisIsStalled
-                        ? formatAnalysisActivity(analysisActivity)
-                        : formatEngineDepthLabel(searchStats, isSearchQueued, isSearching, isReady))}</strong>
-                      <em>{engineRecoveryNotice ? engineRecoveryHint : candidateActive ? candidateSearch!.budgetLabel : analysisIsStalled
-                        ? 'tab in background'
-                        : formatEngineTelemetry(searchStats, isSearchQueued, isSearching)}</em>
-                    </div>
+                    <EngineSearchTelemetry store={telemetry} ready={isReady} queued={isSearchQueued} searching={isSearching} stalled={analysisIsStalled}
+                      detail={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : undefined}
+                      label={engineRecoveryNotice?.text ?? (analysisIsStalled ? formatAnalysisActivity(analysisActivity) : undefined)}
+                      secondary={engineRecoveryNotice ? engineRecoveryHint : candidateActive ? candidateSearch!.budgetLabel : analysisIsStalled ? 'tab in background' : undefined}
+                    />
                     <div className="engine-stat">
                       <span>Detail</span>
                       <strong>{`MultiPV ${candidateActive ? candidateSearch!.moves.length : analysisMultiPv}`}</strong>
@@ -7915,21 +7862,7 @@ function App() {
                     </div>
                   </div>
                   {assistMode === 'pro' ? (
-                    <div
-                      className="engine-output-terminal"
-                      ref={engineOutputRef}
-                      role="log"
-                      aria-label={engineOutputTerminalLabel}
-                      aria-live="off"
-                      aria-relevant="additions text"
-                      title={engineOutputTerminalLabel}
-                      data-testid="engine-output-terminal"
-                    >
-                      {outputLines.slice(-20).map((line, i) => (
-                        <div key={i}>{line}</div>
-                      ))}
-                      {outputLines.length === 0 && <div>Waiting for engine output...</div>}
-                    </div>
+                    <EngineOutput store={telemetry} />
                   ) : candidateActive ? null : (
                     <div className="engine-coach-summary">
                       <div className="engine-coach-item">

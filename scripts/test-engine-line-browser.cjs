@@ -69,6 +69,7 @@ async function followEngineLine(browser, width) {
     await page.keyboard.press('ControlOrMeta+k');
     await page.getByRole('combobox').fill('Save game');
     await page.keyboard.press('Enter');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length > 0);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1'))[0]);
     assert.deepEqual(saved.moves, [], 'Save moved the study cursor away from the root');
     const treeLine = node => [node.uci, ...(node.children?.length ? treeLine(node.children[0]) : [])];
@@ -105,6 +106,7 @@ async function followEngineLine(browser, width) {
 
     // A full study must remain recoverable after rejecting an oversized addition.
     await page.addInitScript(() => {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('xiangqi:recovery-draft:v1:')) localStorage.removeItem(key);
       const roots = ['h2c2','h2d2','b2b3','h2f2','h2g2','h2i2','b2a2','b2c2','b2d2','b2e2','b2f2','b2g2','h2h3','h2h4','h2h5','h2h6'];
       const children = roots.map(uci => {
         let children = [];
@@ -125,6 +127,7 @@ async function followEngineLine(browser, width) {
     await page.keyboard.press('ControlOrMeta+k');
     await page.getByRole('combobox').fill('Save game');
     await page.keyboard.press('Enter');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').some(game => game.moveTree?.[0]?.uci === 'h2c2'));
     const fullStudy = JSON.parse(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('xiangqi:library:v1'))
       .find(game => game.moveTree?.[0]?.uci === 'h2c2') ?? null)));
     assert.ok(fullStudy, 'The study could not be saved after rejecting the line');
@@ -132,6 +135,7 @@ async function followEngineLine(browser, width) {
     assert.equal(treeLine(fullStudy.moveTree[0]).length, 512);
     // The total-node allowance must not let engine lines exceed history depth.
     await page.addInitScript(() => {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('xiangqi:recovery-draft:v1:')) localStorage.removeItem(key);
       const moves = Array.from({ length: 1024 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]);
       localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify({ version: 1, savedAt: 1,
         game: { id: 'deep-study', savedAt: 1, gameMode: 'PvP', moves } }));

@@ -1,3 +1,5 @@
+import { samePvReading } from '../utils/samePvReading';
+import { createEngineTelemetryStore, type EngineTelemetryStore } from '../utils/engineTelemetryStore';
 import type { EvaluationScoreKind } from '../utils/engineEvalReading';
 import { parseScoreBound, type ScoreBound } from '../utils/engineScore';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -204,10 +206,10 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [engineName, setEngineName] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [variant, setVariant] = useState<string>('unknown');
-    const [outputLines, setOutputLines] = useState<string[]>([]);
+    const telemetryRef = useRef<EngineTelemetryStore | null>(null);
+    if (!telemetryRef.current) telemetryRef.current = createEngineTelemetryStore();
     const [pvLines, setPvLines] = useState<PvLine[]>([]);
-    const [wdl, setWdl] = useState<WdlStats | null>(null);
-    const [searchStats, setSearchStats] = useState<EngineSearchStats | null>(null);
+    const wdlRef = useRef<WdlStats | null>(null);
     const [isSearchQueued, setIsSearchQueued] = useState(false);
     /**
      * How far the engine's 53MB weights have got. Null before the first byte
@@ -221,6 +223,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const onWorkerErrorRef = useRef(options.onWorkerError);
     const outputLinesRef = useRef<string[]>([]);
     const pvLinesRef = useRef<PvLine[]>([]);
+    const getLatestPvLines = useCallback(() => pvLinesRef.current, []);
     const pvSlotRef = useRef<Record<number, PvLine>>({});
     /**
      * The evaluation this search has most recently read, handed to
@@ -319,7 +322,7 @@ export function useEngine(options: EngineInitOptions = {}) {
     const commitOutputLines = useCallback((nextLines: string[]) => {
         const trimmed = nextLines.slice(-OUTPUT_LINE_LIMIT);
         outputLinesRef.current = trimmed;
-        setOutputLines(trimmed);
+        telemetryRef.current!.setOutput(trimmed);
     }, []);
 
     const appendOutputLine = useCallback((line: string) => {
@@ -356,7 +359,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         }
 
         if (pendingWdlRef.current !== null) {
-            setWdl(pendingWdlRef.current);
+            wdlRef.current = pendingWdlRef.current;
             pendingWdlRef.current = null;
         }
 
@@ -365,7 +368,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             // UCI info messages can update only some counters. Keep the other
             // readings from this search across flushes; clearSearchStats resets
             // them when the next search starts.
-            setSearchStats(previous => ({ ...previous, ...update }));
+            telemetryRef.current!.setStats(previous => ({ ...previous, ...update }));
             pendingSearchStatsRef.current = null;
         }
 
@@ -373,7 +376,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             pvDirtyRef.current = false;
             const sorted = Object.values(pvSlotRef.current).sort((a, b) => (a.multipv ?? 0) - (b.multipv ?? 0));
             pvLinesRef.current = sorted;
-            setPvLines(sorted);
+            setPvLines(previous => samePvReading(previous, sorted) ? previous : sorted);
         }
     }, [commitOutputLines]);
 
@@ -386,7 +389,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const clearSearchStats = useCallback(() => {
         pendingSearchStatsRef.current = null;
-        setSearchStats(null);
+        telemetryRef.current!.setStats(null);
     }, []);
 
     const clearEngineReadyTimer = useCallback(() => {
@@ -426,7 +429,7 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const clearWdl = useCallback(() => {
         pendingWdlRef.current = null;
-        setWdl(null);
+        wdlRef.current = null;
     }, []);
 
     const sendCommand = useCallback((cmd: string) => {
@@ -528,7 +531,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvLinesRef.current = [];
         pvDirtyRef.current = false;
         setPvLines([]);
-        setWdl(null);
+        wdlRef.current = null;
         clearSearchStats();
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
@@ -602,7 +605,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         setAssetProgress(null);
         setIsReady(false);
         setIsSearching(false);
-        setSearchStats(null);
+        telemetryRef.current!.setStats(null);
         setVariant('unknown');
         setEngineName(null);
 
@@ -619,7 +622,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             activeSearchSignatureRef.current = '';
             activeSearchTagRef.current = null;
             clearQueuedSearch();
-            setSearchStats(null);
+            telemetryRef.current!.setStats(null);
             stopRequestedRef.current = false;
             onWorkerErrorRef.current?.(`[boot-error] Pikafish did not finish booting within ${Math.ceil(readyTimeoutMs / 1000)}s.`);
         }, readyTimeoutMs);
@@ -693,7 +696,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                     activeSearchSignatureRef.current = '';
                     activeSearchTagRef.current = null;
                     clearQueuedSearch();
-                    setSearchStats(null);
+                    telemetryRef.current!.setStats(null);
                     stopRequestedRef.current = false;
                     onWorkerErrorRef.current?.(`[worker-error] Pikafish did not become ready within ${Math.ceil(readyTimeoutMs / 1000)}s.`);
                 }, readyTimeoutMs);
@@ -731,12 +734,12 @@ export function useEngine(options: EngineInitOptions = {}) {
             setIsSearching(false);
             isSearchingRef.current = false;
             setVariant('disabled');
-            setOutputLines([]);
+            telemetryRef.current!.setOutput([]);
             setPvLines([]);
-            setWdl(null);
+            wdlRef.current = null;
             publishedAssetProgressRef.current = null;
             setAssetProgress(null);
-            setSearchStats(null);
+            telemetryRef.current!.setStats(null);
         };
 
         if (!enabled) {
@@ -885,7 +888,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             activeSearchSignatureRef.current = '';
             activeSearchTagRef.current = null;
             clearQueuedSearch();
-            setSearchStats(null);
+            telemetryRef.current!.setStats(null);
             stopRequestedRef.current = false;
             onWorkerErrorRef.current?.(msg);
         } else if (msg.startsWith('bestmove')) {
@@ -1071,10 +1074,10 @@ export function useEngine(options: EngineInitOptions = {}) {
         clearWdl,
         setOption,
         sendCommand,
-        outputLines,
+        telemetry: telemetryRef.current,
         pvLines,
-        wdl,
-        searchStats,
+        getLatestPvLines,
+        wdl: wdlRef.current,
         assetProgress,
     };
 }

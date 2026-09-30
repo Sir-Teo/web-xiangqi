@@ -18,7 +18,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 14. [x] Timeout stalled library workers
 15. [x] Ignore repeated action shortcuts
 16. [x] Serialize concurrent library mutations
-17. [ ] Isolate engine telemetry rendering
+17. [x] Isolate engine telemetry rendering
 18. [ ] Narrow tree-derived invalidation
 19. [ ] Avoid whole-library mutation/reload costs
 20. [ ] Skip duplicate autosave work
@@ -145,3 +145,9 @@ Validation: browser key-down/repeat/up checks for board flip, command palette, a
 Every UI library mutation now runs under an origin-wide Web Lock, with an IndexedDB transaction fallback. Queued operations read the latest library only after acquiring the lock. Save/import submission guards prevent duplicate requests; late save completion cannot attach an old study to a newly opened board.
 
 Validation: simultaneous two-tab saves under both coordination mechanisms, recovery/update, rename/delete focus at three widths, backup restore, PGN collection import, all 2,092 unit tests, TypeScript, and ESLint.
+
+## 17. Isolate engine telemetry rendering
+
+Search counters and raw logs now update subscribed leaf components rather than App state. Effort-only PV updates reuse the board reading, while explicit Keep Line captures the latest effort. Recommendations, score changes, bounds, and WDL changes still publish normally.
+
+Validation: instrumented browser recorded zero App renders across four counter/log flushes; engine-line keep/replay/save/recovery on desktop and phone; 2,099 unit tests, TypeScript, and ESLint. Existing browser assertions now await asynchronous library persistence.
