@@ -39,6 +39,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__boots === 1);
         await page.keyboard.press('e');
+        await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
         await page.getByTestId('restart-engine-btn').click();
         await page.waitForFunction(() => window.__boots === 2);
         assert.deepEqual(await page.evaluate(() => window.__aborted), [0], 'Restart did not cancel its pending predecessor');

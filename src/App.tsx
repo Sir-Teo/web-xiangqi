@@ -5880,6 +5880,9 @@ function App() {
               </div>
             </div>
 
+            <details className="engine-advanced settings-engine-advanced" data-testid="advanced-engine-settings">
+              <summary>Advanced engine settings</summary>
+              <p className="settings-hint">Tune search depth, CPU and memory. Device defaults work without adjustment.</p>
             <div className="settings-group">
               <span id="settings-analysis-engine-label" className="settings-label">Analysis Engine</span>
               <div className="settings-inline-toggles" role="group" aria-labelledby="settings-analysis-engine-label">
@@ -6017,6 +6020,8 @@ function App() {
                 Restore automatic thread and hash choices for this device. Changing resources restarts the engine.
               </p>
             </div>
+
+            </details>
 
             {isAiMode && (
               <div className="settings-group">
@@ -7642,6 +7647,10 @@ function App() {
                       >
                         <IconBarChart aria-hidden="true" /> Compare
                       </button>
+                      <details className="engine-advanced" data-testid="advanced-engine-maintenance">
+                        <summary>Engine maintenance</summary>
+                        <p>Restart a stalled engine or clear remembered search positions.</p>
+                        <div className="engine-advanced-actions">
                       <button
                         type="button"
                         className="engine-cache-btn"
@@ -7664,6 +7673,8 @@ function App() {
                       >
                         {engineHashFeedback === 'queued' ? <><IconRefresh aria-hidden="true" focusable="false" /> Queued</> : engineHashFeedback === 'cleared' ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
                       </button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                   {engineRecoveryNotice ? (

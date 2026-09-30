@@ -35,7 +35,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 31. [x] Keep board context in phone analysis
 32. [x] Offer notation-aware board coordinates
 33. [x] Distinguish advantage from win probability
-34. [ ] Group advanced engine controls
+34. [x] Group advanced engine controls
 35. [ ] Offer comfortable UI density
 36. [ ] Show persistent save/modified state
 37. [ ] Track study modification dates
@@ -247,3 +247,9 @@ Validation: notation mapping tests and all three styles in both orientations at 
 The evaluation bar announces a normalized advantage indicator out of 100 and explains that the centipawn transform is not a calibrated win probability. Review loss and practice feedback use advantage wording; engine-provided WDL remains separate.
 
 Validation: 64 evaluation/review/graph tests, TypeScript and ESLint; browser expectations updated to the explicit indicator wording.
+
+## 34. Group advanced engine controls
+
+Restart and hash clearing live in an Engine maintenance disclosure. Search policy, depth and resources are grouped under Advanced engine settings with a device-defaults explanation. Primary analysis actions remain visible.
+
+Validation: restart/disable during pending boot on desktop and phone; collapsed resources and expanded controls at three widths; TypeScript and ESLint.
