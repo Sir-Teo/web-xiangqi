@@ -476,6 +476,20 @@ export interface LibraryState {
     raw: string | null;
 }
 
+// Saved records are immutable. Keep their identity (and downstream search /
+// explorer caches) across unrelated writes. Storage is still read under the
+// mutation lock, so another tab's writes always invalidate this snapshot.
+const libraryCache = new WeakMap<Storage, LibraryState>();
+const serializedGames = new WeakMap<SavedGame, string>();
+function serializeGame(game: SavedGame): string {
+    let text = serializedGames.get(game);
+    if (text === undefined) {
+        text = JSON.stringify(game);
+        serializedGames.set(game, text);
+    }
+    return text;
+}
+
 export function loadLibraryState(): LibraryState {
     let raw: string | null = null;
     try {
@@ -486,15 +500,28 @@ export function loadLibraryState(): LibraryState {
             raw = localStorage.getItem(LEGACY_STORAGE_KEYS[GAME_LIBRARY_STORAGE_KEY]);
             if (raw !== null) readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
         }
-        if (raw === null) return { games: [], mutationBlocked: false, raw };
+        const cached = libraryCache.get(localStorage);
+        if (cached?.raw === raw) return cached;
+        if (raw === null) {
+            const state = { games: [], mutationBlocked: false, raw };
+            libraryCache.set(localStorage, state);
+            return state;
+        }
         if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
             return { games: [], mutationBlocked: true, raw };
         }
         const parsed: unknown = JSON.parse(raw);
         if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true, raw };
-        const games = normalizeSavedGames(parsed);
+        const previous = new Map(cached?.games.map(game => [game.id, game]));
+        const games = parsed.flatMap((record: unknown) => {
+            const existing = isRecord(record) && typeof record.id === 'string' ? previous.get(record.id) : undefined;
+            const game = existing && serializeGame(existing) === JSON.stringify(record) ? existing : normalizeSavedGame(record);
+            return game ? [game] : [];
+        }).sort((a, b) => a.savedAt - b.savedAt).slice(-MAX_SAVED_GAMES);
         const duplicateIds = new Set(games.map(game => game.id)).size !== games.length;
-        return { games, mutationBlocked: games.length !== parsed.length || duplicateIds, raw };
+        const state = { games, mutationBlocked: games.length !== parsed.length || duplicateIds, raw };
+        libraryCache.set(localStorage, state);
+        return state;
     } catch {
         return { games: [], mutationBlocked: true, raw };
     }
@@ -508,10 +535,11 @@ function readAll(): SavedGame[] {
 
 function writeAll(games: SavedGame[]): boolean {
     try {
-        const serialized = JSON.stringify(games);
+        const serialized = `[${games.map(serializeGame).join(',')}]`;
         // Never report success for data the next read would refuse.
         if (serialized.length > MAX_LIBRARY_JSON_LENGTH) return false;
         localStorage.setItem(GAME_LIBRARY_STORAGE_KEY, serialized);
+        libraryCache.set(localStorage, { games: [...games].sort((a, b) => a.savedAt - b.savedAt), mutationBlocked: false, raw: serialized });
         return true;
     } catch {
         return false;
@@ -538,7 +566,7 @@ export function createSavedGameId() {
  * order, and noted because the line looks load-bearing and is not.
  */
 export function loadAllGames(): SavedGame[] {
-    return readAll().sort((a, b) => b.savedAt - a.savedAt);
+    return [...readAll()].sort((a, b) => b.savedAt - a.savedAt);
 }
 
 export type SaveGameResult =

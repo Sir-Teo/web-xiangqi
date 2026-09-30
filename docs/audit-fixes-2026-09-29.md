@@ -20,7 +20,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 16. [x] Serialize concurrent library mutations
 17. [x] Isolate engine telemetry rendering
 18. [x] Narrow tree-derived invalidation
-19. [ ] Avoid whole-library mutation/reload costs
+19. [x] Avoid whole-library mutation/reload costs
 20. [ ] Skip duplicate autosave work
 21. [ ] Move direct imports to a worker
 22. [ ] Prepare library search off the typing path
@@ -157,3 +157,9 @@ Validation: instrumented browser recorded zero App renders across four counter/l
 A separate immutable move-structure snapshot changes only when moves or main-line order change. Notes and stored evaluations no longer invalidate path signatures, opening lookups, branch counts, notation callbacks, or FEN clocks.
 
 Validation: structural identity browser regression; main-line and halfmove-clock suites at 1440, 390, and 320px; focused unit tests, TypeScript, and ESLint. Save assertions await asynchronous persistence.
+
+## 19. Avoid whole-library mutation/reload costs
+
+Library reads reuse validated snapshots while storage is unchanged. Mutations serialize only changed records and publish the resulting state directly; unchanged records retain their search and explorer caches, including across external edits. The bounded JSON library remains one atomic storage write. Failed writes never publish cached success.
+
+Validation: cache identity, external modification, corrupt data and quota regressions; 52 focused tests, two-tab saves under Web Locks and IndexedDB, TypeScript, and ESLint.
