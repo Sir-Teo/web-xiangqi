@@ -135,3 +135,30 @@ describe('saved study practice', () => {
     expect(preparePracticeStudy(game({ moveTree: [loop] })).error).toMatch(/circular/);
   });
 });
+
+describe('shared practice paths', () => {
+  it('matches an alternate move without materializing other full lines', () => {
+    const study = preparePracticeStudy(branched).study!;
+    for (let index = 1; index < study.lines.length; index++) {
+      Object.defineProperty(study.lines, index, { get: () => { throw Error('Unrelated full line was read'); } });
+    }
+    expect(practiceLineIndices(study, 'b')).toEqual([0, 1, 2]);
+    const chosen = attemptPracticeMove(study, startPracticeLine(study, 0), 'w', 'b2e2');
+    expect(chosen.matched).toBe(true);
+    expect(chosen.session.line).toBe(2);
+    expect(practiceComplete(study, chosen.session)).toBe(false);
+  });
+  it('retains different notes when duplicate prefixes lead to different lines', () => {
+    const study = preparePracticeStudy(game({ moveTree: [
+      { uci: 'h2e2', comment: 'First explanation', children: [{ uci: 'h9g7' }] },
+      { uci: 'h2e2', comment: 'Second explanation', children: [{ uci: 'b9c7' }] },
+    ] })).study!;
+    expect(study.notes[0][0].comment).toBe('First explanation');
+    expect(study.notes[1][0].comment).toBe('Second explanation');
+    expect(study.notes[0][0].comment).toBe('First explanation');
+    const first = attemptPracticeMove(study, startPracticeLine(study, 0), 'w', 'h2e2').session;
+    const alternative = attemptPracticeMove(study, first, 'b', 'b9c7');
+    expect(alternative.session.line).toBe(1);
+    expect(practiceComplete(study, alternative.session)).toBe(true);
+  });
+});

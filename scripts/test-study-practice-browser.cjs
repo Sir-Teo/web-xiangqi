@@ -221,6 +221,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
     const ai = await browser.newPage();
     await setup(ai); await ai.addInitScript(() => { window.__holdAiMove = true; });
     await ai.goto(base + '?moves=h2e2&mode=PvAI-Black');
+    await ai.getByTestId('start-engine-analysis').click();
     await ai.getByRole('button', { name: 'Open game library' }).waitFor();
     await ai.keyboard.press('ControlOrMeta+k');
     await ai.getByRole('combobox', { name: 'Search commands' }).fill('Settings'); await ai.keyboard.press('Enter');

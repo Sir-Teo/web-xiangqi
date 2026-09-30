@@ -5,7 +5,14 @@ import { normalizeMoveComment } from './moveComment';
 import { START_POSITION_FEN, cloneBoardState, otherSide, parseFenBoard, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
 export interface PracticeStudyNote { ply: number; move?: string; comment: string }
-export interface PracticeStudy { board: BoardState; side: Side; lines: string[][]; notes: PracticeStudyNote[][] }
+interface PracticeTrie { children: Map<string, PracticeTrie>; parent?: PracticeTrie; line?: number; firstLine: number }
+interface PracticePath { move: string; parent?: PracticePath; note?: PracticeStudyNote; length: number }
+export interface PracticeStudy {
+  board: BoardState; side: Side;
+  /** Only the currently requested line is materialized; prefixes stay shared. */
+  lines: string[][]; notes: PracticeStudyNote[][];
+  lineLengths: number[]; root: PracticeTrie;
+}
 export interface PracticeSession {
   board: BoardState;
   side: Side;
@@ -43,46 +50,74 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       for (let i = game.moves.length - 1; i >= 0; i--) roots = [{ uci: game.moves[i], children: roots }];
     }
     if (!roots.length) return fail('Save a game or variation with moves to practice it.');
-    const lines: Array<{ moves: string[]; notes: PracticeStudyNote[] }> = [];
-    const path: string[] = [];
-    const pathNotes: Array<PracticeStudyNote | undefined> = [];
+    const root: PracticeTrie = { children: new Map(), firstLine: Infinity };
+    const trieNodes = [root];
+    const ends = new Map<PracticeTrie, PracticePath>();
     const rootComment = normalizeMoveComment(game.rootComment);
     const rootNotes: PracticeStudyNote[] = rootComment ? [{ ply: 0, comment: rootComment }] : [];
     const ancestors = new Set<SavedMoveTreeNode>();
-    const stack: Array<{ nodes: SavedMoveTreeNode[]; index: number; board: BoardState; side: Side; owner?: SavedMoveTreeNode }> = [
-      { nodes: roots, index: 0, board, side },
+    const stack: Array<{ nodes: SavedMoveTreeNode[]; index: number; board: BoardState; side: Side;
+      owner?: SavedMoveTreeNode; path?: PracticePath; trie: PracticeTrie }> = [
+      { nodes: roots, index: 0, board, side, trie: root },
     ];
     let visited = 0;
     while (stack.length) {
       const frame = stack[stack.length - 1];
       if (frame.index === frame.nodes.length) {
         stack.pop();
-        if (frame.owner) { ancestors.delete(frame.owner); path.pop(); pathNotes.pop(); }
+        if (frame.owner) ancestors.delete(frame.owner);
         continue;
       }
       const node = frame.nodes[frame.index++];
-      if (path.length >= MAX_SAVED_MOVES) return fail('This line has too many moves to practice.');
+      const depth = (frame.path?.length ?? 0) + 1;
+      if (depth > MAX_SAVED_MOVES) return fail('This line has too many moves to practice.');
       if (++visited > MAX_SAVED_TREE_NODES || ancestors.has(node)) return fail('This study has too many moves or a circular variation.');
       const next = movedBoard(frame.board, node.uci, frame.side);
-      if (!next) return fail(`Saved move ${node.uci} at ply ${path.length + 1} is illegal. Correct the study before practicing.`);
-      path.push(node.uci);
+      if (!next) return fail(`Saved move ${node.uci} at ply ${depth} is illegal. Correct the study before practicing.`);
       const comment = normalizeMoveComment(node.comment);
-      pathNotes.push(comment ? { ply: path.length, move: node.uci, comment } : undefined);
+      const path: PracticePath = { move: node.uci, parent: frame.path, length: depth,
+        note: comment ? { ply: depth, move: node.uci, comment } : undefined };
+      let trie = frame.trie.children.get(node.uci);
+      if (!trie) {
+        trie = { children: new Map(), parent: frame.trie, firstLine: Infinity };
+        frame.trie.children.set(node.uci, trie); trieNodes.push(trie);
+      }
       if (node.children?.length) {
         ancestors.add(node);
-        stack.push({ nodes: node.children, index: 0, board: next, side: otherSide(frame.side), owner: node });
-      } else {
-        lines.push({ moves: [...path], notes: [...rootNotes, ...pathNotes.filter((note): note is PracticeStudyNote => Boolean(note))] });
-        path.pop(); pathNotes.pop();
-      }
+        stack.push({ nodes: node.children, index: 0, board: next, side: otherSide(frame.side), owner: node, path, trie });
+      } else ends.set(trie, path);
     }
-    const unique = [...new Map(lines.map(line => [line.moves.join(' '), line])).values()];
-    return { study: { board, side, lines: unique.map(line => line.moves), notes: unique.map(line => line.notes) }, error: null };
+    const leaves = [...ends.values()];
+    [...ends.keys()].forEach((trie, index) => { trie.line = index; trie.firstLine = index; });
+    // A subtree's earliest line lets matching prune unrelated continuations.
+    for (let i = trieNodes.length - 1; i > 0; i--) {
+      const node = trieNodes[i];
+      node.parent!.firstLine = Math.min(node.parent!.firstLine, node.firstLine);
+    }
+    let cachedIndex = -1;
+    let cachedMoves: string[] = [];
+    let cachedNotes: PracticeStudyNote[] = [];
+    const materialize = (index: number) => {
+      if (cachedIndex === index) return;
+      const path: PracticePath[] = [];
+      for (let node: PracticePath | undefined = leaves[index]; node; node = node.parent) path.push(node);
+      path.reverse();
+      cachedMoves = path.map(node => node.move);
+      cachedNotes = [...rootNotes, ...path.flatMap(node => node.note ? [node.note] : [])];
+      cachedIndex = index;
+    };
+    const lines: string[][] = new Array(leaves.length);
+    const notes: PracticeStudyNote[][] = new Array(leaves.length);
+    leaves.forEach((_, index) => {
+      Object.defineProperty(lines, index, { enumerable: true, configurable: true, get: () => { materialize(index); return cachedMoves; } });
+      Object.defineProperty(notes, index, { enumerable: true, configurable: true, get: () => { materialize(index); return cachedNotes; } });
+    });
+    return { study: { board, side, lines, notes, lineLengths: leaves.map(node => node.length), root }, error: null };
   } catch { return fail('This saved study could not be read. Load and correct it before practicing.'); }
 }
 
 export function practiceLineIndices(study: PracticeStudy, side: Side): number[] {
-  return study.lines.flatMap((line, index) => side === study.side || line.length > 1 ? [index] : []);
+  return study.lineLengths.flatMap((length, index) => side === study.side || length > 1 ? [index] : []);
 }
 
 export function startPracticeLine(study: PracticeStudy, line: number, previous?: PracticeSession): PracticeSession {
@@ -92,14 +127,14 @@ export function startPracticeLine(study: PracticeStudy, line: number, previous?:
 }
 
 export function practiceComplete(study: PracticeStudy, session: PracticeSession): boolean {
-  return session.moves.length === study.lines[session.line]?.length;
+  return session.moves.length === study.lineLengths[session.line];
 }
 
 function advance(study: PracticeStudy, session: PracticeSession, uci: string, line: number): PracticeSession {
   const board = movedBoard(session.board, uci, session.side);
   if (!board) return session;
   const moves = [...session.moves, uci];
-  const completed = moves.length === study.lines[line].length
+  const completed = moves.length === study.lineLengths[line]
     ? [...new Set([...session.completed, line])] : session.completed;
   return { ...session, board, side: otherSide(session.side), moves, line, completed, assisted: false };
 }
@@ -108,12 +143,24 @@ export function attemptPracticeMove(study: PracticeStudy, session: PracticeSessi
   if (session.side !== side || practiceComplete(study, session)) return { session, message: 'Play the saved reply or start another line.', matched: false };
   const checked = validateMoveStr(uci, session.board, side);
   if (!checked.ok) return { session, message: formatMoveRuleHint(checked.reason), matched: false };
-  const candidates = study.lines.flatMap((line, index) => line[session.moves.length] === uci
-    && session.moves.every((move, ply) => line[ply] === move) ? [index] : []);
-  if (!candidates.length) return { session: { ...session, assisted: true }, matched: false,
+  let branch: PracticeTrie | undefined = study.root;
+  for (const move of session.moves) branch = branch?.children.get(move);
+  branch = branch?.children.get(uci);
+  if (!branch) return { session: { ...session, assisted: true }, matched: false,
     message: 'That move is legal, but outside this study. Try a saved continuation or ask for a hint.' };
-  const line = candidates.includes(session.line) ? session.line
-    : candidates.find(index => !session.completed.includes(index)) ?? candidates[0];
+  let line = session.line;
+  if (study.lines[line]?.[session.moves.length] !== uci) {
+    const completed = new Set(session.completed);
+    let firstUncompleted = Infinity;
+    const pending = [branch];
+    while (pending.length) {
+      const node = pending.pop()!;
+      if (node.firstLine >= firstUncompleted) continue;
+      if (node.line !== undefined && !completed.has(node.line)) firstUncompleted = Math.min(firstUncompleted, node.line);
+      pending.push(...node.children.values());
+    }
+    line = Number.isFinite(firstUncompleted) ? firstUncompleted : branch.firstLine;
+  }
   const next = advance(study, session, uci, line);
   return { session: { ...next, answered: session.answered + 1, recalled: session.recalled + (session.assisted ? 0 : 1) },
     message: 'That move is in your study.', matched: true };
