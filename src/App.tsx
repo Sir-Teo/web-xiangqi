@@ -1,3 +1,4 @@
+import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
@@ -7203,6 +7204,12 @@ function App() {
             </div>
           )}
         </section>
+
+        {isMobile && mobileView === 'analysis' && (
+          <AnalysisBoardContext board={board} orientation={orientation} pieceStyle={pieceStyle}
+            positionLabel={`${sideToMove === 'w' ? 'Red' : 'Black'} to move · ${timelineCompactText}`}
+            onReturn={() => setMobileView('board')} />
+        )}
 
         {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
         {isMobile && (

@@ -32,7 +32,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 28. [x] Defer hidden cloud requests
 29. [x] Clarify initial task choices
 30. [x] Use a gentler first AI difficulty
-31. [ ] Keep board context in phone analysis
+31. [x] Keep board context in phone analysis
 32. [ ] Offer notation-aware board coordinates
 33. [ ] Distinguish advantage from win probability
 34. [ ] Group advanced engine controls
@@ -229,3 +229,9 @@ Validation: all guide actions, focus, dismissal persistence, real AI reply and b
 New and reset preferences use Easy instead of Master. Explicit saved strengths are preserved, and the guide still offers Beginner quick start.
 
 Validation: fresh/default and saved-strength reload checks; AI pause, late replies, save and resume at four sizes with enlarged text; TypeScript.
+
+## 31. Keep board context in phone analysis
+
+All phone analysis tabs retain a compact current-position preview, turn and timeline label, with one return-to-board control. The preview follows piece style and orientation without adding another interactive square grid.
+
+Validation: piece position, turn, return action and panel visibility at three phone/landscape sizes; screenshot inspection, TypeScript and ESLint.
