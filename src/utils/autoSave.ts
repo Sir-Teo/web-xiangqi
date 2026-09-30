@@ -1,3 +1,4 @@
+import { normalizeLibrarySource, type LibrarySource } from './librarySource';
 import { type KeyValueStorage, getLocalStorage, removeStorage, writeStorage } from './storage';
 
 /**
@@ -19,8 +20,8 @@ export const AUTO_SAVE_MAX_LABEL = '2 MB';
 /** Fixed, because there is only ever one auto-save. */
 export const AUTO_SAVE_ID = 'auto-save';
 
-export type AutoSaveInput = Omit<SavedGame, 'id' | 'savedAt'>;
-export type AutoSavedGame = { version: 1; savedAt: number; game: SavedGame };
+export type AutoSaveInput = Omit<SavedGame, 'id' | 'savedAt'> & { sourceLibrary?: LibrarySource };
+export type AutoSavedGame = { version: 1; savedAt: number; game: SavedGame; sourceLibrary?: LibrarySource };
 export type AutoSaveWriteResult = 'saved' | 'too-large' | 'empty' | 'failed';
 
 type AutoSaveStorage = KeyValueStorage;
@@ -68,7 +69,7 @@ export function readAutoSavedGame(
 
         const game = normalizeSavedGame(parsed.game);
         if (!game) return null;
-        return { version: 1, savedAt: parsed.savedAt, game };
+        return { version: 1, savedAt: parsed.savedAt, game, ...(normalizeLibrarySource(parsed.sourceLibrary) ? { sourceLibrary: normalizeLibrarySource(parsed.sourceLibrary) } : {}) };
     } catch {
         return null;
     }
@@ -91,10 +92,12 @@ export function writeAutoSavedGame(
         if (exceedsRecoveryMoveLimit(game)) {
             return 'too-large';
         }
+        const { sourceLibrary, ...gameData } = game;
         const snapshot: AutoSavedGame = {
             version: 1,
             savedAt,
-            game: { ...game, id: AUTO_SAVE_ID, savedAt },
+            game: { ...gameData, id: AUTO_SAVE_ID, savedAt },
+            sourceLibrary: normalizeLibrarySource(sourceLibrary),
         };
         const serialized = JSON.stringify(snapshot);
         if (getSerializedByteLength(serialized) > AUTO_SAVE_MAX_BYTES) {

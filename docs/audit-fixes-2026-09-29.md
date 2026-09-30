@@ -13,7 +13,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 9. [x] Cancel stale direct imports
 10. [x] Validate FEN counters
 11. [x] Preserve reviewed-game cursor
-12. [ ] Preserve recovered library identity
+12. [x] Preserve recovered library identity
 13. [ ] Validate cloud numeric fields
 14. [ ] Timeout stalled library workers
 15. [ ] Ignore repeated action shortcuts
@@ -113,3 +113,9 @@ Validation: 32 position/FEN tests, including negative, fractional, non-finite, e
 Saved studies now record the selected ply independently from the full line needed for review annotations. Recovery and ordinary library loading restore that position; explicit explorer navigation still wins. Old records default to their original behavior.
 
 Validation: 54 autosave/library tests plus browser save/reload/recovery at the root and mid-line with a complete review; TypeScript and ESLint.
+
+## 12. Preserve recovered library identity
+
+Recovery envelopes retain the original library ID and a compact content revision. An unchanged entry reconnects to Update saved study, including after a rename. Changed or deleted source entries recover as a separate study with an explanation; normal update conflict checks remain in place.
+
+Validation: source/rename/conflict and envelope tests, browser save/edit/reload/recover/update of the same library ID, TypeScript, and ESLint.

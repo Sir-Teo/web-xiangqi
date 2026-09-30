@@ -1,3 +1,4 @@
+import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
 import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
@@ -4321,6 +4322,7 @@ function App() {
       .filter((uci): uci is string => Boolean(uci));
     return {
       gameMode,
+      sourceLibrary: loadedSavedStudy ? librarySource(loadedSavedStudy) : undefined,
       metadata: gameMetadata,
       rootComment,
       rootResult,
@@ -4341,7 +4343,7 @@ function App() {
           }
         : undefined,
     };
-  }, [selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
+  }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
   /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
@@ -5238,9 +5240,10 @@ function App() {
     // refusal is reported the way every other auto-save failure is: the game
     // is on the board by then, so that notice and its Download PGN are the
     // right place for it rather than a second message here.
-    persistAutoSave(discardedAutoSave.snapshot.game);
+    setLoadedSavedStudy(resolveLibrarySource(discardedAutoSave.snapshot.sourceLibrary, savedGames));
+    persistAutoSave({ ...discardedAutoSave.snapshot.game, sourceLibrary: discardedAutoSave.snapshot.sourceLibrary });
     dismissDiscardedAutoSave();
-  }, [discardedAutoSave, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave]);
+  }, [discardedAutoSave, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
 
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
@@ -5250,12 +5253,17 @@ function App() {
       return;
     }
     setRecoveryError(null);
-    if (restored && writeAutoSaveDraft(autoSaveRecovery.game) === 'saved') {
+    const source = resolveLibrarySource(autoSaveRecovery.sourceLibrary, savedGames);
+    setLoadedSavedStudy(source);
+    if (autoSaveRecovery.sourceLibrary && !source) {
+      setShareLinkNotice({ tone: 'warning', text: 'Recovered as a separate study', detail: 'The saved library entry changed or was removed. Use Save to keep this draft as another copy.' });
+    }
+    if (restored && writeAutoSaveDraft({ ...autoSaveRecovery.game, sourceLibrary: source ? librarySource(source) : undefined }) === 'saved') {
       clearAutoSaveDraft(autoSaveRecovery.draftId);
       setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== autoSaveRecovery.draftId));
     }
     setAutoSaveRecovery(null);
-  }, [autoSaveRecovery, handleLoadGame]);
+  }, [autoSaveRecovery, handleLoadGame, savedGames]);
 
   /**
    * Single-key shortcuts for the things a player reaches for mid-analysis.
