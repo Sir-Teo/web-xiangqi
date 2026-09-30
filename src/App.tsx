@@ -3026,6 +3026,9 @@ function App() {
   const shareLinkLoadedRef = useRef(false);
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState<string | null>(null);
+  const directImportGenerationRef = useRef(0);
+  useEffect(() => { directImportGenerationRef.current++; }, [gameIdentity, pendingGameMode]);
+  useEffect(() => () => { directImportGenerationRef.current++; }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
@@ -3116,6 +3119,7 @@ function App() {
   }, [clearFenError]);
 
   const closeNewGameMenu = useCallback(() => {
+    directImportGenerationRef.current++;
     setShowNewGameMenu(false);
     setShowMobileBoardActionMenu(false);
     clearFenError();
@@ -3123,6 +3127,7 @@ function App() {
   }, [clearFenError]);
 
   const openNewGameMenu = useCallback(() => {
+    directImportGenerationRef.current++;
     setShowMobileBoardActionMenu(false);
     setShowSettings(false);
     setPendingGameMode(gameMode);
@@ -3333,6 +3338,7 @@ function App() {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
+    const generation = ++directImportGenerationRef.current;
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
@@ -3343,6 +3349,7 @@ function App() {
 
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (generation !== directImportGenerationRef.current) return;
       // Binary, so it cannot go through the text box: read it and load it.
       if (isXqfFile(bytes) || /\.xqf$/i.test(file.name)) {
         const record = parseXqf(bytes, MAX_MOVE_IMPORT_UCI_MOVES);
@@ -3366,6 +3373,7 @@ function App() {
       setMoveLineFileName(file.name);
       setMoveLineError(null);
     } catch (error) {
+      if (generation !== directImportGenerationRef.current) return;
       setMoveLineFileName('');
       setMoveLineError(error instanceof XqfMoveLimitError ? error.message : 'Could not read file');
     }
@@ -4064,6 +4072,7 @@ function App() {
   handleLoadFenRef.current = handleLoadFen;
 
   const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
+    directImportGenerationRef.current++;
     showImportNotice(null);
     // Reading the record and deciding what it is happens in one place, with no
     // state touched until the decision is made: see `planMoveLineImport` for
@@ -6188,6 +6197,7 @@ function App() {
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
                   onChange={(e) => {
+                    directImportGenerationRef.current++;
                     const nextValue = e.target.value;
                     setMoveLineFileName('');
                     if (isMoveImportTextTooLarge(nextValue)) {

@@ -10,7 +10,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 6. [x] Make recovery Escape non-destructive
 7. [x] Checkpoint studies before replacement
 8. [x] Preserve failed recovery data
-9. [ ] Cancel stale direct imports
+9. [x] Cancel stale direct imports
 10. [ ] Validate FEN counters
 11. [ ] Preserve reviewed-game cursor
 12. [ ] Preserve recovered library identity
@@ -95,3 +95,9 @@ Validation: browser reset/checkpoint/restore and quota-failure refusal, TypeScri
 A failed Restore keeps the dialog and original data, with a download action. Unreadable or unsupported recovery records show a download notice and are preserved byte-for-byte when a new study saves.
 
 Validation: malformed/unsupported data retention tests, browser downloads of malformed and illegal-move records, component tests, TypeScript, and ESLint.
+
+## 9. Cancel stale direct imports
+
+Direct file reads carry a generation token. New file selections, typed input, closing/reopening the dialog, mode changes, board replacement, and unmount invalidate old results and errors.
+
+Validation: delayed-file browser regression with out-of-order success, late failure after close, and typing during a read; TypeScript and ESLint.
