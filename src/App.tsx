@@ -600,6 +600,7 @@ function App() {
   // Characters by default: they are the game. Letters are offered for the
   // reader who cannot yet tell 仕 from 士, and they are the WXF letters the
   // move list already uses, so the board teaches the notation.
+  const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>(storedPreferences.uiDensity ?? 'compact');
   const [pieceStyle, setPieceStyle] = useState<PieceStyle>(storedPreferences.pieceStyle ?? 'traditional');
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1280 : window.innerWidth,
@@ -712,6 +713,7 @@ function App() {
   }, []);
 
   const applyPreferences = useCallback((preferences: StoredPreferences) => {
+    setUiDensity(preferences.uiDensity ?? 'compact');
     setAssistMode(preferences.assistMode ?? 'coach');
     setOrientation(preferences.orientation ?? 'red');
     setShowArrows(preferences.showArrows ?? true);
@@ -736,6 +738,7 @@ function App() {
 
   useEffect(() => {
     writeStoredPreferences({
+      uiDensity,
       assistMode,
       orientation,
       showArrows,
@@ -753,6 +756,7 @@ function App() {
       cloudBookEnabled,
     });
   }, [
+    uiDensity,
     aiSpeed,
     cloudBookEnabled,
     deepSearchMode,
@@ -5480,6 +5484,7 @@ function App() {
       className="app-shell"
       data-mobile-view={isMobile ? mobileView : undefined}
       data-assist-mode={assistMode}
+      data-ui-density={uiDensity}
     >
       <h1 className="sr-only">Web Xiangqi</h1>
 
@@ -5856,6 +5861,16 @@ function App() {
                   Black at bottom
                 </button>
               </div>
+            </div>
+
+            <div className="settings-group">
+              <label htmlFor="settings-ui-density">Interface density</label>
+              <select id="settings-ui-density" className="premium-select app-select" value={uiDensity}
+                onChange={event => setUiDensity(event.target.value as 'comfortable' | 'compact')}>
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+              </select>
+              <p className="settings-hint">Comfortable enlarges panel text and controls while keeping the board size.</p>
             </div>
 
             <div className="settings-group">

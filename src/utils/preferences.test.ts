@@ -12,6 +12,7 @@ import {
  * about dropping it costs the reader the rest of their settings.
  */
 const complete: Required<StoredPreferences> = {
+  uiDensity: 'comfortable',
   assistMode: 'pro',
   orientation: 'black',
   showArrows: false,

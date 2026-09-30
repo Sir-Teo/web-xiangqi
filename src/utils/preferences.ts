@@ -29,6 +29,7 @@ export type DeepSearchMode = 'bounded' | 'infinite';
 export const MAX_PREFERENCES_JSON_LENGTH = 4096;
 
 export type StoredPreferences = {
+  uiDensity?: 'comfortable' | 'compact';
   assistMode?: AssistMode;
   orientation?: BoardOrientation;
   showArrows?: boolean;
@@ -99,6 +100,7 @@ export function normalizeStoredPreferencesValue(raw: string | null): StoredPrefe
     const engineHashMB = asFiniteNumber(record.engineHashMB);
     const engineThreads = asFiniteNumber(record.engineThreads);
     return {
+      uiDensity: record.uiDensity === 'comfortable' || record.uiDensity === 'compact' ? record.uiDensity : undefined,
       assistMode: isAssistMode(record.assistMode) ? record.assistMode : undefined,
       orientation: isBoardOrientation(record.orientation) ? record.orientation : undefined,
       showArrows: typeof record.showArrows === 'boolean' ? record.showArrows : undefined,

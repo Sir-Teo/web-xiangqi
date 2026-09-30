@@ -95,6 +95,7 @@ describe('every preference is written, normalized, stored and applied', () => {
      */
     it('carries a non-default value of every preference through storage', () => {
         const chosen: Required<StoredPreferences> = {
+            uiDensity: 'comfortable',
             assistMode: 'pro',
             orientation: 'black',
             showArrows: false,

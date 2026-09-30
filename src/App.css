@@ -8166,3 +8166,17 @@ summary:active {
 .engine-advanced > p { margin: 0 0 0.5rem; color: var(--text-secondary); line-height: 1.5; }
 .engine-advanced-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .settings-engine-advanced { border-block: 1px solid var(--border-subtle); margin-bottom: 1rem; }
+
+/* Readability preference changes panel controls, without scaling the playfield. */
+[data-ui-density="comfortable"] :is(.panel.left, .panel.right, .settings-body) :is(button, input, select, textarea) {
+  font-size: max(0.875rem, 14px);
+}
+[data-ui-density="comfortable"] :is(.panel.left, .panel.right, .settings-body) :is(button, select, input:not([type="range"]):not([type="checkbox"])) {
+  min-height: 44px;
+}
+[data-ui-density="comfortable"] :is(.settings-hint, .settings-help, .lib-date, .lib-meta, .lib-label, .pv-line-moves, .move-tree-row) {
+  font-size: max(0.875rem, 14px);
+  line-height: 1.6;
+}
+[data-ui-density="comfortable"] .settings-group { margin-bottom: 1.25rem; }
+[data-ui-density="comfortable"] .engine-advanced > summary { min-height: 44px; font-size: 0.875rem; }

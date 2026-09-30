@@ -36,7 +36,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 32. [x] Offer notation-aware board coordinates
 33. [x] Distinguish advantage from win probability
 34. [x] Group advanced engine controls
-35. [ ] Offer comfortable UI density
+35. [x] Offer comfortable UI density
 36. [ ] Show persistent save/modified state
 37. [ ] Track study modification dates
 38. [ ] Add editor Undo/Redo
@@ -253,3 +253,9 @@ Validation: 64 evaluation/review/graph tests, TypeScript and ESLint; browser exp
 Restart and hash clearing live in an Engine maintenance disclosure. Search policy, depth and resources are grouped under Advanced engine settings with a device-defaults explanation. Primary analysis actions remain visible.
 
 Validation: restart/disable during pending boot on desktop and phone; collapsed resources and expanded controls at three widths; TypeScript and ESLint.
+
+## 35. Offer comfortable UI density
+
+A persisted Comfortable density enlarges side-panel/settings controls and supporting text. Compact preserves the existing layout. The toolbar and board remain the same size.
+
+Validation: 31 preference tests; actual font/target size, board dimensions, horizontal fit and reload persistence at three widths; TypeScript and ESLint.
