@@ -1,9 +1,11 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import type { CommandPaletteModal } from './CommandPaletteModal';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import type { BoardEditorProps } from './Board/BoardEditor';
 import { keepTabWithin } from '../utils/focusTrap';
 import { LazyPanelBoundary } from './LazyPanelBoundary';
 import './DeferredDialogs.css';
 
+const Commands = lazy(() => import('./CommandPaletteModal').then(module => ({ default: module.CommandPaletteModal })));
 const Editor = lazy(() => import('./Board/BoardEditor').then(module => ({ default: module.BoardEditor })));
 const Lessons = lazy(() => import('./RuleLessons').then(module => ({ default: module.RuleLessons })));
 
@@ -55,4 +57,9 @@ export function DeferredBoardEditor(props: BoardEditorProps) {
 
 export function DeferredRuleLessons({ onClose }: { onClose: () => void }) {
   return <DeferredDialog title="Learn the rules" onClose={onClose}><Lessons onClose={onClose} /></DeferredDialog>;
+}
+
+export function DeferredCommandPalette(props: ComponentProps<typeof CommandPaletteModal>) {
+  if (!props.open) return null;
+  return <DeferredDialog title="Commands" onClose={props.onClose}><Commands {...props} /></DeferredDialog>;
 }

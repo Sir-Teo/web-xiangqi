@@ -100,6 +100,7 @@ async function setup(page) {
         await setup(page); await page.addInitScript(() => { window.__holdAiMove = true; });
         await page.route(url => isModule(url.href, 'BoardEditor') && /\.(?:js|tsx)(?:\?|$)/.test(url.href), async route => { await gate; await route.continue(); });
         await page.goto(base + '?moves=h2e2&mode=PvAI-Black');
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.board-stage .hitbox[tabindex="0"]').first().focus();
         await open(page, 'Settings');
         // The shared link opens analysis. Count only searches started after

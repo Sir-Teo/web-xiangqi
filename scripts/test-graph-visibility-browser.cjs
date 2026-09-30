@@ -55,6 +55,7 @@ async function openGraph(page) {
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: 1024 }, (_, i) => cycle[i % 4]).join('+'));
+        await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__searchedPlies === 1024);
         if (width >= 900) {
           await page.waitForFunction(() => window.__geometry?.length === 1025);

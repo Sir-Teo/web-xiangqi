@@ -27,7 +27,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 23. [x] Defer engine download until requested
 24. [x] Improve device resource classification
 25. [x] Bound AI thinking time at every level
-26. [ ] Reduce initial bundle
+26. [x] Reduce initial bundle
 27. [ ] Avoid duplicated practice paths
 28. [ ] Defer hidden cloud requests
 29. [ ] Clarify initial task choices
@@ -199,3 +199,9 @@ Validation: 52 device-profile tests covering touch laptops/tablets, strong phone
 All six strengths send both depth and time ceilings: 250, 500, 900, 1,500, 2,500 and 4,000 ms. The strength description shows that budget, including subsecond values. Invalid depth inputs resolve to a finite supported ceiling.
 
 Validation: all 2,104 unit tests; AI pause/late-reply refusal, annotations, persistence and resume at four desktop/phone/landscape sizes and 100/200% text; TypeScript and ESLint.
+
+## 26. Reduce initial bundle
+
+Graph rendering, candidate comparison and the command palette are separate lazy chunks with loading/error boundaries. Pending dialogs remain closable and restore focus. Main JavaScript decreased from 523.48 KB to 490.04 KB (151.34 KB gzip); optional panels are absent from initial phone requests.
+
+Validation: production build, deferred-command cancellation/reopening, candidate comparison at three widths, hidden/visible graph updates at four widths, delayed/failed editor and lesson loading with focus restoration, TypeScript and ESLint.

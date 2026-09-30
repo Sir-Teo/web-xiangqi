@@ -23,7 +23,7 @@ import './App.css';
 import { Board } from './components/Board/Board';
 import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
-import { EvalGraph } from './components/Panels/EvalGraph';
+import { DeferredEvalGraph as EvalGraph, DeferredCandidatePanel as CandidatePanel } from './components/DeferredAnalysisPanels';
 import { DeferredReviewPanel } from './components/Panels/DeferredReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
@@ -40,7 +40,6 @@ import {
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
-import { CandidatePanel } from './components/CandidatePanel';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
@@ -161,7 +160,7 @@ import {
   resolveAnalysisActivity,
 } from './utils/analysisActivity';
 import { describeShareLinkFailure, shareLinkHeadline, type ShareLinkFailure } from './utils/shareLinkNotice';
-import { CommandPaletteModal } from './components/CommandPaletteModal';
+import { DeferredCommandPalette as CommandPaletteModal } from './components/DeferredDialogs';
 import type { Command } from './utils/commandPalette';
 import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
 import {

@@ -61,6 +61,7 @@ async function compare(browser, width, real = false) {
       };
     ` }));
     await page.goto(base + '?moves=h2e2');
+        await page.getByTestId('start-engine-analysis').click();
     await page.locator('.xiangqi-board').waitFor();
     const evalSelector = width < 900 ? '.mobile-eval-chip' : '.eval-bar-readout';
     if (!real) await page.waitForFunction(selector => Number(document.querySelector(selector)?.textContent) === -0.3, evalSelector);
