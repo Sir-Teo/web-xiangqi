@@ -79,13 +79,14 @@ describe('writing and reading back', () => {
         expect(readAutoSavedGame(storage)?.game.moves).toEqual(['b2e2']);
     });
 
-    it('forgets a snapshot too big to be worth keeping', () => {
+    it('keeps the previous snapshot when the replacement is too large', () => {
         const { storage, entries } = stubStorage();
         writeAutoSavedGame(GAME, storage, 1);
 
         const huge = { ...GAME, label: 'x'.repeat(AUTO_SAVE_MAX_BYTES + 10) };
         expect(writeAutoSavedGame(huge, storage, 2)).toBe('too-large');
-        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(true);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
     });
 
     it('reports a storage that refuses the write', () => {
@@ -101,7 +102,8 @@ describe('writing and reading back', () => {
         expect(writeAutoSavedGame({ ...GAME, moves }, storage, 1)).toBe('saved');
         expect(readAutoSavedGame(storage)?.game.moves).toHaveLength(1024);
         expect(writeAutoSavedGame({ ...GAME, moves: [...moves, 'a0a1'] }, storage, 2)).toBe('too-large');
-        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(true);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
     });
 
     it('counts the whole study, including branches outside the current line', () => {
@@ -110,7 +112,8 @@ describe('writing and reading back', () => {
         const moveTree = [{ uci: 'h2e2', children }, { uci: 'b2e2', children }];
         writeAutoSavedGame(GAME, storage, 1);
         expect(writeAutoSavedGame({ ...GAME, moveTree }, storage, 2)).toBe('too-large');
-        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(true);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
     });
 
     it('rejects a too-deep side line even when the saved cursor is short', () => {
@@ -119,14 +122,16 @@ describe('writing and reading back', () => {
         for (let i = 0; i < 1025; i++) line = [{ uci: 'h2e2', children: line }];
         writeAutoSavedGame(GAME, storage, 1);
         expect(writeAutoSavedGame({ ...GAME, moveTree: line as AutoSaveInput['moveTree'] }, storage, 2)).toBe('too-large');
-        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(true);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
     });
 
     it('rejects other unreadable snapshots before claiming they were saved', () => {
         const { storage, entries } = stubStorage();
         writeAutoSavedGame(GAME, storage, 1);
         expect(writeAutoSavedGame({ ...GAME, moves: ['not-a-move'] }, storage, 2)).toBe('failed');
-        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(false);
+        expect(entries.has(AUTO_SAVED_GAME_KEY)).toBe(true);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
     });
 
     it('does nothing at all without storage', () => {

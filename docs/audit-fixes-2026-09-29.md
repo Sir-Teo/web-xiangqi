@@ -4,7 +4,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 
 1. [x] Bound complete share links
 2. [x] Enforce study limits for every move path
-3. [ ] Keep last good autosave on capacity failures
+3. [x] Keep last good autosave on capacity failures
 4. [ ] Keep separate recovery drafts across tabs
 5. [ ] Undo discarding note-only studies
 6. [ ] Make recovery Escape non-destructive
@@ -59,3 +59,9 @@ Validation: share URL/tree tests (31 passing), TypeScript, and ESLint.
 Normal moves and appended engine lines now share the 1,024-ply / 8,192-node limits. Appending an oversized line fails atomically, while following existing moves still works at capacity. The board shows a dismissible explanation and recovery direction.
 
 Validation: append-line regression tests (8 passing), TypeScript, ESLint, and full-study browser recovery at 1440, 390, and 320px.
+
+## 3. Keep last good autosave on capacity failures
+
+Capacity, validation, and storage failures leave the previous recoverable snapshot intact. The warning explicitly distinguishes that snapshot from the latest unsaved edits.
+
+Validation: autosave tests (18 passing), including byte, line, tree, and invalid-data failures; TypeScript.

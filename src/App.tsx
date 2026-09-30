@@ -8272,8 +8272,8 @@ function App() {
       {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
         <div className="save-error-notice" role="alert" data-testid="auto-save-error">
           <span>{autoSaveIssue === 'too-large'
-            ? 'This study is too large for automatic recovery. Download a PGN before leaving.'
-            : 'Automatic recovery could not save your latest changes. Download a PGN before leaving.'}</span>
+            ? 'This study is too large for automatic recovery. Your last successful snapshot is kept. Download a PGN for your latest changes.'
+            : 'Automatic recovery could not save your latest changes. Your last successful snapshot is kept. Download a PGN before leaving.'}</span>
           <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
             {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
           </button>

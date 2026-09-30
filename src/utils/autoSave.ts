@@ -89,7 +89,6 @@ export function writeAutoSavedGame(
         // The byte ceiling alone permits thousands of moves that the reader
         // rejects. Report the capacity problem while the study is still open.
         if (exceedsRecoveryMoveLimit(game)) {
-            clearAutoSavedGame(storage);
             return 'too-large';
         }
         const snapshot: AutoSavedGame = {
@@ -99,13 +98,10 @@ export function writeAutoSavedGame(
         };
         const serialized = JSON.stringify(snapshot);
         if (getSerializedByteLength(serialized) > AUTO_SAVE_MAX_BYTES) {
-            // Better to drop a stale snapshot than to keep offering one that
-            // no longer matches the game on screen.
-            removeStorage(AUTO_SAVED_GAME_KEY, storage);
+            // Keep the last recoverable snapshot until a newer write succeeds.
             return 'too-large';
         }
         if (!normalizeSavedGame(snapshot.game)) {
-            clearAutoSavedGame(storage);
             return 'failed';
         }
         return writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage) ? 'saved' : 'failed';
