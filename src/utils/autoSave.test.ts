@@ -213,3 +213,30 @@ it('preserves a reviewed line independently of its selected cursor', () => {
         expect(readAutoSavedGame(storage)?.game.cursorPly).toBeUndefined();
     }
 });
+
+describe('unchanged autosave flushes', () => {
+    it('keeps its timestamp and skips storage writes until content changes', () => {
+        const { storage } = stubStorage();
+        let writes = 0;
+        const write = storage.setItem;
+        storage.setItem = (key, value) => { writes++; write(key, value); };
+        expect(writeAutoSavedGame(GAME, storage, 1)).toBe('saved');
+        expect(writeAutoSavedGame({ ...GAME }, storage, 2)).toBe('saved');
+        expect(writes).toBe(1);
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(1);
+        expect(writeAutoSavedGame({ ...GAME, rootComment: 'New note' }, storage, 3)).toBe('saved');
+        expect(writes).toBe(2);
+        storage.removeItem(AUTO_SAVED_GAME_KEY);
+        expect(writeAutoSavedGame({ ...GAME, rootComment: 'New note' }, storage, 4)).toBe('saved');
+        expect(writes).toBe(3);
+    });
+    it('retries failed content instead of caching a false success', () => {
+        const { storage } = stubStorage();
+        const write = storage.setItem;
+        storage.setItem = () => { throw Error('Quota'); };
+        expect(writeAutoSavedGame(GAME, storage, 1)).toBe('failed');
+        storage.setItem = write;
+        expect(writeAutoSavedGame(GAME, storage, 2)).toBe('saved');
+        expect(readAutoSavedGame(storage)?.savedAt).toBe(2);
+    });
+});

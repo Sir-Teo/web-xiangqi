@@ -5,13 +5,20 @@ export const AUTO_SAVE_DRAFT_PREFIX = 'xiangqi:recovery-draft:v1:';
 // A document owns its slot. Duplicating a tab must not duplicate ownership.
 export const currentDraftId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 export type RecoveryDraft = AutoSavedGame & { draftId: string };
+const adapters = new WeakMap<KeyValueStorage, Map<string, KeyValueStorage>>();
 
 function draftStorage(id: string, storage: KeyValueStorage): KeyValueStorage {
+    let slots = adapters.get(storage);
+    if (!slots) { slots = new Map(); adapters.set(storage, slots); }
+    const cached = slots.get(id);
+    if (cached) return cached;
     const key = AUTO_SAVE_DRAFT_PREFIX + id;
-    return {
+    const adapter: KeyValueStorage = {
         getItem: name => name === AUTO_SAVED_GAME_KEY ? storage.getItem(key) : null,
         setItem: (_name, value) => {
-            const serialized = JSON.stringify({ ...JSON.parse(value), draftId: id });
+            // The writer supplies an object envelope. Add ownership without
+            // parsing and serializing its entire study a second time.
+            const serialized = `{"draftId":${JSON.stringify(id)},${value.slice(1)}`;
             storage.setItem(key, serialized);
             // Compatibility mirror for older app versions. Recovery always uses
             // the independent slots, so another tab replacing this is harmless.
@@ -26,6 +33,8 @@ function draftStorage(id: string, storage: KeyValueStorage): KeyValueStorage {
         },
         removeItem: () => clearAutoSaveDraft(id, storage),
     };
+    slots.set(id, adapter);
+    return adapter;
 }
 
 export function clearAutoSaveDraft(id: string, storage = getLocalStorage()): void {

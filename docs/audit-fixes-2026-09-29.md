@@ -21,7 +21,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 17. [x] Isolate engine telemetry rendering
 18. [x] Narrow tree-derived invalidation
 19. [x] Avoid whole-library mutation/reload costs
-20. [ ] Skip duplicate autosave work
+20. [x] Skip duplicate autosave work
 21. [ ] Move direct imports to a worker
 22. [ ] Prepare library search off the typing path
 23. [ ] Defer engine download until requested
@@ -163,3 +163,9 @@ Validation: structural identity browser regression; main-line and halfmove-clock
 Library reads reuse validated snapshots while storage is unchanged. Mutations serialize only changed records and publish the resulting state directly; unchanged records retain their search and explorer caches, including across external edits. The bounded JSON library remains one atomic storage write. Failed writes never publish cached success.
 
 Validation: cache identity, external modification, corrupt data and quota regressions; 52 focused tests, two-tab saves under Web Locks and IndexedDB, TypeScript, and ESLint.
+
+## 20. Skip duplicate autosave work
+
+Unchanged flushes retain the original recovery timestamp and skip validation, byte encoding, and storage writes. The writer checks its actual owned slot before reusing success, so deleted or externally replaced drafts are repaired and failures remain retryable. Draft ownership is inserted without reparsing and reserializing the whole study.
+
+Validation: 25 autosave/draft tests, recovery Undo browser cases, storage-failure/download/retry on desktop and phone, TypeScript, and ESLint.

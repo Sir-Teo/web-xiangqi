@@ -25,6 +25,7 @@ export type AutoSavedGame = { version: 1; savedAt: number; game: SavedGame; sour
 export type AutoSaveWriteResult = 'saved' | 'too-large' | 'empty' | 'failed';
 
 type AutoSaveStorage = KeyValueStorage;
+const savedSnapshots = new WeakMap<AutoSaveStorage, { content: string; raw: string }>();
 
 function exceedsRecoveryMoveLimit(game: AutoSaveInput): boolean {
     if (game.moves.length > MAX_SAVED_MOVES) return true;
@@ -87,6 +88,11 @@ export function writeAutoSavedGame(
     }
 
     try {
+        // Ignore envelope timestamps, but verify the actual slot: deletion or
+        // external replacement must be repaired even without a new edit.
+        const content = JSON.stringify(game);
+        const previous = savedSnapshots.get(storage);
+        if (previous?.content === content && storage.getItem(AUTO_SAVED_GAME_KEY) === previous.raw) return 'saved';
         // The byte ceiling alone permits thousands of moves that the reader
         // rejects. Report the capacity problem while the study is still open.
         if (exceedsRecoveryMoveLimit(game)) {
@@ -107,12 +113,16 @@ export function writeAutoSavedGame(
         if (!normalizeSavedGame(snapshot.game)) {
             return 'failed';
         }
-        return writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage) ? 'saved' : 'failed';
+        if (!writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage)) return 'failed';
+        const raw = storage.getItem(AUTO_SAVED_GAME_KEY);
+        if (raw !== null) savedSnapshots.set(storage, { content, raw });
+        return 'saved';
     } catch {
         return 'failed';
     }
 }
 
 export function clearAutoSavedGame(storage: AutoSaveStorage | null = getLocalStorage()): void {
+    if (storage) savedSnapshots.delete(storage);
     removeStorage(AUTO_SAVED_GAME_KEY, storage);
 }
