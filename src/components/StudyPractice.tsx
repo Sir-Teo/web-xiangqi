@@ -1,3 +1,4 @@
+import { readPracticeProgress, writePracticeProgress } from '../utils/practiceProgress';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { PieceStyle } from '../utils/pieceStyle';
@@ -9,8 +10,13 @@ import { Board } from './Board/Board';
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
   const study = prepared.study;
-  const [side, setSide] = useState<Side>(() => study?.side ?? 'w');
-  const [session, setSession] = useState(() => study ? startPracticeLine(study, 0) : null);
+  const restored = useMemo(() => study ? readPracticeProgress(game, study) : null, [game, study]);
+  const [side, setSide] = useState<Side>(() => restored?.side ?? study?.side ?? 'w');
+  const [session, setSession] = useState(() => restored?.session ?? (study ? startPracticeLine(study, 0) : null));
+  const [progressSaved, setProgressSaved] = useState(true);
+  useEffect(() => {
+    if (session) setProgressSaved(writePracticeProgress(game, side, session));
+  }, [game, side, session]);
   const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
   const [letters, setLetters] = useState(pieceStyle === 'letters');
   const [hint, setHint] = useState(false);
@@ -81,11 +87,13 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         const chosen = event.target.value as Side;
         setSide(chosen);
         const first = practiceLineIndices(study, chosen)[0];
-        if (first !== undefined) setSession(startPracticeLine(study, first));
+        if (first !== undefined) setSession(readPracticeProgress(game, study, chosen)?.session ?? startPracticeLine(study, first));
         setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
       }}><option value="w">Red</option><option value="b">Black</option></select></label>
+      <button type="button" onClick={() => reset(eligible[0] ?? 0, false)}>Reset progress for this side</button>
       <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
     </div>
+    {!progressSaved && <p role="status">Practice continues, but browser storage could not save your progress.</p>}
     {eligible.length === 0 ? <p role="status">This study has no moves for {side === 'w' ? 'Red' : 'Black'}. Choose the other side.</p> : <>
       <div className="study-practice-board" ref={boardRef}>
         <Board board={session.board} orientation={side === 'w' ? 'red' : 'black'} selected={selected} validTargets={validTargets}
@@ -123,7 +131,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         <details className="study-practice-note"><summary>How practice works</summary>
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
           <p>Complete a line to read any notes saved with it.</p>
-          <p>Progress lasts for this session. Changing sides starts a new session.</p>
+          <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Editing a saved study starts fresh practice.</p>
         </details>
       </section>
     </>}

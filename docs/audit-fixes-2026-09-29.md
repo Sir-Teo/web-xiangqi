@@ -42,7 +42,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 38. [x] Add editor Undo/Redo
 39. [x] Apply pending editor FEN on Done
 40. [x] Respect notation during practice
-41. [ ] Persist practice progress
+41. [x] Persist practice progress
 42. [ ] Provide guided library salvage
 43. [ ] Resolve backup conflicts per game
 44. [ ] Detect collection duplicates
@@ -289,3 +289,9 @@ Validation: pending valid/invalid FEN and clock preservation browser checks at d
 Practice receives the selected notation for board files, hints, saved replies and completed-line notes. Notes are formatted against each move’s original position so Chinese/WXF piece and file names remain correct.
 
 Validation: hints/replies/notes in all three notations; complete practice flows at four sizes and enlarged text, failed-chunk recovery and AI pause isolation; TypeScript and ESLint.
+
+## 41. Persist practice progress
+
+Practice resumes the selected side, move prefix, completed lines and recall counts after closing or reloading. Each side is separate and can be reset explicitly. Stored prefixes are validated and replayed; edited studies start fresh, storage is bounded to 50 studies / 512 KB, and write failures are visible.
+
+Validation: 16 practice/progress tests; reload/resume, separate sides, completion and reset at three widths; complete practice regression across four sizes and enlarged text; TypeScript and ESLint.
