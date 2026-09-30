@@ -1,3 +1,4 @@
+import { studyCapacityError, studyCapacityMessage } from '../utils/studyLimits';
 import { normalizeRecordedResult, type RecordedResult } from '../utils/recordedResult';
 import { type EvaluationScoreKind } from '../utils/engineEvalReading';
 import { makeEnginePositionCommand } from '../utils/engineTags';
@@ -263,6 +264,7 @@ function gameResultForPosition(board: BoardState, sideToMove: Side): GameResult 
 
 export function useXiangqi() {
     const [treeNodes, setTreeNodes] = useState<Record<string, MoveTreeNode>>(() => createRootTree());
+    const [moveCapacityError, setMoveCapacityError] = useState<string | null>(null);
     const [gameMetadata, setGameMetadata] = useState<GameMetadata>();
     const [rootPosition, setRootPosition] = useState<RootPosition>(() => createStartRootPosition());
     const [activeLineNodeIds, setActiveLineNodeIds] = useState<string[]>([]);
@@ -312,6 +314,7 @@ export function useXiangqi() {
         setTreeNodes(rootTree);
         setRootPosition(root);
         setGameMetadata(undefined);
+        setMoveCapacityError(null);
         setActiveLineNodeIds([]);
         setCurrentMoveIndex(-1);
         setBoard(root.board);
@@ -331,6 +334,7 @@ export function useXiangqi() {
         setTreeNodes(rootTree);
         setRootPosition(root);
         setGameMetadata(undefined);
+        setMoveCapacityError(null);
         setActiveLineNodeIds([]);
         setCurrentMoveIndex(-1);
         setBoard(root.board);
@@ -501,6 +505,7 @@ export function useXiangqi() {
         nodeCounterRef.current = counter;
         setRootPosition(root);
         setGameMetadata(undefined);
+        setMoveCapacityError(null);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(selectedPly - 1);
@@ -627,6 +632,7 @@ export function useXiangqi() {
         nodeCounterRef.current = counter;
         setRootPosition(root);
         setGameMetadata(undefined);
+        setMoveCapacityError(null);
         setTreeNodes(tree);
         setActiveLineNodeIds(activeLine);
         setCurrentMoveIndex(shouldKeepRootSelected ? -1 : cursorIndex);
@@ -810,6 +816,11 @@ export function useXiangqi() {
         const activePrefix = findPathToNode(treeNodes, parentNodeId);
         const existingChildId = parentNode?.childrenIds.find((childId) => treeNodes[childId]?.record?.uci === mv.raw);
 
+        if (!existingChildId) {
+            const error = studyCapacityError(Object.keys(treeNodes).length, activePrefix.length + 1);
+            if (error) { setMoveCapacityError(studyCapacityMessage(error)); return false; }
+        }
+        setMoveCapacityError(null);
         if (existingChildId) {
             const existingChild = treeNodes[existingChildId];
             const updatedRecord: MoveRecord | undefined = existingChild.record ? {
@@ -896,6 +907,8 @@ export function useXiangqi() {
     const applyUciLineAtNode = useCallback((parentNodeId: string, moves: string[]): boolean => {
         const result = appendMoveTreeLine(treeNodes, parentNodeId, moves,
             rootPosition.board, rootPosition.sideToMove, nodeCounterRef.current);
+        if (result.capacityError) { setMoveCapacityError(studyCapacityMessage(result.capacityError)); return false; }
+        setMoveCapacityError(null);
         const { tree, tipId: cursor, nextNodeId: counter, played } = result;
         const position = getPositionFromNode(tree, cursor, rootPosition);
         if (played === 0) return false;
@@ -915,6 +928,7 @@ export function useXiangqi() {
         if (sourceMoves.length + moves.length > MAX_SAVED_MOVES) return 'line-full';
         const result = appendMoveTreeLine(treeNodes, parentNodeId, moves,
             rootPosition.board, rootPosition.sideToMove, nodeCounterRef.current);
+        if (result.capacityError) return result.capacityError;
         if (!result.played || result.played !== moves.length) return 'invalid';
         // The root is not serialized. Never claim to keep a line that storage
         // would reject on the next reload because the study is too large.
@@ -1235,6 +1249,8 @@ export function useXiangqi() {
         gameIdentity: rootPosition,
         gameMetadata,
         setGameMetadata,
+        moveCapacityError,
+        dismissMoveCapacityError: () => setMoveCapacityError(null),
         treeNodes,
         activeLineNodeIds,
         selected,

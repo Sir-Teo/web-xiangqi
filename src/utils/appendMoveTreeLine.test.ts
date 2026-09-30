@@ -79,3 +79,29 @@ describe('appendMoveTreeLine', () => {
         expect(hasMoveTreeLine(tree, 'root', [])).toBe(false);
     });
 });
+
+
+describe('study capacity across playback paths', () => {
+    it('rejects an overlong continuation atomically and still follows an existing full-length line', () => {
+        const moves = Array.from({ length: 1024 }, (_, i) => ['b0c2', 'b9c7', 'c2b0', 'c7b9'][i % 4]);
+        const source = root();
+        const refused = append(source, 'root', [...moves, 'b0c2']);
+        expect(refused.capacityError).toBe('line-full');
+        expect(refused.tree).toBe(source);
+        expect(refused.played).toBe(0);
+        const full = append(source, 'root', moves);
+        expect(full.played).toBe(1024);
+        expect(append(full.tree, 'root', moves).tree).toBe(full.tree);
+        expect(append(full.tree, full.tipId, ['b0c2']).capacityError).toBe('line-full');
+    });
+
+    it('rejects additions at the node limit while permitting an existing continuation', () => {
+        const full = append(root(), 'root', ['h2e2']);
+        for (let i = 2; i <= 8192; i++) full.tree[`n${i}`] = { id: `n${i}`, parentId: 'root', childrenIds: [] };
+        expect(append(full.tree, 'root', ['h2e2']).tree).toBe(full.tree);
+        const refused = append(full.tree, 'root', ['b2e2']);
+        expect(refused.capacityError).toBe('full');
+        expect(refused.tree).toBe(full.tree);
+        expect(refused.nextNodeId).toBe(1);
+    });
+});

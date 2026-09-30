@@ -818,6 +818,8 @@ function App() {
     gameIdentity,
     gameMetadata,
     setGameMetadata,
+    moveCapacityError,
+    dismissMoveCapacityError,
     treeNodes,
     activeLineNodeIds,
     currentFen,
@@ -8250,6 +8252,13 @@ function App() {
           onNewGame={() => { setGameResult(null); resetGame(); }}
           onReview={dismissGameOverForReview}
         />
+      )}
+
+      {moveCapacityError && (
+        <div className="save-error-notice" role="alert" data-testid="study-capacity-error">
+          <span>{moveCapacityError}</span>
+          <button type="button" className="undo-toast-dismiss" onClick={dismissMoveCapacityError} aria-label="Dismiss study limit"><IconX /></button>
+        </div>
       )}
 
       {saveFailedToast && librarySaveError ? (

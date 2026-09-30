@@ -1,3 +1,4 @@
+import { studyCapacityError, type StudyCapacityError } from './studyLimits';
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import { isInCheck, validateMoveStr, type BoardState, type Side } from './xiangqi';
 
@@ -6,6 +7,7 @@ export interface AppendedMoveTreeLine {
     tipId: string;
     nextNodeId: number;
     played: number;
+    capacityError?: StudyCapacityError;
 }
 
 /** Add a legal prefix, reusing existing branches and copying the tree at most once. */
@@ -18,6 +20,8 @@ export function appendMoveTreeLine(
     nextNodeId: number,
 ): AppendedMoveTreeLine {
     let nextTree = tree;
+    const initialNextNodeId = nextNodeId;
+    let nodeCount = Object.keys(tree).length - 1;
     let cursor = parentId;
     const parent = tree[parentId];
     let board = parent?.record?.board ?? rootBoard;
@@ -40,6 +44,9 @@ export function appendMoveTreeLine(
         if (existing) {
             cursor = existing;
         } else {
+            const capacityError = studyCapacityError(nodeCount + 1, ply);
+            if (capacityError) return { tree, tipId: parentId, nextNodeId: initialNextNodeId, played: 0, capacityError };
+            nodeCount++;
             if (nextTree === tree) nextTree = { ...tree };
             while (nextTree[`n${nextNodeId}`]) nextNodeId++;
             const id = `n${nextNodeId++}`;

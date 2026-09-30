@@ -28,33 +28,11 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         if (width < 900) await page.getByTestId('mobile-view-board').click();
         await page.locator('.hitbox[data-file="1"][data-rank="2"]').click();
         await page.locator('.hitbox[data-file="1"][data-rank="3"]').click();
-        const notice = page.getByTestId('auto-save-error');
+        const notice = page.getByTestId('study-capacity-error');
         await notice.waitFor({ timeout: 3000 });
-        assert.match(await notice.innerText(), /too large for automatic recovery/);
-        if (width < 900) {
-          const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
-          for (const button of coarse ? await notice.getByRole('button').all() : []) {
-            const box = await button.boundingBox();
-            assert.ok(box.height >= 44 && box.width >= 44, 'Recovery action is smaller than a touch target');
-          }
-          const warningBox = await notice.boundingBox();
-          const navBox = await page.locator('.mobile-board-nav').boundingBox();
-          assert.ok(warningBox.y + warningBox.height + 8 <= navBox.y, 'Recovery warning overlaps move navigation');
-        }
-        assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:auto-saved-game:v1')), null);
-        const pending = page.waitForEvent('download');
-        await notice.getByRole('button', { name: 'Download PGN', exact: true }).click();
-        const chunks = [];
-        for await (const chunk of await (await pending).createReadStream()) chunks.push(chunk);
-        const pgn = Buffer.concat(chunks).toString();
-        assert.equal((pgn.match(/\ba[0198]a[0198]\b/g) ?? []).length, 8176);
-        assert.match(pgn, /b2b3/);
+        assert.match(await notice.innerText(), /8,192|8192/);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-        await page.screenshot({ path: `/tmp/xiangqi-autosave-limit-${browserType.name()}-${width}.png` });
-        await page.keyboard.press('ControlOrMeta+k');
-        await page.getByRole('combobox').fill('Delete this move and what follows');
-        await page.keyboard.press('Enter');
-        await notice.waitFor({ state: 'detached' });
+        await notice.getByRole('button', { name: 'Dismiss study limit' }).click();
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.length === 16);
         await page.reload();
         await page.getByRole('button', { name: 'Restore', exact: true }).click();
@@ -62,7 +40,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         await page.keyboard.press('t');
         assert.equal(await page.evaluate(() => { let count = 0, pending = [...JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1')).game.moveTree]; while (pending.length) { const node = pending.pop(); count++; pending.push(...node.children || []); } return count; }), 8192);
         assert.deepEqual(errors, []);
-        console.log(`Autosave capacity warning, full PGN download, pruning and recovery passed at ${width}px`);
+        console.log(`Study capacity refusal preserves full recovery snapshot at ${width}px`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

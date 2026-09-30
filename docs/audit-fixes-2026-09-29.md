@@ -3,7 +3,7 @@
 The 45 findings from the review are being addressed in order, with a separate commit per item. Each entry records its implementation and validation.
 
 1. [x] Bound complete share links
-2. [ ] Enforce study limits for every move path
+2. [x] Enforce study limits for every move path
 3. [ ] Keep last good autosave on capacity failures
 4. [ ] Keep separate recovery drafts across tabs
 5. [ ] Undo discarding note-only studies
@@ -53,3 +53,9 @@ The 45 findings from the review are being addressed in order, with a separate co
 Short links retain the legacy query format. Long payloads use a versioned URL fragment, keeping study data out of the HTTP request. The complete encoded URL has a 24,000-character ceiling; oversized links explain the PGN fallback. Both loading and recovery recognize fragment links. Regression tests cover the previously failing 240-ply annotated Unicode study and old links.
 
 Validation: share URL/tree tests (31 passing), TypeScript, and ESLint.
+
+## 2. Enforce study limits for every move path
+
+Normal moves and appended engine lines now share the 1,024-ply / 8,192-node limits. Appending an oversized line fails atomically, while following existing moves still works at capacity. The board shows a dismissible explanation and recovery direction.
+
+Validation: append-line regression tests (8 passing), TypeScript, ESLint, and full-study browser recovery at 1440, 390, and 320px.
