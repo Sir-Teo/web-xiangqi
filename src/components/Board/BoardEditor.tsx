@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useRed
 import './Board.css';
 import './BoardEditor.css';
 import { START_FEN, parseFenBoard, type BoardState, type Side } from '../../utils/xiangqi';
-import { describeSetupProblem, emptyBoard, setupFen } from '../../utils/positionSetup';
+import { describeFenProblem, describeSetupProblem, emptyBoard, setupFen } from '../../utils/positionSetup';
 import { copyToClipboard } from '../../utils/gameExport';
 import { pieceLabel, type PieceStyle } from '../../utils/pieceStyle';
 import { IconX } from '../icons';
@@ -113,6 +113,14 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         // line below says what is wrong with it, as it does for any other edit.
         setFenNotice(null);
     }, [fen, fenDraft, side]);
+
+    const applyPosition = () => {
+        const draft = fenDraft?.trim().replace(/\s+/g, ' ');
+        const candidate = draft === undefined ? fen : draft.includes(' ') ? draft : `${draft} ${side} - - 0 1`;
+        const issue = describeFenProblem(candidate);
+        if (issue) { setFenNotice(issue); return; }
+        onApply(candidate);
+    };
 
     const copyFen = useCallback(async () => {
         const ok = await copyToClipboard(fen);
@@ -360,9 +368,9 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                         <button
                             type="button"
                             className="gc-btn new-game-start-btn"
-                            onClick={() => onApply(fen)}
-                            disabled={problem !== null}
-                            title={problem ?? 'Load this position'}
+                            onClick={applyPosition}
+                            disabled={fenDraft === null && problem !== null}
+                            title={fenDraft !== null ? 'Validate and load the typed FEN' : problem ?? 'Load this position'}
                             data-testid="editor-done"
                         >
                             Done

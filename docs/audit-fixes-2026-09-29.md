@@ -40,7 +40,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 36. [x] Show persistent save/modified state
 37. [x] Track study modification dates
 38. [x] Add editor Undo/Redo
-39. [ ] Apply pending editor FEN on Done
+39. [x] Apply pending editor FEN on Done
 40. [ ] Respect notation during practice
 41. [ ] Persist practice progress
 42. [ ] Provide guided library salvage
@@ -277,3 +277,9 @@ Validation: 29 library/cache/source/backup/date tests and saved-study update/con
 Position edits have a bounded 100-step history. Undo/Redo covers painting, clearing, start-position resets, side changes and atomic FEN loads. Ctrl/Cmd-Z, Shift-Z and Y work on board controls while text fields retain native editing shortcuts.
 
 Validation: history branching/bounds tests plus editor keyboard, undo/redo, clear recovery, focus trap and layout at four sizes; TypeScript and ESLint.
+
+## 39. Apply pending editor FEN on Done
+
+Done validates the latest typed FEN and applies its placement, side and clocks without requiring Load first. Invalid drafts remain open with a specific error, and a valid draft can replace an invalid board preview.
+
+Validation: pending valid/invalid FEN and clock preservation browser checks at desktop and two phone widths; TypeScript and ESLint.
