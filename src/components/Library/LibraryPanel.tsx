@@ -30,7 +30,7 @@ type LibraryPrimaryLine = ReturnType<typeof savedGameLine> & { savedPath: 'compl
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
 
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
-  recent: 'Newest first',
+  recent: 'Recently modified',
   oldest: 'Oldest first',
   'accuracy-high': 'Highest accuracy',
   'accuracy-low': 'Lowest accuracy',
@@ -138,6 +138,7 @@ function getSavedGameSearchText(game: SavedGame, line: LibraryPrimaryLine, study
     game.gameMode,
     resultLabel(line.result ?? 'ongoing'),
     formatDate(game.savedAt),
+    game.modifiedAt ? formatDate(game.modifiedAt) : undefined,
     formatSavedGameMoveCount(game, line),
     studyLineLabel,
     savedReviewScope(game, line),
@@ -187,7 +188,7 @@ function compareDefinedNumbers(
 }
 
 function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
-  const recentTieBreak = right.savedAt - left.savedAt;
+  const recentTieBreak = (right.modifiedAt ?? right.savedAt) - (left.modifiedAt ?? left.savedAt);
   switch (sort) {
     case 'oldest':
       return left.savedAt - right.savedAt;
@@ -920,7 +921,8 @@ export function LibraryPanel({
                 {/* An unnamed game is titled by its date, so repeating it here
                     said the same thing twice on one card. A renamed game still
                     needs it: its title no longer carries the date. */}
-                {game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
+                {game.modifiedAt ? <span className="lib-date" title={`Created ${formatDate(game.savedAt)}`}>Updated {formatDate(game.modifiedAt)}</span>
+                  : game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
               </div>
               {searchTerms.length > 0 && Boolean(game.moveTree?.length) && <LibraryStudyMatches
                 game={game} terms={searchTerms} formatKey={dateFormatKey} tabIndex={savedTabIndex}

@@ -102,6 +102,7 @@ export interface SavedGame {
     mainLinePinned?: true;
     id: string;
     savedAt: number;
+    modifiedAt?: number;
     gameMode: GameMode;
     moves: string[];            // UCI line used by the saved review, or path to the cursor
     cursorPly?: number;         // selected position within moves; defaults to its end
@@ -440,6 +441,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     return {
         id,
         savedAt,
+        ...(typeof asValidTimestamp(raw.modifiedAt) === 'number' && Number(raw.modifiedAt) >= savedAt ? { modifiedAt: Number(raw.modifiedAt) } : {}),
         gameMode,
         moves,
         ...(Number.isInteger(raw.cursorPly) && Number(raw.cursorPly) >= 0 && Number(raw.cursorPly) <= moves.length ? { cursorPly: Number(raw.cursorPly) } : {}),
@@ -566,7 +568,7 @@ export function createSavedGameId() {
  * order, and noted because the line looks load-bearing and is not.
  */
 export function loadAllGames(): SavedGame[] {
-    return [...readAll()].sort((a, b) => b.savedAt - a.savedAt);
+    return [...readAll()].sort((a, b) => (b.modifiedAt ?? b.savedAt) - (a.modifiedAt ?? a.savedAt));
 }
 
 export type SaveGameResult =
@@ -574,7 +576,7 @@ export type SaveGameResult =
     | { game: null; error: string };
 
 export function saveGameWithResult(game: Omit<SavedGame, 'id' | 'savedAt'>): SaveGameResult {
-    const saved = normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt: Date.now() });
+    const saved = normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt: Date.now(), modifiedAt: undefined });
     if (!saved) return { game: null, error: 'This game could not be saved because its data is invalid.' };
     const { games, mutationBlocked } = readAllResult();
     if (mutationBlocked) {
@@ -603,12 +605,12 @@ export function updateSavedGameWithResult(source: SavedGame, replacement: Omit<S
     const current = state.games[index];
     // The label is edited independently in the library. Preserve its newest
     // value; a rename does not invalidate the board's source content.
-    const content = (game: SavedGame) => JSON.stringify({ ...game, label: undefined });
+    const content = (game: SavedGame) => JSON.stringify({ ...game, label: undefined, modifiedAt: undefined });
     const expected = normalizeSavedGame(source);
     if (!expected || content(current) !== content(expected)) {
         return fail('This saved study changed since it was opened. Update was cancelled. Reload that version, or use Save to keep your board as a separate copy.');
     }
-    const updated = normalizeSavedGame({ ...replacement, id: current.id, savedAt: current.savedAt, label: current.label });
+    const updated = normalizeSavedGame({ ...replacement, id: current.id, savedAt: current.savedAt, modifiedAt: Math.max(current.savedAt, Date.now()), label: current.label });
     if (!updated) return fail('This study could not be updated because its data is invalid. The saved version has been kept.');
     const games = [...state.games]; games[index] = updated;
     return writeAll(games) ? { game: updated, error: null }
@@ -653,7 +655,7 @@ export function renameGame(id: string, label: string): boolean {
     if (mutationBlocked) {
         return false;
     }
-    const renamed = games.map((g) => g.id === id ? { ...g, label: normalizedLabel } : g);
+    const renamed = games.map((g) => g.id === id ? { ...g, label: normalizedLabel, modifiedAt: Math.max(g.savedAt, Date.now()) } : g);
     return writeAll(renamed);
 }
 
@@ -722,7 +724,7 @@ export function saveGameCollection(incoming: Omit<SavedGame, 'id' | 'savedAt'>[]
     if (current.mutationBlocked) return fail('Your existing library could not be read. Download its recovery file before importing.');
     if (current.games.length + incoming.length > MAX_SAVED_GAMES) return fail(`These games would exceed the ${MAX_SAVED_GAMES}-game library limit. Nothing was imported.`);
     const savedAt = Date.now();
-    const additions = incoming.map(game => normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt }));
+    const additions = incoming.map(game => normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt, modifiedAt: undefined }));
     if (additions.some(game => !game)) return fail('The collection contains invalid game data. Nothing was imported.');
     const games = [...current.games, ...additions as SavedGame[]];
     if (!writeAll(games)) return fail('Browser storage is full, blocked, or the combined library is too large. Nothing was imported.');

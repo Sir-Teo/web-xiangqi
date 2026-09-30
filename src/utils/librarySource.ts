@@ -5,7 +5,7 @@ const cache = new WeakMap<SavedGame, LibrarySource>();
 export function librarySource(game: SavedGame): LibrarySource {
     const cached = cache.get(game);
     if (cached) return cached;
-    const text = JSON.stringify({ ...normalizeSavedGame(game), label: undefined });
+    const text = JSON.stringify({ ...normalizeSavedGame(game), label: undefined, modifiedAt: undefined });
     let first = 0x811c9dc5, second = 0x9e3779b9;
     for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i);

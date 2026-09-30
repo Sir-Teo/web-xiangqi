@@ -38,7 +38,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 34. [x] Group advanced engine controls
 35. [x] Offer comfortable UI density
 36. [x] Show persistent save/modified state
-37. [ ] Track study modification dates
+37. [x] Track study modification dates
 38. [ ] Add editor Undo/Redo
 39. [ ] Apply pending editor FEN on Done
 40. [ ] Respect notation during practice
@@ -265,3 +265,9 @@ Validation: 31 preference tests; actual font/target size, board dimensions, hori
 Desktop and phone controls show Unsaved, Modified, Saving or Saved study and directly save/update it. Comparison includes notes, variations, metadata and retained analysis while ignoring navigation and automatic readings. Pending note edits mark the study immediately.
 
 Validation: content identity tests and browser save/navigation/pending-note/update checks at three widths; TypeScript and ESLint.
+
+## 37. Track study modification dates
+
+Study edits and renames set a separate modification date while retaining creation time. Recently modified sorting and Updated labels use it; older records fall back to creation time. Renames still preserve recovery/update identity.
+
+Validation: 29 library/cache/source/backup/date tests and saved-study update/conflict/copy browser workflows at three widths; TypeScript and ESLint.
