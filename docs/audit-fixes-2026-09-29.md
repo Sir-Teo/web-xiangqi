@@ -12,7 +12,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 8. [x] Preserve failed recovery data
 9. [x] Cancel stale direct imports
 10. [x] Validate FEN counters
-11. [ ] Preserve reviewed-game cursor
+11. [x] Preserve reviewed-game cursor
 12. [ ] Preserve recovered library identity
 13. [ ] Validate cloud numeric fields
 14. [ ] Timeout stalled library workers
@@ -107,3 +107,9 @@ Validation: delayed-file browser regression with out-of-order success, late fail
 Explicit FEN clocks must be decimal whole numbers in a supported range (halfmove 0–1,000,000; fullmove 1–1,000,000). Invalid clocks are explained rather than silently rounded or reset. Omitted clocks still default to 0/1.
 
 Validation: 32 position/FEN tests, including negative, fractional, non-finite, exponent, hex, and overflow inputs; TypeScript and ESLint.
+
+## 11. Preserve reviewed-game cursor
+
+Saved studies now record the selected ply independently from the full line needed for review annotations. Recovery and ordinary library loading restore that position; explicit explorer navigation still wins. Old records default to their original behavior.
+
+Validation: 54 autosave/library tests plus browser save/reload/recovery at the root and mid-line with a complete review; TypeScript and ESLint.

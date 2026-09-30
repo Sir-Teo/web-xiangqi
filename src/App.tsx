@@ -4326,6 +4326,7 @@ function App() {
       rootResult,
       mainLinePinned,
       moves,
+      cursorPly: currentMoveIndex + 1,
       opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: ((gameResult ?? selectedRecordedResult) === 'red-wins' ? 'red' : (gameResult ?? selectedRecordedResult) === 'black-wins' ? 'black' : (gameResult ?? selectedRecordedResult) === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
@@ -4872,6 +4873,7 @@ function App() {
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
       stopDeepDive, studyNotes.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
+    initialPly ??= selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
     if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {

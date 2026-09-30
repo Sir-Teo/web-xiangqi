@@ -103,7 +103,8 @@ export interface SavedGame {
     id: string;
     savedAt: number;
     gameMode: GameMode;
-    moves: string[];            // UCI strings from root to the saved cursor
+    moves: string[];            // UCI line used by the saved review, or path to the cursor
+    cursorPly?: number;         // selected position within moves; defaults to its end
     startFen?: string;          // root position for custom-FEN games
     result?: SavedResult;
     label?: string;             // user-editable
@@ -441,6 +442,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         savedAt,
         gameMode,
         moves,
+        ...(Number.isInteger(raw.cursorPly) && Number(raw.cursorPly) >= 0 && Number(raw.cursorPly) <= moves.length ? { cursorPly: Number(raw.cursorPly) } : {}),
         startFen,
         rootComment,
         ...(normalizeRecordedResult(raw.rootResult) ? { rootResult: normalizeRecordedResult(raw.rootResult) } : {}),

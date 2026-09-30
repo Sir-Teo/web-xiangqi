@@ -200,3 +200,16 @@ describe('refusing to restore something unusable', () => {
         expect(readAutoSavedGame(storage)).toBeNull();
     });
 });
+
+it('preserves a reviewed line independently of its selected cursor', () => {
+    const { storage } = stubStorage();
+    for (const cursorPly of [0, 1, 2]) {
+        writeAutoSavedGame({ ...GAME, cursorPly }, storage, 1);
+        expect(readAutoSavedGame(storage)?.game.cursorPly).toBe(cursorPly);
+        expect(readAutoSavedGame(storage)?.game.moves).toEqual(GAME.moves);
+    }
+    for (const cursorPly of [-1, 3, 0.5, NaN]) {
+        writeAutoSavedGame({ ...GAME, cursorPly }, storage, 1);
+        expect(readAutoSavedGame(storage)?.game.cursorPly).toBeUndefined();
+    }
+});
