@@ -22,7 +22,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 18. [x] Narrow tree-derived invalidation
 19. [x] Avoid whole-library mutation/reload costs
 20. [x] Skip duplicate autosave work
-21. [ ] Move direct imports to a worker
+21. [x] Move direct imports to a worker
 22. [ ] Prepare library search off the typing path
 23. [ ] Defer engine download until requested
 24. [ ] Improve device resource classification
@@ -169,3 +169,9 @@ Validation: cache identity, external modification, corrupt data and quota regres
 Unchanged flushes retain the original recovery timestamp and skip validation, byte encoding, and storage writes. The writer checks its actual owned slot before reusing success, so deleted or externally replaced drafts are repaired and failures remain retryable. Draft ownership is inserted without reparsing and reserializing the whole study.
 
 Validation: 25 autosave/draft tests, recovery Undo browser cases, storage-failure/download/retry on desktop and phone, TypeScript, and ESLint.
+
+## 21. Move direct imports to a worker
+
+Direct PGN, notation, DhtmlXQ, and XQF reading and legality checks run in a dedicated worker. Cancel, dismissal, replacement, input edits and FEN changes terminate pending parsing; a 30-second deadline exposes a retryable error. Deep trees use flat worker messages. The board and worker share the same pure move validators.
+
+Validation: cancellation/timeout/late-response browser test; delayed-file races; XQF metadata/results and 1,024-ply capacity/recovery at three widths; 53 parser/transfer tests, TypeScript, and ESLint.

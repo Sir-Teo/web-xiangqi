@@ -11,7 +11,7 @@ import { StudyNotes } from './components/StudyNotes';
 import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
-import { extractPgnMetadata, normalizeGameMetadata } from './utils/gameMetadata';
+import { normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
@@ -106,7 +106,7 @@ import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './utils/moveComme
 import { formatBreadcrumbLabel } from './utils/moveBreadcrumb';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeCompletedDrillAttempt, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
-import { isXqfFile, parseXqf, XqfMoveLimitError, type XqfRecord } from './utils/xqf';
+import type { XqfRecord } from './utils/xqf';
 import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
 import { describePvStanding } from './utils/pvStanding';
 import { formatRecordText } from './utils/recordText';
@@ -140,7 +140,7 @@ import {
   type StoredPreferences,
 } from './utils/preferences';
 import { createBoardArrowSelector, type BoardArrow, type BoardSquare } from './utils/boardArrows';
-import { planMoveLineImport } from './utils/moveLineImportPlan';
+import { readDirectImport } from './utils/directImport';
 import { getDialogFocusableElements, keepTabWithin } from './utils/focusTrap';
 import {
   createRepetitionAnalyzer,
@@ -2988,8 +2988,16 @@ function App() {
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState<string | null>(null);
   const directImportGenerationRef = useRef(0);
-  useLayoutEffect(() => { directImportGenerationRef.current++; }, [gameIdentity, pendingGameMode, showNewGameMenu]);
-  useEffect(() => () => { directImportGenerationRef.current++; }, []);
+  const directImportControllerRef = useRef<AbortController | null>(null);
+  const [directImportBusy, setDirectImportBusy] = useState(false);
+  const cancelDirectImport = useCallback(() => {
+    directImportGenerationRef.current++;
+    directImportControllerRef.current?.abort();
+    directImportControllerRef.current = null;
+    setDirectImportBusy(false);
+  }, []);
+  useLayoutEffect(() => { cancelDirectImport(); }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
+  useEffect(() => () => { directImportGenerationRef.current++; directImportControllerRef.current?.abort(); }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
@@ -3080,15 +3088,15 @@ function App() {
   }, [clearFenError]);
 
   const closeNewGameMenu = useCallback(() => {
-    directImportGenerationRef.current++;
+    cancelDirectImport();
     setShowNewGameMenu(false);
     setShowMobileBoardActionMenu(false);
     clearFenError();
     setMoveLineError(null);
-  }, [clearFenError]);
+  }, [clearFenError, cancelDirectImport]);
 
   const openNewGameMenu = useCallback(() => {
-    directImportGenerationRef.current++;
+    cancelDirectImport();
     setShowMobileBoardActionMenu(false);
     setShowSettings(false);
     setPendingGameMode(gameMode);
@@ -3098,7 +3106,7 @@ function App() {
     clearFenError();
     setMoveLineError(null);
     setShowNewGameMenu(true);
-  }, [clearFenError, gameMode]);
+  }, [clearFenError, gameMode, cancelDirectImport]);
 
   const toggleNewGameMenu = useCallback(() => {
     if (showNewGameMenu) {
@@ -3255,11 +3263,6 @@ function App() {
       setMoveLineError('This XQF file holds no moves and no position.');
       return;
     }
-    const treeValidation = record.moveTree.length > 0 ? validateMoveTree(record.moveTree, record.startFen) : null;
-    if (treeValidation && !treeValidation.ok) {
-      setMoveLineError(treeValidation.move ? `Move ${treeValidation.move}: ${treeValidation.reason}` : treeValidation.reason);
-      return;
-    }
     if (record.moves.length === 0) {
       // Through the ref: the FEN loader is declared further down.
       if (handleLoadFenRef.current?.(record.startFen || START_POSITION_FEN, nextGameMode, record.rootComment)) {
@@ -3293,13 +3296,14 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis]);
 
   const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
-    const generation = ++directImportGenerationRef.current;
+    cancelDirectImport();
+    const generation = directImportGenerationRef.current;
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
@@ -3309,21 +3313,21 @@ function App() {
     }
 
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      setDirectImportBusy(true);
+      const bytes = await file.arrayBuffer();
       if (generation !== directImportGenerationRef.current) return;
-      // Binary, so it cannot go through the text box: read it and load it.
-      if (isXqfFile(bytes) || /\.xqf$/i.test(file.name)) {
-        const record = parseXqf(bytes, MAX_MOVE_IMPORT_UCI_MOVES);
-        if (!record) {
-          setMoveLineFileName('');
-          setMoveLineError('Could not read this XQF file: it is not one, or its position cannot be placed.');
-          return;
-        }
+      const controller = new AbortController();
+      directImportControllerRef.current = controller;
+      const response = await readDirectImport({ kind: 'file', bytes, name: file.name }, controller.signal);
+      if (generation !== directImportGenerationRef.current) return;
+      setDirectImportBusy(false);
+      if (response.kind === 'xqf') {
         setMoveLineFileName(file.name);
-        handleImportXqf(record);
+        handleImportXqf(response.record);
         return;
       }
-      const text = new TextDecoder().decode(bytes);
+      if (response.kind !== 'text') return;
+      const text = response.text;
       if (isMoveImportTextTooLarge(text)) {
         setMoveLineInput('');
         setMoveLineFileName('');
@@ -3336,9 +3340,10 @@ function App() {
     } catch (error) {
       if (generation !== directImportGenerationRef.current) return;
       setMoveLineFileName('');
-      setMoveLineError(error instanceof XqfMoveLimitError ? error.message : 'Could not read file');
+      setDirectImportBusy(false);
+      setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }
-  }, [handleImportXqf]);
+  }, [handleImportXqf, cancelDirectImport]);
 
   const handleCopyFen = useCallback(async () => {
     const ok = await copyToClipboard(currentFen);
@@ -4032,13 +4037,24 @@ function App() {
   const handleLoadFenRef = useRef<typeof handleLoadFen | null>(null);
   handleLoadFenRef.current = handleLoadFen;
 
-  const handleImportMoveLine = useCallback((text: string, nextGameMode: GameMode = pendingGameMode) => {
-    directImportGenerationRef.current++;
+  const handleImportMoveLine = useCallback(async (text: string, nextGameMode: GameMode = pendingGameMode) => {
+    cancelDirectImport();
     showImportNotice(null);
-    // Reading the record and deciding what it is happens in one place, with no
-    // state touched until the decision is made: see `planMoveLineImport` for
-    // why the parsers are tried in the order they are.
-    const plan = planMoveLineImport(text, fenInput, { validateMoveSequence, validateMoveTree });
+    const generation = directImportGenerationRef.current;
+    const controller = new AbortController();
+    directImportControllerRef.current = controller;
+    setDirectImportBusy(true);
+    let response;
+    try { response = await readDirectImport({ kind: 'plan', text, fen: fenInput }, controller.signal); }
+    catch (error) {
+      if (generation !== directImportGenerationRef.current) return;
+      setDirectImportBusy(false);
+      setMoveLineError(error instanceof Error ? error.message : 'Could not read this game.');
+      return;
+    }
+    if (generation !== directImportGenerationRef.current || response.kind !== 'plan') return;
+    setDirectImportBusy(false);
+    const { plan, metadata } = response;
     if (plan.kind === 'error') {
       setMoveLineError(plan.message);
       return;
@@ -4046,7 +4062,7 @@ function App() {
     if (plan.kind === 'diagram') {
       if (handleLoadFen(plan.startFen, nextGameMode, plan.rootComment)) {
         restoreRecordedResult(rootNodeId, plan.rootResult);
-        setGameMetadata(extractPgnMetadata(text));
+        setGameMetadata(metadata);
       }
       return;
     }
@@ -4068,7 +4084,7 @@ function App() {
       : loadMoves(moves, startFen, undefined, plan.rootComment, plan.mainLinePinned);
     restoreRecordedResult(rootNodeId, plan.rootResult);
     restoreRecordedResult(loadedNodeIds[moves.length - 1] ?? rootNodeId, plan.recordedResult, true);
-    setGameMetadata(extractPgnMetadata(text));
+    setGameMetadata(metadata);
     if (notationRejected.length > 0) {
       // More pressing than the first-game notice: that one says the rest of a
       // file was left, this one says part of *this* game was.
@@ -4102,7 +4118,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, gameMode, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, validateMoveSequence, validateMoveTree]);
+  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, gameMode, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, cancelDirectImport]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -6183,7 +6199,7 @@ function App() {
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
                   onChange={(e) => {
-                    directImportGenerationRef.current++;
+                    cancelDirectImport();
                     const nextValue = e.target.value;
                     setMoveLineFileName('');
                     if (isMoveImportTextTooLarge(nextValue)) {
@@ -6221,15 +6237,16 @@ function App() {
                   />
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
                 </div>
+                {directImportBusy && <p role="status">Checking the game… <button type="button" onClick={cancelDirectImport}>Cancel reading</button></p>}
                 <div className="new-game-line-actions">
                   {moveLineError ? <span id="new-game-line-error" className="new-game-line-error" role="alert">{moveLineError}</span> : <span />}
                   <button
                     type="submit"
                     className="new-game-strength-btn new-game-strength-btn-active"
-                    disabled={!moveLineInput.trim()}
+                    disabled={directImportBusy || !moveLineInput.trim()}
                     data-testid="import-uci-line-btn"
                   >
-                    Import
+                    {directImportBusy ? 'Reading…' : 'Import'}
                   </button>
                 </div>
               </form>

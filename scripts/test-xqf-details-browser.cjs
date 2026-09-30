@@ -10,7 +10,7 @@ function file(kind,result=3,metadata=true){
  const moves=kind==='diagram'?[]:kind==='refused-main'?[step('h2e2',true),step('a9a0')]:kind==='missing-next'?[step('h2e2',true)]:kind==='replaced-main'?[step('a0a9',false,true),step('h2e2')]:kind==='refused-side'?[step('h2e2',true),step('h9g7',false,true),step('a9a0')]:[step('h2e2',true),step('h9g7')];
  return Buffer.concat([h,root,...moves]);
 }
-async function command(page,label){await page.keyboard.press('ControlOrMeta+k');await page.getByRole('combobox',{name:'Search commands'}).fill(label);await page.keyboard.press('Enter');}
+async function command(page,label){const count=label==='Save game'?await page.evaluate(()=>JSON.parse(localStorage.getItem('xiangqi:library:v1')||'[]').length):null;await page.keyboard.press('ControlOrMeta+k');await page.getByRole('combobox',{name:'Search commands'}).fill(label);await page.keyboard.press('Enter');if(count!==null)await page.waitForFunction(n=>JSON.parse(localStorage.getItem('xiangqi:library:v1')||'[]').length===n+1,count);}
 async function copy(page){await command(page,'Copy PGN');return page.evaluate(()=>window.__copied);}
 (async()=>{const browser=await browserType.launch();try{
  for(const width of [1440,390,320]){
