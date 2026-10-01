@@ -4,8 +4,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const extra of [{ rootComment: 'Notes before any move' }, { moveTree: [{ uci: 'h2e2' }] }, { metadata: { event: 'Study notes' } }, { rootResult: 'red-wins' }]) {
-      const page = await browser.newPage();
+    for (const width of [1440, 390, 320]) for (const extra of [{ rootComment: 'Notes before any move' }, { moveTree: [{ uci: 'h2e2' }] }, { metadata: { event: 'Study notes' } }, { rootResult: 'red-wins' }]) {
+      const page = await browser.newPage({ viewport: { width, height: width === 320 ? 480 : 900 } });
       page.setDefaultTimeout(10000);
       await page.addInitScript(extra => {
         if (sessionStorage.getItem('fixture')) return;
@@ -18,7 +18,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       await page.keyboard.press('Escape');
       assert.equal(await page.getByRole('dialog', { name: 'Unfinished game' }).count(), 0);
       assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:auto-saved-game:v1')), before);
-      await page.getByRole('button', { name: 'Recovery drafts (1)' }).click();
+      if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();
+      await page.getByTestId('recovery-drafts-btn').click();
       await page.getByRole('button', { name: 'Start fresh', exact: true }).click();
       await page.getByTestId('discard-undo-btn').click();
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1')).game);

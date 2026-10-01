@@ -325,3 +325,9 @@ Validation: position-editor keyboard/focus coverage at four viewports in WebKit,
 Firefox and WebKit run a 16-workflow production smoke suite alongside the existing Chromium audit shards. The final verification gate requires both browser jobs before deployment, and failures retain screenshots. The Chromium manifest includes the new audit regressions. Coordinate fixtures seed preferences before mounting, and concurrent-save checks observe a foreground tab with timer polling.
 
 Validation: all 16 core workflows exercised in Chromium, Firefox and WebKit; the WebKit editor focus failure was fixed and its four-viewport suite passed three consecutive production runs. Four shard/workflow coverage tests pass. The broader Chromium audit is being reconciled with asynchronous saving, recovery checkpoints and explicit engine activation.
+
+## Browser follow-up: keep recovery controls out of board content
+
+Recovery drafts now appear in the desktop action bar and phone action menu. The floating control could cover rule explanations on narrow screens with enlarged text.
+
+Validation: recovery menu flows at 1440, 390 and 320 pixels; 60-move-rule notices at all three widths with 100% and 200% text; TypeScript and ESLint.

@@ -5502,6 +5502,15 @@ function App() {
           : null;
   const boardDetailText = moveRuleHint ?? (selectedPiece ? legalMoveText : boardArrowHint ?? legalMoveText);
 
+  const recoveryDraftControl = !autoSaveRecovery && recoveryDrafts.length > 0 ? (
+    <button type="button" className={isMobile ? 'mobile-action-menu-btn' : 'top-action-btn'}
+      role={isMobile ? 'menuitem' : undefined} data-testid="recovery-drafts-btn"
+      aria-label={`Recovery drafts (${recoveryDrafts.length})`} title="Restore an unfinished study or replacement checkpoint"
+      onClick={() => { setShowMobileBoardActionMenu(false); setAutoSaveRecovery(recoveryDrafts[0]); }}>
+      <IconRefresh /><span className={isMobile ? undefined : 'btn-label-desktop'}>Recovery drafts ({recoveryDrafts.length})</span>
+    </button>
+  ) : null;
+
   const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
     title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
@@ -5641,6 +5650,7 @@ function App() {
 
             {/* Action buttons */}
             <div className="top-action-buttons">
+              {!isMobile && recoveryDraftControl}
               <button
                 type="button"
                 className="top-action-btn"
@@ -6915,6 +6925,7 @@ function App() {
                   {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
                   <span>{saveFailedToast ? 'Save failed' : savedToast ? 'Saved game' : 'Save game'}</span>
                 </button>
+                {recoveryDraftControl}
                 {showMobilePgnAction ? (
                   <button
                     className={`mobile-action-menu-btn ${downloadedPgnToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'download-pgn' ? 'mobile-action-menu-btn-warn' : ''}`}
@@ -8397,12 +8408,6 @@ function App() {
           }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
           <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
         </div>
-      )}
-
-      {!autoSaveRecovery && recoveryDrafts.length > 0 && (
-        <button className="recovery-drafts-button" type="button" onClick={() => setAutoSaveRecovery(recoveryDrafts[0])}>
-          Recovery drafts ({recoveryDrafts.length})
-        </button>
       )}
 
       {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
