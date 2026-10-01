@@ -5056,6 +5056,7 @@ function App() {
    * Re-run whenever a dialog opens or closes: the dialog has to be in the DOM
    * for `contains` to find it.
    */
+  const dialogLauncherRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     if (typeof document === 'undefined') return;
     const shell = document.querySelector('.app-shell');
@@ -5068,6 +5069,12 @@ function App() {
     // "restore" and the opener is lost for good.
     const launcher = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (aDialogIsOpen) {
+      // Keep the original page control through palette → dialog transitions.
+      // The palette input can be removed before the next dialog records focus.
+      if (!dialogLauncherRef.current && launcher && launcher !== document.body
+        && !launcher.closest('[role="dialog"]')) {
+        dialogLauncherRef.current = launcher;
+      }
       const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
       // Nothing found means the dialog has not rendered yet; the next run of
       // this effect catches it, and inerting everything meanwhile would take
@@ -5079,15 +5086,20 @@ function App() {
           marked.push(child);
         }
       }
+    } else {
+      dialogLauncherRef.current = null;
     }
+    const originalLauncher = dialogLauncherRef.current;
     return () => {
       for (const child of marked) child.removeAttribute('inert');
       // Only when nothing else has claimed focus: a dialog that tracked its own
       // launcher restores from a passive cleanup, which runs after this.
       if (!marked.length) return;
       if (document.activeElement && document.activeElement !== document.body) return;
-      if (launcher && launcher !== document.body && launcher.isConnected) {
-        launcher.focus({ preventScroll: true });
+      const destination = launcher && launcher !== document.body && launcher.isConnected
+        && !launcher.closest('[role="dialog"]') ? launcher : originalLauncher;
+      if (destination?.isConnected) {
+        destination.focus({ preventScroll: true });
       }
     };
   }, [aDialogIsOpen, showSettings, showNewGameMenu, showCommandPalette, visibleGameResult, autoSaveRecovery, showBoardEditor, showRuleLessons, practiceStudy]);

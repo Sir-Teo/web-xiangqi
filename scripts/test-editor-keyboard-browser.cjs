@@ -90,7 +90,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         assert.equal(await editor.evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
         await page.screenshot({ path: `/tmp/xiangqi-editor-keyboard-${browserType.name()}-${width}.png` });
         await page.keyboard.press('Escape'); await editor.waitFor({ state: 'hidden' });
-        assert.equal(await launchSquare.evaluate(node => document.activeElement === node), true, 'Closing the editor lost the original board focus');
+        await page.waitForFunction(node => document.activeElement === node, await launchSquare.elementHandle(), { timeout: 3000 });
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()}: editor arrows, one Tab stop, painting, focus trap, escape and layout passed at ${width}x${height}`);
       } finally { await page.close(); }

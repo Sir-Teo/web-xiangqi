@@ -313,3 +313,9 @@ Validation: 18 backup/conflict tests; mixed choices at three widths, complete ba
 PGN imports compare normalized game content across existing records and within the incoming selection, independent of library IDs, dates and labels. Compact and tree representations match. The preview reports new/duplicate counts before capacity checks, and an explicit option retains duplicate copies. Changed notes or annotations remain distinct.
 
 Validation: duplicate/capacity/copy/atomic-save unit tests; repeated collection import skips duplicates, optional copies exercise quota refusal, metadata and variation export remain intact at three widths; TypeScript and ESLint.
+
+## Browser follow-up: preserve focus through dialog transitions
+
+The original page control remains the focus destination when a command palette action opens another dialog. Removed palette inputs and the page body no longer replace that destination.
+
+Validation: position-editor keyboard/focus coverage at four viewports in WebKit, repeated three times against the production build; Chromium dialog focus/inert checks; TypeScript and ESLint.

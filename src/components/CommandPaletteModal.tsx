@@ -49,7 +49,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
             // and because a command that opens another dialog should keep the
             // focus that dialog takes -- React runs this cleanup before that
             // dialog's own effect.
-            if (previouslyFocused && document.contains(previouslyFocused)) {
+            if (previouslyFocused && previouslyFocused !== document.body && document.contains(previouslyFocused)) {
                 previouslyFocused.focus({ preventScroll: true });
             }
         };
