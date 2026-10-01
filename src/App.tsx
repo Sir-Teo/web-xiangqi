@@ -4879,9 +4879,9 @@ function App() {
       run: () => openAnalysisPanel('review'),
     },
     {
-      id: 'tab-engine', label: 'Engine panel', hint: engineEnabled ? undefined : 'Available in Analysis',
-      keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E', disabled: !engineEnabled,
-      run: () => openAnalysisPanel('engine'),
+      id: 'tab-engine', label: 'Engine panel', hint: engineEnabled ? undefined : 'Start analysis; about 53 MB on first use',
+      keywords: ['pikafish', 'depth', 'pv'], shortcut: 'E',
+      run: () => { startEngineAnalysis(); openAnalysisPanel('engine'); },
     },
     { id: 'panel-graph', label: 'Evaluation graph', keywords: ['chart', 'swing'], run: openGraphPanel },
     { id: 'go-first', label: 'Go to start', keywords: ['first', 'beginning'], shortcut: '↑', run: goToFirstMove },
@@ -5359,7 +5359,7 @@ function App() {
           handlePlayPvLine(topAnalysisPv.moves, 1);
           break;
         case 'e':
-          if (!engineEnabled) return;
+          startEngineAnalysis();
           openEnginePanel();
           break;
         case 't':
@@ -5376,7 +5376,7 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    openAnalysisPanel, aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive, engineEnabled,
+    startEngineAnalysis, openAnalysisPanel, aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive,
     handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopDeepDive,
     stopThreat, threatActive, topAnalysisPv,
   ]);
@@ -7403,13 +7403,14 @@ function App() {
                 >
                   <IconBarChart />Review
                 </button>
-                {engineEnabled ? (
+                {workspaceMode === 'analysis' ? (
                   <button
                     type="button"
                     role="tab"
                     id="analysis-tab-engine-tab"
                     className={`analysis-tab-btn ${analysisTab === 'engine' ? 'active' : ''}`}
                     onClick={() => {
+                      startEngineAnalysis();
                       setAnalysisTab('engine');
                       setMobileAnalysisTab('engine');
                     }}

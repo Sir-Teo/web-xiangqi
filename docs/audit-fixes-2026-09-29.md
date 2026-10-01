@@ -184,7 +184,7 @@ Validation: controlled first-keystroke test proves zero text preparation during 
 
 ## 23. Defer engine download until requested
 
-Opening the board, a shared study, or the library no longer starts Pikafish or preloads its loader. Explicit analysis controls, the phone Engine tab, post-game review, and AI play activate it. Desktop, phone and command-palette entry points explain the first-use download.
+Opening the board, a shared study, or the library no longer starts Pikafish or preloads its loader. Explicit analysis controls, desktop and phone Engine tabs, the E shortcut, the Engine panel command, post-game review, and AI play activate it. Desktop, phone and command-palette entry points explain the first-use download.
 
 Validation: zero loader/NNUE/WASM requests before activation at 1440, 390 and 320px; one loader request afterward; startup cancellation, telemetry isolation, and engine-line save/recovery/capacity workflows; TypeScript, ESLint and production build.
 

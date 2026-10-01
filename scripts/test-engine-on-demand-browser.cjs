@@ -13,7 +13,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
    await page.locator('.xiangqi-board').waitFor();
    await page.waitForTimeout(800);
    assert.deepEqual(requests, [], 'Opening a study must not download an engine');
-   await page.getByTestId('start-engine-analysis').click();
+   if (width === 1440) await page.getByTestId('analysis-tab-engine').click();
+   else if (width === 390) await page.keyboard.press('e');
+   else {
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Engine panel'); await page.keyboard.press('Enter');
+   }
    await page.waitForFunction(() => document.querySelector('.top-engine-state')?.textContent.includes('Engine ready'));
    assert.equal(requests.filter(url => url.includes('pikafish.js')).length, 1);
    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
