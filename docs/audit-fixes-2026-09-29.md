@@ -337,3 +337,9 @@ Validation: recovery menu flows at 1440, 390 and 320 pixels; 60-move-rule notice
 Replacing a meaningful study now uses the existing ID fallback when `crypto.randomUUID` is unavailable. Previously, checkpoint creation threw and prevented opening a checked PGN on the board.
 
 Validation: dense PGN recovery at three widths, including an unreadable library and unavailable native UUID at 320 pixels; all 1,000 analysis snapshots retained and library bytes unchanged.
+
+## Browser follow-up: consistent drill evaluation language
+
+Good-alternative drill feedback now says “Advantage change,” consistent with the other verdicts and the evaluation display.
+
+Validation: the mistake-practice prompt, good alternative and grading workflow pass in the layout suite; TypeScript and ESLint.

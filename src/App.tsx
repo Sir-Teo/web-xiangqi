@@ -3978,7 +3978,7 @@ function App() {
       case 'good':
         return {
           headline: `${attemptText} is good enough.`,
-          detail: `Winning chance ${formatWinPercentLoss(verdict.winPercentLoss)}; the engine preferred ${bestText}.`,
+          detail: `Advantage change ${formatWinPercentLoss(verdict.winPercentLoss)}; the engine preferred ${bestText}.`,
         };
       case 'wrong':
         return {
