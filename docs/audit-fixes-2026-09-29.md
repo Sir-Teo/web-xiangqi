@@ -331,3 +331,9 @@ Validation: all 16 core workflows exercised in Chromium, Firefox and WebKit; the
 Recovery drafts now appear in the desktop action bar and phone action menu. The floating control could cover rule explanations on narrow screens with enlarged text.
 
 Validation: recovery menu flows at 1440, 390 and 320 pixels; 60-move-rule notices at all three widths with 100% and 200% text; TypeScript and ESLint.
+
+## Browser follow-up: checkpoint without native UUID support
+
+Replacing a meaningful study now uses the existing ID fallback when `crypto.randomUUID` is unavailable. Previously, checkpoint creation threw and prevented opening a checked PGN on the board.
+
+Validation: dense PGN recovery at three widths, including an unreadable library and unavailable native UUID at 320 pixels; all 1,000 analysis snapshots retained and library bytes unchanged.

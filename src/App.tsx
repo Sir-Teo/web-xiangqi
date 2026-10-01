@@ -67,7 +67,7 @@ import { formatExplorerRecord } from './utils/positionExplorer';
 import { savedGameLine } from './utils/savedGameLine';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import { MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
+import { createSavedGameId, MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
@@ -5177,7 +5177,7 @@ function App() {
       if (!isWorthAutoSaving(snapshot)) return true;
       const signature = JSON.stringify(snapshot);
       if (signature === lastCheckpointRef.current?.signature && readAutoSaveDrafts().some(draft => draft.draftId === lastCheckpointRef.current?.id)) return true;
-      const id = `checkpoint-${globalThis.crypto.randomUUID()}`;
+      const id = `checkpoint-${createSavedGameId()}`;
       const result = writeAutoSaveDraft(snapshot, undefined, Date.now(), id);
       if (result !== 'saved') {
         setAutoSaveIssue(result === 'too-large' ? 'too-large' : 'failed');

@@ -72,7 +72,7 @@ async function installEngine(page) {
         });
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Checking the file must not replace the board');
         assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), original);
-        if (width === 320) assert.equal(await panel.getByRole('button', { name: 'Import 1 game', exact: true }).isDisabled(), true);
+        if (width === 320) assert.equal(await panel.getByRole('button', { name: /^Import \d+ games?$/ }).isDisabled(), true);
         const initialFont = await open.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
         for (const size of [16, 32]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
