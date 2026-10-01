@@ -52,7 +52,7 @@ async function resetText(page) {
    assert.equal(await raw(),before,'Preview does not save');
    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen);
    await checkEnlargedDetails(page, panel.locator('.lib-pgn-game span span').first(), 'preview');
-   await panel.getByRole('checkbox').last().uncheck();
+   await panel.locator('.lib-pgn-games').getByRole('checkbox').last().uncheck();
    assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true);
    await panel.getByRole('button',{name:'Select none',exact:true}).click();
    assert.equal(await panel.getByRole('button',{name:'Import 0 games',exact:true}).isDisabled(),true);
@@ -79,15 +79,20 @@ async function resetText(page) {
    assert.ok(pgn.includes('Branch note') && pgn.includes('(') && pgn.includes('[White "Alice"]'));
    for(const tag of ['[WhiteElo "2500"]','[BlackElo "2450"]','[TimeControl "40/7200:3600"]','[Annotator "Coach 王"]']) assert.ok(pgn.includes(tag), `Collection export lost ${tag}`);
    await resetText(page);
+   await upload(source);
+   await panel.getByRole('button',{name:'Import 0 games',exact:true}).waitFor();
+   await panel.getByRole('button',{name:'Import 0 games',exact:true}).click();
+   await panel.getByRole('status').filter({hasText:'Skipped 2 duplicates.'}).waitFor();
    // Failed writes preserve the current library and leave the preview available.
    await upload(source);
+   await panel.getByRole('checkbox',{name:'Import duplicates as copies'}).check();
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
    await page.evaluate(()=>{ const original=Storage.prototype.setItem; Storage.prototype.setItem=function(key,value){if(key==='xiangqi:library:v1')throw new Error('Quota'); return original.call(this,key,value);}; });
    const original=await raw();
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
    await panel.getByRole('alert').waitFor();
    assert.equal(await raw(),original);
-   assert.equal(await panel.getByRole('checkbox').count(),2);
+   assert.equal(await panel.getByRole('checkbox').count(),3);
    await panel.getByRole('button',{name:'Cancel import',exact:true}).click();
    assert.equal(await panel.getByRole('checkbox').count(),0);
    assert.deepEqual(errors,[]);

@@ -1,7 +1,7 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
-import { MAX_SAVED_GAMES, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
+import { previewGameCollection, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { formatRatedPlayer } from '../../utils/gameMetadata';
 import { unpackCollectionGames, type PackedGame } from '../../utils/moveTreeTransfer';
@@ -11,6 +11,8 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
 }) {
   const [games, setGames] = useState<CollectionGame[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [includeDuplicates, setIncludeDuplicates] = useState(false);
+  const preview = useMemo(() => previewGameCollection(games.filter((_, index) => selected.has(index)), state, includeDuplicates), [games, selected, state, includeDuplicates]);
   const [busy, setBusy] = useState(false);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
@@ -62,14 +64,14 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
     if (savingRef.current) return;
     savingRef.current = true; setSaving(true);
     const request = generation.current;
-    const result = await withLibraryMutation(() => saveGameCollection(games.filter((_, index) => selected.has(index))), { added: 0, error: LIBRARY_LOCK_ERROR });
+    const result = await withLibraryMutation(() => saveGameCollection(games.filter((_, index) => selected.has(index)), includeDuplicates), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
     savingRef.current = false; setSaving(false);
     onChange();
     if (request !== generation.current) return;
     setError(result.error || '');
-    if (!result.error) { setMessage(`Imported ${result.added} ${result.added === 1 ? 'game' : 'games'}.`); setGames([]); setSelected(new Set()); }
+    if (!result.error) { setMessage(`Imported ${result.added} ${result.added === 1 ? 'game' : 'games'}.${result.duplicates ? ` Skipped ${result.duplicates} duplicates.` : ''}`); setGames([]); setSelected(new Set()); }
   }
-  const tooMany = state.games.length + selected.size > MAX_SAVED_GAMES;
+
   return <section className="lib-transfer" aria-label="Import PGN collection">
     <details data-testid="pgn-collection-import">
       <summary>Import PGN collection</summary>
@@ -80,7 +82,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
       </label>
       {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview">
-        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept; importing the same file again creates new copies.</p>
+        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept. Identical game content is skipped by default.</p>
         <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, saved analysis, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
         <div className="lib-transfer-actions">
           <button type="button" onClick={() => setSelected(new Set(games.map((_, index) => index)))}>Select all</button>
@@ -102,9 +104,11 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
             </button>
           </div>)}
         </div>
-        {tooMany && <p role="alert">Select fewer games. Your library has {MAX_SAVED_GAMES - state.games.length} spaces remaining.</p>}
+        <label><input type="checkbox" checked={includeDuplicates} onChange={event => setIncludeDuplicates(event.target.checked)} /> Import duplicates as copies</label>
+        <p role="status">{preview.added} new games; {preview.duplicates} duplicates skipped.</p>
+        {selected.size > 0 && preview.error && <p role="alert">{preview.error}</p>}
         <div className="lib-transfer-actions">
-          <button type="button" disabled={saving || state.mutationBlocked || !selected.size || tooMany} onClick={save}>Import {selected.size} {selected.size === 1 ? 'game' : 'games'}</button>
+          <button type="button" disabled={saving || state.mutationBlocked || !selected.size || Boolean(preview.error)} onClick={save}>Import {preview.added} {preview.added === 1 ? 'game' : 'games'}</button>
           <button type="button" onClick={() => { generation.current++; stop(); setGames([]); setError(''); }}>Cancel import</button>
         </div>
       </div>}

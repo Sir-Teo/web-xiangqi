@@ -735,19 +735,61 @@ export function restoreLibraryBackup(text: string, choices: LibraryRestoreChoice
     return preview;
 }
 
-/** Append a reviewed collection in one write, re-reading storage at confirmation. */
-export function saveGameCollection(incoming: Omit<SavedGame, 'id' | 'savedAt'>[]): { added: number; error: string | null } {
-    const fail = (error: string) => ({ added: 0, error });
+type CollectionInput = Omit<SavedGame, 'id' | 'savedAt'>;
+const collectionIdentities = new WeakMap<object, string>();
+const normalizedCollectionGames = new WeakMap<object, SavedGame | null>();
+function collectionIdentity(game: SavedGame): string {
+    const cached = collectionIdentities.get(game);
+    if (cached !== undefined) return cached;
+    const rows: unknown[] = [];
+    if (game.moveTree?.length) {
+        const stack = game.moveTree.slice().reverse().map(node => ({ node, depth: 0 }));
+        while (stack.length) {
+            const { node, depth } = stack.pop()!;
+            rows.push({ depth, ...node, children: undefined });
+            for (let i = (node.children?.length ?? 0) - 1; i >= 0; i--) stack.push({ node: node.children![i], depth: depth + 1 });
+        }
+    } else game.moves.forEach((uci, depth) => rows.push({ depth, uci }));
+    const identity = JSON.stringify([game.startFen, game.metadata, game.rootComment, game.rootResult, game.result, game.mainLinePinned, rows, game.review]);
+    collectionIdentities.set(game, identity);
+    return identity;
+}
+function prepareGameCollection(incoming: CollectionInput[], current: LibraryState, includeDuplicates: boolean) {
+    const fail = (error: string) => ({ additions: [] as SavedGame[], added: 0, duplicates: 0, error });
     if (!incoming.length || incoming.length > MAX_SAVED_GAMES) return fail(`Choose between 1 and ${MAX_SAVED_GAMES} games.`);
-    const current = loadLibraryState();
     if (current.mutationBlocked) return fail('Your existing library could not be read. Download its recovery file before importing.');
-    if (current.games.length + incoming.length > MAX_SAVED_GAMES) return fail(`These games would exceed the ${MAX_SAVED_GAMES}-game library limit. Nothing was imported.`);
+    const seen = new Set(current.games.map(collectionIdentity));
+    const additions: SavedGame[] = [];
+    let duplicates = 0;
+    for (const input of incoming) {
+        let game = normalizedCollectionGames.get(input);
+        if (game === undefined) {
+            game = normalizeSavedGame({ ...input, id: 'collection-preview', savedAt: 1, modifiedAt: undefined });
+            normalizedCollectionGames.set(input, game);
+        }
+        if (!game) return fail('The collection contains invalid game data. Nothing was imported.');
+        const identity = collectionIdentity(game);
+        if (!includeDuplicates && seen.has(identity)) { duplicates++; continue; }
+        seen.add(identity); additions.push(game);
+    }
+    if (current.games.length + additions.length > MAX_SAVED_GAMES) return fail(`These games would exceed the ${MAX_SAVED_GAMES}-game library limit. Nothing was imported.`);
+    return { additions, added: additions.length, duplicates, error: null };
+}
+
+export function previewGameCollection(incoming: CollectionInput[], current: LibraryState, includeDuplicates = false) {
+    const { added, duplicates, error } = prepareGameCollection(incoming, current, includeDuplicates);
+    return { added, duplicates, error };
+}
+
+/** Deduplicate before capacity checks; re-read under the library mutation lock. */
+export function saveGameCollection(incoming: CollectionInput[], includeDuplicates = false): { added: number; duplicates?: number; error: string | null } {
+    const current = loadLibraryState();
+    const result = prepareGameCollection(incoming, current, includeDuplicates);
+    if (result.error) return { added: 0, error: result.error };
     const savedAt = Date.now();
-    const additions = incoming.map(game => normalizeSavedGame({ ...game, id: createSavedGameId(), savedAt, modifiedAt: undefined }));
-    if (additions.some(game => !game)) return fail('The collection contains invalid game data. Nothing was imported.');
-    const games = [...current.games, ...additions as SavedGame[]];
-    if (!writeAll(games)) return fail('Browser storage is full, blocked, or the combined library is too large. Nothing was imported.');
-    return { added: additions.length, error: null };
+    const additions = result.additions.map(game => ({ ...game, id: createSavedGameId(), savedAt }));
+    if (additions.length && !writeAll([...current.games, ...additions])) return { added: 0, error: 'Browser storage is full, blocked, or the combined library is too large. Nothing was imported.' };
+    return { added: additions.length, error: null, ...(result.duplicates ? { duplicates: result.duplicates } : {}) };
 }
 
 const LIBRARY_RECOVERY_PREFIX = 'xiangqi:library-recovery:v1:';

@@ -45,7 +45,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 41. [x] Persist practice progress
 42. [x] Provide guided library salvage
 43. [x] Resolve backup conflicts per game
-44. [ ] Detect collection duplicates
+44. [x] Detect collection duplicates
 45. [ ] Run cross-browser checks in CI
 
 ## 1. Bound complete share links
@@ -307,3 +307,9 @@ Validation: salvage/archive/quota/stale-preview tests and guided repair with exa
 Restore previews current and incoming versions and offers Keep current, Replace with backup or Import as a copy for each conflict. Counts and capacity follow the choices. Confirmation rechecks selected replacement/copy sources under the library lock and refuses changed or deleted versions.
 
 Validation: 18 backup/conflict tests; mixed choices at three widths, complete backup/download/recovery browser flow; TypeScript and ESLint.
+
+## 44. Detect collection duplicates
+
+PGN imports compare normalized game content across existing records and within the incoming selection, independent of library IDs, dates and labels. Compact and tree representations match. The preview reports new/duplicate counts before capacity checks, and an explicit option retains duplicate copies. Changed notes or annotations remain distinct.
+
+Validation: duplicate/capacity/copy/atomic-save unit tests; repeated collection import skips duplicates, optional copies exercise quota refusal, metadata and variation export remain intact at three widths; TypeScript and ESLint.
