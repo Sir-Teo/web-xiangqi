@@ -52,6 +52,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: 1024 }, (_, i) => cycle[i % 4]).join('+'));
+        await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__searchHeld);
         await page.keyboard.press('t');
         await page.getByTestId('move-tree-active').waitFor();

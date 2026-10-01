@@ -47,7 +47,11 @@ async function copyPgn(page) { await command(page, 'Copy PGN'); return page.eval
           if (fixture.id === 'mate-tree') await page.screenshot({ path: `/tmp/xiangqi-loaded-result-${browserType.name()}-${width}.png` });
           await modal.getByRole('button', { name: 'Review', exact: true }).click();
           assert.ok((await copyPgn(page)).includes(`[Result "${fixture.tag}"]`), fixture.id);
-          await command(page, 'Save game');
+          {
+            const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+            await command(page, 'Save game');
+            await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+          }
           const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
           assert.equal(saved.result, fixture.saved, fixture.id);
           if (fixture.moves.length) {

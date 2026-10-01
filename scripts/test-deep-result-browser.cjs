@@ -95,6 +95,7 @@ async function check(browser, width) {
     await waitDepth(28);
     const boots = await page.evaluate(() => window.__boots);
     const oldCommands = await page.evaluate(() => window.__commands.length);
+    if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
     await page.getByTestId('restart-engine-btn').click();
     await page.waitForFunction(previous => window.__boots === previous + 1, boots);
     await waitDepth(8);

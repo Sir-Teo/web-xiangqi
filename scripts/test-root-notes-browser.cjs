@@ -49,7 +49,11 @@ function xqf(diagram = false) {
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
         await page.getByRole('textbox', { name: 'Note on starting position', exact: true }).fill(rootNote);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         console.log(`${browserType.name()} ${width}px: initial note saved`);
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length === 1);
         let saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
@@ -69,7 +73,11 @@ function xqf(diagram = false) {
         const treePgn = await page.evaluate(() => window.__copied);
         assert.ok(treePgn.indexOf(rootNote) < treePgn.indexOf('h2e2'));
         assert.ok(treePgn.includes('Other cannon'));
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.rootComment, rootNote); assert.equal(saved.moveTree[0].comment, 'Central cannon');
         await command(page, 'Library');
@@ -102,7 +110,12 @@ function xqf(diagram = false) {
         await importPgn(page, width, '[DhtmlXQ_movelist][/DhtmlXQ_movelist][DhtmlXQ_comment0]Dhtml opening plan[/DhtmlXQ_comment0]');
         await noteIs(page, 'Dhtml opening plan');
         await page.getByTestId('move-comment-input').fill(''); await page.getByTestId('move-comment-input').blur();
-        await page.waitForFunction(() => !localStorage.getItem('xiangqi:auto-saved-game:v1'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="study-save-status"]')?.textContent.includes('Unsaved study'));
+        assert.ok(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('xiangqi:recovery-draft:v1:')).every(key => {
+          const game = JSON.parse(localStorage.getItem(key)).game;
+          return game.moves.length > 0 || Boolean(game.rootComment?.trim()) || Object.values(game.metadata || {}).some(value => String(value).trim());
+        })));
+
         await page.keyboard.press('Escape');
         await command(page, 'Library');
         await page.getByRole('searchbox', { name: 'Search library' }).fill('');

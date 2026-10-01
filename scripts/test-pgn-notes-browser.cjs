@@ -64,7 +64,11 @@ async function importPgn(page, width, source, fromFile = false) {
         assert.equal(await page.locator('.mtree-chip').count(), 2);
         await page.locator('.mtree-chip').first().click();
         await page.waitForFunction(() => document.querySelector('[data-testid="move-comment-input"]')?.value === '[%'.repeat(250));
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.moveTree[0].comment, '[%'.repeat(250));
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -79,7 +83,11 @@ async function importPgn(page, width, source, fromFile = false) {
           ] },
         ];
         await importPgn(page, width, source);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const lastTree = () => page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1).moveTree);
         assert.deepEqual(await lastTree(), expected, 'Paste import lost or reassigned a branch note');
         await page.keyboard.press('t');
@@ -94,12 +102,20 @@ async function importPgn(page, width, source, fromFile = false) {
         const chunks = [];
         for await (const chunk of await (await downloadReady).createReadStream()) chunks.push(chunk);
         await importPgn(page, width, Buffer.concat(chunks).toString(), true);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual(await lastTree(), expected, 'File round-trip lost a branch note');
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.[1]?.children?.[1]?.comment === 'Nested rook Keep this alternative');
         await page.reload();
         await page.getByRole('button', { name: 'Restore', exact: true }).click();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual(await lastTree(), expected, 'Reload recovery lost a branch note');
         await importPgn(page, width, 'h2e2 $6 {[%eval +0.42,18] Brace idea} ; Semicolon continuation\nh9g7 $2 {[%eval -.75,21]} h0g2 {[%eval #+3,24]} b9c7 {[%eval #-0,0]} *');
         const reviewDownload = page.waitForEvent('download');
@@ -110,7 +126,11 @@ async function importPgn(page, width, source, fromFile = false) {
         for (const evaluation of ['0.42,18', '-0.75,21', '#3,24', '#-0,0']) {
           assert.ok(reviewedPgn.includes(`[%eval ${evaluation}]`), `Imported evaluation ${evaluation} was lost or changed sides`);
         }
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const readSaved = () => page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         const annotatedGame = await readSaved();
         assert.equal(annotatedGame.review, undefined, 'Import fabricated a completed engine review');
@@ -125,13 +145,21 @@ async function importPgn(page, width, source, fromFile = false) {
         assert.ok(new URL(copied).searchParams.has('tree'), 'An unbranched annotated line was shared as bare moves');
         await page.reload();
         await page.getByRole('button', { name: 'Restore', exact: true }).click();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).moveTree, annotatedGame.moveTree);
         assert.equal((await readSaved()).review, undefined);
         // Reimporting a link uses the same validated tree fields as PGN/library recovery.
         await page.goto(copied);
         await page.getByRole('button', { name: "Keep the link's game", exact: true }).click();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).moveTree, annotatedGame.moveTree);
         await page.keyboard.press('t');
         assert.equal(await page.locator('.mtree-chip.quality-inaccuracy').count(), 1);
@@ -142,21 +170,33 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.keyboard.press('e');
         await page.getByTestId('deep-dive-btn').click();
         await page.getByTestId('engine-pv-0-move-0').waitFor();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const updated = await readSaved();
         assert.equal(updated.moveTree[0].evalScore, 42);
         assert.equal(updated.moveTree[0].evalDepth, undefined, 'A fresh score inherited the old imported depth');
         assert.equal(updated.moveTree[0].children[0].evalDepth, 21, 'Updating one move erased another depth');
         await page.evaluate(() => { window.__evaluationLine = undefined; });
         await importPgn(page, width, 'h2e2 $6 {[%eval 0.42,18]} h9g7 $2 {[%eval -0.75,21]} (b9c7 $4 {[%eval #-3,20] Annotated alternative}) *');
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).moveTree[0].children[1], { uci: 'b9c7', nags: [4], evalScore: -29997, evalDepth: 20, quality: 'blunder', comment: 'Annotated alternative' });
         const beforeReview = (await readSaved()).moveTree;
         await page.keyboard.press('r');
         await page.locator('.review-panel [data-testid="start-review-btn"]').click();
         // Assert the persistent review error, not the transient live announcement.
         await page.locator('.review-panel').getByText(/Review stopped: the engine returned no evaluation/).waitFor();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const cancelledReview = await readSaved();
         assert.deepEqual(cancelledReview.moveTree, beforeReview, 'A cancelled review changed saved annotations');
         assert.equal(cancelledReview.review, undefined, 'A scoreless engine search became a completed review');
@@ -178,17 +218,29 @@ async function importPgn(page, width, source, fromFile = false) {
         await page.screenshot({ path: `/tmp/xiangqi-review-cancel-${browserType.name()}-${width}.png` });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         await page.locator('.review-panel').getByRole('button', { name: 'Cancel running game review', exact: true }).click();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).moveTree, beforeReview, 'Explicit Cancel changed scores, depth or quality');
         // A later scoreless position must also discard earlier successful searches.
         await beginControlledReview([...responses.slice(0, 2), {}]);
         await page.locator('.review-panel').getByRole('button', { name: 'Cancel running game review', exact: true }).waitFor({ state: 'hidden' });
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).moveTree, beforeReview, 'A late scoreless search left a partial review');
         // Enough replies for an optional critical-position revisit as well.
         await beginControlledReview([...responses, ...responses, ...responses]);
         await page.locator('.review-panel').getByRole('button', { name: 'Clear completed game review', exact: true }).waitFor();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const finished = await readSaved();
         assert.deepEqual(suppliedGlyphs(finished.moveTree), suppliedGlyphs(beforeReview), 'Completed review changed supplied glyphs');
         assert.ok(finished.review, 'A successful review was not saved');
@@ -200,14 +252,26 @@ async function importPgn(page, width, source, fromFile = false) {
         // cancelling must restore its summary as well as its exact annotations.
         await beginControlledReview([]);
         await page.waitForFunction(() => window.__reviewSearches === 1);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).review, finished.review, 'Saving during a rerun lost the completed review');
         await page.locator('.review-panel').getByRole('button', { name: 'Cancel running game review', exact: true }).click();
         await page.locator('.review-panel').getByRole('button', { name: 'Clear completed game review', exact: true }).waitFor();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.deepEqual((await readSaved()).review, finished.review, 'Cancel discarded the previous completed review');
         await page.locator('.review-panel').getByRole('button', { name: 'Clear completed game review', exact: true }).click();
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const cleared = await readSaved();
         assert.deepEqual(suppliedGlyphs(cleared.moveTree), suppliedGlyphs(beforeReview), 'Clear review removed supplied glyphs');
         assert.equal(cleared.review, undefined);

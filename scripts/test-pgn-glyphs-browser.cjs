@@ -21,7 +21,11 @@ async function importPgn(page, width, pgn) {
   await page.getByTestId('uci-line-input').waitFor({ state: 'hidden' });
 }
 async function save(page) {
-  await command(page, 'Save game');
+  {
+    const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+    await command(page, 'Save game');
+    await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+  }
   return page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
 }
 async function assertFits(page) {
@@ -90,6 +94,7 @@ async function assertFits(page) {
         const panel = page.getByTestId('pgn-collection-import');
         await panel.locator('summary').click();
         await panel.getByLabel('Choose PGN collection').setInputFiles({ name: 'Glyphs.pgn', mimeType: 'application/x-chess-pgn', buffer: Buffer.from(source + '\nh2e2 $0 *') });
+        await panel.getByLabel('Import duplicates as copies').check();
         await panel.getByRole('button', { name: 'Import 2 games', exact: true }).click();
         await panel.getByRole('status').filter({ hasText: 'Imported 2 games.' }).waitFor();
         const collection = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).slice(-2));

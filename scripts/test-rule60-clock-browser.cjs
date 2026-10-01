@@ -67,6 +67,8 @@ async function engineFens() {
             } };
           };` }));
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         for (const fixture of fixtures) {
           await command(page, 'Library'); await page.getByTestId('load-saved-' + fixture.id).click();
           if (width < 900) await page.getByTestId('mobile-view-board').click();

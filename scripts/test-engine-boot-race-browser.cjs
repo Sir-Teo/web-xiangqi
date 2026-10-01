@@ -37,9 +37,11 @@ async function lateBoot(browser, width) {
     ` }));
     await page.clock.install();
     await page.goto(base);
+    await page.getByTestId('start-engine-analysis').click();
     await page.waitForFunction(() => window.__boots?.length === 1);
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
     await page.keyboard.press('e');
+    if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
     await page.getByTestId('restart-engine-btn').click();
     assert.equal(await page.evaluate(() => window.__boots.length), 2);
     // Complete the abandoned constructor while its replacement is still booting.

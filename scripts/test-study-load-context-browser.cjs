@@ -85,7 +85,12 @@ const command = async (page, label) => {
         assert.equal(await page.getByTestId('move-comment-input').inputValue(), 'Recorded ply 5');
         assert.deepEqual(await card.locator('code').allTextContents(), ['position startpos moves a0a1 a9a8 a1a0 a8a9 a0a1'],
           'Only the next move’s valid snapshot should remain; the selected move’s different-history reading must be discarded');
+        // The dense study exceeds recovery capacity, so replacement correctly
+        // refuses an uncheckpointed change. Test the separate custom-root load
+        // from a fresh document; the original dense study stays in the library.
+        await page.reload(); await page.locator('.xiangqi-board').waitFor();
         await command(page, 'Library'); await page.getByTestId('load-saved-custom').click();
+        await page.waitForFunction(() => [...document.querySelectorAll('.mtree-chip')].some(node => node.textContent.includes('h7e7')));
         await card.waitFor(); await card.locator('summary').first().click();
         assert.equal(await card.locator('code').textContent(), await page.evaluate(() => window.__customSource + ' moves h7e7'));
         await command(page, 'Go to start');

@@ -58,6 +58,7 @@ async function noteIs(page, note) {
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: plies }, (_, i) => cycle[i % 4]).join('+'));
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('t');
         await page.waitForFunction(plies => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n' + plies, plies);

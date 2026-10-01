@@ -68,7 +68,11 @@ async function install(page, game) {
           await page.locator('.mtree-chip').filter({ has: page.locator('.move-uci', { hasText: 'b2e2' }) }).click();
           assert.match(await page.getByTestId('recorded-line-result').innerText(), /Black wins/i);
           await page.waitForFunction(() => document.querySelector('[data-testid="move-comment-input"]')?.value === 'Side resignation');
-          await command(page, 'Save game');
+          {
+            const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+            await command(page, 'Save game');
+            await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+          }
           const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
           assert.equal(saved.moveTree[1].recordedResult, 'black-wins');
           assert.equal(saved.moveTree[1].evalScore, scenario === 'pinned-side' ? 125 : 75);

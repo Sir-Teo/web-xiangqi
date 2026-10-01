@@ -218,6 +218,7 @@ async function checkWeightsAreCachedAcrossVisits(browser, server) {
       const before = server.transferred.length;
       await page.goto(PLAIN_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.getByTestId("start-engine-analysis").click();
       await page.waitForFunction(
         () => /Engine ready/.test(document.body.innerText),
         null,
@@ -255,6 +256,11 @@ async function checkWeightsAreCachedAcrossVisits(browser, server) {
 async function checkApp(target, url, label) {
   const page = await target.newPage({ viewport: { width: 1280, height: 900 } });
   const problems = [];
+  const failedAssets = [];
+  const requestNavigation = new WeakMap();
+  let navigation = 0;
+  page.on("framenavigated", frame => { if (frame === page.mainFrame()) navigation += 1; });
+  page.on("request", request => requestNavigation.set(request, navigation));
   page.on("console", (message) => {
     if (message.type() === "error") problems.push(`console: ${message.text().slice(0, 200)}`);
   });
@@ -263,7 +269,7 @@ async function checkApp(target, url, label) {
     // Favicons and the like are not worth failing a deploy over; engine and
     // bundle assets are exactly what this exists to catch.
     if (/\.(js|css|wasm|nnue)(\?|$)/.test(request.url())) {
-      problems.push(`request failed: ${request.url()} (${request.failure()?.errorText})`);
+      failedAssets.push({ url: request.url(), error: request.failure()?.errorText, navigation: requestNavigation.get(request) });
     }
   });
 
@@ -290,6 +296,7 @@ async function checkApp(target, url, label) {
   const fresh = page.getByRole("button", { name: /start fresh/i });
   if (await fresh.count()) await fresh.first().click().catch(() => {});
 
+  await page.getByTestId("start-engine-analysis").click();
   await page.waitForFunction(
     () => /Engine ready/.test(document.body.innerText),
     null,
@@ -320,6 +327,13 @@ async function checkApp(target, url, label) {
   });
   if (!reported.sawDashboard) fail(`${label}: the engine dashboard never rendered, so nothing about the engine was checked`);
 
+  for (const asset of failedAssets) {
+    // Installing the isolation worker reloads the page and cancels requests
+    // belonging to the previous document. Failures in the final document still
+    // fail the smoke check, including aborted bundle and engine requests.
+    if (asset.error === "net::ERR_ABORTED" && asset.navigation < navigation) continue;
+    problems.push(`request failed: ${asset.url} (${asset.error})`);
+  }
   if (problems.length) fail(`${label}: the built app reported:\n  - ${problems.join("\n  - ")}`);
   await page.close();
   return { boardMs, readyMs, squares, ...reported };

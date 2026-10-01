@@ -42,7 +42,11 @@ function contents(game) {
           };` }));
         await page.goto(base);
         const save = async () => {
-          await command(page, 'Save game');
+          {
+            const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+            await command(page, 'Save game');
+            await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+          }
           return page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         };
         for (const prefix of ['{Preparation note 开局}', '; Preparation note 开局']) {

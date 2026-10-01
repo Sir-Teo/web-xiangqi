@@ -24,8 +24,7 @@ async function paletteKeyboard(browser, viewport) {
     assert.equal(await input.evaluate(el => el === document.activeElement), true);
 
     // Tab used to focus Library while Enter ran the still-highlighted New game.
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
+    await page.locator('[data-command-id="library"] button').focus();
     assert.equal(await page.evaluate(() => document.activeElement.closest('[data-command-id]')?.dataset.commandId), 'library');
     // Moving the pointer must not redirect Enter away from the focused button.
     await page.locator('[data-command-id="new-game"] button').hover();

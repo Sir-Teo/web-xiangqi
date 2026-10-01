@@ -52,6 +52,7 @@ const command = async (page, label) => {
           else if (action === 'crash') await page.evaluate(() => window.__crashHint());
           else {
             await command(page, 'Settings');
+            await page.getByTestId('advanced-engine-settings').locator('summary').click();
             if (action === 'hash') {
               await page.getByRole('group', { name: 'Engine Hash', exact: true }).locator('button[aria-pressed="false"]').last().click();
             } else await page.getByRole('button', { name: 'Use device defaults', exact: true }).click();

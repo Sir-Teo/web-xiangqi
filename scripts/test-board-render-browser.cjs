@@ -14,6 +14,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         await page.addInitScript(() => {
           window.__boardWork = [];
           const renderers = new Map();
+          let lastBoardFiber;
           window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
             supportsFiber: true, renderers,
             inject(renderer) { renderers.set(1, renderer); return 1; },
@@ -23,7 +24,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
               while (stack.length) {
                 const fiber = stack.pop();
                 if ((fiber.elementType?.displayName || fiber.type?.displayName || fiber.type?.name) === 'Board') {
-                  window.__boardWork.push({ rendered: Boolean(fiber.flags & 1), changed: Object.keys(fiber.memoizedProps).filter(key => fiber.memoizedProps[key] !== fiber.alternate?.memoizedProps?.[key]) });
+                  window.__boardWork.push({ rendered: fiber !== lastBoardFiber && Boolean(fiber.flags & 1), changed: Object.keys(fiber.memoizedProps).filter(key => fiber.memoizedProps[key] !== fiber.alternate?.memoizedProps?.[key]) });
+                  lastBoardFiber = fiber;
                 }
                 if (fiber.child) stack.push(fiber.child);
                 if (fiber.sibling) stack.push(fiber.sibling);
@@ -49,6 +51,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
           await page.keyboard.press('Enter');
         };
         await page.goto(base);
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => typeof window.__pulse === 'function');
         // A user marker must survive hiding, analysis updates, and showing.
         const square = page.locator('.xiangqi-board .hitbox[data-file="0"][data-rank="4"]');

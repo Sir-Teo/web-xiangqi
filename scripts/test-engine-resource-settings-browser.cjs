@@ -9,6 +9,7 @@ const openSettings = async page => {
   await page.getByRole('combobox', { name: 'Search commands' }).fill('Settings');
   await page.keyboard.press('Enter');
   await page.locator('.settings-body[role="dialog"]').waitFor();
+  await page.getByTestId('advanced-engine-settings').locator('summary').click();
 };
 (async () => {
   const browser = await browserType.launch();
@@ -58,8 +59,9 @@ const openSettings = async page => {
           };` });
         });
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+        await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__resourceBoots?.length === 1);
-        const expected = width === 1440 ? { threads: 8, hashMB: 256 } : { threads: 1, hashMB: 24 };
+        const expected = width === 1440 ? { threads: 8, hashMB: 256 } : { threads: 2, hashMB: 64 };
         assert.deepEqual(await page.evaluate(() => window.__resourceBoots[0]), expected);
         await openSettings(page);
         const reset = page.getByRole('button', { name: 'Use device defaults', exact: true });
@@ -67,7 +69,7 @@ const openSettings = async page => {
         for (const size of (realEngine ? [16] : [16, 32])) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size); await settle(page);
           const hash = page.getByRole('group', { name: 'Engine Hash', exact: true });
-          const manualHash = width === 1440 ? 512 : 48;
+          const manualHash = width === 1440 ? 512 : 128;
           await hash.getByRole('button', { name: `Engine hash ${manualHash} megabytes`, exact: true }).click();
           await page.waitForFunction(value => window.__resourceBoots.at(-1).hashMB === value, manualHash);
           if (width === 1440) {
@@ -103,6 +105,7 @@ const openSettings = async page => {
           assert.equal(await page.evaluate(() => window.__resourceBoots.length), before.boots + 1, 'Reset at defaults must not restart again');
         }
         await page.reload(); await page.locator('.xiangqi-board').waitFor();
+        await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__resourceBoots?.length === 1);
         assert.deepEqual(await page.evaluate(() => window.__resourceBoots[0]), expected, 'Reload must retain automatic defaults');
         assert.deepEqual(errors, []);

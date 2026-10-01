@@ -125,7 +125,11 @@ async function check(browser, width) {
     await page.keyboard.press('t');
     assert.match(await card.locator('summary').first().innerText(), /\+1.00 Red POV · D26/);
     assert.equal(await page.locator('.mtree-chip').count(), 3, 'Updating analysis duplicated moves');
-    await command(page, 'Save game');
+    {
+      const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+      await command(page, 'Save game');
+      await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+    }
     let saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
     assert.deepEqual(saved.moves, []);
     assert.equal(saved.moveTree[0].analysis.score, 100);
@@ -136,7 +140,11 @@ async function check(browser, width) {
 
     // A snapshot-only straight line must survive saving and sharing at its tip.
     await page.locator('.mtree-chip').last().click();
-    await command(page, 'Save game');
+    {
+      const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+      await command(page, 'Save game');
+      await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+    }
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
     assert.deepEqual(saved.moveTree[0].analysis, snapshot);
     await command(page, 'Copy link');
@@ -166,10 +174,15 @@ async function check(browser, width) {
     await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
     await page.getByTestId('uci-line-input').fill(pgn);
     await page.getByTestId('import-uci-line-btn').click();
+    await page.getByTestId('uci-line-input').waitFor({ state: 'hidden' });
     await command(page, 'Go to start');
     await page.keyboard.press('t');
     assert.match(await card.innerText(), /D26/);
-    await command(page, 'Save game');
+    {
+      const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+      await command(page, 'Save game');
+      await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+    }
     saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
     assert.deepEqual(saved.moveTree[0].analysis, snapshot);
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.[0]?.analysis?.depth === 26);
@@ -188,6 +201,7 @@ async function check(browser, width) {
     // The palette restores focus to the note field. A bare e would edit it;
     // use a command that works while focus remains in a text control.
     await command(page, 'Engine panel');
+    await keep.waitFor();
     await page.evaluate(() => { window.__depth = 245; window.__score = 100; });
     await page.getByTestId('deep-dive-btn').click();
     await page.waitForFunction(() => document.querySelector('[data-testid="keep-engine-pv-0"]')?.textContent.includes('Update analysis'));
@@ -210,6 +224,7 @@ async function check(browser, width) {
       const saved = JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1'));
       delete saved.game.moveTree[0].analysis.effort;
       localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify(saved));
+      localStorage.setItem('xiangqi:recovery-draft:v1:' + saved.draftId, JSON.stringify(saved));
     });
     await page.reload();
     await page.getByRole('button', { name: 'Restore', exact: true }).click();
@@ -223,6 +238,7 @@ async function check(browser, width) {
       const saved = JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1'));
       saved.game.moveTree[0].analysis.position = 'position startpos moves a0a1 a9a8 a1a0 a8a9';
       localStorage.setItem('xiangqi:auto-saved-game:v1', JSON.stringify(saved));
+      localStorage.setItem('xiangqi:recovery-draft:v1:' + saved.draftId, JSON.stringify(saved));
     });
     await page.reload();
     await page.getByRole('button', { name: 'Restore', exact: true }).click();
@@ -243,7 +259,11 @@ async function checkRealEngine(browser, width) {
     await page.locator('.xiangqi-board').waitFor();
     await page.keyboard.press('e');
     await page.getByTestId('keep-engine-pv-0').click({ timeout: 120_000 });
-    await command(page, 'Save game');
+    {
+      const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+      await command(page, 'Save game');
+      await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+    }
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
     const snapshot = saved.moveTree[0].analysis;
     assert.ok(snapshot.depth > 0);

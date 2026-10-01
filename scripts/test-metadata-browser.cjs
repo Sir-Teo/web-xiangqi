@@ -30,6 +30,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
    await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact:true }).click();
    await page.getByTestId('uci-line-input').fill('[White "Alice"]\n[Black "Bob"]\n[Event "Open Cup"]\n[Date "2020.??.??"]\n[Round "2"]\n[Site "Paris"]\n\n1. h2e2 h9g7 *');
    await page.getByTestId('import-uci-line-btn').click();
+   await page.getByTestId('uci-line-input').waitFor({ state: 'hidden' });
    if (width < 900) {
     await page.getByTestId('mobile-view-analysis').click();
     await page.getByTestId('mobile-analysis-tab-moves').click();
@@ -78,6 +79,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
    await page.getByRole('button', { name: width < 900 ? 'Open new game menu' : 'Start new game', exact:true }).click();
    await page.getByTestId('uci-line-input').fill('1. h2e2 *');
    await page.getByTestId('import-uci-line-btn').click();
+   await page.getByTestId('uci-line-input').waitFor({ state: 'hidden' });
    if (width < 900) {
     await page.getByTestId('mobile-view-analysis').click();
     await page.getByTestId('mobile-analysis-tab-moves').click();

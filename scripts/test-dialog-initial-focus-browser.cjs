@@ -61,12 +61,13 @@ async function assertVisibleFocus(modal, label) {
      assert.equal(initial.tag,overflowing?'H2':'BUTTON',label);
      const primary=modal.getByRole('button',{name:kind==='recovery'?'Restore':'New Game',exact:true});
      const secondary=modal.getByRole('button',{name:kind==='recovery'?"Keep the link's game":'Review',exact:true});
+     const last=kind==='recovery'?modal.getByRole('button',{name:'Decide later',exact:true}):secondary;
      if(overflowing) {
       await page.keyboard.press('Enter'); // Reading the title must not start/reset a game.
       assert.equal(await modal.count(),1,label);
      }
      await tab(true);
-     assert.equal(await secondary.evaluate(el=>el===document.activeElement),true,label);
+     assert.equal(await last.evaluate(el=>el===document.activeElement),true,label);
      await assertVisibleFocus(modal,label+' reverse');
      await tab();
      assert.equal(await primary.evaluate(el=>el===document.activeElement),true,label);

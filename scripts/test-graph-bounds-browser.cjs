@@ -33,6 +33,7 @@ async function command(page, label) {
           };`
         }));
         await page.goto(base + '?moves=' + (black ? 'h2e2' : 'h2e2+h9g7'));
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         await command(page, 'Evaluation graph');
         const graph = page.locator('.graph-wrap');

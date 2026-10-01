@@ -95,7 +95,11 @@ async function play(page, from, to) {
         await page.getByTestId('delete-variation-n6').click();
         await page.getByTestId('delete-undo-btn').click();
         assert.deepEqual(await page.locator('.mtree-row .mtree-chip').evaluateAll(nodes => nodes.map(node => node.dataset.nodeId)), ['n1', 'n2', 'n4']);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         const nodes = [];
         const collect = list => { for (const node of list || []) { nodes.push(node); collect(node.children); } };
@@ -133,7 +137,11 @@ async function play(page, from, to) {
         }, { note: '', symbols: 0 }, 'Undo must respect deliberately cleared annotations');
         await page.locator('.mtree-chip[data-node-id="n7"]').click();
         await noteIs(page, 'New continuation');
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const clearedStudy = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         const clearedNodes = [];
         const collectCleared = list => { for (const node of list || []) { clearedNodes.push(node); collectCleared(node.children); } };

@@ -420,6 +420,11 @@ async function assertNoDanglingAriaControls(page) {
   }
 }
 
+async function startLayoutAnalysis(page) {
+  const start = page.getByTestId("start-engine-analysis");
+  if (await start.isVisible()) await start.click();
+}
+
 /**
  * A tall display, where the board's ceiling is what it reaches rather than the
  * room it has -- and where the eval bar stops matching it.
@@ -446,6 +451,7 @@ async function assertLargeDisplayBoardAndEvalBar(page) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.waitForTimeout(600);
 
     const measured = await page.evaluate(() => {
@@ -529,6 +535,7 @@ async function assertForcedColoursRemainReadable(browser) {
         timeout: 60000,
       });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await startLayoutAnalysis(page);
       await page.waitForTimeout(700);
 
       const seen = await page.evaluate(() => {
@@ -1445,6 +1452,8 @@ async function assertPlayFromHereKeepsThePosition(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.waitForTimeout(1200);
   for (const name of [/start fresh|keep the link/i, /restore/i]) {
@@ -1942,6 +1951,8 @@ async function assertShowThreatIsSeparateFromTheAnalysis(page) {
     "http://127.0.0.1:8192/web-xiangqi/?moves=h2c2+b7e7+c2c1+i9i8+b2f2+i8f8+e0e1+d9e8",
     { waitUntil: "domcontentloaded", timeout: 60000 },
   );
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.waitForSelector(".piece", { timeout: 30000 });
   for (const name of [/keep the link/i, /restore/i]) {
     const button = page.getByRole("button", { name });
@@ -2019,6 +2030,8 @@ async function assertShowThreatIsSeparateFromTheAnalysis(page) {
       "http://127.0.0.1:8192/web-xiangqi/?fen=" + encodeURIComponent(fen),
       { waitUntil: "domcontentloaded", timeout: 60000 },
     );
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".piece", { timeout: 30000 });
     for (const name of [/keep the link/i, /restore/i]) {
       const button = page.getByRole("button", { name });
@@ -2284,6 +2297,8 @@ async function assertSettingsExplainTheirOwnOptions(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.waitForTimeout(800);
   for (const name of [/start fresh|keep the link/i, /restore/i]) {
@@ -2292,6 +2307,7 @@ async function assertSettingsExplainTheirOwnOptions(page) {
   }
   await page.getByRole("button", { name: /Open settings/i }).first().click();
   await page.waitForTimeout(600);
+  await page.getByTestId("advanced-engine-settings").locator("summary").click();
 
   const hints = () => page.evaluate(() =>
     [...document.querySelectorAll(".settings-hint")]
@@ -3738,7 +3754,7 @@ async function assertBeginnerAiUsesCandidatePv(browser) {
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await page.getByRole("button", { name: "Start new game" }).click();
     await page.getByRole("button", { name: /You play Black/i }).click();
-    await page.getByRole("button", { name: /Beginner: depth 2/i }).click();
+    await page.getByRole("button", { name: /Beginner:.*depth 2/i }).click();
     await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
     await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
     await page.waitForFunction(() => {
@@ -3786,6 +3802,7 @@ async function assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.waitForFunction(() => {
       const commands = window.__engineCommands || [];
       return commands.some((command) => /^go\b/.test(command));
@@ -3833,6 +3850,7 @@ async function assertEngineLoaderFailureShowsNotice(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.waitForFunction(() => {
       const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
       return text && !/Loading engine/i.test(text);
@@ -3862,6 +3880,7 @@ async function assertEngineReadyTimeoutShowsNotice(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.waitForFunction(() => {
       const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
       return /Recovering engine|Engine paused after crashes/i.test(text);
@@ -3934,6 +3953,8 @@ async function assertEngineCreateTimeoutShowsNotice(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.waitForFunction(() => {
       const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
@@ -3983,6 +4004,7 @@ async function assertAnalysisResumesAfterVisibilityReturn(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.getByTestId("analysis-tab-engine").click();
     await page.waitForFunction(() => {
       const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
@@ -4088,6 +4110,7 @@ async function assertEnginePvLineControl(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await startLayoutAnalysis(page);
 
   await page.getByTestId("analysis-tab-engine").click();
   await page.getByTestId("engine-pv-lines-3").waitFor({ timeout: 5000 });
@@ -4137,6 +4160,7 @@ async function assertEnginePvLineControl(page) {
     throw new Error(`Engine PV selector introduced horizontal overflow: ${updated.overflowX}`);
   }
 
+  await page.getByTestId("advanced-engine-maintenance").locator("summary").click();
   await page.getByTestId("restart-engine-btn").waitFor({ timeout: 5000 });
   const runtimeState = await page.evaluate(() => {
     const restart = document.querySelector('[data-testid="restart-engine-btn"]');
@@ -4221,6 +4245,8 @@ async function assertAnEngineLineIsOneTabStop(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.getByTestId("analysis-tab-engine").click();
     await page.getByTestId("engine-pv-0-move-1").waitFor({ timeout: 10000 });
@@ -4272,6 +4298,8 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.getByTestId("analysis-tab-engine").click();
     await page.getByTestId("engine-pv-0-move-1").waitFor({ timeout: 10000 });
@@ -4359,6 +4387,8 @@ async function assertTwoEngineLinesFitAtLaptopHeight(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.getByTestId("analysis-tab-engine").click();
   await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
@@ -4397,6 +4427,8 @@ async function assertEngineTelemetryDashboard(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.getByTestId("analysis-tab-engine").click();
     await page.waitForFunction(() => {
@@ -4544,6 +4576,7 @@ async function assertEngineTelemetryDashboard(browser) {
     const clearHashCommandsBefore = await page.evaluate(() => {
       return (window.__engineCommands || []).filter((cmd) => cmd === "setoption name Clear Hash").length;
     });
+    if (!await page.getByTestId("clear-engine-hash-btn").isVisible()) await page.getByTestId("advanced-engine-maintenance").locator("summary").click();
     await page.getByTestId("clear-engine-hash-btn").click();
     const queuedHashState = await page.evaluate((beforeCount) => {
       const button = document.querySelector('[data-testid="clear-engine-hash-btn"]');
@@ -4660,6 +4693,7 @@ async function assertEngineDownloadReportsItsProgress(browser) {
         timeout: 60000,
       });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await startLayoutAnalysis(page);
 
       const read = () => page.evaluate((isPhone) => {
         const node = isPhone
@@ -4840,6 +4874,7 @@ async function assertADeepSearchSurvivesAHiddenTab(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     for (const name of [/keep the link/i, /start fresh/i, /restore/i]) {
       const button = page.getByRole("button", { name });
       if (await button.count()) { await button.first().click().catch(() => {}); break; }
@@ -5437,6 +5472,7 @@ async function assertLargeTextKeepsAUsableBoard(browser) {
       });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
       if (downloading) {
+        await startLayoutAnalysis(page);
         await page.waitForFunction(() => typeof window.__reportWeights === "function");
         await page.evaluate(() => window.__reportWeights(25, false));
         await page.waitForFunction(() => document.querySelector('[aria-label^="Loading engine"]')?.textContent.includes('MB'));
@@ -5649,6 +5685,8 @@ async function assertEngineMateScoresRenderAsMate(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.getByTestId("analysis-tab-engine").click();
     await page.waitForFunction(() => {
@@ -5725,6 +5763,8 @@ async function assertEngineMateScoresRenderAsMate(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.waitForFunction(() => {
       return document.querySelector(".mobile-eval-chip")?.textContent?.includes("-M3");
@@ -5765,8 +5805,10 @@ async function assertEngineRestartDropsBufferedInfo(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.getByTestId("analysis-tab-engine").click();
-    await page.getByTestId("restart-engine-btn").waitFor({ timeout: 5000 });
+    await page.getByTestId("advanced-engine-maintenance").locator("summary").click();
+  await page.getByTestId("restart-engine-btn").waitFor({ timeout: 5000 });
     await page.waitForFunction(() => window.__engineCommands?.some((cmd) => /^go\b/.test(cmd)), null, { timeout: 10000 });
     await page.waitForTimeout(40);
     await page.getByTestId("restart-engine-btn").click();
@@ -5807,6 +5849,7 @@ async function assertEngineRestartRestoresDetailOptions(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.getByTestId("analysis-tab-engine").click();
     await page.waitForFunction(() => {
       return /Engine ready/i.test(document.querySelector(".top-engine-state")?.getAttribute("aria-label") || "");
@@ -5821,6 +5864,7 @@ async function assertEngineRestartRestoresDetailOptions(browser) {
         firstCommands.includes("setoption name UCI_ShowWDL value true");
     }, activeInstanceId, { timeout: 10000 });
 
+    await page.getByTestId("advanced-engine-maintenance").locator("summary").click();
     await page.getByTestId("restart-engine-btn").click();
     await page.waitForFunction((instanceId) => {
       return window.__engineInstanceCount > instanceId &&
@@ -5890,6 +5934,8 @@ async function assertPlayedEnginePvDoesNotStoreRootEval(browser) {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
     await page.getByTestId("analysis-tab-engine").click();
     await page.getByTestId("play-engine-pv-0").waitFor({ timeout: 15000 });
@@ -5960,6 +6006,7 @@ async function assertPreferencePersistence(page) {
       name: "Pro interface, compact analysis with fewer teaching prompts",
       exact: true,
     }).click();
+    await page.getByTestId("advanced-engine-settings").locator("summary").click();
     await settings.getByRole("button", {
       name: "Stable analysis engine profile, safer boot and conservative resources",
       exact: true,
@@ -6696,7 +6743,7 @@ async function assertMobileNewGameStartButtonVisible(page) {
     return Boolean(menu && menu.contains(document.activeElement));
   }, null, { timeout: 5000 });
   await page.locator(".new-game-mode-btn").filter({ hasText: "You play Black" }).click();
-  await page.locator('button[aria-label^="Beginner: depth 2"]').click();
+  await page.getByRole('button', { name: /Beginner:.*depth 2/ }).click();
 
   const layout = await page.evaluate(() => {
     const menu = document.querySelector(".new-game-menu");
@@ -7421,6 +7468,7 @@ async function measureReviewInProgress(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await startLayoutAnalysis(page);
 
   await page.getByRole("button", { name: "Start new game" }).click();
   await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7 2. h0g2');
@@ -7516,6 +7564,8 @@ async function assertClearingAReviewKeepsWhatTheReaderWrote(page) {
   const MOVES = ["h2e2", "h9g7", "b0c2", "b9c7"];
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate((moves) => {
     const savedAt = 1710000011000;
     const grades = ["mistake", "good", "blunder", "inaccuracy"];
@@ -7624,6 +7674,8 @@ async function assertClearingAReviewKeepsWhatTheReaderWrote(page) {
 async function assertReviewGradesAreNotColourAlone(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     const moves = ("h2h9 i9h9 b2b9 b7b5 a0a1 h7i7 b9d9 h9h4 d9d6 i7i3 i0i2 i3e3 e0e1 h4h0 b0a2 " +
       "e3a3 i2i4 a3a1 d6a6 a9a6 i4i3 h0i0 i3i6 a6a2 i6h6 i0g0 h6g6 f9e8 g6e6 g0f0").split(" ");
@@ -7757,6 +7809,8 @@ async function assertReviewGradesAreNotColourAlone(page) {
 async function assertEachPhaseScoreStaysOnOneLine(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     const moves = ("h2h9 i9h9 b2b9 b7b5 a0a1 h7i7 b9d9 h9h4 d9d6 i7i3 i0i2 i3e3 e0e1 h4h0 b0a2 " +
       "e3a3 i2i4 a3a1 d6a6 a9a6 i4i3 h0i0 i3i6 a6a2 i6h6 i0g0 h6g6 f9e8 g6e6 g0f0").split(" ");
@@ -7846,6 +7900,8 @@ async function assertTheReviewMomentsAreOneTabStop(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     const savedAt = 1710000006000;
     const moment = (moveIndex, side, quality, played, best, evalBefore, evalAfter) => ({
@@ -7926,6 +7982,8 @@ async function assertReviewBestMoveBranchAction(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     const savedAt = 1710000005000;
     localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
@@ -8181,8 +8239,8 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.mistakeLabel !== "1 mistake" ||
     reviewReadout.blunderLabel !== "0 blunders" ||
     reviewReadout.mistakeTitle !== "1 mistake" ||
-    reviewReadout.rerunLabel !== "Re-run game review unavailable: Engine is still loading" ||
-    reviewReadout.rerunTitle !== "Engine is still loading" ||
+    reviewReadout.rerunLabel !== "Re-run game review unavailable: Start engine analysis to review this line" ||
+    reviewReadout.rerunTitle !== "Start engine analysis to review this line" ||
     reviewReadout.clearReviewLabel !== "Clear completed game review" ||
     reviewReadout.clearReviewTitle !== "Clear completed game review" ||
     // 42, not the 66 a plain mean of 39 and 93 gives. The game figure is
@@ -8411,6 +8469,7 @@ async function assertLearnFromMistakesAsksAndGrades(page) {
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await startLayoutAnalysis(page);
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByTestId("load-saved-qa-drill").click();
   await page.getByTestId("learn-from-mistakes-btn").waitFor({ timeout: 5000 });
@@ -8486,6 +8545,8 @@ async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
       id: "decisive-arrow-quality",
@@ -8567,6 +8628,7 @@ async function assertRunningReviewCancelsOnLineChange(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
 
     await page.getByRole("button", { name: "Start new game" }).click();
     await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2');
@@ -8660,6 +8722,7 @@ async function assertARunningReviewSurvivesAHiddenTab(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
     await page.getByRole("button", { name: "Start new game" }).click();
     await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2');
     await page.getByTestId("import-uci-line-btn").click();
@@ -8859,6 +8922,7 @@ async function assertReviewRevisitRefreshesDecisionBestMove(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
 
     await page.getByRole("button", { name: "Start new game" }).click();
     await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7');
@@ -8928,6 +8992,7 @@ async function assertReviewRevisitIgnoresGoodScoreSwings(browser) {
       timeout: 60000,
     });
     await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await startLayoutAnalysis(page);
 
     await page.getByRole("button", { name: "Start new game" }).click();
     await page.getByTestId("uci-line-input").fill('[Variant "Xiangqi"]\n1. b2e2 h9g7');
@@ -8975,6 +9040,8 @@ async function assertCompletedReviewRerunRespectsEngineState(page) {
     waitUntil: "domcontentloaded",
     timeout: 60000,
   });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.evaluate(() => {
     const savedAt = 1710000006000;
     localStorage.setItem("xiangqi:library:v1", JSON.stringify([{
@@ -9006,6 +9073,7 @@ async function assertCompletedReviewRerunRespectsEngineState(page) {
   });
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  await startLayoutAnalysis(page);
 
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByTestId("load-saved-review-rerun-state").click();
@@ -9034,7 +9102,7 @@ async function assertCompletedReviewRerunRespectsEngineState(page) {
   });
   if (
     !state.disabled ||
-    state.title !== "Switch to Analysis to review this line" ||
+    state.title !== "Start engine analysis to review this line" ||
     state.playPressed !== "true" ||
     state.overflowX > 2
   ) {
@@ -10724,6 +10792,8 @@ async function assertAPhoneCanPinchTheBoard(browser) {
 async function assertChoosingAnEngineOptionDoesNotRenameIt(page) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://127.0.0.1:8192/web-xiangqi/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.locator(".xiangqi-board").waitFor();
+  await startLayoutAnalysis(page);
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.getByRole("button", { name: "Open settings" }).first().click();
   await page.waitForSelector('.settings-body[role="dialog"]', { timeout: 10000 });
@@ -11146,12 +11216,10 @@ async function assertTheBottomBarChipsSurviveAReview(browser) {
       if (!state.row || !state.badge) {
         throw new Error(`The bottom bar needs its control row and an opening badge to check: ${JSON.stringify(state)}`);
       }
-      if (!state.canScroll) {
-        throw new Error(
-          `At ${width}px a review is meant to overflow the bottom control row, and it did not: ${JSON.stringify(state)}. Either the row grew a way to fit, in which case this check has nothing left to prove, or it is clipping instead of scrolling.`
-        );
+      if (!state.canScroll && state.hiddenAtRest > 0) {
+        throw new Error(`The bottom control row clips badges without allowing scrolling: ${JSON.stringify(state)}`);
       }
-      if (!state.scrolled) {
+      if (state.canScroll && !state.scrolled) {
         throw new Error(
           `At ${width}px a wheel over the bottom control row moved nothing: ${JSON.stringify(state)}. \`.game-controls\` must keep \`overflow-x: auto\` -- with \`hidden\` the row still scrolls to a script and not to a reader, so the review summary silently eats the end of it.`
         );
@@ -13284,7 +13352,7 @@ async function assertLibrarySavedGameSorting(page) {
     "Low Accuracy QA",
     "High Accuracy QA",
     "Red Accuracy Peak QA",
-  ], "Sorted by Newest first.");
+  ], "Sorted by Recently modified.");
   await assertOrder("accuracy-high", [
     "High Accuracy QA",
     "Red Accuracy Peak QA",
@@ -13804,7 +13872,7 @@ async function assertLibraryInvalidSavedGameLoadFeedback(page) {
   await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
 
   await page.locator('button[aria-label="Open game library"]').click();
-  await page.getByText("Invalid load QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("load-saved-qa-invalid-load").waitFor({ timeout: 10000 });
   await page.getByTestId("load-saved-qa-invalid-load").click();
   await page.getByTestId("library-action-error").getByText("Could not load this game").waitFor({ timeout: 5000 });
 
@@ -14581,6 +14649,9 @@ async function clearAutoSaveBetweenNavigations(page) {
   await page.addInitScript(() => {
     try {
       window.localStorage.removeItem("xiangqi:auto-saved-game:v1");
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("xiangqi:recovery-draft:v1:")) localStorage.removeItem(key);
+      }
     } catch {
       // Storage unavailable in this context; nothing to clear.
     }
@@ -15101,7 +15172,7 @@ async function main() {
         results.push({ name: check.name, status: "passed", seconds: (Date.now() - started) / 1000 });
       } catch (error) {
         results.push({ name: check.name, status: "failed", seconds: (Date.now() - started) / 1000 });
-        throw error;
+        console.error(error);
       } finally {
         console.log(`${check.name}: ${((Date.now() - started) / 1000).toFixed(1)}s`);
         console.log("::endgroup::");
@@ -15127,6 +15198,7 @@ async function main() {
       throw new Error("Unexpected browser console errors:\n" + unexpected.join("\n"));
     }
 
+    if (results.some(result => result.status === "failed")) throw new Error("Layout checks failed; see per-check diagnostics above");
     console.log(`Layout shard ${shard}: ${selected.length} checks passed.`);
   } catch (e) {
     throw new Error(

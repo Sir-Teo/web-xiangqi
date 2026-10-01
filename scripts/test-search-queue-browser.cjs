@@ -32,6 +32,7 @@ async function navigationDebounce(browser, width) {
     ` }));
     await page.clock.install();
     await page.goto(base + '?moves=' + encodeURIComponent('h2e2 h9g7 h0g2'));
+    await page.getByTestId('start-engine-analysis').click();
     await page.waitForFunction(() => window.__commands?.some(command => command.startsWith('go ')));
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     const searches = () => page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length);

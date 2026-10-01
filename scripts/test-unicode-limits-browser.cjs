@@ -40,7 +40,11 @@ async function noteIs(page, text) {
         assert.equal(await page.getByRole('textbox', { name: 'Red player', exact: true }).inputValue(), player);
         await page.getByTestId('game-metadata').locator('summary').click();
         await atRoot(page, width); await noteIs(page, bounded);
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.rootComment, bounded); assert.equal(saved.metadata.redPlayer, player);
         assert.equal(saved.moveTree[0].comment, bounded);
@@ -53,7 +57,9 @@ async function noteIs(page, text) {
         assert.ok(pgn.includes(preview + '🐎 develops'));
         await command(page, 'Copy link');
         const url = await page.evaluate(() => window.__copied);
-        assert.equal(new URL(url).searchParams.get('note'), bounded);
+        const shared = new URL(url);
+        const params = shared.hash.startsWith('#share=1&') ? new URLSearchParams(shared.hash.slice('#share=1&'.length)) : shared.searchParams;
+        assert.equal(params.get('note'), bounded);
         const recipient = await browser.newPage({ viewport: { width, height: 900 } });
         recipient.on('pageerror', error => errors.push(error.message));
         try {

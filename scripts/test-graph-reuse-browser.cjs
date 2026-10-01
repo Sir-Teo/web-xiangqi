@@ -63,6 +63,8 @@ async function command(page, label) {
           };` }));
         const cycle = ['a0a1', 'a9a8', 'a1a0', 'a8a9'];
         await page.goto(base + '?moves=' + Array.from({ length: 1024 }, (_, i) => cycle[i % 4]).join('+'));
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         if (width < 900) {
           await page.getByTestId('mobile-view-analysis').click();
           await page.getByTestId('mobile-analysis-tab-graph').click();

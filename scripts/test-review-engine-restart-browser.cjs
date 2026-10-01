@@ -43,6 +43,7 @@ const command = async (page, label) => {
               } };
           };` }));
         await page.goto(base + '?moves=h2e2+h9g7'); await page.locator('.xiangqi-board').waitFor();
+        await page.getByTestId('start-engine-analysis').click();
         await command(page, 'Review panel');
         const save = async () => {
           const count = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length);
@@ -62,9 +63,10 @@ const command = async (page, label) => {
           if (action === 'restart') await command(page, 'Restart engine');
           else {
             await command(page, 'Settings');
+            await page.getByTestId('advanced-engine-settings').locator('summary').click();
             await page.getByRole('group', { name: 'Engine Hash', exact: true }).locator('[aria-pressed="true"]').click();
             assert.equal(await page.evaluate(() => window.__reviewBoots), boots, 'Re-selecting the same resources must not restart');
-            const button = action === 'hash' ? `Engine hash ${width === 1440 ? 512 : 48} megabytes`
+            const button = action === 'hash' ? `Engine hash ${width === 1440 ? 512 : 128} megabytes`
               : action === 'threads' ? 'Engine threads 1' : 'Use device defaults';
             await page.getByRole('button', { name: button, exact: true }).click();
             await page.getByRole('button', { name: 'Close settings', exact: true }).click();

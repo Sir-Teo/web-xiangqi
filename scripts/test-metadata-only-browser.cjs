@@ -85,7 +85,12 @@ async function command(page, label) {
         await page.screenshot({ path: `/tmp/xiangqi-metadata-only-${browserType.name()}-${width}.png` });
         // Whitespace fields must not leave an empty recovery offer behind.
         for (const input of await editor.locator('input').all()) await input.fill('   ');
-        await page.waitForFunction(() => !localStorage.getItem('xiangqi:auto-saved-game:v1'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="study-save-status"]')?.textContent.includes('Unsaved study'));
+        // Earlier meaningful studies remain available as replacement checkpoints.
+        assert.ok(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('xiangqi:recovery-draft:v1:')).every(key => {
+          const game = JSON.parse(localStorage.getItem(key)).game;
+          return game.moves.length > 0 || Object.values(game.metadata || {}).some(value => String(value).trim());
+        })));
         if (width < 900) await page.getByTestId('mobile-view-board').click();
         // On a phone Save lives in the board's overflow menu.
         if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();

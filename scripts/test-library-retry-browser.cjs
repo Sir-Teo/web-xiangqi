@@ -49,6 +49,8 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
             } };
           };` }));
         await page.goto(base + '?moves=h2e2');
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__engineReady);
         if (width < 900) {
           await page.getByTestId('mobile-view-analysis').click();

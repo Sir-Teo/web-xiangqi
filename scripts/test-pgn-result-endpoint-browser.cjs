@@ -76,7 +76,9 @@ async function install(page, game) {
           if (scenario === 'legacy-prefix') {
             await page.screenshot({ path: `/tmp/xiangqi-pgn-endpoint-${browserType.name()}-${width}.png` });
             await page.locator('.mtree-chip').filter({ has: page.locator('.move-uci', { hasText: 'h2e2' }) }).click();
+            const previous = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
             await command(page, 'Save game');
+            await page.waitForFunction(previous => localStorage.getItem('xiangqi:library:v1') !== previous, previous);
             const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
             assert.equal(saved.moveTree[0].recordedResult, 'draw');
             assert.equal(saved.moveTree[0].children[0].recordedResult, undefined);

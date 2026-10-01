@@ -33,6 +33,7 @@ async function setup(page) {
         const requests = []; page.on('request', request => { if (isReviewCode(request.url())) requests.push(request.url()); });
         await page.route(url => isReviewCode(url.href), async route => { await gate; await route.continue(); });
         await page.goto(base + '?moves=h2e2+h9g7');
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         assert.deepEqual(requests, [], 'Review code must not be fetched at startup');
         const fen = await page.locator('.bottombar-fen').getAttribute('title');
@@ -71,6 +72,8 @@ async function setup(page) {
         await setup(failed);
         await failed.route(url => isReviewCode(url.href), route => route.abort());
         await failed.goto(base + '?moves=h2e2+h9g7');
+        await failed.getByTestId('start-engine-analysis').click();
+        await failed.waitForFunction(() => document.querySelector('.top-engine-state')?.textContent.includes('Engine ready'));
         await failed.evaluate(() => { window.__holdSearch = true; });
         const fen = await failed.locator('.bottombar-fen').getAttribute('title');
         await command(failed, 'Review game');

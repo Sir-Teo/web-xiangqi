@@ -46,6 +46,8 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
             } };
           };` }));
         await page.goto(base + '?moves=a0a1+a9a8+a1a0+a8a9');
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         await page.waitForFunction(() => window.__engineReady);
         await settle(page);
         const startup = await page.evaluate(() => window.__indexWork);

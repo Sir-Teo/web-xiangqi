@@ -92,6 +92,7 @@ async function stopServer(server) {
 
 async function reviewGame(page, moves) {
   await page.goto(`${BASE}?moves=${moves.join("+")}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.getByTestId("start-engine-analysis").click();
   await page.waitForTimeout(1500);
   for (const name of [/restore/i, /start fresh/i]) {
     const button = page.getByRole("button", { name });

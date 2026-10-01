@@ -43,6 +43,8 @@ const command = async (page, label) => {
             } };
           };` }));
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+        await page.locator('.xiangqi-board').waitFor();
+        if (await page.getByTestId('start-engine-analysis').isVisible()) await page.getByTestId('start-engine-analysis').click();
         const load = async id => {
           await command(page, 'Library'); await page.getByTestId('load-saved-' + id).click();
           if (width < 900) await page.getByTestId('mobile-view-board').click();

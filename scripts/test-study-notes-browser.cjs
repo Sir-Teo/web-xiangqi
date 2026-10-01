@@ -81,7 +81,11 @@ async function assertFits(page) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
           await assertFits(page);
         }
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.rootComment, 'Opening overview');
         assert.equal(saved.moveTree[1].children[1].comment, 'Nested rook edited immediately');

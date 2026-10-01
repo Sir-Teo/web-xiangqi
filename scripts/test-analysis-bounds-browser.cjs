@@ -31,7 +31,9 @@ async function install(page, errors) {
     };` }));
 }
 async function savedAnalysis(page) {
+  const previous = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
   await command(page, 'Save game');
+  await page.waitForFunction(previous => localStorage.getItem('xiangqi:library:v1') !== previous, previous);
   return page.evaluate(() => {
     const game = JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1);
     const stack = [...game.moveTree]; const analyses = [];
@@ -86,6 +88,7 @@ async function importPgn(page, width, pgn) {
       try {
         await install(page, errors);
         await page.goto(base + (black ? '?moves=h2e2' : ''));
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         const boardState = () => page.locator('.hitbox').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label')));
         const before = await boardState();

@@ -54,6 +54,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
         await page.clock.runFor(1100);
         await page.evaluate(() => window.__crash());
+        if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
         await page.getByTestId('restart-engine-btn').click();
         await page.clock.runFor(25);
         assert.equal(await page.evaluate(() => window.__boots), 3);
@@ -78,6 +79,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
         await page.clock.runFor(16000); // The earlier recovery leaves the rolling budget.
         await page.evaluate(() => { window.__failAllBoots = true; });
+        if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
         await page.getByTestId('restart-engine-btn').click();
         for (let step = 0; step < 16; step++) await page.clock.runFor(300);
         assert.equal(await page.evaluate(() => window.__boots), 8, 'Fast startup failures were dropped or retried without a bound');
@@ -98,6 +100,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         await page.clock.runFor(5000);
         assert.equal(await page.evaluate(() => window.__boots), 8, 'The crash budget did not stop recovery');
         await page.evaluate(() => { window.__failAllBoots = false; });
+        if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
         await page.getByTestId('restart-engine-btn').click();
         await page.clock.resume();
         await page.getByTestId('engine-pv-0-move-0').waitFor();

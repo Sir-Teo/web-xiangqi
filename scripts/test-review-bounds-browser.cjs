@@ -40,6 +40,7 @@ async function command(page, label) {
           };`
         }));
         await page.goto(base + '?moves=h2e2+h9g7');
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         await command(page, 'Review panel');
         await page.waitForFunction(() => document.querySelector('[data-testid="start-review-btn"]')?.disabled === false);

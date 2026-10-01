@@ -1,6 +1,6 @@
 # Audit fixes — 2026-09-29
 
-The 45 findings from the review are being addressed in order, with a separate commit per item. Each entry records its implementation and validation.
+All 45 findings from the review have implementation commits, with a separate commit per item. Each entry records its implementation and validation.
 
 1. [x] Bound complete share links
 2. [x] Enforce study limits for every move path
@@ -324,7 +324,7 @@ Validation: position-editor keyboard/focus coverage at four viewports in WebKit,
 
 Firefox and WebKit run a 16-workflow production smoke suite alongside the existing Chromium audit shards. The final verification gate requires both browser jobs before deployment, and failures retain screenshots. The Chromium manifest includes the new audit regressions. Coordinate fixtures seed preferences before mounting, and concurrent-save checks observe a foreground tab with timer polling.
 
-Validation: all 16 core workflows exercised in Chromium, Firefox and WebKit; the WebKit editor focus failure was fixed and its four-viewport suite passed three consecutive production runs. Four shard/workflow coverage tests pass. The broader Chromium audit is being reconciled with asynchronous saving, recovery checkpoints and explicit engine activation.
+Validation: all 16 core workflows exercised in Chromium, Firefox and WebKit; the WebKit editor focus failure was fixed and its four-viewport suite passed three consecutive production runs. Four shard/workflow coverage tests pass. The broader Chromium audit has been reconciled with asynchronous saving, recovery checkpoints and explicit engine activation.
 
 ## Browser follow-up: keep recovery controls out of board content
 
@@ -349,3 +349,9 @@ Validation: the mistake-practice prompt, good alternative and grading workflow p
 The entire phone analysis context button now fits between the left and right safe-area insets. Its clickable bounds previously extended beneath landscape display cutouts even though its text was padded.
 
 Validation: the comprehensive follow-up browser sweep passes, including landscape/portrait cutout emulation, board intersections and touch targets; TypeScript and ESLint.
+
+## Final browser regression reconciliation
+
+Engine-dependent fixtures explicitly request analysis. Save/import fixtures wait for persistence or completed imports, recovery fixtures preserve meaningful replacement checkpoints, and library focus/sort expectations follow modification dates. Render probes distinguish new work from flags retained on an unchanged React fiber. The production smoke excludes requests cancelled by the expected service-worker reload only when they belong to an earlier document; final-document asset failures still fail the check. Layout runs collect all failures before returning a nonzero exit code.
+
+Validation: all 127 Chromium audit scripts and 177 layout checks exercised. Initial failures were corrected and their targeted reruns pass. Real engine production smoke passes for isolated hosting, static hosting and returning visitors with the legacy service worker. Engine telemetry updates produce zero unchanged-board renders, and navigation in a 1,024-ply study renders only three affected move entries.

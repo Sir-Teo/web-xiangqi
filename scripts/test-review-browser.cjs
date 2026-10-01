@@ -94,6 +94,7 @@ async function main() {
       `http://${host}:${port}${basePath}?moves=${REVIEW_FIXTURE_MOVES.join("+")}`,
       { waitUntil: "domcontentloaded", timeout: 60000 }
     );
+    await page.getByTestId("start-engine-analysis").click();
     await waitForEngineReady(page, 180000);
     await page.waitForFunction(
       (expected) => document.body.innerText.includes(`${expected} / ${expected}`),

@@ -56,6 +56,7 @@ async function command(page, label) {
           };`
         }));
         await page.goto(base);
+        await page.getByTestId('start-engine-analysis').click();
         await page.locator('.xiangqi-board').waitFor();
         await command(page, 'Library');
         await page.getByTestId('load-saved-drill-bound-fixture').click();

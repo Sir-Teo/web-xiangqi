@@ -34,6 +34,10 @@ const start = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR';
           ['b - - 47 32', 'h9g7', `fen ${start} b - - 47 32`],
         ]) {
           await page.goto(base + '?' + new URLSearchParams({ fen: `${start} ${suffix}`, moves: move }));
+          await page.locator('.xiangqi-board').waitFor();
+          const later = page.getByRole('button', { name: 'Decide later', exact: true });
+          if (await later.isVisible()) await later.click();
+          await page.getByTestId('start-engine-analysis').click();
           await page.waitForFunction(() => window.__commands?.some(command => command.startsWith('go ')));
           assert.equal(await page.evaluate(() => window.__commands.find(command => command.startsWith('position '))),
             `position ${expectedRoot} moves ${move}`, 'Engine position discarded the imported counters');

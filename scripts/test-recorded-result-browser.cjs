@@ -62,7 +62,11 @@ async function install(page) {
         await move(page, 'b2e2').click(); await copyPgn(page, '0-1');
         await move(page, 'h2e2').click(); await command(page, 'Set this as study main line');
         await move(page, 'b2e2').click(); await copyPgn(page, '1/2-1/2');
-        await command(page, 'Save game');
+        {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.result, 'black');
         assert.equal(saved.moveTree[0].children[0].recordedResult, 'draw');
@@ -120,7 +124,11 @@ async function install(page) {
         await copyPgn(page, '1/2-1/2');
         // Root-only declarations also survive PGN, saving and share links.
         await importPgn(page, '[Result "1/2-1/2"]\n1/2-1/2');
-        await copyPgn(page, '1/2-1/2'); await command(page, 'Save game');
+        await copyPgn(page, '1/2-1/2'); {
+          const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+          await command(page, 'Save game');
+          await page.waitForFunction(before => localStorage.getItem('xiangqi:library:v1') !== before, before);
+        }
         assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1).rootResult), 'draw');
         await command(page, 'Copy link');
         const rootUrl = await page.evaluate(() => window.__copied);
