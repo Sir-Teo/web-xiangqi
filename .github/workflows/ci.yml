@@ -123,10 +123,41 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  cross-browser:
+    name: Core workflows in ${{ matrix.browser }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    env:
+      XIANGQI_QA_BROWSER: ${{ matrix.browser }}
+      PIKAFISH_BROWSER_VARIANT: single
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/restore-build
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ matrix.browser }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:ui:cross-browser -- --smoke
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cross-browser-${{ matrix.browser }}
+          path: /tmp/xiangqi-*.png
+          retention-days: 7
+          if-no-files-found: ignore
+
   verify:
     name: verify
     if: always()
-    needs: [checks, build, node, browser]
+    needs: [checks, build, node, browser, cross-browser]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

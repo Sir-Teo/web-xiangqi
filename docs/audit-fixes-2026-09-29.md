@@ -46,7 +46,7 @@ The 45 findings from the review are being addressed in order, with a separate co
 42. [x] Provide guided library salvage
 43. [x] Resolve backup conflicts per game
 44. [x] Detect collection duplicates
-45. [ ] Run cross-browser checks in CI
+45. [x] Run cross-browser checks in CI
 
 ## 1. Bound complete share links
 
@@ -319,3 +319,9 @@ Validation: duplicate/capacity/copy/atomic-save unit tests; repeated collection 
 The original page control remains the focus destination when a command palette action opens another dialog. Removed palette inputs and the page body no longer replace that destination.
 
 Validation: position-editor keyboard/focus coverage at four viewports in WebKit, repeated three times against the production build; Chromium dialog focus/inert checks; TypeScript and ESLint.
+
+## 45. Run cross-browser checks in CI
+
+Firefox and WebKit run a 16-workflow production smoke suite alongside the existing Chromium audit shards. The final verification gate requires both browser jobs before deployment, and failures retain screenshots. The Chromium manifest includes the new audit regressions. Coordinate fixtures seed preferences before mounting, and concurrent-save checks observe a foreground tab with timer polling.
+
+Validation: all 16 core workflows exercised in Chromium, Firefox and WebKit; the WebKit editor focus failure was fixed and its four-viewport suite passed three consecutive production runs. Four shard/workflow coverage tests pass. The broader Chromium audit is being reconciled with asynchronous saving, recovery checkpoints and explicit engine activation.

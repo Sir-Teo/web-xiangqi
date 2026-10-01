@@ -12,7 +12,24 @@ const { browserType } = require('./qa-browser.cjs');
       ? [browserType.name()] : ['chromium', 'webkit', 'firefox'];
     const failures = [];
     for (const browser of browsers) {
-      for (const script of [
+      for (const script of (process.argv.includes('--smoke') ? [
+        'test-engine-on-demand-browser.cjs',
+        'test-engine-startup-cancel-browser.cjs',
+        'test-beginner-browser.cjs',
+        'test-editor-keyboard-browser.cjs',
+        'test-editor-pending-fen-browser.cjs',
+        'test-board-coordinates-browser.cjs',
+        'test-analysis-context-browser.cjs',
+        'test-cloud-visibility-browser.cjs',
+        'test-density-browser.cjs',
+        'test-save-state-browser.cjs',
+        'test-practice-notation-browser.cjs',
+        'test-practice-progress-browser.cjs',
+        'test-library-conflicts-browser.cjs',
+        'test-library-salvage-browser.cjs',
+        'test-library-concurrency-browser.cjs',
+        'test-pgn-collection-browser.cjs',
+      ] : [
         'test-worker-lifecycle-browser.cjs',
         'test-worker-progress-browser.cjs',
         'test-nnue-memory-browser.cjs',
@@ -108,7 +125,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-library-retry-browser.cjs',
         'test-explorer-browser.cjs',
         'test-autosave-limit-browser.cjs',
-      ]) {
+      ])) {
         console.log(`[${browser}] ${script}`);
         await new Promise((resolve, reject) => {
           const child = spawn(process.execPath, [path.join(__dirname, script)], {
