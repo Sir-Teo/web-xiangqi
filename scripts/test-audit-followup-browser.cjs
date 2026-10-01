@@ -484,6 +484,7 @@ async function shortDesktopDock(browser, width, height, expected) {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.position-dock').waitFor();
     const box = await page.evaluate(() => {
       const rectOf = s => document.querySelector(s).getBoundingClientRect();
@@ -534,6 +535,7 @@ async function everyIntersectionReachable(browser, width, height, note) {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.hitboxes-layer').waitFor();
     const covered = await page.evaluate(() => {
       const out = [];
@@ -570,6 +572,7 @@ async function evalBarFitsBesideTheBoard(browser, width, height) {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.eval-bar').waitFor();
     const box = await page.evaluate(() => {
       const bar = document.querySelector('.eval-bar').getBoundingClientRect();
@@ -621,6 +624,7 @@ async function panelsDoNotAnimateOnLoad(browser, width, height) {
       }, true);
     });
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.xiangqi-board').waitFor();
     // Tolerant on purpose: against the unfixed code the attribute never appears,
     // and the point of this check is to report the animation it was added to
@@ -694,6 +698,7 @@ async function panelsCannotEraseTheBoard(browser, width, height) {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.xiangqi-board').waitFor();
     for (const [handle, key] of [
       ['left-panel-resize-handle', 'ArrowRight'],
@@ -753,6 +758,7 @@ async function boardFitsItsColumn(browser, width, height) {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.xiangqi-board').waitFor();
     const box = await page.evaluate(() => {
       const board = document.querySelector('.xiangqi-board').getBoundingClientRect();
@@ -847,6 +853,7 @@ async function landscapeNavRidesHeader(browser, width, height) {
   const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
   try {
     await page.goto(base + '?moves=h2e2%20b9c7%20e2e6%20c7e6');
+    await page.getByTestId('start-engine-analysis').click();
     await page.locator('.mobile-board-nav').waitFor();
     await page.getByTestId('mobile-more-actions-btn').click();
     await page.locator('.mobile-board-action-menu').waitFor();

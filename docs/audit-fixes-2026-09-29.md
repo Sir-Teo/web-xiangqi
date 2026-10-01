@@ -343,3 +343,9 @@ Validation: dense PGN recovery at three widths, including an unreadable library 
 Good-alternative drill feedback now says “Advantage change,” consistent with the other verdicts and the evaluation display.
 
 Validation: the mistake-practice prompt, good alternative and grading workflow pass in the layout suite; TypeScript and ESLint.
+
+## Browser follow-up: inset the analysis context control
+
+The entire phone analysis context button now fits between the left and right safe-area insets. Its clickable bounds previously extended beneath landscape display cutouts even though its text was padded.
+
+Validation: the comprehensive follow-up browser sweep passes, including landscape/portrait cutout emulation, board intersections and touch targets; TypeScript and ESLint.
