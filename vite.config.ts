@@ -44,5 +44,25 @@ export default defineConfig({
     // (a cached toolchain has no test/ directory), which is why it only
     // appeared once the workflow ran end to end.
     exclude: [...configDefaults.exclude, '**/.deps/**'],
+    // Run the wall-clock parser limits after the parallel unit suite, so
+    // unrelated test workers do not consume their one-second CPU budget.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          exclude: [...configDefaults.exclude, '**/.deps/**', 'src/utils/__fuzz.test.ts'],
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'parser-limits',
+          include: ['src/utils/__fuzz.test.ts'],
+          sequence: { groupOrder: 1 },
+        },
+      },
+    ],
   },
 })

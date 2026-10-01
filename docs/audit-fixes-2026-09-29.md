@@ -355,3 +355,9 @@ Validation: the comprehensive follow-up browser sweep passes, including landscap
 Engine-dependent fixtures explicitly request analysis. Save/import fixtures wait for persistence or completed imports, recovery fixtures preserve meaningful replacement checkpoints, and library focus/sort expectations follow modification dates. Render probes distinguish new work from flags retained on an unchanged React fiber. The production smoke excludes requests cancelled by the expected service-worker reload only when they belong to an earlier document; final-document asset failures still fail the check. Layout runs collect all failures before returning a nonzero exit code.
 
 Validation: all 127 Chromium audit scripts and 177 layout checks exercised. Initial failures were corrected and their targeted reruns pass. Real engine production smoke passes for isolated hosting, static hosting and returning visitors with the legacy service worker. Engine telemetry updates produce zero unchanged-board renders, and navigation in a 1,024-ply study renders only three affected move entries.
+
+## Verification follow-up: isolate parser timing checks
+
+Vitest runs the parser time-limit project after the parallel unit project. This prevents unrelated test workers from consuming the parser checks’ wall-clock allowance; all existing inputs and the one-second bound remain unchanged. File filters continue to work through the standard Vitest command.
+
+Validation: `npm run verify` passes, including all 154 test files / 2,122 tests, opening/library checks, build-publication checks, engine contract, threaded smoke, single-core parity, React production build and development/preview header revalidation. Final phone analysis-context and recovery-menu suites pass in both Firefox and WebKit. All 45 audit findings and subsequent regression fixes are committed.
