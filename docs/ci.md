@@ -79,6 +79,10 @@ text or buttons.
 The pending-FEN editor check waits for the lazy dialog's initial focus and
 fonts before entering a draft, verifies that validation retains the draft and
 leaves the main board unchanged, and captures a screenshot if it fails.
+Manual saves include pending root and move notes in the same snapshot used by
+recovery, even before blur or the note debounce fires. The save-state check
+pauses that debounce and saves without moving focus, covering note creation
+and clearing in all three browsers.
 
 ## Measured baseline and timeout repair
 
