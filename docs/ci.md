@@ -83,6 +83,8 @@ Manual saves include pending root and move notes in the same snapshot used by
 recovery, even before blur or the note debounce fires. The save-state check
 pauses that debounce and saves without moving focus, covering note creation
 and clearing in all three browsers.
+Graph keyboard checks wait for each selected-move update before sending the
+next key and keep the pointer outside the plot while resizing text.
 
 ## Measured baseline and timeout repair
 

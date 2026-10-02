@@ -47,12 +47,18 @@ async function command(page, label) {
         await command(page, 'Evaluation graph');
         const navigator = page.getByRole('slider', { name: 'Evaluation graph move navigator' });
         await navigator.waitFor();
+        // Keep pointer hover from replacing the keyboard-selected tooltip as
+        // the plot moves during text resizing and scrolling.
+        await page.mouse.move(width - 1, height - 1);
         for (const textSize of [16, 32, 16]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, textSize);
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           await navigator.scrollIntoViewIfNeeded();
           await navigator.focus();
-          await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');
+          await page.keyboard.press('Home');
+          await page.waitForFunction(() => document.querySelector('.winrate-graph')?.getAttribute('aria-valuenow') === '0');
+          await page.keyboard.press('ArrowRight');
+          await page.waitForFunction(() => document.querySelector('.winrate-graph')?.getAttribute('aria-valuenow') === '1');
           await page.waitForFunction(() => document.querySelector('.graph-tooltip')?.textContent?.includes('Missed a stronger continuation.'));
           await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           const details = page.locator('.graph-tooltip');
@@ -86,10 +92,14 @@ async function command(page, label) {
           await navigator.scrollIntoViewIfNeeded();
           await navigator.focus();
           await page.keyboard.press('ArrowRight');
+          await page.waitForFunction(() => document.querySelector('.winrate-graph')?.getAttribute('aria-valuenow') === '2');
           await page.waitForFunction(() => document.querySelector('.graph-tooltip')?.textContent?.includes('Solid choice.'));
         }
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}x${height}/${hasTouch ? 'touch' : 'mouse'}: review details leave the plot visible on narrow/enlarged layouts and update with keyboard navigation`);
+      } catch (error) {
+        await page.screenshot({ path: `/tmp/xiangqi-graph-details-failed-${browserType.name()}-${width}-${height}.png` }).catch(() => {});
+        throw error;
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
