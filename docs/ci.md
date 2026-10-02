@@ -76,6 +76,9 @@ complete cards fit above the fold and that diagnostics appear below them.
 The controls use the panel's existing gap; removing their duplicate bottom
 margins keeps the full second line visible at 1280 × 720 without shrinking
 text or buttons.
+The pending-FEN editor check waits for the lazy dialog's initial focus and
+fonts before entering a draft, verifies that validation retains the draft and
+leaves the main board unchanged, and captures a screenshot if it fails.
 
 ## Measured baseline and timeout repair
 
