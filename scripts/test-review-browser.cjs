@@ -136,9 +136,10 @@ async function main() {
     await page.getByTestId("move-tree-active").waitFor({ timeout: 10000 });
 
     await page.getByTestId("save-game-btn").click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length > 0);
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
-    await waitForEngineReady(page, 180000);
 
+    // Reading a saved review does not require restarting the on-demand engine.
     // The reload finds an auto-save and offers to restore it. The check that
     // decides whether to offer runs on mount, before the URL's moves are
     // applied, so it always sees an empty board and always offers -- and the

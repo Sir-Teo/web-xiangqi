@@ -20,6 +20,8 @@ async function activateMainLineAction(page, testId) {
   const text = page.getByTestId('study-main-line').locator('summary, p');
   const originalSizes = await text.evaluateAll(nodes => nodes.map(node => parseFloat(getComputedStyle(node).fontSize)));
   await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+  await page.waitForFunction(sizes => [...document.querySelectorAll('[data-testid="study-main-line"] summary, [data-testid="study-main-line"] p')]
+    .every((node, index) => parseFloat(getComputedStyle(node).fontSize) === sizes[index] * 2), originalSizes);
   await text.first().scrollIntoViewIfNeeded();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const enlargedSizes = await text.evaluateAll(nodes => nodes.map(node => parseFloat(getComputedStyle(node).fontSize)));

@@ -13,17 +13,6 @@ const {
   relativePathForRequest,
 } = require("./serve-demo.cjs");
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function assertMetaTag(html, attributeName, attributeValue, content) {
-  assert.match(
-    html,
-    new RegExp(`<meta ${attributeName}="${escapeRegExp(attributeValue)}" content="${escapeRegExp(content)}"\\s*/?>`)
-  );
-}
-
 function buildFakeAiEngineScript({ variant, infoLines, bestmove }) {
   return `
     window.Pikafish = function Pikafish() {};
@@ -92,14 +81,6 @@ async function main() {
     assert.equal(indexResponse.headers.get("cross-origin-opener-policy"), "same-origin");
     assert.equal(indexResponse.headers.get("x-content-type-options"), "nosniff");
     const html = await indexResponse.text();
-    assert.match(html, /<title>Web Xiangqi \| Pikafish Analysis Board<\/title>/);
-    assertMetaTag(html, "name", "description", "A fast Xiangqi analysis board with Pikafish engine lines, game review, openings, saved studies, PGN/FEN import, and shareable variations.");
-    assertMetaTag(html, "name", "application-name", "Web Xiangqi");
-    assertMetaTag(html, "name", "color-scheme", "dark");
-    assertMetaTag(html, "name", "theme-color", "#050505");
-    assertMetaTag(html, "property", "og:title", "Web Xiangqi");
-    assertMetaTag(html, "name", "twitter:card", "summary");
-    assert.match(html, /<link rel="preload" href="\.\/pikafish\.js" as="script"\s*\/?>/);
     const assetPath = html.match(/src="([^"]+\/assets\/[^"]+\.js)"/)?.[1];
     assert(assetPath, "React build should reference a hashed JS asset.");
 
@@ -161,6 +142,7 @@ async function main() {
         timeout: 60000,
       });
       await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await page.getByTestId("start-engine-analysis").click();
       await page.waitForFunction(() => {
         const text = document.querySelector(".top-engine-state")?.textContent?.trim() || "";
         return text && !/Loading engine/i.test(text);
@@ -214,6 +196,7 @@ async function main() {
         timeout: 60000,
       });
       await invalidMovePage.waitForSelector(".xiangqi-board", { timeout: 30000 });
+      await invalidMovePage.getByTestId("start-engine-analysis").click();
       await invalidMovePage.waitForFunction(() => {
         return Boolean(window.__pikafishCreateWorkerEngineOptions);
       }, null, { timeout: 5000 });

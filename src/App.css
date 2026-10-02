@@ -5379,9 +5379,17 @@ summary:active {
    ═══════════════════════════════════════════════════ */
 .top-action-buttons {
   display: flex;
+  /* Recovery adds another action; enlarged labels must wrap within the bar. */
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: 0.2rem;
   flex-shrink: 0;
+}
+
+@media (max-width: 900px),
+       (max-width: 960px) and (max-height: 500px) and (pointer: coarse) {
+  .top-action-buttons { flex-wrap: nowrap; max-width: none; }
 }
 
 .top-action-btn {
