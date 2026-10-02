@@ -4350,12 +4350,28 @@ function App() {
   const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
 
-  /** The snapshot as it is written: the shape above plus the evaluation of the moment. */
-  const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => ({
-    ...snapshot,
-    finalEval: snapshotEvalRef.current.score,
-    finalEvalKind: snapshotEvalRef.current.kind,
-  }), []);
+  /** Include the live note even when Save runs before blur or its debounce. */
+  const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => {
+    let stored = {
+      ...snapshot,
+      finalEval: snapshotEvalRef.current.score,
+      finalEvalKind: snapshotEvalRef.current.kind,
+    };
+    const pending = moveCommentEditRef.current;
+    if (pending?.gameIdentity !== gameIdentity) return stored;
+    const node = treeNodesRef.current[pending.nodeId];
+    const normalized = normalizeMoveComment(pending.draft);
+    if (pending.nodeId === rootNodeId) {
+      stored = { ...stored, rootComment: normalized };
+    } else if (node?.record && normalized !== node.record.comment) {
+      const record = { ...node.record };
+      if (normalized) record.comment = normalized;
+      else delete record.comment;
+      const patched = { ...treeNodesRef.current, [pending.nodeId]: { ...node, record } };
+      stored = { ...stored, moveTree: serializeSavedMoveTree(patched, rootNodeId) };
+    }
+    return stored;
+  }, [gameIdentity, rootNodeId]);
 
   const reportSaveResult = useCallback((saved: SavedGame | null) => {
     if (saved) setLoadedSavedStudy(saved);
@@ -4384,6 +4400,7 @@ function App() {
     if (libraryWritePendingRef.current || (update && !loadedSavedStudy)) return;
     libraryWritePendingRef.current = true;
     setLibraryWritePending(true);
+    commitMoveComment();
     const snapshot = snapshotForStorage(currentGameSnapshot);
     setLastSaveWasUpdate(update);
     try {
@@ -4398,7 +4415,7 @@ function App() {
       libraryWritePendingRef.current = false;
       setLibraryWritePending(false);
     }
-  }, [currentGameSnapshot, gameIdentity, loadedSavedStudy, reportSaveResult, saveGameToLibrary, snapshotForStorage, updateGameInLibrary]);
+  }, [commitMoveComment, currentGameSnapshot, gameIdentity, loadedSavedStudy, reportSaveResult, saveGameToLibrary, snapshotForStorage, updateGameInLibrary]);
   const handleSaveGame = useCallback(() => saveCurrentStudy(false), [saveCurrentStudy]);
   const handleUpdateSavedStudy = useCallback(() => saveCurrentStudy(true), [saveCurrentStudy]);
 
@@ -5151,24 +5168,7 @@ function App() {
    * sitting in the draft ref waiting for its own debounce, and it would
    * otherwise be the one thing this flush failed to save.
    */
-  const recoverySnapshot = useCallback(() => {
-      let snapshot = snapshotForStorage(currentGameSnapshotRef.current);
-      const pending = moveCommentEditRef.current;
-      if (pending) {
-        const node = treeNodesRef.current[pending.nodeId];
-        const normalized = normalizeMoveComment(pending.draft);
-        if (pending.nodeId === rootNodeId) {
-          snapshot = { ...snapshot, rootComment: normalized };
-        } else if (node?.record && normalized !== (node.record.comment ?? '')) {
-          const record = { ...node.record };
-          if (normalized) record.comment = normalized;
-          else delete record.comment;
-          const patched = { ...treeNodesRef.current, [pending.nodeId]: { ...node, record } };
-          snapshot = { ...snapshot, moveTree: serializeSavedMoveTree(patched, rootNodeId) };
-        }
-      }
-    return snapshot;
-  }, [rootNodeId, snapshotForStorage]);
+  const recoverySnapshot = useCallback(() => snapshotForStorage(currentGameSnapshotRef.current), [snapshotForStorage]);
 
   const lastCheckpointRef = useRef<{ signature: string; id: string } | null>(null);
   useLayoutEffect(() => {

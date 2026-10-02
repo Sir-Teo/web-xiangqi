@@ -94,6 +94,7 @@ async function setup(page) {
         await failed.getByTestId('move-comment-input').blur();
         assert.equal(await failed.locator('.bottombar-fen').getAttribute('title'), fen);
         await command(failed, 'Save game');
+        await failed.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length > 0);
         const saved = await failed.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         assert.equal(saved.moveTree[0].children[0].comment, 'Study still editable after a failed review download');
       } finally { await failed.close(); }

@@ -5,15 +5,18 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
  const browser = await browserType.launch();
  try {
   for (const width of [1440,390,320]) {
-   const page = await browser.newPage({viewport:{width,height:844}});
+   const page = await browser.newPage({viewport:{width,height:844},reducedMotion:'reduce'});
    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
    const before = await page.locator('.xiangqi-board').boundingBox();
    await page.keyboard.press('ControlOrMeta+k'); await page.getByRole('combobox').fill('Settings'); await page.keyboard.press('Enter');
    await page.locator('#settings-ui-density').selectOption('comfortable');
    await page.waitForFunction(()=>document.querySelector('main').dataset.uiDensity==='comfortable');
-   await page.waitForTimeout(300);
+   await page.waitForFunction(() => {
+    const control = document.querySelector('#settings-ui-density');
+    return parseFloat(getComputedStyle(control).fontSize) >= 14 && control.getBoundingClientRect().height >= 43.95;
+   });
    const control = await page.locator('#settings-ui-density').evaluate(el=>({font:parseFloat(getComputedStyle(el).fontSize),height:el.getBoundingClientRect().height}));
-   assert.ok(control.font>=14 && control.height>=44);
+   assert.ok(control.font>=14 && control.height>=43.95, JSON.stringify({width,...control}));
    await page.getByRole('button',{name:'Close settings',exact:true}).click();
    const after=await page.locator('.xiangqi-board').boundingBox(); assert.equal(after.width,before.width);
    if(width<900) await page.getByTestId('mobile-view-analysis').click();

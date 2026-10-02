@@ -3432,108 +3432,68 @@ async function assertAiPlayModeShowsEngineStatus(page) {
   }
 }
 
-/**
- * Take back, against the real engine: the human plays, the engine answers,
- * and one press removes both so it is the human's move again from the
- * position before -- and the engine does not answer a move that is no
- * longer there. With the engine still thinking, only the human's move goes.
- */
-async function assertTakeBackRemovesTheExchange(page) {
-  await page.setViewportSize({ width: 1280, height: 820 });
-  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
-    waitUntil: "domcontentloaded",
-    timeout: 60000,
-  });
-  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByRole("button", { name: /You play Red/i }).click();
-  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
-  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
-  await page.waitForFunction(() => document.body.innerText.includes("Engine ready"), null, { timeout: 90000 });
-
-  const meta = () => page.evaluate(() => document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "");
-  const takeBack = page.getByTestId("take-back-btn");
-  if (!(await takeBack.isDisabled())) throw new Error("Take back was offered before any move was played");
-
-  await page.getByLabel("h2, red cannon").click();
-  await page.getByLabel("e2, empty, legal move").click();
-  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "2 / 2", null, { timeout: 30000 });
-  await takeBack.click();
-  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "No moves", null, { timeout: 5000 });
-  // The engine must not answer a move that is no longer on the board.
-  await page.waitForTimeout(2500);
-  const after = await page.evaluate(() => ({
-    meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
-    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
-    toast: document.querySelector('[data-testid="delete-undo-toast"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
-    aiStatus: document.querySelector(".board-ai-status")?.textContent?.trim() ?? "",
-  }));
-  if (after.meta !== "No moves" || !after.fen.startsWith("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w")) {
-    throw new Error(`Take back did not remove the move and the reply: ${JSON.stringify(after)}`);
-  }
-  if (!/Removed 2 moves/.test(after.toast)) {
-    throw new Error(`Take back should offer to undo both plies: ${JSON.stringify(after)}`);
-  }
-  if (await meta() !== "No moves") {
-    throw new Error(`The engine moved after the take back: ${await meta()}`);
-  }
-
-  // And the half this used to only claim: taken back *while the engine is
-  // still thinking*, only the human's move goes.
-  //
-  // `takeBackPlies` is what decides that, and it is what this pins -- pegging
-  // it to 2, or to 1, or inverting its turn test all fail here. The trailing
-  // wait below is weaker and is labelled as such: the reply never lands, but
-  // no single change makes it land. `handleTakeBack` clears the queued search,
-  // stops the running one and drops `applyBestMoveRef`, and the apply site
-  // separately requires the tag's position to still be the current one and
-  // the AI to still be on move. Removing all of those together still produces
-  // no move, so something upstream of them is also stopping the search when
-  // the position changes. Kept as a regression check on the behaviour, not as
-  // a check on any of those guards.
-  //
-  // At whatever strength the dialog already has, which is the point.
-  //
-  // This used to pick "Full strength" to widen the window, and that was wrong
-  // twice over. `aiStrength` is a persisted preference and this file shares
-  // one page across every assertion, so the choice leaked: every later
-  // assertion that played the AI inherited the heaviest search in the suite,
-  // on a real engine, for the rest of the run. It also cost the most CPU of
-  // anything here and is the likeliest reason this assertion killed its own
-  // browser on a loaded machine.
-  //
-  // The window does not need it. Measured on this machine: the engine answers
-  // in ~0.9s at the default and ~4.8s at full strength, against a press that
-  // lands within ~50ms of the wait below resolving. A loaded machine makes the
-  // engine slower, which widens the window rather than closing it.
-  await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByRole("button", { name: /You play Red/i }).click();
-  await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
-  await page.locator(".new-game-menu").waitFor({ state: "detached", timeout: 5000 });
-  await page.getByLabel("h2, red cannon").click();
-  await page.getByLabel("e2, empty, legal move").click();
-  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 1", null, { timeout: 30000 });
-  await takeBack.click();
-  await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "No moves", null, { timeout: 5000 });
-  const mid = await page.evaluate(() => ({
-    toast: document.querySelector('[data-testid="delete-undo-toast"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "",
-    disabled: document.querySelector('[data-testid="take-back-btn"]')?.disabled,
-  }));
-  // `(?!s)` because the toast reads `Removed 1 moveUndo` -- the Undo button's
-  // own text runs straight on -- and `Removed 1 moves` is the wrong answer.
-  if (!/Removed 1 move(?!s)/.test(mid.toast)) {
-    throw new Error(`Taking back during the engine's search should remove one ply, not two: ${JSON.stringify(mid)}`);
-  }
-  if (mid.disabled !== true) {
-    throw new Error(`Nothing is left to take back, so the button should be disabled: ${JSON.stringify(mid)}`);
-  }
-  // Past the search it was running when the move went away. See the note
-  // above: this has never been shown to be able to fail.
-  await page.waitForTimeout(6000);
-  const settled = await meta();
-  if (settled !== "No moves") {
-    throw new Error(`The engine played the reply it was computing for a move that had been taken back: ${settled}`);
-  }
+/** Take back both a completed exchange and a move whose reply is still pending. */
+async function assertTakeBackRemovesTheExchange(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+  try {
+    await page.route("**/pikafish.js", route => route.fulfill({
+      contentType: "application/javascript",
+      body: `
+        window.Pikafish = function() {};
+        window.__holdReply = false;
+        window.__replyPending = false;
+        window.Pikafish.createWorkerEngine = async () => {
+          const listeners = [];
+          const emit = line => listeners.forEach(listener => listener(line));
+          let position = '';
+          window.__finishReply = () => {
+            window.__replyPending = false;
+            emit('info depth 8 score cp 0 pv h9g7');
+            emit('bestmove h9g7');
+          };
+          return { variant: 'single', addMessageListener: listener => listeners.push(listener), terminate() {}, postMessage(command) {
+            if (command === 'uci') queueMicrotask(() => emit('uciok'));
+            if (command === 'isready') queueMicrotask(() => emit('readyok'));
+            if (command.startsWith('position ')) position = command;
+            if (command.startsWith('go ')) {
+              if (position.endsWith(' moves h2e2')) {
+                window.__replyPending = true;
+                if (!window.__holdReply) queueMicrotask(window.__finishReply);
+              } else queueMicrotask(() => emit('bestmove (none)'));
+            }
+            // A real UCI engine can return a legal bestmove after being stopped.
+            if (command === 'stop') queueMicrotask(() => window.__replyPending ? window.__finishReply() : emit('bestmove (none)'));
+          } };
+        };`,
+    }));
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/");
+    await page.getByRole("button", { name: "Start new game" }).click();
+    await page.getByRole("button", { name: /You play Red/i }).click();
+    await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
+    await page.locator(".new-game-menu").waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.body.innerText.includes("Engine ready"));
+    const takeBack = page.getByTestId("take-back-btn");
+    if (!(await takeBack.isDisabled())) throw new Error("Take back was offered before any move was played");
+    for (const pending of [false, true]) {
+      await page.evaluate(hold => { window.__holdReply = hold; }, pending);
+      await page.getByLabel("h2, red cannon").click();
+      await page.getByLabel("e2, empty, legal move").click();
+      await page.waitForFunction(pending => pending ? window.__replyPending
+        : document.querySelector(".wc-meta strong")?.textContent?.trim() === "2 / 2", pending);
+      await takeBack.click();
+      await page.waitForFunction(() => document.querySelector(".wc-meta strong")?.textContent?.trim() === "No moves");
+      if (pending) await page.waitForFunction(() => !window.__replyPending);
+      const state = await page.evaluate(() => ({
+        fen: document.querySelector(".bottombar-fen")?.getAttribute("title"),
+        toast: document.querySelector('[data-testid="delete-undo-toast"]')?.textContent,
+        disabled: document.querySelector('[data-testid="take-back-btn"]')?.disabled,
+      }));
+      if (!state.fen.startsWith("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w")
+        || !(pending ? /Removed 1 move(?!s)/ : /Removed 2 moves/).test(state.toast) || !state.disabled) {
+        throw new Error(`Take back (${pending ? 'pending reply' : 'completed exchange'}): ${JSON.stringify(state)}`);
+      }
+    }
+  } finally { await page.close(); }
 }
 
 async function assertAiNewGameSwitchesToPlayWorkspace(page) {
@@ -4378,45 +4338,58 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
   }
 }
 
-async function assertTwoEngineLinesFitAtLaptopHeight(page) {
-  // The Engine tab exists for its lines. At 1280x720 the diagnostics cards
-  // used to sit between the controls and the lines, so the panel showed one
-  // line of the three and the rest lived below the fold.
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
-    waitUntil: "domcontentloaded",
-    timeout: 60000,
-  });
-  await page.locator(".xiangqi-board").waitFor();
-  await startLayoutAnalysis(page);
-  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByTestId("analysis-tab-engine").click();
-  await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
+async function assertTwoEngineLinesFitAtLaptopHeight(browser) {
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 720 });
+  try {
+    // Hold the line lengths and preferences fixed: real search depth and prior
+    // tests' saved settings must not decide how many rows the cards occupy.
+    await page.addInitScript({ content: buildFakePikafishScript({
+      variant: "fake-line-layout",
+      goSource: `queueMicrotask(() => {
+        emit("info depth 8 multipv 1 score cp 42 wdl 400 300 300 pv h2e2 h9g7 h0g2 b9c7 c3c4 c6c5 a0a1 a9a8");
+        emit("info depth 8 multipv 2 score cp 20 wdl 350 350 300 pv b2e2 b9c7 h0g2 h9g7 g3g4 g6g5 a0a1 a9a8");
+        emit("bestmove h2e2");
+      });`,
+    }) });
+    // The Engine tab exists for its lines. At 1280x720 the diagnostics cards
+    // used to sit between the controls and the lines, so the panel showed one
+    // line of the three and the rest lived below the fold.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("engine-pv-lines-3").click();
+    await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
 
-  const layout = await page.evaluate(() => {
-    const rect = (selector) => {
-      const box = document.querySelector(selector)?.getBoundingClientRect();
-      return box ? { top: Math.round(box.top), bottom: Math.round(box.bottom) } : null;
-    };
-    const panel = document.querySelector('[data-testid="engine-pv-line-1"]')?.closest(".panel-content");
-    const panelBox = panel?.getBoundingClientRect();
-    return {
-      panel: panelBox ? { top: Math.round(panelBox.top), bottom: Math.round(panelBox.bottom) } : null,
-      line0: rect('[data-testid="engine-pv-line-0"]'),
-      line1: rect('[data-testid="engine-pv-line-1"]'),
-      dashboard: rect(".engine-dashboard"),
-    };
-  });
-  if (!layout.panel || !layout.line0 || !layout.line1 || !layout.dashboard) {
-    throw new Error(`Engine tab layout could not be measured: ${JSON.stringify(layout)}`);
-  }
-  if (layout.line1.bottom > layout.panel.bottom || layout.line0.top < layout.panel.top) {
-    throw new Error(`Two engine lines do not fit at 1280x720: ${JSON.stringify(layout)}`);
-  }
-  if (layout.dashboard.top < layout.line1.bottom) {
-    throw new Error(`Engine diagnostics sit above the lines: ${JSON.stringify(layout)}`);
-  }
-  console.log(`PASS: two engine lines fit at 1280x720 (${JSON.stringify(layout)})`);
+    const layout = await page.evaluate(() => {
+      const rect = (selector) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect();
+        return box ? { top: Math.round(box.top), bottom: Math.round(box.bottom) } : null;
+      };
+      const panel = document.querySelector('[data-testid="engine-pv-line-1"]')?.closest(".panel-content");
+      const panelBox = panel?.getBoundingClientRect();
+      return {
+        panel: panelBox ? { top: Math.round(panelBox.top), bottom: Math.round(panelBox.bottom) } : null,
+        line0: rect('[data-testid="engine-pv-line-0"]'),
+        line1: rect('[data-testid="engine-pv-line-1"]'),
+        dashboard: rect(".engine-dashboard"),
+      };
+    });
+    if (!layout.panel || !layout.line0 || !layout.line1 || !layout.dashboard) {
+      throw new Error(`Engine tab layout could not be measured: ${JSON.stringify(layout)}`);
+    }
+    if (layout.line1.bottom > layout.panel.bottom || layout.line0.top < layout.panel.top) {
+      throw new Error(`Two engine lines do not fit at 1280x720: ${JSON.stringify(layout)}`);
+    }
+    if (layout.dashboard.top < layout.line1.bottom) {
+      throw new Error(`Engine diagnostics sit above the lines: ${JSON.stringify(layout)}`);
+    }
+    console.log(`PASS: two engine lines fit at 1280x720 (${JSON.stringify(layout)})`);
+  } finally { await context.close(); }
 }
 
 async function assertEngineTelemetryDashboard(browser) {
@@ -7094,44 +7067,6 @@ async function assertAnXqfFileImports(page) {
   }
   if (state.comments.length !== 1 || state.comments[0] !== "Central cannon.") {
     throw new Error(`The XQF file's note did not land on its move: ${JSON.stringify(state)}`);
-  }
-}
-
-/**
- * The DhtmlXQ block a dpxq.com game page carries. Six moves from a real
- * record, with a note on the second, pasted into the import box: the line
- * has to load, and the note has to land on its move.
- */
-async function assertADhtmlXqRecordImports(page) {
-  await page.setViewportSize({ width: 1280, height: 820 });
-  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
-    waitUntil: "domcontentloaded",
-    timeout: 60000,
-  });
-  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByTestId("uci-line-input").fill([
-    "[DhtmlXQ]",
-    "[DhtmlXQ_binit]8979695949392919097717866646260600102030405060708012720323436383[/DhtmlXQ_binit]",
-    "[DhtmlXQ_movelist]262563641927706217071022[/DhtmlXQ_movelist]",
-    "[DhtmlXQ_comment2]A quiet reply.||Second line.[/DhtmlXQ_comment2]",
-    "[/DhtmlXQ]",
-  ].join("\n"));
-  await page.getByTestId("import-uci-line-btn").click();
-  await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
-  const state = await page.evaluate(() => ({
-    meta: document.querySelector(".wc-meta strong")?.textContent?.trim() ?? "",
-    fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? "",
-    comments: [...document.querySelectorAll(".mtree-comment")].map((el) => el.getAttribute("title") ?? ""),
-    error: document.querySelector("#new-game-line-error")?.textContent ?? "",
-  }));
-  // c3c4 g6g5 b0c2 h9g7 b2a2 b9c7
-  if (state.meta !== "6 / 6" || !state.fen.startsWith("r1bakab1r/9/1cn3nc1/p1p1p3p/6p2/2P6/P3P1P1P/C1N4C1/9/R1BAKABNR w")) {
-    throw new Error(`The DhtmlXQ record did not import as its six moves: ${JSON.stringify(state)}`);
-  }
-  // A note folds its line breaks to spaces on the way into the tree.
-  if (state.comments.length !== 1 || !state.comments[0].includes("A quiet reply. Second line.")) {
-    throw new Error(`The record's note did not land on its move: ${JSON.stringify(state)}`);
   }
 }
 
@@ -14154,6 +14089,10 @@ async function assertMobileSaveLibraryActions(page) {
   await mobilePaletteButton.waitFor({ timeout: 5000 });
   await mobilePaletteButton.click();
   await page.getByRole("dialog", { name: "Commands" }).waitFor({ timeout: 5000 });
+  // The lazy-loading dialog has the same name; wait for the actual palette.
+  await page.getByRole("combobox", { name: "Search commands" }).waitFor();
+  await page.waitForFunction(() => document.activeElement?.getAttribute("data-command-input") !== null
+    && document.activeElement?.getAttribute("role") === "combobox");
   const paletteState = await page.evaluate(() => {
     const dialog = document.querySelector('[role="dialog"][aria-label="Commands"]');
     const input = dialog?.querySelector("input");
@@ -14964,7 +14903,7 @@ function layoutChecks(page, browser) {
     { name: "assertAiNewGameSwitchesToPlayWorkspace", run: () => assertAiNewGameSwitchesToPlayWorkspace(page) },
     { name: "assertLocalNewGameReturnsTheWorkspaceAiTook", run: () => assertLocalNewGameReturnsTheWorkspaceAiTook(page) },
     { name: "assertARefusedFenSaysWhichThingIsWrong", run: () => assertARefusedFenSaysWhichThingIsWrong(page) },
-    { name: "assertTakeBackRemovesTheExchange", run: () => assertTakeBackRemovesTheExchange(page) },
+    { name: "assertTakeBackRemovesTheExchange", run: () => assertTakeBackRemovesTheExchange(browser) },
     { name: "assertBeginnerAiUsesCandidatePv", run: () => assertBeginnerAiUsesCandidatePv(browser) },
     { name: "assertAnalysisWorkspaceDoesNotAutoPlayAi", run: () => assertAnalysisWorkspaceDoesNotAutoPlayAi(browser) },
     { name: "assertEngineLoaderFailureShowsNotice", run: () => assertEngineLoaderFailureShowsNotice(browser) },
@@ -14976,7 +14915,7 @@ function layoutChecks(page, browser) {
     { name: "assertClickingIntoAnEngineLinePlaysItUpToThere", run: () => assertClickingIntoAnEngineLinePlaysItUpToThere(browser) },
     { name: "assertAnEngineLineIsOneTabStop", run: () => assertAnEngineLineIsOneTabStop(browser) },
     { name: "assertEngineTelemetryDashboard", run: () => assertEngineTelemetryDashboard(browser) },
-    { name: "assertTwoEngineLinesFitAtLaptopHeight", run: () => assertTwoEngineLinesFitAtLaptopHeight(page) },
+    { name: "assertTwoEngineLinesFitAtLaptopHeight", run: () => assertTwoEngineLinesFitAtLaptopHeight(browser) },
     { name: "assertTheHeadingOutlineHasNoGaps", run: () => assertTheHeadingOutlineHasNoGaps(browser) },
     { name: "assertADeepSearchSurvivesAHiddenTab", run: () => assertADeepSearchSurvivesAHiddenTab(browser) },
     { name: "assertAMoveNoteSurvivesAReload", run: () => assertAMoveNoteSurvivesAReload(browser) },
@@ -15006,7 +14945,6 @@ function layoutChecks(page, browser) {
     { name: "assertMoveLineImport", run: () => assertMoveLineImport(page) },
     { name: "assertNotationImportSaysWhatItCouldNotRead", run: () => assertNotationImportSaysWhatItCouldNotRead(page) },
     { name: "assertANotationRecordCanStartFromAGivenPosition", run: () => assertANotationRecordCanStartFromAGivenPosition(page) },
-    { name: "assertADhtmlXqRecordImports", run: () => assertADhtmlXqRecordImports(page) },
     { name: "assertAnXqfFileImports", run: () => assertAnXqfFileImports(page) },
     { name: "assertMoveLineImportPreservesVariations", run: () => assertMoveLineImportPreservesVariations(page) },
     { name: "assertMoveLineImportRecoversUnclosedVariation", run: () => assertMoveLineImportRecoversUnclosedVariation(page) },

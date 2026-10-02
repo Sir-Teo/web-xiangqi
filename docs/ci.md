@@ -25,12 +25,12 @@ to the shared artifact wastes work.
 
 ## Browser checks
 
-The 105 focused audit scripts are assigned to eight disjoint shards using
+The 127 focused audit scripts are assigned to eight disjoint shards using
 `scripts/ui-audit-suites.cjs`. Tests prove that the workflow's actual shard
 arguments cover every registered script exactly once. Scripts within a shard
 are ordered using hosted timings to spread slower checks across the shards and
 remain serial; parallelism comes from separate runners, preserving CPU and
-port isolation. The 158 layout checks run in four disjoint shards, with the
+port isolation. The 176 layout checks run in four disjoint shards, with the
 same coverage guarantee. Review fixtures, review, calibration, worker parity,
 production smoke and server tests have their own jobs. The matrix uses 18
 browser runners; checks remain serial within each runner.
@@ -51,6 +51,40 @@ npm run test:ui:audit -- --shard=3/8 --list
 npm run test:ui:layout -- --shard=2/4     # or omit --shard to run all checks
 node --test scripts/test-ui-audit-shards.cjs
 ```
+
+## Keeping coverage focused
+
+The focused DhtmlXQ browser suite owns import, move/note preservation, saving,
+malformed-input rejection, and desktop/phone coverage. The older layout-suite
+DhtmlXQ happy-path check has been removed. XQF's layout check stays because it
+also checks imported variations. The unit check for adjacent documentation
+comments was removed: it tested comment placement, not application behavior.
+
+Server tests retain routing, caching, asset paths, engine failures, and AI move
+handling. Exact title/metadata copy and the obsolete engine-preload assertion
+were removed; engine assets are loaded on demand. Browser tests explicitly
+start analysis when needed and wait for saves to finish before reloading.
+Take-back coverage uses a controlled engine reply to check both completed and
+pending exchanges without racing the real engine's search speed. Real-engine
+play remains covered by the beginner workflow and engine parity suites.
+
+Recovery checks wait for the original library save before reading its ID.
+The laptop engine-line layout check uses a fresh browser context and fixed
+multi-move lines with WDL details, so search speed and earlier tests' saved
+preferences cannot change the measured card height. It still checks that two
+complete cards fit above the fold and that diagnostics appear below them.
+The controls use the panel's existing gap; removing their duplicate bottom
+margins keeps the full second line visible at 1280 × 720 without shrinking
+text or buttons.
+The pending-FEN editor check waits for the lazy dialog's initial focus and
+fonts before entering a draft, verifies that validation retains the draft and
+leaves the main board unchanged, and captures a screenshot if it fails.
+Manual saves include pending root and move notes in the same snapshot used by
+recovery, even before blur or the note debounce fires. The save-state check
+pauses that debounce and saves without moving focus, covering note creation
+and clearing in all three browsers.
+Graph keyboard checks wait for each selected-move update before sending the
+next key and keep the pointer outside the plot while resizing text.
 
 ## Measured baseline and timeout repair
 
