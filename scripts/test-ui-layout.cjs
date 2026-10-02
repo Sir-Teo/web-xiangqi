@@ -4338,45 +4338,58 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
   }
 }
 
-async function assertTwoEngineLinesFitAtLaptopHeight(page) {
-  // The Engine tab exists for its lines. At 1280x720 the diagnostics cards
-  // used to sit between the controls and the lines, so the panel showed one
-  // line of the three and the rest lived below the fold.
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
-    waitUntil: "domcontentloaded",
-    timeout: 60000,
-  });
-  await page.locator(".xiangqi-board").waitFor();
-  await startLayoutAnalysis(page);
-  await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
-  await page.getByTestId("analysis-tab-engine").click();
-  await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
+async function assertTwoEngineLinesFitAtLaptopHeight(browser) {
+  const { context, page } = await newIsolatedPage(browser, { width: 1280, height: 720 });
+  try {
+    // Hold the line lengths and preferences fixed: real search depth and prior
+    // tests' saved settings must not decide how many rows the cards occupy.
+    await page.addInitScript({ content: buildFakePikafishScript({
+      variant: "fake-line-layout",
+      goSource: `queueMicrotask(() => {
+        emit("info depth 8 multipv 1 score cp 42 wdl 400 300 300 pv h2e2 h9g7 h0g2 b9c7 c3c4 c6c5 a0a1 a9a8");
+        emit("info depth 8 multipv 2 score cp 20 wdl 350 350 300 pv b2e2 b9c7 h0g2 h9g7 g3g4 g6g5 a0a1 a9a8");
+        emit("bestmove h2e2");
+      });`,
+    }) });
+    // The Engine tab exists for its lines. At 1280x720 the diagnostics cards
+    // used to sit between the controls and the lines, so the panel showed one
+    // line of the three and the rest lived below the fold.
+    await page.goto("http://127.0.0.1:8192/web-xiangqi/", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
+    await page.locator(".xiangqi-board").waitFor();
+    await startLayoutAnalysis(page);
+    await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+    await page.getByTestId("analysis-tab-engine").click();
+    await page.getByTestId("engine-pv-lines-3").click();
+    await page.getByTestId("engine-pv-line-1").waitFor({ timeout: 30000 });
 
-  const layout = await page.evaluate(() => {
-    const rect = (selector) => {
-      const box = document.querySelector(selector)?.getBoundingClientRect();
-      return box ? { top: Math.round(box.top), bottom: Math.round(box.bottom) } : null;
-    };
-    const panel = document.querySelector('[data-testid="engine-pv-line-1"]')?.closest(".panel-content");
-    const panelBox = panel?.getBoundingClientRect();
-    return {
-      panel: panelBox ? { top: Math.round(panelBox.top), bottom: Math.round(panelBox.bottom) } : null,
-      line0: rect('[data-testid="engine-pv-line-0"]'),
-      line1: rect('[data-testid="engine-pv-line-1"]'),
-      dashboard: rect(".engine-dashboard"),
-    };
-  });
-  if (!layout.panel || !layout.line0 || !layout.line1 || !layout.dashboard) {
-    throw new Error(`Engine tab layout could not be measured: ${JSON.stringify(layout)}`);
-  }
-  if (layout.line1.bottom > layout.panel.bottom || layout.line0.top < layout.panel.top) {
-    throw new Error(`Two engine lines do not fit at 1280x720: ${JSON.stringify(layout)}`);
-  }
-  if (layout.dashboard.top < layout.line1.bottom) {
-    throw new Error(`Engine diagnostics sit above the lines: ${JSON.stringify(layout)}`);
-  }
-  console.log(`PASS: two engine lines fit at 1280x720 (${JSON.stringify(layout)})`);
+    const layout = await page.evaluate(() => {
+      const rect = (selector) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect();
+        return box ? { top: Math.round(box.top), bottom: Math.round(box.bottom) } : null;
+      };
+      const panel = document.querySelector('[data-testid="engine-pv-line-1"]')?.closest(".panel-content");
+      const panelBox = panel?.getBoundingClientRect();
+      return {
+        panel: panelBox ? { top: Math.round(panelBox.top), bottom: Math.round(panelBox.bottom) } : null,
+        line0: rect('[data-testid="engine-pv-line-0"]'),
+        line1: rect('[data-testid="engine-pv-line-1"]'),
+        dashboard: rect(".engine-dashboard"),
+      };
+    });
+    if (!layout.panel || !layout.line0 || !layout.line1 || !layout.dashboard) {
+      throw new Error(`Engine tab layout could not be measured: ${JSON.stringify(layout)}`);
+    }
+    if (layout.line1.bottom > layout.panel.bottom || layout.line0.top < layout.panel.top) {
+      throw new Error(`Two engine lines do not fit at 1280x720: ${JSON.stringify(layout)}`);
+    }
+    if (layout.dashboard.top < layout.line1.bottom) {
+      throw new Error(`Engine diagnostics sit above the lines: ${JSON.stringify(layout)}`);
+    }
+    console.log(`PASS: two engine lines fit at 1280x720 (${JSON.stringify(layout)})`);
+  } finally { await context.close(); }
 }
 
 async function assertEngineTelemetryDashboard(browser) {
@@ -14902,7 +14915,7 @@ function layoutChecks(page, browser) {
     { name: "assertClickingIntoAnEngineLinePlaysItUpToThere", run: () => assertClickingIntoAnEngineLinePlaysItUpToThere(browser) },
     { name: "assertAnEngineLineIsOneTabStop", run: () => assertAnEngineLineIsOneTabStop(browser) },
     { name: "assertEngineTelemetryDashboard", run: () => assertEngineTelemetryDashboard(browser) },
-    { name: "assertTwoEngineLinesFitAtLaptopHeight", run: () => assertTwoEngineLinesFitAtLaptopHeight(page) },
+    { name: "assertTwoEngineLinesFitAtLaptopHeight", run: () => assertTwoEngineLinesFitAtLaptopHeight(browser) },
     { name: "assertTheHeadingOutlineHasNoGaps", run: () => assertTheHeadingOutlineHasNoGaps(browser) },
     { name: "assertADeepSearchSurvivesAHiddenTab", run: () => assertADeepSearchSurvivesAHiddenTab(browser) },
     { name: "assertAMoveNoteSurvivesAReload", run: () => assertAMoveNoteSurvivesAReload(browser) },

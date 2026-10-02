@@ -8,6 +8,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     page.setDefaultTimeout(10000);
     await page.goto(base + '?moves=h2e2');
     await page.getByTestId('save-game-btn').click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length === 1);
     const id = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1'))[0].id);
     await page.locator('.hitbox[data-file="7"][data-rank="9"]').click();
     await page.locator('.hitbox[data-file="6"][data-rank="7"]').click();

@@ -68,6 +68,15 @@ Take-back coverage uses a controlled engine reply to check both completed and
 pending exchanges without racing the real engine's search speed. Real-engine
 play remains covered by the beginner workflow and engine parity suites.
 
+Recovery checks wait for the original library save before reading its ID.
+The laptop engine-line layout check uses a fresh browser context and fixed
+multi-move lines with WDL details, so search speed and earlier tests' saved
+preferences cannot change the measured card height. It still checks that two
+complete cards fit above the fold and that diagnostics appear below them.
+The controls use the panel's existing gap; removing their duplicate bottom
+margins keeps the full second line visible at 1280 × 720 without shrinking
+text or buttons.
+
 ## Measured baseline and timeout repair
 
 For commit `2b6ed1b`, [CI run 34729171229](https://github.com/Sir-Teo/web-xiangqi/actions/runs/34729171229)
