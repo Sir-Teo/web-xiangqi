@@ -1250,24 +1250,33 @@ body.resizing * {
   position: relative;
 }
 
+/* Slid with `transform`, not `left`, because it runs for the whole of every
+   search: animating `left` laid out and repainted the footer on every frame
+   for as long as the engine was thinking, which is exactly when the reader is
+   clicking the board. A transform runs on the compositor. The resting
+   transform keeps it parked off the left edge, where `left: -40%` used to,
+   so the reduced-motion rule below still hides it. */
 .analyzing-bar.active::after {
   content: "";
   position: absolute;
   top: 0;
-  left: -40%;
+  left: 0;
   width: 40%;
   height: 100%;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: translateX(-100%);
   animation: analyzing-slide 1.4s ease-in-out infinite;
 }
 
+/* Percentages of the bar's own 40% width: -100% is the old `left: -40%` and
+   250% the old `left: 100%`. */
 @keyframes analyzing-slide {
   0% {
-    left: -40%;
+    transform: translateX(-100%);
   }
 
   100% {
-    left: 100%;
+    transform: translateX(250%);
   }
 }
 
@@ -6478,10 +6487,19 @@ summary:active {
     /* The floor has to move the layout, not paint over it. `minmax(0, 1fr)`
        lets the board row shrink to nothing, so a board held at its floor simply
        overlapped the dock underneath it -- the pieces drew on top of Turn,
-       Selection and Material. `auto` as the row's minimum is the content's own
-       minimum, which is what the floor is, so the row takes it, the dock is
-       pushed below, and the stage scrolls to reach both. */
-    grid-template-rows: minmax(auto, 1fr) auto;
+       Selection and Material. The row's minimum is the floor, so the row takes
+       it, the dock is pushed below, and the stage scrolls to reach both.
+
+       Stated as the floor itself rather than `auto`, which resolved to the same
+       height but made every relayout of the dock -- one per click, since the
+       Selection card changes on every click -- measure the board's minimum
+       contribution by laying it out at that floor. A 272px board crosses the
+       small-board container queries, so all 32 pieces were restyled to the
+       floor size and back, and every piece repainted its shadows, several times
+       per click: ~215 piece restyles per click. Stating the floor took the
+       median click-to-paint from 88ms to 64ms and a third off the GPU work
+       behind it, measured at 1440x900 at 2x. */
+    grid-template-rows: minmax(calc(var(--board-min-width) * 10 / 9), 1fr) auto;
   }
 
   .board-workspace .board-wrap {
@@ -6593,6 +6611,20 @@ summary:active {
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+/* Both of the hint's lines are reserved whether or not they are used. The
+   resting hint ("Amber arrows: opening book") takes one line and a selected
+   piece's rule hint usually takes two, so the dock grew a line on every select
+   and shrank on every deselect -- and the board, sized from what the dock
+   leaves of its row, resized by 13px each time (1440x900), relaying out and
+   repainting all of it on every click. Desktop only: the stacked phone layout
+   fixes this card's height and clamps the detail line inside it, and Pro mode
+   hides the hint unless there is a rule warning. */
+@media (min-width: 901px) and (not ((max-width: 960px) and (max-height: 500px) and (pointer: coarse))) {
+  .position-stat-selection em {
+    min-height: calc(2 * 1.2em);
+  }
 }
 
 .position-stat-selection .position-warning {
@@ -7377,12 +7409,14 @@ summary:active {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
+/* Full height, scaled to red's share from red's end (see EvalBar.tsx), so a
+   new score is a compositor-only transform instead of a relayout per frame. */
 .eval-bar-red {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset: 0;
   background: linear-gradient(180deg, #e8e2d2 0%, #cfc4a8 100%);
-  transition: height 220ms ease;
+  transition: transform 220ms ease;
+  will-change: transform;
 }
 
 /* Equality, so the eye has something to measure the fill against. Grey rather

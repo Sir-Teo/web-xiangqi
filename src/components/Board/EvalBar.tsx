@@ -29,7 +29,6 @@ interface EvalBarProps {
  */
 export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, boundText, orientation }: EvalBarProps) {
     const { redShare, measured } = readEvalBar(evalScore);
-    const redPercent = redShare * 100;
     const redAtBottom = orientation === 'red';
 
     return (
@@ -41,11 +40,15 @@ export const EvalBar = React.memo(function EvalBar({ evalScore, evalText, boundT
             data-testid="eval-bar"
         >
             <div className="eval-bar-track">
+                {/* Scaled rather than sized: live analysis moves the score every
+                    200ms, so a `height` transition never finished and the bar
+                    was laid out on every frame for as long as the engine ran.
+                    The gradient spans the fill either way. */}
                 <div
                     className="eval-bar-red"
                     style={{
-                        height: `${redPercent}%`,
-                        ...(redAtBottom ? { bottom: 0 } : { top: 0 }),
+                        transform: `scaleY(${redShare})`,
+                        transformOrigin: redAtBottom ? 'bottom' : 'top',
                     }}
                 />
                 <div className="eval-bar-midline" />
