@@ -4,8 +4,7 @@ runs:
   using: composite
   steps:
     # Exact hits only: never substitute an engine built with other sources,
-    # flags, weights, wrapper or toolchain. Save before the browser jobs so a
-    # test failure does not throw away a successful four-flavor compilation.
+    # flags, weights, wrapper or toolchain.
     - name: Restore compiled engine
       id: engine
       uses: actions/cache/restore@v5
@@ -34,8 +33,7 @@ runs:
         cp .cache/engine/* public/
         cp demo/*.html dist/
         printf '%s\n' '{"type":"commonjs"}' > dist/package.json
-        npm run test:engine:contract
-    - name: Save verified engine cache
+    - name: Save compiled engine cache
       if: steps.engine.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:

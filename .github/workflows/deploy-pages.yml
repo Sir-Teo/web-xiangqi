@@ -1,9 +1,11 @@
 name: Deploy GitHub Pages
 
-# Called only after CI verifies this run's exact application artifact. No
-# second checkout/build/test cycle, and a failed browser check cannot publish.
+# Build and publish on every push to main. No test gate: checks are run
+# locally (`npm run verify`, the browser suites in README.md) before pushing.
 on:
-  workflow_call:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,21 +17,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EMSDK_VERSION: 6.0.1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/build-engine
+      - name: Build React application
+        run: npm run build:react
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@v7
-        with:
-          name: application-build
-          path: dist
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

@@ -42,8 +42,8 @@
  *
  * Not part of `verify`, deliberately: that command is browser-free so it works
  * offline, and the README lists this one under "Not in `verify`" for exactly
- * that reason. Both CI workflows run it after the build -- `ci.yml` and
- * `deploy-pages.yml`, the latter being the only job upstream of a publish.
+ * that reason. No workflow runs it either: the Pages deploy builds and
+ * publishes without tests, so run it before pushing a change to the build.
  *
  * So a green local `verify` has *not* opened the bundle. That is the gap this
  * file exists to describe, and saying otherwise here would have been the same

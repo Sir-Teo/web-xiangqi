@@ -1858,23 +1858,21 @@ whole suite rather than isolate a claim.
 
 ### Which gate is upstream of a deploy
 
-The distinction that matters is **what runs before the tested build is
-published**. CI now builds once, shares that artifact with all test jobs, and
-calls the reusable Pages workflow only after its aggregate `verify` job passes.
-A failed, cancelled or skipped gate prevents publication. See [CI and
-deployment](ci.md) for cache inputs, sharding and reproduction commands.
+The distinction that matters is **what runs before the build is published**.
+Today the answer is nothing: the CI test workflow was removed, and every push
+to `main` builds and deploys directly. The checks below are run locally before
+pushing. See [Deployment](ci.md) for cache inputs and the commands.
 
-Two checks were added for that reason, and both sit where the deploy will see
-them:
+Three checks were added for this reason. They used to run in CI ahead of the
+deploy; they are now local commands:
 
 - `test:engine:contract` reads the built engine artifacts and asserts what
   `templates/pikafish.js` and `analysisProfile.ts` assume about them. Static, so
   it runs inside `verify` without a browser or a toolchain.
 - `test:prod:smoke` serves `dist` with `vite preview` and loads it. Every other
   browser suite here drives the *dev* server, so the bundle that gets uploaded
-  was the one thing nothing had ever loaded. It now runs in its own CI browser
-  job against the shared artifact before deployment. The Pages workflow reuses
-  that artifact without compiling or testing it again.
+  was the one thing nothing had ever loaded. Run it after `build:react`; the
+  Pages workflow publishes `dist` without loading it.
 - `test:review:calibration` runs an engine self-play game through the whole
   review pipeline and asserts strong play still scores strongly. The scoring
   *functions* were already covered by fixtures; what was not was the pipeline
