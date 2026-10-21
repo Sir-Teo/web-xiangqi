@@ -63,6 +63,9 @@
     (function () {
       // Already isolated (the dev server, or a host that sends the headers):
       // there is nothing to add and no reason to install a worker.
+      // An embedded preview cannot isolate its parent document. Keep the
+      // single-thread engine and avoid reloading into an autosave prompt.
+      if (window.self !== window.top) return;
       if (window.crossOriginIsolated) return;
       if (!window.isSecureContext) return;
       if (!('serviceWorker' in navigator)) return;
