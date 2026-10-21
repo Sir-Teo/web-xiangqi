@@ -5128,7 +5128,10 @@ function App() {
     autoSaveCheckedRef.current = true;
     const drafts = readAutoSaveDrafts();
     setRecoveryDrafts(drafts);
-    if (drafts.length) setAutoSaveRecovery(drafts[0]);
+    // Credentialless previews keep temporary drafts only for the parent page's
+    // lifetime. Reopening one should show its shared position, not a recovery dialog.
+    const isolatedPreview = (window as Window & { credentialless?: boolean }).credentialless === true;
+    if (drafts.length && !isolatedPreview) setAutoSaveRecovery(drafts[0]);
     setAutoSaveChecked(true);
   }, []);
 
