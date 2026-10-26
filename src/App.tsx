@@ -4366,6 +4366,7 @@ function App() {
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
   const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
+  const mobileStudySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Save study' : studyModified ? 'Save changes' : 'Saved study';
 
   /** Include the live note even when Save runs before blur or its debounce. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => {
@@ -5556,10 +5557,12 @@ function App() {
 
   const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
+    aria-labelledby={isMobile ? 'study-save-action' : undefined}
+    aria-describedby={isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined}
     title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
     onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
-    <span role="status">{studySaveLabel}</span>
-    {isMobile && <span>{loadedSavedStudy ? 'Update' : 'Save'}</span>}
+    <span id="study-save-state" role="status" className={isMobile ? 'sr-only' : undefined}>{studySaveLabel}</span>
+    {isMobile && <span id="study-save-action">{mobileStudySaveLabel}</span>}
   </button>;
 
   return (
@@ -7188,7 +7191,7 @@ function App() {
                 </div>
               ) : null}
 
-              <div className="position-dock">
+              <div className="position-dock" role="region" aria-label="Position status" tabIndex={isMobile ? 0 : undefined}>
                 <div className="position-stat position-stat-turn">
                   <span>Turn</span>
                   <strong>{sideToMoveLabel}</strong>
