@@ -4759,12 +4759,16 @@ function App() {
       keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
       disabled: !studyNotes.length,
       run: () => {
+        const source = dialogLauncherRef.current;
         openAnalysisPanel('tree');
         window.setTimeout(() => {
           if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          const input = document.getElementById('study-notes-search') as HTMLInputElement | null;
+          const active = document.activeElement;
+          if (active !== document.body && active !== source && active !== input) return;
           const details = document.getElementById('study-notes') as HTMLDetailsElement | null;
           if (details) details.open = true;
-          document.getElementById('study-notes-search')?.focus();
+          input?.focus(); input?.select();
         }, 0);
       },
     },

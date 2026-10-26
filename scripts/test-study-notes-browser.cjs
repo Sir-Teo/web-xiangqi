@@ -53,7 +53,11 @@ async function assertFits(page) {
         const search = page.locator('#study-notes-search');
         const results = page.locator('.study-note-result');
         assert.equal(await results.count(), 7);
-        await search.fill('🐎 CANNON 中炮');
+        await search.fill('previous query');
+        await openFinder(page);
+        assert.deepEqual(await search.evaluate(input => [input.selectionStart, input.selectionEnd]), [0, 'previous query'.length], 'Find study notes should select the previous query for replacement');
+        await page.keyboard.insertText('🐎 CANNON 中炮');
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮');
         assert.equal(await results.count(), 1);
         await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         assert.equal(await page.evaluate(() => document.activeElement?.className), 'study-note-result');
@@ -77,6 +81,23 @@ async function assertFits(page) {
         await search.press('Escape');
         assert.equal(await search.inputValue(), '', 'Escape clears the notes query');
         assert.equal(await results.count(), 7, 'Clearing search restores notes across every variation');
+        // Keep a delayed finder command from taking focus back after the
+        // reader has already chosen the note editor.
+        await page.evaluate(() => {
+          const native = window.setTimeout;
+          window.setTimeout = function(callback, delay, ...args) {
+            if (delay === 0 && document.querySelector('[data-command-input]')?.value === 'Find study notes') {
+              window.__heldFinderFocus = () => callback(...args);
+              window.setTimeout = native;
+              return native(() => {}, 0);
+            }
+            return native(callback, delay, ...args);
+          };
+        });
+        await command(page, 'Find study notes');
+        await page.getByTestId('move-comment-input').focus();
+        await page.evaluate(() => window.__heldFinderFocus());
+        assert.equal(await page.getByTestId('move-comment-input').evaluate(input => input === document.activeElement), true, 'A delayed finder command must preserve newer keyboard focus');
         await search.focus();
         await page.screenshot({ path: `/tmp/xiangqi-study-notes-${browserType.name()}-${width}-natural.png` });
         for (const size of [32, 16]) {
