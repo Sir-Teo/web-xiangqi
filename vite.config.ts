@@ -44,8 +44,9 @@ export default defineConfig({
     // (a cached toolchain has no test/ directory), which is why it only
     // appeared once the workflow ran end to end.
     exclude: [...configDefaults.exclude, '**/.deps/**'],
-    // Run the wall-clock parser limits after the parallel unit suite, so
-    // unrelated test workers do not consume their one-second CPU budget.
+    // npm test runs these groups in separate Vitest processes: parser timing
+    // checks get fresh workers and heaps after the parallel unit suite exits.
+    // Keep their ordering for direct `vitest run` invocations too.
     projects: [
       {
         extends: true,
