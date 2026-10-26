@@ -509,6 +509,7 @@ export function LibraryPanel({
   };
 
   const copySavedGamePgn = async (game: SavedGame) => {
+    setCopiedId(current => current === game.id ? null : current);
     const pgn = buildSavedGamePgn(game);
     if (pgn === null) {
       setFailedActionId(`copy-${game.id}`);
@@ -535,6 +536,7 @@ export function LibraryPanel({
   };
 
   const downloadSavedGamePgn = (game: SavedGame) => {
+    setDownloadedId(current => current === game.id ? null : current);
     const pgn = buildSavedGamePgn(game);
     if (pgn === null) {
       setFailedActionId(`download-${game.id}`);

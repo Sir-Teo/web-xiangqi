@@ -13539,7 +13539,7 @@ async function assertLibraryPgnCopy(page) {
         savedAt: 1710000001000,
         gameMode: "PvP",
         moves: ["b0c2"],
-        moveTree: [{ uci: "b2e2", children: [{ uci: "h9g7" }] }],
+        moveTree: [{ uci: "b2e2", comment: "Preserve this variation note", children: [{ uci: "h9g7" }] }],
         result: "ongoing",
         label: "Mismatched tree PGN QA",
       },
@@ -13597,11 +13597,21 @@ async function assertLibraryPgnCopy(page) {
   }
 
   await page.getByText("Mismatched tree PGN QA").waitFor({ timeout: 10000 });
+  const beforeRefusal = await page.evaluate(() => ({
+    writes: window.__libraryPgnWrites?.length ?? 0,
+    library: localStorage.getItem("xiangqi:library:v1"),
+  }));
   await page.getByTestId("copy-pgn-saved-qa-mismatched-tree-pgn-game").click();
-  await page.getByRole("button", { name: "Copied PGN for Mismatched tree PGN QA" }).waitFor({ timeout: 5000 });
-  const fallbackPgn = await page.evaluate(() => window.__libraryPgnWrites?.at(-1) ?? "");
-  if (!fallbackPgn.includes("1. b0c2 *") || fallbackPgn.includes("b2e2")) {
-    throw new Error(`Saved-game PGN exported a tree branch that does not contain the saved mainline:\n${fallbackPgn}`);
+  await page.getByTestId("library-action-error").getByText(/saved moves do not match its variations/).waitFor({ timeout: 5000 });
+  const refused = await page.evaluate(() => ({
+    writes: window.__libraryPgnWrites?.length ?? 0,
+    library: localStorage.getItem("xiangqi:library:v1"),
+    message: document.querySelector('[data-testid="library-action-error"]')?.textContent || "",
+    label: document.querySelector('[data-testid="copy-pgn-saved-qa-mismatched-tree-pgn-game"]')?.getAttribute("aria-label") || "",
+  }));
+  if (refused.writes !== beforeRefusal.writes || refused.library !== beforeRefusal.library
+      || !refused.message.includes("Download library backup") || refused.label.startsWith("Copied")) {
+    throw new Error(`Inconsistent saved-game export must preserve its variations and offer a complete backup: ${JSON.stringify(refused)}`);
   }
 }
 
@@ -13751,7 +13761,7 @@ async function assertLibraryPgnFailureFeedback(page) {
       configurable: true,
       value: {
         writeText: async () => {
-          throw new DOMException("Simulated clipboard denial", "NotAllowedError");
+          if (window.__libraryClipboardDenied) throw new DOMException("Simulated clipboard denial", "NotAllowedError");
         },
       },
     });
@@ -13759,14 +13769,21 @@ async function assertLibraryPgnFailureFeedback(page) {
       configurable: true,
       value: () => false,
     });
+    const createObjectURL = URL.createObjectURL.bind(URL);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: undefined,
+      value: (blob) => {
+        if (window.__libraryDownloadDenied) throw new Error("Simulated download failure");
+        return createObjectURL(blob);
+      },
     });
   });
 
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByText("Library export failure QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("copy-pgn-saved-qa-library-export-failure").click();
+  await page.getByRole("button", { name: "Copied PGN for Library export failure QA", exact: true }).waitFor();
+  await page.evaluate(() => { window.__libraryClipboardDenied = true; });
   await page.getByTestId("copy-pgn-saved-qa-library-export-failure").click();
   await page.getByTestId("library-action-error").getByText("Could not copy this PGN").waitFor({ timeout: 5000 });
 
@@ -13779,6 +13796,11 @@ async function assertLibraryPgnFailureFeedback(page) {
     throw new Error(`Library copy failure did not expose retryable alert state: ${JSON.stringify(afterCopy)}`);
   }
 
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByTestId("download-pgn-saved-qa-library-export-failure").click();
+  await downloadEvent;
+  await page.getByRole("button", { name: "Saved PGN file for Library export failure QA", exact: true }).waitFor();
+  await page.evaluate(() => { window.__libraryDownloadDenied = true; });
   await page.getByTestId("download-pgn-saved-qa-library-export-failure").click();
   await page.getByTestId("library-action-error").getByText("Could not download this PGN").waitFor({ timeout: 5000 });
 
