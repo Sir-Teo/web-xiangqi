@@ -808,7 +808,7 @@ export function LibraryPanel({
                     className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `download-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => downloadSavedGamePgn(game)}
                     title={`Download PGN for ${savedGameLabel}`}
-                    aria-label={downloadedId === game.id ? `Downloaded PGN for ${savedGameLabel}` : `Download PGN for ${savedGameLabel}`}
+                    aria-label={downloadedId === game.id ? `Saved PGN file for ${savedGameLabel}` : `Download PGN file for ${savedGameLabel}`}
                     data-testid={`download-pgn-saved-${game.id}`}
                     data-library-action="download-pgn"
                   >

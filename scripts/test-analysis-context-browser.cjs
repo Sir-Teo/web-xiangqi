@@ -8,7 +8,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
    const page = await browser.newPage({viewport:{width,height}, hasTouch:true});
    await page.goto(base + '?moves=h2e2');
    await page.getByTestId('mobile-view-analysis').click();
-   const context = page.getByRole('button', {name:/Return to board, Black to move/});
+   const context = page.getByRole('button', {name:/Black to move.*Return to board/});
    await context.waitFor();
    assert.equal(await context.locator('[data-square="4-2"]').getAttribute('data-piece'), 'C');
    assert.equal(await context.locator('[data-square="7-2"]').count(), 0);

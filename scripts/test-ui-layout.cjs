@@ -877,7 +877,7 @@ async function assertDialogsReturnFocusOnClose(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.waitForTimeout(400);
 
-  for (const name of [/Start new game/i, /Open settings/i, /Open command palette/i]) {
+  for (const name of [/Start new game/i, /Open settings/i, /Open commands/i]) {
     const trigger = page.getByRole("button", { name });
     if (!(await trigger.count())) throw new Error(`No trigger matching ${name}`);
 
@@ -918,7 +918,7 @@ async function assertDialogsReturnFocusOnClose(page) {
   // preference, so a single flip would reach them as a board with a0 in the
   // wrong corner.
   const runFlip = async () => {
-    const paletteTrigger = page.getByRole("button", { name: /Open command palette/i });
+    const paletteTrigger = page.getByRole("button", { name: /Open commands/i });
     await paletteTrigger.first().focus();
     await page.keyboard.press("Enter");
     await page.waitForTimeout(350);
@@ -8026,7 +8026,7 @@ async function assertReviewBestMoveBranchAction(page) {
     !libraryReviewMeta.metaLabel.includes("Engine: high tier engine") ||
     libraryReviewMeta.loadLabel !== "Load Review best branch QA" ||
     libraryReviewMeta.copyLabel !== "Copy PGN for Review best branch QA" ||
-    libraryReviewMeta.downloadLabel !== "Download PGN for Review best branch QA" ||
+    libraryReviewMeta.downloadLabel !== "Download PGN file for Review best branch QA" ||
     libraryReviewMeta.deleteLabel !== "Delete Review best branch QA" ||
     libraryReviewMeta.overflowX > 2
   ) {
@@ -12407,7 +12407,7 @@ async function assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) {
   }
 
   await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByRole("button", { name: /^You play Red\./ }).click();
+  await page.getByRole("button", { name: /^You play Red\b/ }).click();
   await page.getByTestId("open-board-editor-btn").click();
   await page.waitForSelector("[data-testid=\"board-editor\"]", { timeout: 5000 });
 

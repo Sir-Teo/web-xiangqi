@@ -12,8 +12,7 @@ export function AnalysisBoardContext({ board, orientation, pieceStyle, positionL
 }) {
   const x = (file: number) => 10 + (orientation === 'red' ? file : 8 - file) * 12;
   const y = (rank: number) => 10 + (orientation === 'red' ? 9 - rank : rank) * 12;
-  return <button type="button" className="analysis-board-context" onClick={onReturn}
-    aria-label={`Return to board, ${positionLabel}`}>
+  return <button type="button" className="analysis-board-context" onClick={onReturn}>
     <svg viewBox="0 0 116 128" aria-hidden="true" focusable="false">
       <rect width="116" height="128" rx="5" fill="#ead3a5" />
       <g stroke="#85714f" strokeWidth="0.5">

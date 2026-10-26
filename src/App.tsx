@@ -5743,7 +5743,7 @@ function App() {
                 className="top-action-btn"
                 onClick={() => setShowCommandPalette(true)}
                 title={`Commands (${commandPaletteShortcutLabel()})`}
-                aria-label="Open command palette"
+                aria-label="Open commands"
                 aria-keyshortcuts={COMMAND_PALETTE_ARIA_KEYSHORTCUTS}
                 aria-haspopup="dialog"
                 data-testid="command-palette-btn"
@@ -6224,7 +6224,6 @@ function App() {
                   className={`new-game-mode-btn ${pendingGameMode === mode ? 'new-game-mode-btn-active' : ''}`}
                   onClick={() => setPendingGameMode(mode)}
                   aria-pressed={pendingGameMode === mode}
-                  aria-label={`${label}. ${description}`}
                 >
                   <span>{label}</span>
                   <small>{description}</small>
@@ -6484,7 +6483,6 @@ function App() {
                             onClick={() => handlePlayBookMove(candidate.move)}
                             disabled={Boolean(gameResult) || isAiTurn}
                             title={isAiTurn ? 'Wait for the AI move to finish' : candidate.names.join(' · ')}
-                            aria-label={`Play book continuation ${formatLineInStyle(board, [candidate.move], notationStyle, 1)}: ${candidate.names[0] ?? candidate.chinese[0]}`}
                             data-testid={`book-candidate-${candidate.move}`}
                           >
                             <strong>{formatLineInStyle(board, [candidate.move], notationStyle, 1)}</strong>
@@ -6739,7 +6737,7 @@ function App() {
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {!engineRequired && workspaceMode === 'analysis' && (
                   <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
-                    aria-label="Start engine analysis" title="Downloads about 53 MB on first use">Analyze</button>
+                    aria-label="Analyze this position" title="Downloads about 53 MB on first use">Analyze</button>
                 )}
                 {/* The phone's stand-in for the eval bar, so it reads the same
                     value, the stored one included when no line is live. */}
@@ -6891,7 +6889,7 @@ function App() {
                     onClick={() => { setShowMobileBoardActionMenu(false); playFromHere(); }}
                     role="menuitem"
                     title={`Keep this position and play on as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
-                    aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                    aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     data-testid="mobile-play-from-here-btn"
                   >
                     <IconPlay />
@@ -6955,7 +6953,7 @@ function App() {
                   disabled={!canSaveCurrentPosition}
                   role="menuitem"
                   title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
-                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
+                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Saved game in this browser' : 'Save game in this browser'}
                   data-testid="mobile-save-game-btn"
                 >
                   {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
@@ -6985,7 +6983,7 @@ function App() {
                     disabled={!canShareCurrentPosition}
                     role="menuitem"
                     title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
-                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Copied link to this position' : 'Copy link to this position'}
                     data-testid="mobile-copy-share-link-btn"
                   >
                     {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
@@ -6998,7 +6996,7 @@ function App() {
                   onClick={handleCopyFen}
                   role="menuitem"
                   title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
-                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'Copied FEN for this position' : 'Copy FEN for this position'}
                   data-testid="mobile-copy-fen-btn"
                 >
                   {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
@@ -7040,7 +7038,7 @@ function App() {
                   }}
                   role="menuitem"
                   title="Commands"
-                  aria-label="Open command palette"
+                  aria-label="Open commands"
                   data-testid="mobile-command-palette-btn"
                 >
                   <IconSearch />
@@ -8214,7 +8212,7 @@ function App() {
                 onClick={handleCopyShareLink}
                 disabled={!canShareCurrentPosition}
                 title={exportFailureKey === 'copy-share' ? 'Could not copy share link' : 'Copy a link to this position'}
-                aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy a link to this position'}
+                aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy link to this position'}
                 data-testid="copy-share-link-btn"
               >
                 {exportFailureKey === 'copy-share' ? <><IconX /> Copy Failed</> : copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
@@ -8229,7 +8227,7 @@ function App() {
                   className="gc-btn"
                   onClick={playFromHere}
                   title={`Keep this position and play on against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
-                  aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                  aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                   data-testid="play-from-here-btn"
                 >
                   <IconPlay aria-hidden="true" focusable="false" /> Play From Here
