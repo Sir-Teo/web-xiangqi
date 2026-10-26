@@ -443,7 +443,7 @@ export function LibraryPanel({
     setRovingSavedIndex(next);
   }, [visibleSaved.length]);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
-  const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
+  const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic opening' : 'classic openings';
   // The bundled set is empty on purpose (see historicalGames.ts). A heading, a
   // caveat, a "0 classics" pill and a line saying there is nothing were four
   // pieces of chrome about an absence, on the panel's first screen.
@@ -680,6 +680,12 @@ export function LibraryPanel({
           </button>
         ) : null}
       </div>
+      <p className="sr-only" role="status" aria-atomic="true" data-testid="library-search-status">
+        {preparingSearch ? 'Preparing library search…' : [
+          `${filteredSaved.length} ${savedGameSummaryLabel}.${filteredSaved.length > visibleSaved.length ? ` Showing the first ${visibleSaved.length}.` : ''}`,
+          hasBundledClassics ? `${filteredHistorical.length} ${classicGameSummaryLabel}.` : '',
+        ].filter(Boolean).join(' ')}
+      </p>
       {actionError ? (
         <div className="lib-action-error" role="alert" data-testid="library-action-error">
           {actionError}
@@ -688,7 +694,7 @@ export function LibraryPanel({
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
-      {preparingSearch && <p role="status">Preparing library search…</p>}
+      {preparingSearch && <p>Preparing library search…</p>}
       <div className="lib-list" data-testid="saved-game-list" ref={savedListRef} onKeyDown={handleSavedListKeyDown}>
         {filteredSaved.length === 0 && !preparingSearch ? (
           <p className="lib-empty">
