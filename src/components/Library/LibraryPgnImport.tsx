@@ -140,7 +140,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
       </label>
       {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); fileInput.current?.focus(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview" ref={previewPanel}>
-        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} games checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept. Identical game content is skipped by default.</p>
+        <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} {games.length === 1 ? 'game' : 'games'} checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept. Identical game content is skipped by default.</p>
         <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, saved analysis, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>
         <label className="lib-pgn-search">Find games in this collection
           <input type="search" value={query} maxLength={MAX_SEARCH_QUERY_LENGTH}

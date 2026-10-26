@@ -34,6 +34,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-library-salvage-browser.cjs',
         'test-library-concurrency-browser.cjs',
         'test-pgn-collection-browser.cjs',
+        'test-pgn-collection-export-browser.cjs',
       ] : [
         'test-worker-lifecycle-browser.cjs',
         'test-worker-progress-browser.cjs',
@@ -97,6 +98,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-ai-pause-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',
+        'test-pgn-collection-export-browser.cjs',
         'test-transfer-cancellation-browser.cjs',
         'test-collection-evals-browser.cjs',
         'test-eval-kind-browser.cjs',

@@ -173,7 +173,8 @@ function parseGame(input: Token[]): CollectionGame {
         awaitingVariationMove = false;
     }
     if (stack.length) throw new Error('Unclosed variation.');
-    if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result)) throw new Error('No moves found.');
+    const metadata = extractPgnMetadata(headers);
+    if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result) && !metadata) throw new Error('No moves found.');
     if (result && tags.result && result !== tags.result) throw new Error('The Result header disagrees with the final result marker.');
     const moves: string[] = [];
     let finalNode = root[0];
@@ -182,7 +183,7 @@ function parseGame(input: Token[]): CollectionGame {
     if (declared) { if (finalNode) finalNode.recordedResult = declared; else rootResult = declared; }
     return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment, ...(rootResult ? { rootResult } : {}),
         ...(nodes && tags.xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
-        metadata: extractPgnMetadata(headers), opening: tags.opening,
+        metadata, opening: tags.opening,
         ...(finalNode?.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
         result: RESULTS[result || tags.result || '*'] };
 }

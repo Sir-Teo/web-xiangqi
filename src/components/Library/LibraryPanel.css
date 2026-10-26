@@ -577,6 +577,13 @@
 .lib-transfer .lib-action-error button { display: block; margin-top: 0.5rem; }
 .lib-transfer-status { margin-bottom: 0; }
 .lib-transfer-status:empty { display: none; }
+.lib-collection-export { margin-block: 0.5rem; overflow-wrap: anywhere; }
+.lib-collection-export summary,
+.lib-collection-export button { min-height: 44px; }
+.lib-collection-export button { min-width: 0; white-space: normal; }
+/* Keep the worker's focus handoff visible in browsers that do not assign
+   :focus-visible to a newly focused Cancel or retry control. */
+.app-shell .lib-collection-export .lib-transfer-actions button:focus { outline: 2px solid var(--info); outline-offset: 3px; }
 
 .lib-tournament-details { margin: 6px 0; font-size: .75rem; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
 

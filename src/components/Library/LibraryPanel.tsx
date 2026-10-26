@@ -17,7 +17,9 @@ import {
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { formatEvaluationText } from '../../utils/engineEvalReading';
 import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/searchTerms';
-import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { buildSavedGamePgn } from '../../utils/savedGamePgn';
+import { LibraryPgnExport } from './LibraryPgnExport';
 import { pgnDownloadFilename } from '../../utils/pgnFilename';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { savedGameLine } from '../../utils/savedGameLine';
@@ -70,13 +72,6 @@ function formatDate(ts: number): string {
   return getDateFormatter().format(ts);
 }
 
-
-function savedResultToGameResult(result: SavedGame['result']) {
-  if (result === 'red') return 'red-wins';
-  if (result === 'black') return 'black-wins';
-  if (result === 'draw') return 'draw';
-  return null;
-}
 
 function makeSavedGamePgnFilename(game: SavedGame) {
   return pgnDownloadFilename(game.label || game.opening, new Date(game.savedAt), 'saved-game');
@@ -208,37 +203,6 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
     default:
       return recentTieBreak;
   }
-}
-
-function buildSavedGamePgn(game: SavedGame) {
-  if (game.moveTree?.length) {
-    // A missing saved path must not silently replace the study with a flat
-    // record that discards its variations and annotations.
-    return exportPgnFromMoveTree(game.moveTree, {
-      mainLineMoves: game.moves,
-      gameMode: game.gameMode,
-      opening: game.opening,
-      result: savedResultToGameResult(game.result),
-      label: game.label,
-      metadata: game.metadata,
-      startFen: game.startFen,
-      rootComment: game.rootComment,
-      rootResult: game.rootResult,
-      mainLinePinned: game.mainLinePinned,
-    });
-  }
-
-  return exportPgnFromUci(game.moves, {
-    gameMode: game.gameMode,
-    opening: game.opening,
-    result: savedResultToGameResult(game.result),
-    label: game.label,
-    metadata: game.metadata,
-    startFen: game.startFen,
-    rootComment: game.rootComment,
-    rootResult: game.rootResult,
-    mainLinePinned: game.mainLinePinned,
-  });
 }
 
 export function LibraryPanel({
@@ -701,6 +665,7 @@ export function LibraryPanel({
           hasBundledClassics ? `${filteredHistorical.length} ${classicGameSummaryLabel}.` : '',
         ].filter(Boolean).join(' ')}
       </p>
+      {savedGames.length > 0 && <LibraryPgnExport games={filteredSaved} preparing={preparingSearch} />}
       {actionError ? (
         <div className="lib-action-error" role="alert" data-testid="library-action-error">
           {actionError}
