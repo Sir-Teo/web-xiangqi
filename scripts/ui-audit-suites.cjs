@@ -12,6 +12,7 @@ const scripts = [
   'test-editor-keyboard-browser.cjs',
   'test-editor-pending-fen-browser.cjs',
   'test-engine-on-demand-browser.cjs',
+  'test-play-startup-progress-browser.cjs',
   'test-failed-recovery-browser.cjs',
   'test-library-concurrency-browser.cjs',
   'test-library-conflicts-browser.cjs',

@@ -2576,7 +2576,8 @@ function App() {
   );
   const showEvalBar = engineEnabled && !isMobile;
   // No eval to show, nothing wrong, and not ready yet: the wait itself.
-  const mobileEngineLoading = engineEnabled && !isReady && displayEvalScore === null;
+  // AI play needs the same engine download while live analysis stays off.
+  const mobileEngineLoading = engineRequired && !isReady && (!engineEnabled || displayEvalScore === null);
 
   const displayEvalClass = evalBarScore === null
     ? ''
