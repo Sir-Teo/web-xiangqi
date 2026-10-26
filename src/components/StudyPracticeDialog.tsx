@@ -27,8 +27,9 @@ export function StudyPracticeDialog({ game, pieceStyle, notationStyle, onClose }
   return <>
     <div className="study-practice-backdrop" onClick={onClose} aria-hidden="true" />
     <div className="study-practice-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="study-practice-title" data-testid="study-practice-dialog">
-      <header><div><h2 id="study-practice-title">Practice study</h2><p>{game.label || game.opening || 'Saved game'}</p></div>
+      <header><h2 id="study-practice-title">Practice study</h2>
         <button type="button" aria-label="Close study practice" onClick={onClose}><IconX width={18} height={18} /></button></header>
+      <p className="study-practice-study-name">{game.label || game.opening || 'Saved game'}</p>
       <LazyPanelBoundary><Suspense fallback={<p role="status">Loading study practice…</p>}>
         <Practice game={game} pieceStyle={pieceStyle} notationStyle={notationStyle} />
       </Suspense></LazyPanelBoundary>
