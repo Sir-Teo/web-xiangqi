@@ -1,6 +1,12 @@
 const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
+async function openSettings(page) {
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox', { name: 'Search commands' }).fill('Settings');
+  await page.keyboard.press('Enter');
+  await page.getByRole('dialog', { name: 'Settings', exact: true }).waitFor();
+}
 (async () => {
   const browser = await browserType.launch();
   try {
@@ -11,7 +17,31 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       await page.goto(base);
       const guide = page.getByTestId('beginner-guide');
       const touch = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+      const activate = locator => touch ? locator.tap() : locator.click();
       await guide.waitFor();
+      await openSettings(page);
+      const guideToggle = page.getByRole('button', { name: 'First-move guide', exact: true });
+      assert.equal(await guideToggle.getAttribute('aria-pressed'), 'true');
+      await activate(guideToggle);
+      assert.equal(await guideToggle.getAttribute('aria-pressed'), 'false');
+      await page.keyboard.press('Escape');
+      assert.equal(await guide.count(), 0);
+      await page.reload(); await page.locator('.xiangqi-board').waitFor();
+      assert.equal(await guide.count(), 0, 'The guide setting must persist when switched off');
+      await openSettings(page);
+      assert.equal(await guideToggle.getAttribute('aria-pressed'), 'false');
+      const interfaces = page.getByRole('group', { name: 'Interface', exact: true });
+      const pro = interfaces.getByRole('button', { name: /^Pro interface,/ });
+      await activate(pro); await activate(guideToggle);
+      assert.equal(await guideToggle.getAttribute('aria-pressed'), 'true');
+      assert.equal(await pro.getAttribute('aria-pressed'), 'true', 'Changing guide visibility must preserve the interface preference');
+      await page.keyboard.press('Escape');
+      assert.equal(await guide.count(), 0, 'The guide belongs to Coach mode');
+      await openSettings(page);
+      await activate(interfaces.getByRole('button', { name: /^Coach interface,/ }));
+      await page.keyboard.press('Escape');
+      await guide.waitFor();
+      await page.reload(); await guide.waitFor();
       const board = await page.locator('.xiangqi-board-container').boundingBox();
       assert.ok(board.width > (height < 500 ? 140 : 220), `Board remains usable at ${width}x${height}: ${board.width}`);
       assert.ok(Math.abs(board.width / board.height - .9) < .03, 'Board retains its aspect ratio');
@@ -25,10 +55,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
           assert.ok(box.width >= 44 && box.height >= 44, 'Guide actions need 44px touch targets');
         }
       }
-      await guide.getByRole('button', { name: 'Import a game', exact: true }).click();
+      await activate(guide.getByRole('button', { name: 'Import a game', exact: true }));
       await page.locator('#new-game-line-input').waitFor();
       await page.waitForFunction(() => document.activeElement?.id === 'new-game-line-input');
       await page.keyboard.press('Escape');
+      assert.equal(await guide.getByRole('button', { name: 'Import a game', exact: true }).evaluate(element => element === document.activeElement), true,
+        'Closing the import dialog must return focus to its guide action');
       await guide.getByRole('button', { name: 'Open library', exact: true }).click();
       if (width <= 900) {
         await page.getByTestId('mobile-analysis-tab-library').waitFor();
@@ -49,10 +81,10 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       await guide.getByRole('button', { name: 'Play Beginner' }).click();
       await guide.waitFor({ state: 'detached' });
       await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:preferences:v1'))?.aiStrength === 1);
-      await page.locator('.hitbox[data-file="7"][data-rank="2"]').click();
-      await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
       // A real engine reply proves that the quick start resumes AI play.
       try {
+        await page.locator('.hitbox[data-file="7"][data-rank="2"]').click();
+        await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
         // Match the app's cold-start budget for WASM compilation and the 53MB
         // network; the reply itself still has its own 20-second bound.
         await page.waitForFunction(() => document.querySelector('.top-engine-state')?.textContent.includes('Engine ready'), null, { timeout: 90000 });
@@ -61,7 +93,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         const state = await page.evaluate(() => ({ hidden: document.hidden,
           fen: document.querySelector('.bottombar-fen')?.getAttribute('title'), body: document.body.innerText.slice(-2500) }));
         await page.screenshot({ path: `/tmp/xiangqi-beginner-reply-failure-${browserType.name()}-${width}.png` });
-        throw new Error(`No beginner reply at ${width}x${height}: ${JSON.stringify(state)}`, { cause: error });
+        throw new Error(`Beginner quick start did not finish at ${width}x${height}: ${JSON.stringify(state)}`, { cause: error });
       }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       assert.deepEqual(errors, []);

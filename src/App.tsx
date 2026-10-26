@@ -5853,11 +5853,18 @@ function App() {
                   only in `title`, which does not exist on a touch screen. The
                   words are the ones already written for the tooltip. */}
               <p className="settings-hint">{ASSIST_MODE_COPY[assistMode].title}</p>
-              <button type="button" className="chip-btn" onClick={() => {
-                setGuideDismissed(false);
-                writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'false');
-                setAssistMode('coach');
-              }}>Show first-move guide on empty boards</button>
+              <button type="button" className={`chip-btn settings-guide-toggle ${!guideDismissed ? 'chip-btn-primary' : ''}`}
+                aria-pressed={!guideDismissed}
+                aria-describedby="settings-guide-hint"
+                onClick={() => {
+                  const dismissed = !guideDismissed;
+                  setGuideDismissed(dismissed);
+                  writeStorage(BEGINNER_GUIDE_STORAGE_KEY, String(dismissed));
+                }}>
+                {!guideDismissed && <IconCheck aria-hidden="true" focusable="false" />}
+                First-move guide
+              </button>
+              <p className="settings-hint" id="settings-guide-hint">Appears on empty local boards in Coach mode.</p>
             </div>
 
             <div className="settings-group">

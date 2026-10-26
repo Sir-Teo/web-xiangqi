@@ -2526,6 +2526,10 @@ summary:active {
   color: var(--text-muted);
 }
 
+.settings-guide-toggle {
+  gap: 0.4rem;
+}
+
 /* Label on the left, live value on the right, so a long value never orphans. */
 .settings-group label.settings-label-value {
   display: flex;
