@@ -5946,6 +5946,8 @@ async function assertPreferencePersistence(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const originalGuidePreference = await page.evaluate(() => localStorage.getItem("xiangqi:beginner-guide-dismissed:v1"));
+  let guidePeer = null;
 
   try {
     await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1"));
@@ -6186,11 +6188,22 @@ async function assertPreferencePersistence(page) {
     }
 
     await page.getByRole("button", { name: "Open settings" }).click();
+    const guideToggle = page.getByRole("button", { name: "First-move guide", exact: true });
+    if (await guideToggle.getAttribute("aria-pressed") !== "true") await guideToggle.click();
+    [guidePeer] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.evaluate(() => { window.open(location.href, "guide-preference-peer"); }),
+    ]);
+    await guidePeer.getByTestId("beginner-guide").waitFor();
+    await guideToggle.click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ state: "detached", timeout: 5000 });
     await page.getByTestId("reset-preferences-btn").click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ timeout: 5000 });
     const resetState = await page.evaluate(() => ({
       assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
       stored: JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}"),
       buttons: [...document.querySelectorAll(".settings-body .pill-btn-active")].map((el) => el.textContent?.trim() || ""),
+      guideEnabled: document.querySelector(".settings-guide-toggle")?.getAttribute("aria-pressed"),
     }));
 
     if (resetState.assistMode !== "coach") {
@@ -6207,8 +6220,18 @@ async function assertPreferencePersistence(page) {
     if (!resetState.buttons.includes("Coach") || !resetState.buttons.includes("Optimized") || !resetState.buttons.includes("On")) {
       throw new Error(`Reset preferences did not update settings controls: ${resetState.buttons.join(",")}`);
     }
+    if (resetState.guideEnabled !== "true") throw new Error("Reset preferences did not restore the first-move guide");
+    await guideToggle.click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ state: "detached", timeout: 5000 });
+    await page.evaluate(() => localStorage.clear());
+    await guidePeer.getByTestId("beginner-guide").waitFor({ timeout: 5000 });
   } finally {
-    await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1")).catch(() => {});
+    if (guidePeer) await guidePeer.close().catch(() => {});
+    await page.evaluate(original => {
+      localStorage.removeItem("xiangqi:preferences:v1");
+      if (original === null) localStorage.removeItem("xiangqi:beginner-guide-dismissed:v1");
+      else localStorage.setItem("xiangqi:beginner-guide-dismissed:v1", original);
+    }, originalGuidePreference).catch(() => {});
   }
 }
 

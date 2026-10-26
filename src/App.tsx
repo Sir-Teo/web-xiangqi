@@ -736,6 +736,8 @@ function App() {
 
   const resetPreferences = useCallback(() => {
     clearStoredPreferences();
+    setGuideDismissed(false);
+    writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'false');
     applyPreferences({});
   }, [applyPreferences]);
 
@@ -780,6 +782,11 @@ function App() {
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (event.key === BEGINNER_GUIDE_STORAGE_KEY) {
+        setGuideDismissed(event.newValue === 'true');
+        return;
+      }
+      if (event.key === null) setGuideDismissed(false);
       if (event.key !== PREFERENCES_STORAGE_KEY && event.key !== null) return;
       applyPreferences(normalizeStoredPreferencesValue(event.newValue));
     };
