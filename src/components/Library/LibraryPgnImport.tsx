@@ -84,19 +84,24 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
       const parser = new Worker(new URL('../../workers/pgnCollection.worker.ts', import.meta.url), { type: 'module' });
       worker.current = parser;
       const fail = (message: string) => {
-        if (generation.current !== id) return;
+        if (generation.current !== id || worker.current !== parser) return;
         stop(); setBusy(false); setError(message);
       };
-      parser.onerror = () => fail('The collection reader could not start. Please try again.');
+      parser.onerror = event => { event.preventDefault(); fail('The collection reader could not start. Please try again.'); };
       parser.onmessageerror = () => fail('The collection reader returned an unreadable response. Please try again.');
       parser.onmessage = (event: MessageEvent<{games?: PackedGame<CollectionGame>[]; error?: string}>) => {
-        if (generation.current !== id) return;
-        stop(); setBusy(false);
-        if (event.data.error || !event.data.games?.length) setError(event.data.error || 'No games found.');
-        else {
-          const parsed = unpackCollectionGames(event.data.games);
+        if (generation.current !== id || worker.current !== parser) return;
+        try {
+          const data = event.data;
+          if (!data || typeof data !== 'object') throw new Error();
+          if (typeof data.error === 'string' && data.error) { fail(data.error); return; }
+          if (!Array.isArray(data.games)) throw new Error();
+          if (!data.games.length) { fail('No games found.'); return; }
+          const parsed = unpackCollectionGames(data.games);
+          if (parsed.some(game => !game || !Array.isArray(game.moves) || !['PvP', 'PvE', 'EvE'].includes(game.gameMode))) throw new Error();
+          stop(); setBusy(false);
           setGames(parsed); setSelected(new Set(parsed.map((_, index) => index)));
-        }
+        } catch { fail('The collection reader returned an unreadable response. Please try again.'); }
       };
       timeout.current = setTimeout(() => fail('Reading this collection took too long. Split it into smaller files.'), 30_000);
       parser.postMessage(text);

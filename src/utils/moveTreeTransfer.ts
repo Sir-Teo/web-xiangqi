@@ -32,7 +32,12 @@ export function flattenMoveTree(tree: readonly SavedMoveTreeNode[]): FlatMoveTre
 export function inflateMoveTree(flat: readonly FlatMoveTreeNode[]): SavedMoveTreeNode[] {
     const roots: SavedMoveTreeNode[] = [];
     const nodes: SavedMoveTreeNode[] = [];
-    for (const { parent, ...fields } of flat) {
+    for (const entry of flat) {
+        if (!entry || typeof entry !== 'object' || typeof entry.uci !== 'string'
+            || !Number.isInteger(entry.parent) || entry.parent < -1 || entry.parent >= nodes.length) {
+            throw new Error('Invalid move tree transfer.');
+        }
+        const { parent, ...fields } = entry;
         const node: SavedMoveTreeNode = fields;
         nodes.push(node);
         if (parent < 0) {

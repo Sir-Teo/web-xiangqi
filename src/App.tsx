@@ -3354,6 +3354,7 @@ function App() {
     }
 
     try {
+      setMoveLineError(null);
       setDirectImportBusy(true);
       const bytes = await file.arrayBuffer();
       if (generation !== directImportGenerationRef.current) return;
@@ -4081,6 +4082,7 @@ function App() {
   const handleImportMoveLine = useCallback(async (text: string, nextGameMode: GameMode = pendingGameMode) => {
     cancelDirectImport();
     showImportNotice(null);
+    setMoveLineError(null);
     const generation = directImportGenerationRef.current;
     const controller = new AbortController();
     directImportControllerRef.current = controller;
