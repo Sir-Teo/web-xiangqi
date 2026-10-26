@@ -2968,6 +2968,9 @@ function App() {
   const [engineHashFeedback, setEngineHashFeedback] = useState<EngineHashFeedback>(null);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [exportFailureKey, setExportFailureKey] = useState<ExportFailureKey | null>(null);
+  // Clipboard permission requests can finish out of order. Only the latest
+  // export action may publish feedback, including after a download attempt.
+  const exportRequestRef = useRef(0);
   const [savedToast, setSavedToast] = useState(false);
   const [saveFailedToast, setSaveFailedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
@@ -3206,11 +3209,13 @@ function App() {
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, hasGameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
+    const request = ++exportRequestRef.current;
     clearToastTimer(copiedToastTimerRef);
     setCopiedToast(false);
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = await copyToClipboard(pgn);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-pgn');
       return;
@@ -3227,6 +3232,7 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, showExportFailure]);
 
   const handleDownloadPgn = useCallback(() => {
+    exportRequestRef.current++;
     clearToastTimer(downloadedPgnTimerRef);
     setDownloadedPgnToast(false);
     const pgn = buildCurrentPgn();
@@ -3253,6 +3259,7 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, exportOpeningName, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
+    const request = ++exportRequestRef.current;
     clearToastTimer(copiedShareToastTimerRef);
     setCopiedShareToast(false);
     // Notes travel with the link for the same reason variations do: what is
@@ -3270,6 +3277,7 @@ function App() {
     }
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-share');
       return;
@@ -3407,9 +3415,11 @@ function App() {
   }, [handleImportXqf, cancelDirectImport]);
 
   const handleCopyFen = useCallback(async () => {
+    const request = ++exportRequestRef.current;
     clearToastTimer(copiedFenToastTimerRef);
     setCopiedFenToast(false);
     const ok = await copyToClipboard(currentFen);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-fen');
       return;
@@ -3509,11 +3519,13 @@ function App() {
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const handleCopyRecord = useCallback(async () => {
+    const request = ++exportRequestRef.current;
     clearToastTimer(copiedRecordToastTimerRef);
     setCopiedRecordToast(false);
     const recordText = formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle);
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-record');
       return;
@@ -3530,11 +3542,13 @@ function App() {
   }, [clearExportFailure, currentMoveIndex, moveHistory, notationStyle, rootFen, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
+    const request = ++exportRequestRef.current;
     clearToastTimer(copiedPvTimerRef);
     setCopiedPvIndex(null);
     const rawLine = moves.filter(Boolean).join(' ').trim();
     if (!rawLine) return;
     const ok = await copyToClipboard(rawLine);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure(`copy-pv-${lineIndex}`);
       return;

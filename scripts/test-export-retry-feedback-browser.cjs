@@ -10,7 +10,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => {
         if (window.__copyDenied) throw new DOMException('Denied', 'NotAllowedError');
-        if (window.__holdCopy) await new Promise(resolve => { window.__releaseCopy = resolve; });
+        if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
         window.__copiedText = text;
       } } });
       document.execCommand = () => false;
@@ -46,11 +46,25 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       const firstFile = download ? page.waitForEvent('download') : null;
       await activate(button); if (firstFile) await firstFile;
       await button.filter({ hasText: success }).waitFor();
+      if (!download) {
+        await page.evaluate(() => { window.__holdCopy = true; }); await activate(button);
+        await button.filter({ hasText: success }).waitFor({ state: 'hidden' });
+        await page.evaluate(() => { window.__copyDenied = true; }); await activate(button);
+        await button.filter({ hasText: /failed/i }).waitFor();
+        await page.evaluate(() => { window.__copyDenied = false; window.__holdCopy = false; window.__releaseCopy(); });
+        await page.clock.runFor(50);
+        assert.match(await button.textContent(), /failed/i, `${id}: an older success must not replace a newer failure`);
+        await activate(button);
+        await button.filter({ hasText: success }).waitFor();
+      }
       if (id === 'copy-pgn-btn') {
         await page.evaluate(() => { window.__holdCopy = true; }); await activate(button);
         await button.filter({ hasText: success }).waitFor({ state: 'hidden' });
-        await page.evaluate(() => { window.__holdCopy = false; window.__releaseCopy(); });
+        await page.evaluate(() => { window.__holdCopy = false; }); await activate(button);
         await button.filter({ hasText: success }).waitFor();
+        await page.evaluate(() => window.__rejectCopy(new DOMException('Late denial', 'NotAllowedError')));
+        await page.clock.runFor(50);
+        assert.match(await button.textContent(), success, 'An older failure must not replace a newer successful copy');
       }
       await page.evaluate(download => { if (download) window.__downloadDenied = true; else window.__copyDenied = true; }, download);
       await activate(button); await button.filter({ hasText: /failed/i }).waitFor();
@@ -64,6 +78,17 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       await button.filter({ hasText: success }).waitFor();
       assert.doesNotMatch(await button.getAttribute('class'), /warning/, 'Successful retries clear the failure style');
       console.log(`${browserType.name()} ${id}: success, failed retry, another action and successful retry retain accurate feedback`);
+    }
+    for (const id of ['copy-fen-btn', 'download-pgn-btn']) {
+      const pending = page.getByTestId('copy-pgn-btn'), latest = page.getByTestId(id);
+      await page.evaluate(() => { window.__holdCopy = true; }); await activate(pending);
+      await pending.filter({ hasText: /Copied/ }).waitFor({ state: 'hidden' });
+      await page.evaluate(id => { window.__copyDenied = id === 'copy-fen-btn'; window.__downloadDenied = id === 'download-pgn-btn'; }, id);
+      await activate(latest); await latest.filter({ hasText: /failed/i }).waitFor();
+      await page.evaluate(() => { window.__holdCopy = false; window.__copyDenied = false; window.__downloadDenied = false; window.__releaseCopy(); });
+      await page.clock.runFor(50);
+      assert.match(await latest.textContent(), /failed/i, 'An older clipboard reply cannot clear a newer action failure');
+      assert.doesNotMatch(await pending.textContent(), /Copied/);
     }
     assert.deepEqual(await page.evaluate(() => ({ fen: document.querySelector('.bottombar-fen').title, library: localStorage.getItem('xiangqi:library:v1') })), original);
     assert.deepEqual(errors, []);
