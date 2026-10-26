@@ -91,6 +91,44 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       assert.doesNotMatch(await pending.textContent(), /Copied/);
     }
     assert.deepEqual(await page.evaluate(() => ({ fen: document.querySelector('.bottombar-fen').title, library: localStorage.getItem('xiangqi:library:v1') })), original);
+    await page.clock.resume();
+    await page.evaluate(() => {
+      localStorage.setItem('xiangqi:library:v1', JSON.stringify([
+        { id: 'copy-a', label: 'Copy order A', savedAt: 1, gameMode: 'PvP', moves: ['h2e2'] },
+        { id: 'copy-b', label: 'Copy order B', savedAt: 2, gameMode: 'PvP', moves: ['b2e2'] },
+        { id: 'load-invalid', label: 'Invalid saved path', savedAt: 3, gameMode: 'PvP', moves: ['a0a9'] },
+      ]));
+      dispatchEvent(new StorageEvent('storage', { key: 'xiangqi:library:v1', storageArea: localStorage }));
+    });
+    await page.getByTestId('left-panel-tab-library').click();
+    const copyA = page.getByTestId('copy-pgn-saved-copy-a'), copyB = page.getByTestId('copy-pgn-saved-copy-b');
+    await copyA.waitFor();
+    const saved = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    for (const id of ['copy-pgn-saved-copy-a', 'copy-pgn-saved-copy-b', 'download-pgn-saved-copy-b', 'load-saved-load-invalid']) {
+      await page.evaluate(() => { window.__holdCopy = true; window.__releaseCopy = undefined; });
+      await activate(copyA); await page.waitForFunction(() => typeof window.__releaseCopy === 'function');
+      await page.evaluate(id => { window.__copyDenied = id.startsWith('copy-'); window.__downloadDenied = id.startsWith('download-'); }, id);
+      await activate(page.getByTestId(id));
+      await page.waitForFunction(id => document.querySelector(`[data-testid="${id}"]`)?.classList.contains('chip-btn-warning'), id);
+      await page.clock.runFor(50);
+      const latestError = await page.getByTestId('library-action-error').textContent();
+      await page.evaluate(() => { window.__holdCopy = false; window.__copyDenied = false; window.__downloadDenied = false; window.__releaseCopy(); });
+      await page.clock.runFor(50);
+      assert.equal(await page.getByTestId('library-action-error').textContent(), latestError, 'An older saved-game copy must preserve newer copy/download/load errors');
+      assert.doesNotMatch(await copyA.textContent(), /Copied/);
+    }
+    await page.evaluate(() => { window.__holdCopy = true; window.__rejectCopy = undefined; });
+    await activate(copyA); await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
+    await page.evaluate(() => { window.__holdCopy = false; });
+    await activate(copyB); await copyB.filter({ hasText: /Copied/ }).waitFor();
+    await page.evaluate(() => window.__rejectCopy(new DOMException('Late library denial', 'NotAllowedError')));
+    await page.clock.runFor(50);
+    assert.equal(await page.getByTestId('library-action-error').count(), 0, 'An older saved-game failure cannot replace a newer success');
+    assert.match(await copyB.textContent(), /Copied/);
+    assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), saved, 'Copy and failed-load feedback must preserve the library');
+    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), original.fen);
+    console.log(`${browserType.name()}: saved-game copy replies preserve newer same-card, other-card, download and load feedback`);
     assert.deepEqual(errors, []);
   } finally { await page.close(); await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

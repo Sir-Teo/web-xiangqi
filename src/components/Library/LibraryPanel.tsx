@@ -234,7 +234,13 @@ export function LibraryPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const [failedActionId, setFailedActionId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionErrorState] = useState<string | null>(null);
+  const actionFeedbackVersion = useRef(0);
+  const setActionError = useCallback((message: string | null) => {
+    // A prior clipboard reply must not erase feedback from a later action.
+    actionFeedbackVersion.current++;
+    setActionErrorState(message);
+  }, []);
   const [savedVisibleLimit, setSavedVisibleLimit] = useState(SAVED_PAGE_SIZE);
   /**
    * The saved-game list is one tab stop. A page of it holds a hundred games
@@ -259,7 +265,9 @@ export function LibraryPanel({
   }, [search, reviewFilter, resultFilter, savedSort, onFiltersChange]);
 
   useEffect(() => {
+    const feedback = actionFeedbackVersion;
     return () => {
+      feedback.current++;
       if (copiedToastTimerRef.current !== null) {
         window.clearTimeout(copiedToastTimerRef.current);
       }
@@ -488,6 +496,7 @@ export function LibraryPanel({
   };
 
   const copySavedGamePgn = async (game: SavedGame) => {
+    const request = ++actionFeedbackVersion.current;
     setCopiedId(current => current === game.id ? null : current);
     const pgn = buildSavedGamePgn(game);
     if (pgn === null) {
@@ -496,6 +505,7 @@ export function LibraryPanel({
       return;
     }
     const ok = await copyToClipboard(pgn);
+    if (request !== actionFeedbackVersion.current) return;
     if (!ok) {
       setFailedActionId(`copy-${game.id}`);
       setActionError('Could not copy this PGN. Check clipboard permissions and try again.');
@@ -515,6 +525,7 @@ export function LibraryPanel({
   };
 
   const downloadSavedGamePgn = (game: SavedGame) => {
+    actionFeedbackVersion.current++;
     setDownloadedId(current => current === game.id ? null : current);
     const pgn = buildSavedGamePgn(game);
     if (pgn === null) {
