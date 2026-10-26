@@ -1,3 +1,4 @@
+import { isComposingKey } from './utils/keyboard';
 import { studyContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
@@ -1701,6 +1702,7 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       // Command/Control+K, the near-universal palette binding and the only
       // chord this app claims. Handled before anything else so it works from a
       // text field too, which is where a reader often is when they reach for it.
@@ -5316,6 +5318,7 @@ function App() {
   const pendingShortcutRef = useRef<'threat' | 'deep' | null>(null);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (aDialogIsOpen) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
@@ -7549,7 +7552,7 @@ function App() {
                         // the arrows answer again. Not mid-composition: an IME
                         // uses Escape to cancel its candidate, and pinyin is how
                         // many readers write these notes.
-                        if (event.nativeEvent.isComposing) return;
+                        if (isComposingKey(event.nativeEvent)) return;
                         if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
                           event.preventDefault();
                           event.currentTarget.blur();

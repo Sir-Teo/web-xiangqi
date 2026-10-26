@@ -118,7 +118,9 @@ function* uciTreeTokens(source: string): Generator<{ comment: string } | { match
     let cursor = 0;
     for (const span of pgnMetadataSpans(source)) {
         for (const match of source.slice(cursor, span.start).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
-        if (span.comment !== undefined) yield { comment: span.comment };
+        // Empty remarks carry neither annotations nor prose. Avoid running the
+        // annotation readers for every blank line in comment-heavy records.
+        if (span.comment?.trim()) yield { comment: span.comment };
         cursor = span.end;
     }
     for (const match of source.slice(cursor).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };

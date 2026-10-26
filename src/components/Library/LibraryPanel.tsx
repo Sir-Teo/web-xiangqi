@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { LibraryPgnImport } from './LibraryPgnImport';
 import { LibraryGameMetadata } from './LibraryGameMetadata';
 import { LibraryStudyMatches } from './LibraryStudyMatches';
@@ -733,7 +734,7 @@ export function LibraryPanel({
                     className="lib-rename-form"
                     onSubmit={(e) => { e.preventDefault(); commitEdit(game.id); }}
                     onKeyDown={event => {
-                      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(game.id); }
+                      if (!isComposingKey(event.nativeEvent) && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(game.id); }
                     }}
                     data-testid={`rename-form-saved-${game.id}`}
                     aria-label={`Rename ${savedGameLabel}`}

@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { editorHistory } from '../../utils/editorHistory';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useReducer } from 'react';
 import './Board.css';
@@ -155,6 +156,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialogRef.current, event);
             const target = event.target;
             if ((event.metaKey || event.ctrlKey) && !event.altKey && !(target instanceof HTMLElement && (target.matches('input, textarea') || target.isContentEditable))) {
@@ -355,7 +357,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             aria-invalid={fenNotice ? true : undefined}
                             aria-describedby={fenNotice ? 'board-editor-fen-notice' : undefined}
                             onChange={(event) => { setFenDraft(event.target.value); setFenNotice(null); }}
-                            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
+                            onKeyDown={(event) => { if (!isComposingKey(event.nativeEvent) && event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
                         />
                         <button type="button" className="pill-btn" onClick={loadFenDraft} data-testid="editor-fen-load">Load</button>
                         <button type="button" className="pill-btn" onClick={() => void copyFen()} data-testid="editor-fen-copy">

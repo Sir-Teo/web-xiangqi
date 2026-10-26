@@ -1,3 +1,4 @@
+import { isComposingKey } from '../utils/keyboard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Command, rankCommands, readRecentCommandIds, rememberCommandId } from '../utils/commandPalette';
 import { MAX_SEARCH_QUERY_LENGTH } from '../utils/searchTerms';
@@ -67,6 +68,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     useEffect(() => {
         if (!open) return undefined;
         const onEscape = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialogRef.current, event);
             if (event.key !== 'Escape' || event.defaultPrevented) return;
             event.preventDefault();
@@ -86,9 +88,10 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     useEffect(() => {
         if (!open) return;
         listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-    }, [activeIndex, open]);
+    }, [activeIndex, open, ranked]);
 
     if (!open) return null;
+    const activeCommand = ranked[activeIndex];
 
     const runCommand = (command: Command | undefined) => {
         if (!command || command.disabled) return;
@@ -98,6 +101,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     };
 
     const onKeyDown = (event: React.KeyboardEvent) => {
+        if (isComposingKey(event.nativeEvent)) return;
         if (event.key === 'Escape') {
             event.preventDefault();
             onClose();
@@ -201,6 +205,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                                 data-active={index === activeIndex}
                                 data-command-id={command.id}
                                 className="command-palette-row"
+                                onPointerDown={() => setActiveIndex(index)}
                             >
                                 <button
                                     type="button"
@@ -223,6 +228,11 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                         ))}
                     </ul>
                 )}
+                <p className="command-palette-help" data-testid="command-palette-help">
+                    {activeCommand?.hint || (ranked.length
+                        ? 'Use ↑ and ↓ to choose, Enter to run, or Escape to close.'
+                        : 'Try fewer words or search for an action such as “Flip” or “Settings”.')}
+                </p>
             </div>
         </div>
     );

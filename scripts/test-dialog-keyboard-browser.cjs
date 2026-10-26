@@ -44,6 +44,65 @@ async function paletteKeyboard(browser, viewport) {
   } finally { await page.close(); }
 }
 
+async function compositionKeyboard(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(10000);
+  try {
+    await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    const input = page.getByRole('combobox', { name: 'Search commands' });
+    // A disabled row must still explain itself to touch users, without hover.
+    const saveRow = page.locator('[data-command-id="save-game"]');
+    await saveRow.dispatchEvent('pointerdown', { pointerType: 'touch' });
+    const help = page.getByTestId('command-palette-help');
+    assert.equal(await help.innerText(), 'Play a move or set up a position first');
+    await input.fill('no matching command zzz');
+    assert.match(await help.innerText(), /Try fewer words/);
+    await input.fill('Settings');
+    // Synthetic native key events exercise both the standard IME flag and
+    // WebKit's composition-ending event, whose flag may already be false.
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      const active = await input.getAttribute('aria-activedescendant');
+      for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', 'Escape']) {
+        await input.dispatchEvent('keydown', { key, bubbles: true, ...flags });
+        assert.equal(await input.isVisible(), true, `Composing ${key} closed the palette`);
+        assert.equal(await input.getAttribute('aria-activedescendant'), active,
+          `Composing ${key} changed the selected command`);
+      }
+      await input.dispatchEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, ...flags });
+      assert.equal(await input.isVisible(), true, 'Composing Ctrl+K toggled the palette');
+    }
+    // Normal activation still works once character composition has ended.
+    await page.keyboard.press('Enter');
+    await page.getByRole('dialog', { name: 'Settings', exact: true }).waitFor();
+    const field = page.getByRole('dialog').locator('input, select').first();
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      await field.dispatchEvent('keydown', { key: 'Escape', bubbles: true, ...flags });
+      assert.equal(await page.getByRole('dialog').count(), 1, 'Composing Escape closed Settings');
+    }
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+k');
+    await input.fill('Set up a position');
+    await page.keyboard.press('Enter');
+    const editor = page.getByTestId('board-editor');
+    const fenInput = editor.locator('input[type="text"]');
+    await fenInput.waitFor();
+    const initial = await fenInput.inputValue();
+    await fenInput.fill('9/9/9/9/9/9/9/9/9/9 w - - 0 1');
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      await fenInput.dispatchEvent('keydown', { key: 'Enter', bubbles: true, ...flags });
+      assert.equal(await page.getByTestId('editor-done').isDisabled(), false,
+        'Composing Enter loaded the unfinished FEN');
+      await fenInput.dispatchEvent('keydown', { key: 'Escape', bubbles: true, ...flags });
+      assert.equal(await editor.isVisible(), true, 'Composing Escape closed the editor');
+    }
+    await fenInput.fill(initial);
+    await page.keyboard.press('Escape');
+    await editor.waitFor({ state: 'detached' });
+  } finally { await page.close(); }
+}
+
 async function editorKeyboard(browser, viewport) {
   const page = await browser.newPage({ viewport });
   page.setDefaultTimeout(10000);
@@ -149,6 +208,7 @@ async function modalShortcutGuard(browser, viewport) {
   try {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }]) {
       await paletteKeyboard(browser, viewport);
+      await compositionKeyboard(browser, viewport);
       await editorKeyboard(browser, viewport);
       await modalShortcutGuard(browser, viewport);
     }
