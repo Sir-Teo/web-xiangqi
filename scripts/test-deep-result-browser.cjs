@@ -73,7 +73,7 @@ async function check(browser, width) {
     await waitDepth(28);
     assert.equal(await goCount(), searches, 'Returning replaced the completed deep search');
     assert.match(await pv.getAttribute('aria-label'), /Red POV score -1\.2, depth 28, Red 10% · draw 20% · Black 70%/);
-    assert.match(await page.getByTestId('deep-dive-btn').getAttribute('aria-label'), /^Deep search this position/);
+    assert.match(await page.getByTestId('deep-dive-btn').getAttribute('aria-label'), /^Go deep: search this position/);
 
     // A result completed in the foreground also survives a later tab switch.
     await startDeep();

@@ -4139,7 +4139,7 @@ async function assertEnginePvLineControl(page) {
     runtimeState.restartLabel !== "Restart engine" ||
     runtimeState.restartTitle !== "Restart the engine worker" ||
     runtimeState.restartDisabled ||
-    runtimeState.clearLabel !== "Clear engine hash table"
+    runtimeState.clearLabel !== "Clear hash: empty the engine search table"
   ) {
     throw new Error(`Engine runtime controls are not accessible: ${JSON.stringify(runtimeState)}`);
   }
@@ -4164,7 +4164,7 @@ async function assertEnginePvLineControl(page) {
     const label = button?.getAttribute("aria-label") || "";
     return (
       (text === "Cleared" && label === "Engine hash cleared") ||
-      (text === "Clear Hash" && label === "Clear engine hash table")
+      (text === "Clear Hash" && label === "Clear hash: empty the engine search table")
     );
   }, null, { timeout: 15000 });
   const cacheState = await page.evaluate(() => {
@@ -4179,7 +4179,7 @@ async function assertEnginePvLineControl(page) {
   if (
     !(
       (cacheState.text === "Cleared" && cacheState.label === "Engine hash cleared") ||
-      (cacheState.text === "Clear Hash" && cacheState.label === "Clear engine hash table")
+      (cacheState.text === "Clear Hash" && cacheState.label === "Clear hash: empty the engine search table")
     ) ||
     cacheState.disabled
   ) {
@@ -4629,7 +4629,7 @@ async function assertEngineTelemetryDashboard(browser) {
     if (
       flushedHashState.clearHashCommandCount <= flushedHashState.beforeCount ||
       !["Cleared", "Clear Hash"].includes(flushedHashState.text) ||
-      !["Engine hash cleared", "Clear engine hash table"].includes(flushedHashState.label) ||
+      !["Engine hash cleared", "Clear hash: empty the engine search table"].includes(flushedHashState.label) ||
       flushedHashState.overflowX > 2
     ) {
       throw new Error(`Queued Clear Hash did not flush after the search completed: ${JSON.stringify(flushedHashState)}`);

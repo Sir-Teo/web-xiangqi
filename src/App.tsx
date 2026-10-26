@@ -5891,7 +5891,7 @@ function App() {
                     className={`pill-btn ${pieceStyle === style ? 'pill-btn-active' : ''}`}
                     onClick={() => setPieceStyle(style)}
                     aria-pressed={pieceStyle === style}
-                    aria-label={`Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
+                    aria-label={`${PIECE_STYLE_LABELS[style]}: Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
                     title={PIECE_STYLE_DESCRIPTIONS[style]}
                     data-testid={`piece-style-${style}`}
                   >
@@ -7680,7 +7680,7 @@ function App() {
                         aria-keyshortcuts="D"
                         aria-label={deepDiveActive
                           ? 'Stop the deep search'
-                          : `Deep search this position, ${deepSearchLimitText}`}
+                          : `Go deep: search this position, ${deepSearchLimitText}`}
                         data-testid="deep-dive-btn"
                       >
                         {deepDiveActive
@@ -7721,7 +7721,7 @@ function App() {
                             : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening (X)`}
                         aria-keyshortcuts="X"
                         aria-label={threatActive
-                          ? 'Stop showing the threat and analyse the position as it stands'
+                          ? 'Threat on: stop showing the threat and analyse the position as it stands'
                           : 'Show the threat: let the opponent move first'}
                         data-testid="show-threat-btn"
                       >
@@ -7761,7 +7761,7 @@ function App() {
                         onClick={handleClearEngineHash}
                         disabled={!isReady}
                         title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching || isSearchQueued ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
-                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear engine hash table'}
+                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear hash: empty the engine search table'}
                         data-testid="clear-engine-hash-btn"
                       >
                         {engineHashFeedback === 'queued' ? <><IconRefresh aria-hidden="true" focusable="false" /> Queued</> : engineHashFeedback === 'cleared' ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
@@ -7977,7 +7977,7 @@ function App() {
                               onClick={() => handleKeepPvLine(pv.moves)}
                               disabled={!isReady || lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
                               title={lineKept ? 'This line and analysis are saved' : 'Keep the complete line and save this analysis snapshot without moving the board'}
-                              aria-label={lineKept ? `Engine line ${i + 1} already kept` : `Keep engine line ${i + 1} in the move tree`}
+                              aria-label={lineKept ? `Kept line ${i + 1} in the move tree` : lineExists ? `Update analysis for engine line ${i + 1}` : `Keep line ${i + 1} in the move tree`}
                               data-testid={`keep-engine-pv-${i}`}
                             >
                               {lineKept ? <IconCheck /> : <IconSave />}

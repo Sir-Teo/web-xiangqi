@@ -7,6 +7,7 @@ const scripts = [
   'test-action-repeat-browser.cjs',
   'test-analysis-context-browser.cjs',
   'test-visible-control-names-browser.cjs',
+  'test-analysis-control-names-browser.cjs',
   'test-board-coordinates-browser.cjs',
   'test-board-press-browser.cjs',
   'test-cloud-visibility-browser.cjs',
