@@ -51,7 +51,13 @@ async function openCommand(page) {
             await square('f6').click();
             assert.match(await feedback.textContent(), /leg is blocked/);
             assert.equal(await feedback.getAttribute('data-solved'), 'false');
-            await dialog.getByRole('button', { name: 'Show hint' }).click();
+            const hintButton = dialog.getByRole('button', { name: 'Show hint' });
+            assert.equal(await hintButton.getAttribute('aria-expanded'), 'false');
+            await hintButton.focus(); await page.keyboard.press('Enter');
+            await page.waitForFunction(() => document.querySelector('[data-testid="lesson-feedback"]')?.textContent.includes('Hint:'));
+            assert.equal(await hintButton.getAttribute('aria-expanded'), 'true');
+            assert.equal(await hintButton.getAttribute('aria-controls'), await feedback.getAttribute('id'));
+            assert.match(await feedback.innerText(), /The first step toward g5 is f4/, 'Revealed hints must update the live feedback region');
             assert.match(await square('g5').getAttribute('aria-label'), /highlighted/);
             await dialog.getByRole('button', { name: 'Letter pieces' }).click();
             assert.ok(await dialog.locator('.piece').filter({ hasText: /^H$/ }).count());

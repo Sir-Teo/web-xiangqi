@@ -1,5 +1,5 @@
 import { readPracticeProgress, writePracticeProgress } from '../utils/practiceProgress';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { PieceStyle } from '../utils/pieceStyle';
 import { formatMoveInStyle, formatLineTokensInStyle, type XiangqiNotationStyle } from '../utils/xiangqiNotation';
@@ -28,6 +28,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
   const [notesOpen, setNotesOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLParagraphElement>(null);
+  const feedbackId = useId();
   const nextRef = useRef<HTMLButtonElement>(null);
   const replyRef = useRef<HTMLButtonElement>(null);
   const focusBoardRef = useRef(false);
@@ -51,9 +52,9 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
     return () => cancelAnimationFrame(frame);
   });
   useEffect(() => {
-    if (message && revealFeedbackRef.current) feedbackRef.current?.scrollIntoView({ block: 'nearest' });
+    if ((message || hint) && revealFeedbackRef.current) feedbackRef.current?.scrollIntoView({ block: 'nearest' });
     revealFeedbackRef.current = false;
-  }, [message]);
+  }, [message, hint]);
   if (!study || !session) return <p role="alert">{prepared.error}</p>;
 
   function reset(line: number, keepProgress: boolean) {
@@ -108,11 +109,14 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
           highlights={hint && nextMove ? [uciToSquare(nextMove.slice(0, 2))!, uciToSquare(nextMove.slice(2))!] : []} />
       </div>
       <section className="study-practice-feedback" aria-label="Practice feedback">
-        <p role="status" ref={feedbackRef} data-testid="study-practice-status">{message ? `${message} ${turnMessage}` : asking
-          ? `${turnMessage} Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.` : turnMessage}</p>
-        {hint && nextMove && <p data-testid="study-practice-hint">One saved move: {formatMoveInStyle(session.board, nextMove, notationStyle)}</p>}
+        <p id={feedbackId} role="status" aria-atomic="true" ref={feedbackRef} data-testid="study-practice-status">{message ? `${message} ${turnMessage}` : asking
+          ? `${turnMessage} Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.` : turnMessage}
+          {hint && nextMove && <span className="study-practice-hint" data-testid="study-practice-hint"> One saved move: {formatMoveInStyle(session.board, nextMove, notationStyle)}</span>}
+        </p>
         <div className="study-practice-actions">
-          {asking && <button type="button" onClick={() => { setHint(true); setSession({ ...session, assisted: true }); }}>Show a saved move</button>}
+          {asking && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => {
+            revealFeedbackRef.current = true; setHint(true); setSession({ ...session, assisted: true });
+          }}>Show a saved move</button>}
           {!asking && !complete && <button type="button" ref={replyRef} onClick={() => {
             setSession(playPracticeReply(study, session, side)); setSelected(null); setHint(false);
             setMessage(`${session.side === 'w' ? 'Red' : 'Black'} played ${formatMoveInStyle(session.board, nextMove, notationStyle)}.`);

@@ -31,7 +31,7 @@
 .rule-lessons-task { font-weight: 650; }
 .rule-lessons-feedback { min-height: 4.5em; padding: .65rem; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: 8px; }
 .rule-lessons-feedback[data-solved="true"] { border-color: var(--accent); }
-.rule-lessons-hint { color: var(--text-secondary); }
+.rule-lessons-hint { display: block; margin-top: .5rem; color: var(--text-secondary); }
 .rule-lessons-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .rule-lessons-return { margin-top: .75rem; width: 100%; }
 @media (max-width: 640px) { .rule-lessons-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "board" "feedback"; gap: .5rem; } .rule-lessons { padding: .75rem; } .rule-lessons-board .xiangqi-board-container { --board-max-width: 320px; } .rule-lessons-board { position: static; } }

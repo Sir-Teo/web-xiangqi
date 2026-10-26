@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Board } from './Board/Board';
 import { keepTabWithin } from '../utils/focusTrap';
 import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress } from '../utils/ruleLessons';
@@ -20,6 +20,7 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
     const [letters, setLetters] = useState(pieceStyle === 'letters');
     const dialog = useRef<HTMLDivElement>(null);
     const feedback = useRef<HTMLParagraphElement>(null);
+    const feedbackId = useId();
     const validTargets = useMemo(() => selected && !solved ? legalMovesFrom(board, selected.file, selected.rank, 'w') : [], [board, selected, solved]);
 
     useEffect(() => {
@@ -38,8 +39,8 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
     useEffect(() => {
         // On short phones feedback sits below the board. Reveal the outcome so
         // a learner never has to guess whether a tap worked.
-        if (message) feedback.current?.scrollIntoView({ block: 'nearest' });
-    }, [message]);
+        if (message || hint) feedback.current?.scrollIntoView({ block: 'nearest' });
+    }, [message, hint]);
 
     function openLesson(next: number) {
         setIndex(next); setBoard(parseFenBoard(RULE_LESSONS[next].fen));
@@ -75,12 +76,14 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
                     draggableSide={solved ? null : 'w'} pieceStyle={letters ? 'letters' : 'traditional'}
                     highlights={hint && !solved ? [uciToSquare(lesson.solution.slice(2))!] : []} /></div>
                 <section className="rule-lessons-content" aria-label="Exercise feedback">
-                    <p className="rule-lessons-feedback" role="status" data-solved={solved} data-testid="lesson-feedback" ref={feedback}>{message || 'The exercise piece is selected. Tap a target, or use arrow keys and Enter on the board.'}</p>
-                    {hint && !solved && <p className="rule-lessons-hint">{lesson.hint}</p>}
+                    <p className="rule-lessons-feedback" id={feedbackId} role="status" aria-atomic="true" data-solved={solved} data-testid="lesson-feedback" ref={feedback}>
+                        {message || 'The exercise piece is selected. Tap a target, or use arrow keys and Enter on the board.'}
+                        {hint && !solved && <span className="rule-lessons-hint"> Hint: {lesson.hint}</span>}
+                    </p>
                     {saveFailed && <p role="alert">Completed here, but browser storage could not save your progress.</p>}
                     <div className="rule-lessons-actions">
                         <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
-                        {!solved && <button type="button" onClick={() => setHint(true)}>Show hint</button>}
+                        {!solved && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => setHint(true)}>Show hint</button>}
                         <button type="button" onClick={() => openLesson(index)}>Try again</button>
                         {solved && index < RULE_LESSONS.length - 1 && <button type="button" onClick={() => openLesson(index + 1)}>Next lesson</button>}
                     </div>
