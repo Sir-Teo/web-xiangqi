@@ -6585,8 +6585,6 @@ summary:active {
   font-size: 0.79rem;
   font-weight: 750;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   /* These are short values -- "Even", "Red cannon on b2" -- and none carries a
      title tooltip, so a cut one is simply gone. They wrap instead. The em below
      is left alone deliberately: it holds the move-rule hint, which is long by
