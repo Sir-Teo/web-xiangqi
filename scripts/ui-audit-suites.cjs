@@ -134,6 +134,7 @@ const scripts = [
   'test-library-backup-browser.cjs',
   'test-audit-browser.cjs',
   'test-audit-followup-browser.cjs',
+  'test-palette-stationary-pointer-browser.cjs',
   'test-dialog-keyboard-browser.cjs'];
 
 function selectShard(suites, shard = '1/1') {

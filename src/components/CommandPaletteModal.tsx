@@ -206,13 +206,15 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                                 data-command-id={command.id}
                                 className="command-palette-row"
                                 onPointerDown={() => setActiveIndex(index)}
+                                // Filtering can move a row under a stationary
+                                // pointer. Only actual movement changes hover selection.
+                                onPointerMove={() => setActiveIndex(index)}
                             >
                                 <button
                                     type="button"
                                     className="command-palette-button"
                                     disabled={command.disabled}
                                     onFocus={() => setActiveIndex(index)}
-                                    onMouseEnter={() => setActiveIndex(index)}
                                     onClick={() => runCommand(command)}
                                 >
                                     <span className="command-palette-label">{command.label}</span>

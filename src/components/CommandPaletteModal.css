@@ -13,6 +13,7 @@
     width: min(32rem, 100%);
     max-height: min(30rem, 80vh);
     max-height: min(30rem, 80dvh);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -36,6 +37,9 @@
 }
 
 .command-palette-list {
+    /* Enlarged hints must leave a usable command viewport on short screens. */
+    min-height: 4rem;
+    min-height: calc(3lh + .8rem + 2px);
     list-style: none;
     margin: 0;
     padding: 0;
