@@ -17,6 +17,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
   const generation = useRef(0);
   const restoreInput = useRef<HTMLInputElement>(null);
   const restorePreview = useRef<HTMLDivElement>(null);
+  const backupSummary = useRef<HTMLElement>(null);
   const restoringRef = useRef(false);
   const [restoring, setRestoring] = useState(false);
   const initiatingControl = useRef<HTMLElement | null>(null);
@@ -24,9 +25,11 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     if (restoring) return;
     const target = initiatingControl.current;
     initiatingControl.current = null;
-    // Chromium blurs a focused button as soon as it becomes disabled. On a
-    // failed write it is enabled again here; keep it ready for keyboard retry.
-    if (target?.isConnected && document.activeElement === document.body) target.focus();
+    // Chromium blurs a focused button as soon as it becomes disabled. Keep it
+    // ready for retry, or continue to backups when successful repair removes it.
+    if (target && document.activeElement === document.body) {
+      (target.isConnected ? target : backupSummary.current)?.focus();
+    }
   }, [restoring]);
   useEffect(() => () => { generation.current += 1; }, []);
 
@@ -96,8 +99,9 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     }
   }
 
-  async function repair() {
+  async function repair(control: HTMLButtonElement) {
     if (!state.raw || restoringRef.current) return;
+    initiatingControl.current = document.activeElement === control ? control : null;
     restoringRef.current = true; setRestoring(true); setError('');
     const result = await withLibraryMutation(() => salvageLibrary(state.raw!), { restored: 0, error: LIBRARY_LOCK_ERROR });
     restoringRef.current = false; setRestoring(false); onChange();
@@ -117,13 +121,13 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
               <p>Keep {salvage.games.length} readable studies; skip {salvage.skipped} invalid or identical entries. Preserve {salvage.copies} conflicting IDs as separate copies. The original data will be archived before replacement.</p>
               <ul>{salvage.games.slice(0, 10).map(game => <li key={game.id}>{game.label || game.opening || `${game.moves.length} moves`}</li>)}</ul>
               {salvage.games.length > 10 && <p>And {salvage.games.length - 10} more readable studies.</p>}
-              <button type="button" disabled={restoring} onClick={repair}>Keep {salvage.games.length} readable studies</button>
+              <button type="button" disabled={restoring} onClick={event => { void repair(event.currentTarget); }}>Keep {salvage.games.length} readable studies</button>
             </>}
           </details>}
         </div>
       )}
       <details>
-        <summary>Backup and restore</summary>
+        <summary ref={backupSummary}>Backup and restore</summary>
         {originalRecovery && <button type="button" onClick={() => download('archived')}>Download archived original</button>}
         <p>Keep a copy of all saved games, variations, notes, and reviews, or move them to another browser.</p>
         <button type="button" disabled={state.mutationBlocked} onClick={() => download('backup')}>Download library backup</button>
