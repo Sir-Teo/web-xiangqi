@@ -57,6 +57,7 @@ function stripPgnMetadata(text: string): string {
     return cursor === 0 ? source : out + source.slice(cursor);
 }
 
+const UCI_SQUARE_PATTERN = /[a-i][0-9]/i;
 const UCI_MOVE_PATTERN = /\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
 const UCI_TREE_TOKEN_PATTERN = /\(|\)|\b([a-i][0-9])([a-i][0-9])\b|\b([a-i][0-9])\s*(?:->|=>|[-x:→–—])\s*([a-i][0-9])\b/gi;
 const UCI_ANNOTATED_TREE_TOKEN_PATTERN = new RegExp(`${UCI_TREE_TOKEN_PATTERN.source}|\\$\\d+|[!?]+`, 'gi');
@@ -88,6 +89,9 @@ export function isMoveImportTextTooLarge(text: string): boolean {
  * flag `extractUciMoveTree` already returns.
  */
 export function hasTooManyUciMoves(text: string): boolean {
+    // A coordinate move requires a square. Skip metadata/variation allocation
+    // for unrelated text and notation records that contain none.
+    if (!UCI_SQUARE_PATTERN.test(text)) return false;
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     let seen = 0;
     for (const _ of cleaned.matchAll(UCI_MOVE_PATTERN)) {
@@ -98,6 +102,7 @@ export function hasTooManyUciMoves(text: string): boolean {
 }
 
 export function extractUciMoveLine(text: string): string[] {
+    if (!UCI_SQUARE_PATTERN.test(text)) return [];
     const cleaned = stripParentheticalVariations(stripPgnMetadata(text));
     const moves: string[] = [];
     for (const match of cleaned.matchAll(UCI_MOVE_PATTERN)) {

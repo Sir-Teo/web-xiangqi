@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { cpuUsage } from 'node:process';
 import {
     extractUciMoveLine,
     extractUciMoveTree,
@@ -109,6 +110,7 @@ const NASTY: Array<[string, string]> = [
 
 for (const [name, input] of NASTY) {
     it(`survives: ${name}`, () => {
+        const cpuStarted = cpuUsage();
         const started = performance.now();
 
         isMoveImportTextTooLarge(input);
@@ -136,7 +138,9 @@ for (const [name, input] of NASTY) {
         });
 
         const elapsed = performance.now() - started;
-        expect(elapsed, `${name} took ${elapsed.toFixed(0)}ms`).toBeLessThan(1000);
+        const cpu = cpuUsage(cpuStarted);
+        const cpuMs = (cpu.user + cpu.system) / 1000;
+        expect(elapsed, `${name} took ${elapsed.toFixed(0)}ms wall (${cpuMs.toFixed(0)}ms process CPU)`).toBeLessThan(1000);
     });
 }
 
