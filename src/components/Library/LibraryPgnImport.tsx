@@ -50,6 +50,12 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
   }
   const preview = useMemo(() => previewGameCollection(games.filter((_, index) => selected.has(index)), state, includeDuplicates), [games, selected, state, includeDuplicates]);
   const [busy, setBusy] = useState(false);
+  const readingCancelFocused = useRef(false);
+  useLayoutEffect(() => {
+    if (busy) return;
+    if (readingCancelFocused.current && document.activeElement === document.body) fileInput.current?.focus();
+    readingCancelFocused.current = false;
+  }, [busy]);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -143,7 +149,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
         <input ref={fileInput} type="file" accept=".pgn,.txt,text/plain,application/x-chess-pgn"
           onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void read(file); }} />
       </label>
-      {busy && <><p role="status">Checking games and variations…</p><button type="button" onClick={() => { generation.current++; stop(); fileInput.current?.focus(); setBusy(false); }}>Cancel reading</button></>}
+      {busy && <><p role="status">Checking games and variations…</p><button type="button" onFocus={() => { readingCancelFocused.current = true; }} onClick={() => { generation.current++; stop(); fileInput.current?.focus(); setBusy(false); }}>Cancel reading</button></>}
       {games.length > 0 && <div className="lib-restore-preview" ref={previewPanel}>
         <p><strong className="lib-pgn-filename">{fileName}</strong><br />{games.length} {games.length === 1 ? 'game' : 'games'} checked. Open a game without saving it, or select games to add to your library. Existing saved games will be kept. Identical game content is skipped by default.</p>
         <p>Players, ratings, tournament details, recorded time control, annotator credits, results, variations, notes, evaluations, saved analysis, and supported move-quality marks are retained. Evaluations use Red’s perspective. Run Review to calculate accuracy. Other PGN tags are not retained.</p>

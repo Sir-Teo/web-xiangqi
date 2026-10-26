@@ -3015,6 +3015,14 @@ function App() {
   const directImportGenerationRef = useRef(0);
   const directImportControllerRef = useRef<AbortController | null>(null);
   const [directImportBusy, setDirectImportBusy] = useState(false);
+  const directImportFocusRef = useRef<HTMLElement | null>(null);
+  const directImportCancelRef = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    // A disabled Import button, or a removed Cancel button, can blur to body.
+    // Keep keyboard retry nearby without moving focus from another control.
+    const target = directImportFocusRef.current;
+    if (!directImportBusy && target?.isConnected && document.activeElement === document.body) target.focus();
+  }, [directImportBusy]);
   const cancelDirectImport = useCallback(() => {
     directImportGenerationRef.current++;
     directImportControllerRef.current?.abort();
@@ -6335,6 +6343,11 @@ function App() {
               <p className="new-game-strength-label">Import Move Line</p>
               <form
                 className="new-game-line-form"
+                onFocusCapture={event => {
+                  if (!(event.target instanceof HTMLElement)) return;
+                  if (!event.target.isSameNode(directImportCancelRef.current)) directImportFocusRef.current = event.target;
+                  else if (!directImportFocusRef.current?.isConnected) directImportFocusRef.current = document.getElementById('new-game-line-input');
+                }}
                 onSubmit={(e) => { e.preventDefault(); handleImportMoveLine(moveLineInput, pendingGameMode); }}
               >
                 <textarea
@@ -6380,7 +6393,7 @@ function App() {
                   />
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
                 </div>
-                {directImportBusy && <p role="status">Checking the game… <button type="button" onClick={cancelDirectImport}>Cancel reading</button></p>}
+                {directImportBusy && <p role="status">Checking the game… <button type="button" ref={directImportCancelRef} onClick={cancelDirectImport}>Cancel reading</button></p>}
                 <div className="new-game-line-actions">
                   {moveLineError ? <span id="new-game-line-error" className="new-game-line-error" role="alert">{moveLineError}</span> : <span />}
                   <button

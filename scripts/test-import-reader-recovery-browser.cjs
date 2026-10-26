@@ -32,17 +32,36 @@ async function command(page, label) {
         const importButton = page.getByTestId('import-uci-line-btn');
         for (const data of [null, {}, { kind: 'text', text: 'Unexpected file response' },
           { kind: 'plan', plan: { kind: 'line', moves: ['h2e2'], notationRejected: [], dhtmlComments: [], flatMoveTree: [{ uci: 'h2e2', parent: 0 }] } }]) {
-          await importButton.click();
+          await importButton.focus(); await importButton.press('Enter');
           assert.equal(await page.getByRole('alert').filter({ hasText: 'The game reader returned an unreadable response' }).count(), 0,
             'A retry clears the previous reader error while checking the game');
           await page.evaluate(data => window.__readerWorkers.direct.at(-1).onmessage({ data }), data);
           await page.getByRole('alert').filter({ hasText: 'The game reader returned an unreadable response' }).waitFor();
           assert.equal(await importButton.isEnabled(), true, 'Malformed direct replies must finish and allow retry');
+          assert.equal(await importButton.evaluate(node => node === document.activeElement), true, 'Keyboard import failures retain focus for retry');
           assert.equal(await page.evaluate(() => window.__readerWorkers.direct.at(-1).terminated), true);
           await page.evaluate(() => window.__readerWorkers.direct.at(-1).onmessage({ data: null }));
           assert.equal(await page.getByRole('button', { name: 'Cancel reading', exact: true }).count(), 0);
           assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), original);
         }
+        await importButton.press('Enter');
+        await page.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
+        await page.evaluate(() => window.__readerWorkers.direct.at(-1).onmessageerror());
+        await page.getByRole('alert').filter({ hasText: 'The game reader returned an unreadable response' }).waitFor();
+        assert.equal(await importButton.evaluate(node => node === document.activeElement), true, 'An asynchronously removed Cancel control returns to Import');
+        await importButton.press('Enter');
+        const otherControl = page.locator('.new-game-menu-header').getByRole('button', { name: 'Close', exact: true }); await otherControl.focus();
+        await page.evaluate(() => window.__readerWorkers.direct.at(-1).onmessage({ data: { error: 'Reader failure after focus moved' } }));
+        await page.getByRole('alert').filter({ hasText: 'Reader failure after focus moved' }).waitFor();
+        assert.equal(await otherControl.evaluate(node => node === document.activeElement), true, 'Completing a read must leave another focused control alone');
+        const fileTrigger = page.getByTestId('load-uci-file-btn'); await fileTrigger.focus();
+        const fileWorkerCount = await page.evaluate(() => window.__readerWorkers.direct.length);
+        await page.getByTestId('uci-line-file-input').setInputFiles({ name: 'Direct.pgn', mimeType: 'text/plain', buffer: Buffer.from('h2e2 h9g7') });
+        await page.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
+        await page.waitForFunction(count => window.__readerWorkers.direct.length === count + 1, fileWorkerCount);
+        await page.evaluate(() => window.__readerWorkers.direct.at(-1).onmessage({ data: { kind: 'text', text: 'h2e2 h9g7' } }));
+        await page.getByRole('button', { name: 'Cancel reading', exact: true }).waitFor({ state: 'hidden' });
+        assert.equal(await fileTrigger.evaluate(node => node === document.activeElement), true, 'Decoded files return to the visible file control after Cancel disappears');
         await page.evaluate(() => { window.__realReaders = true; });
         await importButton.click();
         try {
@@ -68,13 +87,24 @@ async function command(page, label) {
         }
         for (const data of [null, { games: {} }, { games: [{}] }, { games: [{ gameMode: 'PvP', moves: ['h2e2'], flatMoveTree: [{ uci: 'h2e2', parent: 0 }] }] }]) {
           await upload();
+          await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
           await page.evaluate(data => window.__readerWorkers.collection.at(-1).onmessage({ data }), data);
           await panel.getByRole('alert').filter({ hasText: 'The collection reader returned an unreadable response' }).waitFor();
           assert.equal(await page.evaluate(() => window.__readerWorkers.collection.at(-1).terminated), true);
           await page.evaluate(() => window.__readerWorkers.collection.at(-1).onmessage({ data: { games: [{ gameMode: 'PvP', moves: ['h2e2'] }] } }));
           assert.equal(await panel.locator('.lib-pgn-game').count(), 0, 'A late reply cannot replace a failed preview');
           assert.equal(await panel.getByRole('button', { name: 'Cancel reading', exact: true }).count(), 0);
+          assert.equal(await file.evaluate(node => node === document.activeElement), true, 'Collection read failures return focus to the file chooser');
         }
+        await upload(); await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
+        await page.evaluate(() => window.__readerWorkers.collection.at(-1).onmessage({ data: { games: [{ gameMode: 'PvP', moves: ['h2e2'] }] } }));
+        await panel.getByRole('button', { name: 'Import 1 game', exact: true }).waitFor();
+        assert.equal(await file.evaluate(node => node === document.activeElement), true, 'Successful collection reads keep keyboard focus when Cancel disappears');
+        await upload(); await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
+        const summary = panel.locator('summary'); await summary.focus();
+        await page.evaluate(() => window.__readerWorkers.collection.at(-1).onmessage({ data: { error: 'Reader failure after focus moved' } }));
+        await panel.getByRole('alert').filter({ hasText: 'Reader failure after focus moved' }).waitFor();
+        assert.equal(await summary.evaluate(node => node === document.activeElement), true, 'Collection completion must leave another focused control alone');
         await upload();
         const prevented = await page.evaluate(() => {
           const event = new ErrorEvent('error', { cancelable: true });
@@ -93,7 +123,7 @@ async function command(page, label) {
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), afterImport, 'Collection failures preserve the board');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: unreadable replies, cyclic trees, late replies, worker errors and real direct/collection retries passed`);
+        console.log(`${browserType.name()} ${width}px: unreadable replies, cyclic trees, late replies, keyboard focus and real direct/collection retries passed`);
       } catch (error) {
         console.error('Reader recovery page errors:', JSON.stringify(errors));
         try {
