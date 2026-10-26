@@ -103,6 +103,44 @@ async function compositionKeyboard(browser, viewport) {
   } finally { await page.close(); }
 }
 
+async function closedDisclosureKeyboard(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(10000);
+  try {
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Settings');
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await dialog.waitFor();
+    // End the dialog in a collapsed disclosure. Chromium can report boxes for
+    // its descendants even though they cannot receive focus. Exercise the real
+    // dialog listener, including the transition to an expanded last control.
+    await dialog.evaluate(body => {
+      const details = document.createElement('details');
+      details.dataset.testid = 'focus-disclosure';
+      const summary = document.createElement('summary'); summary.textContent = 'Extra settings';
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Extra option';
+      details.append(summary, button); body.append(details);
+    });
+    const summary = page.getByTestId('focus-disclosure').locator('summary');
+    const extra = dialog.getByRole('button', { name: 'Extra option', exact: true, includeHidden: true });
+    const close = dialog.getByRole('button', { name: 'Close settings', exact: true });
+    await close.focus(); await page.keyboard.press('Shift+Tab');
+    assert.equal(await summary.evaluate(element => element === document.activeElement), true,
+      'Shift+Tab must wrap to the disclosure summary, not its hidden button');
+    await page.keyboard.press('Tab');
+    assert.equal(await close.evaluate(element => element === document.activeElement), true,
+      'Tab from the collapsed summary must return to the first dialog control');
+    await summary.click();
+    await close.focus(); await page.keyboard.press('Shift+Tab');
+    assert.equal(await extra.evaluate(element => element === document.activeElement), true,
+      'Expanding the disclosure makes its button the final tab stop');
+    await page.keyboard.press('Tab');
+    assert.equal(await close.evaluate(element => element === document.activeElement), true);
+  } finally { await page.close(); }
+}
+
 async function editorKeyboard(browser, viewport) {
   const page = await browser.newPage({ viewport });
   page.setDefaultTimeout(10000);
@@ -213,6 +251,7 @@ async function modalShortcutGuard(browser, viewport) {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }]) {
       await paletteKeyboard(browser, viewport);
       await compositionKeyboard(browser, viewport);
+      await closedDisclosureKeyboard(browser, viewport);
       await editorKeyboard(browser, viewport);
       await modalShortcutGuard(browser, viewport);
     }

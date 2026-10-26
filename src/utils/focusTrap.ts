@@ -32,8 +32,11 @@ export function getDialogFocusableElements(container: HTMLElement): HTMLElement[
     return Array.from(container.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR))
         .filter((element) => {
             if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
-            // Own computed display does not reveal a hidden ancestor or a
-            // closed details element. Those descendants have no layout boxes.
+            // Recent Chromium can expose layout boxes inside a closed details
+            // element. Such controls still cannot receive focus. Use the native
+            // ancestor visibility check where available, then the geometry and
+            // CSS checks for browsers without it.
+            if (typeof element.checkVisibility === 'function' && !element.checkVisibility()) return false;
             if (!element.getClientRects().length) return false;
             const style = window.getComputedStyle(element);
             return style.visibility !== 'hidden' && style.visibility !== 'collapse';
