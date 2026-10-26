@@ -118,8 +118,9 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         </p>
         <div className="study-practice-actions">
           {asking && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => {
-            revealFeedbackRef.current = true; setHint(true); setSession({ ...session, assisted: true });
-          }}>Show a saved move</button>}
+            revealFeedbackRef.current = !hint; setHint(!hint);
+            if (!hint) setSession({ ...session, assisted: true });
+          }}>{hint ? 'Hide saved move' : 'Show a saved move'}</button>}
           {!asking && !complete && <button type="button" ref={replyRef} onClick={() => {
             setSession(playPracticeReply(study, session, side)); setSelected(null); setHint(false);
             setMessage(`${session.side === 'w' ? 'Red' : 'Black'} played ${formatMoveInStyle(session.board, nextMove, notationStyle)}.`);
