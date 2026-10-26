@@ -50,6 +50,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-study-undo-browser.cjs',
         'test-study-undo-edits-browser.cjs',
         'test-library-undo-recovery-browser.cjs',
+        'test-library-pagination-browser.cjs',
         'test-undo-stack-browser.cjs',
         'test-notice-stack-browser.cjs',
         'test-save-error-retention-browser.cjs',

@@ -1012,7 +1012,12 @@ export function LibraryPanel({
         <button
           type="button"
           className="lib-load-more"
-          onClick={() => setSavedVisibleLimit((limit) => limit + SAVED_PAGE_SIZE)}
+          onClick={() => {
+            const index = visibleSaved.length;
+            const next = filteredSaved[index];
+            if (next) pendingFocusRef.current = { id: next.id, index, selector: '[data-library-action="load"]' };
+            setSavedVisibleLimit((limit) => limit + SAVED_PAGE_SIZE);
+          }}
           data-testid="library-show-more-saved"
         >
           Show {Math.min(SAVED_PAGE_SIZE, filteredSaved.length - visibleSaved.length)} more saved games

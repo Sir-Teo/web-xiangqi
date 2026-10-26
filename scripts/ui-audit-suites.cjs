@@ -15,6 +15,7 @@ const scripts = [
   'test-play-startup-progress-browser.cjs',
   'test-failed-recovery-browser.cjs',
   'test-library-concurrency-browser.cjs',
+  'test-library-pagination-browser.cjs',
   'test-library-undo-recovery-browser.cjs',
   'test-undo-stack-browser.cjs',
   'test-notice-stack-browser.cjs',
