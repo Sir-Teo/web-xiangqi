@@ -5343,6 +5343,14 @@ summary:active {
   color: var(--accent-hover);
 }
 
+/* System palettes flatten the selected and unselected fills to the same
+   colour. Keep the chosen setting visible through the border's shape too. */
+@media (forced-colors: active) {
+  .pill-btn-active {
+    border: 3px double Highlight;
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .pill-btn:hover {
   background: var(--accent-muted);

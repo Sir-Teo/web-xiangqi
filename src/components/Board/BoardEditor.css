@@ -17,7 +17,9 @@
   max-height: 94vh;
   overflow: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
+  /* Let the controls grow with enlarged text while keeping room for the board
+     in the two-column layout. The phone layout below stacks both columns. */
+  grid-template-columns: minmax(0, 1fr) min(50%, 11.875rem);
   gap: 0.9rem;
   padding: 1rem;
   border-radius: var(--radius-lg, 14px);
@@ -99,6 +101,12 @@
 .board-editor-brush[aria-pressed="true"] {
   border-color: var(--accent, #10b981);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35);
+}
+
+@media (forced-colors: active) {
+  .board-editor-brush[aria-pressed="true"] {
+    border: 3px double Highlight;
+  }
 }
 
 .board-editor-row {
