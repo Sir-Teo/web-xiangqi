@@ -10,13 +10,17 @@ import { Board } from './Board/Board';
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
   const study = prepared.study;
+  const sideLines = useMemo(() => ({
+    w: study ? practiceLineIndices(study, 'w') : [],
+    b: study ? practiceLineIndices(study, 'b') : [],
+  }), [study]);
   const restored = useMemo(() => study ? readPracticeProgress(game, study) : null, [game, study]);
   const [side, setSide] = useState<Side>(() => restored?.side ?? study?.side ?? 'w');
   const [session, setSession] = useState(() => restored?.session ?? (study ? startPracticeLine(study, 0) : null));
   const [progressSaved, setProgressSaved] = useState(true);
   useEffect(() => {
-    if (session) setProgressSaved(writePracticeProgress(game, side, session));
-  }, [game, side, session]);
+    if (session && sideLines[side].length) setProgressSaved(writePracticeProgress(game, side, session));
+  }, [game, side, session, sideLines]);
   const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
   const [letters, setLetters] = useState(pieceStyle === 'letters');
   const [hint, setHint] = useState(false);
@@ -28,7 +32,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
   const replyRef = useRef<HTMLButtonElement>(null);
   const focusBoardRef = useRef(false);
   const revealFeedbackRef = useRef(false);
-  const eligible = study ? practiceLineIndices(study, side) : [];
+  const eligible = sideLines[side];
   const complete = Boolean(study && session && practiceComplete(study, session));
   const asking = Boolean(session && session.side === side && !complete && eligible.length);
   const validTargets = useMemo(() => session && selected && asking
@@ -86,10 +90,11 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
       <label>Practice as<select className="app-select app-select-roomy" value={side} onChange={event => {
         const chosen = event.target.value as Side;
         setSide(chosen);
-        const first = practiceLineIndices(study, chosen)[0];
+        const first = sideLines[chosen][0];
         if (first !== undefined) setSession(readPracticeProgress(game, study, chosen)?.session ?? startPracticeLine(study, first));
         setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
-      }}><option value="w">Red</option><option value="b">Black</option></select></label>
+      }}><option value="w" disabled={!sideLines.w.length}>Red{!sideLines.w.length ? ' (no saved moves)' : ''}</option>
+        <option value="b" disabled={!sideLines.b.length}>Black{!sideLines.b.length ? ' (no saved moves)' : ''}</option></select></label>
       <button type="button" onClick={() => reset(eligible[0] ?? 0, false)}>Reset progress for this side</button>
       <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
     </div>

@@ -1,6 +1,6 @@
 import type { SavedGame } from './gameLibrary';
 import { librarySource } from './librarySource';
-import { playPracticeReply, startPracticeLine, type PracticeSession, type PracticeStudy } from './studyPractice';
+import { playPracticeReply, practiceLineIndices, startPracticeLine, type PracticeSession, type PracticeStudy } from './studyPractice';
 import type { Side } from './xiangqi';
 
 export const PRACTICE_PROGRESS_KEY = 'xiangqi:practice-progress:v1';
@@ -40,7 +40,13 @@ export function readPracticeProgress(game: SavedGame, study: PracticeStudy, side
   try {
     const entry = entries(storage ?? localStorage).find(entry => entry.id === game.id && entry.revision === librarySource(game).revision);
     if (!entry) return null;
-    const chosen = side ?? entry.side;
+    let chosen = side ?? entry.side;
+    if (!practiceLineIndices(study, chosen).length) {
+      if (side) return null;
+      // Older clients could remember a color with no moves. Keep the valid
+      // color's own saved session instead of copying or resetting its scores.
+      chosen = study.side;
+    }
     const session = restorePracticeSession(study, entry.sessions[chosen]);
     return session ? { side: chosen, session } : null;
   } catch { return null; }
