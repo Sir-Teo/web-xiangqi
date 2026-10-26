@@ -443,7 +443,7 @@ const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCu
                 </span> : null}
                 {notationStyle === 'uci'
                     ? null
-                    : <span className="move-uci"> {record.uci}</span>}
+                    : <>{' '}<span className="move-uci">{record.uci}</span></>}
                 {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
             </button>
             {isBadMove && coachMove && (
