@@ -34,14 +34,36 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen,
           'Paging and arrow navigation must not load a saved game');
         assert.equal(await more.count(), 0);
+        await page.getByTestId(width < 900 ? 'mobile-analysis-tab-graph' : 'left-panel-tab-graph').click();
+        await page.getByTestId(width < 900 ? 'mobile-analysis-tab-library' : 'left-panel-tab-library').click();
+        await cards.nth(204).waitFor();
+        assert.equal(await cards.count(), 205, 'Returning from the graph retains already revealed pages');
         const search = page.getByRole('searchbox', { name: 'Search library', exact: true });
         await search.fill('Paged study 204');
         await page.waitForFunction(() => document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length === 1);
         assert.equal(await search.evaluate(element => element === document.activeElement), true,
           'A later search must retain focus in its input');
+        await search.clear();
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length === 100);
+        assert.equal(await more.count(), 1, 'A different search starts on its first page');
+        await more.press('Enter'); assert.equal(await cards.count(), 200);
+        await page.getByRole('combobox', { name: 'Sort saved games', exact: true }).selectOption('oldest');
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length === 100);
+        assert.equal(await cards.first().getAttribute('data-game-id'), 'paged-0', 'A different sort resets pages and applies its new order');
+        for (const [name, value] of [['Filter by review status', 'unreviewed'], ['Filter by result', 'ongoing']]) {
+          await more.press('Enter'); assert.equal(await cards.count(), 200);
+          await page.getByRole('combobox', { name, exact: true }).selectOption(value);
+          await page.waitForFunction(() => document.querySelectorAll('[data-testid="saved-game-list"] .lib-card').length === 100);
+        }
+        await page.reload(); await page.locator('.xiangqi-board').waitFor();
+        await page.getByRole('dialog', { name: 'Unfinished game', exact: true }).getByRole('button', { name: 'Decide later', exact: true }).click();
+        await page.getByTestId(width < 900 ? 'mobile-open-library-btn' : 'left-panel-tab-library').click();
+        await cards.nth(99).waitFor();
+        assert.equal(await cards.count(), 100, 'A fresh page starts with the initial render limit');
+        assert.equal(await page.getByRole('combobox', { name: 'Sort saved games', exact: true }).inputValue(), 'recent');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: library paging focuses new games, preserves arrow navigation and leaves search focus alone`);
+        console.log(`${browserType.name()} ${width}px: new-page focus, arrow navigation, retained pages on return, query/sort resets and fresh-page defaults passed`);
       } catch (error) {
         await page.screenshot({ path: `/tmp/xiangqi-library-pagination-${browserType.name()}-${width}-failure.png`, timeout: 5000 }).catch(() => {});
         throw error;
