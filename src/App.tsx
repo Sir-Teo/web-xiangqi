@@ -8029,49 +8029,51 @@ function App() {
             zero; an iPhone's 34px inset takes that back. In here it is
             positioned against the workspace, which ends exactly where the
             chrome below it begins, on both. */}
-        {discardedAutoSave ? (
-          <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
-            <span>
-              {discardedAutoSave.failed
-                ? 'Could not put the game back on the board.'
-                : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
-                  ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
-            </span>
-            {discardedAutoSave.failed ? null : (
-              <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
-            )}
-            <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
-        {libraryUndo ? (
-          <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
-            <span>
-              {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
-                ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available.'
-                : libraryUndo.game.label
-                  ? `Deleted “${libraryUndo.game.label}”`
-                  : 'Deleted that saved game'}
-            </span>
-            <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete}
-              disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
-              {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
-            </button>
-            <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
-        {deleteUndo ? (
-          <div className="undo-toast" role="status" data-testid="delete-undo-toast">
-            <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
-            <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
-            <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
+        <div className="undo-toast-stack">
+          {discardedAutoSave ? (
+            <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
+              <span>
+                {discardedAutoSave.failed
+                  ? 'Could not put the game back on the board.'
+                  : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
+                    ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
+              </span>
+              {discardedAutoSave.failed ? null : (
+                <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
+              )}
+              <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+          {libraryUndo ? (
+            <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
+              <span>
+                {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
+                  ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available.'
+                  : libraryUndo.game.label
+                    ? `Deleted “${libraryUndo.game.label}”`
+                    : 'Deleted that saved game'}
+              </span>
+              <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete}
+                disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
+                {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
+              </button>
+              <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+          {deleteUndo ? (
+            <div className="undo-toast" role="status" data-testid="delete-undo-toast">
+              <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
+              <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
+              <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* ── Bottom bar ── */}

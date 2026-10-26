@@ -3927,16 +3927,26 @@ summary:active {
   overflow-y: auto;
 }
 
-.undo-toast {
-  /* Absolute inside .main-container, whose bottom edge is where the desktop
-     bar or the phone's tab bar starts -- so this clears whichever is there
-     without naming a height, and without a safe-area term (the tab bar
-     already carries the inset in its own). */
+.undo-toast-stack {
+  /* Share one stack so simultaneous recovery actions cannot cover each other.
+     The workspace ends above the desktop bar and the phone's safe-area tabs. */
   position: absolute;
   left: 12px;
+  right: 12px;
   bottom: 12px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  z-index: 8900;
+  pointer-events: none;
+}
+
+.undo-toast {
+  display: flex;
   align-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
   gap: 0.6rem;
   padding: 0.5rem 0.6rem 0.5rem 0.9rem;
   border-radius: var(--radius-md);
@@ -3945,7 +3955,6 @@ summary:active {
   box-shadow: var(--shadow-lg);
   font-size: 0.8rem;
   color: var(--text-primary);
-  z-index: 8900;
   /* A transient status message must not become a dead zone. This is pinned to
      the bottom of `.main-container`, so while it is up it sits over whatever
      content is scrolled under it -- and it swallowed a click meant for the
@@ -3953,8 +3962,14 @@ summary:active {
   pointer-events: none;
 }
 
+.undo-toast > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .undo-toast-btn,
 .undo-toast-dismiss {
+  flex-shrink: 0;
   pointer-events: auto;
 }
 
