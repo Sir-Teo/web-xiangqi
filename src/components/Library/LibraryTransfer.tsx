@@ -30,18 +30,20 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
   }, [restoring]);
   useEffect(() => () => { generation.current += 1; }, []);
 
-  function download(recovery: boolean) {
+  function download(kind: 'backup' | 'recovery' | 'archived') {
     setError('');
     setMessage('');
-    const text = recovery ? loadLibraryState().raw : exportLibraryBackup();
+    const text = kind === 'archived' ? latestLibraryRecovery() : kind === 'recovery' ? loadLibraryState().raw : exportLibraryBackup();
     if (text === null) {
       setError('The library could not be read. No download was created.');
       onChange();
       return;
     }
-    const filename = `xiangqi-library-${recovery ? 'recovery-' : ''}${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = kind === 'archived' ? 'xiangqi-library-original-recovery.json'
+      : `xiangqi-library-${kind === 'recovery' ? 'recovery-' : ''}${new Date().toISOString().slice(0, 10)}.json`;
     if (downloadTextFile(filename, text, 'application/json;charset=utf-8')) {
-      setMessage(recovery ? 'Recovery download started. Keep this original file before repairing the data.' : 'Backup download started. Keep the file somewhere safe.');
+      setMessage(kind === 'archived' ? 'Archived original download started. Keep this file before making further repairs.'
+        : kind === 'recovery' ? 'Recovery download started. Keep this original file before repairing the data.' : 'Backup download started. Keep the file somewhere safe.');
     } else setError('The download could not start. Please try again.');
   }
 
@@ -108,7 +110,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
       {state.mutationBlocked && (
         <div className="lib-action-error" role="alert">
           Your saved library could not be fully read. Its original data has been preserved. Saving, renaming, deleting, and restoring are paused.
-          {state.raw !== null && <button type="button" onClick={() => download(true)}>Download recovery file</button>}
+          {state.raw !== null && <button type="button" onClick={() => download('recovery')}>Download recovery file</button>}
           {salvage && <details>
             <summary>Review readable studies for recovery</summary>
             {salvage.error ? <p>{salvage.error}</p> : <>
@@ -122,11 +124,9 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
       )}
       <details>
         <summary>Backup and restore</summary>
-        {originalRecovery && <button type="button" onClick={() => {
-          if (!downloadTextFile('xiangqi-library-original-recovery.json', originalRecovery, 'application/json;charset=utf-8')) setError('The download could not start. Please try again.');
-        }}>Download archived original</button>}
+        {originalRecovery && <button type="button" onClick={() => download('archived')}>Download archived original</button>}
         <p>Keep a copy of all saved games, variations, notes, and reviews, or move them to another browser.</p>
-        <button type="button" disabled={state.mutationBlocked} onClick={() => download(false)}>Download library backup</button>
+        <button type="button" disabled={state.mutationBlocked} onClick={() => download('backup')}>Download library backup</button>
         <label className="lib-backup-file">
           Restore library backup
           <input ref={restoreInput} type="file" accept=".json,application/json" disabled={state.mutationBlocked} onChange={event => {
