@@ -41,6 +41,8 @@ export interface LibraryViewState {
   visibleLimit: number;
 }
 
+export interface LibrarySearchFocusRequest { source: HTMLElement | null }
+
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
   recent: 'Recently modified',
   oldest: 'Oldest first',
@@ -54,6 +56,8 @@ const SAVED_SORT_LABELS: Record<SavedSort, string> = {
 interface LibraryPanelProps {
   initialViewState?: LibraryViewState;
   onViewStateChange?: (filters: LibraryViewState) => void;
+  searchFocusRequest?: LibrarySearchFocusRequest;
+  onSearchFocusHandled?: (request: LibrarySearchFocusRequest) => void;
   savedGames: SavedGame[];
   libraryState: LibraryState;
   onLibraryChange: () => void;
@@ -218,6 +222,8 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
 export function LibraryPanel({
   initialViewState,
   onViewStateChange,
+  searchFocusRequest,
+  onSearchFocusHandled,
   savedGames,
   libraryState,
   onLibraryChange,
@@ -253,6 +259,19 @@ export function LibraryPanel({
   const [rovingSavedIndex, setRovingSavedIndex] = useState<number | null>(null);
   const savedListRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!searchFocusRequest) return;
+    const timer = window.setTimeout(() => {
+      const active = document.activeElement;
+      const input = searchRef.current;
+      if (!document.querySelector('[role="dialog"][aria-modal="true"]')
+          && (active === document.body || active === searchFocusRequest.source || active === input)) {
+        input?.focus(); input?.select();
+      }
+      onSearchFocusHandled?.(searchFocusRequest);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchFocusRequest, onSearchFocusHandled]);
   const pendingFocusRef = useRef<{ id: string; index: number; selector: string } | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);

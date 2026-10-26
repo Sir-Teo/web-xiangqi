@@ -25,7 +25,8 @@ const games = [
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         const original = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
         const fen = await page.locator('.bottombar-fen').getAttribute('title');
-        await command(page, 'Library');
+        await page.locator('.board-stage .hitbox[tabindex="0"]').first().focus();
+        await command(page, 'Search library');
         const search = page.getByRole('searchbox', { name: 'Search library', exact: true });
         const review = page.getByRole('combobox', { name: 'Filter by review status', exact: true });
         const result = page.getByRole('combobox', { name: 'Filter by result', exact: true });
@@ -34,10 +35,15 @@ const games = [
         const values = async () => ({ search: await search.inputValue(), review: await review.inputValue(), result: await result.inputValue(), sort: await sort.inputValue() });
         const defaults = { search: '', review: 'all', result: 'all', sort: 'recent' };
         const selected = { search: 'Cannon 龙', review: 'unreviewed', result: 'red', sort: 'oldest' };
+        await page.waitForFunction(() => document.activeElement === document.querySelector('.lib-search'));
         await search.fill(selected.search); await review.selectOption(selected.review);
         await result.selectOption(selected.result); await sort.selectOption(selected.sort);
         await page.getByTestId('library-search-status').filter({ hasText: /^2 saved games\./ }).waitFor();
         assert.deepEqual(await visibleIds(), ['alpha', 'beta']);
+        await command(page, 'Search library');
+        await page.waitForFunction(() => document.activeElement === document.querySelector('.lib-search'));
+        assert.deepEqual(await values(), selected, 'Search command preserves the current query and filters');
+        assert.deepEqual(await search.evaluate(node => [node.selectionStart, node.selectionEnd]), [0, selected.search.length], 'Search command selects the current query for replacement');
 
         await command(page, 'Evaluation graph');
         assert.equal(await search.count(), 0, 'The lazy library should unmount while the graph is open');
@@ -78,8 +84,52 @@ const games = [
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen, 'Library navigation preserves the board');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: query, review/result filters and sort survive command/tab navigation; reset focus and fresh-page defaults passed`);
+        console.log(`${browserType.name()} ${width}px: direct search command, retained query/filters, Escape/IME, reset focus and fresh-page defaults passed`);
       } finally { await page.close(); }
+    }
+    for (const [width, nextAction] of [[1440, 'board'], [390, 'settings'], [1440, 'tabs'], [390, 'tabs']]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, hasTouch: width < 900, reducedMotion: 'reduce' });
+      let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      let requested;
+      const moduleRequested = new Promise(resolve => { requested = resolve; });
+      try {
+        await page.route(url => /\/(?:assets\/LibraryPanel-[^/]+\.js|src\/components\/Library\/LibraryPanel\.tsx)(?:\?|$)/.test(url.href), async route => {
+          requested(); await gate; await route.continue();
+        });
+        await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+        const origin = page.locator('.board-stage .hitbox[data-file="0"][data-rank="0"]');
+        const libraryTab = page.getByTestId(width < 900 ? 'mobile-analysis-tab-library' : 'left-panel-tab-library');
+        if (nextAction === 'tabs') {
+          await page.getByTestId(width < 900 ? 'mobile-open-library-btn' : 'left-panel-tab-library').click();
+          await libraryTab.focus();
+        }
+        else await origin.focus();
+        const fen = await page.locator('.bottombar-fen').getAttribute('title');
+        await command(page, 'Search library'); await moduleRequested;
+        let target;
+        if (nextAction === 'settings') {
+          await command(page, 'Settings'); target = page.getByRole('dialog', { name: 'Settings', exact: true }); await target.waitFor();
+        } else if (nextAction === 'board') {
+          target = page.locator('.board-stage .hitbox[data-file="1"][data-rank="0"]'); await target.focus();
+        } else {
+          target = libraryTab;
+          await page.getByTestId(width < 900 ? 'mobile-analysis-tab-moves' : 'left-panel-tab-graph').click();
+        }
+        release();
+        if (nextAction === 'tabs') await libraryTab.click();
+        await page.waitForFunction(() => Boolean(document.querySelector('.lib-search')));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await target.evaluate(node => node === document.activeElement || node.contains(document.activeElement)), true,
+          'A delayed library must not take focus from a newer control or dialog');
+        if (nextAction === 'settings') {
+          await page.keyboard.press('Escape'); await target.waitFor({ state: 'hidden' });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          assert.notEqual(await page.evaluate(() => document.activeElement?.className), 'lib-search', 'Consumed focus requests do not reactivate when a newer dialog closes');
+        }
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen);
+        console.log(`${browserType.name()} ${width}px: delayed search command respects newer ${nextAction} focus`);
+      } finally { release(); await page.close(); }
     }
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

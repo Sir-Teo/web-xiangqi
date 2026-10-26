@@ -17,7 +17,7 @@ import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
-import type { LibraryViewState } from './components/Library/LibraryPanel';
+import type { LibrarySearchFocusRequest, LibraryViewState } from './components/Library/LibraryPanel';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
 import { DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
@@ -601,6 +601,10 @@ function App() {
   // avoids rerendering the board on each keystroke; a fresh page starts clear.
   const libraryViewState = useRef<LibraryViewState | undefined>(undefined);
   const rememberLibraryViewState = useCallback((filters: LibraryViewState) => { libraryViewState.current = filters; }, []);
+  const [librarySearchRequest, setLibrarySearchRequest] = useState<LibrarySearchFocusRequest>();
+  const handleLibrarySearchFocused = useCallback((request: LibrarySearchFocusRequest) => {
+    setLibrarySearchRequest(current => current === request ? undefined : current);
+  }, []);
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
   // WXF is the default because it is the notation both a Chinese record and an
@@ -2365,6 +2369,12 @@ function App() {
     setMobileAnalysisTab('library');
     setMobileView('analysis');
   }, []);
+
+  useEffect(() => {
+    if (leftPanelTab !== 'library' || (isMobile && (mobileView !== 'analysis' || mobileAnalysisTab !== 'library'))) {
+      setLibrarySearchRequest(undefined);
+    }
+  }, [leftPanelTab, isMobile, mobileView, mobileAnalysisTab]);
 
   const openAnalysisPanel = useCallback((tab: 'tree' | 'review' | 'engine') => {
     setShowMobileBoardActionMenu(false);
@@ -4651,6 +4661,10 @@ function App() {
       hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
     { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
+    { id: 'search-library', label: 'Search library', hint: 'Find saved games, players, moves or notes', keywords: ['find', 'saved', 'filter'], run: () => {
+      openLibraryPanel();
+      setLibrarySearchRequest({ source: dialogLauncherRef.current });
+    } },
     {
       id: 'save-game',
       label: 'Save game',
@@ -6765,6 +6779,8 @@ function App() {
                   <LazyLibraryPanel
                     initialViewState={libraryViewState.current}
                     onViewStateChange={rememberLibraryViewState}
+                    searchFocusRequest={librarySearchRequest}
+                    onSearchFocusHandled={handleLibrarySearchFocused}
                     savedGames={savedGames}
                     onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
                     onDeleteSavedGame={handleDeleteSavedGame}

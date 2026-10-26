@@ -30,7 +30,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - Engine hash and thread count are settable per device, held inside what the shipped core can take
 - **Show Threat**: hand the opponent the move and let the engine answer what they are threatening — the question the best move does not answer, refused only when the side to move is in check, and kept visibly apart from the position's own evaluation
 - Pieces can be dragged as well as clicked, and a move slides rather than teleporting, so what changed on the board is visible without re-reading it
-- Command palette on `Ctrl`/`Cmd`+`K`: a searchable list of the actions that matter, with recently used first and unavailable commands shown with the reason rather than hidden
+- Command palette on `Ctrl`/`Cmd`+`K`: a searchable list of the actions that matter, with recently used first and unavailable commands shown with the reason rather than hidden. **Search library** opens the library and selects its query for replacement.
 - In library, PGN collection, and study-note searches, `Esc` clears the query while keeping filters, game selection, and keyboard focus.
 - **Infinite analysis**: the `∞` toggle beside Go Deep sends `go infinite`, so the depth climbs on this position until Stop or the next move; the engine hash defaults are sized so a deep search does not fill the table halfway through (256MB on a high-tier machine, 128MB mid)
 - A deep or infinite search keeps running when the tab goes to the background. Live analysis and the AI opponent still stop the moment it does -- they run on their own and nobody is looking -- but a search started by hand is usually started *so* you can do something else, and on a browser that means another tab
