@@ -27,6 +27,7 @@ import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
 import { evaluationSearchText, savedTreeSearchText } from '../../utils/savedStudySearch';
 
 const SAVED_PAGE_SIZE = 100;
+const SAVED_PGN_PATH_ERROR = "This study's saved moves do not match its variations. PGN export could omit notes and branches. Use Download library backup under Backup and restore to keep the complete study.";
 type LibraryPrimaryLine = ReturnType<typeof savedGameLine> & { savedPath: 'complete' | 'prefix' | 'variation' };
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
 
@@ -211,7 +212,9 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
 
 function buildSavedGamePgn(game: SavedGame) {
   if (game.moveTree?.length) {
-    const pgn = exportPgnFromMoveTree(game.moveTree, {
+    // A missing saved path must not silently replace the study with a flat
+    // record that discards its variations and annotations.
+    return exportPgnFromMoveTree(game.moveTree, {
       mainLineMoves: game.moves,
       gameMode: game.gameMode,
       opening: game.opening,
@@ -223,7 +226,6 @@ function buildSavedGamePgn(game: SavedGame) {
       rootResult: game.rootResult,
       mainLinePinned: game.mainLinePinned,
     });
-    if (pgn) return pgn;
   }
 
   return exportPgnFromUci(game.moves, {
@@ -508,6 +510,11 @@ export function LibraryPanel({
 
   const copySavedGamePgn = async (game: SavedGame) => {
     const pgn = buildSavedGamePgn(game);
+    if (pgn === null) {
+      setFailedActionId(`copy-${game.id}`);
+      setActionError(SAVED_PGN_PATH_ERROR);
+      return;
+    }
     const ok = await copyToClipboard(pgn);
     if (!ok) {
       setFailedActionId(`copy-${game.id}`);
@@ -528,9 +535,15 @@ export function LibraryPanel({
   };
 
   const downloadSavedGamePgn = (game: SavedGame) => {
+    const pgn = buildSavedGamePgn(game);
+    if (pgn === null) {
+      setFailedActionId(`download-${game.id}`);
+      setActionError(SAVED_PGN_PATH_ERROR);
+      return;
+    }
     const ok = downloadTextFile(
       makeSavedGamePgnFilename(game),
-      buildSavedGamePgn(game),
+      pgn,
       'application/x-chess-pgn;charset=utf-8'
     );
     if (!ok) {

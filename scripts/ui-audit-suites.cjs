@@ -9,6 +9,7 @@ const scripts = [
   'test-visible-control-names-browser.cjs',
   'test-analysis-control-names-browser.cjs',
   'test-review-control-names-browser.cjs',
+  'test-library-export-integrity-browser.cjs',
   'test-board-coordinates-browser.cjs',
   'test-board-press-browser.cjs',
   'test-cloud-visibility-browser.cjs',
