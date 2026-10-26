@@ -8486,7 +8486,7 @@ function App() {
         />
       )}
 
-      {showRuleLessons && <RuleLessons onClose={() => setShowRuleLessons(false)} />}
+      {showRuleLessons && <RuleLessons pieceStyle={pieceStyle} onClose={() => setShowRuleLessons(false)} />}
 
       {practiceStudy && <StudyPracticeDialog game={practiceStudy} pieceStyle={pieceStyle} notationStyle={notationStyle} onClose={() => setPracticeStudy(null)} />}
 

@@ -5,8 +5,9 @@ import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProg
 import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
 import './RuleLessons.css';
 import { IconX } from './icons';
+import type { PieceStyle } from '../utils/pieceStyle';
 
-export function RuleLessons({ onClose }: { onClose: () => void }) {
+export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: () => void; pieceStyle?: PieceStyle }) {
     const [completed, setCompleted] = useState(readRuleLessonProgress);
     const [index, setIndex] = useState(() => Math.max(0, RULE_LESSONS.findIndex(lesson => !completed.includes(lesson.id))));
     const lesson = RULE_LESSONS[index];
@@ -16,7 +17,7 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
     const [hint, setHint] = useState(false);
     const [message, setMessage] = useState('');
     const [saveFailed, setSaveFailed] = useState(false);
-    const [letters, setLetters] = useState(false);
+    const [letters, setLetters] = useState(pieceStyle === 'letters');
     const dialog = useRef<HTMLDivElement>(null);
     const feedback = useRef<HTMLParagraphElement>(null);
     const validTargets = useMemo(() => selected && !solved ? legalMovesFrom(board, selected.file, selected.rank, 'w') : [], [board, selected, solved]);

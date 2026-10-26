@@ -105,8 +105,25 @@ async function openCommand(page) {
         assert.equal(await dialog.getByTestId('lesson-progress').textContent(), '1 of 9 completed');
         await dialog.getByRole('button', { name: 'Next lesson' }).click(); await square('g5').click();
         assert.equal(await dialog.getByTestId('lesson-progress').textContent(), '2 of 9 completed');
+        await page.keyboard.press('Escape');
+        await page.keyboard.press('ControlOrMeta+k');
+        await page.getByRole('combobox', { name: 'Search commands' }).fill('Draw the pieces as letters');
+        await page.keyboard.press('Enter');
+        const mainBoard = page.locator('.xiangqi-board').first();
+        assert.equal(await mainBoard.locator('.piece-letter').count(), 32);
+        await openCommand(page); await dialog.waitFor();
+        const letters = dialog.getByRole('button', { name: 'Letter pieces' });
+        assert.equal(await letters.getAttribute('aria-pressed'), 'true', 'Lessons must use the chosen piece style');
+        assert.equal(await dialog.locator('.piece:not(.piece-letter)').count(), 0);
+        await letters.click();
+        assert.equal(await dialog.locator('.piece-letter').count(), 0);
+        await page.keyboard.press('Escape');
+        assert.equal(await mainBoard.locator('.piece-letter').count(), 32, 'Lesson toggles must preserve the board preference');
+        await openCommand(page); await dialog.waitFor();
+        assert.equal(await letters.getAttribute('aria-pressed'), 'true', 'Reopened lessons must follow the board preference');
+        await page.keyboard.press('Escape');
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()}: nine solutions, hints, illegal moves, keyboard/focus, persistence, storage failure, game isolation and responsive layout passed at ${width}x${height}`);
+        console.log(`${browserType.name()}: nine solutions, hints, illegal moves, keyboard/focus, persistence, storage failure, piece preference, game isolation and responsive layout passed at ${width}x${height}`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

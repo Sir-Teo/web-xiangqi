@@ -55,8 +55,8 @@ export function DeferredBoardEditor(props: BoardEditorProps) {
   return <DeferredDialog title="Set up a position" onClose={props.onCancel}><Editor {...props} {...position} /></DeferredDialog>;
 }
 
-export function DeferredRuleLessons({ onClose }: { onClose: () => void }) {
-  return <DeferredDialog title="Learn the rules" onClose={onClose}><Lessons onClose={onClose} /></DeferredDialog>;
+export function DeferredRuleLessons(props: ComponentProps<typeof Lessons>) {
+  return <DeferredDialog title="Learn the rules" onClose={props.onClose}><Lessons {...props} /></DeferredDialog>;
 }
 
 export function DeferredCommandPalette(props: ComponentProps<typeof CommandPaletteModal>) {
