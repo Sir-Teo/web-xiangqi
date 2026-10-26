@@ -11,6 +11,7 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
       try {
         await page.addInitScript(() => {
           Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => {
+            if (window.__copyDenied) throw new Error('Clipboard denied');
             if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
           } } });
           document.execCommand = () => false;
@@ -28,6 +29,12 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         const field = page.getByTestId('editor-fen');
         const done = page.getByTestId('editor-done');
         const copy = page.getByTestId('editor-fen-copy');
+        await page.evaluate(() => { window.__copyDenied = true; });
+        await copy.click(); await page.getByTestId('editor-fen-notice').waitFor();
+        assert.match(await page.getByTestId('editor-fen-notice').innerText(), /clipboard refused/i);
+        assert.equal(await field.getAttribute('aria-invalid'), null, 'A clipboard denial must not describe a valid FEN as invalid');
+        assert.equal(await field.getAttribute('aria-describedby'), 'board-editor-fen-notice');
+        await page.evaluate(() => { window.__copyDenied = false; });
         await copy.click(); await copy.filter({ hasText: 'Copied' }).waitFor();
         await page.evaluate(() => { window.__holdCopy = true; });
         await copy.click(); await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
@@ -48,6 +55,7 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         await done.click();
         await page.getByTestId('editor-fen-notice').waitFor();
         assert.match(await page.getByTestId('editor-fen-notice').innerText(), /halfmove clock/i);
+        assert.equal(await field.getAttribute('aria-invalid'), 'true', 'A malformed FEN must still be described as invalid');
         assert.equal(await page.getByTestId('board-editor').isVisible(), true);
         assert.equal(await field.inputValue(), invalidFen, 'Validation must retain the invalid draft');
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);

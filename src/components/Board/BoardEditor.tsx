@@ -74,7 +74,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
      * for the position either.
      */
     const [fenDraft, setFenDraft] = useState<string | null>(null);
-    const [fenNotice, setFenNotice] = useState<string | null>(null);
+    const [fenNotice, setFenNotice] = useState<{ message: string; invalid?: true } | null>(null);
     const [copied, setCopied] = useState(false);
     const copiedTimerRef = useRef<number | null>(null);
     const copyRequestRef = useRef(0);
@@ -115,7 +115,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         try {
             next = parseFenBoard(parts[0]);
         } catch {
-            setFenNotice('That is not a position this board can read.');
+            setFenNotice({ message: 'That is not a position this board can read.', invalid: true });
             return;
         }
         // The side is taken when the FEN names one and left alone when it does
@@ -134,7 +134,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         const draft = fenDraft?.trim().replace(/\s+/g, ' ');
         const candidate = draft === undefined ? fen : draft.includes(' ') ? draft : `${draft} ${side} - - 0 1`;
         const issue = describeFenProblem(candidate);
-        if (issue) { setFenNotice(issue); return; }
+        if (issue) { setFenNotice({ message: issue, invalid: true }); return; }
         onApply(candidate);
     };
 
@@ -145,7 +145,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         const ok = await copyToClipboard(fen);
         if (request !== copyRequestRef.current) return;
         setCopied(ok);
-        setFenNotice(ok ? null : 'The clipboard refused it. Select the text and copy it by hand.');
+        setFenNotice(ok ? null : { message: 'The clipboard refused it. Select the text and copy it by hand.' });
         if (!ok) return;
         copiedTimerRef.current = window.setTimeout(() => {
             copiedTimerRef.current = null;
@@ -372,7 +372,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                                notice below is a live region, which announces once and is gone,
                                while these two are what a reader gets when they come back to the
                                field to fix it. */
-                            aria-invalid={fenNotice ? true : undefined}
+                            aria-invalid={fenNotice?.invalid}
                             aria-describedby={fenNotice ? 'board-editor-fen-notice' : undefined}
                             onChange={(event) => { clearCopyFeedback(); setFenDraft(event.target.value); setFenNotice(null); }}
                             onKeyDown={(event) => { if (!isComposingKey(event.nativeEvent) && event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
@@ -382,7 +382,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             {copied ? 'Copied' : 'Copy'}
                         </button>
                     </div>
-                    {fenNotice ? <p id="board-editor-fen-notice" className="board-editor-fen-notice" role="status" data-testid="editor-fen-notice">{fenNotice}</p> : null}
+                    {fenNotice ? <p id="board-editor-fen-notice" className="board-editor-fen-notice" role="status" data-testid="editor-fen-notice">{fenNotice.message}</p> : null}
                     <div className="board-editor-row">
                         <button type="button" className="gc-btn" onClick={onCancel}>Cancel</button>
                         <button
