@@ -117,6 +117,7 @@ const scripts = [
   'test-study-analysis-browser.cjs',
   'test-library-analysis-search-browser.cjs',
   'test-library-move-search-browser.cjs',
+  'test-library-match-disclosures-browser.cjs',
   'test-study-load-context-browser.cjs',
   'test-dense-pgn-backup-browser.cjs',
   'test-study-breadth-browser.cjs',

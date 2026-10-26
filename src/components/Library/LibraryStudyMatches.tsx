@@ -17,13 +17,14 @@ function MatchPath({ entry, tabIndex }: { entry: SavedStudySearchEntry; tabIndex
 function Matches({ game, terms, tabIndex, onOpen }: {
   game: SavedGame; terms: string[]; tabIndex: number; onOpen: (moves: string[]) => void;
 }) {
-  const entries = useMemo(() => savedStudySearchEntries(game.moveTree), [game]);
-  const matches = useMemo(() => entries.filter(entry => matchesSearchTerms(entry.text, terms)), [entries, terms]);
+  // Assign identity before filtering so an expanded sequence follows its move.
+  const entries = useMemo(() => savedStudySearchEntries(game.moveTree).map((entry, ordinal) => ({ entry, ordinal })), [game]);
+  const matches = useMemo(() => entries.filter(({ entry }) => matchesSearchTerms(entry.text, terms)), [entries, terms]);
   const [limit, setLimit] = useState(PAGE_SIZE);
   return <>
     <p>{matches.length ? `${matches.length} matching ${matches.length === 1 ? 'move' : 'moves'}. Open a position to read its notes and saved analysis.`
       : 'No single move matches every search word. This game matches through its details or several moves; try fewer words.'}</p>
-    {matches.slice(0, limit).map((entry, index) => <div className="lib-study-match" key={index}>
+    {matches.slice(0, limit).map(({ entry, ordinal }) => <div className="lib-study-match" key={ordinal}>
       <button type="button" className="chip-btn" tabIndex={tabIndex} data-library-action="open-match"
         onClick={() => onOpen(savedStudyMatchMoves(entry))}>
         Open {entry.node.uci} · ply {entry.ply}
