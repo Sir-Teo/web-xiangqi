@@ -3927,23 +3927,29 @@ summary:active {
   overflow-y: auto;
 }
 
-.undo-toast-stack {
-  /* Share one stack so simultaneous recovery actions cannot cover each other.
+.app-notice-stack {
+  /* Independent recovery and error messages share one scrollable stack.
      The workspace ends above the desktop bar and the phone's safe-area tabs. */
   position: absolute;
   left: 12px;
   right: 12px;
   bottom: 12px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  z-index: 8900;
+  /* Keep notifications below the command palette (60) and other dialogs. */
+  z-index: 50;
   pointer-events: none;
 }
 
 .undo-toast {
   display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
   align-items: center;
   box-sizing: border-box;
   max-width: 100%;
@@ -3963,6 +3969,7 @@ summary:active {
 }
 
 .undo-toast > span {
+  flex: 1 1 8rem;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -7695,12 +7702,9 @@ summary:active {
 
 /* A save failure needs readable instructions on phones as well as desktop. */
 .save-error-notice {
-  position: fixed;
-  z-index: 1200;
-  left: 50%;
-  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  width: min(560px, calc(100% - 32px));
+  width: min(560px, 100%);
+  flex-shrink: 0;
+  pointer-events: auto;
   box-sizing: border-box;
   padding: 14px;
   display: flex;
@@ -7712,17 +7716,10 @@ summary:active {
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   box-shadow: 0 8px 32px #0008;
-  font-size: 13px;
+  font-size: .8125rem;
   line-height: 1.5;
 }
 .save-error-notice > span { flex-basis: 100%; }
-
-@media (max-width: 900px) and (orientation: portrait) {
-  [data-mobile-view="board"] .save-error-notice {
-    /* Clear the 56px tab bar, 44px move strip, stage spacing and a gap. */
-    bottom: calc(56px + 44px + 1rem + 12px + env(safe-area-inset-bottom, 0px));
-  }
-}
 
 /* Touch targets in the analysis panels.
    ------------------------------------

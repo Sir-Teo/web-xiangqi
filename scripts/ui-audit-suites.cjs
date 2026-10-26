@@ -17,6 +17,7 @@ const scripts = [
   'test-library-concurrency-browser.cjs',
   'test-library-undo-recovery-browser.cjs',
   'test-undo-stack-browser.cjs',
+  'test-notice-stack-browser.cjs',
   'test-library-conflicts-browser.cjs',
   'test-library-salvage-browser.cjs',
   'test-practice-notation-browser.cjs',

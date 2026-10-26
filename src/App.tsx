@@ -8029,7 +8029,7 @@ function App() {
             zero; an iPhone's 34px inset takes that back. In here it is
             positioned against the workspace, which ends exactly where the
             chrome below it begins, on both. */}
-        <div className="undo-toast-stack">
+        <div className="app-notice-stack">
           {discardedAutoSave ? (
             <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
               <span>
@@ -8071,6 +8071,44 @@ function App() {
               <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
                 <IconX />
               </button>
+            </div>
+          ) : null}
+
+          {moveCapacityError && (
+            <div className="save-error-notice" role="alert" data-testid="study-capacity-error">
+              <span>{moveCapacityError}</span>
+              <button type="button" className="undo-toast-dismiss" onClick={dismissMoveCapacityError} aria-label="Dismiss study limit"><IconX /></button>
+            </div>
+          )}
+
+          {saveFailedToast && librarySaveError ? (
+            <div className="save-error-notice" role="alert" data-testid="save-game-error">
+              <span>{librarySaveError}</span>
+              <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
+              <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
+            </div>
+          ) : null}
+
+          {recoveryProblems.length > 0 && !autoSaveRecovery && (
+            <div className="save-error-notice" role="alert" data-testid="recovery-data-error">
+              <span>{recoveryProblems.length} unreadable recovery {recoveryProblems.length === 1 ? 'copy is' : 'copies are'} preserved. Download the original data for repair.</span>
+              <button type="button" className="undo-toast-btn" onClick={() => {
+                const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
+                setRecoveryDownloadFailed(!ok);
+              }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
+              <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
+            </div>
+          )}
+
+          {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
+            <div className="save-error-notice" role="alert" data-testid="auto-save-error">
+              <span>{autoSaveIssue === 'too-large'
+                ? 'This study is too large for automatic recovery. Your last successful snapshot is kept. Download a PGN for your latest changes.'
+                : 'Automatic recovery could not save your latest changes. Your last successful snapshot is kept. Download a PGN before leaving.'}</span>
+              <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
+                {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
+              </button>
+              <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
             </div>
           ) : null}
         </div>
@@ -8402,44 +8440,6 @@ function App() {
           onReview={dismissGameOverForReview}
         />
       )}
-
-      {moveCapacityError && (
-        <div className="save-error-notice" role="alert" data-testid="study-capacity-error">
-          <span>{moveCapacityError}</span>
-          <button type="button" className="undo-toast-dismiss" onClick={dismissMoveCapacityError} aria-label="Dismiss study limit"><IconX /></button>
-        </div>
-      )}
-
-      {saveFailedToast && librarySaveError ? (
-        <div className="save-error-notice" role="alert" data-testid="save-game-error">
-          <span>{librarySaveError}</span>
-          <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
-          <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
-        </div>
-      ) : null}
-
-      {recoveryProblems.length > 0 && !autoSaveRecovery && (
-        <div className="save-error-notice" role="alert" data-testid="recovery-data-error">
-          <span>{recoveryProblems.length} unreadable recovery {recoveryProblems.length === 1 ? 'copy is' : 'copies are'} preserved. Download the original data for repair.</span>
-          <button type="button" className="undo-toast-btn" onClick={() => {
-            const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
-            setRecoveryDownloadFailed(!ok);
-          }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
-          <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
-        </div>
-      )}
-
-      {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
-        <div className="save-error-notice" role="alert" data-testid="auto-save-error">
-          <span>{autoSaveIssue === 'too-large'
-            ? 'This study is too large for automatic recovery. Your last successful snapshot is kept. Download a PGN for your latest changes.'
-            : 'Automatic recovery could not save your latest changes. Your last successful snapshot is kept. Download a PGN before leaving.'}</span>
-          <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
-            {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
-          </button>
-          <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
-        </div>
-      ) : null}
 
       {showBoardEditor && (
         <BoardEditor
