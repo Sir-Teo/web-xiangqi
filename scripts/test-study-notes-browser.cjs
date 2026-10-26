@@ -119,6 +119,8 @@ async function assertFits(page) {
           await page.getByTestId('study-notes').getByRole('status').filter({ hasText: '1025 notes' }).waitFor();
           await page.getByRole('button', { name: 'Show 20 more notes', exact: true }).click();
           assert.equal(await results.count(), 40);
+          assert.equal(await results.nth(20).evaluate(element => element === document.activeElement), true,
+            'Loading more notes must focus the first newly revealed result');
           const list = page.getByTestId('study-notes').locator('ul');
           await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
           assert.ok(await list.evaluate(element => element.scrollTop > 0));

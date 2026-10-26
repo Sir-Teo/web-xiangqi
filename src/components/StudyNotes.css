@@ -12,5 +12,5 @@
 .study-note-result small { font-size: .75rem; }
 .study-note-result:hover, .study-note-result[aria-current] { border-color: var(--accent); background: var(--bg-card-hover); }
 .study-note-result:disabled { cursor: default; opacity: .6; }
-.study-notes summary:focus-visible, .study-note-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.study-notes summary:focus-visible, .study-notes li:focus-visible, .study-note-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .study-notes-more { margin-top: 8px; min-height: 44px; white-space: normal; }

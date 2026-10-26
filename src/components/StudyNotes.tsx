@@ -24,10 +24,25 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
     const [query, setQuery] = useState('');
     const [limit, setLimit] = useState(PAGE_SIZE);
     const listRef = useRef<HTMLUListElement>(null);
+    const nextPageFocusRef = useRef<number | null>(null);
     useEffect(() => { setQuery(''); setLimit(PAGE_SIZE); }, [gameIdentity]);
     useLayoutEffect(() => {
+        nextPageFocusRef.current = null;
         if (listRef.current) listRef.current.scrollTop = 0;
     }, [query, gameIdentity]);
+    useLayoutEffect(() => {
+        const index = nextPageFocusRef.current;
+        if (index === null) return;
+        nextPageFocusRef.current = null;
+        const item = listRef.current?.children[index];
+        const button = item?.querySelector<HTMLButtonElement>('button');
+        // Notes remain readable during play even when navigation is disabled.
+        const target = button?.disabled ? item : button;
+        if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+            target.scrollIntoView({ block: 'nearest' });
+        }
+    }, [limit]);
     const matches = useMemo(() => {
         const terms = toSearchTerms(query);
         return notes.filter(note => matchesSearchTerms(note.comment, terms));
@@ -45,7 +60,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
             <p role="status">{matches.length ? `${matches.length} ${matches.length === 1 ? 'note' : 'notes'}${matches.length > limit ? ` · Showing ${limit}` : ''}. Choose one to go to its position.` : 'No notes match. Try fewer words.'}</p>
             {disabled && <p>Pause play to visit a note.</p>}
             <ul ref={listRef}>
-                {matches.slice(0, limit).map(note => <li key={note.nodeId}>
+                {matches.slice(0, limit).map(note => <li key={note.nodeId} tabIndex={-1}>
                     <button type="button" className="study-note-result" disabled={disabled}
                         aria-current={note.nodeId === currentNodeId ? 'location' : undefined}
                         onClick={() => onNavigate(note.nodeId)}>
@@ -56,7 +71,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
                 </li>)}
             </ul>
             {matches.length > limit && <button type="button" className="chip-btn study-notes-more"
-                onClick={() => setLimit(value => value + PAGE_SIZE)}>Show {Math.min(PAGE_SIZE, matches.length - limit)} more notes</button>}
+                onClick={() => { nextPageFocusRef.current = limit; setLimit(value => value + PAGE_SIZE); }}>Show {Math.min(PAGE_SIZE, matches.length - limit)} more notes</button>}
         </div>
     </details>;
 });
