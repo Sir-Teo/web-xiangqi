@@ -247,6 +247,11 @@ type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
 
+function clearToastTimer(timer: { current: number | null }) {
+  if (timer.current !== null) window.clearTimeout(timer.current);
+  timer.current = null;
+}
+
 const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; description: string }> = [
   { mode: 'PvP', label: 'Local board', shortLabel: 'Local', description: 'Two players, one board, no engine moves.' },
   { mode: 'PvAI-Black', label: 'You play Red', shortLabel: 'Red vs AI', description: 'Red moves first while the engine replies as Black.' },
@@ -3201,6 +3206,8 @@ function App() {
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, hasGameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
+    clearToastTimer(copiedToastTimerRef);
+    setCopiedToast(false);
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = await copyToClipboard(pgn);
@@ -3220,6 +3227,8 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, showExportFailure]);
 
   const handleDownloadPgn = useCallback(() => {
+    clearToastTimer(downloadedPgnTimerRef);
+    setDownloadedPgnToast(false);
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = downloadTextFile(
@@ -3244,6 +3253,8 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, exportOpeningName, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
+    clearToastTimer(copiedShareToastTimerRef);
+    setCopiedShareToast(false);
     // Notes travel with the link for the same reason variations do: what is
     // being shared is a study. Move notes share the tree's 8000-character
     // budget; the bounded starting-position note has its own URL parameter.
@@ -3396,6 +3407,8 @@ function App() {
   }, [handleImportXqf, cancelDirectImport]);
 
   const handleCopyFen = useCallback(async () => {
+    clearToastTimer(copiedFenToastTimerRef);
+    setCopiedFenToast(false);
     const ok = await copyToClipboard(currentFen);
     if (!ok) {
       showExportFailure('copy-fen');
@@ -3496,6 +3509,8 @@ function App() {
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const handleCopyRecord = useCallback(async () => {
+    clearToastTimer(copiedRecordToastTimerRef);
+    setCopiedRecordToast(false);
     const recordText = formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle);
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
@@ -3515,6 +3530,8 @@ function App() {
   }, [clearExportFailure, currentMoveIndex, moveHistory, notationStyle, rootFen, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
+    clearToastTimer(copiedPvTimerRef);
+    setCopiedPvIndex(null);
     const rawLine = moves.filter(Boolean).join(' ').trim();
     if (!rawLine) return;
     const ok = await copyToClipboard(rawLine);

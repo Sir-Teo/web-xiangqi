@@ -133,6 +133,7 @@ const scripts = [
   'test-library-analysis-search-browser.cjs',
   'test-library-filter-memory-browser.cjs',
   'test-import-reader-recovery-browser.cjs',
+  'test-export-retry-feedback-browser.cjs',
   'test-library-move-search-browser.cjs',
   'test-library-match-disclosures-browser.cjs',
   'test-study-load-context-browser.cjs',

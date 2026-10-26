@@ -1,0 +1,71 @@
+const assert = require('node:assert/strict');
+const { browserType } = require('./qa-browser.cjs');
+const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
+(async () => {
+  const browser = await browserType.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', acceptDownloads: true });
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.clock.install();
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => {
+        if (window.__copyDenied) throw new DOMException('Denied', 'NotAllowedError');
+        if (window.__holdCopy) await new Promise(resolve => { window.__releaseCopy = resolve; });
+        window.__copiedText = text;
+      } } });
+      document.execCommand = () => false;
+      const create = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = blob => { if (window.__downloadDenied) throw new Error('Denied'); return create(blob); };
+    });
+    await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
+      window.Pikafish = function() {};
+      window.Pikafish.createWorkerEngine = async () => {
+        const listeners = []; const emit = line => listeners.forEach(listener => listener(line));
+        return { variant: 'single-simd', addMessageListener: listener => listeners.push(listener), terminate() {}, postMessage(command) {
+          if (command === 'uci') queueMicrotask(() => emit('uciok'));
+          if (command === 'isready') queueMicrotask(() => emit('readyok'));
+          if (command.startsWith('go ')) queueMicrotask(() => {
+            emit('info depth 18 multipv 1 score cp 25 pv h9g7 h0g2'); emit('bestmove h9g7');
+          });
+          if (command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
+        } };
+      };` }));
+    await page.goto(base + '?moves=h2e2');
+    await page.waitForFunction(() => / b - - 1 1$/.test(document.querySelector('.bottombar-fen')?.title || ''));
+    const original = await page.evaluate(() => ({ fen: document.querySelector('.bottombar-fen').title, library: localStorage.getItem('xiangqi:library:v1') }));
+    await page.keyboard.press('e'); await page.getByTestId('copy-engine-pv-0').waitFor();
+    // Freeze the two-second success badges so this tests the state transitions,
+    // independently of machine speed. DOM activation avoids paused-frame actionability.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    const activate = button => button.evaluate(node => node.click());
+    for (const id of ['copy-pgn-btn', 'copy-share-link-btn', 'copy-fen-btn', 'download-pgn-btn', 'copy-engine-pv-0', 'copy-record-btn']) {
+      if (id === 'copy-record-btn') { await page.keyboard.press('t'); await page.getByTestId(id).waitFor(); }
+      const button = page.getByTestId(id), download = id === 'download-pgn-btn';
+      const success = download ? /Exported/ : /Copied/;
+      await page.evaluate(() => { window.__copyDenied = false; window.__downloadDenied = false; });
+      const firstFile = download ? page.waitForEvent('download') : null;
+      await activate(button); if (firstFile) await firstFile;
+      await button.filter({ hasText: success }).waitFor();
+      if (id === 'copy-pgn-btn') {
+        await page.evaluate(() => { window.__holdCopy = true; }); await activate(button);
+        await button.filter({ hasText: success }).waitFor({ state: 'hidden' });
+        await page.evaluate(() => { window.__holdCopy = false; window.__releaseCopy(); });
+        await button.filter({ hasText: success }).waitFor();
+      }
+      await page.evaluate(download => { if (download) window.__downloadDenied = true; else window.__copyDenied = true; }, download);
+      await activate(button); await button.filter({ hasText: /failed/i }).waitFor();
+      await page.evaluate(() => { window.__copyDenied = false; window.__downloadDenied = false; });
+      const other = page.getByTestId(id === 'copy-fen-btn' ? 'copy-pgn-btn' : 'copy-fen-btn');
+      await activate(other); await other.filter({ hasText: /Copied/ }).waitFor();
+      assert.doesNotMatch(await button.textContent(), /Copied|Exported/i, `${id}: another successful action must not revive the failed attempt's old badge`);
+      assert.doesNotMatch(await button.getAttribute('aria-label'), /copied|exported/i, `${id}: the accessible name must not revive old success`);
+      const retryFile = download ? page.waitForEvent('download') : null;
+      await activate(button); if (retryFile) await retryFile;
+      await button.filter({ hasText: success }).waitFor();
+      assert.doesNotMatch(await button.getAttribute('class'), /warning/, 'Successful retries clear the failure style');
+      console.log(`${browserType.name()} ${id}: success, failed retry, another action and successful retry retain accurate feedback`);
+    }
+    assert.deepEqual(await page.evaluate(() => ({ fen: document.querySelector('.bottombar-fen').title, library: localStorage.getItem('xiangqi:library:v1') })), original);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
