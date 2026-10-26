@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import { matchesSearchTerms } from '../../utils/searchTerms';
 import { savedStudyMatchMoves, savedStudySearchEntries, type SavedStudySearchEntry } from '../../utils/savedStudySearch';
@@ -22,10 +22,21 @@ function Matches({ game, terms, tabIndex, onOpen }: {
   const matches = useMemo(() => entries.filter(({ entry }) => matchesSearchTerms(entry.text, terms)), [entries, terms]);
   const query = terms.join(' ');
   const [page, setPage] = useState({ query, limit: PAGE_SIZE });
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const nextPageFocusRef = useRef<{ query: string; index: number } | null>(null);
   // Cap the first render of a new query too, before the reset effect commits.
   const limit = page.query === query ? page.limit : PAGE_SIZE;
   useEffect(() => { setPage({ query, limit: PAGE_SIZE }); }, [query]);
-  return <>
+  useLayoutEffect(() => {
+    const pending = nextPageFocusRef.current;
+    nextPageFocusRef.current = null;
+    if (!pending || pending.query !== query) return;
+    const target = resultsRef.current?.querySelectorAll<HTMLButtonElement>('[data-library-action="open-match"]')[pending.index];
+    // Continue reading where the new page begins, even when More disappears.
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest' });
+  }, [limit, query]);
+  return <div ref={resultsRef}>
     <p>{matches.length ? `${matches.length} matching ${matches.length === 1 ? 'move' : 'moves'}. Open a position to read its notes and saved analysis.`
       : 'No single move matches every search word. This game matches through its details or several moves; try fewer words.'}</p>
     {matches.slice(0, limit).map(({ entry, ordinal }) => <div className="lib-study-match" key={ordinal}>
@@ -39,10 +50,13 @@ function Matches({ game, terms, tabIndex, onOpen }: {
       <MatchPath entry={entry} tabIndex={tabIndex} />
     </div>)}
     {matches.length > limit && <button type="button" className="chip-btn" tabIndex={tabIndex}
-      data-library-action="more-matches" onClick={() => setPage(previous => ({ query, limit: (previous.query === query ? previous.limit : PAGE_SIZE) + PAGE_SIZE }))}>
+      data-library-action="more-matches" onClick={() => {
+        nextPageFocusRef.current = { query, index: limit };
+        setPage(previous => ({ query, limit: (previous.query === query ? previous.limit : PAGE_SIZE) + PAGE_SIZE }));
+      }}>
       Show {Math.min(PAGE_SIZE, matches.length - limit)} more matching moves
     </button>}
-  </>;
+  </div>;
 }
 
 export function LibraryStudyMatches({ game, terms, formatKey, tabIndex, onOpen }: {
