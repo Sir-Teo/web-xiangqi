@@ -1,5 +1,5 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   exportLibraryBackup, loadLibraryState, MAX_LIBRARY_JSON_LENGTH,
   previewLibrarySalvage, salvageLibrary, latestLibraryRecovery,
@@ -15,8 +15,19 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const generation = useRef(0);
+  const restoreInput = useRef<HTMLInputElement>(null);
+  const restorePreview = useRef<HTMLDivElement>(null);
   const restoringRef = useRef(false);
   const [restoring, setRestoring] = useState(false);
+  const initiatingControl = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (restoring) return;
+    const target = initiatingControl.current;
+    initiatingControl.current = null;
+    // Chromium blurs a focused button as soon as it becomes disabled. On a
+    // failed write it is enabled again here; keep it ready for keyboard retry.
+    if (target?.isConnected && document.activeElement === document.body) target.focus();
+  }, [restoring]);
   useEffect(() => () => { generation.current += 1; }, []);
 
   function download(recovery: boolean) {
@@ -56,17 +67,27 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     }
   }
 
+  function closePreview(restoreLostFocus = false) {
+    if (restorePreview.current?.contains(document.activeElement) || (restoreLostFocus && document.activeElement === document.body)) restoreInput.current?.focus();
+    setPending(null);
+  }
+
   async function restore() {
     if (!pending || restoringRef.current) return;
-    restoringRef.current = true; setRestoring(true);
+    const focused = document.activeElement;
+    initiatingControl.current = focused instanceof HTMLElement && restorePreview.current?.contains(focused) ? focused : null;
+    const restoreLostFocus = Boolean(initiatingControl.current);
+    restoringRef.current = true; setRestoring(true); setError('');
     const request = generation.current;
     const result: LibraryRestorePreview = await withLibraryMutation(() => restoreLibraryBackup(pending.text, pending.choices), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
     restoringRef.current = false; setRestoring(false);
     onChange();
     if (request !== generation.current) return;
-    setPending(null);
     if (result.error) setError(result.error);
-    else setMessage(`Restored ${result.added} games. Skipped ${result.duplicates} identical games.${result.conflicts?.length ? ` Replaced ${result.replaced ?? 0}; kept ${result.kept ?? 0} current studies.` : ''}`);
+    else {
+      closePreview(restoreLostFocus);
+      setMessage(`Restored ${result.added} ${result.added === 1 ? 'game' : 'games'}. Skipped ${result.duplicates} identical ${result.duplicates === 1 ? 'game' : 'games'}.${result.conflicts?.length ? ` Replaced ${result.replaced ?? 0}; kept ${result.kept ?? 0} current studies.` : ''}`);
+    }
   }
 
   async function repair() {
@@ -104,15 +125,15 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
         <button type="button" disabled={state.mutationBlocked} onClick={() => download(false)}>Download library backup</button>
         <label className="lib-backup-file">
           Restore library backup
-          <input type="file" accept=".json,application/json" disabled={state.mutationBlocked} onChange={event => {
+          <input ref={restoreInput} type="file" accept=".json,application/json" disabled={state.mutationBlocked} onChange={event => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = '';
             void selectFile(file);
           }} />
         </label>
         {pending && (
-          <div className="lib-restore-preview">
-            <p role="status">Ready to add {pending.preview.added} games and skip {pending.preview.duplicates} identical games. Replacements: {pending.preview.replaced ?? 0}. Current versions kept: {pending.preview.kept ?? 0}.</p>
+          <div className="lib-restore-preview" ref={restorePreview}>
+            <p role="status">Ready to add {pending.preview.added} {pending.preview.added === 1 ? 'game' : 'games'} and skip {pending.preview.duplicates} identical {pending.preview.duplicates === 1 ? 'game' : 'games'}. Replacements: {pending.preview.replaced ?? 0}. Current versions kept: {pending.preview.kept ?? 0}.</p>
             {pending.preview.conflicts?.map(conflict => <fieldset key={conflict.id} className="lib-restore-conflict">
               <legend>{conflict.current.label || conflict.incoming.label || "Conflicting study"}</legend>
               <p>Current: {conflict.current.moves.length} plies, {new Date(conflict.current.modifiedAt ?? conflict.current.savedAt).toLocaleString()}. Backup: {conflict.incoming.moves.length} plies, {new Date(conflict.incoming.modifiedAt ?? conflict.incoming.savedAt).toLocaleString()}.</p>
@@ -132,8 +153,8 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
             </fieldset>)}
             {pending.preview.error && <p role="alert">{pending.preview.error}</p>}
             <div className="lib-transfer-actions">
-              <button type="button" disabled={restoring || state.mutationBlocked || (pending.preview.added === 0 && !pending.preview.conflicts?.length) || Boolean(pending.preview.error)} onClick={restore}>Restore {pending.preview.added} games</button>
-              <button type="button" onClick={() => { generation.current += 1; setPending(null); }}>Cancel</button>
+              <button type="button" disabled={restoring || state.mutationBlocked || (pending.preview.added === 0 && !pending.preview.conflicts?.length) || Boolean(pending.preview.error)} onClick={restore}>Restore {pending.preview.added} {pending.preview.added === 1 ? 'game' : 'games'}</button>
+              <button type="button" onClick={() => { generation.current += 1; closePreview(); setError(''); }}>Cancel</button>
             </div>
           </div>
         )}

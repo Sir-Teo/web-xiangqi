@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 const key = 'xiangqi:library:v1';
 /**
@@ -34,7 +34,7 @@ const review = {
 };
 const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', result: 'ongoing', moves: ['h2e2'], label: 'Cannon study', moveTree: [{ uci: 'h2e2', comment: 'Central cannon', children: [{ uci: 'h9g7' }] }], review };
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await browserType.launch();
   try {
     for (const width of [1440, 390]) {
       const page = await browser.newPage({ viewport: { width, height: 844 } });
@@ -47,10 +47,27 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       const payload = JSON.stringify({ format: 'web-xiangqi-library', version: 1, games: [game] });
       const upload = text => input.setInputFiles({ name: 'library.json', mimeType: 'application/json', buffer: Buffer.from(text) });
       await upload(payload);
-      await page.getByRole('button', { name: 'Restore 1 games', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Restore 1 game', exact: true }).waitFor();
       assert.equal(await page.evaluate(k => localStorage.getItem(k), key), null);
-      await page.getByRole('button', { name: 'Restore 1 games', exact: true }).click();
-      await page.getByText('Restored 1 games. Skipped 0 identical games.', { exact: true }).waitFor();
+      await page.evaluate(() => {
+        const original = Storage.prototype.setItem;
+        window.__backupRefuse = true;
+        Storage.prototype.setItem = function(key, value) {
+          if (window.__backupRefuse && key === 'xiangqi:library:v1') throw new Error('Quota');
+          return original.call(this, key, value);
+        };
+      });
+      await page.getByRole('button', { name: 'Restore 1 game', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'Browser storage refused the restore' }).waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Restore 1 game', exact: true }).isEnabled(), true,
+        'A failed restore must keep its preview for retry');
+      assert.equal(await page.getByRole('button', { name: 'Restore 1 game', exact: true }).evaluate(element => element === document.activeElement), true,
+        'A failed restore keeps keyboard focus on Retry');
+      assert.equal(await page.evaluate(k => localStorage.getItem(k), key), null);
+      await page.evaluate(() => { window.__backupRefuse = false; });
+      await page.getByRole('button', { name: 'Restore 1 game', exact: true }).click();
+      await page.getByText('Restored 1 game. Skipped 0 identical games.', { exact: true }).waitFor();
+      assert.equal(await input.evaluate(element => element === document.activeElement), true, 'Restoring returns focus to the chooser');
       const saved = await page.evaluate(k => localStorage.getItem(k), key);
       assert.deepEqual(JSON.parse(saved)[0].moveTree, game.moveTree);
       assert.deepEqual(JSON.parse(saved)[0].review, game.review, 'a restored backup should still carry its review');
@@ -62,8 +79,16 @@ const game = { id: 'backup-study', savedAt: 1700000000000, gameMode: 'PvP', resu
       await page.getByRole('button', { name: 'Restore 0 games', exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: 'Restore 0 games', exact: true }).isDisabled(), true);
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      assert.equal(await input.evaluate(element => element === document.activeElement), true, 'Canceling returns focus to the chooser');
       await upload(JSON.stringify({ ...downloaded, games: [{ ...game, label: 'Conflict' }] }));
       await page.getByRole('combobox', { name: 'Resolve Cannon study' }).waitFor();
+      const choice = page.getByRole('combobox', { name: 'Resolve Cannon study' });
+      await choice.selectOption('copy');
+      await page.evaluate(() => { window.__backupRefuse = true; });
+      await page.getByRole('button', { name: 'Restore 1 game', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'Browser storage refused the restore' }).waitFor();
+      assert.equal(await choice.inputValue(), 'copy', 'A failed write keeps conflict choices');
+      await page.evaluate(() => { window.__backupRefuse = false; });
       assert.equal(await page.evaluate(k => localStorage.getItem(k), key), saved);
       await page.evaluate(k => { localStorage.setItem(k, '{damaged'); window.dispatchEvent(new StorageEvent('storage', { key: k })); }, key);
       await page.getByRole('button', { name: 'Download recovery file', exact: true }).waitFor();

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
 async function paletteKeyboard(browser, viewport) {
@@ -54,7 +54,7 @@ async function compositionKeyboard(browser, viewport) {
     const input = page.getByRole('combobox', { name: 'Search commands' });
     // A disabled row must still explain itself to touch users, without hover.
     const saveRow = page.locator('[data-command-id="save-game"]');
-    await saveRow.dispatchEvent('pointerdown', { pointerType: 'touch' });
+    await saveRow.click({ force: true });
     const help = page.getByTestId('command-palette-help');
     assert.equal(await help.innerText(), 'Play a move or set up a position first');
     await input.fill('no matching command zzz');
@@ -151,8 +151,8 @@ async function modalShortcutGuard(browser, viewport) {
   const page = await browser.newPage({ viewport });
   page.setDefaultTimeout(10000);
   try {
-    const assertPaletteBlocked = async () => {
-      const dialog = page.getByRole('dialog');
+    const assertPaletteBlocked = async (target = page) => {
+      const dialog = target.getByRole('dialog');
       await dialog.waitFor();
       // Settled, not merely present. A lazily loaded dialog -- Set up a
       // position is one -- mounts `dialog-load` first and swaps the real one
@@ -162,16 +162,16 @@ async function modalShortcutGuard(browser, viewport) {
       // The guard being tested still held every time, as the two assertions
       // below it record -- no second modal, no palette -- so what fails here
       // is the wait, not the app.
-      await page.waitForFunction(() => {
+      await target.waitForFunction(() => {
         const open = document.querySelector('[role="dialog"]');
         if (!open || !open.contains(document.activeElement)) return false;
         if (window.__settledDialog !== open) { window.__settledDialog = open; window.__settledSince = performance.now(); return false; }
         return performance.now() - window.__settledSince > 100;
       });
       for (const shortcut of ['Control+k', 'Meta+k']) {
-        await page.keyboard.press(shortcut);
+        await target.keyboard.press(shortcut);
         assert.equal(await dialog.count(), 1, `${shortcut} opened a second modal`);
-        assert.equal(await page.getByRole('combobox', { name: 'Search commands' }).count(), 0);
+        assert.equal(await target.getByRole('combobox', { name: 'Search commands' }).count(), 0);
         assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true);
       }
     };
@@ -193,18 +193,22 @@ async function modalShortcutGuard(browser, viewport) {
     await page.getByRole('heading', { name: 'Red Wins' }).waitFor();
     await assertPaletteBlocked();
     await page.keyboard.press('Escape');
-    // Clear recovery so the terminal position does not raise an extra prompt.
-    await page.evaluate(() => localStorage.removeItem('xiangqi:auto-saved-game:v1'));
-    await page.goto(base + '?moves=h2e2');
-    await page.waitForFunction(() => localStorage.getItem('xiangqi:auto-saved-game:v1'));
-    await page.reload();
-    await page.getByRole('heading', { name: 'Unfinished game' }).waitFor();
-    await assertPaletteBlocked();
+    // Recovery owns independent draft slots and flushes on pagehide. Give
+    // this case a fresh context instead of clearing only the legacy mirror
+    // while the terminal position can still write its own draft back.
+    const recoveryPage = await browser.newPage({ viewport });
+    try {
+      await recoveryPage.goto(base + '?moves=h2e2');
+      await recoveryPage.waitForFunction(() => localStorage.getItem('xiangqi:auto-saved-game:v1'));
+      await recoveryPage.reload();
+      await recoveryPage.getByRole('heading', { name: 'Unfinished game' }).waitFor();
+      await assertPaletteBlocked(recoveryPage);
+    } finally { await recoveryPage.close(); }
   } finally { await page.close(); }
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await browserType.launch({ headless: true });
   try {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }]) {
       await paletteKeyboard(browser, viewport);

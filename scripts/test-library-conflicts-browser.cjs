@@ -5,6 +5,6 @@ const assert=require('node:assert/strict');const {browserType}=require('./qa-bro
  await page.locator('.lib-transfer summary').filter({hasText:'Backup and restore'}).click();
  await page.getByLabel('Restore library backup',{exact:true}).setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'web-xiangqi-library',version:1,games:games.map(g=>({...g,rootComment:'Backup'}))}))});
  await page.getByRole('combobox',{name:'Resolve replace',exact:true}).selectOption('replace');await page.getByRole('combobox',{name:'Resolve copy',exact:true}).selectOption('copy');
- await page.getByRole('button',{name:'Restore 1 games',exact:true}).click();await page.getByText(/Replaced 1; kept 1/).waitFor();
+ await page.getByRole('button',{name:'Restore 1 game',exact:true}).click();await page.getByText(/Replaced 1; kept 1/).waitFor();
  const result=await page.evaluate(()=>JSON.parse(localStorage.getItem('xiangqi:library:v1')));assert.equal(result.length,4);assert.equal(result.find(g=>g.id==='keep').rootComment,'Current');assert.equal(result.find(g=>g.id==='replace').rootComment,'Backup');assert.equal(result.find(g=>g.id==='copy').rootComment,'Current');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.close();
 }console.log('PASS: backup conflicts can keep, replace or copy independently at three widths');}finally{await browser.close()}})().catch(error=>{console.error(error);process.exitCode=1});
