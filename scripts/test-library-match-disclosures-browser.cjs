@@ -34,6 +34,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
         assert.equal(await expanded.count(), 1);
         assert.match(await expanded.getByRole('button').innerText(), /ply 2$/,
           'A retained move keeps its own expansion when its position in the list changes');
+        await results.getByRole('button', { name: 'Show 6 more matching moves', exact: true }).click();
+        assert.equal(await results.locator('.lib-study-match').count(), 16);
+        await search.fill('Training loop chosen');
+        await search.fill('Training loop');
+        assert.equal(await results.locator('.lib-study-match').count(), 10,
+          'Changing a search resets its rendering limit');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}px: move-sequence expansion stays with its matching move across query changes`);
       } catch (error) {

@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import { matchesSearchTerms } from '../../utils/searchTerms';
 import { savedStudyMatchMoves, savedStudySearchEntries, type SavedStudySearchEntry } from '../../utils/savedStudySearch';
@@ -20,7 +20,11 @@ function Matches({ game, terms, tabIndex, onOpen }: {
   // Assign identity before filtering so an expanded sequence follows its move.
   const entries = useMemo(() => savedStudySearchEntries(game.moveTree).map((entry, ordinal) => ({ entry, ordinal })), [game]);
   const matches = useMemo(() => entries.filter(({ entry }) => matchesSearchTerms(entry.text, terms)), [entries, terms]);
-  const [limit, setLimit] = useState(PAGE_SIZE);
+  const query = terms.join(' ');
+  const [page, setPage] = useState({ query, limit: PAGE_SIZE });
+  // Cap the first render of a new query too, before the reset effect commits.
+  const limit = page.query === query ? page.limit : PAGE_SIZE;
+  useEffect(() => { setPage({ query, limit: PAGE_SIZE }); }, [query]);
   return <>
     <p>{matches.length ? `${matches.length} matching ${matches.length === 1 ? 'move' : 'moves'}. Open a position to read its notes and saved analysis.`
       : 'No single move matches every search word. This game matches through its details or several moves; try fewer words.'}</p>
@@ -35,7 +39,7 @@ function Matches({ game, terms, tabIndex, onOpen }: {
       <MatchPath entry={entry} tabIndex={tabIndex} />
     </div>)}
     {matches.length > limit && <button type="button" className="chip-btn" tabIndex={tabIndex}
-      data-library-action="more-matches" onClick={() => setLimit(value => value + PAGE_SIZE)}>
+      data-library-action="more-matches" onClick={() => setPage(previous => ({ query, limit: (previous.query === query ? previous.limit : PAGE_SIZE) + PAGE_SIZE }))}>
       Show {Math.min(PAGE_SIZE, matches.length - limit)} more matching moves
     </button>}
   </>;
