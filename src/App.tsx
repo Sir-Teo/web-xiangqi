@@ -4490,6 +4490,18 @@ function App() {
   const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean; pending?: boolean } | null>(null);
   const libraryUndoTimerRef = useRef<number | null>(null);
   const libraryUndoVersionRef = useRef(0);
+  const libraryUndoButtonRef = useRef<HTMLButtonElement>(null);
+  const focusUndoRetryRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!focusUndoRetryRef.current || libraryUndo?.pending) return;
+    focusUndoRetryRef.current = false;
+    // Disabling the pending button can blur it. Restore the retry action only
+    // if the reader has not moved focus elsewhere while storage was busy.
+    if (libraryUndo?.failed && (document.activeElement === document.body || document.activeElement === libraryUndoButtonRef.current)) {
+      libraryUndoButtonRef.current?.focus({ preventScroll: true });
+      libraryUndoButtonRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [libraryUndo]);
   const dismissLibraryUndo = useCallback(() => {
     libraryUndoVersionRef.current += 1;
     if (libraryUndoTimerRef.current !== null) {
@@ -4521,6 +4533,7 @@ function App() {
     // Once accepted, Undo must survive its original expiry while another tab
     // holds the library lock. A later deletion owns its own toast and timer.
     const version = libraryUndoVersionRef.current;
+    const hadFocus = document.activeElement === libraryUndoButtonRef.current;
     if (libraryUndoTimerRef.current !== null) {
       window.clearTimeout(libraryUndoTimerRef.current);
       libraryUndoTimerRef.current = null;
@@ -4534,6 +4547,7 @@ function App() {
     }
     // Storage can refuse -- it is full, or blocked, or unreadable. Say so and
     // leave the toast up rather than closing it on a delete that stands.
+    focusUndoRetryRef.current = hadFocus;
     setLibraryUndo({ game: libraryUndo.game, failed: true });
   }, [dismissLibraryUndo, libraryUndo, restoreGameToLibrary]);
 
@@ -8055,7 +8069,7 @@ function App() {
                     ? `Deleted “${libraryUndo.game.label}”`
                     : 'Deleted that saved game'}
               </span>
-              <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete}
+              <button type="button" className="undo-toast-btn" ref={libraryUndoButtonRef} onClick={handleUndoLibraryDelete}
                 disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
                 {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
               </button>

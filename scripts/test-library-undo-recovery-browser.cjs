@@ -52,12 +52,23 @@ async function releaseLock(page) {
         await page.getByTestId('library-undo-btn').click();
         const retry = page.getByTestId('library-retry-undo-btn');
         await retry.waitFor();
+        assert.equal(await retry.evaluate(element => element === document.activeElement), true,
+          'A failed keyboard Undo must keep focus on Retry restore');
         assert.match(await page.getByTestId('library-undo-toast').innerText(), /Could not put it back/);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         const toast = await page.getByTestId('library-undo-toast').boundingBox();
         assert.ok(toast.x >= 0 && toast.x + toast.width <= width, 'Recovery actions must fit on screen');
+        await holdLock(page);
+        await page.keyboard.press('Enter');
+        const search = page.getByRole('searchbox', { name: 'Search library', exact: true });
+        await search.focus();
+        await releaseLock(page);
+        assert.equal(await retry.isEnabled(), true);
+        assert.equal(await search.evaluate(element => element === document.activeElement), true,
+          'A delayed restore failure must not steal focus from another control');
+        await retry.focus();
         await page.evaluate(() => { window.__refuseUndo = false; });
-        await retry.click();
+        await page.keyboard.press('Enter');
         await page.getByTestId(`load-saved-${game.id}`).waitFor();
         assert.deepEqual((await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key))[0].moveTree, game.moveTree);
 
