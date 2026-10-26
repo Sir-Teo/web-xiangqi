@@ -106,7 +106,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     const result = await withLibraryMutation(() => salvageLibrary(state.raw!), { restored: 0, error: LIBRARY_LOCK_ERROR });
     restoringRef.current = false; setRestoring(false); onChange();
     if (result.error) setError(result.error);
-    else setMessage(`Recovered ${result.restored} studies. The original data is archived in this browser and can be downloaded below.`);
+    else setMessage(`Recovered ${result.restored} ${result.restored === 1 ? 'study' : 'studies'}. The original data is archived in this browser and can be downloaded below.`);
   }
 
   return (
@@ -118,10 +118,10 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
           {salvage && <details>
             <summary>Review readable studies for recovery</summary>
             {salvage.error ? <p>{salvage.error}</p> : <>
-              <p>Keep {salvage.games.length} readable studies; skip {salvage.skipped} invalid or identical entries. Preserve {salvage.copies} conflicting IDs as separate copies. The original data will be archived before replacement.</p>
-              <ul>{salvage.games.slice(0, 10).map(game => <li key={game.id}>{game.label || game.opening || `${game.moves.length} moves`}</li>)}</ul>
-              {salvage.games.length > 10 && <p>And {salvage.games.length - 10} more readable studies.</p>}
-              <button type="button" disabled={restoring} onClick={event => { void repair(event.currentTarget); }}>Keep {salvage.games.length} readable studies</button>
+              <p>Keep {salvage.games.length} readable {salvage.games.length === 1 ? 'study' : 'studies'}; skip {salvage.skipped} invalid or identical {salvage.skipped === 1 ? 'entry' : 'entries'}. Preserve {salvage.copies} conflicting {salvage.copies === 1 ? 'ID as a separate copy' : 'IDs as separate copies'}. The original data will be archived before replacement.</p>
+              <ul>{salvage.games.slice(0, 10).map(game => <li key={game.id}>{game.label || game.opening || `${game.moves.length} ${game.moves.length === 1 ? 'move' : 'moves'}`}</li>)}</ul>
+              {salvage.games.length > 10 && <p>And {salvage.games.length - 10} more readable {salvage.games.length === 11 ? 'study' : 'studies'}.</p>}
+              <button type="button" disabled={restoring} onClick={event => { void repair(event.currentTarget); }}>Keep {salvage.games.length} readable {salvage.games.length === 1 ? 'study' : 'studies'}</button>
             </>}
           </details>}
         </div>
@@ -144,7 +144,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
             <p role="status">Ready to add {pending.preview.added} {pending.preview.added === 1 ? 'game' : 'games'} and skip {pending.preview.duplicates} identical {pending.preview.duplicates === 1 ? 'game' : 'games'}. Replacements: {pending.preview.replaced ?? 0}. Current versions kept: {pending.preview.kept ?? 0}.</p>
             {pending.preview.conflicts?.map(conflict => <fieldset key={conflict.id} className="lib-restore-conflict">
               <legend>{conflict.current.label || conflict.incoming.label || "Conflicting study"}</legend>
-              <p>Current: {conflict.current.moves.length} plies, {new Date(conflict.current.modifiedAt ?? conflict.current.savedAt).toLocaleString()}. Backup: {conflict.incoming.moves.length} plies, {new Date(conflict.incoming.modifiedAt ?? conflict.incoming.savedAt).toLocaleString()}.</p>
+              <p>Current: {conflict.current.moves.length} {conflict.current.moves.length === 1 ? 'ply' : 'plies'}, {new Date(conflict.current.modifiedAt ?? conflict.current.savedAt).toLocaleString()}. Backup: {conflict.incoming.moves.length} {conflict.incoming.moves.length === 1 ? 'ply' : 'plies'}, {new Date(conflict.incoming.modifiedAt ?? conflict.incoming.savedAt).toLocaleString()}.</p>
               <details><summary>Compare notes and players</summary>
                 <p>Current: {[conflict.current.metadata?.redPlayer, conflict.current.metadata?.blackPlayer, conflict.current.rootComment, conflict.current.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
                 <p>Backup: {[conflict.incoming.metadata?.redPlayer, conflict.incoming.metadata?.blackPlayer, conflict.incoming.rootComment, conflict.incoming.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>

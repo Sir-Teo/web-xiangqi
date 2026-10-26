@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');const fs=require('node:fs/promises');
  const page=await browser.newPage({viewport:{width,height:844}});const raw=JSON.stringify([{id:'a',savedAt:1,gameMode:'PvP',label:'Readable study',moves:['h2e2']},{bad:true}]);
  await page.addInitScript(raw=>localStorage.setItem('xiangqi:library:v1',raw),raw);await page.goto(base);await page.locator('.xiangqi-board').waitFor();await page.keyboard.press('ControlOrMeta+k');await page.getByRole('combobox').fill('Library');await page.keyboard.press('Enter');
  await page.getByText('Review readable studies for recovery',{exact:true}).click();
- const repair=page.getByRole('button',{name:'Keep 1 readable studies',exact:true});
+ const repair=page.getByRole('button',{name:'Keep 1 readable study',exact:true});
  await page.evaluate(()=>{
   const set=Storage.prototype.setItem;
   Storage.prototype.setItem=function(key,value){
@@ -21,7 +21,7 @@ const assert=require('node:assert/strict');const fs=require('node:fs/promises');
   assert.equal(await repair.evaluate(e=>e===document.activeElement),true,'A failed repair retains keyboard focus for retry');
  }
  await page.evaluate(()=>{window.__refuseRepair=null;});
- await repair.press('Enter');await page.getByText(/Recovered 1 studies/).waitFor();
+ await repair.press('Enter');await page.getByText(/Recovered 1 study/).waitFor();
  assert.equal(await page.locator('.lib-transfer summary').filter({hasText:'Backup and restore'}).evaluate(e=>e===document.activeElement),true,
   'Successful keyboard repair continues at backup controls when its button disappears');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('xiangqi:library:v1')).length),1);
