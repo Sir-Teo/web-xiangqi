@@ -34,7 +34,15 @@ async function installEngine(page) {
       localStorage.setItem('xiangqi:library:v1', JSON.stringify([{ id: 'dense', savedAt: 1, gameMode: 'PvP', label: 'Dense preparation', moves, moveTree: children }]));
     });
     await producer.goto(base); await producer.locator('.xiangqi-board').waitFor();
-    await command(producer, 'Library'); await producer.getByTestId('load-saved-dense').click();
+    await command(producer, 'Library');
+    const libraryDownload = producer.waitForEvent('download');
+    const exportStarted = Date.now();
+    await producer.getByTestId('download-pgn-saved-dense').click();
+    const libraryChunks = [];
+    for await (const chunk of await (await libraryDownload).createReadStream()) libraryChunks.push(chunk);
+    const libraryPgn = Buffer.concat(libraryChunks).toString();
+    console.log(`${browserType.name()}: dense library PGN downloaded in ${Date.now() - exportStarted}ms`);
+    await producer.getByTestId('load-saved-dense').click();
     const warning = producer.getByTestId('auto-save-error'); await warning.waitFor();
     assert.match(await warning.innerText(), /too large for automatic recovery/);
     const download = producer.waitForEvent('download');
@@ -45,6 +53,16 @@ async function installEngine(page) {
     console.log(`${browserType.name()}: recovery PGN has ${pgn.length} characters and ${(pgn.match(/\[%xqanalysis /g) || []).length} snapshots`);
     assert.ok(pgn.length > 1000000 && pgn.length <= 8000000);
     assert.equal((pgn.match(/\[%xqanalysis /g) || []).length, 1000);
+    const snapshots = source => [...source.matchAll(/\[%xqanalysis ([^\]\s]+)\]/g)].map(match => JSON.parse(decodeURIComponent(match[1])));
+    const recoveredSnapshots = snapshots(pgn);
+    assert.deepEqual(snapshots(libraryPgn), recoveredSnapshots, 'Library and recovery downloads must retain the same analysis');
+    for (let i = 0; i < recoveredSnapshots.length; i++) {
+      assert.equal(recoveredSnapshots[i].move, ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]);
+      assert.equal(recoveredSnapshots[i].position, i ? 'position startpos moves ' + Array.from({ length: i }, (_, ply) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][ply % 4]).join(' ') : 'position startpos');
+      assert.equal(recoveredSnapshots[i].effort.nodes, 123456);
+    }
+    for (const source of [pgn, libraryPgn]) assert.deepEqual([...source.matchAll(/Preparation (\d+) }/g)].map(match => Number(match[1])),
+      Array.from({ length: 1000 }, (_, i) => i + 1), 'Every note must remain attached to its own move');
     await command(producer, 'Import a game record');
     await producer.getByTestId('uci-line-file-input').setInputFiles({ name: 'Preparation backup.pgn', mimeType: 'application/x-chess-pgn', buffer });
     assert.match(await producer.locator('#new-game-line-error').innerText(), /Library → Import PGN collection, then Open on board/);

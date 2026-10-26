@@ -89,6 +89,23 @@ describe('exporting a tree', () => {
         expect(movetext(pgn)).toContain('b9c7');
     });
 
+    it('keeps nested variations in order when a different main line is selected', () => {
+        const branches: SavedMoveTreeNode[] = [
+            { uci: 'h2e2', comment: 'Main start', children: [
+                { uci: 'h9g7', children: [
+                    { uci: 'b0c2', children: [{ uci: 'b9c7' }] },
+                    { uci: 'b2e2', comment: 'Nested alternative' },
+                ] },
+                { uci: 'b9c7', children: [{ uci: 'h0g2' }] },
+            ] },
+            { uci: 'b2e2', children: [{ uci: 'h9g7' }] },
+        ];
+        expect(movetext(exportPgnFromMoveTree(branches, OPTIONS)!)).toBe(
+            '1. h2e2 { Main start } (1. b2e2 h9g7) h9g7 (1... b9c7 2. h0g2) 2. b0c2 (2. b2e2 { Nested alternative }) b9c7 *');
+        expect(movetext(exportPgnFromMoveTree(branches, { ...OPTIONS, mainLineMoves: ['h2e2', 'b9c7', 'h0g2'] })!)).toBe(
+            '1. h2e2 { Main start } (1. b2e2 h9g7) b9c7 (1... h9g7 2. b0c2 (2. b2e2 { Nested alternative }) b9c7) 2. h0g2 *');
+    });
+
     it('refuses a main line the tree does not contain', () => {
         expect(exportPgnFromMoveTree(tree, { ...OPTIONS, mainLineMoves: ['h2e2', 'a0a1'] })).toBeNull();
     });

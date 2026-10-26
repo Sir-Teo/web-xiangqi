@@ -162,52 +162,55 @@ function buildTreeMoveText(
     result: string
 ): string {
     const preferredChildByParent = buildPreferredChildMap(mainLineNodeIds, treeNodes);
-    const renderFromParent = (parentId: string, plyIndex: number, forceMoveNumber: boolean, seen: Set<string>): string => {
-        const parent = treeNodes[parentId];
-        if (!parent?.childrenIds.length) return '';
-
-        const preferredChild = preferredChildByParent.get(parentId);
-        const mainChildId = preferredChild && parent.childrenIds.includes(preferredChild)
-            ? preferredChild
-            : parent.childrenIds[0];
-        const variations = parent.childrenIds
-            .filter((childId) => childId !== mainChildId)
-            .map((childId) => renderLineFromNode(childId, parentId, plyIndex, true, seen))
-            .filter(Boolean)
-            .map((line) => `(${line})`);
-        const mainText = renderMoveWithVariations(mainChildId, parentId, plyIndex, forceMoveNumber, variations, seen);
-
-        return mainText;
-    };
-
-    const renderMoveWithVariations = (
-        nodeId: string,
-        parentId: string,
-        plyIndex: number,
-        forceMoveNumber: boolean,
-        parentVariations: string[],
-        seen: Set<string>
-    ): string => {
-        if (seen.has(nodeId)) return '';
-        const node = treeNodes[nodeId];
+    type Task =
+        | { kind: 'parent'; parentId: string; plyIndex: number; forceMoveNumber: boolean }
+        | { kind: 'move'; nodeId: string; parentId: string; plyIndex: number; forceMoveNumber: boolean; variations: string[]; wrap: boolean }
+        | { kind: 'continue'; nodeId: string; plyIndex: number }
+        | { kind: 'leave'; nodeId: string }
+        | { kind: 'close'; start: number };
+    const tasks: Task[] = [{ kind: 'parent', parentId: rootNodeId, plyIndex: 0, forceMoveNumber: true }];
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    // Collect each move once. Joining every growing continuation copied a
+    // multi-megabyte annotated study once per ply and blocked large exports.
+    while (tasks.length) {
+        const task = tasks.pop()!;
+        if (task.kind === 'leave') { seen.delete(task.nodeId); continue; }
+        if (task.kind === 'close') {
+            parts[task.start] = `(${parts[task.start]}`;
+            parts[parts.length - 1] += ')';
+            continue;
+        }
+        if (task.kind === 'continue') {
+            seen.add(task.nodeId);
+            tasks.push({ kind: 'leave', nodeId: task.nodeId },
+                { kind: 'parent', parentId: task.nodeId, plyIndex: task.plyIndex + 1, forceMoveNumber: false });
+            continue;
+        }
+        if (task.kind === 'parent') {
+            const parent = treeNodes[task.parentId];
+            if (!parent?.childrenIds.length) continue;
+            const preferred = preferredChildByParent.get(task.parentId);
+            const main = preferred && parent.childrenIds.includes(preferred) ? preferred : parent.childrenIds[0];
+            tasks.push({ ...task, kind: 'move', nodeId: main, wrap: false,
+                variations: parent.childrenIds.filter(id => id !== main) });
+            continue;
+        }
+        const node = treeNodes[task.nodeId];
         const record = node?.record;
-        if (!node || !record || node.parentId !== parentId) return '';
-
-        const nextSeen = new Set(seen);
-        nextSeen.add(nodeId);
-        const moveToken = [
-            formatPgnMove(record.uci, startPosition, plyIndex, forceMoveNumber),
-            ...annotationTokensForMove(record),
-        ].join(' ');
-        const continuation = renderFromParent(nodeId, plyIndex + 1, false, nextSeen);
-        return [moveToken, ...parentVariations, continuation].filter(Boolean).join(' ');
-    };
-
-    const renderLineFromNode = (nodeId: string, parentId: string, plyIndex: number, forceMoveNumber: boolean, seen: Set<string>): string => {
-        return renderMoveWithVariations(nodeId, parentId, plyIndex, forceMoveNumber, [], seen);
-    };
-
-    const moveText = renderFromParent(rootNodeId, 0, true, new Set());
+        if (seen.has(task.nodeId) || !record || node.parentId !== task.parentId) continue;
+        const start = parts.length;
+        parts.push([formatPgnMove(record.uci, startPosition, task.plyIndex, task.forceMoveNumber),
+            ...annotationTokensForMove(record)].join(' '));
+        if (task.wrap) tasks.push({ kind: 'close', start });
+        tasks.push({ kind: 'continue', nodeId: task.nodeId, plyIndex: task.plyIndex });
+        // Siblings branch from the same position and share only its ancestors.
+        for (let i = task.variations.length - 1; i >= 0; i--) {
+            tasks.push({ kind: 'move', nodeId: task.variations[i], parentId: task.parentId,
+                plyIndex: task.plyIndex, forceMoveNumber: true, variations: [], wrap: true });
+        }
+    }
+    const moveText = parts.join(' ');
     return `${moveText}${moveText ? ' ' : ''}${result}`;
 }
 
