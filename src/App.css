@@ -197,7 +197,7 @@ body.resizing * {
   }
 }
 
-.panel button:active {
+.panel button:active:not(.hitbox) {
   transform: scale(0.97);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
@@ -2397,8 +2397,9 @@ body.resizing * {
   margin-left: 0.2rem;
 }
 
-/* Interactive Active States */
-button:active:not(:disabled),
+/* Board hitboxes use translation to stay centered on their intersections.
+   Replacing it with a press scale moves the target away before pointerup. */
+button:active:not(:disabled):not(.hitbox),
 .gc-btn:active:not(:disabled),
 .wc-btn:active:not(:disabled),
 .gc-pill:active,
