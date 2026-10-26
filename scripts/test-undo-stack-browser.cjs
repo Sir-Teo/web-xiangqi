@@ -15,12 +15,12 @@ async function command(page, label) {
       const page = await browser.newPage({ viewport: { width, height: width === 320 ? 480 : 900 }, hasTouch: width < 900 });
       page.setDefaultTimeout(10000);
       try {
-        await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
         await page.addInitScript(() => localStorage.setItem('xiangqi:library:v1', JSON.stringify([
           { id: 'stacked-undo', savedAt: 1, gameMode: 'PvP', label: 'Saved study', moves: ['h2e2'] },
         ])));
         await page.goto(base + '?moves=h2e2%20h9g7');
         await page.waitForFunction(() => / w - - 2 2$/.test(document.querySelector('.bottombar-fen')?.title || ''));
+        await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
         // Measuring both text sizes and taking a screenshot must not consume
         // the recovery window when browser rendering is slow on a CI runner.
         await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));

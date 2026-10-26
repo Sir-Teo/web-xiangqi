@@ -40,6 +40,8 @@ async function clickable(button) {
         const recovery = page.getByTestId('recovery-data-error');
         await recovery.waitFor();
         await page.getByTestId('auto-save-error').waitFor();
+        await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+        await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
         await command(page, 'Delete this move and what follows');
         await command(page, 'Save game');
         const failedSave = page.getByTestId('save-game-error');
@@ -66,6 +68,7 @@ async function clickable(button) {
         await page.getByTestId('delete-undo-btn').click();
         // Wait for the restored position's debounced write to fail before
         // unblocking storage, so an automatic retry cannot race our click.
+        await page.clock.runFor(700);
         await page.waitForFunction(count => window.__failedDraftWrites > count, failedWrites);
 
         // Notifications must stay behind the command dialog, including when
@@ -86,6 +89,11 @@ async function clickable(button) {
         assert.equal(await recovery.isVisible(), true, 'A successful retry must retain the independent recovery warning');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         console.log(`${browserType.name()} ${viewport.width}x${viewport.height}: independent errors and Undo stack at 100/200% text; downloads, autosave retry and dialog layering work`);
+      } catch (error) {
+        console.error(await page.locator('body').innerText());
+        console.error(await page.locator('.app-notice-stack').evaluate(element => ({ inert: element.closest('[inert]')?.className, scrollTop: element.scrollTop, height: element.clientHeight, content: element.scrollHeight })).catch(() => null));
+        await page.screenshot({ path: `/tmp/xiangqi-notice-stack-${browserType.name()}-${viewport.width}-failure.png`, timeout: 5000 }).catch(() => {});
+        throw error;
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

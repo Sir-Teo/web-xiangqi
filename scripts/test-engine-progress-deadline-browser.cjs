@@ -72,12 +72,12 @@ async function wrapperDownload(browser) {
       let messages=0;
       const result=await window.Pikafish.createWorkerEngine({variant:'single',
         workerScript:new URL('qa-progress-worker.js?mode='+mode,location.href).href,
-        initTimeoutMs:800,extendInitTimeoutOnProgress:extend,
+        initTimeoutMs:800,...(extend === undefined ? {} : {extendInitTimeoutOnProgress:extend}),
         onAssetProgress:callback ? ()=>{messages++} : undefined,
       }).then(async engine=>{await engine.terminate();return {state:'ready'};},error=>({state:'error',message:error.message}));
       return {...result,messages,terminations:window.__terminations-before};
     }, {mode,extend,callback});
-    const strict=await create('growing',false,true);
+    const strict=await create('growing',undefined,true);
     assert.equal(strict.state,'error','The default API retains an absolute startup deadline');
     assert.match(strict.message,/Timed out/);
     assert.equal(strict.terminations,1);

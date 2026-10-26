@@ -125,8 +125,10 @@ parts: chaining by hand is how a real failure gets reported as success, and
 
 `test:prod:smoke` loads the built app under isolation headers, a Pages-style
 service-worker host, and legacy-worker recovery. It runs before the Pages
-deploy. `test:ui:cross-browser` also serves `dist/` and checks user workflows in
-Chromium, Firefox, and WebKit; the layout and focused audit suites use Vite dev.
+deploy. The audit and cross-browser runners also serve the existing `dist/`;
+run `npm run build:react` after editing the app, or use `npm run verify`, which
+includes that build. The cross-browser runner checks Chromium, Firefox, and
+WebKit. The layout suite starts a Vite development server.
 
 Not in `verify`:
 
@@ -134,6 +136,7 @@ Not in `verify`:
 npm audit --audit-level=moderate   # left out so verify works offline
 npm run test:serve-demo
 npm run test:ui:install            # once per machine
+npx playwright install --with-deps chromium firefox webkit # for cross-browser QA
 npm run test:ui:layout             # drives a real browser
 npm run test:ui:audit              # focused regressions; starts its own server
 npm run test:ui:soak               # seeded random walk, checks invariants

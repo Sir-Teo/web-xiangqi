@@ -49,7 +49,7 @@ async function releaseLock(page) {
             return original.call(this, name, value);
           };
         }, key);
-        await page.getByTestId('library-undo-btn').click();
+        await page.getByTestId('library-undo-btn').press('Enter');
         const retry = page.getByTestId('library-retry-undo-btn');
         await retry.waitFor();
         assert.equal(await retry.evaluate(element => element === document.activeElement), true,
@@ -98,6 +98,10 @@ async function releaseLock(page) {
         assert.equal(await page.getByTestId('library-undo-toast').count(), 0,
           'A late restore failure must not reopen a dismissed notice');
         console.log(`${browserType.name()} ${width}px: failed Undo retries; queued Undo survives expiry; dismissed notices stay closed`);
+      } catch (error) {
+        console.error(await page.locator('body').innerText());
+        await page.screenshot({ path: `/tmp/xiangqi-library-undo-recovery-${browserType.name()}-${width}-failure.png`, timeout: 5000 }).catch(() => {});
+        throw error;
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
