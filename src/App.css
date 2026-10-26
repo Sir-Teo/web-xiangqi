@@ -5201,6 +5201,8 @@ summary:active {
   width: min(400px, calc(100vw - 16px));
   max-height: min(85vh, 700px);
   overflow-y: auto;
+  /* Leave focused controls clear of the title, including at larger text sizes. */
+  scroll-padding-top: calc(max(44px, 1.5rem) + 0.75rem + 1px);
   padding: clamp(16px, 3vw, 24px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
@@ -5224,12 +5226,16 @@ summary:active {
 }
 
 .settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1.25rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .settings-header h2 {
@@ -5238,6 +5244,17 @@ summary:active {
   font-weight: 700;
   color: var(--text-heading);
   letter-spacing: 0;
+}
+
+/* Cover the panel's top padding while content scrolls behind the title. */
+.settings-header::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: clamp(16px, 3vw, 24px);
+  background: var(--bg-surface);
 }
 
 .settings-close-btn {
