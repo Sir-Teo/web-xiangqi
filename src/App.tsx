@@ -1,4 +1,5 @@
 import { isComposingKey } from './utils/keyboard';
+import { downloadRecoveryGame } from './utils/recoveryDownload';
 import { studyContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
@@ -4488,7 +4489,9 @@ function App() {
    * `restoreGameToLibrary` puts it back under its own id, so an open study or
    * a saved review still points at the same game.
    */
-  const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean; pending?: boolean } | null>(null);
+  const [libraryUndo, setLibraryUndo] = useState<{
+    game: SavedGame; failed?: boolean; pending?: boolean; downloadFailed?: boolean;
+  } | null>(null);
   const libraryUndoTimerRef = useRef<number | null>(null);
   const libraryUndoVersionRef = useRef(0);
   const libraryUndoButtonRef = useRef<HTMLButtonElement>(null);
@@ -5249,7 +5252,9 @@ function App() {
    * So the snapshot is kept for the length of the toast instead of dropped on
    * the spot, and Undo restores it the way Restore would have.
    */
-  const [discardedAutoSave, setDiscardedAutoSave] = useState<{ snapshot: AutoSavedGame; failed?: boolean } | null>(null);
+  const [discardedAutoSave, setDiscardedAutoSave] = useState<{
+    snapshot: AutoSavedGame; failed?: boolean; downloadFailed?: boolean;
+  } | null>(null);
   const discardedAutoSaveTimerRef = useRef<number | null>(null);
   const dismissDiscardedAutoSave = useCallback(() => {
     if (discardedAutoSaveTimerRef.current !== null) {
@@ -8049,11 +8054,19 @@ function App() {
             <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
               <span>
                 {discardedAutoSave.failed
-                  ? 'Could not put the game back on the board.'
+                  ? 'Could not put the game back on the board. Download its data for repair.'
                   : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
                     ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
               </span>
-              {discardedAutoSave.failed ? null : (
+              {discardedAutoSave.failed ? (
+                <button type="button" className="undo-toast-btn" data-testid="discard-undo-download"
+                  aria-label={discardedAutoSave.downloadFailed ? 'Download failed — retry for unfinished game' : 'Download data for unfinished game'}
+                  onClick={() => {
+                    const snapshot = discardedAutoSave.snapshot;
+                    const ok = downloadRecoveryGame(snapshot.game, 'xiangqi-unfinished-game.json');
+                    setDiscardedAutoSave(current => current?.snapshot === snapshot ? { ...current, downloadFailed: !ok } : current);
+                  }}>{discardedAutoSave.downloadFailed ? 'Download failed — retry' : 'Download data'}</button>
+              ) : (
                 <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
               )}
               <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
@@ -8065,7 +8078,7 @@ function App() {
             <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
               <span>
                 {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
-                  ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available.'
+                  ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available, or download its data.'
                   : libraryUndo.game.label
                     ? `Deleted “${libraryUndo.game.label}”`
                     : 'Deleted that saved game'}
@@ -8074,6 +8087,13 @@ function App() {
                 disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
                 {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
               </button>
+              {libraryUndo.failed && <button type="button" className="undo-toast-btn" data-testid="library-undo-download"
+                aria-label={libraryUndo.downloadFailed ? 'Download failed — retry for deleted game' : 'Download data for deleted game'}
+                onClick={() => {
+                  const game = libraryUndo.game;
+                  const ok = downloadRecoveryGame(game, 'xiangqi-deleted-game.json');
+                  setLibraryUndo(current => current?.game === game ? { ...current, downloadFailed: !ok } : current);
+                }}>{libraryUndo.downloadFailed ? 'Download failed — retry' : 'Download data'}</button>}
               <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
                 <IconX />
               </button>
