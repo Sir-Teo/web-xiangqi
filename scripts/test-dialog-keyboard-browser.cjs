@@ -18,6 +18,15 @@ async function paletteKeyboard(browser, viewport) {
         `${key} escaped the empty command palette`);
     }
     await input.fill('');
+    await page.getByRole('option').first().waitFor();
+    await page.keyboard.press('Tab');
+    const commandFocus = await input.evaluate(element => {
+      const option = document.getElementById(element.getAttribute('aria-activedescendant'));
+      return { matches: option === document.activeElement && option?.getAttribute('role') === 'option',
+        selected: option?.id, focused: document.activeElement?.id, role: document.activeElement?.getAttribute('role') };
+    });
+    assert.equal(commandFocus.matches, true, `The announced command option must be the control reached with Tab: ${JSON.stringify(commandFocus)}`);
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.locator('.command-palette-button:enabled').last().evaluate(el => el === document.activeElement), true);
     await page.keyboard.press('Tab');

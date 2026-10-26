@@ -194,14 +194,11 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                 </p>
 
                 {ranked.length > 0 && (
-                    <ul className="command-palette-list" id="command-palette-list" role="listbox" ref={listRef}>
+                    <ul className="command-palette-list" id="command-palette-list" role="listbox" tabIndex={-1} ref={listRef}>
                         {ranked.map((command, index) => (
                             <li
                                 key={command.id}
-                                id={`command-${command.id}`}
-                                role="option"
-                                aria-selected={index === activeIndex}
-                                aria-disabled={command.disabled || undefined}
+                                role="presentation"
                                 data-active={index === activeIndex}
                                 data-command-id={command.id}
                                 className="command-palette-row"
@@ -211,7 +208,11 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                                 onPointerMove={() => setActiveIndex(index)}
                             >
                                 <button
+                                    id={`command-${command.id}`}
                                     type="button"
+                                    role="option"
+                                    aria-selected={index === activeIndex}
+                                    aria-disabled={command.disabled || undefined}
                                     className="command-palette-button"
                                     disabled={command.disabled}
                                     onFocus={() => setActiveIndex(index)}
