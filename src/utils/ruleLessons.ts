@@ -62,8 +62,12 @@ export function readRuleLessonProgress(storage: KeyValueStorage | null = getLoca
     } catch { return []; }
 }
 
-export function completeRuleLesson(id: string, current: string[], storage: KeyValueStorage | null = getLocalStorage()) {
-    const known = new Set([...readRuleLessonProgress(storage), ...current, id]);
+export function saveRuleLessonProgress(current: string[], storage: KeyValueStorage | null = getLocalStorage()) {
+    const known = new Set([...readRuleLessonProgress(storage), ...current]);
     const completed = RULE_LESSONS.filter(lesson => known.has(lesson.id)).map(lesson => lesson.id);
     return { completed, saved: writeStorage(RULE_LESSONS_STORAGE_KEY, JSON.stringify(completed), storage) };
+}
+
+export function completeRuleLesson(id: string, current: string[], storage: KeyValueStorage | null = getLocalStorage()) {
+    return saveRuleLessonProgress([...current, id], storage);
 }

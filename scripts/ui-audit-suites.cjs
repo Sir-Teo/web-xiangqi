@@ -25,6 +25,7 @@ const scripts = [
   'test-library-salvage-browser.cjs',
   'test-practice-notation-browser.cjs',
   'test-practice-progress-browser.cjs',
+  'test-learning-progress-retry-browser.cjs',
   'test-practice-available-sides-browser.cjs',
   'test-recovery-cursor-browser.cjs',
   'test-recovery-drafts-browser.cjs',

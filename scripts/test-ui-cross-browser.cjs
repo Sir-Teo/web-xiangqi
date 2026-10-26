@@ -41,6 +41,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-beginner-browser.cjs',
         'test-play-startup-progress-browser.cjs',
         'test-rule-lessons-browser.cjs',
+        'test-learning-progress-retry-browser.cjs',
         'test-practice-available-sides-browser.cjs',
         'test-editor-keyboard-browser.cjs',
         'test-dialog-keyboard-browser.cjs',

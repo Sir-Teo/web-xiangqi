@@ -18,8 +18,12 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
   const [side, setSide] = useState<Side>(() => restored?.side ?? study?.side ?? 'w');
   const [session, setSession] = useState(() => restored?.session ?? (study ? startPracticeLine(study, 0) : null));
   const [progressSaved, setProgressSaved] = useState(true);
+  const [saveRetryResult, setSaveRetryResult] = useState<'failed' | 'saved' | null>(null);
   useEffect(() => {
-    if (session && sideLines[side].length) setProgressSaved(writePracticeProgress(game, side, session));
+    if (session && sideLines[side].length) {
+      setProgressSaved(writePracticeProgress(game, side, session));
+      setSaveRetryResult(null);
+    }
   }, [game, side, session, sideLines]);
   const [selected, setSelected] = useState<{ file: number; rank: number } | null>(null);
   const [letters, setLetters] = useState(pieceStyle === 'letters');
@@ -99,7 +103,6 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
       <button type="button" onClick={() => reset(eligible[0] ?? 0, false)}>Reset progress for this side</button>
       <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
     </div>
-    {!progressSaved && <p role="status">Practice continues, but browser storage could not save your progress.</p>}
     {eligible.length === 0 ? <p role="status">This study has no moves for {side === 'w' ? 'Red' : 'Black'}. Choose the other side.</p> : <>
       <div className="study-practice-board" ref={boardRef}>
         <Board board={session.board} orientation={side === 'w' ? 'red' : 'black'} selected={selected} validTargets={validTargets}
@@ -129,6 +132,16 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         </div>
         <p data-testid="study-practice-progress">{session.completed.filter(line => eligible.includes(line)).length} of {eligible.length} lines practiced</p>
         {session.answered > 0 && <p data-testid="study-practice-recall">{session.recalled} of {session.answered} moves recalled without help</p>}
+        {(!progressSaved || saveRetryResult === 'saved') && <div className="study-practice-save-notice" data-testid="practice-progress-save">
+          <p role="status">{progressSaved ? 'Practice progress saved in this browser.' : saveRetryResult === 'failed'
+            ? 'Practice continues, but browser storage still could not save your progress.'
+            : 'Practice continues, but browser storage could not save your progress.'}</p>
+          {!progressSaved && <button type="button" onClick={event => {
+            const saved = writePracticeProgress(game, side, session);
+            setProgressSaved(saved); setSaveRetryResult(saved ? 'saved' : 'failed');
+            if (saved && document.activeElement === event.currentTarget) focusBoardRef.current = true;
+          }}>Retry saving progress</button>}
+        </div>}
         {completedNotes.length > 0 && <details className="study-practice-note study-practice-line-notes" data-testid="study-practice-line-notes"
           onToggle={event => setNotesOpen(event.currentTarget.open)}>
           <summary>Study notes for this line ({completedNotes.length})</summary>
