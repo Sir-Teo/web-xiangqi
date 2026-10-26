@@ -578,6 +578,25 @@
    stroke set in CSS alone, so the lines kept their authored #3a2006 brown and
    all but vanished against the forced canvas. */
 @media (forced-colors: active) {
+    /* Gradients disappear in this mode. Keep empty legal destinations visible
+       and distinguish capture targets from the pieces' solid/double rings. */
+    .target-dot {
+        background: CanvasText;
+        border: 2px solid CanvasText;
+    }
+
+    .target-ring {
+        border-color: CanvasText;
+        border-style: dashed;
+    }
+
+    .target-dot,
+    .target-ring {
+        opacity: 1;
+        animation: none;
+        box-shadow: none;
+    }
+
     .piece.red,
     .piece.black {
         background: Canvas;
