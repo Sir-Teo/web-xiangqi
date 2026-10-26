@@ -198,6 +198,7 @@ compares the three and tracks what is worth moving between them.
 - Deployed builds expose `THIRD_PARTY_NOTICES.md` and `Pikafish-Copying.txt` under the `/web-xiangqi/` base path so users can trace the bundled engine source and license.
 - Wrapper usage supports `variant: "auto" | "threaded" | "single"`.
 - Browser wrapper helper supports `Pikafish.createWorkerEngine(...)` to keep UI responsive in both threaded and single-thread modes.
+- `createWorkerEngine` supports `extendInitTimeoutOnProgress: true` to renew `initTimeoutMs` only when downloaded bytes increase. Its default remains a hard deadline. The app opts in so a slow, advancing first download can finish; stalled downloads and the later UCI-ready handshake still time out.
 - Pass an optional `signal: controller.signal` to cancel a pending `createWorkerEngine` call. Cancellation rejects with `AbortError` and releases the worker; failed initialization and timeouts release it too. After startup succeeds, use the returned engine's `terminate()` method. The app cancels pending startup when restarting or disabling analysis.
 - Worker `onAssetProgress` callbacks are coalesced at roughly one-MiB steps, plus initial, completion, reset, and changed-total notifications. Download bytes and completion counts are unchanged; callers must not depend on a callback for every network chunk.
 - The React app preloads the lightweight `pikafish.js` wrapper, then lazy-loads the selected core/NNUE through `useEngine` instead of parser-blocking the app shell before first paint.

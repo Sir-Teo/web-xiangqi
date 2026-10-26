@@ -105,6 +105,7 @@ const scripts = [
   'test-engine-position-browser.cjs',
   'test-engine-boot-race-browser.cjs',
   'test-worker-lifecycle-browser.cjs',
+  'test-engine-progress-deadline-browser.cjs',
   'test-worker-progress-browser.cjs',
   'test-nnue-memory-browser.cjs',
   'test-engine-barriers-browser.cjs',
