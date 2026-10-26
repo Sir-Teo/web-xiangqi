@@ -57,6 +57,8 @@ async function resetText(page) {
    assert.equal(await rows.count(),20,'Initial preview must stay bounded');
    await panel.getByRole('button',{name:'Show 20 more games',exact:true}).click();
    assert.equal(await rows.count(),40);
+   assert.equal(await rows.nth(20).getByRole('checkbox').evaluate(element=>element===document.activeElement),true,
+    'Loading more collection games must focus the first newly revealed selection');
    await panel.locator('.lib-pgn-games').evaluate(element => { element.scrollTop = element.scrollHeight; });
    await search.fill('王 PLAYER 45');
    assert.equal(await rows.count(),1);
@@ -101,7 +103,7 @@ async function resetText(page) {
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    const overflow = await panel.evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, children: [...el.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > el.getBoundingClientRect().right).map(node => ({tag:node.tagName, class:node.className, text:node.textContent.slice(0,100), width:node.clientWidth, scroll:node.scrollWidth})) }));
    assert.equal(overflow.scroll > overflow.width,false,`Long filenames and enlarged collection content must wrap: ${JSON.stringify(overflow)}`);
-   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).press('Enter');
    await panel.getByRole('status').filter({hasText:'Imported 2 games.'}).waitFor();
    assert.equal(await file.evaluate(element => element === document.activeElement),true,'Finishing import restores keyboard focus');
    const games=JSON.parse(await raw());
@@ -129,7 +131,7 @@ async function resetText(page) {
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
    await page.evaluate(()=>{ const original=Storage.prototype.setItem; Storage.prototype.setItem=function(key,value){if(key==='xiangqi:library:v1')throw new Error('Quota'); return original.call(this,key,value);}; });
    const original=await raw();
-   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).press('Enter');
    await panel.getByRole('alert').waitFor();
    assert.equal(await raw(),original);
    assert.equal(await panel.getByRole('button',{name:'Import 2 games',exact:true}).evaluate(element => element === document.activeElement),true,

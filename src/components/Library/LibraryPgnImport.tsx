@@ -18,9 +18,21 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
   const [query, setQuery] = useState('');
   const [visibleLimit, setVisibleLimit] = useState(PREVIEW_PAGE_SIZE);
   const previewList = useRef<HTMLDivElement>(null);
+  const nextPageFocus = useRef<number | null>(null);
   const previewPanel = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (previewList.current) previewList.current.scrollTop = 0; }, [query, games]);
+  useLayoutEffect(() => {
+    nextPageFocus.current = null;
+    if (previewList.current) previewList.current.scrollTop = 0;
+  }, [query, games]);
+  useLayoutEffect(() => {
+    const index = nextPageFocus.current;
+    if (index === null) return;
+    nextPageFocus.current = null;
+    const control = previewList.current?.children[index]?.querySelector<HTMLElement>('input:not(:disabled), button:not(:disabled)');
+    control?.focus({ preventScroll: true });
+    control?.scrollIntoView({ block: 'nearest' });
+  }, [visibleLimit]);
   const indexedGames = useMemo(() => games.map((game, index) => ({
     game, index, text: toSearchText(Object.values(game.metadata ?? {})),
   })), [games]);
@@ -160,7 +172,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
           </div>)}
         </div>
         {matchingGames.length > visibleLimit && <button type="button"
-          onClick={() => setVisibleLimit(value => value + PREVIEW_PAGE_SIZE)}>Show {Math.min(PREVIEW_PAGE_SIZE, matchingGames.length - visibleLimit)} more games</button>}
+          onClick={() => { nextPageFocus.current = visibleLimit; setVisibleLimit(value => value + PREVIEW_PAGE_SIZE); }}>Show {Math.min(PREVIEW_PAGE_SIZE, matchingGames.length - visibleLimit)} more games</button>}
         <label><input type="checkbox" disabled={saving} checked={includeDuplicates} onChange={event => setIncludeDuplicates(event.target.checked)} /> Import duplicates as copies</label>
         <p role="status">{preview.added} new games; {preview.duplicates} duplicates skipped.</p>
         {selected.size > 0 && preview.error && <p role="alert">{preview.error}</p>}
