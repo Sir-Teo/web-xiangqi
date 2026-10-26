@@ -27,6 +27,7 @@ const scripts = [
   'test-recovery-library-source-browser.cjs',
   'test-replacement-checkpoint-browser.cjs',
   'test-save-state-browser.cjs',
+  'test-save-error-retention-browser.cjs',
   'test-direct-import-race-browser.cjs',
   'test-direct-import-worker-browser.cjs',
   'test-deferred-analysis-browser.cjs',

@@ -2953,6 +2953,12 @@ function App() {
   const [savedToast, setSavedToast] = useState(false);
   const [saveFailedToast, setSaveFailedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (savedToastTimerRef.current !== null) window.clearTimeout(savedToastTimerRef.current);
+    savedToastTimerRef.current = null;
+    setSavedToast(false);
+    setSaveFailedToast(false);
+  }, [gameIdentity]);
   const copiedToastTimerRef = useRef<number | null>(null);
   const copiedFenToastTimerRef = useRef<number | null>(null);
   const copiedShareToastTimerRef = useRef<number | null>(null);
@@ -4380,21 +4386,16 @@ function App() {
     if (saved) setLoadedSavedStudy(saved);
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
+      savedToastTimerRef.current = null;
     }
     setSavedToast(Boolean(saved));
     setSaveFailedToast(!saved);
-    // A failure outlasts a success on purpose. "Saved" is a confirmation of
-    // something the reader already expected and can be brief; "Save Failed"
-    // says the game they just tried to keep is not anywhere, and it is the only
-    // place that is said. At the shared 1800ms it was gone before someone who
-    // clicked and glanced away could see it, leaving them believing the save
-    // had worked -- measured with local storage filled to its quota, where the
-    // write really does fail and the library really does stay empty.
-    savedToastTimerRef.current = window.setTimeout(() => {
+    // Recovery instructions stay until dismissal, a successful save, or a
+    // different game. A brief success confirmation can fade on its own.
+    if (saved) savedToastTimerRef.current = window.setTimeout(() => {
       savedToastTimerRef.current = null;
       setSavedToast(false);
-      setSaveFailedToast(false);
-    }, saved ? 1800 : 8000);
+    }, 1800);
   }, []);
 
   const currentSaveIdentityRef = useRef(gameIdentity);
