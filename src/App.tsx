@@ -17,6 +17,7 @@ import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
+import type { LibraryFilters } from './components/Library/LibraryPanel';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
 import { DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
@@ -591,6 +592,10 @@ function App() {
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 2);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
+  // Keep search choices while the lazy library unmounts for the graph. A ref
+  // avoids rerendering the board on each keystroke; a fresh page starts clear.
+  const libraryFilters = useRef<LibraryFilters | undefined>(undefined);
+  const rememberLibraryFilters = useCallback((filters: LibraryFilters) => { libraryFilters.current = filters; }, []);
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
   // WXF is the default because it is the notation both a Chinese record and an
@@ -6712,6 +6717,8 @@ function App() {
                 {qaForcePanelError ? <QaForcedRenderError /> : (
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
+                    initialFilters={libraryFilters.current}
+                    onFiltersChange={rememberLibraryFilters}
                     savedGames={savedGames}
                     onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
                     onDeleteSavedGame={handleDeleteSavedGame}

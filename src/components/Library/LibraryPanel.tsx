@@ -33,6 +33,13 @@ const SAVED_PGN_PATH_ERROR = "This study's saved moves do not match its variatio
 type LibraryPrimaryLine = ReturnType<typeof savedGameLine> & { savedPath: 'complete' | 'prefix' | 'variation' };
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
 
+export interface LibraryFilters {
+  search: string;
+  review: 'all' | 'reviewed' | 'unreviewed';
+  result: 'all' | 'red' | 'black' | 'draw' | 'ongoing';
+  sort: SavedSort;
+}
+
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
   recent: 'Recently modified',
   oldest: 'Oldest first',
@@ -44,6 +51,8 @@ const SAVED_SORT_LABELS: Record<SavedSort, string> = {
 };
 
 interface LibraryPanelProps {
+  initialFilters?: LibraryFilters;
+  onFiltersChange?: (filters: LibraryFilters) => void;
   savedGames: SavedGame[];
   libraryState: LibraryState;
   onLibraryChange: () => void;
@@ -206,6 +215,8 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
 }
 
 export function LibraryPanel({
+  initialFilters,
+  onFiltersChange,
   savedGames,
   libraryState,
   onLibraryChange,
@@ -216,7 +227,7 @@ export function LibraryPanel({
   loadedStudy,
   onLoadHistorical,
 }: LibraryPanelProps) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialFilters?.search ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -239,9 +250,13 @@ export function LibraryPanel({
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
-  const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
-  const [savedSort, setSavedSort] = useState<SavedSort>('recent');
+  const [reviewFilter, setReviewFilter] = useState<LibraryFilters['review']>(initialFilters?.review ?? 'all');
+  const [resultFilter, setResultFilter] = useState<LibraryFilters['result']>(initialFilters?.result ?? 'all');
+  const [savedSort, setSavedSort] = useState<SavedSort>(initialFilters?.sort ?? 'recent');
+
+  useEffect(() => {
+    onFiltersChange?.({ search, review: reviewFilter, result: resultFilter, sort: savedSort });
+  }, [search, reviewFilter, resultFilter, savedSort, onFiltersChange]);
 
   useEffect(() => {
     return () => {
@@ -653,6 +668,7 @@ export function LibraryPanel({
               setReviewFilter('all');
               setResultFilter('all');
               setSavedSort('recent');
+              searchRef.current?.focus();
             }}
           >
             Reset

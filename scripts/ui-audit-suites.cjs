@@ -131,6 +131,7 @@ const scripts = [
   'test-search-telemetry-browser.cjs',
   'test-study-analysis-browser.cjs',
   'test-library-analysis-search-browser.cjs',
+  'test-library-filter-memory-browser.cjs',
   'test-library-move-search-browser.cjs',
   'test-library-match-disclosures-browser.cjs',
   'test-study-load-context-browser.cjs',
