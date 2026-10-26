@@ -485,7 +485,10 @@ export function exportPgnFromMoveTree(
 /**
  * Copies text to clipboard, returning a promise that resolves to true on success.
  */
+let clipboardRequestVersion = 0;
+
 export async function copyToClipboard(text: string): Promise<boolean> {
+    const request = ++clipboardRequestVersion;
     const value = String(text);
     const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
     try {
@@ -497,7 +500,9 @@ export async function copyToClipboard(text: string): Promise<boolean> {
         // Fall through to the selection-based fallback below.
     }
 
-    return copyToClipboardWithSelection(value);
+    // A delayed permission denial must not copy old text over a newer request.
+    if (request !== clipboardRequestVersion) return false;
+    return copyToClipboardWithSelection(value, request);
 }
 
 /**
@@ -538,7 +543,7 @@ export function downloadTextFile(filename: string, text: string, mimeType = 'tex
     }
 }
 
-function copyToClipboardWithSelection(text: string): boolean {
+function copyToClipboardWithSelection(text: string, request: number): boolean {
     if (typeof document === 'undefined' || !document.body) return false;
 
     const previousActive = typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
@@ -570,7 +575,7 @@ function copyToClipboardWithSelection(text: string): boolean {
     textarea.select();
 
     try {
-        return Boolean(document.execCommand?.('copy'));
+        return request === clipboardRequestVersion && Boolean(document.execCommand?.('copy'));
     } catch (_) {
         return false;
     } finally {

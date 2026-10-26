@@ -13,7 +13,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
         window.__copiedText = text;
       } } });
-      document.execCommand = () => false;
+      window.__fallbackCopies = [];
+      document.execCommand = () => {
+        if (!window.__allowFallbackCopy) return false;
+        window.__copiedText = document.activeElement.value;
+        window.__fallbackCopies.push(window.__copiedText); return true;
+      };
       const create = URL.createObjectURL.bind(URL);
       URL.createObjectURL = blob => { if (window.__downloadDenied) throw new Error('Denied'); return create(blob); };
     });
@@ -90,6 +95,21 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       assert.match(await latest.textContent(), /failed/i, 'An older clipboard reply cannot clear a newer action failure');
       assert.doesNotMatch(await pending.textContent(), /Copied/);
     }
+    const pendingPgn = page.getByTestId('copy-pgn-btn'), currentFen = page.getByTestId('copy-fen-btn');
+    await page.evaluate(() => { window.__holdCopy = true; window.__rejectCopy = undefined; });
+    await activate(pendingPgn); await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
+    await page.evaluate(() => { window.__holdCopy = false; }); await activate(currentFen);
+    await currentFen.filter({ hasText: /Copied/ }).waitFor();
+    const newerText = await page.evaluate(() => window.__copiedText);
+    await page.evaluate(() => { window.__allowFallbackCopy = true; window.__rejectCopy(new DOMException('Old denial', 'NotAllowedError')); });
+    await page.clock.runFor(50);
+    assert.equal(await page.evaluate(() => window.__copiedText), newerText, 'An older denied request must not overwrite newer clipboard text through the fallback');
+    assert.equal(await page.evaluate(() => window.__fallbackCopies.length), 0, 'Superseded copies do not run the selection fallback');
+    await page.evaluate(() => { window.__copyDenied = true; }); await activate(currentFen);
+    await currentFen.filter({ hasText: /Copied/ }).waitFor();
+    assert.equal(await page.evaluate(() => window.__copiedText), original.fen, 'The current request still supports the selection fallback');
+    assert.equal(await page.evaluate(() => window.__fallbackCopies.length), 1);
+    await page.evaluate(() => { window.__copyDenied = false; window.__allowFallbackCopy = false; });
     assert.deepEqual(await page.evaluate(() => ({ fen: document.querySelector('.bottombar-fen').title, library: localStorage.getItem('xiangqi:library:v1') })), original);
     await page.clock.resume();
     await page.evaluate(() => {
