@@ -25,6 +25,19 @@ const TRUNCATED_FIRST_COMMENT = [
 const CLOSED_FIRST_COMMENT = TRUNCATED_FIRST_COMMENT.replace('{oops', '{oops}');
 
 describe('firstPgnGame', () => {
+    it('keeps punctuation and empty metadata intact when no game boundary is possible', () => {
+        for (const source of ['', ';\n'.repeat(1000), '%\n'.repeat(1000), '{}[]'.repeat(1000), '炮二平五 馬８進７', '{未完的註解']) {
+            expect(firstPgnGame(source)).toEqual({ text: source, truncated: false });
+        }
+    });
+
+    it('still recognizes every result and header boundaries after punctuation', () => {
+        for (const marker of ['1-0', '0-1', '1/2-1/2', '*']) {
+            expect(firstPgnGame(`{} ${marker} h2e2`)).toEqual({ text: `{} ${marker} `, truncated: true, marker });
+        }
+        expect(firstPgnGame('{} [] 炮二平五 [Event "Next"] h2e2').text).toBe('{} [] 炮二平五 ');
+    });
+
     it('stops at the second game even when the first comment is never closed', () => {
         // The control first: without the defect this shape splits correctly,
         // so a green result below cannot be the fixture being unreadable.

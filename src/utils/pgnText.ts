@@ -206,6 +206,10 @@ export function* pgnMetadataSpans(source: string): Generator<PgnMetadataSpan> {
 
 /** A leading/interleaved header comment is not the start of the movetext. */
 export function firstPgnGame(source: string): { text: string; truncated: boolean; marker?: string } {
+    // Tags require an ASCII letter, and every result contains `1` or `*`.
+    // Without any of these, there can be no game boundary to tokenize. This
+    // avoids allocating a token for every empty remark or punctuation fragment.
+    if (!/[A-Za-z1*]/.test(source)) return { text: source, truncated: false };
     let depth = 0;
     let seenMoves = false;
     let marker: string | undefined;

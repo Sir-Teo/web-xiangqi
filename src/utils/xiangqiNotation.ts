@@ -532,20 +532,29 @@ export function parseMoveInNotation(
     sideToMove: Side,
     text: string
 ): string | null {
+    const token = readNotationToken(text);
+    return token ? resolveNotationToken(board, sideToMove, token) : null;
+}
+
+type NotationToken = { coordinate: string } | { canonical: string };
+
+function readNotationToken(text: string): NotationToken | null {
     const raw = String(text ?? '').trim().toLowerCase();
-    if (COORDINATE_TOKEN.test(raw)) {
-        // Coordinates still have to name a legal move, like everything else.
-        return legalMovesInPosition(board, sideToMove).includes(raw) ? raw : null;
-    }
-
+    if (COORDINATE_TOKEN.test(raw)) return { coordinate: raw };
     const wanted = canonicaliseNotationToken(text);
-    if (!wanted) return null;
+    return wanted ? { canonical: wanted } : null;
+}
 
+function resolveNotationToken(board: BoardState, sideToMove: Side, token: NotationToken): string | null {
+    if ('coordinate' in token) {
+        // Coordinates still have to name a legal move, like everything else.
+        return legalMovesInPosition(board, sideToMove).includes(token.coordinate) ? token.coordinate : null;
+    }
     for (const uci of legalMovesInPosition(board, sideToMove)) {
         const wxf = formatWxfMove(board, uci);
-        if (wxf && canonicaliseNotationToken(wxf) === wanted) return uci;
+        if (wxf && canonicaliseNotationToken(wxf) === token.canonical) return uci;
         const chinese = formatChineseMove(board, uci);
-        if (chinese && canonicaliseNotationToken(chinese) === wanted) return uci;
+        if (chinese && canonicaliseNotationToken(chinese) === token.canonical) return uci;
     }
     return null;
 }
@@ -598,13 +607,12 @@ export function parseMoveLineInNotation(
         // which is every record with a header stripped off the front -- parsed
         // as no moves at all.
         if (!token) continue;
-        const uci = parseMoveInNotation(state, side, token);
+        // Classify once. Non-move text needs no board search, and an illegal
+        // move is already classified when deciding where to stop the record.
+        const parsed = readNotationToken(token);
+        if (!parsed) continue;
+        const uci = resolveNotationToken(state, side, parsed);
         if (!uci) {
-            // A token that is not shaped like a move is decoration -- a move
-            // number, a result, a word from a comment. Skip it and read on.
-            const shaped = canonicaliseNotationToken(token);
-            if (!shaped && !COORDINATE_TOKEN.test(token.trim().toLowerCase())) continue;
-
             // A token that *is* shaped like a move, and names none, is a move
             // the record wanted and this reader could not play. Stop there.
             //
