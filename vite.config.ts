@@ -51,7 +51,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          exclude: [...configDefaults.exclude, '**/.deps/**', 'src/utils/__fuzz.test.ts'],
+          exclude: [...configDefaults.exclude, '**/.deps/**', 'src/utils/__fuzz.test.ts', 'src/utils/moveImport.performance.test.ts'],
           sequence: { groupOrder: 0 },
         },
       },
@@ -59,7 +59,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'parser-limits',
-          include: ['src/utils/__fuzz.test.ts'],
+          include: ['src/utils/__fuzz.test.ts', 'src/utils/moveImport.performance.test.ts'],
+          fileParallelism: false,
           sequence: { groupOrder: 1 },
         },
       },
