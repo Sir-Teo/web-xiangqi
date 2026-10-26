@@ -106,7 +106,11 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
     const restoreLostFocus = Boolean(initiatingControl.current);
     savingRef.current = true; setSaving(true);
     const request = generation.current;
-    const result = await withLibraryMutation(() => saveGameCollection(games.filter((_, index) => selected.has(index)), includeDuplicates), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
+    // Another tab may hold the lock. Canceling or replacing this file must
+    // invalidate the action before it writes, as well as its eventual UI result.
+    const result = await withLibraryMutation(() => request === generation.current
+      ? saveGameCollection(games.filter((_, index) => selected.has(index)), includeDuplicates)
+      : { added: 0, duplicates: 0, error: null }, { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
     savingRef.current = false; setSaving(false);
     onChange();
     if (request !== generation.current) return;
@@ -133,16 +137,16 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
         </label>
         <p role="status">{matchingGames.length} of {games.length} games match{matchingGames.length > visibleLimit ? ` · Showing ${visibleLimit}` : ''}. {selected.size} selected for import.{hiddenSelected > 0 ? ` ${hiddenSelected} selected ${hiddenSelected === 1 ? 'game is' : 'games are'} outside this search.` : ''}</p>
         <div className="lib-transfer-actions">
-          <button type="button" disabled={!matchingGames.length} onClick={() => selectMatches(true)}>{terms.length ? 'Select all matches' : 'Select all'}</button>
-          <button type="button" disabled={!matchingGames.length} onClick={() => selectMatches(false)}>{terms.length ? 'Deselect matches' : 'Select none'}</button>
+          <button type="button" disabled={saving || !matchingGames.length} onClick={() => selectMatches(true)}>{terms.length ? 'Select all matches' : 'Select all'}</button>
+          <button type="button" disabled={saving || !matchingGames.length} onClick={() => selectMatches(false)}>{terms.length ? 'Deselect matches' : 'Select none'}</button>
           {terms.length > 0 && hiddenSelected > 0 && matchingGames.length > 0 && <button type="button"
-            onClick={() => setSelected(new Set(matchingGames.map(entry => entry.index)))}>Select only matches</button>}
+            disabled={saving} onClick={() => setSelected(new Set(matchingGames.map(entry => entry.index)))}>Select only matches</button>}
         </div>
         <div className="lib-pgn-games" ref={previewList}>
           {matchingGames.length === 0 && <p>No games match. Try fewer words or clear the search.</p>}
           {matchingGames.slice(0, visibleLimit).map(({ game, index }) => <div key={index} className="lib-pgn-game">
             <label>
-            <input type="checkbox" checked={selected.has(index)} onChange={() => setSelected(previous => {
+            <input type="checkbox" disabled={saving} checked={selected.has(index)} onChange={() => setSelected(previous => {
               const next = new Set(previous); if (next.has(index)) next.delete(index); else next.add(index); return next;
             })} />
             <span><strong>{index + 1}. {formatRatedPlayer(game.metadata?.redPlayer, game.metadata?.redRating, 'Red')} · {formatRatedPlayer(game.metadata?.blackPlayer, game.metadata?.blackRating, 'Black')}</strong>
@@ -157,7 +161,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
         </div>
         {matchingGames.length > visibleLimit && <button type="button"
           onClick={() => setVisibleLimit(value => value + PREVIEW_PAGE_SIZE)}>Show {Math.min(PREVIEW_PAGE_SIZE, matchingGames.length - visibleLimit)} more games</button>}
-        <label><input type="checkbox" checked={includeDuplicates} onChange={event => setIncludeDuplicates(event.target.checked)} /> Import duplicates as copies</label>
+        <label><input type="checkbox" disabled={saving} checked={includeDuplicates} onChange={event => setIncludeDuplicates(event.target.checked)} /> Import duplicates as copies</label>
         <p role="status">{preview.added} new games; {preview.duplicates} duplicates skipped.</p>
         {selected.size > 0 && preview.error && <p role="alert">{preview.error}</p>}
         <div className="lib-transfer-actions">

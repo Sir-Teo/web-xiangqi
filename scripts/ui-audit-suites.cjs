@@ -28,6 +28,7 @@ const scripts = [
   'test-deferred-analysis-browser.cjs',
   'test-scalar-build-browser.cjs',
   'test-pgn-collection-browser.cjs',
+  'test-transfer-cancellation-browser.cjs',
   'test-pgn-notes-browser.cjs',
   'test-pgn-header-comments-browser.cjs',
   'test-pgn-glyphs-browser.cjs',

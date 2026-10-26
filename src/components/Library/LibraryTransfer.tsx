@@ -79,7 +79,11 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
     const restoreLostFocus = Boolean(initiatingControl.current);
     restoringRef.current = true; setRestoring(true); setError('');
     const request = generation.current;
-    const result: LibraryRestorePreview = await withLibraryMutation(() => restoreLibraryBackup(pending.text, pending.choices), { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
+    // Another tab may hold the lock. Canceling or replacing this file must
+    // invalidate the action before it writes, as well as its eventual UI result.
+    const result: LibraryRestorePreview = await withLibraryMutation(() => request === generation.current
+      ? restoreLibraryBackup(pending.text, pending.choices)
+      : { added: 0, duplicates: 0, error: null }, { added: 0, duplicates: 0, error: LIBRARY_LOCK_ERROR });
     restoringRef.current = false; setRestoring(false);
     onChange();
     if (request !== generation.current) return;
@@ -142,7 +146,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
                 <p>Backup: {[conflict.incoming.metadata?.redPlayer, conflict.incoming.metadata?.blackPlayer, conflict.incoming.rootComment, conflict.incoming.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
               </details>
               <label>Resolve {conflict.current.label || conflict.id}
-                <select value={pending.choices[conflict.id]?.choice ?? "keep"} onChange={event => {
+                <select disabled={restoring} value={pending.choices[conflict.id]?.choice ?? "keep"} onChange={event => {
                   const choices = { ...pending.choices, [conflict.id]: { expected: JSON.stringify(conflict.current), choice: event.target.value as "keep" | "replace" | "copy" } };
                   const preview = previewLibraryRestore(pending.text, choices);
                   setPending({ ...pending, choices, preview: preview.error ? { ...pending.preview, error: preview.error } : preview });
