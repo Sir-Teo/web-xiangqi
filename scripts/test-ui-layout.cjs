@@ -10891,8 +10891,8 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
     // An undo that cannot be carried out is the one moment the toast must not
     // look like the cheerful "Deleted X — Undo" it replaces: the deletion
     // stands, and a reader who reads the old wording walks away believing it
-    // did not. So the toast has to stay up, say what happened, and stop
-    // offering a button that will not work.
+    // did not. Keep the failure visible and replace ordinary Undo with an
+    // explicit retry action, retaining the record for a later attempt.
     await page.getByTestId(`delete-saved-${id}`).click();
     await page.waitForTimeout(300);
     await page.getByTestId(`confirm-delete-saved-${id}`).click();
@@ -10916,6 +10916,7 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
       return {
         text: (toast.textContent || "").replace(/\s+/g, " ").trim(),
         stillOffersUndo: Boolean(toast.querySelector('[data-testid="library-undo-btn"]')),
+        offersRetry: Boolean(toast.querySelector('[data-testid="library-retry-undo-btn"]')),
         marked: toast.className.includes("undo-toast-failed"),
         borderColour: getComputedStyle(toast).borderTopColor,
       };
@@ -10923,8 +10924,8 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
     if (!refused) {
       throw new Error("A refused undo closed its toast, so the deletion stands with nothing said about it.");
     }
-    if (!/could not put it back/i.test(refused.text) || refused.stillOffersUndo) {
-      throw new Error(`A refused undo should say so and stop offering the button: ${JSON.stringify(refused)}`);
+    if (!/could not put it back/i.test(refused.text) || refused.stillOffersUndo || !refused.offersRetry) {
+      throw new Error(`A refused undo should say so and offer an explicit retry: ${JSON.stringify(refused)}`);
     }
     if (!refused.marked) throw new Error("The refused toast is not marked as a failure.");
     // And the marking has to be visible, not just a class name.

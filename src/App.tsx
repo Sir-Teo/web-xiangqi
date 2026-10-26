@@ -4487,9 +4487,11 @@ function App() {
    * `restoreGameToLibrary` puts it back under its own id, so an open study or
    * a saved review still points at the same game.
    */
-  const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean } | null>(null);
+  const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean; pending?: boolean } | null>(null);
   const libraryUndoTimerRef = useRef<number | null>(null);
+  const libraryUndoVersionRef = useRef(0);
   const dismissLibraryUndo = useCallback(() => {
+    libraryUndoVersionRef.current += 1;
     if (libraryUndoTimerRef.current !== null) {
       window.clearTimeout(libraryUndoTimerRef.current);
       libraryUndoTimerRef.current = null;
@@ -4505,6 +4507,7 @@ function App() {
     if (!await deleteGameFromLibrary(id)) return false;
     if (!removed) return true;
     if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
+    libraryUndoVersionRef.current += 1;
     setLibraryUndo({ game: removed });
     libraryUndoTimerRef.current = window.setTimeout(() => {
       libraryUndoTimerRef.current = null;
@@ -4514,17 +4517,23 @@ function App() {
   }, [deleteGameFromLibrary, savedGames]);
 
   const handleUndoLibraryDelete = useCallback(async () => {
-    if (!libraryUndo) return;
-    if (await restoreGameToLibrary(libraryUndo.game)) {
+    if (!libraryUndo || libraryUndo.pending) return;
+    // Once accepted, Undo must survive its original expiry while another tab
+    // holds the library lock. A later deletion owns its own toast and timer.
+    const version = libraryUndoVersionRef.current;
+    if (libraryUndoTimerRef.current !== null) {
+      window.clearTimeout(libraryUndoTimerRef.current);
+      libraryUndoTimerRef.current = null;
+    }
+    setLibraryUndo({ ...libraryUndo, pending: true });
+    const restored = await restoreGameToLibrary(libraryUndo.game);
+    if (version !== libraryUndoVersionRef.current) return;
+    if (restored) {
       dismissLibraryUndo();
       return;
     }
     // Storage can refuse -- it is full, or blocked, or unreadable. Say so and
     // leave the toast up rather than closing it on a delete that stands.
-    if (libraryUndoTimerRef.current !== null) {
-      window.clearTimeout(libraryUndoTimerRef.current);
-      libraryUndoTimerRef.current = null;
-    }
     setLibraryUndo({ game: libraryUndo.game, failed: true });
   }, [dismissLibraryUndo, libraryUndo, restoreGameToLibrary]);
 
@@ -8039,15 +8048,16 @@ function App() {
         {libraryUndo ? (
           <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
             <span>
-              {libraryUndo.failed
-                ? 'Could not put it back: browser storage is full or blocked.'
+              {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
+                ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available.'
                 : libraryUndo.game.label
                   ? `Deleted “${libraryUndo.game.label}”`
                   : 'Deleted that saved game'}
             </span>
-            {libraryUndo.failed ? null : (
-              <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete} data-testid="library-undo-btn">Undo</button>
-            )}
+            <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete}
+              disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
+              {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
+            </button>
             <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
               <IconX />
             </button>

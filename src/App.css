@@ -3962,7 +3962,7 @@ summary:active {
    deletion stands. Without this it arrived looking exactly like the cheerful
    "Deleted X — Undo" it replaces, which is the one moment it must not. Border
    and text only; the danger fill in this app is reserved for buttons that do
-   something destructive, and this one has nothing left to press. */
+   something destructive. Retrying a restore is a recovery action. */
 .undo-toast-failed {
   border-color: var(--danger, #f87171);
   color: var(--danger, #f87171);
