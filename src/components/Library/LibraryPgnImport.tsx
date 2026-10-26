@@ -6,6 +6,7 @@ import { resultLabel } from '../../utils/savedGameLabels';
 import { formatRatedPlayer } from '../../utils/gameMetadata';
 import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms, toSearchText } from '../../utils/searchTerms';
 import { unpackCollectionGames, type PackedGame } from '../../utils/moveTreeTransfer';
+import { isComposingKey } from '../../utils/keyboard';
 
 const PREVIEW_PAGE_SIZE = 20;
 
@@ -156,6 +157,11 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
         <label className="lib-pgn-search">Find games in this collection
           <input type="search" value={query} maxLength={MAX_SEARCH_QUERY_LENGTH}
             placeholder="Players, events, dates, annotators…"
+            aria-keyshortcuts="Escape" title="Press Esc to clear this search"
+            onKeyDown={event => {
+              if (event.key !== 'Escape' || !query || isComposingKey(event.nativeEvent)) return;
+              event.preventDefault(); event.stopPropagation(); setQuery(''); setVisibleLimit(PREVIEW_PAGE_SIZE);
+            }}
             onChange={event => { setQuery(event.target.value); setVisibleLimit(PREVIEW_PAGE_SIZE); }} />
         </label>
         <p role="status">{matchingGames.length} of {games.length} games match{matchingGames.length > visibleLimit ? ` · Showing ${visibleLimit}` : ''}. {selected.size} selected for import.{hiddenSelected > 0 ? ` ${hiddenSelected} selected ${hiddenSelected === 1 ? 'game is' : 'games are'} outside this search.` : ''}</p>

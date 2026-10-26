@@ -50,6 +50,17 @@ const games = [
         await page.getByTestId(width < 900 ? 'mobile-analysis-tab-graph' : 'left-panel-tab-graph').click();
         await page.getByTestId(width < 900 ? 'mobile-analysis-tab-library' : 'left-panel-tab-library').click();
         await search.waitFor(); assert.deepEqual(await values(), selected, 'Panel tabs retain the same choices');
+        await search.focus();
+        await search.evaluate(node => {
+          node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true }));
+          const finalImeKey = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+          Object.defineProperty(finalImeKey, 'keyCode', { value: 229 }); node.dispatchEvent(finalImeKey);
+        });
+        assert.deepEqual(await values(), selected, 'IME Escape and final 229 events preserve the query');
+        await search.press('Escape');
+        assert.deepEqual(await values(), { ...selected, search: '' }, 'Escape clears the query while preserving filters and sorting');
+        assert.equal(await search.evaluate(node => node === document.activeElement), true, 'Clearing the query keeps search focus');
+        await search.fill(selected.search);
         const reset = page.getByRole('button', { name: 'Reset', exact: true });
         await reset.focus(); await reset.press('Enter');
         assert.deepEqual(await values(), defaults);

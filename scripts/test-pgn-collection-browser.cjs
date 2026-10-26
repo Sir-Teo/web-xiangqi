@@ -73,7 +73,10 @@ async function resetText(page) {
    await search.fill('missing player');
    assert.equal(await rows.count(),0);
    assert.equal(await panel.getByRole('button',{name:'Select all matches',exact:true}).isDisabled(),true);
-   await search.fill('');
+   await search.press('Escape');
+   assert.equal(await search.inputValue(),'','Escape clears the preview search');
+   assert.equal(await search.evaluate(node=>node===document.activeElement),true,'Clearing preview search retains focus');
+   assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true,'Clearing search preserves selected games');
    assert.equal(await rows.count(),20,'Changing the search resets pagination');
    assert.equal(await panel.locator('.lib-pgn-games').evaluate(element => element.scrollTop),0,
     'A new search must start at the first matching game');

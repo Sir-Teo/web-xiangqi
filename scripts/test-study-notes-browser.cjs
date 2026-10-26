@@ -74,7 +74,9 @@ async function assertFits(page) {
         await search.fill('no matching note');
         assert.equal(await results.count(), 0);
         await page.getByText('No notes match. Try fewer words.', { exact: true }).waitFor();
-        await search.fill('');
+        await search.press('Escape');
+        assert.equal(await search.inputValue(), '', 'Escape clears the notes query');
+        assert.equal(await results.count(), 7, 'Clearing search restores notes across every variation');
         await search.focus();
         await page.screenshot({ path: `/tmp/xiangqi-study-notes-${browserType.name()}-${width}-natural.png` });
         for (const size of [32, 16]) {

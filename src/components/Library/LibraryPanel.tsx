@@ -588,7 +588,13 @@ export function LibraryPanel({
           placeholder="Search players, moves, notes, analysis…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={event => {
+            if (event.key !== 'Escape' || !search || isComposingKey(event.nativeEvent)) return;
+            event.preventDefault(); event.stopPropagation(); setSearch('');
+          }}
           aria-label="Search library"
+          aria-keyshortcuts="Escape"
+          title="Press Esc to clear this search"
           // Matching truncates past this anyway; stopping it at the input
           // keeps a pasted record out of React state as well.
           maxLength={MAX_SEARCH_QUERY_LENGTH}

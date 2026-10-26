@@ -4,6 +4,7 @@ import type { StudyNote } from '../utils/studyNotes';
 import { formatBreadcrumbLabel } from '../utils/moveBreadcrumb';
 import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms } from '../utils/searchTerms';
 import type { XiangqiNotationStyle } from '../utils/xiangqiNotation';
+import { isComposingKey } from '../utils/keyboard';
 import './StudyNotes.css';
 
 const PAGE_SIZE = 20;
@@ -56,6 +57,11 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
         <div className="study-notes-body">
             <label htmlFor="study-notes-search">Find a note in any variation</label>
             <input id="study-notes-search" type="search" value={query} maxLength={MAX_SEARCH_QUERY_LENGTH}
+                aria-keyshortcuts="Escape" title="Press Esc to clear this search"
+                onKeyDown={event => {
+                    if (event.key !== 'Escape' || !query || isComposingKey(event.nativeEvent)) return;
+                    event.preventDefault(); event.stopPropagation(); setQuery(''); setLimit(PAGE_SIZE);
+                }}
                 placeholder="Search note text" onChange={event => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} />
             <p role="status">{matches.length ? `${matches.length} ${matches.length === 1 ? 'note' : 'notes'}${matches.length > limit ? ` · Showing ${limit}` : ''}. Choose one to go to its position.` : 'No notes match. Try fewer words.'}</p>
             {disabled && <p>Pause play to visit a note.</p>}
