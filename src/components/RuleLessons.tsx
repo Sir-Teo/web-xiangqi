@@ -100,7 +100,7 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
                     </div>}
                     <div className="rule-lessons-actions">
                         <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
-                        {!solved && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => setHint(true)}>Show hint</button>}
+                        {!solved && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => setHint(value => !value)}>{hint ? 'Hide hint' : 'Show hint'}</button>}
                         <button type="button" onClick={() => openLesson(index)}>Try again</button>
                         {solved && index < RULE_LESSONS.length - 1 && <button type="button" ref={nextLessonRef} onClick={() => openLesson(index + 1)}>Next lesson</button>}
                     </div>

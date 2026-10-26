@@ -51,7 +51,7 @@ async function openCommand(page) {
             await square('f6').click();
             assert.match(await feedback.textContent(), /leg is blocked/);
             assert.equal(await feedback.getAttribute('data-solved'), 'false');
-            const hintButton = dialog.getByRole('button', { name: 'Show hint' });
+            const hintButton = dialog.getByRole('button', { name: /^(Show|Hide) hint$/ });
             assert.equal(await hintButton.getAttribute('aria-expanded'), 'false');
             await hintButton.focus(); await page.keyboard.press('Enter');
             await page.waitForFunction(() => document.querySelector('[data-testid="lesson-feedback"]')?.textContent.includes('Hint:'));
