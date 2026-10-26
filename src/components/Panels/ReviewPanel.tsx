@@ -497,7 +497,6 @@ export const ReviewPanel = memo(function ReviewPanel({
                                         aria-keyshortcuts="ArrowUp ArrowDown Home End"
                                         data-testid={`review-moment-${moment.moveIndex}`}
                                         aria-current={currentNodeId === moment.nodeId ? 'true' : undefined}
-                                        aria-label={`${formatReviewQuality(moment.quality)} review moment, ${moment.side} ply ${moment.ply}, played ${formatMoveText(moment.nodeId, moment.playedMove)}, swing ${formatSwing(moment.swing)}, ${formatReviewChanceLossLabel(moment)}, ${formatReviewEvalChangeLabel(moment)}${moment.bestMove ? `, engine suggested ${formatMoveText(moment.nodeId, moment.bestMove)}` : ''}`}
                                     >
                                         <div className="review-moment-topline">
                                             <span>{formatReviewQuality(moment.quality)}</span>
@@ -549,7 +548,8 @@ export const ReviewPanel = memo(function ReviewPanel({
                                                     onClick={() => onPracticeMoment(moment.nodeId)}
                                                     tabIndex={momentIndex === momentStopIndex ? 0 : -1}
                                                     data-testid={`review-practice-${moment.moveIndex}`}
-                                                    aria-label={`Practice the position before ${formatMoveText(moment.nodeId, moment.playedMove)}`}
+                                                    aria-label={`Practice position before ${formatMoveText(moment.nodeId, moment.playedMove)} against the engine`}
+                                                    title="Start a new engine game from before this move"
                                                 >
                                                     Practice position
                                                 </button>
@@ -561,7 +561,8 @@ export const ReviewPanel = memo(function ReviewPanel({
                                                     onClick={() => onPlayBestMove(moment.nodeId, moment.bestMove!)}
                                                     tabIndex={momentIndex === momentStopIndex ? 0 : -1}
                                                     data-testid={`review-try-best-${moment.moveIndex}`}
-                                                    aria-label={`Try engine suggestion ${formatMoveText(moment.nodeId, moment.bestMove)} instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
+                                                    aria-label={`Try best ${formatMoveText(moment.nodeId, moment.bestMove)}, the engine suggestion, instead of ${formatMoveText(moment.nodeId, moment.playedMove)}`}
+                                                    title="Play the engine's suggestion as a variation"
                                                 >
                                                     Try best <strong>{formatMoveText(moment.nodeId, moment.bestMove)}</strong>
                                                 </button>

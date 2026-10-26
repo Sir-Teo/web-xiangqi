@@ -112,8 +112,11 @@ async function main() {
     );
 
     const firstMoment = page.locator('.review-moment-card[data-testid^="review-moment-"]').first();
-    const firstMomentLabel = await firstMoment.getAttribute("aria-label");
-    if (!firstMomentLabel || !/review moment/i.test(firstMomentLabel) || !/played/i.test(firstMomentLabel)) {
+    const firstMomentLabel = await firstMoment.ariaSnapshot();
+    const playedMove = await firstMoment.locator(".review-moment-main > span").textContent();
+    const ply = (await firstMoment.locator(".review-moment-topline > strong").innerText()).match(/\bply\s+(\d+)\b/i)?.[1];
+    const namedMoment = page.locator(".review-moment-list").getByRole("button", { name: new RegExp(`\\bply\\s+${ply}\\b.*${(playedMove || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i") });
+    if (!playedMove || !ply || await namedMoment.count() !== 1 || await namedMoment.getAttribute("data-testid") !== await firstMoment.getAttribute("data-testid")) {
       throw new Error(`Review moment did not expose an actionable label: ${firstMomentLabel}`);
     }
     await firstMoment.click();

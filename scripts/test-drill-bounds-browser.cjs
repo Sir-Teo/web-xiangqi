@@ -61,7 +61,8 @@ async function command(page, label) {
         await command(page, 'Library');
         await page.getByTestId('load-saved-drill-bound-fixture').click();
         const moment = page.getByTestId('review-moment-' + (black ? 3 : 2));
-        const originalMoment = await moment.getAttribute('aria-label');
+        const originalMoment = await moment.textContent();
+        assert.ok(originalMoment, 'The reviewed moment must contain its move details');
         await page.waitForFunction(() => document.querySelector('[data-testid="learn-from-mistakes-btn"]')?.disabled === false);
         await page.getByTestId('learn-from-mistakes-btn').click();
         const banner = page.getByTestId('mistake-drill');
@@ -134,7 +135,7 @@ async function command(page, label) {
         assert.match(await banner.innerText(), /Done: 1 of 1 found/);
         await page.getByTestId('drill-close-btn').click();
         await command(page, 'Review panel');
-        assert.equal(await moment.getAttribute('aria-label'), originalMoment, 'Practice must preserve the original reviewed mistake');
+        assert.equal(await moment.textContent(), originalMoment, 'Practice must preserve the original reviewed mistake');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}x${height}/${black ? 'Black' : 'Red'}: uncertain/missing practice scores, same-position retry, exact recovery and enlarged actions passed`);
       } finally { await page.close(); }

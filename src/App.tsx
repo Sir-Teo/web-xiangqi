@@ -8365,7 +8365,7 @@ function App() {
                       setMobileAnalysisTab('review');
                     }}
                     title="Open completed game review"
-                    aria-label="Open completed game review"
+                    aria-label="View completed game review"
                     data-testid="view-completed-review-btn"
                   >
                     View

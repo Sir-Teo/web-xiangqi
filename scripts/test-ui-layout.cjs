@@ -8096,7 +8096,6 @@ async function assertReviewBestMoveBranchAction(page) {
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
     momentChance: document.querySelector('[data-testid="review-moment-chance-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentChanceLabel: document.querySelector('[data-testid="review-moment-chance-0"]')?.getAttribute("aria-label") || "",
-    momentLabel: document.querySelector('[data-testid="review-moment-0"]')?.getAttribute("aria-label") || "",
     best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -8152,6 +8151,7 @@ async function assertReviewBestMoveBranchAction(page) {
     graphValueText: document.querySelector(".winrate-graph")?.getAttribute("aria-valuetext") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
+  reviewReadout.momentLabel = await page.getByTestId("review-moment-0").ariaSnapshot();
   if (
     !reviewReadout.focus.includes("Study focus") ||
     !reviewReadout.focus.includes("Mistake at ply 1") ||
@@ -8225,7 +8225,7 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.bottomAverageLossLabel !== "Average centipawn loss 130cp" ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
-    reviewReadout.bottomViewLabel !== "Open completed game review" ||
+    reviewReadout.bottomViewLabel !== "View completed game review" ||
     reviewReadout.bottomViewTitle !== "Open completed game review" ||
     reviewReadout.bottomClearLabel !== "Clear completed game review" ||
     reviewReadout.bottomClearTitle !== "Clear completed game review" ||
@@ -8835,7 +8835,6 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       sideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
       qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
       momentText: document.querySelector('[data-testid="review-moment-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
-      momentLabel: document.querySelector('[data-testid="review-moment-1"]')?.getAttribute("aria-label") || "",
       momentEvalText: document.querySelector('[data-testid="review-moment-eval-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("aria-label") || "",
       momentEvalTitle: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("title") || "",
@@ -8845,6 +8844,7 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
+    state.momentLabel = await page.getByTestId("review-moment-1").ariaSnapshot();
     if (
       state.count !== "1/1" ||
       state.sideFilter !== "all" ||
