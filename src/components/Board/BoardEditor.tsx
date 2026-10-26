@@ -77,6 +77,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     const [fenNotice, setFenNotice] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const copiedTimerRef = useRef<number | null>(null);
+    const copyRequestRef = useRef(0);
     const dialogRef = useRef<HTMLDivElement | null>(null);
     const [focusedSquare, setFocusedSquare] = useState({ file: 0, rank: 9 });
     const keyboardHelpId = useId();
@@ -87,14 +88,27 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     useEffect(() => () => {
         if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
     }, []);
+    useEffect(() => {
+        const request = copyRequestRef;
+        return () => { request.current++; };
+    }, []);
+
+    const clearCopyFeedback = useCallback(() => {
+        copyRequestRef.current++;
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = null;
+        setCopied(false);
+    }, []);
 
     /** Any edit to the board means the field is describing the board again. */
     const followBoard = useCallback(() => {
+        clearCopyFeedback();
         setFenDraft(null);
         setFenNotice(null);
-    }, []);
+    }, [clearCopyFeedback]);
 
     const loadFenDraft = useCallback(() => {
+        clearCopyFeedback();
         const text = (fenDraft ?? fen).trim().replace(/\s+/g, ' ');
         const parts = text.split(' ');
         let next: BoardState;
@@ -113,9 +127,10 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         // show one because it is not legal yet would defeat that. The problem
         // line below says what is wrong with it, as it does for any other edit.
         setFenNotice(null);
-    }, [fen, fenDraft, side]);
+    }, [clearCopyFeedback, fen, fenDraft, side]);
 
     const applyPosition = () => {
+        clearCopyFeedback();
         const draft = fenDraft?.trim().replace(/\s+/g, ' ');
         const candidate = draft === undefined ? fen : draft.includes(' ') ? draft : `${draft} ${side} - - 0 1`;
         const issue = describeFenProblem(candidate);
@@ -124,8 +139,11 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     };
 
     const copyFen = useCallback(async () => {
+        clearCopyFeedback();
+        setFenNotice(null);
+        const request = copyRequestRef.current;
         const ok = await copyToClipboard(fen);
-        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        if (request !== copyRequestRef.current) return;
         setCopied(ok);
         setFenNotice(ok ? null : 'The clipboard refused it. Select the text and copy it by hand.');
         if (!ok) return;
@@ -133,7 +151,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
             copiedTimerRef.current = null;
             setCopied(false);
         }, 1800);
-    }, [fen]);
+    }, [clearCopyFeedback, fen]);
 
     /**
      * `App` inerts every shell child that holds no open dialog, and inerting an
@@ -356,7 +374,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                                field to fix it. */
                             aria-invalid={fenNotice ? true : undefined}
                             aria-describedby={fenNotice ? 'board-editor-fen-notice' : undefined}
-                            onChange={(event) => { setFenDraft(event.target.value); setFenNotice(null); }}
+                            onChange={(event) => { clearCopyFeedback(); setFenDraft(event.target.value); setFenNotice(null); }}
                             onKeyDown={(event) => { if (!isComposingKey(event.nativeEvent) && event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
                         />
                         <button type="button" className="pill-btn" onClick={loadFenDraft} data-testid="editor-fen-load">Load</button>

@@ -26,7 +26,10 @@ async function compare(browser, width, real = false) {
   page.on('pageerror', error => errors.push(error.message));
   try {
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copied = text; } } });
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => {
+        if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
+        window.__copied = text;
+      } } });
     });
     if (!real) await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
       window.__commands = [];
@@ -128,6 +131,19 @@ async function compare(browser, width, real = false) {
       assert.equal(commands.slice(0, go).findLast(command => command.startsWith('setoption name MultiPV')), 'setoption name MultiPV value 2');
       await page.getByTestId('copy-candidate-a9a8').click();
       assert.equal(await page.evaluate(() => window.__copied), 'a9a8 a0a1 i9i8');
+      const copyFirst = page.getByTestId('copy-candidate-a9a8');
+      for (const id of ['copy-candidate-a9a8', 'copy-candidate-i9i8']) {
+        await page.evaluate(() => { window.__holdCopy = true; window.__rejectCopy = undefined; });
+        await copyFirst.click();
+        await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
+        assert.equal(await copyFirst.innerText(), 'Copy line', 'A pending retry must clear its old success badge');
+        await page.evaluate(() => { window.__holdCopy = false; });
+        const latest = page.getByTestId(id);
+        await latest.click(); await latest.filter({ hasText: 'Copied' }).waitFor();
+        await page.evaluate(() => window.__rejectCopy(new Error('Old clipboard denial')));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await latest.innerText(), 'Copied', 'An old candidate-copy failure must preserve the newer success');
+      }
       // Clipboard denial must not report success; a later retry can recover.
       await page.evaluate(() => {
         window.__writeClipboard = navigator.clipboard.writeText;

@@ -35,10 +35,15 @@ export function CandidatePanel(props: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [choice, setChoice] = useState('');
   const [copyStatus, setCopyStatus] = useState<{ line: string; ok: boolean } | null>(null);
+  const copyRequestRef = useRef(0);
   const selectRef = useRef<HTMLSelectElement>(null);
   const compareRef = useRef<HTMLButtonElement>(null);
   const focusAfterEditRef = useRef(false);
   useEffect(() => { selectRef.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => {
+    const request = copyRequestRef;
+    return () => { request.current++; };
+  }, []);
   useLayoutEffect(() => {
     if (!focusAfterEditRef.current) return;
     focusAfterEditRef.current = false;
@@ -58,9 +63,15 @@ export function CandidatePanel(props: Props) {
     return { uci, label: `${formatMoveInStyle(board, uci, notation)} · ${name} ${uci.slice(0, 2)} → ${uci.slice(2)}` };
   }), [board, side, notation]);
   const copy = async (moves: string[]) => {
+    const request = ++copyRequestRef.current;
     const line = moves.join(' ');
-    try { const ok = await copyToClipboard(line); setCopyStatus({ line, ok }); }
-    catch { setCopyStatus({ line, ok: false }); }
+    setCopyStatus(null);
+    try {
+      const ok = await copyToClipboard(line);
+      if (request === copyRequestRef.current) setCopyStatus({ line, ok });
+    } catch {
+      if (request === copyRequestRef.current) setCopyStatus({ line, ok: false });
+    }
   };
 
   return <section id="candidate-comparison" className="candidate-panel" aria-label="Compare candidate moves" data-testid="candidate-panel">

@@ -9,6 +9,12 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
     for (const width of [1440, 390, 320]) {
       const page = await browser.newPage({ viewport: { width, height: 844 }, reducedMotion: 'reduce' });
       try {
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => {
+            if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
+          } } });
+          document.execCommand = () => false;
+        });
         await page.goto(base);
         await page.locator('.xiangqi-board').waitFor();
         const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
@@ -21,6 +27,21 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         await page.evaluate(() => document.fonts.ready);
         const field = page.getByTestId('editor-fen');
         const done = page.getByTestId('editor-done');
+        const copy = page.getByTestId('editor-fen-copy');
+        await copy.click(); await copy.filter({ hasText: 'Copied' }).waitFor();
+        await page.evaluate(() => { window.__holdCopy = true; });
+        await copy.click(); await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
+        assert.equal(await copy.innerText(), 'Copy', 'A pending editor copy must clear its old success badge');
+        await page.evaluate(() => { window.__holdCopy = false; });
+        await copy.click(); await copy.filter({ hasText: 'Copied' }).waitFor();
+        await page.evaluate(() => window.__rejectCopy(new Error('Old editor clipboard denial')));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await copy.innerText(), 'Copied', 'An old editor-copy failure must preserve the newer success');
+        assert.equal(await page.getByTestId('editor-fen-notice').count(), 0);
+        await page.getByTestId('editor-side-black').click();
+        assert.equal(await copy.innerText(), 'Copy', 'Editing the position must clear its old copy badge');
+        await page.evaluate(() => { window.__holdCopy = true; window.__releaseCopy = undefined; });
+        await copy.click(); await page.waitForFunction(() => typeof window.__releaseCopy === 'function');
         const invalidFen = fen.replace('8 12', '-1 12');
         await field.fill(invalidFen);
         assert.equal(await field.inputValue(), invalidFen, 'The invalid draft must reach the field before Done');
@@ -30,6 +51,10 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         assert.equal(await page.getByTestId('board-editor').isVisible(), true);
         assert.equal(await field.inputValue(), invalidFen, 'Validation must retain the invalid draft');
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
+        await page.evaluate(() => { window.__holdCopy = false; window.__releaseCopy(); });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.match(await page.getByTestId('editor-fen-notice').innerText(), /halfmove clock/i, 'A delayed copy must preserve newer validation feedback');
+        assert.equal(await copy.innerText(), 'Copy');
 
         await page.getByTestId('editor-clear').click();
         await field.fill(fen);
