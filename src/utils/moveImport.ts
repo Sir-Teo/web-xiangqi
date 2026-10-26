@@ -117,7 +117,10 @@ export function extractUciMoveLine(text: string): string[] {
 function* uciTreeTokens(source: string): Generator<{ comment: string } | { match: RegExpMatchArray }> {
     let cursor = 0;
     for (const span of pgnMetadataSpans(source)) {
-        for (const match of source.slice(cursor, span.start).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
+        const gap = source.slice(cursor, span.start);
+        // Metadata-only lines have no move tokens between their spans. Avoid
+        // creating a regex iterator for every empty remark or escape line.
+        if (gap.trim()) for (const match of gap.matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
         // Empty remarks carry neither annotations nor prose. Avoid running the
         // annotation readers for every blank line in comment-heavy records.
         if (span.comment?.trim()) yield { comment: span.comment };

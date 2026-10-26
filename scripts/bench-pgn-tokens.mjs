@@ -7,7 +7,8 @@ import { createServer } from 'vite';
 // of unterminated openers, and the original `\{[^}]*(?:\}|$)` was linear only
 // because it swallowed the rest of the file -- which hid the next game.
 const LIMIT = 200_000; // MAX_MOVE_IMPORT_TEXT_LENGTH
-const server = await createServer({ server: { middlewareMode: true } });
+const server = await createServer({ configFile: false, cacheDir: '.cache/bench-pgn', optimizeDeps: { noDiscovery: true },
+  server: { middlewareMode: true, hmr: false, watch: null } });
 try {
   const { pgnTokens, firstPgnGame } = await server.ssrLoadModule('/src/utils/pgnText.ts');
 
@@ -41,6 +42,25 @@ try {
     }
     samples.sort((a, b) => a - b);
     console.log(JSON.stringify({ case: name, characters: source.length, tokens,
+      medianMs: +samples[10].toFixed(3), p95Ms: +samples[18].toFixed(3) }));
+  }
+  const { extractUciMoveTree } = await server.ssrLoadModule('/src/utils/moveImport.ts');
+  const annotated = extractUciMoveTree('%tool data\n1.h2e2 {Keep this note}\n;\n h9g7 *');
+  assert.deepEqual(annotated.moves, ['h2e2', 'h9g7']);
+  assert.equal(annotated.moveTree[0].comment, 'Keep this note');
+  for (const marker of ['%', ';']) {
+    const source = `${marker}\n`.repeat(LIMIT / 2);
+    for (let run = 0; run < 5; run++) extractUciMoveTree(source);
+    const samples = [];
+    for (let run = 0; run < 20; run++) {
+      const start = performance.now();
+      const tree = extractUciMoveTree(source);
+      samples.push(performance.now() - start);
+      assert.deepEqual(tree.moves, []);
+      assert.deepEqual(tree.moveTree, []);
+    }
+    samples.sort((a, b) => a - b);
+    console.log(JSON.stringify({ case: `coordinate tree, blank ${marker} lines`, characters: source.length,
       medianMs: +samples[10].toFixed(3), p95Ms: +samples[18].toFixed(3) }));
   }
 } finally { await server.close(); }
