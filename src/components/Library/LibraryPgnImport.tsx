@@ -1,7 +1,7 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
-import { previewGameCollection, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
+import { isSavedGameMode, previewGameCollection, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { formatRatedPlayer } from '../../utils/gameMetadata';
 import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms, toSearchText } from '../../utils/searchTerms';
@@ -104,7 +104,7 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
           if (!Array.isArray(data.games)) throw new Error();
           if (!data.games.length) { fail('No games found.'); return; }
           const parsed = unpackCollectionGames(data.games);
-          if (parsed.some(game => !game || !Array.isArray(game.moves) || !['PvP', 'PvE', 'EvE'].includes(game.gameMode))) throw new Error();
+          if (parsed.some(game => !game || !Array.isArray(game.moves) || !isSavedGameMode(game.gameMode))) throw new Error();
           stop(); setBusy(false);
           setGames(parsed); setSelected(new Set(parsed.map((_, index) => index)));
         } catch { fail('The collection reader returned an unreadable response. Please try again.'); }

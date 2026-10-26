@@ -85,7 +85,7 @@ async function command(page, label) {
           await file.setInputFiles({ name: 'Retry.pgn', mimeType: 'application/x-chess-pgn', buffer: Buffer.from('[White "Retry player"]\n1.h2e2 *') });
           await page.waitForFunction(before => window.__readerWorkers.collection.length === before + 1, before);
         }
-        for (const data of [null, { games: {} }, { games: [{}] }, { games: [{ gameMode: 'PvP', moves: ['h2e2'], flatMoveTree: [{ uci: 'h2e2', parent: 0 }] }] }]) {
+        for (const data of [null, { games: {} }, { games: [{}] }, { games: [{ gameMode: 'PvE', moves: ['h2e2'] }] }, { games: [{ gameMode: 'PvP', moves: ['h2e2'], flatMoveTree: [{ uci: 'h2e2', parent: 0 }] }] }]) {
           await upload();
           await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
           await page.evaluate(data => window.__readerWorkers.collection.at(-1).onmessage({ data }), data);
@@ -97,8 +97,11 @@ async function command(page, label) {
           assert.equal(await file.evaluate(node => node === document.activeElement), true, 'Collection read failures return focus to the file chooser');
         }
         await upload(); await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
-        await page.evaluate(() => window.__readerWorkers.collection.at(-1).onmessage({ data: { games: [{ gameMode: 'PvP', moves: ['h2e2'] }] } }));
-        await panel.getByRole('button', { name: 'Import 1 game', exact: true }).waitFor();
+        await page.evaluate(() => window.__readerWorkers.collection.at(-1).onmessage({ data: { games:
+          ['PvP', 'PvAI-Black', 'PvAI-Red', 'AIvAI'].map(gameMode => ({ gameMode, moves: ['h2e2'], metadata: { redPlayer: gameMode } })),
+        } }));
+        await panel.getByRole('button', { name: 'Import 4 games', exact: true }).waitFor();
+        assert.equal(await panel.locator('.lib-pgn-game').count(), 4, 'Every supported game mode remains readable');
         assert.equal(await file.evaluate(node => node === document.activeElement), true, 'Successful collection reads keep keyboard focus when Cancel disappears');
         await upload(); await panel.getByRole('button', { name: 'Cancel reading', exact: true }).focus();
         const summary = panel.locator('summary'); await summary.focus();
