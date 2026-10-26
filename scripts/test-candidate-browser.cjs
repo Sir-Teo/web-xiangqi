@@ -84,6 +84,8 @@ async function compare(browser, width, real = false) {
       await select.selectOption(move);
       await panel.getByRole('button', { name: 'Add move', exact: true }).click();
       assert.equal(await select.locator(`option[value="${move}"]`).isDisabled(), true);
+      assert.equal(await select.evaluate(el => el === document.activeElement), true,
+        'Adding a candidate must return focus to the picker for the next move');
     }
     if (!real) await page.evaluate(() => { window.__candidateBound = ' lowerbound'; });
     await panel.getByTestId('compare-candidates').click();
@@ -232,6 +234,8 @@ async function compare(browser, width, real = false) {
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'));
     await page.getByTestId('deep-infinite-toggle').click();
     await panel.getByRole('button', { name: 'Remove candidate a9a8' }).click();
+    assert.equal(await select.evaluate(el => el === document.activeElement), true,
+      'Removing a candidate must not leave focus on the page body');
     assert.equal(await page.getByTestId('candidate-results').count(), 0);
     await page.getByTestId('engine-pv-line-0').waitFor({ timeout: 60000 });
     await panel.getByTestId('compare-candidates').click();
@@ -241,12 +245,18 @@ async function compare(browser, width, real = false) {
     assert.match(await page.locator('.hitbox[data-file="8"][data-rank="8"]').getAttribute('aria-label'), /black chariot/);
     await open.click();
     const available = await select.locator('option').evaluateAll(options => options.map(option => option.value).filter(Boolean));
-    for (const move of available.slice(0, 5)) {
+    for (const [index, move] of available.slice(0, 5).entries()) {
       await select.selectOption(move);
       await panel.getByRole('button', { name: 'Add move', exact: true }).click();
+      const next = index === 4 ? panel.getByTestId('compare-candidates') : select;
+      assert.equal(await next.evaluate(el => el === document.activeElement), true,
+        'The fifth candidate must move focus from the disabled picker to Compare');
     }
     assert.equal(await select.isDisabled(), true);
     assert.match(await panel.getByRole('status').innerText(), /5 of 5 selected/);
+    await panel.getByRole('button', { name: `Remove candidate ${available[4]}`, exact: true }).click();
+    assert.equal(await select.isEnabled(), true);
+    assert.equal(await select.evaluate(el => el === document.activeElement), true);
     await page.getByRole('button', { name: 'Close candidate comparison' }).click();
     assert.equal(await open.evaluate(el => el === document.activeElement), true);
     assert.deepEqual(errors, []);

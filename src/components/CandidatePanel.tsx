@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
 import type { PvLine } from '../hooks/useEngine';
 import { legalCandidateMoves, MAX_CANDIDATE_MOVES } from '../utils/candidateSearch';
 import { formatRedPovEngineScore } from '../utils/engineScore';
@@ -36,7 +36,21 @@ export function CandidatePanel(props: Props) {
   const [choice, setChoice] = useState('');
   const [copyStatus, setCopyStatus] = useState<{ line: string; ok: boolean } | null>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
+  const compareRef = useRef<HTMLButtonElement>(null);
+  const focusAfterEditRef = useRef(false);
   useEffect(() => { selectRef.current?.focus({ preventScroll: true }); }, []);
+  useLayoutEffect(() => {
+    if (!focusAfterEditRef.current) return;
+    focusAfterEditRef.current = false;
+    // Add disables itself after every choice; Remove leaves the DOM. Keep
+    // editing from the picker, or Compare when all five slots are filled.
+    const target = selectRef.current?.disabled ? compareRef.current : selectRef.current;
+    target?.focus({ preventScroll: true });
+    const frame = requestAnimationFrame(() => {
+      if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected.length]);
   const choices = useMemo(() => legalCandidateMoves(board, side).map(uci => {
     const square = uciToSquare(uci.slice(0, 2));
     const piece = square ? board[square.rank][square.file] : '';
@@ -61,17 +75,17 @@ export function CandidatePanel(props: Props) {
         {choices.map(option => <option key={option.uci} value={option.uci} disabled={selected.includes(option.uci)}>{option.label}</option>)}
       </select>
       <button type="button" disabled={!choice || !props.canCompare || selected.length >= MAX_CANDIDATE_MOVES}
-        onClick={() => { props.onEdit(); setSelected(previous => previous.includes(choice) ? previous : [...previous, choice]); setChoice(''); }}>Add move</button>
+        onClick={() => { focusAfterEditRef.current = true; props.onEdit(); setSelected(previous => previous.includes(choice) ? previous : [...previous, choice]); setChoice(''); }}>Add move</button>
       {choice && <span className="candidate-choice-description" id="candidate-choice-description">{choices.find(option => option.uci === choice)?.label}</span>}
     </div>
     <ul className="candidate-selections" aria-label="Selected moves">
       {selected.map(uci => <li key={uci}><span>{formatMoveInStyle(board, uci, notation)}</span>
-        <button type="button" disabled={!props.canCompare} onClick={() => { props.onEdit(); setSelected(previous => previous.filter(move => move !== uci)); }}
+        <button type="button" disabled={!props.canCompare} onClick={() => { focusAfterEditRef.current = true; props.onEdit(); setSelected(previous => previous.filter(move => move !== uci)); }}
           aria-label={`Remove candidate ${uci}`}>×</button></li>)}
     </ul>
     <span className="candidate-count" role="status">{selected.length} of {MAX_CANDIDATE_MOVES} selected</span>
     <div className="candidate-actions">
-      <button type="button" onClick={() => props.onCompare(selected)} disabled={!selected.length || !props.canCompare}
+      <button type="button" ref={compareRef} onClick={() => props.onCompare(selected)} disabled={!selected.length || !props.canCompare}
         data-testid="compare-candidates">Compare</button>
       {props.active && props.searching ? <button type="button" onClick={props.onStop}>Stop comparison</button> : null}
     </div>
