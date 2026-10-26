@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { StudyNote } from '../utils/studyNotes';
 import { formatBreadcrumbLabel } from '../utils/moveBreadcrumb';
@@ -23,7 +23,11 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
     currentNodeId, gameIdentity, disabled, onNavigate }: Props) {
     const [query, setQuery] = useState('');
     const [limit, setLimit] = useState(PAGE_SIZE);
+    const listRef = useRef<HTMLUListElement>(null);
     useEffect(() => { setQuery(''); setLimit(PAGE_SIZE); }, [gameIdentity]);
+    useLayoutEffect(() => {
+        if (listRef.current) listRef.current.scrollTop = 0;
+    }, [query, gameIdentity]);
     const matches = useMemo(() => {
         const terms = toSearchTerms(query);
         return notes.filter(note => matchesSearchTerms(note.comment, terms));
@@ -40,7 +44,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
                 placeholder="Search note text" onChange={event => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} />
             <p role="status">{matches.length ? `${matches.length} ${matches.length === 1 ? 'note' : 'notes'}${matches.length > limit ? ` · Showing ${limit}` : ''}. Choose one to go to its position.` : 'No notes match. Try fewer words.'}</p>
             {disabled && <p>Pause play to visit a note.</p>}
-            <ul>
+            <ul ref={listRef}>
                 {matches.slice(0, limit).map(note => <li key={note.nodeId}>
                     <button type="button" className="study-note-result" disabled={disabled}
                         aria-current={note.nodeId === currentNodeId ? 'location' : undefined}

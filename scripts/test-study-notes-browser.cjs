@@ -119,6 +119,13 @@ async function assertFits(page) {
           await page.getByTestId('study-notes').getByRole('status').filter({ hasText: '1025 notes' }).waitFor();
           await page.getByRole('button', { name: 'Show 20 more notes', exact: true }).click();
           assert.equal(await results.count(), 40);
+          const list = page.getByTestId('study-notes').locator('ul');
+          await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
+          assert.ok(await list.evaluate(element => element.scrollTop > 0));
+          await search.fill('Side note');
+          assert.equal(await results.count(), 20);
+          assert.equal(await list.evaluate(element => element.scrollTop), 0,
+            'A new note search must start at the first matching result');
           await search.fill('Side note 1023');
           assert.equal(await results.count(), 1, 'Search must reach beyond rendered tree/list limits');
           await results.first().click();
