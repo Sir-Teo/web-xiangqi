@@ -34,8 +34,12 @@ async function newGameImportKeyboard(browser, viewport, size) {
   await page.goto(base);
   await page.getByRole('button',{name:viewport.width<900?'Open new game menu':'Start new game',exact:true}).click();
   const modal=page.getByRole('dialog',{name:'New game',exact:true});await modal.waitFor();
+  const close=modal.getByRole('button',{name:'Close',exact:true});
+  const closeIsReachable=()=>close.evaluate(el=>{
+   const box=el.getBoundingClientRect();return el.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2));
+  });
   await page.waitForFunction(()=>document.querySelector('.new-game-menu')?.contains(document.activeElement));
-  const tab=()=>page.keyboard.press(`${browserType.name()==='webkit' && process.platform==='darwin'?'Alt+':''}Tab`);
+  const tab=(reverse=false)=>page.keyboard.press(`${browserType.name()==='webkit' && process.platform==='darwin'?'Alt+':''}${reverse?'Shift+':''}Tab`);
   const reach=async control=>{
    for(let step=0;step<25 && !(await control.evaluate(el=>el===document.activeElement));step++)await tab();
    assert.equal(await control.evaluate(el=>el===document.activeElement),true,label+' keyboard reaches control');
@@ -47,9 +51,16 @@ async function newGameImportKeyboard(browser, viewport, size) {
    });
    assert.ok(state.aboveFooter && state.receivesPointer,`${label}: focused input/action must remain above the footer: ${JSON.stringify(state)}`);
   };
-  const field=page.getByTestId('uci-line-input');await reach(field);await field.fill('h2e2');
+  const field=page.getByTestId('uci-line-input');await reach(field);
+  assert.equal(await closeIsReachable(),true,label+' Close must remain reachable while editing');
+  await field.fill('h2e2');
   if(viewport.width===320)await page.screenshot({path:`/tmp/xiangqi-new-game-import-focus-${browserType.name()}-${size}.png`});
-  await reach(page.getByTestId('import-uci-line-btn'));
+  const importButton=page.getByTestId('import-uci-line-btn');await reach(importButton);
+  assert.equal(await closeIsReachable(),true,label+' Close must remain reachable at the end of the form');
+  await tab();await tab();
+  assert.equal(await close.evaluate(el=>el===document.activeElement),true,label+' Tab wraps to the fixed Close action');
+  await tab(true);await tab(true);
+  assert.equal(await importButton.evaluate(el=>el===document.activeElement),true,label+' Reverse Tab returns to Import');
   assert.equal(await modal.evaluate(el=>[el,...el.querySelectorAll('.new-game-menu-content')]
    .some(node=>node.scrollWidth>node.clientWidth+1)),false,label+' must not scroll sideways');
   await page.keyboard.press('Enter');
@@ -125,5 +136,7 @@ async function newGameImportKeyboard(browser, viewport, size) {
     }finally{await page.close();}
    }
   }
+  for(const viewport of [{width:390,height:640},{width:480,height:400}])
+   for(const size of [16,32])await newGameImportKeyboard(browser,viewport,size);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

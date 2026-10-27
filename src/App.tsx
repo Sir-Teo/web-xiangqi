@@ -6301,9 +6301,6 @@ function App() {
             ref={newGameDialogRef}
             tabIndex={-1}
           >
-            <div className="new-game-menu-content" onFocusCapture={event => {
-              if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            }}>
             <div className="new-game-menu-header">
               <div className="new-game-menu-copy">
                 <h2>New Game</h2>
@@ -6317,6 +6314,9 @@ function App() {
                 <IconX />
               </button>
             </div>
+            <div className="new-game-menu-content" tabIndex={-1} onFocusCapture={event => {
+              if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }}>
             <div className="new-game-menu-modes">
               {GAME_MODES.map(({ mode, label, description }) => (
                 <button
@@ -6453,7 +6453,7 @@ function App() {
                   aria-label="Move line in coordinates, WXF or Chinese notation"
                   aria-invalid={moveLineError ? true : undefined}
                   aria-describedby={moveLineError ? 'new-game-line-error new-game-line-drop-hint' : 'new-game-line-drop-hint'}
-                  rows={isMobile && viewportSize.height <= 500 ? 2 : 3}
+                  rows={viewportSize.height <= 500 ? 2 : 3}
                   data-testid="uci-line-input"
                 />
                 <p id="new-game-line-drop-hint" className="settings-hint">Drop a PGN, XQF or text file here.</p>

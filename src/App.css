@@ -6061,6 +6061,7 @@ summary:active {
 
 .new-game-menu-header {
   display: flex;
+  flex-shrink: 0;
   /* The copy is the title alone now, so centre it on the close button rather
      than hanging it 10px above the button's middle. */
   align-items: center;
@@ -6200,8 +6201,13 @@ summary:active {
   }
 }
 
-/* Keep the selected mode and action, spending less height on their chrome. */
-@media (max-height: 500px) {
+/* Keep the heading, selected mode and actions compact in short windows. */
+@media (max-height: 700px) {
+  .new-game-menu-header {
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .new-game-menu-copy h2 { font-size: max(16px, 0.9rem); }
   .new-game-selection-label { display: none; }
   .new-game-strength-label { letter-spacing: 0.02em; }
   .new-game-menu-footer {
@@ -6217,6 +6223,11 @@ summary:active {
 
 /* Landscape has room for the selected mode and Start action on one row. */
 @media (max-height: 500px) and (orientation: landscape) {
+  .new-game-menu {
+    width: min(600px, calc(100vw - 1rem - max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) * 2));
+    padding-top: 0.6rem;
+  }
+  .new-game-menu-header { margin-bottom: 0.25rem; }
   .new-game-menu-footer {
     flex-direction: row;
     align-items: center;
