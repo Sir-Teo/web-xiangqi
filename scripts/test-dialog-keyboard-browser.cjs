@@ -150,7 +150,7 @@ async function closedDisclosureKeyboard(browser, viewport) {
     const composingTab = await dialog.evaluate(body => {
       const input = document.createElement('input'); input.type = 'text'; input.setAttribute('aria-label', 'Composition field');
       body.append(input);
-      const results = [{ isComposing: true }, { keyCode: 229 }, {}].map(flags => {
+      const results = [{ isComposing: true }, { keyCode: 229 }, { ctrlKey: true }, { metaKey: true }, {}, { altKey: true }].map(flags => {
         input.focus();
         const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, ...flags });
         input.dispatchEvent(event);
@@ -159,8 +159,10 @@ async function closedDisclosureKeyboard(browser, viewport) {
       input.remove(); return results;
     });
     assert.deepEqual(composingTab, [
-      { prevented: false, retained: true }, { prevented: false, retained: true }, { prevented: true, retained: false },
-    ], 'IME candidate navigation keeps Tab; an ordinary Tab still wraps within Settings');
+      { prevented: false, retained: true }, { prevented: false, retained: true },
+      { prevented: false, retained: true }, { prevented: false, retained: true },
+      { prevented: true, retained: false }, { prevented: true, retained: false },
+    ], 'IME and browser shortcuts keep Tab; ordinary and macOS Option+Tab still wrap within Settings');
   } finally { await page.close(); }
 }
 

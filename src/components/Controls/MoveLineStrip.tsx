@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 
@@ -43,6 +44,7 @@ export function MoveLineStrip({
     const stopIndex = rovingTabStopIndex(tokens.length, rovingIndex, 0);
 
     const handleKeyDown = useCallback((event: KeyboardEvent<HTMLSpanElement>) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         const target = event.target;
         if (!(target instanceof HTMLButtonElement)) return;
         const from = Number(target.dataset.moveIndex);

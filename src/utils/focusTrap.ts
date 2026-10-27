@@ -54,7 +54,8 @@ export function getDialogFocusableElements(container: HTMLElement): HTMLElement[
  * the next Tab would walk into the page behind.
  */
 export function keepTabWithin(container: HTMLElement | null, event: KeyboardEvent): void {
-    if (event.key !== 'Tab' || isComposingKey(event) || !container) return;
+    // Option+Tab remains available for macOS full keyboard navigation.
+    if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.metaKey || isComposingKey(event) || !container) return;
     const focusable = getDialogFocusableElements(container);
     if (focusable.length === 0) {
         event.preventDefault();

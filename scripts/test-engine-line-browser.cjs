@@ -42,6 +42,22 @@ async function followEngineLine(browser, width) {
     const boardState = () => page.locator('.hitbox').evaluateAll(elements => elements.map(el => el.getAttribute('aria-label')));
     const initial = await boardState();
     if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) assert.ok((await keep.boundingBox()).height >= 44);
+    const firstMove = page.getByTestId('engine-pv-0-move-0');
+    for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+      await firstMove.focus();
+      const state = await firstMove.evaluate((node, flags) => {
+        const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true, ...flags });
+        if (flags.prePrevented) event.preventDefault();
+        node.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+      }, flags);
+      assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Right must preserve the engine move: ${JSON.stringify(flags)}`);
+      assert.deepEqual(await boardState(), initial);
+    }
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.getByTestId('engine-pv-0-move-1').evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Home');
+    assert.equal(await firstMove.evaluate(node => node === document.activeElement), true);
     await keep.click();
     assert.deepEqual(await boardState(), initial, 'Keeping a line moved the board');
     assert.equal(await keep.isDisabled(), true, 'The complete line was not recognized as kept');

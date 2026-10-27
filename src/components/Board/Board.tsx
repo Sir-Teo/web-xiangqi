@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { boardFileLabel } from '../../utils/boardCoordinates';
 import type { XiangqiNotationStyle } from '../../utils/xiangqiNotation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -327,6 +328,7 @@ export const Board = React.memo(function Board({
         file: number,
         rank: number
     ) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
             event.preventDefault();
             if (event.shiftKey && onToggleHighlight) {

@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
@@ -131,6 +132,7 @@ export const MoveListTree = memo(function MoveListTree({
             : activeLineNodeIds[0] ?? null;
 
     const handleChipKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         const { key } = event;
         if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Home' && key !== 'End') return;
         const container = scrollRef.current;

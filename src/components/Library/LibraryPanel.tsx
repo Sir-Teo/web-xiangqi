@@ -428,6 +428,7 @@ export function LibraryPanel({
   };
   const savedStopIndex = rovingTabStopIndex(visibleSaved.length, rovingSavedIndex, 0);
   const handleSavedListKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     const target = event.target;
     if (!(target instanceof HTMLElement) || target instanceof HTMLInputElement) return;

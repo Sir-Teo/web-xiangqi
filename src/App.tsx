@@ -1523,6 +1523,7 @@ function App() {
     event: React.KeyboardEvent<HTMLButtonElement>,
     index: number
   ) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     const strip = treeBreadcrumbRef.current;
     const next = rovingIndexForKey(event.key, strip?.childElementCount ?? 0, index);
     if (next === null) return;
@@ -2404,6 +2405,7 @@ function App() {
   // and reversible. Claiming the key also keeps it from reaching the global move
   // shortcuts while a tab has focus.
   const handleTablistKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     const { key } = event;
     if (key !== 'ArrowRight' && key !== 'ArrowLeft' && key !== 'Home' && key !== 'End') return;
     const tabs = Array.from(
@@ -2422,6 +2424,7 @@ function App() {
   }, []);
 
   const handleLeftResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       adjustLeftPanelWidth(-PANEL_KEYBOARD_STEP);
@@ -2438,6 +2441,7 @@ function App() {
   }, [adjustLeftPanelWidth]);
 
   const handleRightResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       adjustRightPanelWidth(PANEL_KEYBOARD_STEP);
