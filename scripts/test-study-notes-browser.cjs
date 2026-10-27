@@ -48,11 +48,16 @@ async function assertFits(page) {
             } };
           };` }));
         await page.goto(base);
-        await importPgn(page, width, '{Opening overview} h2e2 {Main cannon} (b2e2 {Side cannon 中炮 🐎} a9a8 {Side rook} (i9i8 {Nested rook}) h0g2 {Side horse}) h9g7 {Main horse} *');
+        await importPgn(page, width, '{Opening overview} h2e2 {Main cannon} (b2e2 {Side cannon 中炮 🐎} a9a8 {Side rook} (i9i8 {Nested rook}) h0g2 {Side horse Cafe\u0301}) h9g7 {Main horse} *');
         await openFinder(page);
         const search = page.locator('#study-notes-search');
         const results = page.locator('.study-note-result');
         assert.equal(await results.count(), 7);
+        for (const query of ['CAFÉ', 'cafe\u0301']) {
+          await search.fill(query);
+          assert.equal(await results.count(), 1, 'Composed and decomposed accented queries must find the same note');
+          assert.match(await results.first().innerText(), /Side horse/);
+        }
         await search.fill('previous query');
         await openFinder(page);
         assert.deepEqual(await search.evaluate(input => [input.selectionStart, input.selectionEnd]), [0, 'previous query'.length], 'Find study notes should select the previous query for replacement');

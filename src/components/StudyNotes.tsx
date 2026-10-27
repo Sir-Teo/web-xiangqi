@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { StudyNote } from '../utils/studyNotes';
 import { formatBreadcrumbLabel } from '../utils/moveBreadcrumb';
-import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms } from '../utils/searchTerms';
+import { MAX_SEARCH_QUERY_LENGTH, toSearchTerms, toSearchText } from '../utils/searchTerms';
 import type { XiangqiNotationStyle } from '../utils/xiangqiNotation';
 import { isComposingKey } from '../utils/keyboard';
 import { IconX } from './icons';
@@ -61,10 +61,14 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
             target.scrollIntoView({ block: 'nearest' });
         }
     }, [limit]);
-    const matches = useMemo(() => {
-        const terms = toSearchTerms(query);
-        return notes.filter(note => matchesSearchTerms(note.comment, terms));
-    }, [notes, query]);
+    const terms = useMemo(() => toSearchTerms(query), [query]);
+    const hasTerms = terms.length > 0;
+    // Normalize once per note edit, rather than every keystroke. An empty
+    // query needs no index, including while the finder is still collapsed.
+    const searchText = useMemo(() => hasTerms ? notes.map(note => toSearchText([note.comment])) : [], [hasTerms, notes]);
+    const matches = useMemo(() => hasTerms
+        ? notes.filter((_, index) => terms.every(term => searchText[index].includes(term)))
+        : notes, [hasTerms, notes, searchText, terms]);
     const label = (id: string) => id === rootId ? 'Starting position'
         : formatBreadcrumbLabel(treeNodes[id]?.record, rootFen, notationStyle);
 
