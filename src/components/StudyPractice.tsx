@@ -4,7 +4,7 @@ import type { SavedGame } from '../utils/gameLibrary';
 import type { PieceStyle } from '../utils/pieceStyle';
 import { formatMoveInStyle, formatLineTokensInStyle, type XiangqiNotationStyle } from '../utils/xiangqiNotation';
 import { isInCheck, legalMovesFrom, pieceSide, squareToUci, uciToSquare, type Side } from '../utils/xiangqi';
-import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine } from '../utils/studyPractice';
+import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine, type PracticeSession } from '../utils/studyPractice';
 import { Board } from './Board/Board';
 
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
@@ -17,6 +17,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
   const restored = useMemo(() => study ? readPracticeProgress(game, study) : null, [game, study]);
   const [side, setSide] = useState<Side>(() => restored?.side ?? study?.side ?? 'w');
   const [session, setSession] = useState(() => restored?.session ?? (study ? startPracticeLine(study, 0) : null));
+  const [resetUndo, setResetUndo] = useState<{ side: Side; session: PracticeSession } | null>(null);
   const [progressSaved, setProgressSaved] = useState(true);
   const [saveRetryResult, setSaveRetryResult] = useState<'failed' | 'saved' | null>(null);
   useEffect(() => {
@@ -36,24 +37,32 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
   const nextRef = useRef<HTMLButtonElement>(null);
   const replyRef = useRef<HTMLButtonElement>(null);
   const focusBoardRef = useRef(false);
+  const focusFrameRef = useRef<number | null>(null);
   const revealFeedbackRef = useRef(false);
   const eligible = sideLines[side];
   const complete = Boolean(study && session && practiceComplete(study, session));
   const asking = Boolean(session && session.side === side && !complete && eligible.length);
   const validTargets = useMemo(() => session && selected && asking
     ? legalMovesFrom(session.board, selected.file, selected.rank, side) : [], [session, selected, asking, side]);
+  useEffect(() => {
+    const frame = focusFrameRef;
+    return () => { if (frame.current !== null) cancelAnimationFrame(frame.current); };
+  }, []);
   useLayoutEffect(() => {
     if (!focusBoardRef.current) return;
     focusBoardRef.current = false;
+    if (focusFrameRef.current !== null) cancelAnimationFrame(focusFrameRef.current);
     const target = complete ? nextRef.current : !asking ? replyRef.current
       : boardRef.current?.querySelector<HTMLElement>('.hitbox[tabindex="0"]');
     target?.focus({ preventScroll: true });
     // Wait for the dialog's responsive layout: WebKit can focus a newly
     // mounted control before its final position is available for scrolling.
-    const frame = requestAnimationFrame(() => {
+    // Saving progress can render a storage warning before this frame runs.
+    // Keep the reveal pending through that update, and skip it if focus moved.
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null;
       if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
     });
-    return () => cancelAnimationFrame(frame);
   });
   useEffect(() => {
     if ((message || hint) && revealFeedbackRef.current) feedbackRef.current?.scrollIntoView({ block: 'nearest' });
@@ -63,6 +72,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
 
   function reset(line: number, keepProgress: boolean) {
     if (!study || !session) return;
+    if (keepProgress) setResetUndo(null);
     setSession(startPracticeLine(study, line, keepProgress ? session : undefined));
     setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
     focusBoardRef.current = true;
@@ -78,6 +88,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
     const result = attemptPracticeMove(study, session, side, squareToUci(selected.file, selected.rank) + squareToUci(file, rank));
     setSession(result.session); setMessage(result.message);
     if (result.matched) {
+      setResetUndo(null);
       setSelected(null); setHint(false);
       // The next action can be below the board on a phone. Keep keyboard
       // practice moving through reply/next controls and let focus reveal it.
@@ -94,13 +105,25 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
     <div className="study-practice-controls">
       <label>Practice as<select className="app-select app-select-roomy" value={side} onChange={event => {
         const chosen = event.target.value as Side;
+        setResetUndo(null);
         setSide(chosen);
         const first = sideLines[chosen][0];
         if (first !== undefined) setSession(readPracticeProgress(game, study, chosen)?.session ?? startPracticeLine(study, first));
         setSelected(null); setHint(false); setMessage(''); setNotesOpen(false);
       }}><option value="w" disabled={!sideLines.w.length}>Red{!sideLines.w.length ? ' (no saved moves)' : ''}</option>
         <option value="b" disabled={!sideLines.b.length}>Black{!sideLines.b.length ? ' (no saved moves)' : ''}</option></select></label>
-      <button type="button" onClick={() => reset(eligible[0] ?? 0, false)}>Reset progress for this side</button>
+      <button type="button" onClick={() => {
+        setResetUndo(previous => previous?.side === side ? previous : { side, session });
+        reset(eligible[0] ?? 0, false);
+        // Keep focus on Reset so Tab can reach Undo before practice resumes.
+        focusBoardRef.current = false;
+        setMessage(`Progress reset for ${side === 'w' ? 'Red' : 'Black'}.`);
+      }}>Reset progress for this side</button>
+      {resetUndo?.side === side && <button type="button" onClick={() => {
+        setSession(resetUndo.session); setResetUndo(null);
+        setSelected(null); setHint(false); setNotesOpen(false); setMessage('Reset undone.');
+        focusBoardRef.current = true;
+      }}>Undo reset</button>}
       <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
     </div>
     {eligible.length === 0 ? <p role="status">This study has no moves for {side === 'w' ? 'Red' : 'Black'}. Choose the other side.</p> : <>
@@ -122,6 +145,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
             if (!hint) setSession({ ...session, assisted: true });
           }}>{hint ? 'Hide saved move' : 'Show a saved move'}</button>}
           {!asking && !complete && <button type="button" ref={replyRef} onClick={() => {
+            setResetUndo(null);
             setSession(playPracticeReply(study, session, side)); setSelected(null); setHint(false);
             setMessage(`${session.side === 'w' ? 'Red' : 'Black'} played ${formatMoveInStyle(session.board, nextMove, notationStyle)}.`);
             focusBoardRef.current = true;
@@ -155,6 +179,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
           <p>Complete a line to read any notes saved with it.</p>
           <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Editing a saved study starts fresh practice.</p>
+          <p>Use Undo reset to recover the position and scores from before a progress reset.</p>
         </details>
       </section>
     </>}
