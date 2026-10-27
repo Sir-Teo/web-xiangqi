@@ -49,6 +49,10 @@ const SAVED_GAME_MODES = listOf({
     'PvP': true, 'PvAI-Black': true, 'PvAI-Red': true, 'AIvAI': true,
 } satisfies Record<GameMode, true>);
 
+export function isSavedGameMode(value: unknown): value is GameMode {
+    return typeof value === 'string' && SAVED_GAME_MODES.includes(value as GameMode);
+}
+
 const REVIEW_MOVE_QUALITIES = listOf({
     best: true, good: true, inaccuracy: true, mistake: true, blunder: true,
 } satisfies Record<ReviewMoveQuality, true>);
@@ -419,9 +423,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
     const id = asString(raw.id);
     const savedAt = asValidTimestamp(raw.savedAt);
     const rawGameMode = asString(raw.gameMode);
-    const gameMode = rawGameMode && SAVED_GAME_MODES.includes(rawGameMode as GameMode)
-        ? rawGameMode as GameMode
-        : undefined;
+    const gameMode = isSavedGameMode(rawGameMode) ? rawGameMode : undefined;
     const moves = normalizeSavedMoves(raw.moves);
     const moveTree = normalizeSavedMoveTree(raw.moveTree);
     const startFen = normalizeStartFen(raw.startFen);

@@ -2,6 +2,7 @@ import type { CommandPaletteModal } from './CommandPaletteModal';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import type { BoardEditorProps } from './Board/BoardEditor';
 import { keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 import { LazyPanelBoundary } from './LazyPanelBoundary';
 import './DeferredDialogs.css';
 
@@ -15,6 +16,7 @@ function DialogNotice({ title, onClose, failed = false }: { title: string; onClo
   useEffect(() => { dialog.current?.querySelector('button')?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       keepTabWithin(dialog.current, event);
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
     };
@@ -55,8 +57,8 @@ export function DeferredBoardEditor(props: BoardEditorProps) {
   return <DeferredDialog title="Set up a position" onClose={props.onCancel}><Editor {...props} {...position} /></DeferredDialog>;
 }
 
-export function DeferredRuleLessons({ onClose }: { onClose: () => void }) {
-  return <DeferredDialog title="Learn the rules" onClose={onClose}><Lessons onClose={onClose} /></DeferredDialog>;
+export function DeferredRuleLessons(props: ComponentProps<typeof Lessons>) {
+  return <DeferredDialog title="Learn the rules" onClose={props.onClose}><Lessons {...props} /></DeferredDialog>;
 }
 
 export function DeferredCommandPalette(props: ComponentProps<typeof CommandPaletteModal>) {

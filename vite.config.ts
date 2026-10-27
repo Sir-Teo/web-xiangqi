@@ -9,6 +9,20 @@ const crossOriginIsolationHeaders = {
   'X-Content-Type-Options': 'nosniff',
 }
 
+const parserTimingTests = [
+  'src/__fuzz.test.ts',
+  'src/utils/__fuzz.test.ts',
+  'src/utils/moveImport.performance.test.ts',
+]
+
+const cpuHeavyUnitTests = [
+  'src/utils/perft.test.ts',
+  'src/utils/attackConsistency.test.ts',
+  'src/utils/notationRecordRoundTrip.test.ts',
+  'src/utils/pgnCollection.test.ts',
+  'src/utils/savedMoveTree.test.ts',
+]
+
 function installIsolationHeaders(server: Pick<ViteDevServer, 'middlewares'>) {
   // Vite's static/transform handlers can return 304 before applying their
   // configured headers. WebKit rejects cached workers without COEP on that
@@ -44,23 +58,35 @@ export default defineConfig({
     // (a cached toolchain has no test/ directory), which is why it only
     // appeared once the workflow ran end to end.
     exclude: [...configDefaults.exclude, '**/.deps/**'],
-    // Run the wall-clock parser limits after the parallel unit suite, so
-    // unrelated test workers do not consume their one-second CPU budget.
+    // npm test runs broad units, CPU-heavy correctness, and parser timing in
+    // separate processes. Heavy suites get fresh workers and heaps after the
+    // parallel suite exits, retaining their existing wall-clock budgets.
+    // Keep their ordering for direct `vitest run` invocations too.
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
-          exclude: [...configDefaults.exclude, '**/.deps/**', 'src/utils/__fuzz.test.ts'],
+          exclude: [...configDefaults.exclude, '**/.deps/**', ...parserTimingTests, ...cpuHeavyUnitTests],
           sequence: { groupOrder: 0 },
         },
       },
       {
         extends: true,
         test: {
-          name: 'parser-limits',
-          include: ['src/utils/__fuzz.test.ts'],
+          name: 'unit-heavy',
+          include: cpuHeavyUnitTests,
+          fileParallelism: false,
           sequence: { groupOrder: 1 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'parser-limits',
+          include: parserTimingTests,
+          fileParallelism: false,
+          sequence: { groupOrder: 2 },
         },
       },
     ],

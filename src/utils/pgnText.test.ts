@@ -25,6 +25,19 @@ const TRUNCATED_FIRST_COMMENT = [
 const CLOSED_FIRST_COMMENT = TRUNCATED_FIRST_COMMENT.replace('{oops', '{oops}');
 
 describe('firstPgnGame', () => {
+    it('keeps punctuation and empty metadata intact when no game boundary is possible', () => {
+        for (const source of ['', ';\n'.repeat(1000), '%\n'.repeat(1000), '{}[]'.repeat(1000), '炮二平五 馬８進７', '{未完的註解']) {
+            expect(firstPgnGame(source)).toEqual({ text: source, truncated: false });
+        }
+    });
+
+    it('still recognizes every result and header boundaries after punctuation', () => {
+        for (const marker of ['1-0', '0-1', '1/2-1/2', '*']) {
+            expect(firstPgnGame(`{} ${marker} h2e2`)).toEqual({ text: `{} ${marker} `, truncated: true, marker });
+        }
+        expect(firstPgnGame('{} [] 炮二平五 [Event "Next"] h2e2').text).toBe('{} [] 炮二平五 ');
+    });
+
     it('stops at the second game even when the first comment is never closed', () => {
         // The control first: without the defect this shape splits correctly,
         // so a green result below cannot be the fixture being unreadable.
@@ -59,4 +72,18 @@ describe('extractUciMoveTree', () => {
         expect(truncated.moves).toEqual(['h2e2']);
         expect(truncated.hadMoreGames).toBe(true);
     });
+});
+
+it('keeps ordinary records and script-like text without inventing a game boundary', () => {
+    for (const text of ['h2e2 h9g7', 'function f(){return[1,2,3]}'.repeat(100), '{Leading note} 炮二平五']) {
+        expect(firstPgnGame(text)).toEqual({ text, truncated: false });
+    }
+});
+
+it('still recognizes spaced tag names and every result marker after movetext', () => {
+    expect(firstPgnGame('h2e2 [  Event "Next"] h9g7').text).toBe('h2e2 ');
+    for (const marker of ['1-0', '0-1', '1/2-1/2', '*']) {
+        const text = `h2e2 ${marker} h9g7`;
+        expect(firstPgnGame(text)).toEqual({ text: `h2e2 ${marker} `, truncated: true, marker });
+    }
 });

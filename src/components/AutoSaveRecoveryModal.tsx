@@ -2,6 +2,7 @@ import type { RecoveryDraft } from '../utils/autoSaveDrafts';
 import { useEffect, useRef } from 'react';
 import './AutoSaveRecoveryModal.css';
 import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 
 interface AutoSaveRecoveryModalProps {
     drafts?: RecoveryDraft[];
@@ -41,6 +42,13 @@ function describeWhen(savedAt: number, now = Date.now()): string {
     return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+function draftLabel(draft: RecoveryDraft): string {
+    const { game } = draft;
+    return game.label || game.metadata?.event
+        || [game.metadata?.redPlayer, game.metadata?.blackPlayer].filter(Boolean).join(' · ')
+        || game.opening || 'Unfinished study';
+}
+
 export function AutoSaveRecoveryModal({
     drafts = [], draftId, onSelectDraft, error, onDownload,
     savedAt,
@@ -53,11 +61,15 @@ export function AutoSaveRecoveryModal({
     const modalRef = useRef<HTMLDivElement | null>(null);
     const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
     const titleRef = useRef<HTMLHeadingElement | null>(null);
+    const selectedDraft = drafts.find(draft => draft.draftId === draftId) ?? drafts[0];
 
     useEffect(() => {
         focusDialogStart(modalRef.current, primaryButtonRef.current, titleRef.current);
+    }, []);
 
+    useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onLater();
@@ -94,15 +106,16 @@ export function AutoSaveRecoveryModal({
                 </p>
                 {error && <p role="alert">{error}</p>}
                 {error && onDownload && <button className="auto-save-btn auto-save-btn-secondary" type="button" onClick={onDownload}>Download original data</button>}
-                {drafts.length > 1 && (
-                    <label>Recovery draft
-                        <select value={draftId} onChange={event => onSelectDraft?.(event.target.value)}>
+                {drafts.length > 1 && <>
+                    <label className="auto-save-draft-picker">Recovery draft
+                        <select className="app-select app-select-roomy" value={draftId} aria-describedby="auto-save-draft-details" onChange={event => onSelectDraft?.(event.target.value)}>
                             {drafts.map(draft => <option key={draft.draftId} value={draft.draftId}>
-                                {draft.game.label || draft.game.metadata?.event || 'Unfinished study'} · {draft.game.moves.length} moves · {new Date(draft.savedAt).toLocaleString()}
+                                {draftLabel(draft)} · {draft.game.moves.length} {draft.game.moves.length === 1 ? 'move' : 'moves'} · {new Date(draft.savedAt).toLocaleString()}
                             </option>)}
                         </select>
                     </label>
-                )}
+                    <p id="auto-save-draft-details" className="auto-save-draft-details">{selectedDraft && draftLabel(selectedDraft)}</p>
+                </>}
                 <div className="auto-save-actions">
                     <button
                         className="auto-save-btn auto-save-btn-primary"

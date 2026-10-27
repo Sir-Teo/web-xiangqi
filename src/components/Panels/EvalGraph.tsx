@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MoveRecord } from '../../hooks/useXiangqi';
 import {
@@ -416,6 +417,7 @@ export const EvalGraph = React.memo(function EvalGraph({
     };
 
     const onChartKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         if (!onNavigate) return;
 
         if (event.key === 'Enter' || event.key === ' ') {

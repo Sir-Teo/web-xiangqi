@@ -2252,6 +2252,14 @@ Down move to the same button of the card above or below, falling back to its
 Load, and Home and End reach the ends. The rename input is left alone so its
 own arrow keys still edit text. `assertTheSavedLibraryIsOneTabStop` holds it.
 
+Custom navigation leaves modified keys and IME candidate keys with their
+existing owner, including the composition-ending `keyCode: 229` event. It also
+respects keys a child control has already prevented. The position editor keeps
+its documented Ctrl+Home/End shortcuts for the board's corners. Dialogs leave
+Ctrl/Cmd+Tab to the browser while retaining Option+Tab for macOS full keyboard
+navigation. The browser regressions check focus, selected commands, panel widths
+and game positions, alongside the ordinary navigation paths.
+
 ## A phone is narrow, or short and touched
 
 The phone layout used to switch on width alone, `(max-width: 900px)`. The

@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { LibraryPgnImport } from './LibraryPgnImport';
 import { LibraryGameMetadata } from './LibraryGameMetadata';
 import { LibraryStudyMatches } from './LibraryStudyMatches';
@@ -16,7 +17,9 @@ import {
 import { HISTORICAL_GAMES } from '../../utils/historicalGames';
 import { formatEvaluationText } from '../../utils/engineEvalReading';
 import { matchesSearchTerms, toSearchText, toSearchTerms } from '../../utils/searchTerms';
-import { exportPgnFromMoveTree, exportPgnFromUci, copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { copyToClipboard, downloadTextFile } from '../../utils/gameExport';
+import { buildSavedGamePgn } from '../../utils/savedGamePgn';
+import { LibraryPgnExport } from './LibraryPgnExport';
 import { pgnDownloadFilename } from '../../utils/pgnFilename';
 import { resultLabel } from '../../utils/savedGameLabels';
 import { savedGameLine } from '../../utils/savedGameLine';
@@ -26,8 +29,19 @@ import { MAX_SEARCH_QUERY_LENGTH } from '../../utils/searchTerms';
 import { evaluationSearchText, savedTreeSearchText } from '../../utils/savedStudySearch';
 
 const SAVED_PAGE_SIZE = 100;
+const SAVED_PGN_PATH_ERROR = "This study's saved moves do not match its variations. PGN export could omit notes and branches. Use Download library backup under Backup and restore to keep the complete study.";
 type LibraryPrimaryLine = ReturnType<typeof savedGameLine> & { savedPath: 'complete' | 'prefix' | 'variation' };
 type SavedSort = 'recent' | 'oldest' | 'accuracy-high' | 'accuracy-low' | 'average-loss-low' | 'red-accuracy-high' | 'black-accuracy-high';
+
+export interface LibraryViewState {
+  search: string;
+  review: 'all' | 'reviewed' | 'unreviewed';
+  result: 'all' | 'red' | 'black' | 'draw' | 'ongoing';
+  sort: SavedSort;
+  visibleLimit: number;
+}
+
+export interface LibrarySearchFocusRequest { source: HTMLElement | null }
 
 const SAVED_SORT_LABELS: Record<SavedSort, string> = {
   recent: 'Recently modified',
@@ -40,6 +54,10 @@ const SAVED_SORT_LABELS: Record<SavedSort, string> = {
 };
 
 interface LibraryPanelProps {
+  initialViewState?: LibraryViewState;
+  onViewStateChange?: (filters: LibraryViewState) => void;
+  searchFocusRequest?: LibrarySearchFocusRequest;
+  onSearchFocusHandled?: (request: LibrarySearchFocusRequest) => void;
   savedGames: SavedGame[];
   libraryState: LibraryState;
   onLibraryChange: () => void;
@@ -68,13 +86,6 @@ function formatDate(ts: number): string {
   return getDateFormatter().format(ts);
 }
 
-
-function savedResultToGameResult(result: SavedGame['result']) {
-  if (result === 'red') return 'red-wins';
-  if (result === 'black') return 'black-wins';
-  if (result === 'draw') return 'draw';
-  return null;
-}
 
 function makeSavedGamePgnFilename(game: SavedGame) {
   return pgnDownloadFilename(game.label || game.opening, new Date(game.savedAt), 'saved-game');
@@ -208,37 +219,11 @@ function compareSavedGames(left: SavedGame, right: SavedGame, sort: SavedSort) {
   }
 }
 
-function buildSavedGamePgn(game: SavedGame) {
-  if (game.moveTree?.length) {
-    const pgn = exportPgnFromMoveTree(game.moveTree, {
-      mainLineMoves: game.moves,
-      gameMode: game.gameMode,
-      opening: game.opening,
-      result: savedResultToGameResult(game.result),
-      label: game.label,
-      metadata: game.metadata,
-      startFen: game.startFen,
-      rootComment: game.rootComment,
-      rootResult: game.rootResult,
-      mainLinePinned: game.mainLinePinned,
-    });
-    if (pgn) return pgn;
-  }
-
-  return exportPgnFromUci(game.moves, {
-    gameMode: game.gameMode,
-    opening: game.opening,
-    result: savedResultToGameResult(game.result),
-    label: game.label,
-    metadata: game.metadata,
-    startFen: game.startFen,
-    rootComment: game.rootComment,
-    rootResult: game.rootResult,
-    mainLinePinned: game.mainLinePinned,
-  });
-}
-
 export function LibraryPanel({
+  initialViewState,
+  onViewStateChange,
+  searchFocusRequest,
+  onSearchFocusHandled,
   savedGames,
   libraryState,
   onLibraryChange,
@@ -249,15 +234,21 @@ export function LibraryPanel({
   loadedStudy,
   onLoadHistorical,
 }: LibraryPanelProps) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialViewState?.search ?? '');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadedId, setDownloadedId] = useState<string | null>(null);
   const [failedActionId, setFailedActionId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [savedVisibleLimit, setSavedVisibleLimit] = useState(SAVED_PAGE_SIZE);
+  const [actionError, setActionErrorState] = useState<string | null>(null);
+  const actionFeedbackVersion = useRef(0);
+  const setActionError = useCallback((message: string | null) => {
+    // A prior clipboard reply must not erase feedback from a later action.
+    actionFeedbackVersion.current++;
+    setActionErrorState(message);
+  }, []);
+  const [savedVisibleLimit, setSavedVisibleLimit] = useState(initialViewState?.visibleLimit ?? SAVED_PAGE_SIZE);
   /**
    * The saved-game list is one tab stop. A page of it holds a hundred games
    * with five buttons each, and every one was in the tab order, so reaching
@@ -268,16 +259,35 @@ export function LibraryPanel({
   const [rovingSavedIndex, setRovingSavedIndex] = useState<number | null>(null);
   const savedListRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!searchFocusRequest) return;
+    const timer = window.setTimeout(() => {
+      const active = document.activeElement;
+      const input = searchRef.current;
+      if (!document.querySelector('[role="dialog"][aria-modal="true"]')
+          && (active === document.body || active === searchFocusRequest.source || active === input)) {
+        input?.focus(); input?.select();
+      }
+      onSearchFocusHandled?.(searchFocusRequest);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchFocusRequest, onSearchFocusHandled]);
   const pendingFocusRef = useRef<{ id: string; index: number; selector: string } | null>(null);
   const copiedToastTimerRef = useRef<number | null>(null);
   const downloadedToastTimerRef = useRef<number | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'reviewed' | 'unreviewed'>('all');
-  const [resultFilter, setResultFilter] = useState<'all' | 'red' | 'black' | 'draw' | 'ongoing'>('all');
-  const [savedSort, setSavedSort] = useState<SavedSort>('recent');
+  const [reviewFilter, setReviewFilter] = useState<LibraryViewState['review']>(initialViewState?.review ?? 'all');
+  const [resultFilter, setResultFilter] = useState<LibraryViewState['result']>(initialViewState?.result ?? 'all');
+  const [savedSort, setSavedSort] = useState<SavedSort>(initialViewState?.sort ?? 'recent');
 
   useEffect(() => {
+    onViewStateChange?.({ search, review: reviewFilter, result: resultFilter, sort: savedSort, visibleLimit: savedVisibleLimit });
+  }, [search, reviewFilter, resultFilter, savedSort, savedVisibleLimit, onViewStateChange]);
+
+  useEffect(() => {
+    const feedback = actionFeedbackVersion;
     return () => {
+      feedback.current++;
       if (copiedToastTimerRef.current !== null) {
         window.clearTimeout(copiedToastTimerRef.current);
       }
@@ -290,10 +300,16 @@ export function LibraryPanel({
 
   const searchTerms = useMemo(() => toSearchTerms(search), [search]);
   const q = searchTerms.join(' ');
+  const pageFilterKey = JSON.stringify([q, reviewFilter, resultFilter, savedSort]);
+  const previousPageFilter = useRef(pageFilterKey);
 
   useEffect(() => {
+    // A remounted library keeps pages the reader already revealed. A different
+    // query, filter or sort starts with the first page of its own results.
+    if (previousPageFilter.current === pageFilterKey) return;
+    previousPageFilter.current = pageFilterKey;
     setSavedVisibleLimit(SAVED_PAGE_SIZE);
-  }, [q, reviewFilter, resultFilter, savedSort]);
+  }, [pageFilterKey]);
 
   const filteredHistorical = useMemo(() => HISTORICAL_GAMES.filter((g) => {
     if (reviewFilter === 'reviewed') return false;
@@ -412,6 +428,7 @@ export function LibraryPanel({
   };
   const savedStopIndex = rovingTabStopIndex(visibleSaved.length, rovingSavedIndex, 0);
   const handleSavedListKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     const target = event.target;
     if (!(target instanceof HTMLElement) || target instanceof HTMLInputElement) return;
@@ -442,7 +459,7 @@ export function LibraryPanel({
     setRovingSavedIndex(next);
   }, [visibleSaved.length]);
   const savedGameSummaryLabel = filteredSaved.length === 1 ? 'saved game' : 'saved games';
-  const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic game' : 'classic games';
+  const classicGameSummaryLabel = filteredHistorical.length === 1 ? 'classic opening' : 'classic openings';
   // The bundled set is empty on purpose (see historicalGames.ts). A heading, a
   // caveat, a "0 classics" pill and a line saying there is nothing were four
   // pieces of chrome about an absence, on the panel's first screen.
@@ -506,8 +523,16 @@ export function LibraryPanel({
   };
 
   const copySavedGamePgn = async (game: SavedGame) => {
+    const request = ++actionFeedbackVersion.current;
+    setCopiedId(current => current === game.id ? null : current);
     const pgn = buildSavedGamePgn(game);
+    if (pgn === null) {
+      setFailedActionId(`copy-${game.id}`);
+      setActionError(SAVED_PGN_PATH_ERROR);
+      return;
+    }
     const ok = await copyToClipboard(pgn);
+    if (request !== actionFeedbackVersion.current) return;
     if (!ok) {
       setFailedActionId(`copy-${game.id}`);
       setActionError('Could not copy this PGN. Check clipboard permissions and try again.');
@@ -527,9 +552,17 @@ export function LibraryPanel({
   };
 
   const downloadSavedGamePgn = (game: SavedGame) => {
+    actionFeedbackVersion.current++;
+    setDownloadedId(current => current === game.id ? null : current);
+    const pgn = buildSavedGamePgn(game);
+    if (pgn === null) {
+      setFailedActionId(`download-${game.id}`);
+      setActionError(SAVED_PGN_PATH_ERROR);
+      return;
+    }
     const ok = downloadTextFile(
       makeSavedGamePgnFilename(game),
-      buildSavedGamePgn(game),
+      pgn,
       'application/x-chess-pgn;charset=utf-8'
     );
     if (!ok) {
@@ -575,11 +608,22 @@ export function LibraryPanel({
           placeholder="Search players, moves, notes, analysis…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={event => {
+            if (event.key !== 'Escape' || !search || isComposingKey(event.nativeEvent)) return;
+            event.preventDefault(); event.stopPropagation(); setSearch('');
+          }}
           aria-label="Search library"
+          aria-keyshortcuts="Escape"
+          title="Press Esc to clear this search"
           // Matching truncates past this anyway; stopping it at the input
           // keeps a pasted record out of React state as well.
           maxLength={MAX_SEARCH_QUERY_LENGTH}
         />
+        {search && <button type="button" className="chip-btn lib-search-clear"
+          aria-label="Clear library search" title="Clear search"
+          onClick={() => { setSearch(''); searchRef.current?.focus(); }}>
+          <IconX width="1rem" height="1rem" />
+        </button>}
       </div>
       <div className="lib-filter-row">
         <select
@@ -673,12 +717,20 @@ export function LibraryPanel({
               setReviewFilter('all');
               setResultFilter('all');
               setSavedSort('recent');
+              searchRef.current?.focus();
             }}
           >
             Reset
           </button>
         ) : null}
       </div>
+      <p className="sr-only" role="status" aria-atomic="true" data-testid="library-search-status">
+        {preparingSearch ? 'Preparing library search…' : [
+          `${filteredSaved.length} ${savedGameSummaryLabel}.${filteredSaved.length > visibleSaved.length ? ` Showing the first ${visibleSaved.length}.` : ''}`,
+          hasBundledClassics ? `${filteredHistorical.length} ${classicGameSummaryLabel}.` : '',
+        ].filter(Boolean).join(' ')}
+      </p>
+      {savedGames.length > 0 && <LibraryPgnExport games={filteredSaved} preparing={preparingSearch} />}
       {actionError ? (
         <div className="lib-action-error" role="alert" data-testid="library-action-error">
           {actionError}
@@ -687,7 +739,7 @@ export function LibraryPanel({
 
       {/* ── My Games ── */}
       <div className="lib-section-header">My Games</div>
-      {preparingSearch && <p role="status">Preparing library search…</p>}
+      {preparingSearch && <p>Preparing library search…</p>}
       <div className="lib-list" data-testid="saved-game-list" ref={savedListRef} onKeyDown={handleSavedListKeyDown}>
         {filteredSaved.length === 0 && !preparingSearch ? (
           <p className="lib-empty">
@@ -733,7 +785,7 @@ export function LibraryPanel({
                     className="lib-rename-form"
                     onSubmit={(e) => { e.preventDefault(); commitEdit(game.id); }}
                     onKeyDown={event => {
-                      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(game.id); }
+                      if (!isComposingKey(event.nativeEvent) && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(game.id); }
                     }}
                     data-testid={`rename-form-saved-${game.id}`}
                     aria-label={`Rename ${savedGameLabel}`}
@@ -801,7 +853,7 @@ export function LibraryPanel({
                     className={`chip-btn ${downloadedId === game.id ? 'chip-btn-primary' : ''} ${failedActionId === `download-${game.id}` ? 'chip-btn-warning' : ''}`}
                     onClick={() => downloadSavedGamePgn(game)}
                     title={`Download PGN for ${savedGameLabel}`}
-                    aria-label={downloadedId === game.id ? `Downloaded PGN for ${savedGameLabel}` : `Download PGN for ${savedGameLabel}`}
+                    aria-label={downloadedId === game.id ? `Saved PGN file for ${savedGameLabel}` : `Download PGN file for ${savedGameLabel}`}
                     data-testid={`download-pgn-saved-${game.id}`}
                     data-library-action="download-pgn"
                   >
@@ -1005,7 +1057,12 @@ export function LibraryPanel({
         <button
           type="button"
           className="lib-load-more"
-          onClick={() => setSavedVisibleLimit((limit) => limit + SAVED_PAGE_SIZE)}
+          onClick={() => {
+            const index = visibleSaved.length;
+            const next = filteredSaved[index];
+            if (next) pendingFocusRef.current = { id: next.id, index, selector: '[data-library-action="load"]' };
+            setSavedVisibleLimit((limit) => limit + SAVED_PAGE_SIZE);
+          }}
           data-testid="library-show-more-saved"
         >
           Show {Math.min(SAVED_PAGE_SIZE, filteredSaved.length - visibleSaved.length)} more saved games

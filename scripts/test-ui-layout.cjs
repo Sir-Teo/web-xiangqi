@@ -877,7 +877,7 @@ async function assertDialogsReturnFocusOnClose(page) {
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
   await page.waitForTimeout(400);
 
-  for (const name of [/Start new game/i, /Open settings/i, /Open command palette/i]) {
+  for (const name of [/Start new game/i, /Open settings/i, /Open commands/i]) {
     const trigger = page.getByRole("button", { name });
     if (!(await trigger.count())) throw new Error(`No trigger matching ${name}`);
 
@@ -918,7 +918,7 @@ async function assertDialogsReturnFocusOnClose(page) {
   // preference, so a single flip would reach them as a board with a0 in the
   // wrong corner.
   const runFlip = async () => {
-    const paletteTrigger = page.getByRole("button", { name: /Open command palette/i });
+    const paletteTrigger = page.getByRole("button", { name: /Open commands/i });
     await paletteTrigger.first().focus();
     await page.keyboard.press("Enter");
     await page.waitForTimeout(350);
@@ -4139,7 +4139,7 @@ async function assertEnginePvLineControl(page) {
     runtimeState.restartLabel !== "Restart engine" ||
     runtimeState.restartTitle !== "Restart the engine worker" ||
     runtimeState.restartDisabled ||
-    runtimeState.clearLabel !== "Clear engine hash table"
+    runtimeState.clearLabel !== "Clear hash: empty the engine search table"
   ) {
     throw new Error(`Engine runtime controls are not accessible: ${JSON.stringify(runtimeState)}`);
   }
@@ -4164,7 +4164,7 @@ async function assertEnginePvLineControl(page) {
     const label = button?.getAttribute("aria-label") || "";
     return (
       (text === "Cleared" && label === "Engine hash cleared") ||
-      (text === "Clear Hash" && label === "Clear engine hash table")
+      (text === "Clear Hash" && label === "Clear hash: empty the engine search table")
     );
   }, null, { timeout: 15000 });
   const cacheState = await page.evaluate(() => {
@@ -4179,7 +4179,7 @@ async function assertEnginePvLineControl(page) {
   if (
     !(
       (cacheState.text === "Cleared" && cacheState.label === "Engine hash cleared") ||
-      (cacheState.text === "Clear Hash" && cacheState.label === "Clear engine hash table")
+      (cacheState.text === "Clear Hash" && cacheState.label === "Clear hash: empty the engine search table")
     ) ||
     cacheState.disabled
   ) {
@@ -4629,7 +4629,7 @@ async function assertEngineTelemetryDashboard(browser) {
     if (
       flushedHashState.clearHashCommandCount <= flushedHashState.beforeCount ||
       !["Cleared", "Clear Hash"].includes(flushedHashState.text) ||
-      !["Engine hash cleared", "Clear engine hash table"].includes(flushedHashState.label) ||
+      !["Engine hash cleared", "Clear hash: empty the engine search table"].includes(flushedHashState.label) ||
       flushedHashState.overflowX > 2
     ) {
       throw new Error(`Queued Clear Hash did not flush after the search completed: ${JSON.stringify(flushedHashState)}`);
@@ -5946,6 +5946,8 @@ async function assertPreferencePersistence(page) {
     timeout: 60000,
   });
   await page.waitForSelector(".xiangqi-board", { timeout: 30000 });
+  const originalGuidePreference = await page.evaluate(() => localStorage.getItem("xiangqi:beginner-guide-dismissed:v1"));
+  let guidePeer = null;
 
   try {
     await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1"));
@@ -6186,11 +6188,22 @@ async function assertPreferencePersistence(page) {
     }
 
     await page.getByRole("button", { name: "Open settings" }).click();
+    const guideToggle = page.getByRole("button", { name: "First-move guide", exact: true });
+    if (await guideToggle.getAttribute("aria-pressed") !== "true") await guideToggle.click();
+    [guidePeer] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.evaluate(() => { window.open(location.href, "guide-preference-peer"); }),
+    ]);
+    await guidePeer.getByTestId("beginner-guide").waitFor();
+    await guideToggle.click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ state: "detached", timeout: 5000 });
     await page.getByTestId("reset-preferences-btn").click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ timeout: 5000 });
     const resetState = await page.evaluate(() => ({
       assistMode: document.querySelector(".app-shell")?.getAttribute("data-assist-mode") || "",
       stored: JSON.parse(localStorage.getItem("xiangqi:preferences:v1") || "{}"),
       buttons: [...document.querySelectorAll(".settings-body .pill-btn-active")].map((el) => el.textContent?.trim() || ""),
+      guideEnabled: document.querySelector(".settings-guide-toggle")?.getAttribute("aria-pressed"),
     }));
 
     if (resetState.assistMode !== "coach") {
@@ -6207,8 +6220,18 @@ async function assertPreferencePersistence(page) {
     if (!resetState.buttons.includes("Coach") || !resetState.buttons.includes("Optimized") || !resetState.buttons.includes("On")) {
       throw new Error(`Reset preferences did not update settings controls: ${resetState.buttons.join(",")}`);
     }
+    if (resetState.guideEnabled !== "true") throw new Error("Reset preferences did not restore the first-move guide");
+    await guideToggle.click();
+    await guidePeer.getByTestId("beginner-guide").waitFor({ state: "detached", timeout: 5000 });
+    await page.evaluate(() => localStorage.clear());
+    await guidePeer.getByTestId("beginner-guide").waitFor({ timeout: 5000 });
   } finally {
-    await page.evaluate(() => localStorage.removeItem("xiangqi:preferences:v1")).catch(() => {});
+    if (guidePeer) await guidePeer.close().catch(() => {});
+    await page.evaluate(original => {
+      localStorage.removeItem("xiangqi:preferences:v1");
+      if (original === null) localStorage.removeItem("xiangqi:beginner-guide-dismissed:v1");
+      else localStorage.setItem("xiangqi:beginner-guide-dismissed:v1", original);
+    }, originalGuidePreference).catch(() => {});
   }
 }
 
@@ -8026,7 +8049,7 @@ async function assertReviewBestMoveBranchAction(page) {
     !libraryReviewMeta.metaLabel.includes("Engine: high tier engine") ||
     libraryReviewMeta.loadLabel !== "Load Review best branch QA" ||
     libraryReviewMeta.copyLabel !== "Copy PGN for Review best branch QA" ||
-    libraryReviewMeta.downloadLabel !== "Download PGN for Review best branch QA" ||
+    libraryReviewMeta.downloadLabel !== "Download PGN file for Review best branch QA" ||
     libraryReviewMeta.deleteLabel !== "Delete Review best branch QA" ||
     libraryReviewMeta.overflowX > 2
   ) {
@@ -8073,7 +8096,6 @@ async function assertReviewBestMoveBranchAction(page) {
     momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-0"]')?.getAttribute("aria-label") || "",
     momentChance: document.querySelector('[data-testid="review-moment-chance-0"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     momentChanceLabel: document.querySelector('[data-testid="review-moment-chance-0"]')?.getAttribute("aria-label") || "",
-    momentLabel: document.querySelector('[data-testid="review-moment-0"]')?.getAttribute("aria-label") || "",
     best: document.querySelector('[data-testid="review-quality-best"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     good: document.querySelector('[data-testid="review-quality-good"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
     inaccuracy: document.querySelector('[data-testid="review-quality-inaccuracy"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
@@ -8129,6 +8151,7 @@ async function assertReviewBestMoveBranchAction(page) {
     graphValueText: document.querySelector(".winrate-graph")?.getAttribute("aria-valuetext") || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
+  reviewReadout.momentLabel = await page.getByTestId("review-moment-0").ariaSnapshot();
   if (
     !reviewReadout.focus.includes("Study focus") ||
     !reviewReadout.focus.includes("Mistake at ply 1") ||
@@ -8202,7 +8225,7 @@ async function assertReviewBestMoveBranchAction(page) {
     reviewReadout.bottomAverageLossLabel !== "Average centipawn loss 130cp" ||
     !reviewReadout.bottomSummaryLabel.includes("1 mistake") ||
     !reviewReadout.bottomSummaryLabel.includes("Engine: high tier engine") ||
-    reviewReadout.bottomViewLabel !== "Open completed game review" ||
+    reviewReadout.bottomViewLabel !== "View completed game review" ||
     reviewReadout.bottomViewTitle !== "Open completed game review" ||
     reviewReadout.bottomClearLabel !== "Clear completed game review" ||
     reviewReadout.bottomClearTitle !== "Clear completed game review" ||
@@ -8812,7 +8835,6 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       sideFilter: document.querySelector('[data-testid="review-moment-side-filter"]')?.value || "",
       qualityFilter: document.querySelector('[data-testid="review-moment-quality-filter"]')?.value || "",
       momentText: document.querySelector('[data-testid="review-moment-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
-      momentLabel: document.querySelector('[data-testid="review-moment-1"]')?.getAttribute("aria-label") || "",
       momentEvalText: document.querySelector('[data-testid="review-moment-eval-1"]')?.textContent?.replace(/\s+/g, " ").trim() || "",
       momentEvalLabel: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("aria-label") || "",
       momentEvalTitle: document.querySelector('[data-testid="review-moment-eval-1"]')?.getAttribute("title") || "",
@@ -8822,6 +8844,7 @@ async function assertReviewMomentFiltersResetOnLoad(browser) {
       focusEvalTitle: document.querySelector('[data-testid="review-focus-eval"]')?.getAttribute("title") || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     }));
+    state.momentLabel = await page.getByTestId("review-moment-1").ariaSnapshot();
     if (
       state.count !== "1/1" ||
       state.sideFilter !== "all" ||
@@ -10891,8 +10914,8 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
     // An undo that cannot be carried out is the one moment the toast must not
     // look like the cheerful "Deleted X — Undo" it replaces: the deletion
     // stands, and a reader who reads the old wording walks away believing it
-    // did not. So the toast has to stay up, say what happened, and stop
-    // offering a button that will not work.
+    // did not. Keep the failure visible and replace ordinary Undo with an
+    // explicit retry action, retaining the record for a later attempt.
     await page.getByTestId(`delete-saved-${id}`).click();
     await page.waitForTimeout(300);
     await page.getByTestId(`confirm-delete-saved-${id}`).click();
@@ -10916,6 +10939,7 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
       return {
         text: (toast.textContent || "").replace(/\s+/g, " ").trim(),
         stillOffersUndo: Boolean(toast.querySelector('[data-testid="library-undo-btn"]')),
+        offersRetry: Boolean(toast.querySelector('[data-testid="library-retry-undo-btn"]')),
         marked: toast.className.includes("undo-toast-failed"),
         borderColour: getComputedStyle(toast).borderTopColor,
       };
@@ -10923,8 +10947,8 @@ async function assertDestructiveActionsCanBeTakenBack(browser) {
     if (!refused) {
       throw new Error("A refused undo closed its toast, so the deletion stands with nothing said about it.");
     }
-    if (!/could not put it back/i.test(refused.text) || refused.stillOffersUndo) {
-      throw new Error(`A refused undo should say so and stop offering the button: ${JSON.stringify(refused)}`);
+    if (!/could not put it back/i.test(refused.text) || refused.stillOffersUndo || !refused.offersRetry) {
+      throw new Error(`A refused undo should say so and offer an explicit retry: ${JSON.stringify(refused)}`);
     }
     if (!refused.marked) throw new Error("The refused toast is not marked as a failure.");
     // And the marking has to be visible, not just a class name.
@@ -12406,7 +12430,7 @@ async function assertTheBoardEditorStandsAloneAndKeepsTheChosenMode(page) {
   }
 
   await page.getByRole("button", { name: "Start new game" }).click();
-  await page.getByRole("button", { name: /^You play Red\./ }).click();
+  await page.getByRole("button", { name: /^You play Red\b/ }).click();
   await page.getByTestId("open-board-editor-btn").click();
   await page.waitForSelector("[data-testid=\"board-editor\"]", { timeout: 5000 });
 
@@ -13515,7 +13539,7 @@ async function assertLibraryPgnCopy(page) {
         savedAt: 1710000001000,
         gameMode: "PvP",
         moves: ["b0c2"],
-        moveTree: [{ uci: "b2e2", children: [{ uci: "h9g7" }] }],
+        moveTree: [{ uci: "b2e2", comment: "Preserve this variation note", children: [{ uci: "h9g7" }] }],
         result: "ongoing",
         label: "Mismatched tree PGN QA",
       },
@@ -13573,11 +13597,21 @@ async function assertLibraryPgnCopy(page) {
   }
 
   await page.getByText("Mismatched tree PGN QA").waitFor({ timeout: 10000 });
+  const beforeRefusal = await page.evaluate(() => ({
+    writes: window.__libraryPgnWrites?.length ?? 0,
+    library: localStorage.getItem("xiangqi:library:v1"),
+  }));
   await page.getByTestId("copy-pgn-saved-qa-mismatched-tree-pgn-game").click();
-  await page.getByRole("button", { name: "Copied PGN for Mismatched tree PGN QA" }).waitFor({ timeout: 5000 });
-  const fallbackPgn = await page.evaluate(() => window.__libraryPgnWrites?.at(-1) ?? "");
-  if (!fallbackPgn.includes("1. b0c2 *") || fallbackPgn.includes("b2e2")) {
-    throw new Error(`Saved-game PGN exported a tree branch that does not contain the saved mainline:\n${fallbackPgn}`);
+  await page.getByTestId("library-action-error").getByText(/saved moves do not match its variations/).waitFor({ timeout: 5000 });
+  const refused = await page.evaluate(() => ({
+    writes: window.__libraryPgnWrites?.length ?? 0,
+    library: localStorage.getItem("xiangqi:library:v1"),
+    message: document.querySelector('[data-testid="library-action-error"]')?.textContent || "",
+    label: document.querySelector('[data-testid="copy-pgn-saved-qa-mismatched-tree-pgn-game"]')?.getAttribute("aria-label") || "",
+  }));
+  if (refused.writes !== beforeRefusal.writes || refused.library !== beforeRefusal.library
+      || !refused.message.includes("Download library backup") || refused.label.startsWith("Copied")) {
+    throw new Error(`Inconsistent saved-game export must preserve its variations and offer a complete backup: ${JSON.stringify(refused)}`);
   }
 }
 
@@ -13727,7 +13761,7 @@ async function assertLibraryPgnFailureFeedback(page) {
       configurable: true,
       value: {
         writeText: async () => {
-          throw new DOMException("Simulated clipboard denial", "NotAllowedError");
+          if (window.__libraryClipboardDenied) throw new DOMException("Simulated clipboard denial", "NotAllowedError");
         },
       },
     });
@@ -13735,14 +13769,21 @@ async function assertLibraryPgnFailureFeedback(page) {
       configurable: true,
       value: () => false,
     });
+    const createObjectURL = URL.createObjectURL.bind(URL);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: undefined,
+      value: (blob) => {
+        if (window.__libraryDownloadDenied) throw new Error("Simulated download failure");
+        return createObjectURL(blob);
+      },
     });
   });
 
   await page.locator('button[aria-label="Open game library"]').click();
   await page.getByText("Library export failure QA").waitFor({ timeout: 10000 });
+  await page.getByTestId("copy-pgn-saved-qa-library-export-failure").click();
+  await page.getByRole("button", { name: "Copied PGN for Library export failure QA", exact: true }).waitFor();
+  await page.evaluate(() => { window.__libraryClipboardDenied = true; });
   await page.getByTestId("copy-pgn-saved-qa-library-export-failure").click();
   await page.getByTestId("library-action-error").getByText("Could not copy this PGN").waitFor({ timeout: 5000 });
 
@@ -13755,6 +13796,11 @@ async function assertLibraryPgnFailureFeedback(page) {
     throw new Error(`Library copy failure did not expose retryable alert state: ${JSON.stringify(afterCopy)}`);
   }
 
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByTestId("download-pgn-saved-qa-library-export-failure").click();
+  await downloadEvent;
+  await page.getByRole("button", { name: "Saved PGN file for Library export failure QA", exact: true }).waitFor();
+  await page.evaluate(() => { window.__libraryDownloadDenied = true; });
   await page.getByTestId("download-pgn-saved-qa-library-export-failure").click();
   await page.getByTestId("library-action-error").getByText("Could not download this PGN").waitFor({ timeout: 5000 });
 

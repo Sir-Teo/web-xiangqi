@@ -33,11 +33,14 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
             };
           };
         ` }));
-        await page.clock.install();
+        const clockStart = new Date('2026-01-01T00:00:00Z');
+        await page.clock.install({ time: clockStart });
+        await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
         await page.goto(base); await page.locator('.xiangqi-board').waitFor();
         await page.keyboard.press('e');
+        await page.waitForFunction(() => window.__boots === 1);
+        await page.clock.runFor(500);
         await page.getByTestId('engine-pv-0-move-0').waitFor();
-        await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
 
         await page.evaluate(() => window.__crash());
         await page.clock.runFor(100);
@@ -71,12 +74,12 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
         await page.locator('#settings-workspace-mode').selectOption('analysis');
         await page.getByRole('button', { name: 'Close settings', exact: true }).click();
         await page.keyboard.press('e');
+        await page.waitForFunction(() => window.__boots === 4);
         await page.clock.runFor(1000);
         assert.equal(await page.evaluate(() => window.__boots), 4);
-        await page.clock.resume();
+        await page.clock.runFor(500);
         await page.getByTestId('engine-pv-0-move-0').waitFor();
 
-        await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
         await page.clock.runFor(16000); // The earlier recovery leaves the rolling budget.
         await page.evaluate(() => { window.__failAllBoots = true; });
         if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();

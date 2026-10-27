@@ -23,6 +23,16 @@ describe('move tree transfer', () => {
         expect(inflateMoveTree([])).toEqual([]);
     });
 
+    it.each([0, 1, -2, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects an invalid first parent %s instead of creating an unreachable or cyclic tree', parent => {
+        expect(() => inflateMoveTree([{ uci: 'h2e2', parent }])).toThrow('Invalid move tree transfer');
+    });
+
+    it('rejects a self-reference or forward link later in the tree', () => {
+        for (const parent of [1, 2]) {
+            expect(() => inflateMoveTree([{ uci: 'h2e2', parent: -1 }, { uci: 'h9g7', parent }])).toThrow('Invalid move tree transfer');
+        }
+    });
+
     it('carries a line far deeper than structured clone can nest', () => {
         const root: SavedMoveTreeNode = { uci: 'a0a1' };
         let tip = root;

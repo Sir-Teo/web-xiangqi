@@ -51,6 +51,18 @@ function* tokens(text: string): Generator<Token> {
     }
 }
 
+/** Count only enough normalized prose to decide refusal, without building a
+ * multi-megabyte replacement string for a note that cannot be accepted. */
+function exceedsPlainCommentLimit(previous: string | undefined, text: string): boolean {
+    let length = previous?.length ?? 0;
+    for (const word of text.matchAll(/\S+/g)) {
+        if (length) length++;
+        length += word[0].length;
+        if (length > MAX_MOVE_COMMENT_LENGTH) return true;
+    }
+    return false;
+}
+
 type Cursor = { board: BoardState; side: Side; children: SavedMoveTreeNode[]; ply: number; node?: SavedMoveTreeNode; parent?: Cursor };
 function parseGame(input: Token[]): CollectionGame {
     let seenMovetext = false;
@@ -104,6 +116,13 @@ function parseGame(input: Token[]): CollectionGame {
         // variation on ply 1 -- did the refusal below fire, so one file
         // behaved two ways depending on how deep its variations were.
         if (awaitingVariationMove) throw new Error('Attach a variation note to its first move.');
+        // Without a closing bracket, every command is unfinished and remains
+        // prose. Refuse an overlong note before scanning or decoding commands.
+        if (text.length > MAX_MOVE_COMMENT_LENGTH && !text.includes(']')
+            && (cursor.node || nodes === 0)
+            && exceedsPlainCommentLimit(cursor.node ? cursor.node.comment : rootComment, text)) {
+            throw new Error(`A ${cursor.node ? 'move' : 'starting-position'} note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
+        }
         const recordedResult = readRecordedResultPgn(text);
         const withoutResult = stripDelimited(text, '[%xqresult ', ']', '');
         if (!cursor.node) {
@@ -173,7 +192,8 @@ function parseGame(input: Token[]): CollectionGame {
         awaitingVariationMove = false;
     }
     if (stack.length) throw new Error('Unclosed variation.');
-    if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result)) throw new Error('No moves found.');
+    const metadata = extractPgnMetadata(headers);
+    if (!nodes && !rootComment && !tags.fen && !rootResult && !parseResultTag(result ?? tags.result) && !metadata) throw new Error('No moves found.');
     if (result && tags.result && result !== tags.result) throw new Error('The Result header disagrees with the final result marker.');
     const moves: string[] = [];
     let finalNode = root[0];
@@ -182,7 +202,7 @@ function parseGame(input: Token[]): CollectionGame {
     if (declared) { if (finalNode) finalNode.recordedResult = declared; else rootResult = declared; }
     return { gameMode: 'PvP', moves, moveTree: root, startFen: tags.fen, rootComment, ...(rootResult ? { rootResult } : {}),
         ...(nodes && tags.xiangqimainline === '1' ? { mainLinePinned: true as const } : {}),
-        metadata: extractPgnMetadata(headers), opening: tags.opening,
+        metadata, opening: tags.opening,
         ...(finalNode?.evalScore === undefined ? {} : { finalEval: finalNode.evalScore, finalEvalKind: finalNode.evalScoreKind }),
         result: RESULTS[result || tags.result || '*'] };
 }

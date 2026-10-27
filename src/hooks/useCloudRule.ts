@@ -1,5 +1,5 @@
 import { readCloudResponse } from '../utils/cloudResponse';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     CLOUD_RULE_MIN_MOVES,
     currentCloudRuleState,
@@ -22,11 +22,13 @@ const cache = new BoundedLruCache<{ banned: string[]; drawing: string[] } | null
  * What chessdb.cn rules about the moves of the position on screen, asked only
  * while `wanted` -- the position has stood here before -- and only when the
  * reader has the cloud book on. Answers are cached per line for the life of
- * the page; a failed request is not, so it is retried on the next visit.
+ * the page; a failed request is not, so it can be retried here or on the next visit.
  */
-export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, enabled: boolean): CloudRuleState {
+export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, enabled: boolean): CloudRuleState & { retry: () => void } {
     const key = `${rootFen}|${moves.join(' ')}`;
     const [state, setState] = useState<CloudRuleState>({ status: 'off', banned: [], drawing: [], key });
+    const [attempt, setAttempt] = useState(0);
+    const retry = useCallback(() => setAttempt(value => value + 1), []);
 
     useEffect(() => {
         if (!enabled || !wanted || moves.length < CLOUD_RULE_MIN_MOVES) {
@@ -82,7 +84,7 @@ export function useCloudRule(rootFen: string, moves: string[], wanted: boolean, 
         };
         // `moves` is re-derived every render; `key` is its identity.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, wanted, key, rootFen]);
+    }, [enabled, wanted, key, rootFen, attempt]);
 
-    return currentCloudRuleState(state, key, enabled && wanted && moves.length >= CLOUD_RULE_MIN_MOVES);
+    return { ...currentCloudRuleState(state, key, enabled && wanted && moves.length >= CLOUD_RULE_MIN_MOVES), retry };
 }

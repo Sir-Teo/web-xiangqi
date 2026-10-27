@@ -658,7 +658,18 @@
     const started = new Promise((resolve, reject) => {
       let settled = false;
       let timer;
+      let startupBytes = 0;
       const signal = opts.signal;
+
+      function armStartupTimeout() {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error("Timed out initializing Pikafish worker"));
+        }, opts.initTimeoutMs || 60000);
+      }
 
       function cleanup() {
         clearTimeout(timer);
@@ -691,6 +702,13 @@
             return;
           }
           if (data.type === "assetProgress") {
+            // Opt in to an inactivity deadline for large first downloads.
+            // Duplicate, invalid, or backward byte counts cannot renew it.
+            if (!settled && opts.extendInitTimeoutOnProgress === true &&
+                Number.isFinite(data.loaded) && data.loaded > startupBytes) {
+              startupBytes = data.loaded;
+              armStartupTimeout();
+            }
             // The weights are downloaded inside the worker, so the page cannot
             // see the request at all -- worker fetches are not in the document's
             // resource timing either. This is the only way the app learns how
@@ -742,12 +760,7 @@
         return true;
       };
 
-      timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new Error("Timed out initializing Pikafish worker"));
-      }, opts.initTimeoutMs || 60000);
+      armStartupTimeout();
 
       worker.postMessage({
         type: "init",
@@ -762,7 +775,7 @@
         threads: opts.threads,
         autoHashMB: opts.autoHashMB,
         hashMB: opts.hashMB,
-        reportAssetProgress: typeof opts.onAssetProgress === "function",
+        reportAssetProgress: typeof opts.onAssetProgress === "function" || opts.extendInitTimeoutOnProgress === true,
         coreScript,
         coreScripts
       });

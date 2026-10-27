@@ -31,8 +31,18 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
   await page.evaluate(() => { while (window.searchTasks.size) { const [id, run] = window.searchTasks.entries().next().value; window.searchTasks.delete(id); run(); } });
   await page.getByTestId('load-saved-search-199').waitFor();
   assert.equal(await page.locator('[data-testid^="load-saved-search-"]').count(), 1);
+  const status = page.getByTestId('library-search-status');
+  assert.equal(await status.getAttribute('role'), 'status');
+  assert.equal(await status.innerText(), '1 saved game.');
   await search.fill('ordinary');
   assert.equal(await page.evaluate(() => window.searchBuilds), 200, 'Later queries reuse prepared text');
+  assert.equal(await status.innerText(), '199 saved games. Showing the first 100.');
+  await page.getByTestId('library-show-more-saved').click();
+  assert.equal(await status.innerText(), '199 saved games.');
+  await search.fill('no matching study');
+  assert.equal(await status.innerText(), '0 saved games.');
+  assert.equal(await search.evaluate(element => element === document.activeElement), true,
+   'Result announcements must not steal search focus');
   console.log('PASS: first keystroke does not prepare study text; background completion publishes complete search results');
  } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

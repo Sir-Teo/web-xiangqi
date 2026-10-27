@@ -1,3 +1,4 @@
+import { isComposingKey } from '../utils/keyboard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Command, rankCommands, readRecentCommandIds, rememberCommandId } from '../utils/commandPalette';
 import { MAX_SEARCH_QUERY_LENGTH } from '../utils/searchTerms';
@@ -67,6 +68,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     useEffect(() => {
         if (!open) return undefined;
         const onEscape = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialogRef.current, event);
             if (event.key !== 'Escape' || event.defaultPrevented) return;
             event.preventDefault();
@@ -86,9 +88,10 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     useEffect(() => {
         if (!open) return;
         listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-    }, [activeIndex, open]);
+    }, [activeIndex, open, ranked]);
 
     if (!open) return null;
+    const activeCommand = ranked[activeIndex];
 
     const runCommand = (command: Command | undefined) => {
         if (!command || command.disabled) return;
@@ -98,6 +101,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     };
 
     const onKeyDown = (event: React.KeyboardEvent) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         if (event.key === 'Escape') {
             event.preventDefault();
             onClose();
@@ -177,52 +181,63 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
                     onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
                 />
 
-                {/*
-                  * Announced politely, the way web-katrain's palette does it.
-                  * Without this a screen-reader user types and hears nothing:
-                  * the list narrowing, or emptying, is invisible unless the
-                  * count is spoken.
-                  */}
-                <p className="command-palette-count" aria-live="polite" data-command-count>
-                    {ranked.length === 0
-                        ? 'No commands match'
-                        : `${ranked.length} command${ranked.length === 1 ? '' : 's'}`}
-                </p>
+                <div className="command-palette-content" tabIndex={-1}>
+                    {/*
+                      * Announced politely, the way web-katrain's palette does it.
+                      * Without this a screen-reader user types and hears nothing:
+                      * the list narrowing, or emptying, is invisible unless the
+                      * count is spoken.
+                      */}
+                    <p className="command-palette-count" aria-live="polite" data-command-count>
+                        {ranked.length === 0
+                            ? 'No commands match'
+                            : `${ranked.length} command${ranked.length === 1 ? '' : 's'}`}
+                    </p>
 
-                {ranked.length > 0 && (
-                    <ul className="command-palette-list" id="command-palette-list" role="listbox" ref={listRef}>
-                        {ranked.map((command, index) => (
-                            <li
-                                key={command.id}
-                                id={`command-${command.id}`}
-                                role="option"
-                                aria-selected={index === activeIndex}
-                                aria-disabled={command.disabled || undefined}
-                                data-active={index === activeIndex}
-                                data-command-id={command.id}
-                                className="command-palette-row"
-                            >
-                                <button
-                                    type="button"
-                                    className="command-palette-button"
-                                    disabled={command.disabled}
-                                    onFocus={() => setActiveIndex(index)}
-                                    onMouseEnter={() => setActiveIndex(index)}
-                                    onClick={() => runCommand(command)}
+                    {ranked.length > 0 && (
+                        <ul className="command-palette-list" id="command-palette-list" role="listbox" tabIndex={-1} ref={listRef}>
+                            {ranked.map((command, index) => (
+                                <li
+                                    key={command.id}
+                                    role="presentation"
+                                    data-active={index === activeIndex}
+                                    data-command-id={command.id}
+                                    className="command-palette-row"
+                                    onPointerDown={() => setActiveIndex(index)}
+                                    // Filtering can move a row under a stationary
+                                    // pointer. Only actual movement changes hover selection.
+                                    onPointerMove={() => setActiveIndex(index)}
                                 >
-                                    <span className="command-palette-label">{command.label}</span>
-                                    {command.hint && (
-                                        // Titled because the hint is the reason a
-                                        // command is unavailable, and it is the first
-                                        // thing to be truncated at phone width.
-                                        <span className="command-palette-hint" title={command.hint}>{command.hint}</span>
-                                    )}
-                                    {command.shortcut && <kbd className="command-palette-key">{command.shortcut}</kbd>}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                                    <button
+                                        id={`command-${command.id}`}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={index === activeIndex}
+                                        aria-disabled={command.disabled || undefined}
+                                        className="command-palette-button"
+                                        disabled={command.disabled}
+                                        onFocus={() => setActiveIndex(index)}
+                                        onClick={() => runCommand(command)}
+                                    >
+                                        <span className="command-palette-label">{command.label}</span>
+                                        {command.hint && (
+                                            // Titled because the hint is the reason a
+                                            // command is unavailable, and it is the first
+                                            // thing to be truncated at phone width.
+                                            <span className="command-palette-hint" title={command.hint}>{command.hint}</span>
+                                        )}
+                                        {command.shortcut && <kbd className="command-palette-key">{command.shortcut}</kbd>}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    <p className="command-palette-help" data-testid="command-palette-help">
+                        {activeCommand?.hint || (ranked.length
+                            ? 'Use ↑ and ↓ to choose, Enter to run, or Escape to close.'
+                            : 'Try fewer words or search for an action such as “Flip” or “Settings”.')}
+                    </p>
+                </div>
             </div>
         </div>
     );

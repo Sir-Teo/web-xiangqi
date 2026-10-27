@@ -1,4 +1,5 @@
 /** Shared keyboard focus handling for the app's dialogs. */
+import { isComposingKey } from './keyboard';
 
 /** Keep the beginning of a long dialog and its initial focus in view. */
 export function focusDialogStart(
@@ -32,8 +33,11 @@ export function getDialogFocusableElements(container: HTMLElement): HTMLElement[
     return Array.from(container.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR))
         .filter((element) => {
             if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
-            // Own computed display does not reveal a hidden ancestor or a
-            // closed details element. Those descendants have no layout boxes.
+            // Recent Chromium can expose layout boxes inside a closed details
+            // element. Such controls still cannot receive focus. Use the native
+            // ancestor visibility check where available, then the geometry and
+            // CSS checks for browsers without it.
+            if (typeof element.checkVisibility === 'function' && !element.checkVisibility()) return false;
             if (!element.getClientRects().length) return false;
             const style = window.getComputedStyle(element);
             return style.visibility !== 'hidden' && style.visibility !== 'collapse';
@@ -50,7 +54,8 @@ export function getDialogFocusableElements(container: HTMLElement): HTMLElement[
  * the next Tab would walk into the page behind.
  */
 export function keepTabWithin(container: HTMLElement | null, event: KeyboardEvent): void {
-    if (event.key !== 'Tab' || !container) return;
+    // Option+Tab remains available for macOS full keyboard navigation.
+    if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.metaKey || isComposingKey(event) || !container) return;
     const focusable = getDialogFocusableElements(container);
     if (focusable.length === 0) {
         event.preventDefault();
@@ -65,11 +70,12 @@ export function keepTabWithin(container: HTMLElement | null, event: KeyboardEven
     const outsideTabOrder = !focusable.some(element => element === active);
     if (event.shiftKey && (outsideTabOrder || active === first)) {
         event.preventDefault();
-        // Let the dialog scroll to the destination, especially when its board
-        // and last control cannot both fit on a small screen.
+        // Focus can leave a control partly clipped in a scrolling dialog.
         last.focus();
+        last.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } else if (!event.shiftKey && (outsideTabOrder || active === last)) {
         event.preventDefault();
         first.focus();
+        first.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 }

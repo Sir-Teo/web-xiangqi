@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { editorHistory } from '../../utils/editorHistory';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useReducer } from 'react';
 import './Board.css';
@@ -73,9 +74,10 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
      * for the position either.
      */
     const [fenDraft, setFenDraft] = useState<string | null>(null);
-    const [fenNotice, setFenNotice] = useState<string | null>(null);
+    const [fenNotice, setFenNotice] = useState<{ message: string; invalid?: true } | null>(null);
     const [copied, setCopied] = useState(false);
     const copiedTimerRef = useRef<number | null>(null);
+    const copyRequestRef = useRef(0);
     const dialogRef = useRef<HTMLDivElement | null>(null);
     const [focusedSquare, setFocusedSquare] = useState({ file: 0, rank: 9 });
     const keyboardHelpId = useId();
@@ -86,21 +88,34 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     useEffect(() => () => {
         if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
     }, []);
+    useEffect(() => {
+        const request = copyRequestRef;
+        return () => { request.current++; };
+    }, []);
+
+    const clearCopyFeedback = useCallback(() => {
+        copyRequestRef.current++;
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = null;
+        setCopied(false);
+    }, []);
 
     /** Any edit to the board means the field is describing the board again. */
     const followBoard = useCallback(() => {
+        clearCopyFeedback();
         setFenDraft(null);
         setFenNotice(null);
-    }, []);
+    }, [clearCopyFeedback]);
 
     const loadFenDraft = useCallback(() => {
+        clearCopyFeedback();
         const text = (fenDraft ?? fen).trim().replace(/\s+/g, ' ');
         const parts = text.split(' ');
         let next: BoardState;
         try {
             next = parseFenBoard(parts[0]);
         } catch {
-            setFenNotice('That is not a position this board can read.');
+            setFenNotice({ message: 'That is not a position this board can read.', invalid: true });
             return;
         }
         // The side is taken when the FEN names one and left alone when it does
@@ -112,27 +127,31 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         // show one because it is not legal yet would defeat that. The problem
         // line below says what is wrong with it, as it does for any other edit.
         setFenNotice(null);
-    }, [fen, fenDraft, side]);
+    }, [clearCopyFeedback, fen, fenDraft, side]);
 
     const applyPosition = () => {
+        clearCopyFeedback();
         const draft = fenDraft?.trim().replace(/\s+/g, ' ');
         const candidate = draft === undefined ? fen : draft.includes(' ') ? draft : `${draft} ${side} - - 0 1`;
         const issue = describeFenProblem(candidate);
-        if (issue) { setFenNotice(issue); return; }
+        if (issue) { setFenNotice({ message: issue, invalid: true }); return; }
         onApply(candidate);
     };
 
     const copyFen = useCallback(async () => {
-        const ok = await copyToClipboard(fen);
-        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        clearCopyFeedback();
+        setFenNotice(null);
+        const request = copyRequestRef.current;
+        const ok = await copyToClipboard(fenDraft ?? fen);
+        if (request !== copyRequestRef.current) return;
         setCopied(ok);
-        setFenNotice(ok ? null : 'The clipboard refused it. Select the text and copy it by hand.');
+        setFenNotice(ok ? null : { message: 'The clipboard refused it. Select the text and copy it by hand.' });
         if (!ok) return;
         copiedTimerRef.current = window.setTimeout(() => {
             copiedTimerRef.current = null;
             setCopied(false);
         }, 1800);
-    }, [fen]);
+    }, [clearCopyFeedback, fen, fenDraft]);
 
     /**
      * `App` inerts every shell child that holds no open dialog, and inerting an
@@ -155,6 +174,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialogRef.current, event);
             const target = event.target;
             if ((event.metaKey || event.ctrlKey) && !event.altKey && !(target instanceof HTMLElement && (target.matches('input, textarea') || target.isContentEditable))) {
@@ -192,6 +212,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     }, [paint]);
 
     const handleSquareKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.defaultPrevented || isComposingKey(event.nativeEvent)) return;
         if (event.altKey || event.metaKey || (event.ctrlKey && event.key !== 'Home' && event.key !== 'End')) return;
         let nextFile = file;
         let nextRank = rank;
@@ -347,22 +368,24 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             type="text"
                             spellCheck={false}
                             autoComplete="off"
+                            autoCapitalize="off"
+                            autoCorrect="off"
                             value={fenDraft ?? fen}
                             /* Same pairing `.new-game-fen-input` uses for the same job: the
                                notice below is a live region, which announces once and is gone,
                                while these two are what a reader gets when they come back to the
                                field to fix it. */
-                            aria-invalid={fenNotice ? true : undefined}
+                            aria-invalid={fenNotice?.invalid}
                             aria-describedby={fenNotice ? 'board-editor-fen-notice' : undefined}
-                            onChange={(event) => { setFenDraft(event.target.value); setFenNotice(null); }}
-                            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
+                            onChange={(event) => { clearCopyFeedback(); setFenDraft(event.target.value); setFenNotice(null); }}
+                            onKeyDown={(event) => { if (!isComposingKey(event.nativeEvent) && event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
                         />
                         <button type="button" className="pill-btn" onClick={loadFenDraft} data-testid="editor-fen-load">Load</button>
-                        <button type="button" className="pill-btn" onClick={() => void copyFen()} data-testid="editor-fen-copy">
+                        <button type="button" className="pill-btn" onClick={() => void copyFen()} title="Copy FEN text" data-testid="editor-fen-copy">
                             {copied ? 'Copied' : 'Copy'}
                         </button>
                     </div>
-                    {fenNotice ? <p id="board-editor-fen-notice" className="board-editor-fen-notice" role="status" data-testid="editor-fen-notice">{fenNotice}</p> : null}
+                    {fenNotice ? <p id="board-editor-fen-notice" className="board-editor-fen-notice" role="status" data-testid="editor-fen-notice">{fenNotice.message}</p> : null}
                     <div className="board-editor-row">
                         <button type="button" className="gc-btn" onClick={onCancel}>Cancel</button>
                         <button

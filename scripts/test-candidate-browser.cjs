@@ -26,7 +26,10 @@ async function compare(browser, width, real = false) {
   page.on('pageerror', error => errors.push(error.message));
   try {
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copied = text; } } });
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => {
+        if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
+        window.__copied = text;
+      } } });
     });
     if (!real) await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
       window.__commands = [];
@@ -84,6 +87,8 @@ async function compare(browser, width, real = false) {
       await select.selectOption(move);
       await panel.getByRole('button', { name: 'Add move', exact: true }).click();
       assert.equal(await select.locator(`option[value="${move}"]`).isDisabled(), true);
+      assert.equal(await select.evaluate(el => el === document.activeElement), true,
+        'Adding a candidate must return focus to the picker for the next move');
     }
     if (!real) await page.evaluate(() => { window.__candidateBound = ' lowerbound'; });
     await panel.getByTestId('compare-candidates').click();
@@ -126,6 +131,19 @@ async function compare(browser, width, real = false) {
       assert.equal(commands.slice(0, go).findLast(command => command.startsWith('setoption name MultiPV')), 'setoption name MultiPV value 2');
       await page.getByTestId('copy-candidate-a9a8').click();
       assert.equal(await page.evaluate(() => window.__copied), 'a9a8 a0a1 i9i8');
+      const copyFirst = page.getByTestId('copy-candidate-a9a8');
+      for (const id of ['copy-candidate-a9a8', 'copy-candidate-i9i8']) {
+        await page.evaluate(() => { window.__holdCopy = true; window.__rejectCopy = undefined; });
+        await copyFirst.click();
+        await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
+        assert.equal(await copyFirst.innerText(), 'Copy line', 'A pending retry must clear its old success badge');
+        await page.evaluate(() => { window.__holdCopy = false; });
+        const latest = page.getByTestId(id);
+        await latest.click(); await latest.filter({ hasText: 'Copied' }).waitFor();
+        await page.evaluate(() => window.__rejectCopy(new Error('Old clipboard denial')));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await latest.innerText(), 'Copied', 'An old candidate-copy failure must preserve the newer success');
+      }
       // Clipboard denial must not report success; a later retry can recover.
       await page.evaluate(() => {
         window.__writeClipboard = navigator.clipboard.writeText;
@@ -230,8 +248,27 @@ async function compare(browser, width, real = false) {
     }
     await panel.getByRole('button', { name: 'Stop comparison', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'));
+    assert.equal(await panel.getByTestId('compare-candidates').evaluate(node => node === document.activeElement), true,
+      'Stopping a comparison must return focus from the removed Stop control to Compare');
     await page.getByTestId('deep-infinite-toggle').click();
+    if (!real) {
+      for (const focusStop of [true, false]) {
+        const beforeGo = await page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length);
+        await page.evaluate(() => { window.__holdStop = true; });
+        await panel.getByTestId('compare-candidates').click();
+        await page.waitForFunction(count => window.__commands.filter(command => command.startsWith('go ')).length > count, beforeGo);
+        const focusTarget = focusStop ? panel.getByRole('button', { name: 'Stop comparison', exact: true }) : select;
+        await focusTarget.focus();
+        await page.evaluate(() => { window.__holdStop = false; window.__emit('bestmove a9a8'); });
+        await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'));
+        const expected = focusStop ? panel.getByTestId('compare-candidates') : select;
+        assert.equal(await expected.evaluate(node => node === document.activeElement), true,
+          focusStop ? 'A completed search must return focus from its removed Stop control' : 'A completed search must preserve focus on the picker');
+      }
+    }
     await panel.getByRole('button', { name: 'Remove candidate a9a8' }).click();
+    assert.equal(await select.evaluate(el => el === document.activeElement), true,
+      'Removing a candidate must not leave focus on the page body');
     assert.equal(await page.getByTestId('candidate-results').count(), 0);
     await page.getByTestId('engine-pv-line-0').waitFor({ timeout: 60000 });
     await panel.getByTestId('compare-candidates').click();
@@ -241,12 +278,18 @@ async function compare(browser, width, real = false) {
     assert.match(await page.locator('.hitbox[data-file="8"][data-rank="8"]').getAttribute('aria-label'), /black chariot/);
     await open.click();
     const available = await select.locator('option').evaluateAll(options => options.map(option => option.value).filter(Boolean));
-    for (const move of available.slice(0, 5)) {
+    for (const [index, move] of available.slice(0, 5).entries()) {
       await select.selectOption(move);
       await panel.getByRole('button', { name: 'Add move', exact: true }).click();
+      const next = index === 4 ? panel.getByTestId('compare-candidates') : select;
+      assert.equal(await next.evaluate(el => el === document.activeElement), true,
+        'The fifth candidate must move focus from the disabled picker to Compare');
     }
     assert.equal(await select.isDisabled(), true);
     assert.match(await panel.getByRole('status').innerText(), /5 of 5 selected/);
+    await panel.getByRole('button', { name: `Remove candidate ${available[4]}`, exact: true }).click();
+    assert.equal(await select.isEnabled(), true);
+    assert.equal(await select.evaluate(el => el === document.activeElement), true);
     await page.getByRole('button', { name: 'Close candidate comparison' }).click();
     assert.equal(await open.evaluate(el => el === document.activeElement), true);
     assert.deepEqual(errors, []);

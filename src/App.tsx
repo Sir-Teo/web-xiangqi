@@ -1,3 +1,5 @@
+import { isComposingKey } from './utils/keyboard';
+import { downloadRecoveryGame } from './utils/recoveryDownload';
 import { studyContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
@@ -9,12 +11,13 @@ import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind 
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
-import { StudyNotes } from './components/StudyNotes';
+import { StudyNotes, type StudyNotesViewState } from './components/StudyNotes';
 import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
 import { normalizeGameMetadata } from './utils/gameMetadata';
 import { LibraryMatches } from './components/Library/LibraryMatches';
+import type { LibrarySearchFocusRequest, LibraryViewState } from './components/Library/LibraryPanel';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
 import { DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
@@ -42,6 +45,7 @@ import {
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
+import { useUndoTimeout } from './hooks/useUndoTimeout';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
@@ -243,6 +247,11 @@ type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
 type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
 type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
+
+function clearToastTimer(timer: { current: number | null }) {
+  if (timer.current !== null) window.clearTimeout(timer.current);
+  timer.current = null;
+}
 
 const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; description: string }> = [
   { mode: 'PvP', label: 'Local board', shortLabel: 'Local', description: 'Two players, one board, no engine moves.' },
@@ -589,6 +598,14 @@ function App() {
   const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 2);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
+  // Keep search choices and revealed pages while the library unmounts. A ref
+  // avoids rerendering the board on each keystroke; a fresh page starts clear.
+  const libraryViewState = useRef<LibraryViewState | undefined>(undefined);
+  const rememberLibraryViewState = useCallback((filters: LibraryViewState) => { libraryViewState.current = filters; }, []);
+  const [librarySearchRequest, setLibrarySearchRequest] = useState<LibrarySearchFocusRequest>();
+  const handleLibrarySearchFocused = useCallback((request: LibrarySearchFocusRequest) => {
+    setLibrarySearchRequest(current => current === request ? undefined : current);
+  }, []);
   const [graphLoadSweepToken, setGraphLoadSweepToken] = useState(0);
   const [orientation, setOrientation] = useState<BoardOrientation>(storedPreferences.orientation ?? 'red');
   // WXF is the default because it is the notation both a Chinese record and an
@@ -734,6 +751,8 @@ function App() {
 
   const resetPreferences = useCallback(() => {
     clearStoredPreferences();
+    setGuideDismissed(false);
+    writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'false');
     applyPreferences({});
   }, [applyPreferences]);
 
@@ -778,6 +797,11 @@ function App() {
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea && event.storageArea !== window.localStorage) return;
+      if (event.key === BEGINNER_GUIDE_STORAGE_KEY) {
+        setGuideDismissed(event.newValue === 'true');
+        return;
+      }
+      if (event.key === null) setGuideDismissed(false);
       if (event.key !== PREFERENCES_STORAGE_KEY && event.key !== null) return;
       applyPreferences(normalizeStoredPreferencesValue(event.newValue));
     };
@@ -1499,6 +1523,7 @@ function App() {
     event: React.KeyboardEvent<HTMLButtonElement>,
     index: number
   ) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     const strip = treeBreadcrumbRef.current;
     const next = rovingIndexForKey(event.key, strip?.childElementCount ?? 0, index);
     if (next === null) return;
@@ -1701,6 +1726,7 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       // Command/Control+K, the near-universal palette binding and the only
       // chord this app claims. Handled before anything else so it works from a
       // text field too, which is where a reader often is when they reach for it.
@@ -1714,7 +1740,7 @@ function App() {
         setShowCommandPalette((open) => !open);
         return;
       }
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         event.preventDefault();
         setShowSettings(false);
         setShowNewGameMenu(false);
@@ -1783,10 +1809,16 @@ function App() {
     const previouslyFocused = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+    let initialFocusPlaced = false;
     const focusInitial = () => {
-      if (activeDialog.contains(document.activeElement)) return;
+      if (initialFocusPlaced) return;
+      if (activeDialog.contains(document.activeElement)) { initialFocusPlaced = true; return; }
       const firstFocusable = getDialogFocusableElements(activeDialog)[0];
       (firstFocusable ?? activeDialog).focus({ preventScroll: true });
+      // Retry only a focus attempt that failed, for example while the page's
+      // inert state settles. A later disabled action can legitimately blur to
+      // body; an initial-focus retry must not take over that interaction.
+      initialFocusPlaced = activeDialog.contains(document.activeElement);
     };
 
     focusInitial();
@@ -2284,6 +2316,12 @@ function App() {
     }
   }, [assistMode, board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
 
+  const handleCancelBoardSelection = useCallback(() => {
+    if (!selected) return;
+    onSquareClick(selected.file, selected.rank);
+    clearMoveRuleHint();
+  }, [clearMoveRuleHint, onSquareClick, selected]);
+
   const applyMode = useCallback((mode: GameMode) => {
     const nextWorkspace = workspaceForNewGame(mode, gameMode);
     if (nextWorkspace) setWorkspaceMode(nextWorkspace);
@@ -2346,6 +2384,12 @@ function App() {
     setMobileView('analysis');
   }, []);
 
+  useEffect(() => {
+    if (leftPanelTab !== 'library' || (isMobile && (mobileView !== 'analysis' || mobileAnalysisTab !== 'library'))) {
+      setLibrarySearchRequest(undefined);
+    }
+  }, [leftPanelTab, isMobile, mobileView, mobileAnalysisTab]);
+
   const openAnalysisPanel = useCallback((tab: 'tree' | 'review' | 'engine') => {
     setShowMobileBoardActionMenu(false);
     setRightWidth(width => width === 0 ? initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH) : width);
@@ -2367,6 +2411,7 @@ function App() {
   // and reversible. Claiming the key also keeps it from reaching the global move
   // shortcuts while a tab has focus.
   const handleTablistKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     const { key } = event;
     if (key !== 'ArrowRight' && key !== 'ArrowLeft' && key !== 'Home' && key !== 'End') return;
     const tabs = Array.from(
@@ -2385,6 +2430,7 @@ function App() {
   }, []);
 
   const handleLeftResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       adjustLeftPanelWidth(-PANEL_KEYBOARD_STEP);
@@ -2401,6 +2447,7 @@ function App() {
   }, [adjustLeftPanelWidth]);
 
   const handleRightResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       adjustRightPanelWidth(PANEL_KEYBOARD_STEP);
@@ -2574,7 +2621,8 @@ function App() {
   );
   const showEvalBar = engineEnabled && !isMobile;
   // No eval to show, nothing wrong, and not ready yet: the wait itself.
-  const mobileEngineLoading = engineEnabled && !isReady && displayEvalScore === null;
+  // AI play needs the same engine download while live analysis stays off.
+  const mobileEngineLoading = engineRequired && !isReady && (!engineEnabled || displayEvalScore === null);
 
   const displayEvalClass = evalBarScore === null
     ? ''
@@ -2790,6 +2838,7 @@ function App() {
   );
   const cloudRule = useCloudRule(rootFen, repetitionLineMoves, repetition.occurrences >= 2,
     cloudBookEnabled && isPageVisible && (!isMobile || mobileView === 'board' || mobileAnalysisTab === 'graph'));
+  const repetitionNoticeRef = useRef<HTMLDivElement>(null);
   const cloudRuleHasVerdict = cloudRule.status === 'ok' && (cloudRule.banned.length > 0 || cloudRule.drawing.length > 0);
   // A forbidden move is worth saying at the first repetition, before it is
   // played, whatever the threshold for an unforced one.
@@ -2947,9 +2996,18 @@ function App() {
   const [engineHashFeedback, setEngineHashFeedback] = useState<EngineHashFeedback>(null);
   const [copiedPvIndex, setCopiedPvIndex] = useState<number | null>(null);
   const [exportFailureKey, setExportFailureKey] = useState<ExportFailureKey | null>(null);
+  // Clipboard permission requests can finish out of order. Only the latest
+  // export action may publish feedback, including after a download attempt.
+  const exportRequestRef = useRef(0);
   const [savedToast, setSavedToast] = useState(false);
   const [saveFailedToast, setSaveFailedToast] = useState(false);
   const savedToastTimerRef = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (savedToastTimerRef.current !== null) window.clearTimeout(savedToastTimerRef.current);
+    savedToastTimerRef.current = null;
+    setSavedToast(false);
+    setSaveFailedToast(false);
+  }, [gameIdentity]);
   const copiedToastTimerRef = useRef<number | null>(null);
   const copiedFenToastTimerRef = useRef<number | null>(null);
   const copiedShareToastTimerRef = useRef<number | null>(null);
@@ -2993,16 +3051,29 @@ function App() {
   const directImportGenerationRef = useRef(0);
   const directImportControllerRef = useRef<AbortController | null>(null);
   const [directImportBusy, setDirectImportBusy] = useState(false);
+  const [moveLineFileDragActive, setMoveLineFileDragActive] = useState(false);
+  const directImportFocusRef = useRef<HTMLElement | null>(null);
+  const directImportCancelRef = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    // A disabled Import button, or a removed Cancel button, can blur to body.
+    // Keep keyboard retry nearby without moving focus from another control.
+    const target = directImportFocusRef.current;
+    if (!directImportBusy && target?.isConnected && document.activeElement === document.body) target.focus();
+  }, [directImportBusy]);
   const cancelDirectImport = useCallback(() => {
     directImportGenerationRef.current++;
     directImportControllerRef.current?.abort();
     directImportControllerRef.current = null;
     setDirectImportBusy(false);
   }, []);
-  useLayoutEffect(() => { cancelDirectImport(); }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
+  useLayoutEffect(() => {
+    cancelDirectImport();
+    setMoveLineFileDragActive(false);
+  }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
   useEffect(() => () => { directImportGenerationRef.current++; directImportControllerRef.current?.abort(); }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
+  const [moveLineFileUndo, setMoveLineFileUndo] = useState<{ text: string; name: string } | null>(null);
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
   const showMobilePgnAction =
     canExportCurrentLine ||
@@ -3085,6 +3156,7 @@ function App() {
   const toggleSettings = useCallback(() => {
     setShowMobileBoardActionMenu(false);
     setShowNewGameMenu(false);
+    setMoveLineFileUndo(null);
     clearFenError();
     setMoveLineError(null);
     setShowSettings((open) => !open);
@@ -3092,6 +3164,7 @@ function App() {
 
   const closeNewGameMenu = useCallback(() => {
     cancelDirectImport();
+    setMoveLineFileUndo(null);
     setShowNewGameMenu(false);
     setShowMobileBoardActionMenu(false);
     clearFenError();
@@ -3106,6 +3179,7 @@ function App() {
     setFenInput('');
     setMoveLineInput('');
     setMoveLineFileName('');
+    setMoveLineFileUndo(null);
     clearFenError();
     setMoveLineError(null);
     setShowNewGameMenu(true);
@@ -3123,7 +3197,7 @@ function App() {
       }}
       onLibrary={openLibraryPanel}
       onLearn={() => setShowRuleLessons(true)}
-      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
+      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); focusBoard(); }}
     />
   ) : null;
 
@@ -3171,9 +3245,13 @@ function App() {
   }, [activeLineNodeIds, currentMoveIndex, treeNodes, rootNodeId, gameMetadata, hasGameMetadata, gameMode, exportOpeningName, gameResult, rootFen, rootComment, rootResult, mainLinePinned, hasMoveTreeMoves, hasStudyBranches]);
 
   const handleCopyPgn = useCallback(async () => {
+    const request = ++exportRequestRef.current;
+    clearToastTimer(copiedToastTimerRef);
+    setCopiedToast(false);
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = await copyToClipboard(pgn);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-pgn');
       return;
@@ -3190,6 +3268,9 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, showExportFailure]);
 
   const handleDownloadPgn = useCallback(() => {
+    exportRequestRef.current++;
+    clearToastTimer(downloadedPgnTimerRef);
+    setDownloadedPgnToast(false);
     const pgn = buildCurrentPgn();
     if (!pgn) return;
     const ok = downloadTextFile(
@@ -3214,6 +3295,9 @@ function App() {
   }, [buildCurrentPgn, clearExportFailure, exportOpeningName, showExportFailure]);
 
   const handleCopyShareLink = useCallback(async () => {
+    const request = ++exportRequestRef.current;
+    clearToastTimer(copiedShareToastTimerRef);
+    setCopiedShareToast(false);
     // Notes travel with the link for the same reason variations do: what is
     // being shared is a study. Move notes share the tree's 8000-character
     // budget; the bounded starting-position note has its own URL parameter.
@@ -3229,6 +3313,7 @@ function App() {
     }
     if (!share || !canShareCurrentPosition) return;
     const ok = await copyToClipboard(share.url);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-share');
       return;
@@ -3317,21 +3402,18 @@ function App() {
     closeNewGameMenu();
   }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis]);
 
-  const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
+  const readMoveLineFile = useCallback(async (file: File) => {
     cancelDirectImport();
     const generation = directImportGenerationRef.current;
+    const previous = { text: moveLineInput, name: moveLineFileName };
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
-      setMoveLineFileName('');
-      setMoveLineInput('');
       setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
       return;
     }
 
     try {
+      setMoveLineError(null);
       setDirectImportBusy(true);
       const bytes = await file.arrayBuffer();
       if (generation !== directImportGenerationRef.current) return;
@@ -3341,31 +3423,72 @@ function App() {
       if (generation !== directImportGenerationRef.current) return;
       setDirectImportBusy(false);
       if (response.kind === 'xqf') {
-        setMoveLineFileName(file.name);
         handleImportXqf(response.record);
         return;
       }
       if (response.kind !== 'text') return;
       const text = response.text;
+      if (!text.trim()) throw new Error('The file is empty. Choose a game record with moves or a position.');
       if (isMoveImportTextTooLarge(text)) {
-        setMoveLineInput('');
-        setMoveLineFileName('');
         setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
         return;
       }
       setMoveLineInput(text);
       setMoveLineFileName(file.name);
+      if (text !== previous.text || file.name !== previous.name) setMoveLineFileUndo(previous);
       setMoveLineError(null);
     } catch (error) {
       if (generation !== directImportGenerationRef.current) return;
-      setMoveLineFileName('');
       setDirectImportBusy(false);
       setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }
-  }, [handleImportXqf, cancelDirectImport]);
+  }, [handleImportXqf, cancelDirectImport, moveLineInput, moveLineFileName]);
+
+  const handleUndoMoveLineFile = useCallback(() => {
+    if (!moveLineFileUndo) return;
+    const source = document.activeElement;
+    directImportFocusRef.current = document.getElementById('new-game-line-input');
+    cancelDirectImport();
+    const generation = directImportGenerationRef.current;
+    setMoveLineInput(moveLineFileUndo.text);
+    setMoveLineFileName(moveLineFileUndo.name);
+    setMoveLineError(null);
+    setMoveLineFileUndo(null);
+    // The Undo button leaves the DOM. Reveal the restored text after layout,
+    // unless another edit or focused control has superseded this action.
+    requestAnimationFrame(() => {
+      if (generation !== directImportGenerationRef.current) return;
+      const input = document.getElementById('new-game-line-input');
+      if (document.activeElement === document.body || document.activeElement === input || document.activeElement === source) input?.focus();
+    });
+  }, [cancelDirectImport, moveLineFileUndo]);
+
+  const handleMoveLineFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) void readMoveLineFile(file);
+  }, [readMoveLineFile]);
+
+  const handleMoveLineFileDrop = useCallback((event: React.DragEvent<HTMLTextAreaElement>) => {
+    setMoveLineFileDragActive(false);
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    const file = event.dataTransfer.files[0];
+    if (event.dataTransfer.files.length !== 1 || !file) {
+      cancelDirectImport();
+      setMoveLineError('Drop one game file at a time.');
+      return;
+    }
+    void readMoveLineFile(file);
+  }, [cancelDirectImport, readMoveLineFile]);
 
   const handleCopyFen = useCallback(async () => {
+    const request = ++exportRequestRef.current;
+    clearToastTimer(copiedFenToastTimerRef);
+    setCopiedFenToast(false);
     const ok = await copyToClipboard(currentFen);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-fen');
       return;
@@ -3464,10 +3587,18 @@ function App() {
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
+  const studyNotesViewRef = useRef<{ identity: object; state: StudyNotesViewState } | null>(null);
+  const rememberStudyNotesView = useCallback((identity: object, state: StudyNotesViewState) => {
+    studyNotesViewRef.current = { identity, state };
+  }, []);
   const handleCopyRecord = useCallback(async () => {
+    const request = ++exportRequestRef.current;
+    clearToastTimer(copiedRecordToastTimerRef);
+    setCopiedRecordToast(false);
     const recordText = formatRecordText(moveHistory.slice(0, currentMoveIndex + 1), rootFen, notationStyle);
     if (!recordText) return;
     const ok = await copyToClipboard(recordText);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure('copy-record');
       return;
@@ -3484,9 +3615,13 @@ function App() {
   }, [clearExportFailure, currentMoveIndex, moveHistory, notationStyle, rootFen, showExportFailure]);
 
   const handleCopyPvLine = useCallback(async (lineIndex: number, moves: string[]) => {
+    const request = ++exportRequestRef.current;
+    clearToastTimer(copiedPvTimerRef);
+    setCopiedPvIndex(null);
     const rawLine = moves.filter(Boolean).join(' ').trim();
     if (!rawLine) return;
     const ok = await copyToClipboard(rawLine);
+    if (request !== exportRequestRef.current) return;
     if (!ok) {
       showExportFailure(`copy-pv-${lineIndex}`);
       return;
@@ -3886,14 +4021,6 @@ function App() {
     setMobileView('board');
   }, [askDrillMoment, drillMoments]);
 
-  const stopMistakeDrill = useCallback(() => setDrill(null), []);
-
-  const retryDrillMoment = useCallback(() => {
-    if (!drill || !drillMoment) return;
-    setDrill({ ...drill, attempt: null, verdict: null });
-    askDrillMoment(drillMoment);
-  }, [askDrillMoment, drill, drillMoment]);
-
   const nextDrillMoment = useCallback(() => {
     if (!drill) return;
     const found = drill.found + (isDrillSuccess(drill.verdict) ? 1 : 0);
@@ -3905,15 +4032,6 @@ function App() {
     setDrill({ ...drill, found, index, attempt: null, verdict: null });
     askDrillMoment(drill.moments[index]);
   }, [askDrillMoment, drill]);
-
-  const showDrillAnswer = useCallback(() => {
-    if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
-    // The verdict is set before the move lands, so the effect below does not
-    // read the engine's own move as the reader's attempt.
-    setDrill({ ...drill, verdict: { kind: 'shown' } });
-    clearBoardMarkers();
-    applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove);
-  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId]);
 
   // A move played from the asked position is the attempt. The engine's move
   // and the game's move are graded at once; anything else waits for the
@@ -4059,6 +4177,7 @@ function App() {
   const handleImportMoveLine = useCallback(async (text: string, nextGameMode: GameMode = pendingGameMode) => {
     cancelDirectImport();
     showImportNotice(null);
+    setMoveLineError(null);
     const generation = directImportGenerationRef.current;
     const controller = new AbortController();
     directImportControllerRef.current = controller;
@@ -4349,6 +4468,7 @@ function App() {
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
   const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
+  const mobileStudySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Save study' : studyModified ? 'Save changes' : 'Saved study';
 
   /** Include the live note even when Save runs before blur or its debounce. */
   const snapshotForStorage = useCallback((snapshot: typeof currentGameSnapshot) => {
@@ -4377,21 +4497,16 @@ function App() {
     if (saved) setLoadedSavedStudy(saved);
     if (savedToastTimerRef.current !== null) {
       window.clearTimeout(savedToastTimerRef.current);
+      savedToastTimerRef.current = null;
     }
     setSavedToast(Boolean(saved));
     setSaveFailedToast(!saved);
-    // A failure outlasts a success on purpose. "Saved" is a confirmation of
-    // something the reader already expected and can be brief; "Save Failed"
-    // says the game they just tried to keep is not anywhere, and it is the only
-    // place that is said. At the shared 1800ms it was gone before someone who
-    // clicked and glanced away could see it, leaving them believing the save
-    // had worked -- measured with local storage filled to its quota, where the
-    // write really does fail and the library really does stay empty.
-    savedToastTimerRef.current = window.setTimeout(() => {
+    // Recovery instructions stay until dismissal, a successful save, or a
+    // different game. A brief success confirmation can fade on its own.
+    if (saved) savedToastTimerRef.current = window.setTimeout(() => {
       savedToastTimerRef.current = null;
       setSavedToast(false);
-      setSaveFailedToast(false);
-    }, saved ? 1800 : 8000);
+    }, 1800);
   }, []);
 
   const currentSaveIdentityRef = useRef(gameIdentity);
@@ -4434,17 +4549,11 @@ function App() {
    * costs nothing until it is needed.
    */
   const [deleteUndo, setDeleteUndo] = useState<{ snapshot: MoveTreeSnapshot; removed: number; nodeId: string } | null>(null);
-  const deleteUndoTimerRef = useRef<number | null>(null);
+  const deleteUndoTimeout = useUndoTimeout(10000, () => setDeleteUndo(null));
   const dismissDeleteUndo = useCallback(() => {
-    if (deleteUndoTimerRef.current !== null) {
-      window.clearTimeout(deleteUndoTimerRef.current);
-      deleteUndoTimerRef.current = null;
-    }
+    deleteUndoTimeout.cancel();
     setDeleteUndo(null);
-  }, []);
-  useEffect(() => () => {
-    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
-  }, []);
+  }, [deleteUndoTimeout]);
   // A new game may have the same root FEN, but its predecessor's undo cannot
   // be applied to it. Identity changes on reset, import, and library load.
   useEffect(() => { dismissDeleteUndo(); }, [dismissDeleteUndo, gameIdentity]);
@@ -4462,13 +4571,9 @@ function App() {
       stack.push(...(treeNodes[id]?.childrenIds ?? []));
     }
     if (!deleteNode(nodeId)) return;
-    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
     setDeleteUndo({ snapshot, removed, nodeId });
-    deleteUndoTimerRef.current = window.setTimeout(() => {
-      deleteUndoTimerRef.current = null;
-      setDeleteUndo(null);
-    }, 10000);
-  }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
+    deleteUndoTimeout.start();
+  }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, deleteUndoTimeout, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
 
   /**
    * Deleting a saved study is the most expensive thing a reader can do here,
@@ -4484,46 +4589,58 @@ function App() {
    * `restoreGameToLibrary` puts it back under its own id, so an open study or
    * a saved review still points at the same game.
    */
-  const [libraryUndo, setLibraryUndo] = useState<{ game: SavedGame; failed?: boolean } | null>(null);
-  const libraryUndoTimerRef = useRef<number | null>(null);
-  const dismissLibraryUndo = useCallback(() => {
-    if (libraryUndoTimerRef.current !== null) {
-      window.clearTimeout(libraryUndoTimerRef.current);
-      libraryUndoTimerRef.current = null;
+  const [libraryUndo, setLibraryUndo] = useState<{
+    game: SavedGame; failed?: boolean; pending?: boolean; downloadFailed?: boolean;
+  } | null>(null);
+  const libraryUndoTimeout = useUndoTimeout(10000, () => setLibraryUndo(null));
+  const libraryUndoVersionRef = useRef(0);
+  const libraryUndoButtonRef = useRef<HTMLButtonElement>(null);
+  const focusUndoRetryRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!focusUndoRetryRef.current || libraryUndo?.pending) return;
+    focusUndoRetryRef.current = false;
+    // Disabling the pending button can blur it. Restore the retry action only
+    // if the reader has not moved focus elsewhere while storage was busy.
+    if (libraryUndo?.failed && (document.activeElement === document.body || document.activeElement === libraryUndoButtonRef.current)) {
+      libraryUndoButtonRef.current?.focus({ preventScroll: true });
+      libraryUndoButtonRef.current?.scrollIntoView({ block: 'nearest' });
     }
+  }, [libraryUndo]);
+  const dismissLibraryUndo = useCallback(() => {
+    libraryUndoVersionRef.current += 1;
+    libraryUndoTimeout.cancel();
     setLibraryUndo(null);
-  }, []);
-  useEffect(() => () => {
-    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
-  }, []);
+  }, [libraryUndoTimeout]);
 
   const handleDeleteSavedGame = useCallback(async (id: string): Promise<boolean> => {
     const removed = savedGames.find((game) => game.id === id);
     if (!await deleteGameFromLibrary(id)) return false;
     if (!removed) return true;
-    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
+    libraryUndoVersionRef.current += 1;
     setLibraryUndo({ game: removed });
-    libraryUndoTimerRef.current = window.setTimeout(() => {
-      libraryUndoTimerRef.current = null;
-      setLibraryUndo(null);
-    }, 10000);
+    libraryUndoTimeout.start();
     return true;
-  }, [deleteGameFromLibrary, savedGames]);
+  }, [deleteGameFromLibrary, libraryUndoTimeout, savedGames]);
 
   const handleUndoLibraryDelete = useCallback(async () => {
-    if (!libraryUndo) return;
-    if (await restoreGameToLibrary(libraryUndo.game)) {
+    if (!libraryUndo || libraryUndo.pending) return;
+    // Once accepted, Undo must survive its original expiry while another tab
+    // holds the library lock. A later deletion owns its own toast and timer.
+    const version = libraryUndoVersionRef.current;
+    const hadFocus = document.activeElement === libraryUndoButtonRef.current;
+    libraryUndoTimeout.cancel();
+    setLibraryUndo({ ...libraryUndo, pending: true });
+    const restored = await restoreGameToLibrary(libraryUndo.game);
+    if (version !== libraryUndoVersionRef.current) return;
+    if (restored) {
       dismissLibraryUndo();
       return;
     }
     // Storage can refuse -- it is full, or blocked, or unreadable. Say so and
     // leave the toast up rather than closing it on a delete that stands.
-    if (libraryUndoTimerRef.current !== null) {
-      window.clearTimeout(libraryUndoTimerRef.current);
-      libraryUndoTimerRef.current = null;
-    }
+    focusUndoRetryRef.current = hadFocus;
     setLibraryUndo({ game: libraryUndo.game, failed: true });
-  }, [dismissLibraryUndo, libraryUndo, restoreGameToLibrary]);
+  }, [dismissLibraryUndo, libraryUndo, libraryUndoTimeout, restoreGameToLibrary]);
 
   const handleUndoDelete = useCallback(() => {
     if (!deleteUndo) return;
@@ -4567,6 +4684,10 @@ function App() {
       hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
     { id: 'new-game', label: 'New game', keywords: ['restart', 'reset'], run: () => { resetGame(); } },
     { id: 'library', label: 'Library', hint: 'Saved games', keywords: ['open', 'load'], run: openLibraryPanel },
+    { id: 'search-library', label: 'Search library', hint: 'Find saved games, players, moves or notes', keywords: ['find', 'saved', 'filter'], run: () => {
+      openLibraryPanel();
+      setLibrarySearchRequest({ source: dialogLauncherRef.current });
+    } },
     {
       id: 'save-game',
       label: 'Save game',
@@ -4661,12 +4782,16 @@ function App() {
       keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
       disabled: !studyNotes.length,
       run: () => {
+        const source = dialogLauncherRef.current;
         openAnalysisPanel('tree');
         window.setTimeout(() => {
           if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          const input = document.getElementById('study-notes-search') as HTMLInputElement | null;
+          const active = document.activeElement;
+          if (active !== document.body && active !== source && active !== input) return;
           const details = document.getElementById('study-notes') as HTMLDetailsElement | null;
           if (details) details.open = true;
-          document.getElementById('study-notes-search')?.focus();
+          input?.focus(); input?.select();
         }, 0);
       },
     },
@@ -4816,6 +4941,16 @@ function App() {
       keywords: ['arrow', 'marker', 'overlay', 'highlight', 'draw', 'annotation', 'clutter', 'clean', '\u7bad\u5934'],
       run: () => setShowArrows((shown) => !shown),
     },
+    {
+      id: 'clear-board-markers',
+      label: 'Clear drawn arrows and highlights',
+      hint: userArrows.length || userHighlights.length
+        ? 'Remove your drawings; keep engine arrows and the last move'
+        : 'No drawings to clear',
+      keywords: ['erase', 'remove', 'marker', 'annotation', 'drawing', 'clean'],
+      disabled: !userArrows.length && !userHighlights.length,
+      run: clearBoardMarkers,
+    },
     /**
      * One command per notation, rather than one that cycles: a reader who wants
      * Chinese should not have to pass through WXF to get there, and naming each
@@ -4909,7 +5044,7 @@ function App() {
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
-      stopDeepDive, studyNotes.length])
+      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
     initialPly ??= selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
     if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
@@ -5006,10 +5141,49 @@ function App() {
   // fixed corner.
   const focusBoard = useCallback(() => {
     if (typeof document === 'undefined') return;
-    const target = document.querySelector<HTMLElement>('.xiangqi-board [tabindex="0"]')
-      ?? document.querySelector<HTMLElement>('.xiangqi-board [data-file][data-rank]');
-    target?.focus();
+    setMobileView('board');
+    // Focus only after the mobile board has returned to the layout.
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>('.xiangqi-board [tabindex="0"]')
+        ?? document.querySelector<HTMLElement>('.xiangqi-board [data-file][data-rank]');
+      target?.focus();
+    });
   }, []);
+
+  const handleStartBoardAnalysis = useCallback(() => {
+    startEngineAnalysis();
+    focusBoard();
+  }, [focusBoard, startEngineAnalysis]);
+
+  const stopMistakeDrill = useCallback(() => {
+    setDrill(null);
+    focusBoard();
+  }, [focusBoard]);
+
+  const retryDrillMoment = useCallback(() => {
+    if (!drill || !drillMoment) return;
+    setDrill({ ...drill, attempt: null, verdict: null });
+    askDrillMoment(drillMoment);
+    focusBoard();
+  }, [askDrillMoment, drill, drillMoment, focusBoard]);
+
+  const showDrillAnswer = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
+    if (!applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove)) {
+      showImportNotice('Answer unavailable', 'The saved answer could not be played here. Try another move or skip this question.');
+      // A capacity warning can reduce the mobile workspace after this click.
+      const button = event.currentTarget;
+      requestAnimationFrame(() => {
+        if (button === document.activeElement) button.scrollIntoView({ block: 'nearest' });
+      });
+      return;
+    }
+    // Batch the revealed verdict with the accepted move, so the attempt
+    // effect does not grade the engine's own answer as the reader's move.
+    setDrill({ ...drill, verdict: { kind: 'shown' } });
+    clearBoardMarkers();
+    focusBoard();
+  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId, focusBoard, showImportNotice]);
 
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
@@ -5222,18 +5396,14 @@ function App() {
    * So the snapshot is kept for the length of the toast instead of dropped on
    * the spot, and Undo restores it the way Restore would have.
    */
-  const [discardedAutoSave, setDiscardedAutoSave] = useState<{ snapshot: AutoSavedGame; failed?: boolean } | null>(null);
-  const discardedAutoSaveTimerRef = useRef<number | null>(null);
+  const [discardedAutoSave, setDiscardedAutoSave] = useState<{
+    snapshot: AutoSavedGame; failed?: boolean; downloadFailed?: boolean;
+  } | null>(null);
+  const discardedAutoSaveTimeout = useUndoTimeout(30000, () => setDiscardedAutoSave(null));
   const dismissDiscardedAutoSave = useCallback(() => {
-    if (discardedAutoSaveTimerRef.current !== null) {
-      window.clearTimeout(discardedAutoSaveTimerRef.current);
-      discardedAutoSaveTimerRef.current = null;
-    }
+    discardedAutoSaveTimeout.cancel();
     setDiscardedAutoSave(null);
-  }, []);
-  useEffect(() => () => {
-    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
-  }, []);
+  }, [discardedAutoSaveTimeout]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     const discarded = autoSaveRecovery;
@@ -5241,16 +5411,12 @@ function App() {
     setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== discarded?.draftId));
     setAutoSaveRecovery(null);
     if (!discarded || !isWorthAutoSaving(discarded.game)) return;
-    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
     setDiscardedAutoSave({ snapshot: discarded });
     // Longer than the ten seconds the other two undos run for: this one has to
     // survive the reader starting to look at the fresh board and realising
     // what they have lost, rather than an immediate "no, not that one".
-    discardedAutoSaveTimerRef.current = window.setTimeout(() => {
-      discardedAutoSaveTimerRef.current = null;
-      setDiscardedAutoSave(null);
-    }, 30000);
-  }, [autoSaveRecovery]);
+    discardedAutoSaveTimeout.start();
+  }, [autoSaveRecovery, discardedAutoSaveTimeout]);
 
   const undoDiscardedAutoSave = useCallback(() => {
     if (!discardedAutoSave) return;
@@ -5259,10 +5425,7 @@ function App() {
     if (!handleLoadGame(discardedAutoSave.snapshot.game)) {
       // Keep the toast. Dismissing it here would throw away the only copy of
       // the game a second time, with nothing on the board to show for it.
-      if (discardedAutoSaveTimerRef.current !== null) {
-        window.clearTimeout(discardedAutoSaveTimerRef.current);
-        discardedAutoSaveTimerRef.current = null;
-      }
+      discardedAutoSaveTimeout.cancel();
       setDiscardedAutoSave({ snapshot: discardedAutoSave.snapshot, failed: true });
       return;
     }
@@ -5277,7 +5440,7 @@ function App() {
     setLoadedSavedStudy(resolveLibrarySource(discardedAutoSave.snapshot.sourceLibrary, savedGames));
     persistAutoSave({ ...discardedAutoSave.snapshot.game, sourceLibrary: discardedAutoSave.snapshot.sourceLibrary });
     dismissDiscardedAutoSave();
-  }, [discardedAutoSave, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
+  }, [discardedAutoSave, discardedAutoSaveTimeout, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
 
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
@@ -5316,6 +5479,7 @@ function App() {
   const pendingShortcutRef = useRef<'threat' | 'deep' | null>(null);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (aDialogIsOpen) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
@@ -5516,10 +5680,12 @@ function App() {
 
   const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
+    aria-labelledby={isMobile ? 'study-save-action' : undefined}
+    aria-describedby={isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined}
     title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
     onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
-    <span role="status">{studySaveLabel}</span>
-    {isMobile && <span>{loadedSavedStudy ? 'Update' : 'Save'}</span>}
+    <span id="study-save-state" role="status" className={isMobile ? 'sr-only' : undefined}>{studySaveLabel}</span>
+    {isMobile && <span id="study-save-action">{mobileStudySaveLabel}</span>}
   </button>;
 
   return (
@@ -5603,7 +5769,7 @@ function App() {
 
             {!isMobile && studySaveControl}
             {!isMobile && !engineRequired && workspaceMode === 'analysis' && (
-              <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
+              <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={handleStartBoardAnalysis}
                 title="Downloads about 53 MB on first use. Board editing and the library work without the engine.">
                 Start engine analysis
               </button>
@@ -5710,7 +5876,7 @@ function App() {
                 className="top-action-btn"
                 onClick={() => setShowCommandPalette(true)}
                 title={`Commands (${commandPaletteShortcutLabel()})`}
-                aria-label="Open command palette"
+                aria-label="Open commands"
                 aria-keyshortcuts={COMMAND_PALETTE_ARIA_KEYSHORTCUTS}
                 aria-haspopup="dialog"
                 data-testid="command-palette-btn"
@@ -5820,11 +5986,18 @@ function App() {
                   only in `title`, which does not exist on a touch screen. The
                   words are the ones already written for the tooltip. */}
               <p className="settings-hint">{ASSIST_MODE_COPY[assistMode].title}</p>
-              <button type="button" className="chip-btn" onClick={() => {
-                setGuideDismissed(false);
-                writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'false');
-                setAssistMode('coach');
-              }}>Show first-move guide on empty boards</button>
+              <button type="button" className={`chip-btn settings-guide-toggle ${!guideDismissed ? 'chip-btn-primary' : ''}`}
+                aria-pressed={!guideDismissed}
+                aria-describedby="settings-guide-hint"
+                onClick={() => {
+                  const dismissed = !guideDismissed;
+                  setGuideDismissed(dismissed);
+                  writeStorage(BEGINNER_GUIDE_STORAGE_KEY, String(dismissed));
+                }}>
+                {!guideDismissed && <IconCheck aria-hidden="true" focusable="false" />}
+                First-move guide
+              </button>
+              <p className="settings-hint" id="settings-guide-hint">Appears on empty local boards in Coach mode.</p>
             </div>
 
             <div className="settings-group">
@@ -5858,7 +6031,7 @@ function App() {
                     className={`pill-btn ${pieceStyle === style ? 'pill-btn-active' : ''}`}
                     onClick={() => setPieceStyle(style)}
                     aria-pressed={pieceStyle === style}
-                    aria-label={`Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
+                    aria-label={`${PIECE_STYLE_LABELS[style]}: Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
                     title={PIECE_STYLE_DESCRIPTIONS[style]}
                     data-testid={`piece-style-${style}`}
                   >
@@ -6183,6 +6356,9 @@ function App() {
                 <IconX />
               </button>
             </div>
+            <div className="new-game-menu-content" tabIndex={-1} onFocusCapture={event => {
+              if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }}>
             <div className="new-game-menu-modes">
               {GAME_MODES.map(({ mode, label, description }) => (
                 <button
@@ -6191,7 +6367,6 @@ function App() {
                   className={`new-game-mode-btn ${pendingGameMode === mode ? 'new-game-mode-btn-active' : ''}`}
                   onClick={() => setPendingGameMode(mode)}
                   aria-pressed={pendingGameMode === mode}
-                  aria-label={`${label}. ${description}`}
                 >
                   <span>{label}</span>
                   <small>{description}</small>
@@ -6227,6 +6402,10 @@ function App() {
                 <input
                   className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
                   type="text"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={fenInput}
                   onChange={(e) => {
                     setFenInput(e.target.value);
@@ -6279,31 +6458,55 @@ function App() {
               <p className="new-game-strength-label">Import Move Line</p>
               <form
                 className="new-game-line-form"
+                onKeyDown={event => {
+                  if (!moveLineFileUndo || isComposingKey(event.nativeEvent) || !(event.ctrlKey || event.metaKey)
+                    || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'z') return;
+                  event.preventDefault(); event.stopPropagation(); handleUndoMoveLineFile();
+                }}
+                onFocusCapture={event => {
+                  if (!(event.target instanceof HTMLElement)) return;
+                  if (!event.target.isSameNode(directImportCancelRef.current)) directImportFocusRef.current = event.target;
+                  else if (!directImportFocusRef.current?.isConnected) directImportFocusRef.current = document.getElementById('new-game-line-input');
+                }}
                 onSubmit={(e) => { e.preventDefault(); handleImportMoveLine(moveLineInput, pendingGameMode); }}
               >
                 <textarea
                   id="new-game-line-input"
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={moveLineInput}
+                  data-file-drag={moveLineFileDragActive || undefined}
+                  onDragLeave={() => setMoveLineFileDragActive(false)}
+                  onDragEnd={() => setMoveLineFileDragActive(false)}
+                  onDragOver={event => {
+                    if (!event.dataTransfer.types.includes('Files')) return;
+                    event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
+                    setMoveLineFileDragActive(true);
+                  }}
+                  onDrop={handleMoveLineFileDrop}
                   onChange={(e) => {
                     cancelDirectImport();
                     const nextValue = e.target.value;
-                    setMoveLineFileName('');
                     if (isMoveImportTextTooLarge(nextValue)) {
-                      setMoveLineInput('');
                       setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
                       return;
                     }
+                    setMoveLineFileName('');
+                    setMoveLineFileUndo(null);
                     setMoveLineInput(nextValue);
                     setMoveLineError(null);
                   }}
                   placeholder="1. 炮二平五 马8进7   ·   1. C2=5 H8+7   ·   1. b2e2 h9g7"
                   aria-label="Move line in coordinates, WXF or Chinese notation"
                   aria-invalid={moveLineError ? true : undefined}
-                  aria-describedby={moveLineError ? 'new-game-line-error' : undefined}
-                  rows={3}
+                  aria-describedby={moveLineError ? 'new-game-line-error new-game-line-drop-hint' : 'new-game-line-drop-hint'}
+                  rows={viewportSize.height <= 500 ? 2 : 3}
                   data-testid="uci-line-input"
                 />
+                <p id="new-game-line-drop-hint" className="settings-hint">Drop a PGN, XQF or text file here.</p>
                 <div className="new-game-file-row">
                   <button
                     type="button"
@@ -6323,8 +6526,10 @@ function App() {
                     data-testid="uci-line-file-input"
                   />
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
+                  {moveLineFileUndo && <button type="button" className="new-game-file-btn" onClick={handleUndoMoveLineFile}
+                    title="Undo file load (Ctrl/Cmd+Z)" aria-keyshortcuts="Control+Z Meta+Z">Undo file load</button>}
                 </div>
-                {directImportBusy && <p role="status">Checking the game… <button type="button" onClick={cancelDirectImport}>Cancel reading</button></p>}
+                {directImportBusy && <p role="status">Checking the game… <button type="button" ref={directImportCancelRef} onClick={cancelDirectImport}>Cancel reading</button></p>}
                 <div className="new-game-line-actions">
                   {moveLineError ? <span id="new-game-line-error" className="new-game-line-error" role="alert">{moveLineError}</span> : <span />}
                   <button
@@ -6337,6 +6542,7 @@ function App() {
                   </button>
                 </div>
               </form>
+            </div>
             </div>
             <div className="new-game-menu-footer">
               <div className="new-game-selection" aria-label={`Selected ${pendingModeLabel}. ${pendingModeMeta.description}`}>
@@ -6356,6 +6562,7 @@ function App() {
       )}
 
       <div className="main-container" data-mobile-tab={isMobile ? mobileAnalysisTab : undefined}>
+        <div className="main-workspace">
         {/* ── Left panel: Eval Graph ── */}
         {/* Named so it becomes a region landmark. Its twin on the right is an
             <aside> (complementary) carrying an <h2>, so without a name here the
@@ -6451,7 +6658,6 @@ function App() {
                             onClick={() => handlePlayBookMove(candidate.move)}
                             disabled={Boolean(gameResult) || isAiTurn}
                             title={isAiTurn ? 'Wait for the AI move to finish' : candidate.names.join(' · ')}
-                            aria-label={`Play book continuation ${formatLineInStyle(board, [candidate.move], notationStyle, 1)}: ${candidate.names[0] ?? candidate.chinese[0]}`}
                             data-testid={`book-candidate-${candidate.move}`}
                           >
                             <strong>{formatLineInStyle(board, [candidate.move], notationStyle, 1)}</strong>
@@ -6664,6 +6870,10 @@ function App() {
                 {qaForcePanelError ? <QaForcedRenderError /> : (
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
                   <LazyLibraryPanel
+                    initialViewState={libraryViewState.current}
+                    onViewStateChange={rememberLibraryViewState}
+                    searchFocusRequest={librarySearchRequest}
+                    onSearchFocusHandled={handleLibrarySearchFocused}
                     savedGames={savedGames}
                     onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
                     onDeleteSavedGame={handleDeleteSavedGame}
@@ -6705,8 +6915,8 @@ function App() {
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {!engineRequired && workspaceMode === 'analysis' && (
-                  <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
-                    aria-label="Start engine analysis" title="Downloads about 53 MB on first use">Analyze</button>
+                  <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={handleStartBoardAnalysis}
+                    aria-label="Analyze this position" title="Downloads about 53 MB on first use">Analyze</button>
                 )}
                 {/* The phone's stand-in for the eval bar, so it reads the same
                     value, the stored one included when no line is live. */}
@@ -6858,7 +7068,7 @@ function App() {
                     onClick={() => { setShowMobileBoardActionMenu(false); playFromHere(); }}
                     role="menuitem"
                     title={`Keep this position and play on as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
-                    aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                    aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     data-testid="mobile-play-from-here-btn"
                   >
                     <IconPlay />
@@ -6922,7 +7132,7 @@ function App() {
                   disabled={!canSaveCurrentPosition}
                   role="menuitem"
                   title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
-                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Current game saved' : 'Save current game'}
+                  aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Saved game in this browser' : 'Save game in this browser'}
                   data-testid="mobile-save-game-btn"
                 >
                   {saveFailedToast ? <IconX /> : savedToast ? <IconCheck /> : <IconSave />}
@@ -6952,7 +7162,7 @@ function App() {
                     disabled={!canShareCurrentPosition}
                     role="menuitem"
                     title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
-                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy share link'}
+                    aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Copied link to this position' : 'Copy link to this position'}
                     data-testid="mobile-copy-share-link-btn"
                   >
                     {exportFailureKey === 'copy-share' ? <IconX /> : copiedShareToast ? <IconCheck /> : <IconLink />}
@@ -6965,7 +7175,7 @@ function App() {
                   onClick={handleCopyFen}
                   role="menuitem"
                   title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
-                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'FEN copied' : 'Copy current FEN'}
+                  aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'Copied FEN for this position' : 'Copy FEN for this position'}
                   data-testid="mobile-copy-fen-btn"
                 >
                   {exportFailureKey === 'copy-fen' ? <IconX /> : copiedFenToast ? <IconCheck /> : <IconCopy />}
@@ -7007,7 +7217,7 @@ function App() {
                   }}
                   role="menuitem"
                   title="Commands"
-                  aria-label="Open command palette"
+                  aria-label="Open commands"
                   data-testid="mobile-command-palette-btn"
                 >
                   <IconSearch />
@@ -7082,6 +7292,7 @@ function App() {
                   selected={selected}
                   validTargets={validTargets}
                   onSquareClick={handleSquareClick}
+                  onCancelSelection={handleCancelBoardSelection}
                   // Dragging is offered for exactly the pieces a click could
                   // move: the side to play, and only while the board is taking
                   // moves at all. `handleSquareClick` already refuses the other
@@ -7115,35 +7326,32 @@ function App() {
                     {drillCopy.detail ? <em>{drillCopy.detail}</em> : null}
                   </div>
                   <div className="drill-banner-actions">
-                    {drillVerdictKind === 'finished' ? (
-                      <button type="button" className="chip-btn chip-btn-primary" onClick={stopMistakeDrill} data-testid="drill-close-btn">Close</button>
-                    ) : (
-                      <>
-                        {drillVerdictKind === 'unavailable' && (
-                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillAnalysis} disabled={!canRetryDrillAnalysis} data-testid="drill-reanalyze-btn">Retry analysis</button>
-                        )}
-                        {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
-                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
-                        ) : null}
-                        {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
-                          <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className={`chip-btn ${drillVerdictKind === 'best' || drillVerdictKind === 'good' || drillVerdictKind === 'shown' ? 'chip-btn-primary' : ''}`}
-                          onClick={nextDrillMoment}
-                          data-testid="drill-next-btn"
-                        >
-                          {drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'unavailable' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
-                        </button>
-                        <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
-                      </>
+                    {drillVerdictKind === 'unavailable' && (
+                      <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillAnalysis} disabled={!canRetryDrillAnalysis} data-testid="drill-reanalyze-btn">Retry analysis</button>
+                    )}
+                    {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
+                      <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
+                    ) : null}
+                    {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
+                      <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
+                    ) : null}
+                    {/* Preserve the primary action's focus when Finish becomes Close. */}
+                    <button
+                      type="button"
+                      className={`chip-btn ${drillVerdictKind === 'best' || drillVerdictKind === 'good' || drillVerdictKind === 'shown' || drillVerdictKind === 'finished' ? 'chip-btn-primary' : ''}`}
+                      onClick={drillVerdictKind === 'finished' ? stopMistakeDrill : nextDrillMoment}
+                      data-testid={drillVerdictKind === 'finished' ? 'drill-close-btn' : 'drill-next-btn'}
+                    >
+                      {drillVerdictKind === 'finished' ? 'Close' : drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'unavailable' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
+                    </button>
+                    {drillVerdictKind !== 'finished' && (
+                      <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
                     )}
                   </div>
                 </div>
               ) : null}
 
-              <div className="position-dock">
+              <div className="position-dock" role="region" aria-label="Position status" tabIndex={isMobile ? 0 : undefined}>
                 <div className="position-stat position-stat-turn">
                   <span>Turn</span>
                   <strong>{sideToMoveLabel}</strong>
@@ -7178,6 +7386,8 @@ function App() {
                   <div
                     className={`position-stat position-stat-repetition${visibleRepetition.mustVary ? ' position-stat-repetition-binding' : ''}`}
                     role="status"
+                    ref={repetitionNoticeRef}
+                    tabIndex={-1}
                     data-testid="repetition-notice"
                     data-verdict={visibleRepetition.verdict}
                   >
@@ -7201,6 +7411,11 @@ function App() {
                         Ask {CLOUD_BOOK_SITE_NAME} whether this is a chase
                       </button>
                     ) : null}
+                    {cloudRule.status === 'error' && <button type="button" className="position-stat-cloud-ask"
+                      data-testid="repetition-cloud-retry" onClick={event => {
+                        if (document.activeElement === event.currentTarget) repetitionNoticeRef.current?.focus({ preventScroll: true });
+                        cloudRule.retry();
+                      }}>Retry cloud ruling</button>}
                   </div>
                 ) : null}
                 {/* The other rule the app will not adjudicate but the engine
@@ -7275,7 +7490,7 @@ function App() {
         {isMobile && mobileView === 'analysis' && (
           <AnalysisBoardContext board={board} orientation={orientation} pieceStyle={pieceStyle}
             positionLabel={`${sideToMove === 'w' ? 'Red' : 'Black'} to move · ${timelineCompactText}`}
-            onReturn={() => setMobileView('board')} />
+            onReturn={focusBoard} />
         )}
 
         {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
@@ -7518,8 +7733,10 @@ function App() {
                   <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
+                    initialViewState={studyNotesViewRef.current?.identity === gameIdentity ? studyNotesViewRef.current.state : undefined}
+                    onViewStateChange={rememberStudyNotesView}
                     disabled={studyControlsDisabled} onNavigate={jumpToNode} />
-                  {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
+                  {treeNodes[currentNodeId]?.record && <ImportedGlyphs nodeId={currentNodeId} gameIdentity={gameIdentity}
                     nags={treeNodes[currentNodeId]?.record?.nags} disabled={studyControlsDisabled}
                     onChange={nags => setNodeGlyphs(currentNodeId, nags)} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
@@ -7538,6 +7755,7 @@ function App() {
                       id="move-comment-input"
                       className="move-comment-input"
                       data-testid="move-comment-input"
+                      aria-describedby="move-comment-limit"
                       value={moveCommentDraft}
                       onChange={(event) => handleMoveCommentChange(event.target.value)}
                       onBlur={commitMoveComment}
@@ -7549,7 +7767,7 @@ function App() {
                         // the arrows answer again. Not mid-composition: an IME
                         // uses Escape to cancel its candidate, and pinyin is how
                         // many readers write these notes.
-                        if (event.nativeEvent.isComposing) return;
+                        if (isComposingKey(event.nativeEvent)) return;
                         if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
                           event.preventDefault();
                           event.currentTarget.blur();
@@ -7562,6 +7780,9 @@ function App() {
                       placeholder={currentNodeId === rootNodeId ? 'Plans, themes, or questions about this position' : moveCommentTarget ? 'Why this move' : ''}
                       aria-label={moveCommentTarget ? `Note on ${moveCommentTarget}` : 'Note on the current move'}
                     />
+                    <p id="move-comment-limit" className="move-comment-count" data-at-limit={moveCommentDraft.length >= MAX_MOVE_COMMENT_LENGTH || undefined}>
+                      {moveCommentDraft.length} / {MAX_MOVE_COMMENT_LENGTH} characters{moveCommentDraft.length >= MAX_MOVE_COMMENT_LENGTH ? ' · Limit reached' : ''}
+                    </p>
                   </div>
                   {canCopyRecord ? (
                     <div className="tree-actions">
@@ -7649,7 +7870,7 @@ function App() {
                         aria-keyshortcuts="D"
                         aria-label={deepDiveActive
                           ? 'Stop the deep search'
-                          : `Deep search this position, ${deepSearchLimitText}`}
+                          : `Go deep: search this position, ${deepSearchLimitText}`}
                         data-testid="deep-dive-btn"
                       >
                         {deepDiveActive
@@ -7690,7 +7911,7 @@ function App() {
                             : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening (X)`}
                         aria-keyshortcuts="X"
                         aria-label={threatActive
-                          ? 'Stop showing the threat and analyse the position as it stands'
+                          ? 'Threat on: stop showing the threat and analyse the position as it stands'
                           : 'Show the threat: let the opponent move first'}
                         data-testid="show-threat-btn"
                       >
@@ -7730,7 +7951,7 @@ function App() {
                         onClick={handleClearEngineHash}
                         disabled={!isReady}
                         title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching || isSearchQueued ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
-                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear engine hash table'}
+                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear hash: empty the engine search table'}
                         data-testid="clear-engine-hash-btn"
                       >
                         {engineHashFeedback === 'queued' ? <><IconRefresh aria-hidden="true" focusable="false" /> Queued</> : engineHashFeedback === 'cleared' ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
@@ -7946,7 +8167,7 @@ function App() {
                               onClick={() => handleKeepPvLine(pv.moves)}
                               disabled={!isReady || lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
                               title={lineKept ? 'This line and analysis are saved' : 'Keep the complete line and save this analysis snapshot without moving the board'}
-                              aria-label={lineKept ? `Engine line ${i + 1} already kept` : `Keep engine line ${i + 1} in the move tree`}
+                              aria-label={lineKept ? `Kept line ${i + 1} in the move tree` : lineExists ? `Update analysis for engine line ${i + 1}` : `Keep line ${i + 1} in the move tree`}
                               data-testid={`keep-engine-pv-${i}`}
                             >
                               {lineKept ? <IconCheck /> : <IconSave />}
@@ -8007,57 +8228,107 @@ function App() {
             </div>
           </div>
         </aside>
-        {/* Inside the workspace, not beside it: the toast used to be a sibling
-            of the bottom bar and the phone's tab bar both, held off the bottom
-            of the window by a flat 76px. That is not the height of either --
-            it sat 47px *over* the desktop bar, covering New Game, Save and
-            Copy PGN for the ten seconds the Undo lasts, and on a phone it
-            clears the 56px tab bar by 20px only while the safe-area inset is
-            zero; an iPhone's 34px inset takes that back. In here it is
-            positioned against the workspace, which ends exactly where the
-            chrome below it begins, on both. */}
-        {discardedAutoSave ? (
-          <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
-            <span>
-              {discardedAutoSave.failed
-                ? 'Could not put the game back on the board.'
-                : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
-                  ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
-            </span>
-            {discardedAutoSave.failed ? null : (
-              <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
-            )}
-            <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
-        {libraryUndo ? (
-          <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
-            <span>
-              {libraryUndo.failed
-                ? 'Could not put it back: browser storage is full or blocked.'
-                : libraryUndo.game.label
-                  ? `Deleted “${libraryUndo.game.label}”`
-                  : 'Deleted that saved game'}
-            </span>
-            {libraryUndo.failed ? null : (
-              <button type="button" className="undo-toast-btn" onClick={handleUndoLibraryDelete} data-testid="library-undo-btn">Undo</button>
-            )}
-            <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
-        {deleteUndo ? (
-          <div className="undo-toast" role="status" data-testid="delete-undo-toast">
-            <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
-            <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
-            <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
-              <IconX />
-            </button>
-          </div>
-        ) : null}
+        </div>
+        {/* Notices take their own row above the bottom chrome. A persistent
+            recovery warning must leave board navigation and panels usable. */}
+        <div className="app-notice-stack">
+          {discardedAutoSave ? (
+            <div {...discardedAutoSaveTimeout.bindings} className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
+              <span>
+                {discardedAutoSave.failed
+                  ? 'Could not put the game back on the board. Download its data for repair.'
+                  : `Discarded the unfinished game${discardedAutoSave.snapshot.game.moves.length === 1
+                    ? ' (1 move)' : ` (${discardedAutoSave.snapshot.game.moves.length} moves)`}`}
+              </span>
+              {discardedAutoSave.failed ? (
+                <button type="button" className="undo-toast-btn" data-testid="discard-undo-download"
+                  aria-label={discardedAutoSave.downloadFailed ? 'Download failed — retry for unfinished game' : 'Download data for unfinished game'}
+                  onClick={() => {
+                    const snapshot = discardedAutoSave.snapshot;
+                    const ok = downloadRecoveryGame(snapshot.game, 'xiangqi-unfinished-game.json');
+                    setDiscardedAutoSave(current => current?.snapshot === snapshot ? { ...current, downloadFailed: !ok } : current);
+                  }}>{discardedAutoSave.downloadFailed ? 'Download failed — retry' : 'Download data'}</button>
+              ) : (
+                <button type="button" className="undo-toast-btn" onClick={undoDiscardedAutoSave} data-testid="discard-undo-btn">Undo</button>
+              )}
+              <button type="button" className="undo-toast-dismiss" onClick={dismissDiscardedAutoSave} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+          {libraryUndo ? (
+            <div {...libraryUndoTimeout.bindings} className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
+              <span>
+                {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
+                  ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available, or download its data.'
+                  : libraryUndo.game.label
+                    ? `Deleted “${libraryUndo.game.label}”`
+                    : 'Deleted that saved game'}
+              </span>
+              <button type="button" className="undo-toast-btn" ref={libraryUndoButtonRef} onClick={handleUndoLibraryDelete}
+                disabled={libraryUndo.pending} data-testid={libraryUndo.failed ? 'library-retry-undo-btn' : 'library-undo-btn'}>
+                {libraryUndo.pending ? 'Restoring…' : libraryUndo.failed ? 'Retry restore' : 'Undo'}
+              </button>
+              {libraryUndo.failed && <button type="button" className="undo-toast-btn" data-testid="library-undo-download"
+                aria-label={libraryUndo.downloadFailed ? 'Download failed — retry for deleted game' : 'Download data for deleted game'}
+                onClick={() => {
+                  const game = libraryUndo.game;
+                  const ok = downloadRecoveryGame(game, 'xiangqi-deleted-game.json');
+                  setLibraryUndo(current => current?.game === game ? { ...current, downloadFailed: !ok } : current);
+                }}>{libraryUndo.downloadFailed ? 'Download failed — retry' : 'Download data'}</button>}
+              <button type="button" className="undo-toast-dismiss" onClick={dismissLibraryUndo} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+          {deleteUndo ? (
+            <div {...deleteUndoTimeout.bindings} className="undo-toast" role="status" data-testid="delete-undo-toast">
+              <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
+              <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
+              <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">
+                <IconX />
+              </button>
+            </div>
+          ) : null}
+
+          {moveCapacityError && (
+            <div className="save-error-notice" role="alert" data-testid="study-capacity-error">
+              <span>{moveCapacityError}</span>
+              <button type="button" className="undo-toast-dismiss" onClick={dismissMoveCapacityError} aria-label="Dismiss study limit"><IconX /></button>
+            </div>
+          )}
+
+          {saveFailedToast && librarySaveError ? (
+            <div className="save-error-notice" role="alert" data-testid="save-game-error">
+              <span>{librarySaveError}</span>
+              <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
+              <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
+            </div>
+          ) : null}
+
+          {recoveryProblems.length > 0 && !autoSaveRecovery && (
+            <div className="save-error-notice" role="alert" data-testid="recovery-data-error">
+              <span>{recoveryProblems.length} unreadable recovery {recoveryProblems.length === 1 ? 'copy is' : 'copies are'} preserved. Download the original data for repair.</span>
+              <button type="button" className="undo-toast-btn" onClick={() => {
+                const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
+                setRecoveryDownloadFailed(!ok);
+              }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
+              <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
+            </div>
+          )}
+
+          {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
+            <div className="save-error-notice" role="alert" data-testid="auto-save-error">
+              <span>{autoSaveIssue === 'too-large'
+                ? 'This study is too large for automatic recovery. Your last successful snapshot is kept. Download a PGN for your latest changes.'
+                : 'Automatic recovery could not save your latest changes. Your last successful snapshot is kept. Download a PGN before leaving.'}</span>
+              <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
+                {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
+              </button>
+              <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* ── Bottom bar ── */}
@@ -8125,7 +8396,7 @@ function App() {
                 onClick={handleCopyShareLink}
                 disabled={!canShareCurrentPosition}
                 title={exportFailureKey === 'copy-share' ? 'Could not copy share link' : 'Copy a link to this position'}
-                aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy a link to this position'}
+                aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Share link copied' : 'Copy link to this position'}
                 data-testid="copy-share-link-btn"
               >
                 {exportFailureKey === 'copy-share' ? <><IconX /> Copy Failed</> : copiedShareToast ? <><IconCheck /> Copied</> : <><IconLink /> Copy Link</>}
@@ -8140,7 +8411,7 @@ function App() {
                   className="gc-btn"
                   onClick={playFromHere}
                   title={`Keep this position and play on against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
-                  aria-label={`Play on from this position against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
+                  aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                   data-testid="play-from-here-btn"
                 >
                   <IconPlay aria-hidden="true" focusable="false" /> Play From Here
@@ -8264,7 +8535,7 @@ function App() {
                       setMobileAnalysisTab('review');
                     }}
                     title="Open completed game review"
-                    aria-label="Open completed game review"
+                    aria-label="View completed game review"
                     data-testid="view-completed-review-btn"
                   >
                     View
@@ -8387,44 +8658,6 @@ function App() {
         />
       )}
 
-      {moveCapacityError && (
-        <div className="save-error-notice" role="alert" data-testid="study-capacity-error">
-          <span>{moveCapacityError}</span>
-          <button type="button" className="undo-toast-dismiss" onClick={dismissMoveCapacityError} aria-label="Dismiss study limit"><IconX /></button>
-        </div>
-      )}
-
-      {saveFailedToast && librarySaveError ? (
-        <div className="save-error-notice" role="alert" data-testid="save-game-error">
-          <span>{librarySaveError}</span>
-          <button type="button" className="undo-toast-btn" onClick={() => { setSaveFailedToast(false); openLibraryPanel(); }}>Open library</button>
-          <button type="button" className="undo-toast-dismiss" onClick={() => setSaveFailedToast(false)} aria-label="Dismiss save error"><IconX /></button>
-        </div>
-      ) : null}
-
-      {recoveryProblems.length > 0 && !autoSaveRecovery && (
-        <div className="save-error-notice" role="alert" data-testid="recovery-data-error">
-          <span>{recoveryProblems.length} unreadable recovery {recoveryProblems.length === 1 ? 'copy is' : 'copies are'} preserved. Download the original data for repair.</span>
-          <button type="button" className="undo-toast-btn" onClick={() => {
-            const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
-            setRecoveryDownloadFailed(!ok);
-          }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
-          <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
-        </div>
-      )}
-
-      {autoSaveIssue && !(saveFailedToast && librarySaveError) ? (
-        <div className="save-error-notice" role="alert" data-testid="auto-save-error">
-          <span>{autoSaveIssue === 'too-large'
-            ? 'This study is too large for automatic recovery. Your last successful snapshot is kept. Download a PGN for your latest changes.'
-            : 'Automatic recovery could not save your latest changes. Your last successful snapshot is kept. Download a PGN before leaving.'}</span>
-          <button type="button" className="undo-toast-btn" onClick={handleDownloadPgn}>
-            {exportFailureKey === 'download-pgn' ? 'Download failed — try again' : 'Download PGN'}
-          </button>
-          <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
-        </div>
-      ) : null}
-
       {showBoardEditor && (
         <BoardEditor
           initialBoard={editorSeed?.board ?? board}
@@ -8435,7 +8668,7 @@ function App() {
         />
       )}
 
-      {showRuleLessons && <RuleLessons onClose={() => setShowRuleLessons(false)} />}
+      {showRuleLessons && <RuleLessons pieceStyle={pieceStyle} onClose={() => setShowRuleLessons(false)} />}
 
       {practiceStudy && <StudyPracticeDialog game={practiceStudy} pieceStyle={pieceStyle} notationStyle={notationStyle} onClose={() => setPracticeStudy(null)} />}
 

@@ -52,20 +52,33 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
         await page.waitForFunction(() => document.querySelector('[data-testid="cloud-book-card"]')?.dataset.status === 'error'
           && document.querySelector('[data-testid="cloud-pv-status"]')?.textContent.includes('unavailable'));
         assert.ok((await page.getByTestId('repetition-cloud-rule').textContent()).includes('unavailable'));
+        const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
         await page.getByTestId('cloud-book-card').screenshot({ path: `/tmp/xiangqi-cloud-bound-${browserType.name()}-${width}.png` });
         await page.getByTestId('cloud-book-retry').click();
         await page.getByTestId('cloud-pv-retry').click();
         await page.waitForFunction(() => document.querySelector('[data-testid="cloud-book-card"]')?.dataset.status === 'ok');
         await page.getByTestId('cloud-pv-move-1').waitFor();
         assert.ok((await page.getByTestId('cloud-book-card').textContent()).includes('炮🐎'));
-        await page.getByTestId('cloud-book-disable').click();
-        await page.getByTestId('cloud-book-enable').click();
+        if (width < 900) await page.getByTestId('mobile-view-board').click();
+        const rulingRetry = page.getByTestId('repetition-cloud-retry');
+        await page.evaluate(async () => {
+          document.documentElement.style.fontSize = '32px';
+          await document.fonts.ready;
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        });
+        assert.equal(await rulingRetry.evaluate(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1), false, 'The retry label must fit with enlarged text');
+        assert.ok(await rulingRetry.evaluate(node => node.getBoundingClientRect().height >= 44));
+        await rulingRetry.focus(); await page.keyboard.press('Enter');
+        await rulingRetry.waitFor({ state: 'hidden' });
+        assert.equal(await page.getByTestId('repetition-notice').evaluate(node => node === document.activeElement), true, 'Retrying a ruling must retain keyboard focus when its button disappears');
         await page.waitForFunction(() => window.__cloudRequests.queryrule === 2);
         await page.waitForFunction(() => document.querySelector('[data-testid="repetition-cloud-rule"]')?.textContent.includes('forbidden'));
         assert.deepEqual(await page.evaluate(() => window.__cloudRequests), { queryall: 2, querypv: 2, queryrule: 2 });
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Retrying a ruling must preserve the current game');
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:preferences:v1')).cloudBookEnabled), true);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: oversized open streams cancelled, visible errors, independent retries, UTF-8 and uncached failed rulings passed`);
+        console.log(`${browserType.name()} ${width}px: bounded responses, independent retries, ruling retry focus, enlarged text and unchanged game passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

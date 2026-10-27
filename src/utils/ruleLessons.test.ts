@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress } from './ruleLessons';
+import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress, saveRuleLessonProgress } from './ruleLessons';
 import { describeSetupProblem } from './positionSetup';
 import { hasAnyLegalMove, isInCheck, parseFenBoard, validateMoveStr } from './xiangqi';
 import { RULE_LESSONS_STORAGE_KEY } from './storageKeys';
@@ -70,5 +70,20 @@ describe('lesson progress', () => {
         expect(readRuleLessonProgress(storage)).toEqual([]);
         expect(completeRuleLesson('horse', ['chariot'], storage)).toEqual({ completed: ['chariot', 'horse'], saved: false });
         expect(completeRuleLesson('horse', [], null)).toEqual({ completed: ['horse'], saved: false });
+    });
+    it('retries retained completions and merges another tab without marking an unsolved lesson', () => {
+        const target = memoryStorage();
+        let blocked = true;
+        const storage = { ...target, setItem: (key: string, value: string) => {
+            if (blocked) throw new Error('quota');
+            target.setItem(key, value);
+        } };
+        const failed = completeRuleLesson('chariot', [], storage);
+        expect(failed).toEqual({ completed: ['chariot'], saved: false });
+        // Another tab completed the cannon while this window is on the horse.
+        target.setItem(RULE_LESSONS_STORAGE_KEY, '["cannon"]');
+        blocked = false;
+        expect(saveRuleLessonProgress(failed.completed, storage)).toEqual({ completed: ['chariot', 'cannon'], saved: true });
+        expect(readRuleLessonProgress(storage)).toEqual(['chariot', 'cannon']);
     });
 });

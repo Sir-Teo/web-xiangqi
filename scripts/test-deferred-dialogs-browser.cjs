@@ -46,6 +46,10 @@ async function setup(page) {
         await open(page, item.title);
         const notice = page.getByTestId('dialog-load'); await notice.getByRole('status').waitFor();
         assert.equal(await notice.getByRole('button', { name: 'Close', exact: true }).evaluate(node => node === document.activeElement), true);
+        for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+          await notice.getByRole('button', { name: 'Close', exact: true }).dispatchEvent('keydown', { key: 'Escape', bubbles: true, ...flags });
+          assert.equal(await notice.isVisible(), true, 'An IME Escape must not dismiss the loading dialog');
+        }
         await page.keyboard.press(tab);
         assert.equal(await notice.evaluate(node => node.contains(document.activeElement)), true);
         await page.keyboard.press('Shift+' + tab);

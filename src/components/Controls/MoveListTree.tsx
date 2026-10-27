@@ -1,3 +1,4 @@
+import { isComposingKey } from '../../utils/keyboard';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../../hooks/useXiangqi';
 import {
@@ -131,6 +132,7 @@ export const MoveListTree = memo(function MoveListTree({
             : activeLineNodeIds[0] ?? null;
 
     const handleChipKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         const { key } = event;
         if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Home' && key !== 'End') return;
         const container = scrollRef.current;
@@ -443,7 +445,7 @@ const MoveChip = memo(function MoveChip({ nodeId, record, quality, compact, isCu
                 </span> : null}
                 {notationStyle === 'uci'
                     ? null
-                    : <span className="move-uci">{record.uci}</span>}
+                    : <>{' '}<span className="move-uci">{record.uci}</span></>}
                 {qualityClass !== 'quality-pending' ? <span className="mtree-quality-dot" /> : null}
             </button>
             {isBadMove && coachMove && (
@@ -522,12 +524,13 @@ function formatMoveAriaLabel(
     notationStyle: XiangqiNotationStyle,
     quality?: ReviewMoveQuality
 ) {
-    const notation = formatMoveNotation(record, notationStyle);
+    const visibleLabel = notationStyle === 'uci'
+        ? formatMoveLabel(record, notationStyle)
+        : `${formatMoveNotation(record, notationStyle)} ${record.uci}`;
     const parts = [
         isCurrent ? 'Current move' : '',
+        visibleLabel,
         describeMoveWithCheck(record),
-        notationStyle === 'uci' ? '' : notation,
-        `UCI ${formatUciMove(record.uci)}`,
         qualityDescription(record, quality),
         describeMoveGlyphs(record.nags),
         coachMove ? `Engine suggestion ${formatAlternative(record, coachMove, notationStyle)}` : '',

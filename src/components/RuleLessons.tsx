@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Board } from './Board/Board';
 import { keepTabWithin } from '../utils/focusTrap';
-import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress } from '../utils/ruleLessons';
+import { isComposingKey } from '../utils/keyboard';
+import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress, saveRuleLessonProgress } from '../utils/ruleLessons';
 import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
 import './RuleLessons.css';
-import { IconX } from './icons';
+import { IconCheck, IconX } from './icons';
+import type { PieceStyle } from '../utils/pieceStyle';
 
-export function RuleLessons({ onClose }: { onClose: () => void }) {
+export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: () => void; pieceStyle?: PieceStyle }) {
     const [completed, setCompleted] = useState(readRuleLessonProgress);
     const [index, setIndex] = useState(() => Math.max(0, RULE_LESSONS.findIndex(lesson => !completed.includes(lesson.id))));
     const lesson = RULE_LESSONS[index];
@@ -15,10 +17,13 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
     const [solved, setSolved] = useState(false);
     const [hint, setHint] = useState(false);
     const [message, setMessage] = useState('');
-    const [saveFailed, setSaveFailed] = useState(false);
-    const [letters, setLetters] = useState(false);
+    const [saveState, setSaveState] = useState<'failed' | 'retry-failed' | 'saved' | null>(null);
+    const [letters, setLetters] = useState(pieceStyle === 'letters');
     const dialog = useRef<HTMLDivElement>(null);
     const feedback = useRef<HTMLParagraphElement>(null);
+    const feedbackId = useId();
+    const nextLessonRef = useRef<HTMLButtonElement>(null);
+    const returnRef = useRef<HTMLButtonElement>(null);
     const validTargets = useMemo(() => selected && !solved ? legalMovesFrom(board, selected.file, selected.rank, 'w') : [], [board, selected, solved]);
 
     useEffect(() => {
@@ -28,6 +33,7 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
     }, []);
     useEffect(() => {
         const keydown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialog.current, event);
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
         };
@@ -37,8 +43,8 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
     useEffect(() => {
         // On short phones feedback sits below the board. Reveal the outcome so
         // a learner never has to guess whether a tap worked.
-        if (message) feedback.current?.scrollIntoView({ block: 'nearest' });
-    }, [message]);
+        if (message || hint) feedback.current?.scrollIntoView({ block: 'nearest' });
+    }, [message, hint]);
 
     function openLesson(next: number) {
         setIndex(next); setBoard(parseFenBoard(RULE_LESSONS[next].fen));
@@ -54,7 +60,7 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
         if (attempt.solved) {
             setBoard(attempt.board); setSelected(null); setSolved(true);
             const progress = completeRuleLesson(lesson.id, completed);
-            setCompleted(progress.completed); setSaveFailed(!progress.saved);
+            setCompleted(progress.completed); setSaveState(progress.saved ? null : 'failed');
         }
     }
     return <>
@@ -74,17 +80,34 @@ export function RuleLessons({ onClose }: { onClose: () => void }) {
                     draggableSide={solved ? null : 'w'} pieceStyle={letters ? 'letters' : 'traditional'}
                     highlights={hint && !solved ? [uciToSquare(lesson.solution.slice(2))!] : []} /></div>
                 <section className="rule-lessons-content" aria-label="Exercise feedback">
-                    <p className="rule-lessons-feedback" role="status" data-solved={solved} data-testid="lesson-feedback" ref={feedback}>{message || 'The exercise piece is selected. Tap a target, or use arrow keys and Enter on the board.'}</p>
-                    {hint && !solved && <p className="rule-lessons-hint">{lesson.hint}</p>}
-                    {saveFailed && <p role="alert">Completed here, but browser storage could not save your progress.</p>}
+                    <p className="rule-lessons-feedback" id={feedbackId} role="status" aria-atomic="true" data-solved={solved} data-testid="lesson-feedback" ref={feedback}>
+                        {message || 'The exercise piece is selected. Tap a target, or use arrow keys and Enter on the board.'}
+                        {hint && !solved && <span className="rule-lessons-hint"> Hint: {lesson.hint}</span>}
+                    </p>
+                    {saveState && <div className="rule-lessons-save-notice" data-testid="lesson-progress-save">
+                        <p role={saveState === 'saved' ? 'status' : 'alert'}>{saveState === 'saved'
+                            ? 'Lesson progress saved in this browser.' : saveState === 'retry-failed'
+                                ? 'Browser storage still could not save your progress. Your completed lessons remain here.'
+                                : 'Completed here, but browser storage could not save your progress.'}</p>
+                        {saveState !== 'saved' && <button type="button" onClick={event => {
+                            const progress = saveRuleLessonProgress(completed);
+                            setCompleted(progress.completed); setSaveState(progress.saved ? 'saved' : 'retry-failed');
+                            if (progress.saved && document.activeElement === event.currentTarget) {
+                                const target = solved ? nextLessonRef.current ?? returnRef.current
+                                    : dialog.current?.querySelector<HTMLButtonElement>('.hitbox[tabindex="0"]');
+                                target?.focus({ preventScroll: true });
+                                requestAnimationFrame(() => { if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' }); });
+                            }
+                        }}>Retry saving progress</button>}
+                    </div>}
                     <div className="rule-lessons-actions">
-                        <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
-                        {!solved && <button type="button" onClick={() => setHint(true)}>Show hint</button>}
+                        <button type="button" className="letter-pieces-toggle" onClick={() => setLetters(value => !value)} aria-pressed={letters}><IconCheck className="letter-pieces-check" />Letter pieces</button>
+                        {!solved && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => setHint(value => !value)}>{hint ? 'Hide hint' : 'Show hint'}</button>}
                         <button type="button" onClick={() => openLesson(index)}>Try again</button>
-                        {solved && index < RULE_LESSONS.length - 1 && <button type="button" onClick={() => openLesson(index + 1)}>Next lesson</button>}
+                        {solved && index < RULE_LESSONS.length - 1 && <button type="button" ref={nextLessonRef} onClick={() => openLesson(index + 1)}>Next lesson</button>}
                     </div>
                     {completed.length === RULE_LESSONS.length && <p>You have completed all nine exercises. Revisit any lesson to practice again.</p>}
-                    <button type="button" className="rule-lessons-return" onClick={onClose}>Back to your board</button>
+                    <button type="button" className="rule-lessons-return" ref={returnRef} onClick={onClose}>Back to your board</button>
                 </section>
             </div>
         </div>

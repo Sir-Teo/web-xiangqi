@@ -270,3 +270,17 @@ describe('strict Xiangqi PGN collections', () => {
     expect(parsePgnCollection('1.h2e2 *')[0].review).toBeUndefined();
   });
 });
+
+it('checks normalized prose length instead of rejecting long whitespace or closed commands', () => {
+  const text = ' \t'.repeat(1000) + '棋'.repeat(500) + '\n '.repeat(1000);
+  const [game] = parsePgnCollection(`{${'r'.repeat(500)}} h2e2 {${text}} {   [%eval .42,18]   } *`);
+  expect(game.rootComment).toBe('r'.repeat(500));
+  expect(game.moveTree?.[0]).toMatchObject({ comment: '棋'.repeat(500), evalScore: 42, evalDepth: 18 });
+});
+
+it('includes the existing note and joining space when refusing oversized plain prose', () => {
+  const first = 'x'.repeat(499);
+  const second = ' '.repeat(1000) + 'y';
+  expect(() => parsePgnCollection(`h2e2 {${first}} {${second}} *`)).toThrow('A move note exceeds 500 characters.');
+  expect(() => parsePgnCollection(`{${first}} {${second}} h2e2 *`)).toThrow('A starting-position note exceeds 500 characters.');
+});

@@ -14,6 +14,11 @@ async function followEngineLine(browser, width) {
         const listeners = [];
         const emit = line => listeners.forEach(listener => listener(line));
         let position = '';
+        window.__holdPV = true;
+        window.__updatePV = moves => {
+          window.__pv = moves; emit('info depth 12 multipv 1 score cp 30 pv ' + moves);
+        };
+        window.__finishPV = () => { window.__holdPV = false; emit('bestmove h2e2'); };
         const atHistoryLimit = 'position startpos moves ' + Array.from({ length: 1024 }, (_, i) => ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4]).join(' ');
         return {
           variant: 'single-simd', addMessageListener: listener => listeners.push(listener), terminate() {},
@@ -22,8 +27,8 @@ async function followEngineLine(browser, width) {
             if (command === 'uci') queueMicrotask(() => emit('uciok'));
             if (command === 'isready') queueMicrotask(() => emit('readyok'));
             if (command.startsWith('go ') && (position === 'position startpos' || position === atHistoryLimit)) queueMicrotask(() => {
-              emit('info depth 12 multipv 1 score cp 30 pv ' + window.__pv);
-              emit('bestmove h2e2');
+              window.__updatePV(window.__pv);
+              if (!window.__holdPV) emit('bestmove h2e2');
             });
             if (command === 'stop') queueMicrotask(() => emit('bestmove (none)'));
           }
@@ -42,6 +47,57 @@ async function followEngineLine(browser, width) {
     const boardState = () => page.locator('.hitbox').evaluateAll(elements => elements.map(el => el.getAttribute('aria-label')));
     const initial = await boardState();
     if (await page.evaluate(() => matchMedia('(pointer: coarse)').matches)) assert.ok((await keep.boundingBox()).height >= 44);
+    const firstMove = page.getByTestId('engine-pv-0-move-0');
+    for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+      await firstMove.focus();
+      const state = await firstMove.evaluate((node, flags) => {
+        const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true, ...flags });
+        if (flags.prePrevented) event.preventDefault();
+        node.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+      }, flags);
+      assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Right must preserve the engine move: ${JSON.stringify(flags)}`);
+      assert.deepEqual(await boardState(), initial);
+    }
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.getByTestId('engine-pv-0-move-1').evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Home');
+    assert.equal(await firstMove.evaluate(node => node === document.activeElement), true);
+    // A live replacement must retain the focused move and its single tab stop.
+    const secondMove = page.getByTestId('engine-pv-0-move-1');
+    await page.keyboard.press('ArrowRight');
+    const originalText = await secondMove.textContent();
+    await page.evaluate(() => window.__updatePV('b2e2 b9c7 b0c2'));
+    await page.waitForFunction(text => document.querySelector('[data-testid="engine-pv-0-move-1"]')?.textContent !== text, originalText);
+    assert.equal(await secondMove.evaluate(node => node === document.activeElement), true, 'A live continuation update must keep focus on the same move number');
+    assert.equal(await page.locator('[data-testid="engine-pv-line-0"] .pv-move-btn[tabindex="0"]').count(), 1);
+    assert.deepEqual(await boardState(), initial, 'Refreshing a suggestion must not play it');
+    await page.keyboard.press('End');
+    assert.equal(await page.getByTestId('engine-pv-0-move-2').evaluate(node => node === document.activeElement), true);
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7 h0g2'));
+    await page.waitForFunction(text => document.querySelector('[data-testid="engine-pv-0-move-1"]')?.textContent === text, originalText);
+    assert.equal(await page.getByTestId('engine-pv-0-move-2').evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Home');
+    assert.equal(await firstMove.evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('End');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 2
+      && document.activeElement?.getAttribute('data-testid') === 'engine-pv-0-move-1', null, { timeout: 3000 });
+    await page.evaluate(() => window.__updatePV('h2e2'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 1
+      && document.activeElement?.getAttribute('data-testid') === 'engine-pv-0-move-0', null, { timeout: 3000 });
+    assert.equal(await firstMove.getAttribute('tabindex'), '0', 'The remaining focused move must be the line’s tab stop');
+    assert.deepEqual(await boardState(), initial, 'Shortening a suggestion must not play it');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7 h0g2'));
+    await page.getByTestId('engine-pv-0-move-2').waitFor();
+    assert.equal(await firstMove.evaluate(node => node === document.activeElement), true, 'Growing the line must retain focus');
+    await keep.focus();
+    await page.evaluate(() => window.__updatePV('h2e2'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 1);
+    assert.equal(await keep.evaluate(node => node === document.activeElement), true, 'A shorter suggestion must not take focus from another control');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7 h0g2'));
+    await page.getByTestId('engine-pv-0-move-2').waitFor();
+    await page.evaluate(() => window.__finishPV());
     await keep.click();
     assert.deepEqual(await boardState(), initial, 'Keeping a line moved the board');
     assert.equal(await keep.isDisabled(), true, 'The complete line was not recognized as kept');

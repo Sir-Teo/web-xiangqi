@@ -16,7 +16,9 @@
     "typecheck": "tsc -b",
     "verify": "npm run typecheck && npm run lint && npm test && npm run test:openings && npm run test:library && npm run test:build:publication && npm run test:engine:contract && npm run test:smoke && npm run test:parity && npm run build:react && npm run test:server:headers",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "npm run test:unit && npm run test:parser-limits",
+    "test:unit": "vitest run --project unit && vitest run --project unit-heavy",
+    "test:parser-limits": "vitest run --project parser-limits",
     "build": "bash scripts/build-pikafish.sh",
     "test:engine:contract": "node scripts/test-engine-contract.cjs",
     "test:build:publication": "node --test scripts/test-build-publication.cjs",
@@ -62,7 +64,7 @@
     "playwright": "^1.60.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.7.0",
-    "vite": "^8.0.14",
-    "vitest": "^4.1.11"
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12"
   }
 }

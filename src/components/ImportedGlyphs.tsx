@@ -2,15 +2,16 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { chooseMoveGlyph, describeGlyph, glyphSymbol } from '../utils/moveGlyphs';
 import './ImportedGlyphs.css';
 
-export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity }: {
-    nags: number[] | undefined; onChange: (nags: number[] | undefined) => void; disabled: boolean; gameIdentity: unknown;
+export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity, nodeId }: {
+    nags: number[] | undefined; onChange: (nags: number[] | undefined) => void; disabled: boolean; gameIdentity: unknown; nodeId: string;
 }) {
     const [code, setCode] = useState('');
     const [choice, setChoice] = useState('');
     const [error, setError] = useState('');
     const [announcement, setAnnouncement] = useState('');
     const addSelect = useRef<HTMLSelectElement>(null);
-    useLayoutEffect(() => { setCode(''); setChoice(''); setError(''); setAnnouncement(''); }, [gameIdentity]);
+    const numericInput = useRef<HTMLInputElement>(null);
+    useLayoutEffect(() => { setCode(''); setChoice(''); setError(''); setAnnouncement(''); }, [gameIdentity, nodeId]);
     const apply = (value: number) => {
         onChange(chooseMoveGlyph(nags, value));
         setAnnouncement(`Study annotation applied: ${describeGlyph(value)}.`);
@@ -42,10 +43,17 @@ export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity }: {
             <summary>Numeric PGN code</summary>
             <form onSubmit={event => {
                 event.preventDefault();
+                const input = numericInput.current;
+                input?.focus({ preventScroll: true });
+                // Adding a symbol inserts a row above this field. Reveal it
+                // after that layout update, if the reader is still here.
+                requestAnimationFrame(() => {
+                    if (input === document.activeElement) input?.scrollIntoView({ block: 'nearest' });
+                });
                 if (!/^\d{1,3}$/.test(code) || Number(code) > 255) { setError('Enter a whole number from 0 to 255.'); return; }
                 apply(Number(code)); setCode(''); setError('');
             }}>
-                <label>Code (0–255)<input aria-label="Numeric PGN annotation" inputMode="numeric" maxLength={3} value={code}
+                <label>Code (0–255)<input ref={numericInput} aria-label="Numeric PGN annotation" inputMode="numeric" maxLength={3} value={code}
                     aria-invalid={Boolean(error)} aria-describedby={error ? 'glyph-code-error' : undefined}
                     disabled={disabled} onChange={event => { setCode(event.target.value); setError(''); }} /></label>
                 <button type="submit" disabled={disabled || !code}>Add code</button>

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { chromium } = require('playwright');
+const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
 
 async function paletteKeyboard(browser, viewport) {
@@ -18,6 +18,15 @@ async function paletteKeyboard(browser, viewport) {
         `${key} escaped the empty command palette`);
     }
     await input.fill('');
+    await page.getByRole('option').first().waitFor();
+    await page.keyboard.press('Tab');
+    const commandFocus = await input.evaluate(element => {
+      const option = document.getElementById(element.getAttribute('aria-activedescendant'));
+      return { matches: option === document.activeElement && option?.getAttribute('role') === 'option',
+        selected: option?.id, focused: document.activeElement?.id, role: document.activeElement?.getAttribute('role') };
+    });
+    assert.equal(commandFocus.matches, true, `The announced command option must be the control reached with Tab: ${JSON.stringify(commandFocus)}`);
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.locator('.command-palette-button:enabled').last().evaluate(el => el === document.activeElement), true);
     await page.keyboard.press('Tab');
@@ -41,6 +50,138 @@ async function paletteKeyboard(browser, viewport) {
     assert.equal(await page.getByRole('dialog').count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+}
+
+async function compositionKeyboard(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(10000);
+  try {
+    await page.goto(base);
+    await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    const input = page.getByRole('combobox', { name: 'Search commands' });
+    // A disabled row must still explain itself to touch users, without hover.
+    const saveRow = page.locator('[data-command-id="save-game"]');
+    await saveRow.click({ force: true });
+    const help = page.getByTestId('command-palette-help');
+    assert.equal(await help.innerText(), 'Play a move or set up a position first');
+    await input.fill('no matching command zzz');
+    assert.match(await help.innerText(), /Try fewer words/);
+    await input.fill('panel');
+    await page.locator('.command-palette-button').first().waitFor();
+    assert.ok(await page.locator('.command-palette-button').count() > 1);
+    await page.keyboard.press('End');
+    const selectedCommand = await input.getAttribute('aria-activedescendant');
+    for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { prePrevented: true }]) {
+      const state = await input.evaluate((node, flags) => {
+        const event = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true, ...flags });
+        if (flags.prePrevented) event.preventDefault();
+        node.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+      }, flags);
+      assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/claimed Home must preserve palette focus: ${JSON.stringify(flags)}`);
+      assert.equal(await input.getAttribute('aria-activedescendant'), selectedCommand);
+    }
+    await input.evaluate(node => node.setSelectionRange(node.value.length, node.value.length));
+    await page.keyboard.press('Control+Home');
+    assert.equal(await input.evaluate(node => node.selectionStart), 0, 'Ctrl+Home must retain native text editing');
+    assert.equal(await input.getAttribute('aria-activedescendant'), selectedCommand, 'Moving the text caret must preserve the selected command');
+    await input.fill('Settings');
+    // Synthetic native key events exercise both the standard IME flag and
+    // WebKit's composition-ending event, whose flag may already be false.
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      const active = await input.getAttribute('aria-activedescendant');
+      for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', 'Escape']) {
+        await input.dispatchEvent('keydown', { key, bubbles: true, ...flags });
+        assert.equal(await input.isVisible(), true, `Composing ${key} closed the palette`);
+        assert.equal(await input.getAttribute('aria-activedescendant'), active,
+          `Composing ${key} changed the selected command`);
+      }
+      await input.dispatchEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, ...flags });
+      assert.equal(await input.isVisible(), true, 'Composing Ctrl+K toggled the palette');
+    }
+    // Normal activation still works once character composition has ended.
+    await page.keyboard.press('Enter');
+    await page.getByRole('dialog', { name: 'Settings', exact: true }).waitFor();
+    const field = page.getByRole('dialog').locator('input, select').first();
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      await field.dispatchEvent('keydown', { key: 'Escape', bubbles: true, ...flags });
+      assert.equal(await page.getByRole('dialog').count(), 1, 'Composing Escape closed Settings');
+    }
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+k');
+    await input.fill('Set up a position');
+    await page.keyboard.press('Enter');
+    const editor = page.getByTestId('board-editor');
+    const fenInput = editor.locator('input[type="text"]');
+    await fenInput.waitFor();
+    const initial = await fenInput.inputValue();
+    await fenInput.fill('9/9/9/9/9/9/9/9/9/9 w - - 0 1');
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+      await fenInput.dispatchEvent('keydown', { key: 'Enter', bubbles: true, ...flags });
+      assert.equal(await page.getByTestId('editor-done').isDisabled(), false,
+        'Composing Enter loaded the unfinished FEN');
+      await fenInput.dispatchEvent('keydown', { key: 'Escape', bubbles: true, ...flags });
+      assert.equal(await editor.isVisible(), true, 'Composing Escape closed the editor');
+    }
+    await fenInput.fill(initial);
+    await page.keyboard.press('Escape');
+    await editor.waitFor({ state: 'detached' });
+  } finally { await page.close(); }
+}
+
+async function closedDisclosureKeyboard(browser, viewport) {
+  const page = await browser.newPage({ viewport });
+  page.setDefaultTimeout(10000);
+  try {
+    await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Settings');
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await dialog.waitFor();
+    // End the dialog in a collapsed disclosure. Chromium can report boxes for
+    // its descendants even though they cannot receive focus. Exercise the real
+    // dialog listener, including the transition to an expanded last control.
+    await dialog.evaluate(body => {
+      const details = document.createElement('details');
+      details.dataset.testid = 'focus-disclosure';
+      const summary = document.createElement('summary'); summary.textContent = 'Extra settings';
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Extra option';
+      details.append(summary, button); body.append(details);
+    });
+    const summary = page.getByTestId('focus-disclosure').locator('summary');
+    const extra = dialog.getByRole('button', { name: 'Extra option', exact: true, includeHidden: true });
+    const close = dialog.getByRole('button', { name: 'Close settings', exact: true });
+    await close.focus(); await page.keyboard.press('Shift+Tab');
+    assert.equal(await summary.evaluate(element => element === document.activeElement), true,
+      'Shift+Tab must wrap to the disclosure summary, not its hidden button');
+    await page.keyboard.press('Tab');
+    assert.equal(await close.evaluate(element => element === document.activeElement), true,
+      'Tab from the collapsed summary must return to the first dialog control');
+    await summary.click();
+    await close.focus(); await page.keyboard.press('Shift+Tab');
+    assert.equal(await extra.evaluate(element => element === document.activeElement), true,
+      'Expanding the disclosure makes its button the final tab stop');
+    await page.keyboard.press('Tab');
+    assert.equal(await close.evaluate(element => element === document.activeElement), true);
+    const composingTab = await dialog.evaluate(body => {
+      const input = document.createElement('input'); input.type = 'text'; input.setAttribute('aria-label', 'Composition field');
+      body.append(input);
+      const results = [{ isComposing: true }, { keyCode: 229 }, { ctrlKey: true }, { metaKey: true }, {}, { altKey: true }].map(flags => {
+        input.focus();
+        const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, ...flags });
+        input.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === input };
+      });
+      input.remove(); return results;
+    });
+    assert.deepEqual(composingTab, [
+      { prevented: false, retained: true }, { prevented: false, retained: true },
+      { prevented: false, retained: true }, { prevented: false, retained: true },
+      { prevented: true, retained: false }, { prevented: true, retained: false },
+    ], 'IME and browser shortcuts keep Tab; ordinary and macOS Option+Tab still wrap within Settings');
   } finally { await page.close(); }
 }
 
@@ -92,8 +233,8 @@ async function modalShortcutGuard(browser, viewport) {
   const page = await browser.newPage({ viewport });
   page.setDefaultTimeout(10000);
   try {
-    const assertPaletteBlocked = async () => {
-      const dialog = page.getByRole('dialog');
+    const assertPaletteBlocked = async (target = page) => {
+      const dialog = target.getByRole('dialog');
       await dialog.waitFor();
       // Settled, not merely present. A lazily loaded dialog -- Set up a
       // position is one -- mounts `dialog-load` first and swaps the real one
@@ -103,21 +244,29 @@ async function modalShortcutGuard(browser, viewport) {
       // The guard being tested still held every time, as the two assertions
       // below it record -- no second modal, no palette -- so what fails here
       // is the wait, not the app.
-      await page.waitForFunction(() => {
+      await target.waitForFunction(() => {
         const open = document.querySelector('[role="dialog"]');
         if (!open || !open.contains(document.activeElement)) return false;
         if (window.__settledDialog !== open) { window.__settledDialog = open; window.__settledSince = performance.now(); return false; }
         return performance.now() - window.__settledSince > 100;
       });
       for (const shortcut of ['Control+k', 'Meta+k']) {
-        await page.keyboard.press(shortcut);
+        await target.keyboard.press(shortcut);
         assert.equal(await dialog.count(), 1, `${shortcut} opened a second modal`);
-        assert.equal(await page.getByRole('combobox', { name: 'Search commands' }).count(), 0);
+        assert.equal(await target.getByRole('combobox', { name: 'Search commands' }).count(), 0);
         assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true);
+      }
+      const title = await dialog.getByRole('heading').first().textContent();
+      for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+        await dialog.evaluate((node, flags) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Escape', bubbles: true, cancelable: true, ...flags,
+        })), flags);
+        assert.equal(await dialog.count(), 1, `Composing Escape closed ${title}`);
+        assert.equal(await dialog.evaluate(node => node.contains(document.activeElement)), true, `Composing Escape lost focus in ${title}`);
       }
     };
     await page.goto(base); await page.locator('.xiangqi-board').waitFor();
-    for (const command of ['Settings', 'Set up a position']) {
+    for (const command of ['Settings', 'Set up a position', 'Learn the rules']) {
       await page.keyboard.press('ControlOrMeta+k');
       await page.getByRole('combobox').fill(command);
       await page.keyboard.press('Enter');
@@ -129,29 +278,49 @@ async function modalShortcutGuard(browser, viewport) {
     await assertPaletteBlocked();
     await page.keyboard.press('Escape');
 
+    await page.evaluate(() => {
+      localStorage.setItem('xiangqi:library:v1', JSON.stringify([{ id: 'ime-practice', savedAt: 1, gameMode: 'PvP', moves: ['h2e2', 'h9g7'] }]));
+      dispatchEvent(new StorageEvent('storage', { key: 'xiangqi:library:v1', storageArea: localStorage }));
+    });
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Library'); await page.keyboard.press('Enter');
+    await page.getByTestId('practice-saved-ime-practice').click();
+    await page.getByTestId('study-practice-progress').waitFor();
+    await assertPaletteBlocked();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('study-practice-dialog').waitFor({ state: 'hidden' });
+
     const mate = 'R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1';
     await page.goto(base + '?fen=' + encodeURIComponent(mate));
     await page.getByRole('heading', { name: 'Red Wins' }).waitFor();
     await assertPaletteBlocked();
     await page.keyboard.press('Escape');
-    // Clear recovery so the terminal position does not raise an extra prompt.
-    await page.evaluate(() => localStorage.removeItem('xiangqi:auto-saved-game:v1'));
-    await page.goto(base + '?moves=h2e2');
-    await page.waitForFunction(() => localStorage.getItem('xiangqi:auto-saved-game:v1'));
-    await page.reload();
-    await page.getByRole('heading', { name: 'Unfinished game' }).waitFor();
-    await assertPaletteBlocked();
+    // Recovery owns independent draft slots and flushes on pagehide. Give
+    // this case a fresh context instead of clearing only the legacy mirror
+    // while the terminal position can still write its own draft back.
+    const recoveryPage = await browser.newPage({ viewport });
+    try {
+      await recoveryPage.goto(base + '?moves=h2e2');
+      await recoveryPage.waitForFunction(() => localStorage.getItem('xiangqi:auto-saved-game:v1'));
+      await recoveryPage.reload();
+      await recoveryPage.getByRole('heading', { name: 'Unfinished game' }).waitFor();
+      await assertPaletteBlocked(recoveryPage);
+      await recoveryPage.keyboard.press('Escape');
+      assert.equal(await recoveryPage.getByRole('dialog').count(), 0);
+    } finally { await recoveryPage.close(); }
   } finally { await page.close(); }
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await browserType.launch({ headless: true });
   try {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 568 }]) {
       await paletteKeyboard(browser, viewport);
+      await compositionKeyboard(browser, viewport);
+      await closedDisclosureKeyboard(browser, viewport);
       await editorKeyboard(browser, viewport);
       await modalShortcutGuard(browser, viewport);
     }
-    console.log('PASS: palette activates the focused command; palette/editor contain focus; editor preserves focus on resize and restores the opener; shortcuts respect all five other modals; desktop/mobile');
+    console.log('PASS: palette/editor focus, resize and restoration; shortcuts and IME Escape across seven modals, composing Tab in Settings; desktop/mobile');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

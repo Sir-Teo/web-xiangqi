@@ -55,7 +55,9 @@ async function assertFits(page) {
         await command(page, 'Move tree');
         await page.locator('.mtree-chip').filter({ hasText: 'h2e2' }).click();
         const details = page.getByTestId('imported-glyphs');
-        await details.locator(':scope > summary').click();
+        const openAnnotations = async () => { if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click(); };
+        await openAnnotations();
+        const openNumeric = async () => { if (await details.locator('.glyph-code-editor').getAttribute('open') === null) await details.locator('.glyph-code-editor > summary').click(); };
         const choose = () => page.getByRole('combobox', { name: 'Add study annotation' });
         const apply = async code => { await choose().selectOption(code); await details.getByRole('button', { name: 'Apply symbol', exact: true }).click(); };
         await choose().selectOption('1');
@@ -72,12 +74,23 @@ async function assertFits(page) {
         assert.deepEqual(edited.moveTree[1].nags, [255]);
         await details.getByRole('button', { name: 'Remove Very good move ($3)', exact: true }).click();
         assert.equal(await choose().evaluate(el => el === document.activeElement), true, 'Removing an annotation lost keyboard focus');
-        await details.locator('.glyph-code-editor > summary').click();
+        await openNumeric();
         const numeric = page.getByRole('textbox', { name: 'Numeric PGN annotation' });
-        await numeric.fill('256'); await details.getByRole('button', { name: 'Add code', exact: true }).click();
-        await details.getByRole('alert').filter({ hasText: '0 to 255' }).waitFor();
+        await numeric.fill('256');
+        for (const key of ['Enter', 'Space']) {
+          await details.getByRole('button', { name: 'Add code', exact: true }).focus(); await page.keyboard.press(key);
+          await details.getByRole('alert').filter({ hasText: '0 to 255' }).waitFor();
+          assert.equal(await numeric.evaluate(node => node === document.activeElement), true, 'An invalid code must return focus to its field');
+          assert.equal(await numeric.inputValue(), '256', 'An invalid draft must remain available for correction');
+          assert.equal(await numeric.getAttribute('aria-invalid'), 'true');
+        }
         assert.deepEqual((await save(page)).moveTree[0].nags, [14]);
-        await numeric.fill('255'); await details.getByRole('button', { name: 'Add code', exact: true }).click();
+        await numeric.fill('255');
+        await details.getByRole('button', { name: 'Add code', exact: true }).focus(); await page.keyboard.press('Space');
+        assert.equal(await numeric.evaluate(node => node === document.activeElement), true, 'Adding a code must leave the field ready for another annotation');
+        assert.equal(await numeric.inputValue(), '');
+        assert.equal(await numeric.getAttribute('aria-invalid'), 'false');
+        assert.equal(await details.getByRole('button', { name: 'Add code', exact: true }).isDisabled(), true);
         assert.deepEqual((await save(page)).moveTree[0].nags, [14, 255]);
         for (const font of [16, 32, 16]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, font);
@@ -88,10 +101,17 @@ async function assertFits(page) {
           await choose().scrollIntoViewIfNeeded();
           if (font === 32) await page.screenshot({ path: `/tmp/xiangqi-edit-glyphs-${browserType.name()}-${width}.png` });
         }
+        await numeric.fill('200'); await choose().selectOption('3');
         await page.locator('.mtree-chip').filter({ hasText: 'b2e2' }).click();
-        await details.locator(':scope > summary').click(); await apply('5');
+        assert.notEqual(await details.getAttribute('open'), null, 'Annotation tools should stay open when selecting another move');
+        assert.notEqual(await details.locator('.glyph-code-editor').getAttribute('open'), null, 'The numeric editor should stay open between moves');
+        assert.equal(await numeric.inputValue(), '', 'A numeric draft must not carry to another move');
+        assert.equal(await choose().inputValue(), '', 'An unconfirmed symbol must not carry to another move');
+        assert.equal(await details.getByRole('status').textContent(), '', 'Feedback from the previous move must clear');
+        await apply('5');
         const beforeReload = await save(page);
         assert.deepEqual(beforeReload.moveTree[1].nags, [255, 5]);
+        assert.deepEqual(beforeReload.moveTree[0].nags, [14, 255], 'Changing moves must not apply an unfinished annotation');
         assert.equal(beforeReload.moveTree[1].comment, 'Side note');
         await command(page, 'Copy PGN'); const pgn = await page.evaluate(() => window.__copied);
         assert.match(pgn, /\$14/); assert.match(pgn, /\$255/); assert.match(pgn, /\$5/);
@@ -105,13 +125,13 @@ async function assertFits(page) {
         assert.deepEqual(glyphs((await save(page)).moveTree), glyphs(beforeReload.moveTree));
         // Authoring a previously bare straight line must enable annotated storage.
         await importPgn(page, width, 'h2e2 *'); await command(page, 'Move tree');
-        await details.locator(':scope > summary').click(); await apply('1');
+        await openAnnotations(); await apply('1');
         assert.deepEqual((await save(page)).moveTree, [{ uci: 'h2e2', nags: [1] }]);
         await details.getByRole('button', { name: 'Remove Good move ($1)', exact: true }).click();
         assert.equal((await save(page)).moveTree, undefined);
-        await details.locator('.glyph-code-editor > summary').click(); await numeric.fill('200');
+        await openNumeric(); await numeric.fill('200');
         await importPgn(page, width, 'h2e2 *'); await command(page, 'Move tree');
-        if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+        await openAnnotations();
         assert.equal(await numeric.inputValue(), '', 'A new study inherited the numeric draft on a reused node ID');
         await command(page, 'Go to start'); assert.equal(await details.count(), 0);
         assert.deepEqual(errors, []);

@@ -30,6 +30,16 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
         const grid = editor.getByRole('grid', { name: 'Position board' });
         assert.equal(await grid.getByRole('row').count(), 10);
         assert.equal(await grid.getByRole('gridcell').count(), 90);
+        for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+          const target = square(4, 4); await target.focus();
+          const state = await target.evaluate((node, flags) => {
+            const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true, ...flags });
+            if (flags.prePrevented) event.preventDefault();
+            node.dispatchEvent(event);
+            return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+          }, flags);
+          assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Right must preserve editor focus: ${JSON.stringify(flags)}`);
+        }
         await square(0, 9).focus();
         await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowUp');
         await expectSquare(0, 9);

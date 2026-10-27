@@ -45,8 +45,52 @@ async function resetText(page) {
    await panel.getByRole('alert').waitFor();
    assert.match(await panel.getByRole('alert').innerText(), /Game 3: Illegal move h9h8/);
    assert.equal(await raw(),before);
+   // Search reaches beyond the initial render page. Filtering never silently
+   // changes selection, and bulk actions affect all matches, including those
+   // that have not been rendered yet.
+   const collection = Array.from({length:45}, (_, index) =>
+    `[White "Player ${index + 1}"] [Event "${index % 2 ? 'Even Cup' : 'Odd Cup'}"] [Annotator "Coach 王"]\n1.h2e2 *`).join('\n');
+   await upload(collection);
+   await panel.getByRole('button',{name:'Import 45 games',exact:true}).waitFor();
+   const rows = panel.locator('.lib-pgn-game');
+   const search = panel.getByRole('searchbox', {name:'Find games in this collection'});
+   assert.equal(await rows.count(),20,'Initial preview must stay bounded');
+   await panel.getByRole('button',{name:'Show 20 more games',exact:true}).click();
+   assert.equal(await rows.count(),40);
+   assert.equal(await rows.nth(20).getByRole('checkbox').evaluate(element=>element===document.activeElement),true,
+    'Loading more collection games must focus the first newly revealed selection');
+   await panel.locator('.lib-pgn-games').evaluate(element => { element.scrollTop = element.scrollHeight; });
+   await search.fill('王 PLAYER 45');
+   assert.equal(await rows.count(),1);
+   assert.match(await rows.first().innerText(),/45\. Player 45/);
+   assert.equal(await rows.getByRole('checkbox').isChecked(),true);
+   assert.match(await panel.innerText(),/44 selected games are outside this search/);
+   await panel.getByRole('button',{name:'Deselect matches',exact:true}).click();
+   assert.equal(await panel.getByRole('button',{name:'Import 44 games',exact:true}).isEnabled(),true);
+   await panel.getByRole('button',{name:'Select only matches',exact:true}).click();
+   assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true);
+   assert.equal(await rows.getByRole('checkbox').isChecked(),true,'Selecting only matches includes the visible match');
+   await search.fill('missing player');
+   assert.equal(await rows.count(),0);
+   assert.equal(await panel.getByRole('button',{name:'Select all matches',exact:true}).isDisabled(),true);
+   await search.press('Escape');
+   assert.equal(await search.inputValue(),'','Escape clears the preview search');
+   assert.equal(await search.evaluate(node=>node===document.activeElement),true,'Clearing preview search retains focus');
+   assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true,'Clearing search preserves selected games');
+   assert.equal(await rows.count(),20,'Changing the search resets pagination');
+   assert.equal(await panel.locator('.lib-pgn-games').evaluate(element => element.scrollTop),0,
+    'A new search must start at the first matching game');
+   await panel.getByRole('button',{name:'Select none',exact:true}).click();
+   await search.fill('ODD CUP');
+   assert.equal(await rows.count(),20,'Matching results are paginated too');
+   await panel.getByRole('button',{name:'Select all matches',exact:true}).click();
+   assert.equal(await panel.getByRole('button',{name:'Import 23 games',exact:true}).isEnabled(),true);
+   await search.fill('player 45');
+   assert.equal(await rows.getByRole('checkbox').isChecked(),true,'Bulk selection reaches unrendered matches');
+   assert.equal(await raw(),before,'Search and selection do not write to the library');
    await upload(source);
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
+   assert.equal(await search.inputValue(),'','A replacement file clears the old search');
    assert.match(await panel.locator('.lib-pgn-game strong').first().innerText(), /Alice \(2500\).*Bob \(2450\)/);
    assert.match(await panel.innerText(), /ratings.*recorded time control.*annotator credits/);
    assert.equal(await raw(),before,'Preview does not save');
@@ -62,8 +106,9 @@ async function resetText(page) {
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    const overflow = await panel.evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, children: [...el.querySelectorAll('*')].filter(node => node.getBoundingClientRect().right > el.getBoundingClientRect().right).map(node => ({tag:node.tagName, class:node.className, text:node.textContent.slice(0,100), width:node.clientWidth, scroll:node.scrollWidth})) }));
    assert.equal(overflow.scroll > overflow.width,false,`Long filenames and enlarged collection content must wrap: ${JSON.stringify(overflow)}`);
-   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).press('Enter');
    await panel.getByRole('status').filter({hasText:'Imported 2 games.'}).waitFor();
+   assert.equal(await file.evaluate(element => element === document.activeElement),true,'Finishing import restores keyboard focus');
    const games=JSON.parse(await raw());
    assert.equal(games.length,2);
    const alice=games.find(game=>game.metadata.redPlayer==='Alice');
@@ -89,12 +134,15 @@ async function resetText(page) {
    await panel.getByRole('button',{name:'Import 2 games',exact:true}).waitFor();
    await page.evaluate(()=>{ const original=Storage.prototype.setItem; Storage.prototype.setItem=function(key,value){if(key==='xiangqi:library:v1')throw new Error('Quota'); return original.call(this,key,value);}; });
    const original=await raw();
-   await panel.getByRole('button',{name:'Import 2 games',exact:true}).click();
+   await panel.getByRole('button',{name:'Import 2 games',exact:true}).press('Enter');
    await panel.getByRole('alert').waitFor();
    assert.equal(await raw(),original);
+   assert.equal(await panel.getByRole('button',{name:'Import 2 games',exact:true}).evaluate(element => element === document.activeElement),true,
+    'A failed import keeps keyboard focus on Retry');
    assert.equal(await panel.getByRole('checkbox').count(),3);
    await panel.getByRole('button',{name:'Cancel import',exact:true}).click();
    assert.equal(await panel.getByRole('checkbox').count(),0);
+   assert.equal(await file.evaluate(element => element === document.activeElement),true,'Canceling import restores keyboard focus');
    assert.deepEqual(errors,[]);
    await page.close();
   }

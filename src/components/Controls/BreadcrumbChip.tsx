@@ -31,11 +31,11 @@ export const BreadcrumbChip = memo(function BreadcrumbChip({ nodeId, index, reco
         data-breadcrumb-index={index}
         data-breadcrumb-node-id={nodeId}
         title={title}
-        aria-label={title}
+        aria-label={isRoot ? title : `${label}: ${title}`}
         aria-current={isCurrent ? 'true' : undefined}
     >
         {label}
-        {hasNext ? <span className="tree-breadcrumb-sep">/</span> : null}
+        {hasNext ? <span className="tree-breadcrumb-sep" aria-hidden="true">/</span> : null}
     </button>;
 });
 

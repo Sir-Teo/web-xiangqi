@@ -48,13 +48,56 @@ async function assertFits(page) {
             } };
           };` }));
         await page.goto(base);
-        await importPgn(page, width, '{Opening overview} h2e2 {Main cannon} (b2e2 {Side cannon 中炮 🐎} a9a8 {Side rook} (i9i8 {Nested rook}) h0g2 {Side horse}) h9g7 {Main horse} *');
+        await importPgn(page, width, '{Opening overview} h2e2 {Main cannon} (b2e2 {Side cannon 中炮 🐎} a9a8 {Side rook} (i9i8 {Nested rook}) h0g2 {Side horse Cafe\u0301}) h9g7 {Main horse} *');
         await openFinder(page);
         const search = page.locator('#study-notes-search');
         const results = page.locator('.study-note-result');
         assert.equal(await results.count(), 7);
-        await search.fill('🐎 CANNON 中炮');
+        for (const query of ['CAFÉ', 'cafe\u0301']) {
+          await search.fill(query);
+          assert.equal(await results.count(), 1, 'Composed and decomposed accented queries must find the same note');
+          assert.match(await results.first().innerText(), /Side horse/);
+        }
+        await search.fill('previous query');
+        await openFinder(page);
+        assert.deepEqual(await search.evaluate(input => [input.selectionStart, input.selectionEnd]), [0, 'previous query'.length], 'Find study notes should select the previous query for replacement');
+        await page.keyboard.insertText('🐎 CANNON 中炮');
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮');
         assert.equal(await results.count(), 1);
+        await command(page, 'Review panel');
+        await page.getByTestId('study-notes').waitFor({ state: 'detached' });
+        await command(page, 'Move tree');
+        await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Returning from analysis must preserve the notes query');
+        assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), true, 'Returning from analysis must preserve the expanded notes finder');
+        assert.equal(await results.count(), 1);
+        await page.getByTestId('study-notes').locator('summary').click();
+        await command(page, 'Review panel');
+        await command(page, 'Move tree');
+        await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+        assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), false, 'A collapsed finder must stay collapsed on return');
+        await openFinder(page);
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Reopening the finder must preserve its query');
+        const clear = page.getByRole('button', { name: 'Clear note search', exact: true });
+        const finderFen = await page.locator('.bottombar-fen').getAttribute('title');
+        const currentNote = await page.getByTestId('move-comment-input').inputValue();
+        for (const activation of ['pointer', 'keyboard']) {
+          const box = await clear.boundingBox();
+          assert.ok(box.width >= 44 && box.height >= 44, 'Clear note search needs a touch target');
+          if (activation === 'pointer') await clear.click();
+          else { await clear.focus(); await page.keyboard.press('Enter'); }
+          assert.equal(await search.inputValue(), '');
+          assert.equal(await results.count(), 7, 'Clear must restore every variation’s notes');
+          assert.equal(await search.evaluate(node => node === document.activeElement), true, 'Clear must return focus to the query');
+          assert.equal(await clear.count(), 0);
+          assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), finderFen, 'Clearing must preserve the position');
+          assert.equal(await page.getByTestId('move-comment-input').inputValue(), currentNote, 'Clearing must preserve the current note');
+          await search.fill('🐎 CANNON 中炮');
+          assert.equal(await results.count(), 1);
+        }
+        await search.focus();
+        await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
+        assert.equal(await clear.evaluate(node => node === document.activeElement), true, 'Clear must be reachable from the query with Tab');
         await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         assert.equal(await page.evaluate(() => document.activeElement?.className), 'study-note-result');
         await page.keyboard.press('Enter');
@@ -74,7 +117,26 @@ async function assertFits(page) {
         await search.fill('no matching note');
         assert.equal(await results.count(), 0);
         await page.getByText('No notes match. Try fewer words.', { exact: true }).waitFor();
-        await search.fill('');
+        await search.press('Escape');
+        assert.equal(await search.inputValue(), '', 'Escape clears the notes query');
+        assert.equal(await results.count(), 7, 'Clearing search restores notes across every variation');
+        // Keep a delayed finder command from taking focus back after the
+        // reader has already chosen the note editor.
+        await page.evaluate(() => {
+          const native = window.setTimeout;
+          window.setTimeout = function(callback, delay, ...args) {
+            if (delay === 0 && document.querySelector('[data-command-input]')?.value === 'Find study notes') {
+              window.__heldFinderFocus = () => callback(...args);
+              window.setTimeout = native;
+              return native(() => {}, 0);
+            }
+            return native(callback, delay, ...args);
+          };
+        });
+        await command(page, 'Find study notes');
+        await page.getByTestId('move-comment-input').focus();
+        await page.evaluate(() => window.__heldFinderFocus());
+        assert.equal(await page.getByTestId('move-comment-input').evaluate(input => input === document.activeElement), true, 'A delayed finder command must preserve newer keyboard focus');
         await search.focus();
         await page.screenshot({ path: `/tmp/xiangqi-study-notes-${browserType.name()}-${width}-natural.png` });
         for (const size of [32, 16]) {
@@ -119,12 +181,26 @@ async function assertFits(page) {
           await page.getByTestId('study-notes').getByRole('status').filter({ hasText: '1025 notes' }).waitFor();
           await page.getByRole('button', { name: 'Show 20 more notes', exact: true }).click();
           assert.equal(await results.count(), 40);
+          assert.equal(await results.nth(20).evaluate(element => element === document.activeElement), true,
+            'Loading more notes must focus the first newly revealed result');
+          await command(page, 'Review panel');
+          await command(page, 'Move tree');
+          await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+          assert.equal(await results.count(), 40, 'Returning from analysis must retain revealed note pages');
+          assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), true);
+          const list = page.getByTestId('study-notes').locator('ul');
+          await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
+          assert.ok(await list.evaluate(element => element.scrollTop > 0));
+          await search.fill('Side note');
+          assert.equal(await results.count(), 20);
+          assert.equal(await list.evaluate(element => element.scrollTop), 0,
+            'A new note search must start at the first matching result');
           await search.fill('Side note 1023');
           assert.equal(await results.count(), 1, 'Search must reach beyond rendered tree/list limits');
           await results.first().click();
           await noteIs(page, 'Side note 1023');
-          await search.fill('');
-          assert.equal(await results.count(), 20, 'Changing a filter resets progressive rendering');
+          await clear.click();
+          assert.equal(await results.count(), 20, 'Clearing the query resets progressive rendering');
           await search.fill('Root plan');
           await results.first().click();
           await noteIs(page, 'Root plan');

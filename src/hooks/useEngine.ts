@@ -611,24 +611,36 @@ export function useEngine(options: EngineInitOptions = {}) {
 
         // Boot engine using the wrapper component
         const readyTimeoutMs = getEngineReadyTimeoutMs();
-        engineBootTimerRef.current = window.setTimeout(() => {
-            if (initToken !== initTokenRef.current || engineRef.current) return;
-            engineBootTimerRef.current = null;
-            initTokenRef.current += 1;
-            clearEngineBootTimer();
-            setIsReady(false);
-            setIsSearching(false);
-            isSearchingRef.current = false;
-            activeSearchSignatureRef.current = '';
-            activeSearchTagRef.current = null;
-            clearQueuedSearch();
-            telemetryRef.current!.setStats(null);
-            stopRequestedRef.current = false;
-            onWorkerErrorRef.current?.(`[boot-error] Pikafish did not finish booting within ${Math.ceil(readyTimeoutMs / 1000)}s.`);
-        }, readyTimeoutMs);
+        // A first download can take longer than this budget. Keep its watchdog
+        // alive while bytes advance; the UCI-ready phase has its own deadline.
+        const armBootTimeout = () => {
+            // Renew the timer without aborting the download it is watching.
+            if (engineBootTimerRef.current !== null) window.clearTimeout(engineBootTimerRef.current);
+            engineBootTimerRef.current = window.setTimeout(() => {
+                if (initToken !== initTokenRef.current || engineRef.current) return;
+                engineBootTimerRef.current = null;
+                initTokenRef.current += 1;
+                clearEngineBootTimer();
+                setIsReady(false);
+                setIsSearching(false);
+                isSearchingRef.current = false;
+                activeSearchSignatureRef.current = '';
+                activeSearchTagRef.current = null;
+                clearQueuedSearch();
+                telemetryRef.current!.setStats(null);
+                stopRequestedRef.current = false;
+                onWorkerErrorRef.current?.(`[boot-error] Pikafish startup made no download progress for ${Math.ceil(readyTimeoutMs / 1000)}s.`);
+            }, readyTimeoutMs);
+        };
+        armBootTimeout();
+        let startupBytes = 0;
 
         const handleAssetProgress = (progress: EngineAssetProgress) => {
             if (initToken !== initTokenRef.current) return;
+            if (!engineRef.current && Number.isFinite(progress.loaded) && progress.loaded > startupBytes) {
+                startupBytes = progress.loaded;
+                armBootTimeout();
+            }
             if (!shouldPublishAssetProgress(publishedAssetProgressRef.current, progress)) return;
             publishedAssetProgressRef.current = progress;
             setAssetProgress(progress);
@@ -649,6 +661,7 @@ export function useEngine(options: EngineInitOptions = {}) {
                 threads,
                 hashMB,
                 initTimeoutMs: readyTimeoutMs,
+                extendInitTimeoutOnProgress: true,
                 onAssetProgress: handleAssetProgress,
             }));
         } catch (err: any) {

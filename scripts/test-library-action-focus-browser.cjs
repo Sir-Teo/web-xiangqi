@@ -48,6 +48,16 @@ async function command(page, label) {
           const stops = await page.locator('.lib-card[data-game-id]').evaluateAll(cards => cards.filter(card => card.querySelector('button[tabindex="0"]')).length);
           assert.equal(stops, 1, 'Only the active card belongs in the tab order');
         };
+        for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+          const load = action('load', 'c'); await load.focus();
+          const state = await load.evaluate((node, flags) => {
+            const event = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true, ...flags });
+            if (flags.prePrevented) event.preventDefault();
+            node.dispatchEvent(event);
+            return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+          }, flags);
+          assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Home must preserve the library action: ${JSON.stringify(flags)}`);
+        }
         await moveFocus(action('practice', 'a'), 'ArrowDown', action('load', 'b'));
         await moveFocus(action('delete', 'a'), 'ArrowDown', action('delete', 'b'));
         await moveFocus(action('delete', 'b'), 'ArrowUp', action('delete', 'a'));

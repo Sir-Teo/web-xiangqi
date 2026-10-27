@@ -25,17 +25,18 @@ export function toSearchTerms(query: string | null | undefined): string[] {
         .slice(0, MAX_SEARCH_QUERY_LENGTH)
         .trim()
         .toLowerCase()
+        .normalize('NFC')
         .split(/\s+/)
         .filter(Boolean);
 }
 
-/** Builds the haystack once; skips empty parts and lowercases the result. */
+/** Build an index with the same case and Unicode form as query terms. */
 export function toSearchText(parts: Array<string | null | undefined>): string {
-    return parts.filter((part): part is string => Boolean(part)).join(' ').toLowerCase();
+    return parts.filter((part): part is string => Boolean(part)).join(' ').toLowerCase().normalize('NFC');
 }
 
 export function matchesSearchTerms(haystack: string, terms: string[]): boolean {
     if (terms.length === 0) return true;
-    const text = haystack.toLowerCase();
+    const text = haystack.toLowerCase().normalize('NFC');
     return terms.every((term) => text.includes(term));
 }
