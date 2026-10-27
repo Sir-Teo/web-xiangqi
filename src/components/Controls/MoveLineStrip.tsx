@@ -1,5 +1,5 @@
 import { isComposingKey } from '../../utils/keyboard';
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
 
 /**
@@ -41,7 +41,24 @@ export function MoveLineStrip({
 }: MoveLineStripProps) {
     const [rovingIndex, setRovingIndex] = useState<number | null>(null);
     const stripRef = useRef<HTMLSpanElement | null>(null);
+    const focusedMoveRef = useRef<HTMLButtonElement | null>(null);
     const stopIndex = rovingTabStopIndex(tokens.length, rovingIndex, 0);
+
+    useLayoutEffect(() => {
+        const previous = focusedMoveRef.current;
+        if (!previous || previous.isConnected) return;
+        focusedMoveRef.current = null;
+        // A shorter live line can remove the focused move. Continue at its
+        // nearest remaining move, provided focus has not moved elsewhere.
+        if (!tokens.length || document.activeElement !== document.body) return;
+        const index = Math.min(Number(previous.dataset.moveIndex), tokens.length - 1);
+        const target = stripRef.current?.querySelectorAll<HTMLButtonElement>('button[data-move-index]')[index];
+        target?.focus({ preventScroll: true });
+        const frame = requestAnimationFrame(() => {
+            if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [tokens.length]);
 
     const handleKeyDown = useCallback((event: KeyboardEvent<HTMLSpanElement>) => {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
@@ -72,7 +89,8 @@ export function MoveLineStrip({
                     data-move-index={moveIndex}
                     tabIndex={moveIndex === stopIndex ? 0 : -1}
                     onClick={() => onPlay(moveIndex + 1)}
-                    onFocus={() => setRovingIndex(moveIndex)}
+                    onFocus={event => { focusedMoveRef.current = event.currentTarget; setRovingIndex(moveIndex); }}
+                    onBlur={event => { if (event.currentTarget.isConnected) focusedMoveRef.current = null; }}
                     disabled={disabled}
                     title={title(moveIndex, token)}
                     aria-label={ariaLabel(moveIndex, token)}

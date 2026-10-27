@@ -79,6 +79,24 @@ async function followEngineLine(browser, width) {
     assert.equal(await page.getByTestId('engine-pv-0-move-2').evaluate(node => node === document.activeElement), true);
     await page.keyboard.press('Home');
     assert.equal(await firstMove.evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('End');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 2
+      && document.activeElement?.getAttribute('data-testid') === 'engine-pv-0-move-1', null, { timeout: 3000 });
+    await page.evaluate(() => window.__updatePV('h2e2'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 1
+      && document.activeElement?.getAttribute('data-testid') === 'engine-pv-0-move-0', null, { timeout: 3000 });
+    assert.equal(await firstMove.getAttribute('tabindex'), '0', 'The remaining focused move must be the line’s tab stop');
+    assert.deepEqual(await boardState(), initial, 'Shortening a suggestion must not play it');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7 h0g2'));
+    await page.getByTestId('engine-pv-0-move-2').waitFor();
+    assert.equal(await firstMove.evaluate(node => node === document.activeElement), true, 'Growing the line must retain focus');
+    await keep.focus();
+    await page.evaluate(() => window.__updatePV('h2e2'));
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="engine-pv-line-0"] .pv-move-btn').length === 1);
+    assert.equal(await keep.evaluate(node => node === document.activeElement), true, 'A shorter suggestion must not take focus from another control');
+    await page.evaluate(() => window.__updatePV('h2e2 h9g7 h0g2'));
+    await page.getByTestId('engine-pv-0-move-2').waitFor();
     await page.evaluate(() => window.__finishPV());
     await keep.click();
     assert.deepEqual(await boardState(), initial, 'Keeping a line moved the board');
