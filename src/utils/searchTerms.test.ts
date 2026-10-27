@@ -58,6 +58,24 @@ describe('matching terms', () => {
     });
 });
 
+describe('canonically equivalent Unicode text', () => {
+    it('finds names entered with composed or combining accents', () => {
+        expect(matchesSearchTerms('Lu\u0308 Qin 1982', toSearchTerms('LÜ 1982'))).toBe(true);
+        expect(matchesSearchTerms('Lǚ Qīn', toSearchTerms('LU\u0308\u030c QI\u0304N'))).toBe(true);
+        expect(matchesSearchTerms('Café study', toSearchTerms('cafe\u0301'))).toBe(true);
+    });
+
+    it('builds the same index and terms for equivalent spellings', () => {
+        expect(toSearchText(['Lu\u0308 Qin'])).toBe(toSearchText(['Lü Qin']));
+        expect(toSearchTerms('CAFE\u0301')).toEqual(toSearchTerms('café'));
+    });
+
+    it('keeps distinct accented letters and move symbols separate', () => {
+        expect(matchesSearchTerms('Lü Qin', toSearchTerms('Lu Qin'))).toBe(false);
+        expect(matchesSearchTerms('C2=5', toSearchTerms('C2+5'))).toBe(false);
+    });
+});
+
 describe('bounded query length', () => {
     it('truncates a pasted record instead of scanning every term of it', () => {
         const pastedRecord = Array.from({ length: 20_000 }, (_, i) => `${i}. h2e2 h9g7`).join(' ');

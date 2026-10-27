@@ -16,7 +16,7 @@
  * pasting a game record into the palette cannot become thousands of terms
  * scanned against every command.
  */
-import { toSearchTerms } from './searchTerms';
+import { toSearchTerms, toSearchText } from './searchTerms';
 import { readStorage, writeStorage } from './storage';
 
 export const RECENT_COMMANDS_STORAGE_KEY = 'xiangqi:recent-commands:v1';
@@ -39,9 +39,7 @@ export interface Command {
 }
 
 function haystack(command: Command): string {
-    return [command.label, command.hint ?? '', command.shortcut ?? '', ...(command.keywords ?? [])]
-        .join(' ')
-        .toLowerCase();
+    return toSearchText([command.label, command.hint, command.shortcut, ...(command.keywords ?? [])]);
 }
 
 export function commandMatches(command: Command, terms: string[]): boolean {
@@ -64,7 +62,7 @@ export function rankCommands(commands: Command[], query: string, recentIds: stri
 
     const needle = terms.join(' ');
     const score = (command: Command): number => {
-        const label = command.label.toLowerCase();
+        const label = toSearchText([command.label]);
         if (label.startsWith(needle)) return 0;
         if (label.includes(needle)) return 1;
         if (terms.every((term) => label.includes(term))) return 2;

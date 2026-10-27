@@ -38,6 +38,15 @@ describe('matching commands', () => {
 });
 
 describe('ranking commands', () => {
+    it('keeps prefix ranking consistent for equivalent Unicode spellings', () => {
+        const commands = [
+            make('hint', 'Open study', { hint: 'Lü Qin' }),
+            make('contains', 'Study of Lu\u0308 Qin'),
+            make('prefix', 'Lü Qin study'),
+        ];
+        expect(rankCommands(commands, 'LU\u0308').map(command => command.id)).toEqual(['prefix', 'contains', 'hint']);
+    });
+
     it('puts a label that starts with the query above one that merely contains it', () => {
         // "re" starts "Review game" and sits inside "New game"'s keywords.
         expect(rankCommands(COMMANDS, 're')[0]?.id).toBe('review');
