@@ -3394,7 +3394,6 @@ function App() {
     const previous = { text: moveLineInput, name: moveLineFileName };
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
-      setMoveLineFileName('');
       setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
       return;
     }
@@ -3410,7 +3409,6 @@ function App() {
       if (generation !== directImportGenerationRef.current) return;
       setDirectImportBusy(false);
       if (response.kind === 'xqf') {
-        setMoveLineFileName(file.name);
         handleImportXqf(response.record);
         return;
       }
@@ -3418,7 +3416,6 @@ function App() {
       const text = response.text;
       if (!text.trim()) throw new Error('The file is empty. Choose a game record with moves or a position.');
       if (isMoveImportTextTooLarge(text)) {
-        setMoveLineFileName('');
         setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
         return;
       }
@@ -3428,7 +3425,6 @@ function App() {
       setMoveLineError(null);
     } catch (error) {
       if (generation !== directImportGenerationRef.current) return;
-      setMoveLineFileName('');
       setDirectImportBusy(false);
       setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }

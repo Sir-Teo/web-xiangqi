@@ -32,6 +32,7 @@ async function checkDrops(browser, width) {
       const read = File.prototype.arrayBuffer; window.readFiles = [];
       File.prototype.arrayBuffer = function() {
         window.readFiles.push(this.name);
+        if (this.name === 'unreadable.pgn') return Promise.reject(new DOMException('The file could not be read.', 'NotReadableError'));
         if (this.name !== 'slow.pgn') return read.call(this);
         return new Promise(resolve => { window.releaseSlowFile = () => read.call(this).then(resolve); });
       };
@@ -98,8 +99,25 @@ async function checkDrops(browser, width) {
     }), false, 'Plain text drops keep the browser editing behavior');
     await pick('preview.pgn', 'b2e2');
     await pick('preview.pgn', 'b2e2');
-    await dropFiles(page, [{ name: 'rejected-empty.pgn', text: '' }]);
-    await page.getByRole('alert').filter({ hasText: 'The file is empty' }).waitFor();
+    for (const [name, text, message] of [
+      ['rejected-empty.pgn', '', 'The file is empty'],
+      ['rejected-large.pgn', 'x'.repeat(200001), 'File is too large'],
+      ['unreadable.pgn', 'h2e2', /could not.*read/i],
+    ]) {
+      await dropFiles(page, [{ name, text }]);
+      await page.getByRole('alert').filter({ hasText: message }).waitFor();
+      assert.equal(await field.inputValue(), 'b2e2', 'Rejected replacements retain the current preview');
+      assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'preview.pgn', 'Rejected replacements retain the preview filename');
+      assert.equal(await undo.count(), 1, 'Rejected replacements preserve the earlier Undo');
+    }
+    assert.equal(await page.evaluate(() => window.readFiles.includes('rejected-large.pgn')), false);
+    const emptyXqf = xqfFile().slice(0, 1032); emptyXqf[1026] = 0;
+    await dropFiles(page, [{ name: 'empty.xqf', bytes: emptyXqf }]);
+    await page.getByRole('alert').filter({ hasText: 'This XQF file holds no moves and no position' }).waitFor();
+    assert.equal(await field.inputValue(), 'b2e2');
+    assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'preview.pgn', 'Rejected binary files must not rename the text preview');
+    assert.equal(await undo.count(), 1);
+    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon);
     await restore('Control+z', page.getByTestId('load-uci-file-btn'));
     assert.equal(await field.inputValue(), 'b0c2', 'Repeated identical file reads must retain the original draft for Undo');
     assert.equal(await page.locator('.new-game-file-name').count(), 0);
@@ -151,7 +169,7 @@ async function checkDrops(browser, width) {
     assert.ok(!(await copy()).includes('Dropped record'), 'A binary drop must clear the previous record metadata');
     assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), library);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, file Undo, Ctrl/Cmd+Z, IME/redo ownership, pending-read cancellation, focus and enlarged layout passed`);
+    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, file Undo, Ctrl/Cmd+Z, IME/redo ownership, pending-read cancellation, rejected-preview preservation, focus and enlarged layout passed`);
   } finally { await page.close(); }
 }
 
