@@ -2821,6 +2821,7 @@ function App() {
   );
   const cloudRule = useCloudRule(rootFen, repetitionLineMoves, repetition.occurrences >= 2,
     cloudBookEnabled && isPageVisible && (!isMobile || mobileView === 'board' || mobileAnalysisTab === 'graph'));
+  const repetitionNoticeRef = useRef<HTMLDivElement>(null);
   const cloudRuleHasVerdict = cloudRule.status === 'ok' && (cloudRule.banned.length > 0 || cloudRule.drawing.length > 0);
   // A forbidden move is worth saying at the first repetition, before it is
   // played, whatever the threshold for an unforced one.
@@ -7299,6 +7300,8 @@ function App() {
                   <div
                     className={`position-stat position-stat-repetition${visibleRepetition.mustVary ? ' position-stat-repetition-binding' : ''}`}
                     role="status"
+                    ref={repetitionNoticeRef}
+                    tabIndex={-1}
                     data-testid="repetition-notice"
                     data-verdict={visibleRepetition.verdict}
                   >
@@ -7322,6 +7325,11 @@ function App() {
                         Ask {CLOUD_BOOK_SITE_NAME} whether this is a chase
                       </button>
                     ) : null}
+                    {cloudRule.status === 'error' && <button type="button" className="position-stat-cloud-ask"
+                      data-testid="repetition-cloud-retry" onClick={event => {
+                        if (document.activeElement === event.currentTarget) repetitionNoticeRef.current?.focus({ preventScroll: true });
+                        cloudRule.retry();
+                      }}>Retry cloud ruling</button>}
                   </div>
                 ) : null}
                 {/* The other rule the app will not adjudicate but the engine

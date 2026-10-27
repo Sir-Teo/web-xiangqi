@@ -6741,6 +6741,11 @@ summary:active {
   color: var(--warning);
 }
 
+.position-stat-repetition:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
 /* Amber says "look at this"; a perpetual check is going to decide the game
    against somebody, so it says it louder. */
 .position-stat-repetition-binding {
