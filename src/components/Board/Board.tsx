@@ -355,6 +355,12 @@ export const Board = React.memo(function Board({
             case 'ArrowDown':
                 nextRank += orientation === 'black' ? 1 : -1;
                 break;
+            case 'Home':
+                nextFile = orientation === 'red' ? 0 : 8;
+                break;
+            case 'End':
+                nextFile = orientation === 'red' ? 8 : 0;
+                break;
             default:
                 return;
         }
@@ -512,8 +518,8 @@ export const Board = React.memo(function Board({
     const tabStopSquare = rovingSquare ?? selected ?? fallbackRovingSquare;
 
     const squareKeyshortcuts = onToggleHighlight
-        ? 'Enter Space Shift+Enter Shift+Space ArrowUp ArrowDown ArrowLeft ArrowRight'
-        : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight';
+        ? 'Enter Space Shift+Enter Shift+Space ArrowUp ArrowDown ArrowLeft ArrowRight Home End'
+        : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Home End';
 
     return (
         <div className="xiangqi-board-container" data-orientation={orientation}>

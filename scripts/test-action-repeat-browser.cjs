@@ -95,6 +95,26 @@ async function skipToBoard(browser) {
     await checkOwnership(square, 'ArrowLeft', async () => {});
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('.hitbox[data-file="3"][data-rank="4"]').evaluate(node => node === document.activeElement), true);
+    for (const key of ['Home', 'End']) await checkOwnership(square, key, async () => {});
+    const checkBoardRowEdges = async orientation => {
+      const leftFile = orientation === 'red' ? 0 : 8;
+      const rightFile = 8 - leftFile;
+      await square.focus();
+      for (const [key, file] of [['Home', leftFile], ['Home', leftFile], ['End', rightFile], ['End', rightFile]]) {
+        await page.keyboard.press(key);
+        const destination = page.locator(`.hitbox[data-file="${file}"][data-rank="4"]`);
+        assert.equal(await destination.evaluate(node => node === document.activeElement), true,
+          `${orientation} ${key} must focus the visual row edge without changing rank`);
+        assert.equal(await destination.getAttribute('tabindex'), '0');
+        assert.equal(await page.locator('.hitbox[tabindex="0"]').count(), 1, 'Board must retain one tab stop');
+        assert.doesNotMatch(await destination.getAttribute('aria-label'), /\bselected\b/);
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Row navigation must not play a move');
+      }
+      await page.keyboard.press('ArrowLeft');
+      assert.equal(await page.locator(`.hitbox[data-file="${orientation === 'red' ? 7 : 1}"][data-rank="4"]`).evaluate(node => node === document.activeElement), true,
+        'Arrow navigation must continue from the row edge');
+    };
+    await checkBoardRowEdges('red');
     for (const selector of ['.mtree-chip', '.tree-breadcrumb-chip']) {
       const controls = page.locator(selector);
       assert.ok(await controls.count() >= 2, `${selector} needs multiple real navigation targets`);
@@ -108,6 +128,8 @@ async function skipToBoard(browser) {
     await page.keyboard.down('f');
     await page.keyboard.up('f');
     assert.equal(await board.getAttribute('data-orientation'), 'black');
+    await checkBoardRowEdges('black');
+    await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('f');
     assert.equal(await board.getAttribute('data-orientation'), 'red');
     await page.keyboard.down('Control');

@@ -61,6 +61,7 @@ Working end-to-end in Node.js and ready for browser analysis-app use (tested on 
 - **Find study notes**: expand Study notes below the move tree, or use the command palette, to search note text across the starting position and every variation. Select a result to visit its position. Results follow tree order, with 20 shown initially and more available on demand. The finder keeps your search and revealed results while you switch analysis panels in the current study.
 - **Study annotation symbols**: coordinate PGN import retains `!`, `?`, `!!`, `??`, `!?`, `?!`, position annotations, and numeric codes from `$0` through `$255` on every variation. Expand **Move annotations** to read meanings, apply a named judgement, add a numeric code, or remove a study symbol. Choosing a judgement replaces its move/position group and keeps unfamiliar codes. Symbols survive library storage, recovery, sharing within link limits, and export. Review grades remain separate; PGN can use the review grade when no study move judgement is set.
 - Single-key shortcuts: `F` flip, `X` threat, `D` deep search, `H` hint, `E`/`T`/`R` the Engine, Tree and Review panels, arrows to step through the game; each is printed beside its command in the palette
+- **Board keyboard navigation**: while a board square has focus, arrow keys move focus between squares, and `Home`/`End` reach the left/right edge of the current row, following the board orientation. `Enter` or `Space` selects a piece or plays its move; `Shift+Enter` or `Shift+Space` toggles a square highlight.
 
 ## What this repo contains
 
