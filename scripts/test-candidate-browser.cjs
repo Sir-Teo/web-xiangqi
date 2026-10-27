@@ -248,7 +248,24 @@ async function compare(browser, width, real = false) {
     }
     await panel.getByRole('button', { name: 'Stop comparison', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'));
+    assert.equal(await panel.getByTestId('compare-candidates').evaluate(node => node === document.activeElement), true,
+      'Stopping a comparison must return focus from the removed Stop control to Compare');
     await page.getByTestId('deep-infinite-toggle').click();
+    if (!real) {
+      for (const focusStop of [true, false]) {
+        const beforeGo = await page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length);
+        await page.evaluate(() => { window.__holdStop = true; });
+        await panel.getByTestId('compare-candidates').click();
+        await page.waitForFunction(count => window.__commands.filter(command => command.startsWith('go ')).length > count, beforeGo);
+        const focusTarget = focusStop ? panel.getByRole('button', { name: 'Stop comparison', exact: true }) : select;
+        await focusTarget.focus();
+        await page.evaluate(() => { window.__holdStop = false; window.__emit('bestmove a9a8'); });
+        await page.waitForFunction(() => document.querySelector('[data-testid="candidate-results"]')?.textContent.includes('Comparison finished.'));
+        const expected = focusStop ? panel.getByTestId('compare-candidates') : select;
+        assert.equal(await expected.evaluate(node => node === document.activeElement), true,
+          focusStop ? 'A completed search must return focus from its removed Stop control' : 'A completed search must preserve focus on the picker');
+      }
+    }
     await panel.getByRole('button', { name: 'Remove candidate a9a8' }).click();
     assert.equal(await select.evaluate(el => el === document.activeElement), true,
       'Removing a candidate must not leave focus on the page body');

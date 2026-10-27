@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
 import type { PvLine } from '../hooks/useEngine';
 import { legalCandidateMoves, MAX_CANDIDATE_MOVES } from '../utils/candidateSearch';
 import { formatRedPovEngineScore } from '../utils/engineScore';
@@ -38,6 +38,14 @@ export function CandidatePanel(props: Props) {
   const copyRequestRef = useRef(0);
   const selectRef = useRef<HTMLSelectElement>(null);
   const compareRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const stopRef = useRef<HTMLButtonElement | null>(null);
+  const focusAfterStopRef = useRef(false);
+  const retainStopFocus = useCallback((node: HTMLButtonElement | null) => {
+    // Ref detachment runs before removal blurs the button to the page body.
+    if (!node && stopRef.current && stopRef.current === document.activeElement) focusAfterStopRef.current = true;
+    stopRef.current = node;
+  }, []);
   const focusAfterEditRef = useRef(false);
   useEffect(() => { selectRef.current?.focus({ preventScroll: true }); }, []);
   useEffect(() => {
@@ -56,6 +64,18 @@ export function CandidatePanel(props: Props) {
     });
     return () => cancelAnimationFrame(frame);
   }, [selected.length]);
+  useLayoutEffect(() => {
+    if (!focusAfterStopRef.current) return;
+    focusAfterStopRef.current = false;
+    if (document.activeElement !== document.body) return;
+    const compare = compareRef.current;
+    const target = compare && !compare.disabled ? compare : closeRef.current;
+    target?.focus({ preventScroll: true });
+    const frame = requestAnimationFrame(() => {
+      if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [props.active, props.searching, props.canCompare]);
   const choices = useMemo(() => legalCandidateMoves(board, side).map(uci => {
     const square = uciToSquare(uci.slice(0, 2));
     const piece = square ? board[square.rank][square.file] : '';
@@ -76,7 +96,7 @@ export function CandidatePanel(props: Props) {
 
   return <section id="candidate-comparison" className="candidate-panel" aria-label="Compare candidate moves" data-testid="candidate-panel">
     <div className="candidate-heading"><h3>Compare candidate moves</h3>
-      <button type="button" onClick={props.onClose} aria-label="Close candidate comparison">Close</button></div>
+      <button type="button" ref={closeRef} onClick={props.onClose} aria-label="Close candidate comparison">Close</button></div>
     <p>Choose up to {MAX_CANDIDATE_MOVES} legal moves. Scores apply only to these choices.</p>
     <div className="candidate-picker">
       <label htmlFor="candidate-move">Candidate move</label>
@@ -98,7 +118,7 @@ export function CandidatePanel(props: Props) {
     <div className="candidate-actions">
       <button type="button" ref={compareRef} onClick={() => props.onCompare(selected)} disabled={!selected.length || !props.canCompare}
         data-testid="compare-candidates">Compare</button>
-      {props.active && props.searching ? <button type="button" onClick={props.onStop}>Stop comparison</button> : null}
+      {props.active && props.searching ? <button type="button" ref={retainStopFocus} onClick={props.onStop}>Stop comparison</button> : null}
     </div>
     <p className="candidate-budget">{props.budgetLabel}. After comparing, use Go Deep above for a longer search of those candidates.</p>
     {props.active ? <div className="candidate-results" data-testid="candidate-results">
