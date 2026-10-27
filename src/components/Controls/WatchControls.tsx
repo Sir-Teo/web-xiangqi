@@ -1,5 +1,6 @@
 import { memo, useEffect } from 'react';
 import type { GameMode } from '../../App';
+import { isComposingKey } from '../../utils/keyboard';
 import {
     IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward,
     IconPlay, IconPause, IconStepForward
@@ -78,7 +79,7 @@ export const WatchControls = memo(function WatchControls({
     // Keyboard shortcuts
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if (!shortcutsEnabled) return;
+            if (!shortcutsEnabled || isComposingKey(e)) return;
             if (e.defaultPrevented) return;
             if (e.metaKey || e.ctrlKey || e.altKey) return;
             const target = e.target instanceof HTMLElement ? e.target : null;
