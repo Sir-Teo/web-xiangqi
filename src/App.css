@@ -5825,10 +5825,12 @@ summary:active {
     border: 3px double Highlight;
   }
 
+  .panel.top button[aria-pressed="true"],
   .analysis-tab-btn[aria-selected="true"] {
     position: relative;
   }
 
+  .panel.top button[aria-pressed="true"]::before,
   .analysis-tab-btn[aria-selected="true"]::before {
     content: '';
     position: absolute;
