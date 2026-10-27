@@ -2,8 +2,8 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { chooseMoveGlyph, describeGlyph, glyphSymbol } from '../utils/moveGlyphs';
 import './ImportedGlyphs.css';
 
-export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity }: {
-    nags: number[] | undefined; onChange: (nags: number[] | undefined) => void; disabled: boolean; gameIdentity: unknown;
+export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity, nodeId }: {
+    nags: number[] | undefined; onChange: (nags: number[] | undefined) => void; disabled: boolean; gameIdentity: unknown; nodeId: string;
 }) {
     const [code, setCode] = useState('');
     const [choice, setChoice] = useState('');
@@ -11,7 +11,7 @@ export function ImportedGlyphs({ nags, onChange, disabled, gameIdentity }: {
     const [announcement, setAnnouncement] = useState('');
     const addSelect = useRef<HTMLSelectElement>(null);
     const numericInput = useRef<HTMLInputElement>(null);
-    useLayoutEffect(() => { setCode(''); setChoice(''); setError(''); setAnnouncement(''); }, [gameIdentity]);
+    useLayoutEffect(() => { setCode(''); setChoice(''); setError(''); setAnnouncement(''); }, [gameIdentity, nodeId]);
     const apply = (value: number) => {
         onChange(chooseMoveGlyph(nags, value));
         setAnnouncement(`Study annotation applied: ${describeGlyph(value)}.`);

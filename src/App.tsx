@@ -7736,7 +7736,7 @@ function App() {
                     initialViewState={studyNotesViewRef.current?.identity === gameIdentity ? studyNotesViewRef.current.state : undefined}
                     onViewStateChange={rememberStudyNotesView}
                     disabled={studyControlsDisabled} onNavigate={jumpToNode} />
-                  {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
+                  {treeNodes[currentNodeId]?.record && <ImportedGlyphs nodeId={currentNodeId} gameIdentity={gameIdentity}
                     nags={treeNodes[currentNodeId]?.record?.nags} disabled={studyControlsDisabled}
                     onChange={nags => setNodeGlyphs(currentNodeId, nags)} />}
                   {[currentNodeId, ...(treeNodes[currentNodeId]?.childrenIds ?? [])].map(id => {
