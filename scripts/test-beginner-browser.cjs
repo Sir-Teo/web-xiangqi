@@ -70,7 +70,15 @@ async function openSettings(page) {
       assert.equal(await guide.getByRole('button', { name: 'Letter pieces' }).getAttribute('aria-pressed'), 'true');
       assert.ok(await page.locator('.piece').filter({ hasText: /^K$/ }).count());
       await page.screenshot({ path: `/tmp/xiangqi-beginner-${browserType.name()}-${width}.png` });
-      await guide.getByRole('button', { name: 'Dismiss first-move guide' }).click();
+      const lastSquare = page.locator('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]');
+      const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
+      await lastSquare.focus();
+      await guide.getByRole('button', { name: 'Dismiss first-move guide' }).focus();
+      await page.keyboard.press(width === 320 ? 'Space' : 'Enter');
+      await guide.waitFor({ state: 'detached' });
+      await page.waitForFunction(() => document.activeElement?.matches('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]'), null, { timeout: 3000 });
+      assert.doesNotMatch(await lastSquare.getAttribute('aria-label'), /\bselected\b/, 'Dismissing the guide must focus without selecting a piece');
+      assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Dismissing the guide must preserve the position');
       await page.reload();
       await page.locator('.piece').first().waitFor();
       assert.equal(await guide.count(), 0, 'Dismissal persists');

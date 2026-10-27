@@ -3197,7 +3197,7 @@ function App() {
       }}
       onLibrary={openLibraryPanel}
       onLearn={() => setShowRuleLessons(true)}
-      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); }}
+      onDismiss={() => { setGuideDismissed(true); writeStorage(BEGINNER_GUIDE_STORAGE_KEY, 'true'); focusBoard(); }}
     />
   ) : null;
 
