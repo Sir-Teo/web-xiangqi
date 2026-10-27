@@ -4952,6 +4952,16 @@ function App() {
       keywords: ['arrow', 'marker', 'overlay', 'highlight', 'draw', 'annotation', 'clutter', 'clean', '\u7bad\u5934'],
       run: () => setShowArrows((shown) => !shown),
     },
+    {
+      id: 'clear-board-markers',
+      label: 'Clear drawn arrows and highlights',
+      hint: userArrows.length || userHighlights.length
+        ? 'Remove your drawings; keep engine arrows and the last move'
+        : 'No drawings to clear',
+      keywords: ['erase', 'remove', 'marker', 'annotation', 'drawing', 'clean'],
+      disabled: !userArrows.length && !userHighlights.length,
+      run: clearBoardMarkers,
+    },
     /**
      * One command per notation, rather than one that cycles: a reader who wants
      * Chinese should not have to pass through WXF to get there, and naming each
@@ -5045,7 +5055,7 @@ function App() {
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
-      stopDeepDive, studyNotes.length])
+      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
     initialPly ??= selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
     if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
