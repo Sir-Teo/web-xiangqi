@@ -3436,6 +3436,8 @@ function App() {
 
   const handleUndoMoveLineFile = useCallback(() => {
     if (!moveLineFileUndo) return;
+    const source = document.activeElement;
+    directImportFocusRef.current = document.getElementById('new-game-line-input');
     cancelDirectImport();
     const generation = directImportGenerationRef.current;
     setMoveLineInput(moveLineFileUndo.text);
@@ -3447,7 +3449,7 @@ function App() {
     requestAnimationFrame(() => {
       if (generation !== directImportGenerationRef.current) return;
       const input = document.getElementById('new-game-line-input');
-      if (document.activeElement === document.body || document.activeElement === input) input?.focus();
+      if (document.activeElement === document.body || document.activeElement === input || document.activeElement === source) input?.focus();
     });
   }, [cancelDirectImport, moveLineFileUndo]);
 
@@ -6406,6 +6408,11 @@ function App() {
               <p className="new-game-strength-label">Import Move Line</p>
               <form
                 className="new-game-line-form"
+                onKeyDown={event => {
+                  if (!moveLineFileUndo || isComposingKey(event.nativeEvent) || !(event.ctrlKey || event.metaKey)
+                    || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'z') return;
+                  event.preventDefault(); event.stopPropagation(); handleUndoMoveLineFile();
+                }}
                 onFocusCapture={event => {
                   if (!(event.target instanceof HTMLElement)) return;
                   if (!event.target.isSameNode(directImportCancelRef.current)) directImportFocusRef.current = event.target;
@@ -6462,7 +6469,8 @@ function App() {
                     data-testid="uci-line-file-input"
                   />
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
-                  {moveLineFileUndo && <button type="button" className="new-game-file-btn" onClick={handleUndoMoveLineFile}>Undo file load</button>}
+                  {moveLineFileUndo && <button type="button" className="new-game-file-btn" onClick={handleUndoMoveLineFile}
+                    title="Undo file load (Ctrl/Cmd+Z)" aria-keyshortcuts="Control+Z Meta+Z">Undo file load</button>}
                 </div>
                 {directImportBusy && <p role="status">Checking the game… <button type="button" ref={directImportCancelRef} onClick={cancelDirectImport}>Cancel reading</button></p>}
                 <div className="new-game-line-actions">

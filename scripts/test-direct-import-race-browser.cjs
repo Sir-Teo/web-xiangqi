@@ -60,8 +60,8 @@ async function checkDrops(browser, width) {
         && document.querySelector('.new-game-file-name')?.getAttribute('title') === name
         && !document.querySelector('[data-testid="import-uci-line-btn"]:disabled'), { name, text });
     };
-    const restore = async () => {
-      await undo.scrollIntoViewIfNeeded(); await undo.focus(); await page.keyboard.press('Enter');
+    const restore = async (shortcut = 'Enter', control = undo) => {
+      await control.scrollIntoViewIfNeeded(); await control.focus(); await page.keyboard.press(shortcut);
       await page.waitForFunction(() => document.activeElement?.id === 'new-game-line-input');
       assert.equal(await undo.count(), 0);
     };
@@ -100,13 +100,21 @@ async function checkDrops(browser, width) {
     await pick('preview.pgn', 'b2e2');
     await dropFiles(page, [{ name: 'rejected-empty.pgn', text: '' }]);
     await page.getByRole('alert').filter({ hasText: 'The file is empty' }).waitFor();
-    await restore();
+    await restore('Control+z', page.getByTestId('load-uci-file-btn'));
     assert.equal(await field.inputValue(), 'b0c2', 'Repeated identical file reads must retain the original draft for Undo');
     assert.equal(await page.locator('.new-game-file-name').count(), 0);
     await pick('first.pgn', 'b2e2');
+    const untouched = await field.evaluate(node => [
+      { ctrlKey: true, shiftKey: true }, { ctrlKey: true, isComposing: true }, { metaKey: true, keyCode: 229 },
+    ].map(flags => {
+      node.focus(); const event = new KeyboardEvent('keydown', { key: 'z', bubbles: true, cancelable: true, ...flags });
+      node.dispatchEvent(event); return event.defaultPrevented;
+    }));
+    assert.deepEqual(untouched, [false, false, false], 'Redo and composing keys keep their native behavior');
+    assert.equal(await field.inputValue(), 'b2e2'); assert.equal(await undo.count(), 1);
     await dropFiles(page, [{ name: 'second.pgn', text: 'h2e2' }]);
     await page.waitForFunction(() => document.querySelector('.new-game-file-name')?.title === 'second.pgn');
-    await restore();
+    await restore('Meta+z', field);
     assert.equal(await field.inputValue(), 'b2e2');
     assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'first.pgn', 'Undo restores the previous filename too');
     await field.fill('b0c2');
@@ -143,7 +151,7 @@ async function checkDrops(browser, width) {
     assert.ok(!(await copy()).includes('Dropped record'), 'A binary drop must clear the previous record metadata');
     assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), library);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, file Undo, repeated loads, pending-read cancellation, draft-preserving rejection, focus and enlarged layout passed`);
+    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, file Undo, Ctrl/Cmd+Z, IME/redo ownership, pending-read cancellation, focus and enlarged layout passed`);
   } finally { await page.close(); }
 }
 
