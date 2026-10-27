@@ -69,11 +69,12 @@ export function keepTabWithin(container: HTMLElement | null, event: KeyboardEven
     const outsideTabOrder = !focusable.some(element => element === active);
     if (event.shiftKey && (outsideTabOrder || active === first)) {
         event.preventDefault();
-        // Let the dialog scroll to the destination, especially when its board
-        // and last control cannot both fit on a small screen.
+        // Focus can leave a control partly clipped in a scrolling dialog.
         last.focus();
+        last.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } else if (!event.shiftKey && (outsideTabOrder || active === last)) {
         event.preventDefault();
         first.focus();
+        first.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 }
