@@ -5824,6 +5824,27 @@ summary:active {
   .new-game-strength-btn-active[aria-pressed="true"] {
     border: 3px double Highlight;
   }
+
+  .analysis-tab-btn[aria-selected="true"] {
+    position: relative;
+  }
+
+  .analysis-tab-btn[aria-selected="true"]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 3px double Highlight;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .mobile-tab-btn[aria-selected="true"] {
+    border-bottom: 3px double Highlight;
+  }
+
+  .mobile-tab-bar-btn[aria-current="page"]::after {
+    background: Highlight;
+  }
 }
 
 .new-game-strength-btn:disabled {
