@@ -3059,6 +3059,7 @@ function App() {
   useEffect(() => () => { directImportGenerationRef.current++; directImportControllerRef.current?.abort(); }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
+  const [moveLineFileUndo, setMoveLineFileUndo] = useState<{ text: string; name: string } | null>(null);
   const [moveLineError, setMoveLineError] = useState<string | null>(null);
   const showMobilePgnAction =
     canExportCurrentLine ||
@@ -3141,6 +3142,7 @@ function App() {
   const toggleSettings = useCallback(() => {
     setShowMobileBoardActionMenu(false);
     setShowNewGameMenu(false);
+    setMoveLineFileUndo(null);
     clearFenError();
     setMoveLineError(null);
     setShowSettings((open) => !open);
@@ -3148,6 +3150,7 @@ function App() {
 
   const closeNewGameMenu = useCallback(() => {
     cancelDirectImport();
+    setMoveLineFileUndo(null);
     setShowNewGameMenu(false);
     setShowMobileBoardActionMenu(false);
     clearFenError();
@@ -3162,6 +3165,7 @@ function App() {
     setFenInput('');
     setMoveLineInput('');
     setMoveLineFileName('');
+    setMoveLineFileUndo(null);
     clearFenError();
     setMoveLineError(null);
     setShowNewGameMenu(true);
@@ -3387,6 +3391,7 @@ function App() {
   const readMoveLineFile = useCallback(async (file: File) => {
     cancelDirectImport();
     const generation = directImportGenerationRef.current;
+    const previous = { text: moveLineInput, name: moveLineFileName };
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
@@ -3419,6 +3424,7 @@ function App() {
       }
       setMoveLineInput(text);
       setMoveLineFileName(file.name);
+      if (text !== previous.text || file.name !== previous.name) setMoveLineFileUndo(previous);
       setMoveLineError(null);
     } catch (error) {
       if (generation !== directImportGenerationRef.current) return;
@@ -3426,7 +3432,24 @@ function App() {
       setDirectImportBusy(false);
       setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }
-  }, [handleImportXqf, cancelDirectImport]);
+  }, [handleImportXqf, cancelDirectImport, moveLineInput, moveLineFileName]);
+
+  const handleUndoMoveLineFile = useCallback(() => {
+    if (!moveLineFileUndo) return;
+    cancelDirectImport();
+    const generation = directImportGenerationRef.current;
+    setMoveLineInput(moveLineFileUndo.text);
+    setMoveLineFileName(moveLineFileUndo.name);
+    setMoveLineError(null);
+    setMoveLineFileUndo(null);
+    // The Undo button leaves the DOM. Reveal the restored text after layout,
+    // unless another edit or focused control has superseded this action.
+    requestAnimationFrame(() => {
+      if (generation !== directImportGenerationRef.current) return;
+      const input = document.getElementById('new-game-line-input');
+      if (document.activeElement === document.body || document.activeElement === input) input?.focus();
+    });
+  }, [cancelDirectImport, moveLineFileUndo]);
 
   const handleMoveLineFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -6403,6 +6426,7 @@ function App() {
                     cancelDirectImport();
                     const nextValue = e.target.value;
                     setMoveLineFileName('');
+                    setMoveLineFileUndo(null);
                     if (isMoveImportTextTooLarge(nextValue)) {
                       setMoveLineInput('');
                       setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
@@ -6438,6 +6462,7 @@ function App() {
                     data-testid="uci-line-file-input"
                   />
                   {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
+                  {moveLineFileUndo && <button type="button" className="new-game-file-btn" onClick={handleUndoMoveLineFile}>Undo file load</button>}
                 </div>
                 {directImportBusy && <p role="status">Checking the game… <button type="button" ref={directImportCancelRef} onClick={cancelDirectImport}>Cancel reading</button></p>}
                 <div className="new-game-line-actions">

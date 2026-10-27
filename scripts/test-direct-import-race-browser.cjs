@@ -53,6 +53,18 @@ async function checkDrops(browser, width) {
     await open();
     await page.evaluate(async () => { document.documentElement.style.fontSize = '32px'; await document.fonts.ready; });
     const field = page.getByTestId('uci-line-input');
+    const undo = page.getByRole('button', { name: 'Undo file load', exact: true });
+    const pick = async (name, text) => {
+      await page.getByTestId('uci-line-file-input').setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from(text) });
+      await page.waitForFunction(({ name, text }) => document.getElementById('new-game-line-input')?.value === text
+        && document.querySelector('.new-game-file-name')?.getAttribute('title') === name
+        && !document.querySelector('[data-testid="import-uci-line-btn"]:disabled'), { name, text });
+    };
+    const restore = async () => {
+      await undo.scrollIntoViewIfNeeded(); await undo.focus(); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.activeElement?.id === 'new-game-line-input');
+      assert.equal(await undo.count(), 0);
+    };
     await field.fill('b0c2');
     await dropFiles(page, [{ name: 'one.pgn', text: 'h2e2' }, { name: 'two.pgn', text: 'b2e2' }]);
     assert.match(await page.locator('#new-game-line-error').innerText(), /one game file/);
@@ -84,22 +96,54 @@ async function checkDrops(browser, width) {
       const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data });
       node.dispatchEvent(event); return event.defaultPrevented;
     }), false, 'Plain text drops keep the browser editing behavior');
+    await pick('preview.pgn', 'b2e2');
+    await pick('preview.pgn', 'b2e2');
+    await dropFiles(page, [{ name: 'rejected-empty.pgn', text: '' }]);
+    await page.getByRole('alert').filter({ hasText: 'The file is empty' }).waitFor();
+    await restore();
+    assert.equal(await field.inputValue(), 'b0c2', 'Repeated identical file reads must retain the original draft for Undo');
+    assert.equal(await page.locator('.new-game-file-name').count(), 0);
+    await pick('first.pgn', 'b2e2');
+    await dropFiles(page, [{ name: 'second.pgn', text: 'h2e2' }]);
+    await page.waitForFunction(() => document.querySelector('.new-game-file-name')?.title === 'second.pgn');
+    await restore();
+    assert.equal(await field.inputValue(), 'b2e2');
+    assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'first.pgn', 'Undo restores the previous filename too');
+    await field.fill('b0c2');
+    await pick('pending.pgn', 'b2e2');
+    await dropFiles(page, [{ name: 'slow.pgn', text: 'h2e2' }]);
+    await restore();
+    await page.evaluate(() => window.releaseSlowFile()); await page.waitForTimeout(100);
+    assert.equal(await field.inputValue(), 'b0c2', 'Undo cancels an in-flight replacement and ignores its late reply');
+    assert.equal(await page.getByRole('button', { name: 'Cancel reading', exact: true }).count(), 0);
     const source = '[Event "Dropped record"]\n1. b2e2 *';
+    await dropFiles(page, [{ name: 'record.pgn', text: source }]);
+    await page.waitForFunction(source => document.getElementById('new-game-line-input')?.value === source, source);
+    await restore(); assert.equal(await field.inputValue(), 'b0c2');
     await dropFiles(page, [{ name: 'record.pgn', text: source }]);
     await page.waitForFunction(source => document.getElementById('new-game-line-input')?.value === source, source);
     assert.equal(await field.evaluate(node => node === document.activeElement), true);
     assert.equal(await page.locator('.new-game-menu').evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
+    await undo.scrollIntoViewIfNeeded();
+    const undoBox = await undo.boundingBox();
+    assert.ok(undoBox.height >= 44 && undoBox.x >= 0 && undoBox.x + undoBox.width <= width, 'Undo must remain a readable touch target');
+    await page.locator('.new-game-file-row').screenshot({ path: `/tmp/xiangqi-file-undo-${browserType.name()}-${width}.png` });
     await field.screenshot({ path: `/tmp/xiangqi-file-drop-${browserType.name()}-${width}.png` });
     await page.getByTestId('import-uci-line-btn').click(); await field.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon.replace('1C2C4', '4C2C1'));
     assert.ok((await copy()).includes('[Event "Dropped record"]'));
-    await open(); await dropFiles(page, [{ name: 'position.xqf', bytes: xqfFile(), mimeType: 'application/octet-stream' }]);
+    await open();
+    assert.equal(await undo.count(), 0, 'A new dialog must not retain the previous file Undo');
+    await pick('edited.txt', 'b2e2');
+    await field.fill('h0g2');
+    assert.equal(await undo.count(), 0, 'Typing a new draft expires file Undo');
+    await dropFiles(page, [{ name: 'position.xqf', bytes: xqfFile(), mimeType: 'application/octet-stream' }]);
     await field.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon, 'A dropped XQF must load through the binary reader');
     assert.ok(!(await copy()).includes('Dropped record'), 'A binary drop must clear the previous record metadata');
     assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), library);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, draft-preserving empty/oversized rejection, read cancellation, focus, plain text and enlarged import layout passed`);
+    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, file Undo, repeated loads, pending-read cancellation, draft-preserving rejection, focus and enlarged layout passed`);
   } finally { await page.close(); }
 }
 
@@ -127,6 +171,8 @@ async function checkDrops(browser, width) {
     await page.evaluate(() => window.pendingFiles['old.pgn']());
     await page.waitForTimeout(100);
     assert.equal(await page.getByTestId('uci-line-input').inputValue(), 'b2e2');
+    await page.getByRole('button', { name: 'Undo file load', exact: true }).click();
+    assert.equal(await page.getByTestId('uci-line-input').inputValue(), '', 'Undo must also restore an empty original draft');
     await dropFiles(page, [{ name: 'closing.pgn', text: 'h2e2' }]);
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.pendingFiles['closing.pgn'](true));
