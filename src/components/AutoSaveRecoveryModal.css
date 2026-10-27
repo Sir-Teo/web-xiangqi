@@ -54,6 +54,32 @@
     margin-top: 0.3rem;
 }
 
+.auto-save-draft-picker {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.auto-save-draft-picker select {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md, 9px);
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.auto-save-draft-details {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
 .auto-save-btn {
     min-height: 36px;
     padding: 0.5rem 1.1rem;

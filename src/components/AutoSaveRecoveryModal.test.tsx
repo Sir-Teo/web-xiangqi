@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { AutoSaveRecoveryModal } from './AutoSaveRecoveryModal';
+import type { RecoveryDraft } from '../utils/autoSaveDrafts';
 
 /**
  * The dismiss button does two different things and used to have one name.
@@ -56,6 +57,25 @@ describe('the unfinished-game prompt', () => {
     it('keeps Restore first in the action order', () => {
         const html = render({ incomingLink: { moveCount: 5 } });
         expect(html.indexOf('Restore')).toBeLessThan(html.indexOf("Keep the link"));
+    });
+
+    it('identifies recovery choices using their saved names, events, players or openings', () => {
+        const drafts: RecoveryDraft[] = [
+            { label: 'My preparation', metadata: { event: 'Club final' } },
+            { metadata: { event: 'Club final', redPlayer: 'Alice', blackPlayer: '王' } },
+            { metadata: { redPlayer: 'Alice', blackPlayer: '王' } },
+            { opening: 'Central Cannon' }, {},
+        ].map((extra, index) => ({ version: 1, draftId: String(index), savedAt: 1,
+            game: { id: String(index), savedAt: 1, gameMode: 'PvP', moves: index === 0 ? ['h2e2'] : [], ...extra } }));
+        const html = render({ drafts, draftId: '2' });
+        expect(html).toContain('My preparation · 1 move ·');
+        expect(html).not.toContain('1 moves');
+        expect(html).toContain('Club final · 0 moves ·');
+        expect(html).toContain('Alice · 王 · 0 moves ·');
+        expect(html).toContain('Central Cannon · 0 moves ·');
+        expect(html).toContain('Unfinished study · 0 moves ·');
+        expect(html).toContain('aria-describedby="auto-save-draft-details"');
+        expect(html).toContain('id="auto-save-draft-details" class="auto-save-draft-details">Alice · 王</p>');
     });
 });
 
