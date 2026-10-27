@@ -143,8 +143,11 @@ async function exitPractice(page, buttonId, key) {
             }
           }
         }
-        await page.getByTestId('drill-next-btn').click();
+        await page.getByTestId('drill-next-btn').focus();
+        await page.keyboard.press(black ? 'Space' : 'Enter');
         assert.match(await banner.innerText(), /Done: 1 of 1 found/);
+        assert.equal(await page.getByTestId('drill-close-btn').evaluate(node => node === document.activeElement), true,
+          'Finishing practice must keep focus on Close');
         await exitPractice(page, 'drill-close-btn', black ? 'Space' : 'Enter');
         await command(page, 'Review panel');
         assert.equal(await moment.textContent(), originalMoment, 'Practice must preserve the original reviewed mistake');

@@ -7316,29 +7316,26 @@ function App() {
                     {drillCopy.detail ? <em>{drillCopy.detail}</em> : null}
                   </div>
                   <div className="drill-banner-actions">
-                    {drillVerdictKind === 'finished' ? (
-                      <button type="button" className="chip-btn chip-btn-primary" onClick={stopMistakeDrill} data-testid="drill-close-btn">Close</button>
-                    ) : (
-                      <>
-                        {drillVerdictKind === 'unavailable' && (
-                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillAnalysis} disabled={!canRetryDrillAnalysis} data-testid="drill-reanalyze-btn">Retry analysis</button>
-                        )}
-                        {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
-                          <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
-                        ) : null}
-                        {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
-                          <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className={`chip-btn ${drillVerdictKind === 'best' || drillVerdictKind === 'good' || drillVerdictKind === 'shown' ? 'chip-btn-primary' : ''}`}
-                          onClick={nextDrillMoment}
-                          data-testid="drill-next-btn"
-                        >
-                          {drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'unavailable' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
-                        </button>
-                        <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
-                      </>
+                    {drillVerdictKind === 'unavailable' && (
+                      <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillAnalysis} disabled={!canRetryDrillAnalysis} data-testid="drill-reanalyze-btn">Retry analysis</button>
+                    )}
+                    {(drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
+                      <button type="button" className="chip-btn chip-btn-primary" onClick={retryDrillMoment} data-testid="drill-retry-btn">Try again</button>
+                    ) : null}
+                    {(drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'wrong' || drillVerdictKind === 'repeat' || drillVerdictKind === 'unavailable') ? (
+                      <button type="button" className="chip-btn" onClick={showDrillAnswer} data-testid="drill-show-btn">Show answer</button>
+                    ) : null}
+                    {/* Preserve the primary action's focus when Finish becomes Close. */}
+                    <button
+                      type="button"
+                      className={`chip-btn ${drillVerdictKind === 'best' || drillVerdictKind === 'good' || drillVerdictKind === 'shown' || drillVerdictKind === 'finished' ? 'chip-btn-primary' : ''}`}
+                      onClick={drillVerdictKind === 'finished' ? stopMistakeDrill : nextDrillMoment}
+                      data-testid={drillVerdictKind === 'finished' ? 'drill-close-btn' : 'drill-next-btn'}
+                    >
+                      {drillVerdictKind === 'finished' ? 'Close' : drillVerdictKind === 'asking' || drillVerdictKind === 'pending' || drillVerdictKind === 'unavailable' ? 'Skip' : drillIsLast ? 'Finish' : 'Next'}
+                    </button>
+                    {drillVerdictKind !== 'finished' && (
+                      <button type="button" className="chip-btn" onClick={stopMistakeDrill} aria-label="Stop learning from mistakes" data-testid="drill-stop-btn">Stop</button>
                     )}
                   </div>
                 </div>
