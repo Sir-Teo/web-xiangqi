@@ -5343,14 +5343,6 @@ summary:active {
   color: var(--accent-hover);
 }
 
-/* System palettes flatten the selected and unselected fills to the same
-   colour. Keep the chosen setting visible through the border's shape too. */
-@media (forced-colors: active) {
-  .pill-btn-active {
-    border: 3px double Highlight;
-  }
-}
-
 @media (hover: hover) and (pointer: fine) {
   .pill-btn:hover {
   background: var(--accent-muted);
@@ -5815,6 +5807,16 @@ summary:active {
   font-weight: 600;
 }
 
+/* System palettes flatten the selected and unselected fills to the same
+   colour. Keep the chosen setting visible through the border's shape too. */
+@media (forced-colors: active) {
+  .pill-btn-active,
+  .new-game-mode-btn-active,
+  .new-game-strength-btn-active[aria-pressed="true"] {
+    border: 3px double Highlight;
+  }
+}
+
 .new-game-strength-btn:disabled {
   opacity: 0.42;
   cursor: not-allowed;
@@ -5917,7 +5919,8 @@ summary:active {
   font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 100%;
 }
 
 @media (hover: hover) and (pointer: fine) {
