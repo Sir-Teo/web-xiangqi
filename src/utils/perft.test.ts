@@ -45,11 +45,16 @@ function perft(state: BoardState, side: Side, depth: number): number {
         for (let file = 0; file < 9; file += 1) {
             const piece = state[rank][file];
             if (!piece || pieceSide(piece) !== side) continue;
-            for (const target of legalMovesFrom(state, file, rank, side)) {
+            const targets = legalMovesFrom(state, file, rank, side);
+            if (depth === 1) {
+                total += targets.length;
+                continue;
+            }
+            for (const target of targets) {
                 const next = cloneBoardState(state);
                 next[target.rank][target.file] = piece;
                 next[rank][file] = '';
-                total += depth === 1 ? 1 : perft(next, otherSide(side), depth - 1);
+                total += perft(next, otherSide(side), depth - 1);
             }
         }
     }
