@@ -639,3 +639,12 @@ describe('a record that annotates its moves', () => {
         expect(parsed.moves).not.toContain('b0c2');
     });
 });
+
+it('skips short fragments without losing four-character coordinate, WXF or Chinese moves', () => {
+    const noise = 'a,1,?,C2,炮二,前車,'.repeat(1000);
+    for (const record of ['h2e2 h9g7', 'C2=5 H8+7', '炮二平五 馬８進７']) {
+        const parsed = parseNotationRecord(undefined, noise + record);
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7']);
+        expect(parsed.rejected).toEqual([]);
+    }
+});

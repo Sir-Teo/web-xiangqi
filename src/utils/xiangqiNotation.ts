@@ -602,11 +602,10 @@ export function parseMoveLineInNotation(
     for (const token of String(text ?? '').split(/[\s,;]+/)) {
         if (moves.length >= maxMoves) break;
 
-        // An empty token is a leading or doubled separator, not the end of the
-        // record. Breaking on it meant a record that began with a newline --
-        // which is every record with a header stripped off the front -- parsed
-        // as no moves at all.
-        if (!token) continue;
+        // Every coordinate, WXF and Chinese move needs at least four
+        // characters. Skip separators and shorter decoration before spending
+        // normalization work on each fragment of an unrelated paste.
+        if (token.length < 4) continue;
         // Classify once. Non-move text needs no board search, and an illegal
         // move is already classified when deciding where to stop the record.
         const parsed = readNotationToken(token);

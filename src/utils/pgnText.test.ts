@@ -73,3 +73,17 @@ describe('extractUciMoveTree', () => {
         expect(truncated.hadMoreGames).toBe(true);
     });
 });
+
+it('keeps ordinary records and script-like text without inventing a game boundary', () => {
+    for (const text of ['h2e2 h9g7', 'function f(){return[1,2,3]}'.repeat(100), '{Leading note} 炮二平五']) {
+        expect(firstPgnGame(text)).toEqual({ text, truncated: false });
+    }
+});
+
+it('still recognizes spaced tag names and every result marker after movetext', () => {
+    expect(firstPgnGame('h2e2 [  Event "Next"] h9g7').text).toBe('h2e2 ');
+    for (const marker of ['1-0', '0-1', '1/2-1/2', '*']) {
+        const text = `h2e2 ${marker} h9g7`;
+        expect(firstPgnGame(text)).toEqual({ text: `h2e2 ${marker} `, truncated: true, marker });
+    }
+});

@@ -206,10 +206,11 @@ export function* pgnMetadataSpans(source: string): Generator<PgnMetadataSpan> {
 
 /** A leading/interleaved header comment is not the start of the movetext. */
 export function firstPgnGame(source: string): { text: string; truncated: boolean; marker?: string } {
-    // Tags require an ASCII letter, and every result contains `1` or `*`.
-    // Without any of these, there can be no game boundary to tokenize. This
-    // avoids allocating a token for every empty remark or punctuation fragment.
-    if (!/[A-Za-z1*]/.test(source)) return { text: source, truncated: false };
+    // A second game needs a tag pair or a result marker. If neither can
+    // occur, keep the text without allocating tokens for every word, bracket
+    // and comment in an unrelated paste. Matches inside comments are harmless:
+    // they take the ordinary tokenizer path, which knows what to ignore.
+    if (!/\[\s*[A-Za-z]|1-0|0-1|1\/2-1\/2|\*/.test(source)) return { text: source, truncated: false };
     let depth = 0;
     let seenMoves = false;
     let marker: string | undefined;

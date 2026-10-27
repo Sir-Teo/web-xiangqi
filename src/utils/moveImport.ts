@@ -7,7 +7,7 @@ import { parseEvalCommand, parsePgnMoveQuality } from './pgnEvaluation';
 import { appendPgnGlyph } from './moveGlyphs';
 import { readStudyAnalysisPgn } from './studyAnalysis';
 import type { SavedMoveTreeNode } from './gameLibrary';
-import { normalizeMoveComment } from './moveComment';
+import { MAX_MOVE_COMMENT_LENGTH, normalizeMoveComment } from './moveComment';
 
 export const MAX_MOVE_IMPORT_TEXT_LENGTH = 200_000;
 export const MAX_MOVE_IMPORT_UCI_MOVES = MAX_STUDY_LINE_MOVES;
@@ -134,6 +134,36 @@ function* uciTreeTokens(source: string): Generator<{ comment: string } | { match
     for (const match of source.slice(cursor).matchAll(UCI_ANNOTATED_TREE_TOKEN_PATTERN)) yield { match };
 }
 
+/** Later prose cannot alter a full normalized prefix. A truncated trailing
+ * space still needs the ordinary merge, which can trim it away. */
+function hasFullComment(comment: string | undefined): boolean {
+    return comment?.length === MAX_MOVE_COMMENT_LENGTH && !comment.endsWith(' ');
+}
+
+/** With no coordinate squares, only top-level notes and results can survive.
+ * Track parentheses between metadata spans without allocating move tokens or
+ * variation paths for every fragment of an unrelated paste. */
+function readRootOnlyMetadata(source: string): { rootComment?: string; rootResult?: RecordedResult } {
+    let depth = 0;
+    let cursor = 0;
+    let rootComment: string | undefined;
+    let rootResult: RecordedResult | undefined;
+    for (const span of pgnMetadataSpans(source)) {
+        for (let index = cursor; index < span.start; index++) {
+            if (source[index] === '(') depth++;
+            else if (source[index] === ')') depth = Math.max(0, depth - 1);
+        }
+        cursor = span.end;
+        if (depth || !span.comment?.trim()) continue;
+        rootResult = readRecordedResultPgn(span.comment) ?? rootResult;
+        if (!hasFullComment(rootComment)) {
+            const note = parseFreeTextComment(span.comment);
+            rootComment = normalizeMoveComment([rootComment, note].filter(Boolean).join(' '));
+        }
+    }
+    return { ...(rootComment ? { rootComment } : {}), ...(rootResult ? { rootResult } : {}) };
+}
+
 export function extractUciMoveTree(text: string): {
     rootResult?: RecordedResult;
     rootComment?: string;
@@ -145,6 +175,10 @@ export function extractUciMoveTree(text: string): {
     hadMoreGames: boolean;
 } {
     const firstGame = firstGameOnly(text);
+    if (!UCI_SQUARE_PATTERN.test(firstGame.text)) {
+        return { moves: [], moveTree: [], hasVariations: false, tooLarge: false,
+            hadMoreGames: firstGame.truncated, ...readRootOnlyMetadata(firstGame.text) };
+    }
     const root: SavedMoveTreeNode[] = [];
     const stack: SavedMoveTreeNode[][] = [];
     let currentLine: SavedMoveTreeNode[] = [];
@@ -159,8 +193,10 @@ export function extractUciMoveTree(text: string): {
             if (!commentTarget) {
                 if (nodeCount === 0 && stack.length === 0) {
                     rootResult = readRecordedResultPgn(entry.comment) ?? rootResult;
-                    const note = parseFreeTextComment(entry.comment);
-                    rootComment = normalizeMoveComment([rootComment, note].filter(Boolean).join(' '));
+                    if (!hasFullComment(rootComment)) {
+                        const note = parseFreeTextComment(entry.comment);
+                        rootComment = normalizeMoveComment([rootComment, note].filter(Boolean).join(' '));
+                    }
                 }
                 continue;
             }
@@ -174,8 +210,10 @@ export function extractUciMoveTree(text: string): {
                 commentTarget.evalDepth = evaluation.evalDepth;
                 commentTarget.evalScoreKind = evaluation.evalScoreKind;
             }
-            const note = parseFreeTextComment(entry.comment);
-            if (note) commentTarget.comment = normalizeMoveComment([commentTarget.comment, note].filter(Boolean).join(' '));
+            if (!hasFullComment(commentTarget.comment)) {
+                const note = parseFreeTextComment(entry.comment);
+                if (note) commentTarget.comment = normalizeMoveComment([commentTarget.comment, note].filter(Boolean).join(' '));
+            }
             continue;
         }
         const match = entry.match;

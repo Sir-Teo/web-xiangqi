@@ -260,3 +260,39 @@ describe('a paste with unbalanced brackets keeps its moves', () => {
         expect(line('(')).toEqual([]);
     });
 });
+
+describe('comments after the retained prose limit', () => {
+    it('keeps a later root result even when leading prose is full', () => {
+        const full = 'x'.repeat(500);
+        const parsed = extractUciMoveTree(`{${full}} {Later prose} {[%xqresult 1-0]} h2e2 *`);
+        expect(parsed.rootComment).toBe(full);
+        expect(parsed.rootResult).toBe('red-wins');
+        expect(parsed.moves).toEqual(['h2e2']);
+    });
+
+    it('keeps later evaluations and results on a move with a full note', () => {
+        const full = 'x'.repeat(500);
+        const parsed = extractUciMoveTree(`h2e2 {${full}} {Later prose} {[%eval -.42,18] [%xqresult 0-1]} h9g7 *`);
+        expect(parsed.moveTree[0]).toMatchObject({
+            comment: full, evalScore: -42, evalDepth: 18, recordedResult: 'black-wins',
+        });
+        expect(parsed.moves).toEqual(['h2e2', 'h9g7']);
+    });
+
+    it('preserves merging at a truncated space or Unicode boundary', () => {
+        const prefix = 'x'.repeat(499);
+        expect(extractUciMoveTree(`{${prefix} y} {[%eval .1]} h2e2 *`).rootComment).toBe(prefix);
+        expect(extractUciMoveTree(`{${prefix} y} {z} h2e2 *`).rootComment).toBe(prefix + ' ');
+        expect(extractUciMoveTree(`{${prefix}🐎} {z} h2e2 *`).rootComment).toBe(prefix + ' ');
+    });
+});
+
+it('reads root-only metadata with the same variation and escape rules as a coordinate record', () => {
+    for (const header of ['', '[Event "h0"]\n']) {
+        const parsed = extractUciMoveTree(header + '{Root} ({Hidden [%xqresult 0-1]}) ) {End} {[%xqresult 1-0]}\n% ignored\n; Last note\r*');
+        expect(parsed).toMatchObject({
+            moves: [], moveTree: [], hasVariations: false, tooLarge: false,
+            rootComment: 'Root End Last note', rootResult: 'red-wins',
+        });
+    }
+});

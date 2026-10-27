@@ -51,6 +51,18 @@ function* tokens(text: string): Generator<Token> {
     }
 }
 
+/** Count only enough normalized prose to decide refusal, without building a
+ * multi-megabyte replacement string for a note that cannot be accepted. */
+function exceedsPlainCommentLimit(previous: string | undefined, text: string): boolean {
+    let length = previous?.length ?? 0;
+    for (const word of text.matchAll(/\S+/g)) {
+        if (length) length++;
+        length += word[0].length;
+        if (length > MAX_MOVE_COMMENT_LENGTH) return true;
+    }
+    return false;
+}
+
 type Cursor = { board: BoardState; side: Side; children: SavedMoveTreeNode[]; ply: number; node?: SavedMoveTreeNode; parent?: Cursor };
 function parseGame(input: Token[]): CollectionGame {
     let seenMovetext = false;
@@ -104,6 +116,13 @@ function parseGame(input: Token[]): CollectionGame {
         // variation on ply 1 -- did the refusal below fire, so one file
         // behaved two ways depending on how deep its variations were.
         if (awaitingVariationMove) throw new Error('Attach a variation note to its first move.');
+        // Without a closing bracket, every command is unfinished and remains
+        // prose. Refuse an overlong note before scanning or decoding commands.
+        if (text.length > MAX_MOVE_COMMENT_LENGTH && !text.includes(']')
+            && (cursor.node || nodes === 0)
+            && exceedsPlainCommentLimit(cursor.node ? cursor.node.comment : rootComment, text)) {
+            throw new Error(`A ${cursor.node ? 'move' : 'starting-position'} note exceeds ${MAX_MOVE_COMMENT_LENGTH} characters.`);
+        }
         const recordedResult = readRecordedResultPgn(text);
         const withoutResult = stripDelimited(text, '[%xqresult ', ']', '');
         if (!cursor.node) {
