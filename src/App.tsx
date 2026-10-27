@@ -5142,9 +5142,13 @@ function App() {
   // fixed corner.
   const focusBoard = useCallback(() => {
     if (typeof document === 'undefined') return;
-    const target = document.querySelector<HTMLElement>('.xiangqi-board [tabindex="0"]')
-      ?? document.querySelector<HTMLElement>('.xiangqi-board [data-file][data-rank]');
-    target?.focus();
+    setMobileView('board');
+    // Focus only after the mobile board has returned to the layout.
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>('.xiangqi-board [tabindex="0"]')
+        ?? document.querySelector<HTMLElement>('.xiangqi-board [data-file][data-rank]');
+      target?.focus();
+    });
   }, []);
 
   const incomingLink = useMemo(() => {

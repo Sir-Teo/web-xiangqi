@@ -1,6 +1,42 @@
 const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
+async function skipToBoard(browser) {
+  for (const [width, height] of [[390, 844], [1440, 900], [320, 480], [844, 390]]) {
+    const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 900, reducedMotion: 'reduce' });
+    try {
+      await page.goto(base + '?moves=h2e2,h9g7');
+      await page.waitForFunction(() => / w - - 2 2$/.test(document.querySelector('.bottombar-fen')?.title || ''));
+      const initialFen = await page.locator('.bottombar-fen').getAttribute('title');
+      const square = page.locator('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]');
+      const target = await square.elementHandle();
+      for (const size of [16, 32]) {
+        await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+        for (const key of ['Enter', 'Space']) {
+          await square.focus();
+          if (width < 900) {
+            await page.getByTestId('mobile-view-analysis').click();
+            assert.equal(await page.locator('.app-shell').getAttribute('data-mobile-view'), 'analysis');
+          } else {
+            await page.locator('[role=tablist][aria-label="Analysis panels"] [role=tab]').nth(1).click();
+          }
+          await page.getByRole('button', { name: 'Skip to board', exact: true }).focus();
+          await page.keyboard.press(key);
+          await page.waitForFunction(node => node === document.activeElement, target, { timeout: 3000 });
+          if (width < 900) assert.equal(await page.locator('.app-shell').getAttribute('data-mobile-view'), 'board');
+          const reachable = await square.evaluate(node => {
+            const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+          });
+          assert.equal(reachable, true, `${width}x${height}/${size}px/${key}: skipped-to square must be visible`);
+          assert.equal(await square.getAttribute('tabindex'), '0');
+          assert.doesNotMatch(await square.getAttribute('aria-label'), /\bselected\b/, 'Skipping must focus the piece without picking it up');
+          assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), initialFen, 'Skipping must preserve the position');
+        }
+      }
+      console.log(`${browserType.name()} ${width}x${height}: Enter/Space skip to the last board square at 100/200% text without selecting a piece or changing the game`);
+    } finally { await page.close(); }
+  }
+}
 (async () => {
   const browser = await browserType.launch();
   try {
@@ -87,6 +123,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
     await page.keyboard.up('ArrowLeft');
     assert.match(await page.locator('.wc-meta').innerText(), /START\s*\/\s*2/);
     await page.close();
+    await skipToBoard(browser);
     console.log('PASS: modified/composing/claimed keys preserve widget focus, panels and position; ordinary widget navigation and held actions still work');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
