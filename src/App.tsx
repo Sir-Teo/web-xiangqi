@@ -6428,13 +6428,12 @@ function App() {
                   onChange={(e) => {
                     cancelDirectImport();
                     const nextValue = e.target.value;
-                    setMoveLineFileName('');
-                    setMoveLineFileUndo(null);
                     if (isMoveImportTextTooLarge(nextValue)) {
-                      setMoveLineInput('');
                       setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
                       return;
                     }
+                    setMoveLineFileName('');
+                    setMoveLineFileUndo(null);
                     setMoveLineInput(nextValue);
                     setMoveLineError(null);
                   }}

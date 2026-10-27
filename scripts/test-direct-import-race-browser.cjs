@@ -67,6 +67,9 @@ async function checkDrops(browser, width) {
       assert.equal(await undo.count(), 0);
     };
     await field.fill('b0c2');
+    await field.fill('x'.repeat(200001));
+    await page.getByRole('alert').filter({ hasText: 'Move line is too large' }).waitFor();
+    assert.equal(await field.inputValue(), 'b0c2', 'Oversized text edits must preserve the typed draft');
     await dropFiles(page, [{ name: 'one.pgn', text: 'h2e2' }, { name: 'two.pgn', text: 'b2e2' }]);
     assert.match(await page.locator('#new-game-line-error').innerText(), /one game file/);
     assert.equal(await field.inputValue(), 'b0c2', 'Rejected drops must preserve the current draft');
@@ -118,6 +121,13 @@ async function checkDrops(browser, width) {
     assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'preview.pgn', 'Rejected binary files must not rename the text preview');
     assert.equal(await undo.count(), 1);
     assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon);
+    for (const text of ['x'.repeat(200001), 'y'.repeat(200002)]) {
+      await field.fill(text);
+      await page.getByRole('alert').filter({ hasText: 'Move line is too large' }).waitFor();
+      assert.equal(await field.inputValue(), 'b2e2', 'Repeated oversized edits must preserve the preview');
+      assert.equal(await page.locator('.new-game-file-name').getAttribute('title'), 'preview.pgn');
+      assert.equal(await undo.count(), 1, 'Rejected text edits preserve file Undo');
+    }
     await restore('Control+z', page.getByTestId('load-uci-file-btn'));
     assert.equal(await field.inputValue(), 'b0c2', 'Repeated identical file reads must retain the original draft for Undo');
     assert.equal(await page.locator('.new-game-file-name').count(), 0);
