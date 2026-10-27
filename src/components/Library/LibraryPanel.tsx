@@ -619,6 +619,11 @@ export function LibraryPanel({
           // keeps a pasted record out of React state as well.
           maxLength={MAX_SEARCH_QUERY_LENGTH}
         />
+        {search && <button type="button" className="chip-btn lib-search-clear"
+          aria-label="Clear library search" title="Clear search"
+          onClick={() => { setSearch(''); searchRef.current?.focus(); }}>
+          <IconX width="1rem" height="1rem" />
+        </button>}
       </div>
       <div className="lib-filter-row">
         <select

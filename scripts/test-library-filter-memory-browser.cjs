@@ -66,6 +66,20 @@ const games = [
         await search.press('Escape');
         assert.deepEqual(await values(), { ...selected, search: '' }, 'Escape clears the query while preserving filters and sorting');
         assert.equal(await search.evaluate(node => node === document.activeElement), true, 'Clearing the query keeps search focus');
+        for (const activation of ['pointer', 'keyboard']) {
+          await search.fill(selected.search);
+          await page.getByTestId('library-search-status').filter({ hasText: /^2 saved games\./ }).waitFor();
+          const clear = page.getByRole('button', { name: 'Clear library search', exact: true });
+          const target = await clear.boundingBox();
+          assert.ok(target.width >= 44 && target.height >= 44, 'Clear search needs a touch target');
+          if (activation === 'pointer') await clear.click();
+          else { await clear.focus(); await page.keyboard.press('Enter'); }
+          assert.deepEqual(await values(), { ...selected, search: '' }, `${activation}: Clear must preserve filters and sorting`);
+          assert.equal(await search.evaluate(node => node === document.activeElement), true, 'Clear must return focus to the search field');
+          assert.equal(await clear.count(), 0, 'The clear action must disappear with the empty query');
+          await page.getByTestId('library-search-status').filter({ hasText: /^3 saved games\./ }).waitFor();
+          assert.deepEqual(await visibleIds(), ['alpha', 'beta', 'other']);
+        }
         await search.fill(selected.search);
         const reset = page.getByRole('button', { name: 'Reset', exact: true });
         await reset.focus(); await reset.press('Enter');

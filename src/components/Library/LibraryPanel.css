@@ -6,8 +6,19 @@
 
 /* ── Search ── */
 .lib-search-wrap {
+  display: flex;
+  gap: 0.35rem;
   padding-bottom: 0.4rem;
   flex-shrink: 0;
+}
+
+.lib-search-wrap .lib-search-clear {
+  flex: 0 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
 }
 
 .lib-filter-row {
@@ -85,6 +96,8 @@
 }
 
 .lib-search {
+  min-width: 0;
+  flex: 1;
   width: 100%;
   box-sizing: border-box;
   background: var(--bg-subtle, rgba(255,255,255,0.06));
@@ -98,6 +111,10 @@
 
 .lib-search:focus {
   border-color: var(--accent, #10b981);
+}
+
+.lib-search::-webkit-search-cancel-button {
+  display: none;
 }
 
 .lib-filter-select {
