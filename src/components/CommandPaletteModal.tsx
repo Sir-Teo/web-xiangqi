@@ -101,7 +101,7 @@ export function CommandPaletteModal({ open, commands, onClose }: CommandPaletteM
     };
 
     const onKeyDown = (event: React.KeyboardEvent) => {
-        if (isComposingKey(event.nativeEvent)) return;
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
         if (event.key === 'Escape') {
             event.preventDefault();
             onClose();

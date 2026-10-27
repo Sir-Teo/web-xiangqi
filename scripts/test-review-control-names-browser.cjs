@@ -5,12 +5,14 @@ const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const moves = ['h2e2', 'h9g7', 'b0c2', 'b9c7', 'a0b0', 'a9b9'];
 const fixture = { id: 'review-voice', savedAt: 1, gameMode: 'PvP', moves, label: 'Voice review',
   review: { summary: { totalMoves: 6, accuracy: 80, redAccuracy: 70, blackAccuracy: 90, averageCentipawnLoss: 40,
-    bestCount: 5, goodCount: 0, inaccuracyCount: 0, mistakeCount: 1, blunderCount: 0, reviewedAt: 1,
+    bestCount: 4, goodCount: 0, inaccuracyCount: 0, mistakeCount: 2, blunderCount: 0, reviewedAt: 1,
     lineSignature: moves.join(' '), keyMoments: [{ nodeId: 'n3', moveIndex: 2, jumpTarget: 2, ply: 3, side: 'red', quality: 'mistake',
-      swing: 240, winPercentLoss: 20.7, evalBefore: 0, evalAfter: -240, bestMove: 'h0g2', playedMove: 'b0c2', note: 'Missed a stronger continuation.' }] },
-    annotations: moves.map((_, moveIndex) => ({ moveIndex, evalScore: moveIndex >= 2 ? -240 : 0, quality: moveIndex === 2 ? 'mistake' : 'best',
-      swing: moveIndex === 2 ? 240 : 0, winPercentLoss: moveIndex === 2 ? 20.7 : 0,
-      ...(moveIndex === 2 ? { bestMove: 'h0g2', reviewNote: 'Missed a stronger continuation.' } : {}) })) } };
+      swing: 240, winPercentLoss: 20.7, evalBefore: 0, evalAfter: -240, bestMove: 'h0g2', playedMove: 'b0c2', note: 'Missed a stronger continuation.' },
+      { nodeId: 'n5', moveIndex: 4, jumpTarget: 4, ply: 5, side: 'red', quality: 'mistake',
+        swing: 240, winPercentLoss: 20.7, evalBefore: -240, evalAfter: -480, bestMove: 'h0g2', playedMove: 'a0b0', note: 'Missed a stronger continuation.' }] },
+    annotations: moves.map((_, moveIndex) => ({ moveIndex, evalScore: moveIndex >= 4 ? -480 : moveIndex >= 2 ? -240 : 0, quality: [2, 4].includes(moveIndex) ? 'mistake' : 'best',
+      swing: [2, 4].includes(moveIndex) ? 240 : 0, winPercentLoss: [2, 4].includes(moveIndex) ? 20.7 : 0,
+      ...([2, 4].includes(moveIndex) ? { bestMove: 'h0g2', reviewNote: 'Missed a stronger continuation.' } : {}) })) } };
 async function command(page, name) {
   await page.keyboard.press('ControlOrMeta+k');
   const input = page.getByRole('combobox', { name: 'Search commands' });
@@ -50,6 +52,24 @@ async function namedByCaption(scope, testId) {
         await page.waitForFunction(() => document.querySelector('.top-engine-state')?.textContent.includes('Engine ready'));
         await command(page, 'Review panel');
         const savedBeforePractice = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
+        const moments = page.locator('.review-moment-card');
+        assert.equal(await moments.count(), 2, 'Both reviewed mistakes must remain available');
+        const currentFen = await page.locator('.bottombar-fen').getAttribute('title');
+        for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+          await moments.last().focus();
+          const state = await moments.last().evaluate((node, flags) => {
+            const event = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true, ...flags });
+            if (flags.prePrevented) event.preventDefault();
+            node.dispatchEvent(event);
+            return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+          }, flags);
+          assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Home must preserve review focus: ${JSON.stringify(flags)}`);
+        }
+        await page.keyboard.press('Home');
+        assert.equal(await moments.first().evaluate(node => node === document.activeElement), true);
+        await page.keyboard.press('ArrowDown');
+        assert.equal(await moments.last().evaluate(node => node === document.activeElement), true);
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), currentFen, 'Roving review focus must preserve the board');
         for (const notation of ['wxf', 'chinese', 'uci']) {
           if (notation !== 'wxf') await command(page, notation === 'chinese' ? 'Write moves in Chinese (中文)' : 'Write moves in coordinates (UCI)');
           const moment = page.getByTestId('review-moment-2');

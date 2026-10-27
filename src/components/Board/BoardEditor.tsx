@@ -212,6 +212,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
     }, [paint]);
 
     const handleSquareKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, file: number, rank: number) => {
+        if (event.defaultPrevented || isComposingKey(event.nativeEvent)) return;
         if (event.altKey || event.metaKey || (event.ctrlKey && event.key !== 'Home' && event.key !== 'End')) return;
         let nextFile = file;
         let nextRank = rank;

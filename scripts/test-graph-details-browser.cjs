@@ -47,6 +47,20 @@ async function command(page, label) {
         await command(page, 'Evaluation graph');
         const navigator = page.getByRole('slider', { name: 'Evaluation graph move navigator' });
         await navigator.waitFor();
+        await navigator.focus();
+        const initialPly = await navigator.getAttribute('aria-valuenow');
+        const initialFen = await page.locator('.bottombar-fen').getAttribute('title');
+        for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+          const state = await navigator.evaluate((node, flags) => {
+            const event = new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true, ...flags });
+            if (flags.prePrevented) event.preventDefault();
+            node.dispatchEvent(event);
+            return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+          }, flags);
+          assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/composing/claimed Left must preserve graph focus: ${JSON.stringify(flags)}`);
+          assert.equal(await navigator.getAttribute('aria-valuenow'), initialPly);
+          assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), initialFen, 'Browser shortcuts must preserve the game position');
+        }
         // Keep pointer hover from replacing the keyboard-selected tooltip as
         // the plot moves during text resizing and scrolling.
         await page.mouse.move(width - 1, height - 1);

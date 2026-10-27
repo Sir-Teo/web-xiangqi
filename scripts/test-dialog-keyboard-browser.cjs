@@ -68,6 +68,25 @@ async function compositionKeyboard(browser, viewport) {
     assert.equal(await help.innerText(), 'Play a move or set up a position first');
     await input.fill('no matching command zzz');
     assert.match(await help.innerText(), /Try fewer words/);
+    await input.fill('panel');
+    await page.locator('.command-palette-button').first().waitFor();
+    assert.ok(await page.locator('.command-palette-button').count() > 1);
+    await page.keyboard.press('End');
+    const selectedCommand = await input.getAttribute('aria-activedescendant');
+    for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { prePrevented: true }]) {
+      const state = await input.evaluate((node, flags) => {
+        const event = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true, ...flags });
+        if (flags.prePrevented) event.preventDefault();
+        node.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === node };
+      }, flags);
+      assert.deepEqual(state, { prevented: !!flags.prePrevented, retained: true }, `Modified/claimed Home must preserve palette focus: ${JSON.stringify(flags)}`);
+      assert.equal(await input.getAttribute('aria-activedescendant'), selectedCommand);
+    }
+    await input.evaluate(node => node.setSelectionRange(node.value.length, node.value.length));
+    await page.keyboard.press('Control+Home');
+    assert.equal(await input.evaluate(node => node.selectionStart), 0, 'Ctrl+Home must retain native text editing');
+    assert.equal(await input.getAttribute('aria-activedescendant'), selectedCommand, 'Moving the text caret must preserve the selected command');
     await input.fill('Settings');
     // Synthetic native key events exercise both the standard IME flag and
     // WebKit's composition-ending event, whose flag may already be false.
