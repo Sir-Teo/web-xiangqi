@@ -7450,7 +7450,7 @@ function App() {
         {isMobile && mobileView === 'analysis' && (
           <AnalysisBoardContext board={board} orientation={orientation} pieceStyle={pieceStyle}
             positionLabel={`${sideToMove === 'w' ? 'Red' : 'Black'} to move · ${timelineCompactText}`}
-            onReturn={() => setMobileView('board')} />
+            onReturn={focusBoard} />
         )}
 
         {/* ── Mobile analysis sub-tab strip (analysis view only) ── */}
