@@ -17,7 +17,7 @@
     "verify": "npm run typecheck && npm run lint && npm test && npm run test:openings && npm run test:library && npm run test:build:publication && npm run test:engine:contract && npm run test:smoke && npm run test:parity && npm run build:react && npm run test:server:headers",
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:parser-limits",
-    "test:unit": "vitest run --project unit",
+    "test:unit": "vitest run --project unit && vitest run --project unit-heavy",
     "test:parser-limits": "vitest run --project parser-limits",
     "build": "bash scripts/build-pikafish.sh",
     "test:engine:contract": "node scripts/test-engine-contract.cjs",

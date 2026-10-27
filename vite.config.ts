@@ -15,6 +15,14 @@ const parserTimingTests = [
   'src/utils/moveImport.performance.test.ts',
 ]
 
+const cpuHeavyUnitTests = [
+  'src/utils/perft.test.ts',
+  'src/utils/attackConsistency.test.ts',
+  'src/utils/notationRecordRoundTrip.test.ts',
+  'src/utils/pgnCollection.test.ts',
+  'src/utils/savedMoveTree.test.ts',
+]
+
 function installIsolationHeaders(server: Pick<ViteDevServer, 'middlewares'>) {
   // Vite's static/transform handlers can return 304 before applying their
   // configured headers. WebKit rejects cached workers without COEP on that
@@ -50,16 +58,26 @@ export default defineConfig({
     // (a cached toolchain has no test/ directory), which is why it only
     // appeared once the workflow ran end to end.
     exclude: [...configDefaults.exclude, '**/.deps/**'],
-    // npm test runs these groups in separate Vitest processes: parser timing
-    // checks get fresh workers and heaps after the parallel unit suite exits.
+    // npm test runs broad units, CPU-heavy correctness, and parser timing in
+    // separate processes. Heavy suites get fresh workers and heaps after the
+    // parallel suite exits, retaining their existing wall-clock budgets.
     // Keep their ordering for direct `vitest run` invocations too.
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
-          exclude: [...configDefaults.exclude, '**/.deps/**', ...parserTimingTests],
+          exclude: [...configDefaults.exclude, '**/.deps/**', ...parserTimingTests, ...cpuHeavyUnitTests],
           sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'unit-heavy',
+          include: cpuHeavyUnitTests,
+          fileParallelism: false,
+          sequence: { groupOrder: 1 },
         },
       },
       {
@@ -68,7 +86,7 @@ export default defineConfig({
           name: 'parser-limits',
           include: parserTimingTests,
           fileParallelism: false,
-          sequence: { groupOrder: 1 },
+          sequence: { groupOrder: 2 },
         },
       },
     ],
