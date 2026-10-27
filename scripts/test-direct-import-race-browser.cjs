@@ -59,12 +59,24 @@ async function checkDrops(browser, width) {
     assert.equal(await field.inputValue(), 'b0c2', 'Rejected drops must preserve the current draft');
     await dropFiles(page, [{ name: 'large.pgn', text: 'x'.repeat(200001) }]);
     assert.match(await page.locator('#new-game-line-error').innerText(), /too large/);
+    assert.equal(await field.inputValue(), 'b0c2', 'Oversized files must preserve the current draft');
     assert.equal(await page.evaluate(() => window.readFiles.includes('large.pgn') || window.readFiles.includes('one.pgn')), false, 'Rejected files must not be read');
+    for (const [name, text] of [['empty.pgn', ''], ['whitespace.pgn', ' \n\t '], ['bom.pgn', '\uFEFF']]) {
+      for (const method of ['picker', 'drop']) {
+        if (method === 'picker') await page.getByTestId('uci-line-file-input').setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from(text) });
+        else await dropFiles(page, [{ name, text }]);
+        await page.waitForFunction(() => /empty/i.test(document.getElementById('new-game-line-error')?.textContent || '') && !document.querySelector('.new-game-line-actions button:disabled'));
+        assert.equal(await field.inputValue(), 'b0c2', `${method}: ${name} must preserve the current draft`);
+        assert.equal(await field.getAttribute('aria-invalid'), 'true');
+        assert.equal(await page.locator('.new-game-file-name').count(), 0);
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon);
+      }
+    }
     await dropFiles(page, [{ name: 'slow.pgn', text: 'h2e2' }]);
     await page.getByRole('button', { name: 'Cancel reading', exact: true }).click();
     assert.equal(await field.evaluate(node => node === document.activeElement), true, 'Canceling a dropped file must restore the move box');
     await page.evaluate(() => window.releaseSlowFile()); await page.waitForTimeout(100);
-    assert.equal(await field.inputValue(), '');
+    assert.equal(await field.inputValue(), 'b0c2');
     assert.equal(await page.locator('#new-game-line-error').count(), 0);
     assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), redCannon);
     assert.equal(await field.evaluate(node => {
@@ -87,7 +99,7 @@ async function checkDrops(browser, width) {
     assert.ok(!(await copy()).includes('Dropped record'), 'A binary drop must clear the previous record metadata');
     assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), library);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, read cancellation, focus, multiple/oversized rejection, plain text and enlarged import layout passed`);
+    console.log(`${browserType.name()} ${width}px: PGN/XQF drops, draft-preserving empty/oversized rejection, read cancellation, focus, plain text and enlarged import layout passed`);
   } finally { await page.close(); }
 }
 

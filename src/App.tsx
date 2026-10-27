@@ -3383,7 +3383,6 @@ function App() {
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
       setMoveLineFileName('');
-      setMoveLineInput('');
       setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
       return;
     }
@@ -3405,8 +3404,8 @@ function App() {
       }
       if (response.kind !== 'text') return;
       const text = response.text;
+      if (!text.trim()) throw new Error('The file is empty. Choose a game record with moves or a position.');
       if (isMoveImportTextTooLarge(text)) {
-        setMoveLineInput('');
         setMoveLineFileName('');
         setMoveLineError('File is too large for direct import. For an annotated PGN, use Library → Import PGN collection, then Open on board.');
         return;
