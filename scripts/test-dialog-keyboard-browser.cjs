@@ -147,6 +147,20 @@ async function closedDisclosureKeyboard(browser, viewport) {
       'Expanding the disclosure makes its button the final tab stop');
     await page.keyboard.press('Tab');
     assert.equal(await close.evaluate(element => element === document.activeElement), true);
+    const composingTab = await dialog.evaluate(body => {
+      const input = document.createElement('input'); input.type = 'text'; input.setAttribute('aria-label', 'Composition field');
+      body.append(input);
+      const results = [{ isComposing: true }, { keyCode: 229 }, {}].map(flags => {
+        input.focus();
+        const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, ...flags });
+        input.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === input };
+      });
+      input.remove(); return results;
+    });
+    assert.deepEqual(composingTab, [
+      { prevented: false, retained: true }, { prevented: false, retained: true }, { prevented: true, retained: false },
+    ], 'IME candidate navigation keeps Tab; an ordinary Tab still wraps within Settings');
   } finally { await page.close(); }
 }
 
@@ -286,6 +300,6 @@ async function modalShortcutGuard(browser, viewport) {
       await editorKeyboard(browser, viewport);
       await modalShortcutGuard(browser, viewport);
     }
-    console.log('PASS: palette and editor focus, resize and restoration; shortcuts and IME Escape respect all seven other modals; desktop/mobile');
+    console.log('PASS: palette/editor focus, resize and restoration; shortcuts and IME Escape across seven modals, composing Tab in Settings; desktop/mobile');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

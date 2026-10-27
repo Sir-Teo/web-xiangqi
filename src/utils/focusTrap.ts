@@ -1,4 +1,5 @@
 /** Shared keyboard focus handling for the app's dialogs. */
+import { isComposingKey } from './keyboard';
 
 /** Keep the beginning of a long dialog and its initial focus in view. */
 export function focusDialogStart(
@@ -53,7 +54,7 @@ export function getDialogFocusableElements(container: HTMLElement): HTMLElement[
  * the next Tab would walk into the page behind.
  */
 export function keepTabWithin(container: HTMLElement | null, event: KeyboardEvent): void {
-    if (event.key !== 'Tab' || !container) return;
+    if (event.key !== 'Tab' || isComposingKey(event) || !container) return;
     const focusable = getDialogFocusableElements(container);
     if (focusable.length === 0) {
         event.preventDefault();
