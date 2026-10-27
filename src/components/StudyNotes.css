@@ -18,3 +18,7 @@
 .study-note-result:disabled { cursor: default; opacity: .6; }
 .study-notes summary:focus-visible, .study-notes li:focus-visible, .study-note-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .study-notes-more { margin-top: 8px; min-height: 44px; white-space: normal; }
+
+@media (forced-colors: active) {
+  .study-notes .study-note-result[aria-current="location"] { border: 3px double Highlight; padding: 6px; }
+}
