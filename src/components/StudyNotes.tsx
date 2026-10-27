@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { StudyNote } from '../utils/studyNotes';
 import { formatBreadcrumbLabel } from '../utils/moveBreadcrumb';
@@ -8,6 +8,8 @@ import { isComposingKey } from '../utils/keyboard';
 import './StudyNotes.css';
 
 const PAGE_SIZE = 20;
+export interface StudyNotesViewState { query: string; limit: number; expanded: boolean }
+const EMPTY_VIEW: StudyNotesViewState = { query: '', limit: PAGE_SIZE, expanded: false };
 type Props = {
     notes: StudyNote[];
     treeNodes: Record<string, MoveTreeNode>;
@@ -18,15 +20,28 @@ type Props = {
     gameIdentity: object;
     disabled: boolean;
     onNavigate: (nodeId: string) => void;
+    initialViewState?: StudyNotesViewState;
+    onViewStateChange?: (identity: object, state: StudyNotesViewState) => void;
 };
 
 export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, rootFen, notationStyle,
-    currentNodeId, gameIdentity, disabled, onNavigate }: Props) {
-    const [query, setQuery] = useState('');
-    const [limit, setLimit] = useState(PAGE_SIZE);
+    currentNodeId, gameIdentity, disabled, onNavigate, initialViewState, onViewStateChange }: Props) {
+    const [view, setView] = useState(initialViewState ?? EMPTY_VIEW);
+    const { query, limit, expanded } = view;
+    const identityRef = useRef(gameIdentity);
+    const detailsRef = useRef<HTMLDetailsElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
     const nextPageFocusRef = useRef<number | null>(null);
-    useEffect(() => { setQuery(''); setLimit(PAGE_SIZE); }, [gameIdentity]);
+    useLayoutEffect(() => {
+        if (identityRef.current === gameIdentity) return;
+        identityRef.current = gameIdentity;
+        setView(EMPTY_VIEW);
+    }, [gameIdentity]);
+    const updateView = (patch: Partial<StudyNotesViewState>) => {
+        const next = { ...view, expanded: detailsRef.current?.open ?? expanded, ...patch };
+        setView(next);
+        onViewStateChange?.(gameIdentity, next);
+    };
     useLayoutEffect(() => {
         nextPageFocusRef.current = null;
         if (listRef.current) listRef.current.scrollTop = 0;
@@ -52,7 +67,8 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
         : formatBreadcrumbLabel(treeNodes[id]?.record, rootFen, notationStyle);
 
     if (!notes.length) return null;
-    return <details id="study-notes" className="study-notes" data-testid="study-notes">
+    return <details id="study-notes" className="study-notes" data-testid="study-notes" ref={detailsRef}
+        open={expanded} onToggle={event => updateView({ expanded: event.currentTarget.open })}>
         <summary>Study notes <span>({notes.length})</span></summary>
         <div className="study-notes-body">
             <label htmlFor="study-notes-search">Find a note in any variation</label>
@@ -60,9 +76,9 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
                 aria-keyshortcuts="Escape" title="Press Esc to clear this search"
                 onKeyDown={event => {
                     if (event.key !== 'Escape' || !query || isComposingKey(event.nativeEvent)) return;
-                    event.preventDefault(); event.stopPropagation(); setQuery(''); setLimit(PAGE_SIZE);
+                    event.preventDefault(); event.stopPropagation(); updateView({ query: '', limit: PAGE_SIZE });
                 }}
-                placeholder="Search note text" onChange={event => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} />
+                placeholder="Search note text" onChange={event => updateView({ query: event.target.value, limit: PAGE_SIZE })} />
             <p role="status">{matches.length ? `${matches.length} ${matches.length === 1 ? 'note' : 'notes'}${matches.length > limit ? ` · Showing ${limit}` : ''}. Choose one to go to its position.` : 'No notes match. Try fewer words.'}</p>
             {disabled && <p>Pause play to visit a note.</p>}
             <ul ref={listRef}>
@@ -77,7 +93,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
                 </li>)}
             </ul>
             {matches.length > limit && <button type="button" className="chip-btn study-notes-more"
-                onClick={() => { nextPageFocusRef.current = limit; setLimit(value => value + PAGE_SIZE); }}>Show {Math.min(PAGE_SIZE, matches.length - limit)} more notes</button>}
+                onClick={() => { nextPageFocusRef.current = limit; updateView({ limit: limit + PAGE_SIZE }); }}>Show {Math.min(PAGE_SIZE, matches.length - limit)} more notes</button>}
         </div>
     </details>;
 });

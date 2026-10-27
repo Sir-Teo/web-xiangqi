@@ -59,6 +59,21 @@ async function assertFits(page) {
         await page.keyboard.insertText('🐎 CANNON 中炮');
         assert.equal(await search.inputValue(), '🐎 CANNON 中炮');
         assert.equal(await results.count(), 1);
+        await command(page, 'Review panel');
+        await page.getByTestId('study-notes').waitFor({ state: 'detached' });
+        await command(page, 'Move tree');
+        await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Returning from analysis must preserve the notes query');
+        assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), true, 'Returning from analysis must preserve the expanded notes finder');
+        assert.equal(await results.count(), 1);
+        await page.getByTestId('study-notes').locator('summary').click();
+        await command(page, 'Review panel');
+        await command(page, 'Move tree');
+        await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+        assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), false, 'A collapsed finder must stay collapsed on return');
+        await openFinder(page);
+        assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Reopening the finder must preserve its query');
+        await search.focus();
         await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         assert.equal(await page.evaluate(() => document.activeElement?.className), 'study-note-result');
         await page.keyboard.press('Enter');
@@ -144,6 +159,11 @@ async function assertFits(page) {
           assert.equal(await results.count(), 40);
           assert.equal(await results.nth(20).evaluate(element => element === document.activeElement), true,
             'Loading more notes must focus the first newly revealed result');
+          await command(page, 'Review panel');
+          await command(page, 'Move tree');
+          await page.getByTestId('study-notes').waitFor({ state: 'attached' });
+          assert.equal(await results.count(), 40, 'Returning from analysis must retain revealed note pages');
+          assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), true);
           const list = page.getByTestId('study-notes').locator('ul');
           await list.evaluate(element => { element.scrollTop = element.scrollHeight; });
           assert.ok(await list.evaluate(element => element.scrollTop > 0));

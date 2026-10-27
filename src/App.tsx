@@ -11,7 +11,7 @@ import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind 
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
-import { StudyNotes } from './components/StudyNotes';
+import { StudyNotes, type StudyNotesViewState } from './components/StudyNotes';
 import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
 import { StudyPracticeDialog } from './components/StudyPracticeDialog';
@@ -3529,6 +3529,10 @@ function App() {
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
+  const studyNotesViewRef = useRef<{ identity: object; state: StudyNotesViewState } | null>(null);
+  const rememberStudyNotesView = useCallback((identity: object, state: StudyNotesViewState) => {
+    studyNotesViewRef.current = { identity, state };
+  }, []);
   const handleCopyRecord = useCallback(async () => {
     const request = ++exportRequestRef.current;
     clearToastTimer(copiedRecordToastTimerRef);
@@ -7647,6 +7651,8 @@ function App() {
                   <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
+                    initialViewState={studyNotesViewRef.current?.identity === gameIdentity ? studyNotesViewRef.current.state : undefined}
+                    onViewStateChange={rememberStudyNotesView}
                     disabled={studyControlsDisabled} onNavigate={jumpToNode} />
                   {treeNodes[currentNodeId]?.record && <ImportedGlyphs key={currentNodeId} gameIdentity={gameIdentity}
                     nags={treeNodes[currentNodeId]?.record?.nags} disabled={studyControlsDisabled}
