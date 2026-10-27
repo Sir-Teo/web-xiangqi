@@ -55,6 +55,10 @@ async function command(page, label) {
         await page.getByTestId('delete-saved-stacked-undo').click();
         await page.getByTestId('confirm-delete-saved-stacked-undo').click();
         const undo = page.getByTestId('library-undo-btn');
+        // Library deletion completes asynchronously under its storage lock.
+        // Start measuring only once both notices exist and neither is hovered.
+        await saved.waitFor(); await move.waitFor();
+        await page.mouse.move(0, 0);
         await page.clock.fastForward(3000);
         await undo.focus(); await page.getByTestId('delete-undo-btn').hover();
         await page.clock.fastForward(15000);
@@ -69,6 +73,10 @@ async function command(page, label) {
         assert.equal(await saved.isVisible(), true, 'Leaving Undo must retain its unspent recovery time');
         assert.equal(await move.isVisible(), true);
         await page.clock.fastForward(1001);
+        // Timer callbacks enqueue React updates; observe the rendered result
+        // before counting, without advancing either recovery deadline.
+        await saved.waitFor({ state: 'hidden' });
+        await move.waitFor({ state: 'hidden' });
         assert.equal(await saved.count(), 0, 'Unattended notices must eventually expire');
         assert.equal(await move.count(), 0);
         console.log(`${browserType.name()} ${width}px: separate recovery notices, enlarged text, restoring both edits, focus/hover pause and resumed expiry passed`);
