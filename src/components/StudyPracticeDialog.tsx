@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react';
 import type { SavedGame } from '../utils/gameLibrary';
 import type { PieceStyle } from '../utils/pieceStyle';
 import { keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 import { LazyPanelBoundary } from './LazyPanelBoundary';
 import './StudyPracticeDialog.css';
 import { IconX } from './icons';
@@ -18,6 +19,7 @@ export function StudyPracticeDialog({ game, pieceStyle, notationStyle, onClose }
   }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       keepTabWithin(dialog.current, event);
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
     };

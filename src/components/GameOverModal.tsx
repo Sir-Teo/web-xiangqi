@@ -2,6 +2,7 @@ import { BLACK_GENERAL_GLYPH, RED_GENERAL_GLYPH } from '../utils/pieceStyle';
 import { useEffect, useRef } from 'react';
 import type { GameResult } from '../hooks/useXiangqi';
 import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 
 interface GameOverModalProps {
   result: GameResult;
@@ -42,6 +43,7 @@ export function GameOverModal({ result, reason, onNewGame, onReview }: GameOverM
     const retryTimer = window.setTimeout(focusInitialElement, 80);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isComposingKey(event)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onReview();

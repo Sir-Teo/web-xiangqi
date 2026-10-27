@@ -221,9 +221,17 @@ async function modalShortcutGuard(browser, viewport) {
         assert.equal(await target.getByRole('combobox', { name: 'Search commands' }).count(), 0);
         assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true);
       }
+      const title = await dialog.getByRole('heading').first().textContent();
+      for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+        await dialog.evaluate((node, flags) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Escape', bubbles: true, cancelable: true, ...flags,
+        })), flags);
+        assert.equal(await dialog.count(), 1, `Composing Escape closed ${title}`);
+        assert.equal(await dialog.evaluate(node => node.contains(document.activeElement)), true, `Composing Escape lost focus in ${title}`);
+      }
     };
     await page.goto(base); await page.locator('.xiangqi-board').waitFor();
-    for (const command of ['Settings', 'Set up a position']) {
+    for (const command of ['Settings', 'Set up a position', 'Learn the rules']) {
       await page.keyboard.press('ControlOrMeta+k');
       await page.getByRole('combobox').fill(command);
       await page.keyboard.press('Enter');
@@ -234,6 +242,18 @@ async function modalShortcutGuard(browser, viewport) {
     await page.getByRole('button', { name: viewport.width < 900 ? 'Open new game menu' : 'Start new game', exact: true }).click();
     await assertPaletteBlocked();
     await page.keyboard.press('Escape');
+
+    await page.evaluate(() => {
+      localStorage.setItem('xiangqi:library:v1', JSON.stringify([{ id: 'ime-practice', savedAt: 1, gameMode: 'PvP', moves: ['h2e2', 'h9g7'] }]));
+      dispatchEvent(new StorageEvent('storage', { key: 'xiangqi:library:v1', storageArea: localStorage }));
+    });
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('Library'); await page.keyboard.press('Enter');
+    await page.getByTestId('practice-saved-ime-practice').click();
+    await page.getByTestId('study-practice-progress').waitFor();
+    await assertPaletteBlocked();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('study-practice-dialog').waitFor({ state: 'hidden' });
 
     const mate = 'R3k4/R8/9/9/9/9/9/9/9/3K5 b - - 0 1';
     await page.goto(base + '?fen=' + encodeURIComponent(mate));
@@ -250,6 +270,8 @@ async function modalShortcutGuard(browser, viewport) {
       await recoveryPage.reload();
       await recoveryPage.getByRole('heading', { name: 'Unfinished game' }).waitFor();
       await assertPaletteBlocked(recoveryPage);
+      await recoveryPage.keyboard.press('Escape');
+      assert.equal(await recoveryPage.getByRole('dialog').count(), 0);
     } finally { await recoveryPage.close(); }
   } finally { await page.close(); }
 }
@@ -264,6 +286,6 @@ async function modalShortcutGuard(browser, viewport) {
       await editorKeyboard(browser, viewport);
       await modalShortcutGuard(browser, viewport);
     }
-    console.log('PASS: palette activates the focused command; palette/editor contain focus; editor preserves focus on resize and restores the opener; shortcuts respect all five other modals; desktop/mobile');
+    console.log('PASS: palette and editor focus, resize and restoration; shortcuts and IME Escape respect all seven other modals; desktop/mobile');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

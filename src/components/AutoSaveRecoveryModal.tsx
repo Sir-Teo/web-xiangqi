@@ -2,6 +2,7 @@ import type { RecoveryDraft } from '../utils/autoSaveDrafts';
 import { useEffect, useRef } from 'react';
 import './AutoSaveRecoveryModal.css';
 import { focusDialogStart, keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 
 interface AutoSaveRecoveryModalProps {
     drafts?: RecoveryDraft[];
@@ -58,6 +59,7 @@ export function AutoSaveRecoveryModal({
         focusDialogStart(modalRef.current, primaryButtonRef.current, titleRef.current);
 
         const onKeyDown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
                 onLater();

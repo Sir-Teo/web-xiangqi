@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Board } from './Board/Board';
 import { keepTabWithin } from '../utils/focusTrap';
+import { isComposingKey } from '../utils/keyboard';
 import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress, saveRuleLessonProgress } from '../utils/ruleLessons';
 import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
 import './RuleLessons.css';
@@ -32,6 +33,7 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
     }, []);
     useEffect(() => {
         const keydown = (event: KeyboardEvent) => {
+            if (isComposingKey(event)) return;
             keepTabWithin(dialog.current, event);
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); }
         };
