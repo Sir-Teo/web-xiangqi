@@ -71,6 +71,14 @@
     background: rgba(255, 255, 255, 0.06);
 }
 
+@media (forced-colors: active) {
+    .command-palette-row[data-active='true'] .command-palette-button {
+        border: 3px double Highlight;
+        /* Preserve the row's size as the selection moves. */
+        padding: calc(0.4rem - 2px) calc(0.6rem - 2px);
+    }
+}
+
 .command-palette-button:disabled {
     cursor: default;
     opacity: 0.55;
