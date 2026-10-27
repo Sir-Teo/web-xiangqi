@@ -2975,6 +2975,22 @@ summary:active {
   cursor: pointer;
 }
 
+.letter-pieces-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+}
+
+.letter-pieces-check {
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.letter-pieces-toggle[aria-pressed="true"] .letter-pieces-check {
+  visibility: visible;
+}
+
 .chip-btn-primary {
   border-color: var(--border-accent);
   background: var(--accent-subtle);

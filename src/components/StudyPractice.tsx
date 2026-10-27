@@ -6,6 +6,7 @@ import { formatMoveInStyle, formatLineTokensInStyle, type XiangqiNotationStyle }
 import { isInCheck, legalMovesFrom, pieceSide, squareToUci, uciToSquare, type Side } from '../utils/xiangqi';
 import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine, type PracticeSession } from '../utils/studyPractice';
 import { Board } from './Board/Board';
+import { IconCheck } from './icons';
 
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
@@ -124,7 +125,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         setSelected(null); setHint(false); setNotesOpen(false); setMessage('Reset undone.');
         focusBoardRef.current = true;
       }}>Undo reset</button>}
-      <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
+      <button type="button" className="letter-pieces-toggle" onClick={() => setLetters(value => !value)} aria-pressed={letters}><IconCheck className="letter-pieces-check" />Letter pieces</button>
     </div>
     {eligible.length === 0 ? <p role="status">This study has no moves for {side === 'w' ? 'Red' : 'Black'}. Choose the other side.</p> : <>
       <div className="study-practice-board" ref={boardRef}>

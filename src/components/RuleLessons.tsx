@@ -5,7 +5,7 @@ import { isComposingKey } from '../utils/keyboard';
 import { RULE_LESSONS, attemptRuleLesson, completeRuleLesson, readRuleLessonProgress, saveRuleLessonProgress } from '../utils/ruleLessons';
 import { isRedPiece, legalMovesFrom, parseFenBoard, squareToUci, uciToSquare } from '../utils/xiangqi';
 import './RuleLessons.css';
-import { IconX } from './icons';
+import { IconCheck, IconX } from './icons';
 import type { PieceStyle } from '../utils/pieceStyle';
 
 export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: () => void; pieceStyle?: PieceStyle }) {
@@ -101,7 +101,7 @@ export function RuleLessons({ onClose, pieceStyle = 'traditional' }: { onClose: 
                         }}>Retry saving progress</button>}
                     </div>}
                     <div className="rule-lessons-actions">
-                        <button type="button" onClick={() => setLetters(value => !value)} aria-pressed={letters}>Letter pieces</button>
+                        <button type="button" className="letter-pieces-toggle" onClick={() => setLetters(value => !value)} aria-pressed={letters}><IconCheck className="letter-pieces-check" />Letter pieces</button>
                         {!solved && <button type="button" aria-expanded={hint} aria-controls={feedbackId} onClick={() => setHint(value => !value)}>{hint ? 'Hide hint' : 'Show hint'}</button>}
                         <button type="button" onClick={() => openLesson(index)}>Try again</button>
                         {solved && index < RULE_LESSONS.length - 1 && <button type="button" ref={nextLessonRef} onClick={() => openLesson(index + 1)}>Next lesson</button>}
