@@ -99,6 +99,21 @@ export const ReviewPanel = memo(function ReviewPanel({
     formatMoveText = (_nodeId, uci) => formatUciMove(uci),
     formatLineText = (_nodeId, moves) => moves.map((uci) => formatUciMove(uci)).join(' '),
 }: Props) {
+    const reviewActionRef = useRef<HTMLButtonElement>(null);
+    const reviewTitleRef = useRef<HTMLHeadingElement>(null);
+    const reviewActionAriaLabel = status === 'running' ? 'Cancel running game review'
+        : status === 'done'
+            ? (canStart ? 'Re-run game review' : `Re-run game review unavailable: ${startTitle ?? 'not ready'}`)
+            : (canStart ? undefined : `Game review unavailable: ${startTitle ?? 'not ready'}`);
+    useEffect(() => {
+        const target = document.activeElement;
+        if (target !== reviewActionRef.current && target !== reviewTitleRef.current) return;
+        // Completed-review actions can wrap below the phone's visible panel.
+        const frame = requestAnimationFrame(() => {
+            if (target === document.activeElement) target?.scrollIntoView({ block: 'nearest' });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [status]);
     const [momentSideFilter, setMomentSideFilter] = useState<ReviewMomentSideFilter>('all');
     const [momentQualityFilter, setMomentQualityFilter] = useState<ReviewMomentQualityFilter>('all');
     const [momentPhaseFilter, setMomentPhaseFilter] = useState<GamePhase | 'all'>('all');
@@ -177,74 +192,54 @@ export const ReviewPanel = memo(function ReviewPanel({
         <div className="review-panel">
             <div className="review-panel-header">
                 <div>
-                    <h3>Game Review</h3>
+                    <h3 ref={reviewTitleRef} tabIndex={-1}>Game Review</h3>
                     <p>Critical moments, engine alternatives, and replay jump points.</p>
                 </div>
                 <div className="review-panel-actions">
-                    {status === 'running' ? (
-                        <button
-                            type="button"
-                            className="chip-btn"
-                            onClick={onCancel}
-                            title="Cancel running game review"
-                            aria-label="Cancel running game review"
-                            data-testid="cancel-review-btn"
-                        >
-                            Cancel
-                        </button>
-                    ) : status === 'done' ? (
-                        <>
-                            {onStartDrill ? (
-                                <button
-                                    type="button"
-                                    className="chip-btn chip-btn-primary"
-                                    onClick={onStartDrill}
-                                    disabled={!drillAvailable}
-                                    title={drillAvailable
-                                        ? 'Replay each key moment as a question: find a better move than the one played'
-                                        : 'Nothing to learn from: the review found no key moment with a better move'}
-                                    data-testid="learn-from-mistakes-btn"
-                                >
-                                    Learn from mistakes
-                                </button>
-                            ) : null}
-                            <button
-                                type="button"
-                                className="chip-btn"
-                                onClick={onStart}
-                                disabled={!canStart}
-                                title={startTitle}
-                                aria-label={canStart ? 'Re-run game review' : `Re-run game review unavailable: ${startTitle ?? 'not ready'}`}
-                                data-testid="rerun-review-btn"
-                            >
-                                Re-run
-                            </button>
-                            <button
-                                type="button"
-                                className="chip-btn"
-                                onClick={onClear}
-                                title="Clear completed game review"
-                                aria-label="Clear completed game review"
-                                data-testid="clear-review-btn"
-                            >
-                                Clear
-                            </button>
-                        </>
-                    ) : (
+                    {status === 'done' && onStartDrill ? (
                         <button
                             type="button"
                             className="chip-btn chip-btn-primary"
-                            onClick={onStart}
-                            disabled={!canStart}
-                            title={startTitle}
-                            // Enabled, the visible text is the name; see the bottom
-                            // bar's matching button in App.tsx.
-                            aria-label={canStart ? undefined : `Game review unavailable: ${startTitle ?? 'not ready'}`}
-                            data-testid="start-review-btn"
+                            onClick={onStartDrill}
+                            disabled={!drillAvailable}
+                            title={drillAvailable
+                                ? 'Replay each key moment as a question: find a better move than the one played'
+                                : 'Nothing to learn from: the review found no key moment with a better move'}
+                            data-testid="learn-from-mistakes-btn"
                         >
-                            {startLabel ?? (canStart ? 'Run Review' : 'Engine Loading')}
+                            Learn from mistakes
                         </button>
-                    )}
+                    ) : null}
+                    {/* Keep Run/Cancel/Re-run mounted so completion retains focus. */}
+                    <button
+                        type="button"
+                        ref={reviewActionRef}
+                        className={`chip-btn${status === 'idle' ? ' chip-btn-primary' : ''}`}
+                        onClick={status === 'running' ? onCancel : onStart}
+                        disabled={status !== 'running' && !canStart}
+                        title={status === 'running' ? 'Cancel running game review' : startTitle}
+                        aria-label={reviewActionAriaLabel}
+                        data-testid={status === 'running' ? 'cancel-review-btn' : status === 'done' ? 'rerun-review-btn' : 'start-review-btn'}
+                    >
+                        {status === 'running' ? 'Cancel' : status === 'done' ? 'Re-run' : startLabel ?? (canStart ? 'Run Review' : 'Engine Loading')}
+                    </button>
+                    {status === 'done' ? (
+                        <button
+                            type="button"
+                            className="chip-btn"
+                            onClick={() => {
+                                const action = reviewActionRef.current;
+                                const target = action && !action.disabled ? action : reviewTitleRef.current;
+                                target?.focus({ preventScroll: true });
+                                onClear();
+                            }}
+                            title="Clear completed game review"
+                            aria-label="Clear completed game review"
+                            data-testid="clear-review-btn"
+                        >
+                            Clear
+                        </button>
+                    ) : null}
                 </div>
             </div>
 

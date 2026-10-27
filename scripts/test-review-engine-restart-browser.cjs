@@ -51,9 +51,32 @@ const command = async (page, label) => {
           await page.waitForFunction(count => JSON.parse(localStorage.getItem('xiangqi:library:v1') || '[]').length > count, count);
           return page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).at(-1));
         };
-        await page.getByTestId('start-review-btn').click(); await page.getByTestId('rerun-review-btn').waitFor();
+        const assertReachable = async control => page.waitForFunction(node => {
+          const r = node.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+        }, await control.elementHandle(), { timeout: 3000 });
+        await page.evaluate(async () => { document.documentElement.style.fontSize = '32px'; await document.fonts.ready; });
+        const start = page.getByTestId('start-review-btn');
+        await page.waitForFunction(() => document.querySelector('[data-testid="start-review-btn"]')?.disabled === false);
+        await start.focus(); await page.keyboard.press('Enter');
+        await page.getByTestId('rerun-review-btn').waitFor();
+        assert.equal(await page.getByTestId('rerun-review-btn').evaluate(node => node === document.activeElement), true,
+          'Completing a review must keep keyboard focus on Re-run');
+        await assertReachable(page.getByTestId('rerun-review-btn'));
+        await page.evaluate(() => { document.documentElement.style.fontSize = '16px'; });
         const previous = (await save()).review;
         assert.ok(previous); assert.ok(previous.annotations.every(a => a.evalScore === 0));
+        await page.evaluate(() => { window.__holdReview = true; window.__heldSearches = 0; });
+        await page.getByTestId('rerun-review-btn').focus(); await page.keyboard.press('Enter');
+        await page.waitForFunction(() => window.__heldSearches === 2);
+        const cancel = page.getByTestId('cancel-review-btn');
+        assert.equal(await cancel.evaluate(node => node === document.activeElement), true, 'Starting a review must retain focus on Cancel');
+        await page.keyboard.press('Enter');
+        await page.getByTestId('rerun-review-btn').waitFor();
+        assert.equal(await page.getByTestId('rerun-review-btn').evaluate(node => node === document.activeElement), true,
+          'Canceling a repeated review must retain focus on Re-run');
+        await page.evaluate(() => { window.__holdReview = false; });
+        assert.deepEqual((await save()).review, previous, 'Canceling must preserve the completed review');
         for (const action of (width === 1440 ? ['hash', 'threads', 'defaults', 'restart'] : ['hash', 'defaults', 'restart'])) {
           await page.evaluate(() => { window.__holdReview = true; window.__heldSearches = 0; });
           await page.getByTestId('rerun-review-btn').click();
@@ -98,10 +121,29 @@ const command = async (page, label) => {
         await page.getByTestId('rerun-review-btn').waitFor();
         assert.equal(await page.getByTestId('review-error').count(), 0, 'Completed reviews are not interrupted by a later restart');
         assert.deepEqual((await save()).review, previous);
+        const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
+        await page.evaluate(async () => { document.documentElement.style.fontSize = '32px'; await document.fonts.ready; });
+        await page.getByTestId('clear-review-btn').focus(); await page.keyboard.press('Enter');
+        await page.getByTestId('start-review-btn').waitFor();
+        assert.equal(await page.getByTestId('start-review-btn').evaluate(node => node === document.activeElement), true,
+          'Clearing a completed review must return focus to Run Review');
+        await assertReachable(page.getByTestId('start-review-btn'));
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Clearing review scores must preserve the position');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}px: resource/restart interruptions preserve prior review, reject late output, and allow retry`);
       } catch (error) {
         console.error(await page.evaluate(() => ({ boots: window.__reviewBoots, held: window.__heldSearches, running: Boolean(document.querySelector('[data-testid="cancel-review-btn"]')) })));
+        console.error('Review layout', JSON.stringify({ browser: browserType.name(), width, frames: await page.evaluate(async () => {
+          const frames = [];
+          for (let i = 0; i < 10; i++) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            const button = document.querySelector('[data-testid="rerun-review-btn"], [data-testid="start-review-btn"]');
+            frames.push({ rect: button?.getBoundingClientRect().toJSON(), font: button && getComputedStyle(button).font,
+              rootFont: getComputedStyle(document.documentElement).fontSize, focused: document.activeElement?.outerHTML.slice(0, 500) });
+          }
+          return frames;
+        }) }));
+        await page.screenshot({ path: `/tmp/xiangqi-review-restart-failure-${browserType.name()}-${width}.png` });
         throw error;
       } finally { await page.close(); }
     }
