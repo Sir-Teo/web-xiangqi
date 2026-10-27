@@ -325,7 +325,11 @@ export function validatePieceMove(state: BoardState, mv: Move, movingSide: Side)
         return { ok: false, reason: "unknown piece" };
     }
 
-    const next = cloneBoardState(state);
+    // The check probes only read this trial position. Copy the outer board
+    // and the changed rows, keeping every caller-owned square untouched.
+    const next = state.slice();
+    next[mv.fromRank] = state[mv.fromRank].slice();
+    if (mv.toRank !== mv.fromRank) next[mv.toRank] = state[mv.toRank].slice();
     next[mv.toRank][mv.toFile] = piece;
     next[mv.fromRank][mv.fromFile] = "";
     if (kingsFacing(next)) return { ok: false, reason: "generals cannot face each other" };

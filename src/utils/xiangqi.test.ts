@@ -278,3 +278,20 @@ describe('legal move enumeration', () => {
         expect(legalMovesFrom(state, 0, 0, 'b')).toEqual([]);
     });
 });
+
+describe('validating moves without changing the input position', () => {
+    it.each([
+        ['a0a1', START_FEN, true],
+        ['h2e2', START_FEN, true],
+        ['b2b9', START_FEN, true],
+        ['e1f1', '4k4/9/9/9/4r4/9/9/9/4R4/4K4 w - - 0 1', false],
+        ['e5f5', '4k4/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1', false],
+    ] as const)('keeps a frozen board intact when checking %s', (move, fen, expected) => {
+        const state = parseFenBoard(fen);
+        const before = state.map(row => [...row]);
+        for (const row of state) Object.freeze(row);
+        Object.freeze(state);
+        expect(validateMoveStr(move, state, 'w').ok).toBe(expected);
+        expect(state).toEqual(before);
+    });
+});
