@@ -368,6 +368,8 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             type="text"
                             spellCheck={false}
                             autoComplete="off"
+                            autoCapitalize="off"
+                            autoCorrect="off"
                             value={fenDraft ?? fen}
                             /* Same pairing `.new-game-fen-input` uses for the same job: the
                                notice below is a live region, which announces once and is gone,

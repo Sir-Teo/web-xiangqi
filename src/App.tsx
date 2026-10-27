@@ -6384,6 +6384,10 @@ function App() {
                 <input
                   className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
                   type="text"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={fenInput}
                   onChange={(e) => {
                     setFenInput(e.target.value);
@@ -6451,6 +6455,10 @@ function App() {
                 <textarea
                   id="new-game-line-input"
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={moveLineInput}
                   data-file-drag={moveLineFileDragActive || undefined}
                   onDragLeave={() => setMoveLineFileDragActive(false)}
