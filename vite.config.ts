@@ -9,6 +9,12 @@ const crossOriginIsolationHeaders = {
   'X-Content-Type-Options': 'nosniff',
 }
 
+const parserTimingTests = [
+  'src/__fuzz.test.ts',
+  'src/utils/__fuzz.test.ts',
+  'src/utils/moveImport.performance.test.ts',
+]
+
 function installIsolationHeaders(server: Pick<ViteDevServer, 'middlewares'>) {
   // Vite's static/transform handlers can return 304 before applying their
   // configured headers. WebKit rejects cached workers without COEP on that
@@ -52,7 +58,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          exclude: [...configDefaults.exclude, '**/.deps/**', 'src/utils/__fuzz.test.ts', 'src/utils/moveImport.performance.test.ts'],
+          exclude: [...configDefaults.exclude, '**/.deps/**', ...parserTimingTests],
           sequence: { groupOrder: 0 },
         },
       },
@@ -60,7 +66,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'parser-limits',
-          include: ['src/utils/__fuzz.test.ts', 'src/utils/moveImport.performance.test.ts'],
+          include: parserTimingTests,
           fileParallelism: false,
           sequence: { groupOrder: 1 },
         },
