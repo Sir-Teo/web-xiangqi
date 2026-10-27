@@ -31,13 +31,22 @@ body.resizing * {
    ═══════════════════════════════════════════════════ */
 .main-container {
   flex: 1;
-  display: flex;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) fit-content(30%);
   position: relative;
   min-height: 0;
   overflow-x: hidden;
   /* Prevent horizontal spill */
   overflow-y: hidden;
   box-sizing: border-box;
+}
+
+.main-workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .panel {
@@ -1370,6 +1379,10 @@ body.resizing * {
     width: 100%;
     max-width: 100%;
     overflow: hidden;
+  }
+
+  .main-workspace {
+    flex-direction: column;
   }
 
   .top {
@@ -3933,13 +3946,12 @@ summary:active {
 }
 
 .app-notice-stack {
-  /* Independent recovery and error messages share one scrollable stack.
-     The workspace ends above the desktop bar and the phone's safe-area tabs. */
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  max-height: calc(100% - 24px);
+  /* Reserve space above the bottom chrome, including for persistent errors.
+     Bound the row so several notices can scroll without consuming the board. */
+  position: relative;
+  margin: 12px calc(12px + env(safe-area-inset-right, 0px)) 12px calc(12px + env(safe-area-inset-left, 0px));
+  min-height: 0;
+  max-height: 14rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
@@ -3948,8 +3960,10 @@ summary:active {
   gap: 0.5rem;
   /* Keep notifications below the command palette (60) and other dialogs. */
   z-index: 50;
-  pointer-events: none;
+  pointer-events: auto;
 }
+
+.app-notice-stack:empty { display: none; }
 
 .undo-toast {
   display: flex;
@@ -3966,11 +3980,8 @@ summary:active {
   box-shadow: var(--shadow-lg);
   font-size: 0.8rem;
   color: var(--text-primary);
-  /* A transient status message must not become a dead zone. This is pinned to
-     the bottom of `.main-container`, so while it is up it sits over whatever
-     content is scrolled under it -- and it swallowed a click meant for the
-     analysis panel beneath. Only the buttons take the pointer. */
-  pointer-events: none;
+  /* The reserved row lets the whole card accept scrolling and text selection. */
+  pointer-events: auto;
 }
 
 .undo-toast > span {
@@ -4840,8 +4851,6 @@ summary:active {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
   }
 
   [data-mobile-view="analysis"] .panel.left,
@@ -7977,6 +7986,7 @@ summary:active {
     padding: 8px var(--mobile-stage-pad-right) 8px var(--mobile-stage-pad-left);
     align-items: center;
     overflow-y: auto;
+    container-type: size;
   }
 
   [data-mobile-view="board"] .mobile-board-center,
@@ -8002,11 +8012,20 @@ summary:active {
     grid-row: 1 / 4;
     align-self: center;
     justify-self: center;
-    /* 74px: the 44px tab bar below, the stage's 8px pads and a 14px gap.
-       It read 86px while the bar was 56px tall. */
-    width: min(100%, calc((100dvh - 74px) * 0.9)) !important;
+    /* Notices can reduce the stage below the viewport estimate. Leave room
+       for the decorative frame and derive both dimensions from this stage. */
+    width: min(100%, max(0px, calc((100cqh - 14px) * 0.9))) !important;
     height: auto;
     max-height: 100%;
+    aspect-ratio: 9 / 10;
+    container-type: normal;
+    display: block;
+  }
+
+  [data-mobile-view="board"] .board-workspace .xiangqi-board-container {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 9 / 10;
   }
 
   [data-mobile-view="board"] .mobile-board-header {

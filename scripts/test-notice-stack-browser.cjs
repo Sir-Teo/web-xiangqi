@@ -20,7 +20,7 @@ async function clickable(button) {
 (async () => {
   const browser = await browserType.launch();
   try {
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 480 }, { width: 844, height: 390 }]) {
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 480 }, { width: 844, height: 390 }, { width: 520, height: 480 }]) {
       const page = await browser.newPage({ viewport, hasTouch: viewport.width < 900 });
       page.setDefaultTimeout(10000);
       try {
@@ -47,6 +47,8 @@ async function clickable(button) {
         const failedSave = page.getByTestId('save-game-error');
         const removed = page.getByTestId('delete-undo-toast');
         await failedSave.waitFor();
+        if (viewport.width < 900) await page.getByTestId('mobile-view-board').click();
+        const originalFen = await page.locator('.bottombar-fen').getAttribute('title');
         let normalErrorFont;
         for (const size of ['16px', '32px']) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size; }, size);
@@ -54,6 +56,8 @@ async function clickable(button) {
           if (size === '16px') normalErrorFont = font;
           else assert.equal(font, normalErrorFont * 2, 'Error text must respect enlarged reader text');
           const boxes = await Promise.all([recovery, failedSave, removed].map(notice => notice.boundingBox()));
+          const board = await page.locator('.xiangqi-board').boundingBox();
+          assert.ok(board.width > 0 && Math.abs(board.width / board.height - 0.9) < 0.01, 'Warnings must preserve the board proportions');
           for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length; b++) {
             assert.ok(boxes[a].y + boxes[a].height <= boxes[b].y || boxes[b].y + boxes[b].height <= boxes[a].y,
               'Save errors, recovery warnings, and Undo must not cover each other');
@@ -62,6 +66,16 @@ async function clickable(button) {
           await clickable(recovery.getByRole('button', { name: 'Download recovery data', exact: true }));
           await clickable(failedSave.getByRole('button', { name: 'Open library', exact: true }));
           await clickable(page.getByTestId('delete-undo-btn'));
+          if (viewport.width < 900) {
+            const previous = page.getByRole('button', { name: 'Go to previous move', exact: true }).filter({ visible: true }).first();
+            const next = page.getByRole('button', { name: 'Go to next move', exact: true }).filter({ visible: true }).first();
+            await previous.click(); await clickable(next); await next.click();
+            assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Notices must leave both move-navigation actions usable');
+            await previous.click();
+            await page.locator('.hitbox[data-file="7"][data-rank="2"]').click();
+            await page.locator('.hitbox[data-file="4"][data-rank="2"]').click();
+            assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Board moves must remain reachable below stacked notices');
+          }
         }
         await page.screenshot({ path: `/tmp/xiangqi-notice-stack-${browserType.name()}-${viewport.width}.png` });
         const failedWrites = await page.evaluate(() => window.__failedDraftWrites);
