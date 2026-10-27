@@ -1,6 +1,58 @@
 const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
+async function queryStaysVisible(browser) {
+  for (const [width, height] of [[844, 390], [1440, 900], [320, 480], [390, 640], [480, 400], [844, 320]]) {
+    const page = await browser.newPage({ viewport: { width, height }, hasTouch: width < 900, reducedMotion: 'reduce' });
+    try {
+      await page.goto(base); await page.locator('.xiangqi-board').waitFor();
+      for (const size of [16, 32]) {
+        const appliedSize = await page.evaluate(size => {
+          document.documentElement.style.fontSize = size + 'px';
+          return parseFloat(getComputedStyle(document.documentElement).fontSize);
+        }, size);
+        assert.equal(appliedSize, size, 'Reduced motion must apply text resizing immediately');
+        await page.keyboard.press('ControlOrMeta+k');
+        const input = page.getByRole('combobox', { name: 'Search commands' });
+        const checkVisible = async (key, hasSelection) => {
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const state = await input.evaluate(node => {
+            const rect = node.getBoundingClientRect(); const modal = node.closest('[role="dialog"]').getBoundingClientRect();
+            const selected = document.getElementById(node.getAttribute('aria-activedescendant'));
+            const option = selected?.getBoundingClientRect();
+            return { query: node.value, option: option?.toJSON(), fontSize: selected ? parseFloat(getComputedStyle(selected.querySelector('.command-palette-label') ?? selected).fontSize) : null, focused: node === document.activeElement, top: rect.top, bottom: rect.bottom,
+              visible: rect.top >= Math.max(0, modal.top) + 3 && rect.bottom <= Math.min(innerHeight, modal.bottom) - 3,
+              reachable: document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === node,
+              selectionVisible: !!option && option.top >= rect.bottom + 3
+                && selected.contains(document.elementFromPoint(option.x + option.width / 2, option.y + option.height / 2)) };
+          });
+          if (!state.focused || !state.visible || !state.reachable || (hasSelection && !state.selectionVisible)) {
+            await page.screenshot({ path: `/tmp/xiangqi-palette-query-failure-${browserType.name()}-${width}-${height}-${size}.png` });
+          }
+          const context = `${browserType.name()} ${width}x${height}/${size}px/${key}: ${JSON.stringify(state)}`;
+          assert.equal(state.focused && state.visible && state.reachable, true, `The focused query must stay fully visible: ${context}`);
+          if (hasSelection) {
+            assert.equal(state.fontSize, size, `Command text must follow the requested text size: ${context}`);
+            assert.equal(state.selectionVisible, true, `The selected command must stay clear of the input: ${context}`);
+          }
+        };
+        for (const query of ['panel', '']) {
+          await input.fill(query); await page.locator('.command-palette-button').first().waitFor();
+          for (const key of ['Home', 'End', 'ArrowUp', 'Home']) {
+            await page.keyboard.press(key); await checkVisible(key, true);
+          }
+        }
+        await input.fill('no matching command zzz');
+        assert.equal(await page.locator('.command-palette-button').count(), 0);
+        for (const key of ['Tab', 'Shift+Tab']) { await page.keyboard.press(key); await checkVisible(key, false); }
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        await page.screenshot({ path: `/tmp/xiangqi-palette-query-visible-${browserType.name()}-${width}-${height}-${size}.png` });
+        await page.keyboard.press('Escape');
+      }
+      console.log(`${browserType.name()} ${width}x${height}: focused query and selected commands stay reachable at 100/200% text; empty-result Tab stays in the query`);
+    } finally { await page.close(); }
+  }
+}
 async function forcedColorSelection(browser) {
   // Chromium can emulate both system palettes; regular pointer checks run in every engine.
   if (browserType.name() !== 'chromium') return;
@@ -66,6 +118,7 @@ async function forcedColorSelection(browser) {
         console.log(`${browserType.name()} ${width}px: stationary pointer cannot redirect a typed Save command`);
       } finally { await page.close(); }
     }
+    await queryStaysVisible(browser);
     await forcedColorSelection(browser);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
