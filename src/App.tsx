@@ -4021,8 +4021,6 @@ function App() {
     setMobileView('board');
   }, [askDrillMoment, drillMoments]);
 
-  const stopMistakeDrill = useCallback(() => setDrill(null), []);
-
   const retryDrillMoment = useCallback(() => {
     if (!drill || !drillMoment) return;
     setDrill({ ...drill, attempt: null, verdict: null });
@@ -5171,6 +5169,11 @@ function App() {
     startEngineAnalysis();
     focusBoard();
   }, [focusBoard, startEngineAnalysis]);
+
+  const stopMistakeDrill = useCallback(() => {
+    setDrill(null);
+    focusBoard();
+  }, [focusBoard]);
 
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;

@@ -3,8 +3,20 @@ const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
-  await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
+  await page.getByRole('combobox', { name: 'Search commands', exact: true }).fill(label);
   await page.keyboard.press('Enter');
+}
+async function exitPractice(page, buttonId, key) {
+  const square = page.locator('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]');
+  await square.focus();
+  const fen = await page.locator('.bottombar-fen').getAttribute('title');
+  await page.getByTestId(buttonId).focus(); await page.keyboard.press(key);
+  await page.getByTestId('mistake-drill').waitFor({ state: 'detached' });
+  await page.waitForFunction(() => document.activeElement?.matches('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]'), null, { timeout: 3000 });
+  assert.doesNotMatch(await square.getAttribute('aria-label'), /\bselected\b/, 'Leaving practice must focus without selecting a piece');
+  assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), fen, 'Leaving practice must preserve the position');
+  assert.equal(await square.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true,
+    'The restored board square must be visible and reachable');
 }
 (async () => {
   const browser = await browserType.launch();
@@ -133,9 +145,14 @@ async function command(page, label) {
         }
         await page.getByTestId('drill-next-btn').click();
         assert.match(await banner.innerText(), /Done: 1 of 1 found/);
-        await page.getByTestId('drill-close-btn').click();
+        await exitPractice(page, 'drill-close-btn', black ? 'Space' : 'Enter');
         await command(page, 'Review panel');
         assert.equal(await moment.textContent(), originalMoment, 'Practice must preserve the original reviewed mistake');
+        await page.getByTestId('learn-from-mistakes-btn').click();
+        await page.waitForFunction(() => document.querySelector('[data-testid="mistake-drill"]')?.dataset.verdict === 'asking');
+        await exitPractice(page, 'drill-stop-btn', black ? 'Enter' : 'Space');
+        await command(page, 'Review panel');
+        assert.equal(await moment.textContent(), originalMoment, 'Stopping practice must preserve the original reviewed mistake');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}x${height}/${black ? 'Black' : 'Red'}: uncertain/missing practice scores, same-position retry, exact recovery and enlarged actions passed`);
       } finally { await page.close(); }
