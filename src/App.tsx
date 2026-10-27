@@ -3377,10 +3377,7 @@ function App() {
     closeNewGameMenu();
   }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis]);
 
-  const handleMoveLineFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
+  const readMoveLineFile = useCallback(async (file: File) => {
     cancelDirectImport();
     const generation = directImportGenerationRef.current;
 
@@ -3424,6 +3421,25 @@ function App() {
       setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }
   }, [handleImportXqf, cancelDirectImport]);
+
+  const handleMoveLineFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (file) void readMoveLineFile(file);
+  }, [readMoveLineFile]);
+
+  const handleMoveLineFileDrop = useCallback((event: React.DragEvent<HTMLTextAreaElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    const file = event.dataTransfer.files[0];
+    if (event.dataTransfer.files.length !== 1 || !file) {
+      cancelDirectImport();
+      setMoveLineError('Drop one game file at a time.');
+      return;
+    }
+    void readMoveLineFile(file);
+  }, [cancelDirectImport, readMoveLineFile]);
 
   const handleCopyFen = useCallback(async () => {
     const request = ++exportRequestRef.current;
@@ -6408,6 +6424,11 @@ function App() {
                   id="new-game-line-input"
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
+                  onDragOver={event => {
+                    if (!event.dataTransfer.types.includes('Files')) return;
+                    event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
+                  }}
+                  onDrop={handleMoveLineFileDrop}
                   onChange={(e) => {
                     cancelDirectImport();
                     const nextValue = e.target.value;
@@ -6423,10 +6444,11 @@ function App() {
                   placeholder="1. 炮二平五 马8进7   ·   1. C2=5 H8+7   ·   1. b2e2 h9g7"
                   aria-label="Move line in coordinates, WXF or Chinese notation"
                   aria-invalid={moveLineError ? true : undefined}
-                  aria-describedby={moveLineError ? 'new-game-line-error' : undefined}
+                  aria-describedby={moveLineError ? 'new-game-line-error new-game-line-drop-hint' : 'new-game-line-drop-hint'}
                   rows={3}
                   data-testid="uci-line-input"
                 />
+                <p id="new-game-line-drop-hint" className="settings-hint">Drop a PGN, XQF or text file here.</p>
                 <div className="new-game-file-row">
                   <button
                     type="button"
