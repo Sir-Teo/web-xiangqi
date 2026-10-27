@@ -152,7 +152,8 @@ const scripts = [
   'test-audit-browser.cjs',
   'test-audit-followup-browser.cjs',
   'test-palette-stationary-pointer-browser.cjs',
-  'test-dialog-keyboard-browser.cjs'];
+  'test-dialog-keyboard-browser.cjs',
+  'test-clear-board-markers-browser.cjs'];
 
 function selectShard(suites, shard = '1/1') {
   const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(shard);

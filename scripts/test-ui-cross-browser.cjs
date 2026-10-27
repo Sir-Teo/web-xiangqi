@@ -117,6 +117,8 @@ const { browserType } = require('./qa-browser.cjs');
         'test-graph-axis-browser.cjs',
         'test-move-quality-browser.cjs',
         'test-board-render-browser.cjs',
+        'test-action-repeat-browser.cjs',
+        'test-clear-board-markers-browser.cjs',
         'test-board-press-browser.cjs',
         'test-move-render-browser.cjs',
         'test-move-list-reflow-browser.cjs',
