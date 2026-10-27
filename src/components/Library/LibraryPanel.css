@@ -574,6 +574,23 @@
 .lib-backup-file input:focus-visible { outline: 2px solid var(--accent, #d5a65a); outline-offset: 3px; }
 .lib-backup-file { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; margin-top: 0.8rem; }
 .lib-transfer-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.lib-restore-conflict {
+  min-inline-size: 0;
+  margin: 0.75rem 0;
+  padding: 0.6rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 4px);
+  overflow-wrap: anywhere;
+}
+.lib-restore-conflict legend {
+  max-width: 100%;
+  padding-inline: 0.25rem;
+  color: var(--text-heading);
+  font-weight: 600;
+}
+.lib-restore-conflict label { display: grid; min-width: 0; gap: 0.4rem; }
+.lib-restore-conflict select { font-family: inherit; }
+.lib-restore-resolution { margin-bottom: 0; }
 .lib-transfer .lib-action-error button { display: block; margin-top: 0.5rem; }
 .lib-transfer-status { margin-bottom: 0; }
 .lib-transfer-status:empty { display: none; }

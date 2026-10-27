@@ -1,5 +1,5 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   exportLibraryBackup, loadLibraryState, MAX_LIBRARY_JSON_LENGTH,
   previewLibrarySalvage, salvageLibrary, latestLibraryRecovery,
@@ -7,6 +7,12 @@ import {
   type LibraryRestorePreview, type LibraryRestoreChoices, type LibraryState,
 } from '../../utils/gameLibrary';
 import { downloadTextFile } from '../../utils/gameExport';
+
+const RESOLUTION_DETAILS = {
+  keep: 'Keep the current study. Skip this version from the backup.',
+  replace: 'Replace the current study with the backup version.',
+  copy: 'Keep the current study and add the backup version as a separate copy.',
+};
 
 export function LibraryTransfer({ state, onChange }: { state: LibraryState; onChange: () => void }) {
   const salvage = useMemo(() => state.mutationBlocked ? previewLibrarySalvage(state.raw) : null, [state]);
@@ -18,6 +24,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
   const restoreInput = useRef<HTMLInputElement>(null);
   const restorePreview = useRef<HTMLDivElement>(null);
   const backupSummary = useRef<HTMLElement>(null);
+  const resolutionId = useId();
   const restoringRef = useRef(false);
   const [restoring, setRestoring] = useState(false);
   const initiatingControl = useRef<HTMLElement | null>(null);
@@ -142,15 +149,15 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
         {pending && (
           <div className="lib-restore-preview" ref={restorePreview}>
             <p role="status">Ready to add {pending.preview.added} {pending.preview.added === 1 ? 'game' : 'games'} and skip {pending.preview.duplicates} identical {pending.preview.duplicates === 1 ? 'game' : 'games'}. Replacements: {pending.preview.replaced ?? 0}. Current versions kept: {pending.preview.kept ?? 0}.</p>
-            {pending.preview.conflicts?.map(conflict => <fieldset key={conflict.id} className="lib-restore-conflict">
+            {pending.preview.conflicts?.map((conflict, index) => <fieldset key={conflict.id} className="lib-restore-conflict">
               <legend>{conflict.current.label || conflict.incoming.label || "Conflicting study"}</legend>
               <p>Current: {conflict.current.moves.length} {conflict.current.moves.length === 1 ? 'ply' : 'plies'}, {new Date(conflict.current.modifiedAt ?? conflict.current.savedAt).toLocaleString()}. Backup: {conflict.incoming.moves.length} {conflict.incoming.moves.length === 1 ? 'ply' : 'plies'}, {new Date(conflict.incoming.modifiedAt ?? conflict.incoming.savedAt).toLocaleString()}.</p>
               <details><summary>Compare notes and players</summary>
                 <p>Current: {[conflict.current.metadata?.redPlayer, conflict.current.metadata?.blackPlayer, conflict.current.rootComment, conflict.current.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
                 <p>Backup: {[conflict.incoming.metadata?.redPlayer, conflict.incoming.metadata?.blackPlayer, conflict.incoming.rootComment, conflict.incoming.moveTree?.[0]?.comment].filter(Boolean).join(" · ") || "No player names or opening notes"}</p>
               </details>
-              <label>Resolve {conflict.current.label || conflict.id}
-                <select disabled={restoring} value={pending.choices[conflict.id]?.choice ?? "keep"} onChange={event => {
+              <label>Resolve
+                <select className="lib-filter-select app-select app-select-roomy" aria-label={`Resolve ${conflict.current.label || conflict.id}`} aria-describedby={`${resolutionId}-${index}`} disabled={restoring} value={pending.choices[conflict.id]?.choice ?? "keep"} onChange={event => {
                   const choices = { ...pending.choices, [conflict.id]: { expected: JSON.stringify(conflict.current), choice: event.target.value as "keep" | "replace" | "copy" } };
                   const preview = previewLibraryRestore(pending.text, choices);
                   setPending({ ...pending, choices, preview: preview.error ? { ...pending.preview, error: preview.error } : preview });
@@ -158,6 +165,7 @@ export function LibraryTransfer({ state, onChange }: { state: LibraryState; onCh
                   <option value="keep">Keep current</option><option value="replace">Replace with backup</option><option value="copy">Import backup as a copy</option>
                 </select>
               </label>
+              <p id={`${resolutionId}-${index}`} className="lib-restore-resolution">{RESOLUTION_DETAILS[pending.choices[conflict.id]?.choice ?? 'keep']}</p>
             </fieldset>)}
             {pending.preview.error && <p role="alert">{pending.preview.error}</p>}
             <div className="lib-transfer-actions">
