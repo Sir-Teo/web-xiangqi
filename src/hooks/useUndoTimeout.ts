@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, type FocusEvent } from 'react';
 
-/** Keep an Undo action available while someone is using its notice. */
+/** Pause Undo while the tab is hidden or its notice is being used. */
 export function useUndoTimeout(duration: number, onExpire: () => void) {
   const element = useRef<HTMLDivElement>(null);
   const timeout = useRef<number | null>(null);
@@ -24,7 +24,7 @@ export function useUndoTimeout(duration: number, onExpire: () => void) {
     remaining.current = Math.max(1, remaining.current - (Date.now() - started.current));
   }, []);
   const resume = useCallback(() => {
-    if (timeout.current !== null || remaining.current === null || held.current.focus || held.current.pointer) return;
+    if (timeout.current !== null || remaining.current === null || held.current.focus || held.current.pointer || document.hidden) return;
     started.current = Date.now();
     timeout.current = window.setTimeout(() => {
       timeout.current = null;
@@ -32,6 +32,11 @@ export function useUndoTimeout(duration: number, onExpire: () => void) {
       expire.current();
     }, remaining.current);
   }, []);
+  useLayoutEffect(() => {
+    const onVisibilityChange = () => { if (document.hidden) pause(); else resume(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [pause, resume]);
   const start = useCallback(() => {
     cancel();
     remaining.current = duration;

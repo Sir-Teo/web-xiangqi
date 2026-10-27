@@ -69,6 +69,19 @@ async function command(page, label) {
         assert.equal(await saved.isVisible(), true, 'Moving within the notice must keep expiry paused');
         await page.getByRole('searchbox', { name: 'Search library', exact: true }).focus();
         await page.mouse.move(0, 0);
+        // Headless browsers keep their lone page visible. Deliver the same
+        // visibility signal as switching tabs, without relying on window focus.
+        await page.evaluate(() => {
+          Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        await page.clock.fastForward(60000);
+        assert.equal(await saved.isVisible(), true, 'Hidden tabs must preserve library Undo');
+        assert.equal(await move.isVisible(), true, 'Hidden tabs must preserve move Undo');
+        await page.evaluate(() => {
+          delete document.hidden;
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
         await page.clock.fastForward(6000);
         assert.equal(await saved.isVisible(), true, 'Leaving Undo must retain its unspent recovery time');
         assert.equal(await move.isVisible(), true);
@@ -79,7 +92,7 @@ async function command(page, label) {
         await move.waitFor({ state: 'hidden' });
         assert.equal(await saved.count(), 0, 'Unattended notices must eventually expire');
         assert.equal(await move.count(), 0);
-        console.log(`${browserType.name()} ${width}px: separate recovery notices, enlarged text, restoring both edits, focus/hover pause and resumed expiry passed`);
+        console.log(`${browserType.name()} ${width}px: separate recovery notices, enlarged text, restoring both edits, focus, pointer and tab visibility pause; resumed expiry passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }
