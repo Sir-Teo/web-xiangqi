@@ -5,6 +5,7 @@ import { formatBreadcrumbLabel } from '../utils/moveBreadcrumb';
 import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms } from '../utils/searchTerms';
 import type { XiangqiNotationStyle } from '../utils/xiangqiNotation';
 import { isComposingKey } from '../utils/keyboard';
+import { IconX } from './icons';
 import './StudyNotes.css';
 
 const PAGE_SIZE = 20;
@@ -30,6 +31,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
     const { query, limit, expanded } = view;
     const identityRef = useRef(gameIdentity);
     const detailsRef = useRef<HTMLDetailsElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
     const nextPageFocusRef = useRef<number | null>(null);
     useLayoutEffect(() => {
@@ -72,13 +74,20 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
         <summary>Study notes <span>({notes.length})</span></summary>
         <div className="study-notes-body">
             <label htmlFor="study-notes-search">Find a note in any variation</label>
-            <input id="study-notes-search" type="search" value={query} maxLength={MAX_SEARCH_QUERY_LENGTH}
-                aria-keyshortcuts="Escape" title="Press Esc to clear this search"
-                onKeyDown={event => {
-                    if (event.key !== 'Escape' || !query || isComposingKey(event.nativeEvent)) return;
-                    event.preventDefault(); event.stopPropagation(); updateView({ query: '', limit: PAGE_SIZE });
-                }}
-                placeholder="Search note text" onChange={event => updateView({ query: event.target.value, limit: PAGE_SIZE })} />
+            <div className="study-notes-search">
+                <input id="study-notes-search" ref={searchRef} type="search" value={query} maxLength={MAX_SEARCH_QUERY_LENGTH}
+                    aria-keyshortcuts="Escape" title="Press Esc to clear this search"
+                    onKeyDown={event => {
+                        if (event.key !== 'Escape' || !query || isComposingKey(event.nativeEvent)) return;
+                        event.preventDefault(); event.stopPropagation(); updateView({ query: '', limit: PAGE_SIZE });
+                    }}
+                    placeholder="Search note text" onChange={event => updateView({ query: event.target.value, limit: PAGE_SIZE })} />
+                {query && <button type="button" className="chip-btn study-notes-search-clear"
+                    aria-label="Clear note search" title="Clear search"
+                    onClick={() => { updateView({ query: '', limit: PAGE_SIZE }); searchRef.current?.focus(); }}>
+                    <IconX width="1rem" height="1rem" />
+                </button>}
+            </div>
             <p role="status">{matches.length ? `${matches.length} ${matches.length === 1 ? 'note' : 'notes'}${matches.length > limit ? ` · Showing ${limit}` : ''}. Choose one to go to its position.` : 'No notes match. Try fewer words.'}</p>
             {disabled && <p>Pause play to visit a note.</p>}
             <ul ref={listRef}>

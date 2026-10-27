@@ -73,7 +73,26 @@ async function assertFits(page) {
         assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), false, 'A collapsed finder must stay collapsed on return');
         await openFinder(page);
         assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Reopening the finder must preserve its query');
+        const clear = page.getByRole('button', { name: 'Clear note search', exact: true });
+        const finderFen = await page.locator('.bottombar-fen').getAttribute('title');
+        const currentNote = await page.getByTestId('move-comment-input').inputValue();
+        for (const activation of ['pointer', 'keyboard']) {
+          const box = await clear.boundingBox();
+          assert.ok(box.width >= 44 && box.height >= 44, 'Clear note search needs a touch target');
+          if (activation === 'pointer') await clear.click();
+          else { await clear.focus(); await page.keyboard.press('Enter'); }
+          assert.equal(await search.inputValue(), '');
+          assert.equal(await results.count(), 7, 'Clear must restore every variation’s notes');
+          assert.equal(await search.evaluate(node => node === document.activeElement), true, 'Clear must return focus to the query');
+          assert.equal(await clear.count(), 0);
+          assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), finderFen, 'Clearing must preserve the position');
+          assert.equal(await page.getByTestId('move-comment-input').inputValue(), currentNote, 'Clearing must preserve the current note');
+          await search.fill('🐎 CANNON 中炮');
+          assert.equal(await results.count(), 1);
+        }
         await search.focus();
+        await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
+        assert.equal(await clear.evaluate(node => node === document.activeElement), true, 'Clear must be reachable from the query with Tab');
         await page.keyboard.press(browserType.name() === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         assert.equal(await page.evaluate(() => document.activeElement?.className), 'study-note-result');
         await page.keyboard.press('Enter');
@@ -175,8 +194,8 @@ async function assertFits(page) {
           assert.equal(await results.count(), 1, 'Search must reach beyond rendered tree/list limits');
           await results.first().click();
           await noteIs(page, 'Side note 1023');
-          await search.fill('');
-          assert.equal(await results.count(), 20, 'Changing a filter resets progressive rendering');
+          await clear.click();
+          assert.equal(await results.count(), 20, 'Clearing the query resets progressive rendering');
           await search.fill('Root plan');
           await results.first().click();
           await noteIs(page, 'Root plan');
