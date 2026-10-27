@@ -45,6 +45,7 @@ import {
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
+import { useUndoTimeout } from './hooks/useUndoTimeout';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
@@ -4523,17 +4524,11 @@ function App() {
    * costs nothing until it is needed.
    */
   const [deleteUndo, setDeleteUndo] = useState<{ snapshot: MoveTreeSnapshot; removed: number; nodeId: string } | null>(null);
-  const deleteUndoTimerRef = useRef<number | null>(null);
+  const deleteUndoTimeout = useUndoTimeout(10000, () => setDeleteUndo(null));
   const dismissDeleteUndo = useCallback(() => {
-    if (deleteUndoTimerRef.current !== null) {
-      window.clearTimeout(deleteUndoTimerRef.current);
-      deleteUndoTimerRef.current = null;
-    }
+    deleteUndoTimeout.cancel();
     setDeleteUndo(null);
-  }, []);
-  useEffect(() => () => {
-    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
-  }, []);
+  }, [deleteUndoTimeout]);
   // A new game may have the same root FEN, but its predecessor's undo cannot
   // be applied to it. Identity changes on reset, import, and library load.
   useEffect(() => { dismissDeleteUndo(); }, [dismissDeleteUndo, gameIdentity]);
@@ -4551,13 +4546,9 @@ function App() {
       stack.push(...(treeNodes[id]?.childrenIds ?? []));
     }
     if (!deleteNode(nodeId)) return;
-    if (deleteUndoTimerRef.current !== null) window.clearTimeout(deleteUndoTimerRef.current);
     setDeleteUndo({ snapshot, removed, nodeId });
-    deleteUndoTimerRef.current = window.setTimeout(() => {
-      deleteUndoTimerRef.current = null;
-      setDeleteUndo(null);
-    }, 10000);
-  }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
+    deleteUndoTimeout.start();
+  }, [captureTreeSnapshot, clearBoardMarkers, deleteNode, deleteUndoTimeout, handleCancelReview, reviewStatus, rootNodeId, treeNodes]);
 
   /**
    * Deleting a saved study is the most expensive thing a reader can do here,
@@ -4576,7 +4567,7 @@ function App() {
   const [libraryUndo, setLibraryUndo] = useState<{
     game: SavedGame; failed?: boolean; pending?: boolean; downloadFailed?: boolean;
   } | null>(null);
-  const libraryUndoTimerRef = useRef<number | null>(null);
+  const libraryUndoTimeout = useUndoTimeout(10000, () => setLibraryUndo(null));
   const libraryUndoVersionRef = useRef(0);
   const libraryUndoButtonRef = useRef<HTMLButtonElement>(null);
   const focusUndoRetryRef = useRef(false);
@@ -4592,29 +4583,19 @@ function App() {
   }, [libraryUndo]);
   const dismissLibraryUndo = useCallback(() => {
     libraryUndoVersionRef.current += 1;
-    if (libraryUndoTimerRef.current !== null) {
-      window.clearTimeout(libraryUndoTimerRef.current);
-      libraryUndoTimerRef.current = null;
-    }
+    libraryUndoTimeout.cancel();
     setLibraryUndo(null);
-  }, []);
-  useEffect(() => () => {
-    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
-  }, []);
+  }, [libraryUndoTimeout]);
 
   const handleDeleteSavedGame = useCallback(async (id: string): Promise<boolean> => {
     const removed = savedGames.find((game) => game.id === id);
     if (!await deleteGameFromLibrary(id)) return false;
     if (!removed) return true;
-    if (libraryUndoTimerRef.current !== null) window.clearTimeout(libraryUndoTimerRef.current);
     libraryUndoVersionRef.current += 1;
     setLibraryUndo({ game: removed });
-    libraryUndoTimerRef.current = window.setTimeout(() => {
-      libraryUndoTimerRef.current = null;
-      setLibraryUndo(null);
-    }, 10000);
+    libraryUndoTimeout.start();
     return true;
-  }, [deleteGameFromLibrary, savedGames]);
+  }, [deleteGameFromLibrary, libraryUndoTimeout, savedGames]);
 
   const handleUndoLibraryDelete = useCallback(async () => {
     if (!libraryUndo || libraryUndo.pending) return;
@@ -4622,10 +4603,7 @@ function App() {
     // holds the library lock. A later deletion owns its own toast and timer.
     const version = libraryUndoVersionRef.current;
     const hadFocus = document.activeElement === libraryUndoButtonRef.current;
-    if (libraryUndoTimerRef.current !== null) {
-      window.clearTimeout(libraryUndoTimerRef.current);
-      libraryUndoTimerRef.current = null;
-    }
+    libraryUndoTimeout.cancel();
     setLibraryUndo({ ...libraryUndo, pending: true });
     const restored = await restoreGameToLibrary(libraryUndo.game);
     if (version !== libraryUndoVersionRef.current) return;
@@ -4637,7 +4615,7 @@ function App() {
     // leave the toast up rather than closing it on a delete that stands.
     focusUndoRetryRef.current = hadFocus;
     setLibraryUndo({ game: libraryUndo.game, failed: true });
-  }, [dismissLibraryUndo, libraryUndo, restoreGameToLibrary]);
+  }, [dismissLibraryUndo, libraryUndo, libraryUndoTimeout, restoreGameToLibrary]);
 
   const handleUndoDelete = useCallback(() => {
     if (!deleteUndo) return;
@@ -5347,17 +5325,11 @@ function App() {
   const [discardedAutoSave, setDiscardedAutoSave] = useState<{
     snapshot: AutoSavedGame; failed?: boolean; downloadFailed?: boolean;
   } | null>(null);
-  const discardedAutoSaveTimerRef = useRef<number | null>(null);
+  const discardedAutoSaveTimeout = useUndoTimeout(30000, () => setDiscardedAutoSave(null));
   const dismissDiscardedAutoSave = useCallback(() => {
-    if (discardedAutoSaveTimerRef.current !== null) {
-      window.clearTimeout(discardedAutoSaveTimerRef.current);
-      discardedAutoSaveTimerRef.current = null;
-    }
+    discardedAutoSaveTimeout.cancel();
     setDiscardedAutoSave(null);
-  }, []);
-  useEffect(() => () => {
-    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
-  }, []);
+  }, [discardedAutoSaveTimeout]);
 
   const dismissAutoSaveRecovery = useCallback(() => {
     const discarded = autoSaveRecovery;
@@ -5365,16 +5337,12 @@ function App() {
     setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== discarded?.draftId));
     setAutoSaveRecovery(null);
     if (!discarded || !isWorthAutoSaving(discarded.game)) return;
-    if (discardedAutoSaveTimerRef.current !== null) window.clearTimeout(discardedAutoSaveTimerRef.current);
     setDiscardedAutoSave({ snapshot: discarded });
     // Longer than the ten seconds the other two undos run for: this one has to
     // survive the reader starting to look at the fresh board and realising
     // what they have lost, rather than an immediate "no, not that one".
-    discardedAutoSaveTimerRef.current = window.setTimeout(() => {
-      discardedAutoSaveTimerRef.current = null;
-      setDiscardedAutoSave(null);
-    }, 30000);
-  }, [autoSaveRecovery]);
+    discardedAutoSaveTimeout.start();
+  }, [autoSaveRecovery, discardedAutoSaveTimeout]);
 
   const undoDiscardedAutoSave = useCallback(() => {
     if (!discardedAutoSave) return;
@@ -5383,10 +5351,7 @@ function App() {
     if (!handleLoadGame(discardedAutoSave.snapshot.game)) {
       // Keep the toast. Dismissing it here would throw away the only copy of
       // the game a second time, with nothing on the board to show for it.
-      if (discardedAutoSaveTimerRef.current !== null) {
-        window.clearTimeout(discardedAutoSaveTimerRef.current);
-        discardedAutoSaveTimerRef.current = null;
-      }
+      discardedAutoSaveTimeout.cancel();
       setDiscardedAutoSave({ snapshot: discardedAutoSave.snapshot, failed: true });
       return;
     }
@@ -5401,7 +5366,7 @@ function App() {
     setLoadedSavedStudy(resolveLibrarySource(discardedAutoSave.snapshot.sourceLibrary, savedGames));
     persistAutoSave({ ...discardedAutoSave.snapshot.game, sourceLibrary: discardedAutoSave.snapshot.sourceLibrary });
     dismissDiscardedAutoSave();
-  }, [discardedAutoSave, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
+  }, [discardedAutoSave, discardedAutoSaveTimeout, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
 
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
@@ -8174,7 +8139,7 @@ function App() {
             chrome below it begins, on both. */}
         <div className="app-notice-stack">
           {discardedAutoSave ? (
-            <div className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
+            <div {...discardedAutoSaveTimeout.bindings} className={`undo-toast ${discardedAutoSave.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="discard-undo-toast">
               <span>
                 {discardedAutoSave.failed
                   ? 'Could not put the game back on the board. Download its data for repair.'
@@ -8198,7 +8163,7 @@ function App() {
             </div>
           ) : null}
           {libraryUndo ? (
-            <div className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
+            <div {...libraryUndoTimeout.bindings} className={`undo-toast ${libraryUndo.failed ? 'undo-toast-failed' : ''}`} role="status" data-testid="library-undo-toast">
               <span>
                 {libraryUndo.pending ? 'Restoring the saved game…' : libraryUndo.failed
                   ? 'Could not put it back. Browser storage may be full, blocked, or busy. Retry when it is available, or download its data.'
@@ -8223,7 +8188,7 @@ function App() {
             </div>
           ) : null}
           {deleteUndo ? (
-            <div className="undo-toast" role="status" data-testid="delete-undo-toast">
+            <div {...deleteUndoTimeout.bindings} className="undo-toast" role="status" data-testid="delete-undo-toast">
               <span>Removed {deleteUndo.removed === 1 ? '1 move' : `${deleteUndo.removed} moves`}</span>
               <button type="button" className="undo-toast-btn" onClick={handleUndoDelete} data-testid="delete-undo-btn">Undo</button>
               <button type="button" className="undo-toast-dismiss" onClick={dismissDeleteUndo} aria-label="Dismiss">

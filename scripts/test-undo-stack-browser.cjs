@@ -49,7 +49,29 @@ async function command(page, label) {
         await move.waitFor({ state: 'hidden' });
         assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
         assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:library:v1')).length), 1);
-        console.log(`${browserType.name()} ${width}px: saved-game and move recovery notices stay separate at 100/200% text; both restore actions work`);
+        // Reading or tabbing through Undo must not consume the recovery window.
+        await page.mouse.move(0, 0);
+        await command(page, 'Delete this move and what follows');
+        await page.getByTestId('delete-saved-stacked-undo').click();
+        await page.getByTestId('confirm-delete-saved-stacked-undo').click();
+        const undo = page.getByTestId('library-undo-btn');
+        await page.clock.fastForward(3000);
+        await undo.focus(); await page.getByTestId('delete-undo-btn').hover();
+        await page.clock.fastForward(15000);
+        assert.equal(await saved.isVisible(), true, 'Focused Undo must survive its expiry');
+        assert.equal(await move.isVisible(), true, 'Pointing at Undo must preserve the recovery window');
+        await saved.getByRole('button', { name: 'Dismiss', exact: true }).focus();
+        await page.clock.fastForward(15000);
+        assert.equal(await saved.isVisible(), true, 'Moving within the notice must keep expiry paused');
+        await page.getByRole('searchbox', { name: 'Search library', exact: true }).focus();
+        await page.mouse.move(0, 0);
+        await page.clock.fastForward(6000);
+        assert.equal(await saved.isVisible(), true, 'Leaving Undo must retain its unspent recovery time');
+        assert.equal(await move.isVisible(), true);
+        await page.clock.fastForward(1001);
+        assert.equal(await saved.count(), 0, 'Unattended notices must eventually expire');
+        assert.equal(await move.count(), 0);
+        console.log(`${browserType.name()} ${width}px: separate recovery notices, enlarged text, restoring both edits, focus/hover pause and resumed expiry passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

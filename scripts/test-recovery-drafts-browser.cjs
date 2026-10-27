@@ -20,7 +20,17 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5173/web-xiangqi/';
       assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:auto-saved-game:v1')), before);
       if (width < 900) await page.getByTestId('mobile-more-actions-btn').click();
       await page.getByTestId('recovery-drafts-btn').click();
+      if (extra.rootComment) {
+        await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+        await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+      }
       await page.getByRole('button', { name: 'Start fresh', exact: true }).click();
+      if (extra.rootComment) {
+        const undo = page.getByTestId('discard-undo-btn');
+        await undo.focus(); await page.clock.fastForward(31000);
+        assert.equal(await undo.isVisible(), true, 'A focused recovery action must survive the thirty-second expiry');
+        assert.equal(await undo.evaluate(node => node === document.activeElement), true);
+      }
       await page.getByTestId('discard-undo-btn').click();
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1')).game);
       for (const [key, value] of Object.entries(extra)) assert.deepEqual(saved[key], value);
