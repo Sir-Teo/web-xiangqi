@@ -3041,6 +3041,7 @@ function App() {
   const directImportGenerationRef = useRef(0);
   const directImportControllerRef = useRef<AbortController | null>(null);
   const [directImportBusy, setDirectImportBusy] = useState(false);
+  const [moveLineFileDragActive, setMoveLineFileDragActive] = useState(false);
   const directImportFocusRef = useRef<HTMLElement | null>(null);
   const directImportCancelRef = useRef<HTMLButtonElement | null>(null);
   useLayoutEffect(() => {
@@ -3055,7 +3056,10 @@ function App() {
     directImportControllerRef.current = null;
     setDirectImportBusy(false);
   }, []);
-  useLayoutEffect(() => { cancelDirectImport(); }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
+  useLayoutEffect(() => {
+    cancelDirectImport();
+    setMoveLineFileDragActive(false);
+  }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
   useEffect(() => () => { directImportGenerationRef.current++; directImportControllerRef.current?.abort(); }, []);
   const [moveLineInput, setMoveLineInput] = useState('');
   const [moveLineFileName, setMoveLineFileName] = useState('');
@@ -3456,6 +3460,7 @@ function App() {
   }, [readMoveLineFile]);
 
   const handleMoveLineFileDrop = useCallback((event: React.DragEvent<HTMLTextAreaElement>) => {
+    setMoveLineFileDragActive(false);
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     event.currentTarget.focus();
@@ -6420,9 +6425,13 @@ function App() {
                   id="new-game-line-input"
                   className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
                   value={moveLineInput}
+                  data-file-drag={moveLineFileDragActive || undefined}
+                  onDragLeave={() => setMoveLineFileDragActive(false)}
+                  onDragEnd={() => setMoveLineFileDragActive(false)}
                   onDragOver={event => {
                     if (!event.dataTransfer.types.includes('Files')) return;
                     event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
+                    setMoveLineFileDragActive(true);
                   }}
                   onDrop={handleMoveLineFileDrop}
                   onChange={(e) => {

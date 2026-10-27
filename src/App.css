@@ -5907,6 +5907,12 @@ summary:active {
   border-color: var(--border-accent);
 }
 
+.app-shell .new-game-line-form .new-game-line-input[data-file-drag] {
+  outline: 2px dashed var(--accent-hover);
+  outline-offset: 2px;
+  background: var(--accent-subtle);
+}
+
 .new-game-file-row {
   display: flex;
   flex-wrap: wrap;
