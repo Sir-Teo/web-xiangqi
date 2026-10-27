@@ -4021,12 +4021,6 @@ function App() {
     setMobileView('board');
   }, [askDrillMoment, drillMoments]);
 
-  const retryDrillMoment = useCallback(() => {
-    if (!drill || !drillMoment) return;
-    setDrill({ ...drill, attempt: null, verdict: null });
-    askDrillMoment(drillMoment);
-  }, [askDrillMoment, drill, drillMoment]);
-
   const nextDrillMoment = useCallback(() => {
     if (!drill) return;
     const found = drill.found + (isDrillSuccess(drill.verdict) ? 1 : 0);
@@ -4038,15 +4032,6 @@ function App() {
     setDrill({ ...drill, found, index, attempt: null, verdict: null });
     askDrillMoment(drill.moments[index]);
   }, [askDrillMoment, drill]);
-
-  const showDrillAnswer = useCallback(() => {
-    if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
-    // The verdict is set before the move lands, so the effect below does not
-    // read the engine's own move as the reader's attempt.
-    setDrill({ ...drill, verdict: { kind: 'shown' } });
-    clearBoardMarkers();
-    applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove);
-  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId]);
 
   // A move played from the asked position is the attempt. The engine's move
   // and the game's move are graded at once; anything else waits for the
@@ -5174,6 +5159,23 @@ function App() {
     setDrill(null);
     focusBoard();
   }, [focusBoard]);
+
+  const retryDrillMoment = useCallback(() => {
+    if (!drill || !drillMoment) return;
+    setDrill({ ...drill, attempt: null, verdict: null });
+    askDrillMoment(drillMoment);
+    focusBoard();
+  }, [askDrillMoment, drill, drillMoment, focusBoard]);
+
+  const showDrillAnswer = useCallback(() => {
+    if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
+    // The verdict is set before the move lands, so the effect below does not
+    // read the engine's own move as the reader's attempt.
+    setDrill({ ...drill, verdict: { kind: 'shown' } });
+    clearBoardMarkers();
+    applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove);
+    focusBoard();
+  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId, focusBoard]);
 
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
