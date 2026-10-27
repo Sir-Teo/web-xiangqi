@@ -34,6 +34,9 @@ export function normalizeGameMetadata(value: unknown): GameMetadata | undefined 
 /** Read the leading PGN headers only; comments and later games cannot supply tags. */
 export function extractPgnHeaders(text: string): Record<string, string> {
   const tags: Record<string, string> = {};
+  // A tag requires an opening bracket. Avoid allocating a token for every
+  // comment in header-free records when looking up metadata, FEN or results.
+  if (!text.includes('[')) return tags;
   for (const token of pgnTokens(text)) {
     if (token.kind === 'comment' || token.kind === 'escape') continue;
     if (token.kind !== 'tag') break;
