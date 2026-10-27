@@ -135,6 +135,8 @@ interface BoardProps {
     selected: { file: number, rank: number } | null;
     validTargets: { file: number, rank: number, capture: boolean }[];
     onSquareClick: (file: number, rank: number) => void;
+    /** Leave Escape to the caller's dialog when selection cannot be canceled. */
+    onCancelSelection?: () => void;
     orientation?: BoardOrientation;
     inCheck?: boolean;
     highlights?: Array<{ file: number; rank: number }>;
@@ -162,6 +164,7 @@ export const Board = React.memo(function Board({
     selected,
     validTargets,
     onSquareClick,
+    onCancelSelection,
     orientation = 'red',
     inCheck = false,
     highlights = [],
@@ -329,6 +332,16 @@ export const Board = React.memo(function Board({
         rank: number
     ) => {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
+        if (event.key === 'Escape' && !event.shiftKey && selected && onCancelSelection) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (dragStartRef.current) {
+                endDrag();
+                suppressNextClickRef.current = true;
+            }
+            onCancelSelection();
+            return;
+        }
         if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
             event.preventDefault();
             if (event.shiftKey && onToggleHighlight) {
@@ -367,7 +380,7 @@ export const Board = React.memo(function Board({
 
         event.preventDefault();
         focusSquare(clampSquare(nextFile, 8), clampSquare(nextRank, 9));
-    }, [focusSquare, onSquareClick, onToggleHighlight, orientation]);
+    }, [endDrag, focusSquare, onCancelSelection, onSquareClick, onToggleHighlight, orientation, selected]);
 
     const handleMarkerPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>, file: number, rank: number) => {
         // A cancelled gesture may never produce a click. Its suppression must
@@ -517,9 +530,9 @@ export const Board = React.memo(function Board({
     const fallbackRovingSquare = firstOccupiedSquare(board, ranks, files, draggableSide ? canDragFrom : undefined);
     const tabStopSquare = rovingSquare ?? selected ?? fallbackRovingSquare;
 
-    const squareKeyshortcuts = onToggleHighlight
+    const squareKeyshortcuts = (onToggleHighlight
         ? 'Enter Space Shift+Enter Shift+Space ArrowUp ArrowDown ArrowLeft ArrowRight Home End'
-        : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Home End';
+        : 'Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Home End') + (onCancelSelection ? ' Escape' : '');
 
     return (
         <div className="xiangqi-board-container" data-orientation={orientation}>

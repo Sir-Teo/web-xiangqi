@@ -22,7 +22,15 @@ async function skipToBoard(browser) {
           }
           await page.getByRole('button', { name: 'Skip to board', exact: true }).focus();
           await page.keyboard.press(key);
-          await page.waitForFunction(node => node === document.activeElement, target, { timeout: 3000 });
+          await page.waitForFunction(node => node === document.activeElement, target, { timeout: 3000 }).catch(async error => {
+            console.error('Skip focus failure', { browser: browserType.name(), width, height, size, key,
+              state: await square.evaluate(node => ({ connected: node.isConnected,
+                focused: document.activeElement?.outerHTML, square: node.outerHTML,
+                mobileView: document.querySelector('.app-shell')?.getAttribute('data-mobile-view'), hidden: document.hidden })),
+              originalTargetConnected: await target.evaluate(node => node.isConnected) });
+            await page.screenshot({ path: `/tmp/xiangqi-skip-focus-${browserType.name()}-${width}-${size}-${key}.png` });
+            throw error;
+          });
           if (width < 900) assert.equal(await page.locator('.app-shell').getAttribute('data-mobile-view'), 'board');
           const reachable = await square.evaluate(node => {
             const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -59,7 +67,7 @@ async function skipToBoard(browser) {
       }
     }
     const checkOwnership = async (control, key, unchanged) => {
-      for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }]) {
+      for (const flags of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229 }, { prePrevented: true }, ...(key === 'Escape' ? [{ shiftKey: true }] : [])]) {
         await control.focus();
         const result = await control.evaluate((node, { key, flags }) => {
           const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...flags });
@@ -115,6 +123,39 @@ async function skipToBoard(browser) {
         'Arrow navigation must continue from the row edge');
     };
     await checkBoardRowEdges('red');
+    const rook = page.locator('.hitbox[data-file="8"][data-rank="0"]');
+    await rook.focus(); await page.keyboard.press('Enter');
+    assert.match(await rook.getAttribute('aria-label'), /\bselected\b/);
+    await square.focus(); await page.keyboard.press('Shift+Enter');
+    assert.match(await square.getAttribute('aria-label'), /\bhighlighted\b/);
+    await checkOwnership(square, 'Escape', async () => assert.match(await rook.getAttribute('aria-label'), /\bselected\b/));
+    assert.ok(await page.locator('.hitbox[aria-label*="legal move"]').count() > 0);
+    await page.keyboard.press('Escape');
+    assert.doesNotMatch(await rook.getAttribute('aria-label'), /\bselected\b/, 'Escape must cancel the selected piece from another square');
+    assert.equal(await page.locator('.hitbox[aria-label*="legal move"], .hitbox[aria-label*="legal capture"]').count(), 0);
+    assert.equal(await square.evaluate(node => node === document.activeElement), true, 'Canceling must retain the current square focus');
+    assert.match(await square.getAttribute('aria-label'), /\bhighlighted\b/, 'Canceling must preserve drawn highlights');
+    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.hitbox[aria-label*="selected"]').count(), 0, 'Repeating Escape must not pick up another piece');
+    await page.keyboard.press('Shift+Enter');
+    assert.doesNotMatch(await square.getAttribute('aria-label'), /\bhighlighted\b/);
+    const from = await rook.boundingBox();
+    const to = await page.locator('.hitbox[data-file="8"][data-rank="1"]').boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    try {
+      await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 5 });
+      await page.locator('.piece.dragging').waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('.piece.dragging').count(), 0, 'Escape must return a dragged piece immediately');
+    } finally { await page.mouse.up(); }
+    assert.equal(await page.locator('.hitbox[aria-label*="selected"]').count(), 0, 'Releasing a canceled drag must not select another piece');
+    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen, 'Releasing a canceled drag must not play a move');
+    await rook.click();
+    assert.match(await rook.getAttribute('aria-label'), /\bselected\b/, 'The next pointer gesture must still select normally');
+    await rook.click();
+    assert.doesNotMatch(await rook.getAttribute('aria-label'), /\bselected\b/);
     for (const selector of ['.mtree-chip', '.tree-breadcrumb-chip']) {
       const controls = page.locator(selector);
       assert.ok(await controls.count() >= 2, `${selector} needs multiple real navigation targets`);

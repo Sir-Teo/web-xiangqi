@@ -1740,7 +1740,7 @@ function App() {
         setShowCommandPalette((open) => !open);
         return;
       }
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         event.preventDefault();
         setShowSettings(false);
         setShowNewGameMenu(false);
@@ -2315,6 +2315,12 @@ function App() {
       }
     }
   }, [assistMode, board, clearBoardMarkers, clearMoveRuleHint, gameResult, isAiTurn, onSquareClick, selected, showMoveRuleHint, sideToMove, validTargets]);
+
+  const handleCancelBoardSelection = useCallback(() => {
+    if (!selected) return;
+    onSquareClick(selected.file, selected.rank);
+    clearMoveRuleHint();
+  }, [clearMoveRuleHint, onSquareClick, selected]);
 
   const applyMode = useCallback((mode: GameMode) => {
     const nextWorkspace = workspaceForNewGame(mode, gameMode);
@@ -7260,6 +7266,7 @@ function App() {
                   selected={selected}
                   validTargets={validTargets}
                   onSquareClick={handleSquareClick}
+                  onCancelSelection={handleCancelBoardSelection}
                   // Dragging is offered for exactly the pieces a click could
                   // move: the side to play, and only while the board is taking
                   // moves at all. `handleSquareClick` already refuses the other
