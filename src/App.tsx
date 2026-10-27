@@ -5167,6 +5167,11 @@ function App() {
     });
   }, []);
 
+  const handleStartBoardAnalysis = useCallback(() => {
+    startEngineAnalysis();
+    focusBoard();
+  }, [focusBoard, startEngineAnalysis]);
+
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
     const params = readShareParams(window.location);
@@ -5751,7 +5756,7 @@ function App() {
 
             {!isMobile && studySaveControl}
             {!isMobile && !engineRequired && workspaceMode === 'analysis' && (
-              <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
+              <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={handleStartBoardAnalysis}
                 title="Downloads about 53 MB on first use. Board editing and the library work without the engine.">
                 Start engine analysis
               </button>
@@ -6897,7 +6902,7 @@ function App() {
                 <span className={`turn-dot turn-dot-${sideToMove === 'w' ? 'red' : 'black'}`} />
                 <span className="mobile-turn-label">{sideToMove === 'w' ? 'Red' : 'Black'}</span>
                 {!engineRequired && workspaceMode === 'analysis' && (
-                  <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={startEngineAnalysis}
+                  <button type="button" className="gc-pill" data-testid="start-engine-analysis" onClick={handleStartBoardAnalysis}
                     aria-label="Analyze this position" title="Downloads about 53 MB on first use">Analyze</button>
                 )}
                 {/* The phone's stand-in for the eval bar, so it reads the same
