@@ -10,9 +10,10 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
       const page = await browser.newPage({ viewport: { width, height: 844 }, reducedMotion: 'reduce' });
       try {
         await page.addInitScript(() => {
-          Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => {
+          Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => {
             if (window.__copyDenied) throw new Error('Clipboard denied');
             if (window.__holdCopy) await new Promise((resolve, reject) => { window.__releaseCopy = resolve; window.__rejectCopy = reject; });
+            window.__copiedFen = text;
           } } });
           document.execCommand = () => false;
         });
@@ -29,6 +30,14 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         const field = page.getByTestId('editor-fen');
         const done = page.getByTestId('editor-done');
         const copy = page.getByTestId('editor-fen-copy');
+        const draft = `  ${fen}  `;
+        await field.fill(draft);
+        await copy.click(); await copy.filter({ hasText: 'Copied' }).waitFor();
+        assert.equal(await page.evaluate(() => window.__copiedFen), draft, 'Copy must use the visible FEN draft, including its side, clocks and spacing');
+        assert.equal(await field.inputValue(), draft, 'Copying must retain the draft');
+        assert.equal(await page.getByTestId('editor-side-red').getAttribute('aria-pressed'), 'true', 'Copying a draft must not load its side onto the editor board');
+        assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), originalFen);
+        await page.getByTestId('editor-start').click();
         await page.evaluate(() => { window.__copyDenied = true; });
         await copy.click(); await page.getByTestId('editor-fen-notice').waitFor();
         assert.match(await page.getByTestId('editor-fen-notice').innerText(), /clipboard refused/i);
@@ -36,6 +45,7 @@ const fen = 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 8
         assert.equal(await field.getAttribute('aria-describedby'), 'board-editor-fen-notice');
         await page.evaluate(() => { window.__copyDenied = false; });
         await copy.click(); await copy.filter({ hasText: 'Copied' }).waitFor();
+        assert.equal(await page.evaluate(() => window.__copiedFen), await field.inputValue(), 'Without a draft, Copy must use the current editor position');
         await page.evaluate(() => { window.__holdCopy = true; });
         await copy.click(); await page.waitForFunction(() => typeof window.__rejectCopy === 'function');
         assert.equal(await copy.innerText(), 'Copy', 'A pending editor copy must clear its old success badge');

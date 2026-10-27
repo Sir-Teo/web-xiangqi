@@ -142,7 +142,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
         clearCopyFeedback();
         setFenNotice(null);
         const request = copyRequestRef.current;
-        const ok = await copyToClipboard(fen);
+        const ok = await copyToClipboard(fenDraft ?? fen);
         if (request !== copyRequestRef.current) return;
         setCopied(ok);
         setFenNotice(ok ? null : { message: 'The clipboard refused it. Select the text and copy it by hand.' });
@@ -151,7 +151,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
             copiedTimerRef.current = null;
             setCopied(false);
         }, 1800);
-    }, [clearCopyFeedback, fen]);
+    }, [clearCopyFeedback, fen, fenDraft]);
 
     /**
      * `App` inerts every shell child that holds no open dialog, and inerting an
@@ -381,7 +381,7 @@ export function BoardEditor({ initialBoard, initialSide, pieceStyle = 'tradition
                             onKeyDown={(event) => { if (!isComposingKey(event.nativeEvent) && event.key === 'Enter') { event.preventDefault(); loadFenDraft(); } }}
                         />
                         <button type="button" className="pill-btn" onClick={loadFenDraft} data-testid="editor-fen-load">Load</button>
-                        <button type="button" className="pill-btn" onClick={() => void copyFen()} data-testid="editor-fen-copy">
+                        <button type="button" className="pill-btn" onClick={() => void copyFen()} title="Copy FEN text" data-testid="editor-fen-copy">
                             {copied ? 'Copied' : 'Copy'}
                         </button>
                     </div>
