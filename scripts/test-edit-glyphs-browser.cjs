@@ -74,10 +74,21 @@ async function assertFits(page) {
         assert.equal(await choose().evaluate(el => el === document.activeElement), true, 'Removing an annotation lost keyboard focus');
         await details.locator('.glyph-code-editor > summary').click();
         const numeric = page.getByRole('textbox', { name: 'Numeric PGN annotation' });
-        await numeric.fill('256'); await details.getByRole('button', { name: 'Add code', exact: true }).click();
-        await details.getByRole('alert').filter({ hasText: '0 to 255' }).waitFor();
+        await numeric.fill('256');
+        for (const key of ['Enter', 'Space']) {
+          await details.getByRole('button', { name: 'Add code', exact: true }).focus(); await page.keyboard.press(key);
+          await details.getByRole('alert').filter({ hasText: '0 to 255' }).waitFor();
+          assert.equal(await numeric.evaluate(node => node === document.activeElement), true, 'An invalid code must return focus to its field');
+          assert.equal(await numeric.inputValue(), '256', 'An invalid draft must remain available for correction');
+          assert.equal(await numeric.getAttribute('aria-invalid'), 'true');
+        }
         assert.deepEqual((await save(page)).moveTree[0].nags, [14]);
-        await numeric.fill('255'); await details.getByRole('button', { name: 'Add code', exact: true }).click();
+        await numeric.fill('255');
+        await details.getByRole('button', { name: 'Add code', exact: true }).focus(); await page.keyboard.press('Space');
+        assert.equal(await numeric.evaluate(node => node === document.activeElement), true, 'Adding a code must leave the field ready for another annotation');
+        assert.equal(await numeric.inputValue(), '');
+        assert.equal(await numeric.getAttribute('aria-invalid'), 'false');
+        assert.equal(await details.getByRole('button', { name: 'Add code', exact: true }).isDisabled(), true);
         assert.deepEqual((await save(page)).moveTree[0].nags, [14, 255]);
         for (const font of [16, 32, 16]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, font);
