@@ -179,6 +179,39 @@ async function exitPractice(page, buttonId, key) {
         await exitPractice(page, 'drill-stop-btn', 'Enter');
         await command(page, 'Review panel');
         assert.equal(await moment.textContent(), originalMoment, 'Retrying and showing an answer must preserve the original reviewed mistake');
+        if (width === 320) {
+          await page.evaluate(black => {
+            const key = 'xiangqi:library:v1';
+            const games = JSON.parse(localStorage.getItem(key));
+            const invalid = structuredClone(games.find(game => game.id === 'drill-bound-fixture'));
+            invalid.id = 'drill-answer-failure'; invalid.label = 'Unavailable saved answer';
+            invalid.review.annotations[black ? 3 : 2].bestMove = black ? 'a9a0' : 'a0a9';
+            invalid.review.summary.keyMoments[0].bestMove = black ? 'a9a0' : 'a0a9';
+            games.push(invalid); localStorage.setItem(key, JSON.stringify(games));
+            window.dispatchEvent(new StorageEvent('storage', { key }));
+          }, black);
+          await command(page, 'Library');
+          await page.getByTestId('load-saved-drill-answer-failure').click();
+          await page.waitForFunction(() => document.querySelector('[data-testid="learn-from-mistakes-btn"]')?.disabled === false);
+          await page.getByTestId('learn-from-mistakes-btn').click();
+          await page.waitForFunction(() => document.querySelector('[data-testid="mistake-drill"]')?.dataset.verdict === 'asking');
+          const beforeFailure = await page.locator('.bottombar-fen').getAttribute('title');
+          const marker = page.locator('.xiangqi-board .hitbox[data-file="8"][data-rank="0"]');
+          await marker.focus(); await page.keyboard.press('Shift+Enter');
+          const marked = await marker.getAttribute('aria-label');
+          assert.match(marked, /highlighted/);
+          const show = page.getByTestId('drill-show-btn'); await show.focus(); await page.keyboard.press(black ? 'Space' : 'Enter');
+          await page.waitForFunction(() => /saved answer.*could not be played/i.test(document.querySelector('[data-testid="notice-announcement"]')?.textContent || ''));
+          assert.equal(await banner.getAttribute('data-verdict'), 'asking', 'A rejected answer must not be marked as shown');
+          assert.equal(await page.locator('.bottombar-fen').getAttribute('title'), beforeFailure);
+          assert.equal(await marker.getAttribute('aria-label'), marked, 'A rejected answer must preserve board markings');
+          assert.equal(await show.evaluate(node => node === document.activeElement), true, 'A failed answer must retain focus on Show answer');
+          await page.keyboard.press('Tab');
+          assert.equal(await page.getByTestId('drill-next-btn').evaluate(node => node === document.activeElement), true);
+          await page.keyboard.press('Enter');
+          assert.match(await banner.innerText(), /Done: 0 of 1 found/, 'An unavailable answer must remain skippable');
+          await exitPractice(page, 'drill-close-btn', 'Enter');
+        }
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}x${height}/${black ? 'Black' : 'Red'}: uncertain/missing practice scores, same-position retry, exact recovery and enlarged actions passed`);
       } finally { await page.close(); }

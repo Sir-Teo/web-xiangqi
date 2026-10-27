@@ -5167,15 +5167,23 @@ function App() {
     focusBoard();
   }, [askDrillMoment, drill, drillMoment, focusBoard]);
 
-  const showDrillAnswer = useCallback(() => {
+  const showDrillAnswer = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     if (!drill || !drillMoment?.bestMove || !drillParentNodeId) return;
-    // The verdict is set before the move lands, so the effect below does not
-    // read the engine's own move as the reader's attempt.
+    if (!applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove)) {
+      showImportNotice('Answer unavailable', 'The saved answer could not be played here. Try another move or skip this question.');
+      // A capacity warning can reduce the mobile workspace after this click.
+      const button = event.currentTarget;
+      requestAnimationFrame(() => {
+        if (button === document.activeElement) button.scrollIntoView({ block: 'nearest' });
+      });
+      return;
+    }
+    // Batch the revealed verdict with the accepted move, so the attempt
+    // effect does not grade the engine's own answer as the reader's move.
     setDrill({ ...drill, verdict: { kind: 'shown' } });
     clearBoardMarkers();
-    applyUciMoveAtNode(drillParentNodeId, drillMoment.bestMove);
     focusBoard();
-  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId, focusBoard]);
+  }, [applyUciMoveAtNode, clearBoardMarkers, drill, drillMoment, drillParentNodeId, focusBoard, showImportNotice]);
 
   const incomingLink = useMemo(() => {
     if (typeof window === 'undefined') return null;
