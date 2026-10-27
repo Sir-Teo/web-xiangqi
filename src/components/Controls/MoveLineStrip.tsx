@@ -63,9 +63,10 @@ export function MoveLineStrip({
 
     return (
         <span className="pv-move-strip" ref={stripRef} onKeyDown={handleKeyDown}>
+            {/* Keep focus on a move’s place when live analysis changes its text. */}
             {tokens.map((token, moveIndex) => (
                 <button
-                    key={`${moveIndex}-${token}`}
+                    key={moveIndex}
                     type="button"
                     className="pv-move-btn"
                     data-move-index={moveIndex}
