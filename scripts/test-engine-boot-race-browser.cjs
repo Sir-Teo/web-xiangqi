@@ -35,11 +35,14 @@ async function lateBoot(browser, width) {
         if (id >= 2) resolve(engine);
       });
     ` }));
-    await page.clock.install();
+    // Freeze before startup so protocol latency cannot overtake a pause target
+    // or consume part of the boot watchdog's five-second deadline.
+    const clockStart = new Date('2026-01-01T00:00:00Z');
+    await page.clock.install({ time: clockStart });
+    await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
     await page.goto(base);
     await page.getByTestId('start-engine-analysis').click();
     await page.waitForFunction(() => window.__boots?.length === 1);
-    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
     await page.keyboard.press('e');
     if (!(await page.getByTestId('restart-engine-btn').isVisible())) await page.getByTestId('advanced-engine-maintenance').locator('summary').click();
     await page.getByTestId('restart-engine-btn').click();

@@ -9,11 +9,9 @@ async function savePendingNote(page, text) {
  await note.focus();
  // Save while the note debounce is paused, without a blur to commit it.
  // WebKit may leave the field focused when a save button is activated.
- await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
  await note.fill(text);
  assert.match(await status.textContent(), /Modified study/);
  await status.evaluate(button => button.click());
- await page.clock.resume();
  await page.waitForFunction(()=>document.querySelector('[data-testid="study-save-status"]').textContent.includes('Saved study'));
  return page.evaluate(()=>JSON.parse(localStorage.getItem('xiangqi:library:v1'))[0]);
 }
@@ -23,7 +21,9 @@ async function savePendingNote(page, text) {
  try {
   for (const width of [1440,390,320]) {
    const page = await browser.newPage({viewport:{width,height:844}});
-   await page.clock.install();
+   const clockStart = new Date('2026-01-01T00:00:00Z');
+   await page.clock.install({ time: clockStart });
+   await page.clock.pauseAt(new Date(clockStart.getTime() + 60_000));
    await page.goto(base+'?moves=h2e2+h9g7'); await page.locator('.xiangqi-board').waitFor();
    const status=page.getByTestId('study-save-status');
    assert.match(await status.textContent(),/Unsaved study/); await status.click();
