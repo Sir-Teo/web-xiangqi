@@ -1808,10 +1808,16 @@ function App() {
     const previouslyFocused = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+    let initialFocusPlaced = false;
     const focusInitial = () => {
-      if (activeDialog.contains(document.activeElement)) return;
+      if (initialFocusPlaced) return;
+      if (activeDialog.contains(document.activeElement)) { initialFocusPlaced = true; return; }
       const firstFocusable = getDialogFocusableElements(activeDialog)[0];
       (firstFocusable ?? activeDialog).focus({ preventScroll: true });
+      // Retry only a focus attempt that failed, for example while the page's
+      // inert state settles. A later disabled action can legitimately blur to
+      // body; an initial-focus retry must not take over that interaction.
+      initialFocusPlaced = activeDialog.contains(document.activeElement);
     };
 
     focusInitial();

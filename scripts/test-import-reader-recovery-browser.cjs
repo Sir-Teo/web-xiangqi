@@ -15,6 +15,13 @@ async function command(page, label) {
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       try {
         await page.addInitScript(() => {
+          // Hold the dialog's late initial-focus retry until Import is busy.
+          // A successfully opened dialog must not take focus back at that point.
+          const nativeTimeout = window.setTimeout.bind(window);
+          window.__dialogFocusRetries = [];
+          window.setTimeout = (callback, delay, ...args) => delay === 80 && document.querySelector('.new-game-menu')
+            ? nativeTimeout(() => window.__dialogFocusRetries.push(() => callback(...args)), 0)
+            : nativeTimeout(callback, delay, ...args);
           const Native = Worker;
           window.__readerWorkers = { direct: [], collection: [] };
           window.Worker = function(url, options) {
@@ -29,10 +36,12 @@ async function command(page, label) {
         const original = await page.locator('.bottombar-fen').getAttribute('title');
         await command(page, 'Import a game record');
         await page.getByTestId('uci-line-input').fill('h2e2 h9g7');
+        await page.waitForFunction(() => window.__dialogFocusRetries.length > 0);
         const importButton = page.getByTestId('import-uci-line-btn');
         for (const data of [null, {}, { kind: 'text', text: 'Unexpected file response' },
           { kind: 'plan', plan: { kind: 'line', moves: ['h2e2'], notationRejected: [], dhtmlComments: [], flatMoveTree: [{ uci: 'h2e2', parent: 0 }] } }]) {
           await importButton.focus(); await importButton.press('Enter');
+          await page.evaluate(() => { for (const retry of window.__dialogFocusRetries.splice(0)) retry(); });
           assert.equal(await page.getByRole('alert').filter({ hasText: 'The game reader returned an unreadable response' }).count(), 0,
             'A retry clears the previous reader error while checking the game');
           await page.evaluate(data => window.__readerWorkers.direct.at(-1).onmessage({ data }), data);
