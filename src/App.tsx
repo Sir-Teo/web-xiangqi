@@ -7755,6 +7755,7 @@ function App() {
                       id="move-comment-input"
                       className="move-comment-input"
                       data-testid="move-comment-input"
+                      aria-describedby="move-comment-limit"
                       value={moveCommentDraft}
                       onChange={(event) => handleMoveCommentChange(event.target.value)}
                       onBlur={commitMoveComment}
@@ -7779,6 +7780,9 @@ function App() {
                       placeholder={currentNodeId === rootNodeId ? 'Plans, themes, or questions about this position' : moveCommentTarget ? 'Why this move' : ''}
                       aria-label={moveCommentTarget ? `Note on ${moveCommentTarget}` : 'Note on the current move'}
                     />
+                    <p id="move-comment-limit" className="move-comment-count" data-at-limit={moveCommentDraft.length >= MAX_MOVE_COMMENT_LENGTH || undefined}>
+                      {moveCommentDraft.length} / {MAX_MOVE_COMMENT_LENGTH} characters{moveCommentDraft.length >= MAX_MOVE_COMMENT_LENGTH ? ' · Limit reached' : ''}
+                    </p>
                   </div>
                   {canCopyRecord ? (
                     <div className="tree-actions">

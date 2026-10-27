@@ -7806,6 +7806,18 @@ summary:active {
   color: var(--text-primary);
 }
 
+.move-comment .move-comment-count {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.move-comment .move-comment-count[data-at-limit] { color: var(--warning); }
+
 .move-comment-input::placeholder { color: var(--text-tertiary); }
 
 .move-comment-input:disabled {
