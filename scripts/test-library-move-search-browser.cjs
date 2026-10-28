@@ -26,12 +26,18 @@ const command = async (page, label) => {
           for (let i = 15; i >= 0; i--) loop = [{ uci: ['a0a1', 'a9a8', 'a1a0', 'a8a9'][i % 4], comment: 'Training loop ' + i, children: loop }];
           localStorage.setItem('xiangqi:library:v1', JSON.stringify([
             { id: 'prepared', savedAt: 1, gameMode: 'PvP', label: 'Prepared study', moves: ['h2e2', 'h9g7'], result: 'red',
+              rootComment: 'Starting guide: 中炮 overview',
               metadata: { redPlayer: 'Lin' }, mainLinePinned: true,
               moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7', comment: 'Shared preparation: main road' }] },
                 { uci: 'b2e2', children: [{ uci: 'h9g7', comment: 'Shared preparation: Dragon trap 龙门', analysis }] }],
               review: { summary: { totalMoves: 2, accuracy: 90, reviewedAt: 1 },
                 annotations: [{ moveIndex: 0, evalScore: 42, quality: 'good' }, { moveIndex: 1, evalScore: 50, quality: 'mistake', reviewNote: 'Review belongs to the saved path' }] } },
             { id: 'loop', savedAt: 2, gameMode: 'PvP', label: 'Training study', moves: [], moveTree: loop },
+            { id: 'root-only', savedAt: 3, gameMode: 'PvP', label: 'Root lesson', moves: [],
+              rootComment: 'A note-only lesson Cafe\u0301 龙门',
+              startFen: 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 42' },
+            { id: 'legacy', savedAt: 4, gameMode: 'PvP', label: 'Legacy study', moves: ['h2e2', 'h9g7'],
+              cursorPly: 2, result: 'red', rootComment: 'Legacy starting guide' },
           ]));
         });
         await page.route('**/pikafish.js', route => route.fulfill({ contentType: 'application/javascript', body: `
@@ -51,10 +57,10 @@ const command = async (page, label) => {
         await search.fill('Pikafish Research');
         const matches = page.getByTestId('study-matches-prepared');
         assert.equal(await page.evaluate(() => window.__matchEntries), 0, 'Ordinary filtering must not build the move-location index');
-        await matches.getByRole('button', { name: 'Find matching moves', exact: true }).click({ timeout: 5000 });
+        await matches.getByRole('button', { name: 'Find matching positions', exact: true }).click({ timeout: 5000 });
         assert.ok(await page.evaluate(() => window.__matchEntries) > 0, 'Probe must observe on-demand indexing');
         await page.evaluate(() => { window.__matchEntries = 0; });
-        assert.match(await matches.innerText(), /1 matching move/);
+        assert.match(await matches.innerText(), /1 matching position/);
         assert.match(await matches.innerText(), /lower bound, not exact/);
         await search.fill('Shared preparation');
         assert.equal(await matches.locator('[data-library-action="open-match"]').count(), 2);
@@ -86,8 +92,8 @@ const command = async (page, label) => {
         assert.equal(await page.locator('.game-over-modal').count(), 0, 'Saved-line win must not end the selected side line');
         // Search through metadata still finds the game but must not invent a single-move match.
         await command(page, 'Library'); await search.fill('Lin Dragon');
-        await matches.getByRole('button', { name: 'Find matching moves', exact: true }).click();
-        assert.match(await matches.innerText(), /No single move matches every search word/);
+        await matches.getByRole('button', { name: 'Find matching positions', exact: true }).click();
+        assert.match(await matches.innerText(), /No single position matches every search word/);
         await search.fill('Shared preparation');
         await matches.locator('[data-library-action="open-match"]').first().click();
         assert.equal(await page.getByTestId('move-comment-input').inputValue(), 'Shared preparation: main road');
@@ -97,13 +103,39 @@ const command = async (page, label) => {
         assert.match(await page.locator('body').innerText(), /Review belongs to the saved path/);
         await command(page, 'Library'); await search.fill('Training loop');
         const loop = page.getByTestId('study-matches-loop');
-        await loop.getByRole('button', { name: 'Find matching moves', exact: true }).click();
-        assert.match(await loop.innerText(), /16 matching moves/);
+        await loop.getByRole('button', { name: 'Find matching positions', exact: true }).click();
+        assert.match(await loop.innerText(), /16 matching positions/);
         assert.equal(await loop.locator('[data-library-action="open-match"]').count(), 10);
-        await loop.getByRole('button', { name: 'Show 6 more matching moves' }).click();
+        await loop.getByRole('button', { name: 'Show 6 more matching positions' }).click();
         assert.equal(await loop.locator('[data-library-action="open-match"]').count(), 16);
         await loop.locator('[data-library-action="open-match"]').last().click();
         assert.equal(await page.getByTestId('move-comment-input').inputValue(), 'Training loop 15');
+        for (const [gameId, query, note, moveCount] of [
+          ['prepared', '中炮 overview', 'Starting guide: 中炮 overview', 2],
+          ['root-only', 'CAFÉ 龙门', 'A note-only lesson Café 龙门', 0],
+          ['legacy', 'Legacy starting guide', 'Legacy starting guide', 2],
+        ]) {
+          await command(page, 'Library');
+          await search.fill(query);
+          const rootMatches = page.getByTestId(`study-matches-${gameId}`);
+          await rootMatches.getByRole('button', { name: 'Find matching positions', exact: true }).click();
+          assert.match(await rootMatches.innerText(), /1 matching position/);
+          assert.equal(await rootMatches.locator('summary').count(), 0, 'The starting position must not invent a move sequence');
+          for (const size of [16, 32]) {
+            await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
+            await rootMatches.getByRole('button', { name: 'Open starting position', exact: true }).scrollIntoViewIfNeeded();
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+          }
+          await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+          await rootMatches.getByRole('button', { name: 'Open starting position', exact: true }).click();
+          assert.equal((await page.getByTestId('move-comment-input').inputValue()).normalize('NFC'), note);
+          assert.equal(await page.locator('.mtree-row .move-uci').count(), moveCount, 'Opening the root must retain the saved continuation');
+          assert.equal(await page.getByTestId('move-comment-input').getAttribute('aria-label'), 'Note on starting position');
+          assert.equal(await page.locator('.game-over-modal').count(), 0, 'The saved endpoint result must not end the starting position');
+          if (gameId === 'root-only') {
+            assert.match(await page.locator('.bottombar-fen').getAttribute('title'), / b - - 0 42$/);
+          }
+        }
         assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), before, 'Opening matches must preserve the stored cursor, tree, results and review');
         await command(page, 'Library'); await search.fill('Prepared study');
         await page.getByTestId('load-saved-prepared').click();

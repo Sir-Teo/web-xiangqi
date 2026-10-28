@@ -5046,8 +5046,8 @@ function App() {
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
       stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
-    initialPly ??= selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
-    if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
+    initialPly ??= selectedMoves?.length === 0 ? 0 : selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
+    if (selectedMoves && !moveTreeContainsLine(game.moveTree, selectedMoves)) return false;
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);

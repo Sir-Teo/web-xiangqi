@@ -976,7 +976,7 @@ export function LibraryPanel({
                 {game.modifiedAt ? <span className="lib-date" title={`Created ${formatDate(game.savedAt)}`}>Updated {formatDate(game.modifiedAt)}</span>
                   : game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
               </div>
-              {searchTerms.length > 0 && Boolean(game.moveTree?.length) && <LibraryStudyMatches
+              {searchTerms.length > 0 && Boolean(game.moveTree?.length || game.rootComment) && <LibraryStudyMatches
                 game={game} terms={searchTerms} formatKey={dateFormatKey} tabIndex={savedTabIndex}
                 onOpen={moves => loadSavedGame(game, moves)} />}
               {game.review ? (
