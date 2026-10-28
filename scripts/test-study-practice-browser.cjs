@@ -151,7 +151,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
             assert.equal(await control.evaluate(node => {
               const rect = node.getBoundingClientRect();
               return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
-            }), true, 'Practice control is covered or unreachable');
+            }), true, `Practice control is covered or unreachable (${width}x${height}, ${fontSize}px text): ${await control.getAttribute('aria-label') || await control.textContent()}`);
           }
           if (fontSize === 32) await dialog.locator('.study-practice-controls').screenshot({ path: `/tmp/xiangqi-practice-controls-${browserType.name()}-${width}.png` });
           if (fontSize === 32 && width === 320) {

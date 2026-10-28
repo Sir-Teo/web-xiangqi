@@ -14,7 +14,8 @@
 .study-practice-dialog button:not(.hitbox) { min-width: 44px; min-height: 44px; max-width: 100%; font: inherit; font-size: .85rem; padding: .5rem .75rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
 .study-practice-dialog header > button:not(.hitbox) { flex-shrink: 0; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; }
 .study-practice-dialog button[aria-pressed="true"] { border-color: var(--accent); }
-.study-practice-board { grid-area: board; min-width: 0; padding: 10px; }
+/* Keep the board's pieces and hitboxes below the sticky heading and Close. */
+.study-practice-board { grid-area: board; min-width: 0; padding: 10px; isolation: isolate; }
 .study-practice-board .xiangqi-board-container { --board-max-width: 440px; }
 .study-practice-feedback { grid-area: feedback; min-width: 0; }
 .study-practice-feedback > p[role="status"] { padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-panel); }
