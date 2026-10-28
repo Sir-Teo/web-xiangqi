@@ -18,7 +18,7 @@ async function paletteKeyboard(browser, viewport) {
         `${key} escaped the empty command palette`);
     }
     await input.fill('');
-    await page.getByRole('option').first().waitFor();
+    await page.getByRole('dialog', { name: 'Commands', exact: true }).getByRole('option').first().waitFor();
     await page.keyboard.press('Tab');
     const commandFocus = await input.evaluate(element => {
       const option = document.getElementById(element.getAttribute('aria-activedescendant'));

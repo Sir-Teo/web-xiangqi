@@ -259,7 +259,8 @@ async function assertFits(page) {
         await page.getByTestId('study-notes').waitFor({ state: 'detached' });
         await page.keyboard.press('ControlOrMeta+k');
         await page.getByRole('combobox', { name: 'Search commands' }).fill('Find study notes');
-        assert.equal(await page.getByRole('option').first().getAttribute('aria-disabled'), 'true');
+        const palette = page.getByRole('dialog', { name: 'Commands', exact: true });
+        assert.equal(await palette.getByRole('option', { name: /Find study notes/ }).getAttribute('aria-disabled'), 'true');
         await page.keyboard.press('Escape');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}px: all-branch search, draft retention, keyboard jumps, saved notes, notation and 200% reflow passed${width === 1440 ? '; 1,024-move study rendered only 20 initial results' : ''}`);
