@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { studyContent, studyDetailsContent, studyMoveContent } from './studyContent';
+import { studyContent, studyContentParts, studyDetailsContent, studyMoveContent } from './studyContent';
 import type { SavedGame } from './gameLibrary';
 
 const study: SavedGame = { id: 'a', savedAt: 1, gameMode: 'PvP', moves: ['h2e2', 'h9g7'] };
@@ -47,4 +47,64 @@ it('still detects annotation, order and result edits independently of automatic 
     { children: [{ uci: 'b9c7' }, { uci: 'h9g7' }] },
   ]) expect(studyMoveContent({ ...base, moveTree: [{ ...base.moveTree[0], ...patch }] })).not.toBe(identity);
   expect(studyMoveContent({ ...base, moveTree: [{ ...base.moveTree[0], evalScore: 125, quality: 'good' }] })).toBe(identity);
+});
+
+it.each([['red', 'red-wins'], ['black', 'black-wins'], ['draw', 'draw']] as const)(
+  'treats legacy %s as its restored endpoint declaration', (result, recordedResult) => {
+    const compact = { ...study, result };
+    const restored = { ...study, result: undefined, moves: [],
+      moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult }] }] };
+    expect(studyContent(compact)).toBe(studyContent(restored));
+  },
+);
+
+it.each([['red', 'red-wins'], ['black', 'black-wins'], ['draw', 'draw']] as const)(
+  'treats a legacy %s at the root as its restored root declaration', (result, rootResult) => {
+    const legacy = { ...study, moves: [], metadata: { event: 'Diagram' }, result };
+    expect(studyContent(legacy)).toBe(studyContent({ ...legacy, result: undefined, rootResult }));
+  },
+);
+
+it('restores only the selected occurrence, even when a pinned main line has the same reply', () => {
+  const legacy: SavedGame = { ...study, moves: ['b2e2', 'h9g7'], result: 'red', mainLinePinned: true,
+    moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }, { uci: 'b2e2', children: [{ uci: 'h9g7' }] }] };
+  const restored: SavedGame = { ...legacy, result: undefined, moves: [], moveTree: [legacy.moveTree![0],
+    { uci: 'b2e2', children: [{ uci: 'h9g7', recordedResult: 'red-wins' }] }] };
+  expect(studyContent(legacy)).toBe(studyContent(restored));
+  expect(studyContent({ ...restored, moveTree: [
+    { uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'red-wins' }] }, legacy.moveTree![1],
+  ] })).not.toBe(studyContent(legacy));
+});
+
+it('keeps a saved endpoint result before an unplayed continuation', () => {
+  const legacy: SavedGame = { ...study, moves: ['h2e2'], result: 'draw', moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }] };
+  expect(studyContent(legacy)).toBe(studyContent({ ...legacy, result: undefined, moves: [],
+    moveTree: [{ uci: 'h2e2', recordedResult: 'draw', children: [{ uci: 'h9g7' }] }] }));
+});
+
+it('preserves explicit node and root declarations ahead of conflicting legacy outcomes', () => {
+  const explicit: SavedGame = { ...study, result: 'red', moveTree: [
+    { uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'black-wins' }] },
+  ] };
+  expect(studyContent(explicit)).toBe(studyContent({ ...explicit, result: undefined }));
+  expect(studyContent({ ...study, moves: [], result: 'red', rootResult: 'black-wins' }))
+    .toBe(studyContent({ ...study, moves: [], rootResult: 'black-wins' }));
+});
+
+it('still detects a real clearing of an outcome in the current study', () => {
+  const legacy = { ...study, result: 'red' as const };
+  expect(studyContentParts(legacy).moves).not.toBe(studyMoveContent({ moves: [],
+    moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }] }));
+  expect(studyContentParts({ ...legacy, moves: [], metadata: { event: 'Diagram' } }).details)
+    .not.toBe(studyDetailsContent({ ...study, metadata: { event: 'Diagram' } }));
+});
+
+it('does not modify a saved tree or backfill an incomplete path', () => {
+  const tree = [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }];
+  const legacy: SavedGame = { ...study, result: 'red', moveTree: tree };
+  const before = JSON.stringify(legacy);
+  studyContentParts(legacy);
+  expect(JSON.stringify(legacy)).toBe(before);
+  expect(studyMoveContent({ ...legacy, moves: ['h2e2', 'a9a8'] }))
+    .toBe(studyMoveContent({ ...legacy, moves: [], result: undefined }));
 });

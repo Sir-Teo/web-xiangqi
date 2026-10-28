@@ -1,12 +1,12 @@
 import { isComposingKey } from './utils/keyboard';
 import { downloadRecoveryGame } from './utils/recoveryDownload';
-import { studyDetailsContent, studyMoveContent } from './utils/studyContent';
+import { studyContentParts, studyDetailsContent, studyMoveContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
 import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
-import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
+import { normalizeRecordedResult, recordedResultFromSavedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
@@ -48,7 +48,7 @@ import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
 import { useUndoTimeout } from './hooks/useUndoTimeout';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
-import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
+import { useXiangqi, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove, type BoardState, type Side } from './utils/xiangqi';
 import { describeFenProblem, readFenBoard } from './utils/positionSetup';
 import { WdlBar } from './components/Panels/WdlBar';
@@ -518,13 +518,6 @@ function formatSquare(square: BoardSquare | null) {
 
 /** Long enough that a fast sequence of moves writes once, not per move. */
 const AUTO_SAVE_DEBOUNCE_MS = 600;
-
-function savedResultToGameResult(result: SavedGame['result']): GameResult {
-  if (result === 'red') return 'red-wins';
-  if (result === 'black') return 'black-wins';
-  if (result === 'draw') return 'draw';
-  return null;
-}
 
 function App() {
   const storedPreferences = useMemo(() => readStoredPreferences(), []);
@@ -3350,7 +3343,7 @@ function App() {
   const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
     const recordedResult = record.mainLineComplete && record.result !== 'unknown'
-      ? savedResultToGameResult(record.result) : null;
+      ? recordedResultFromSavedResult(record.result) ?? null : null;
     const metadata = normalizeGameMetadata(record);
     const reportRecovery = () => {
       if (!record.mainLineComplete) {
@@ -4465,9 +4458,7 @@ function App() {
   const currentStudyDetailsContent = useMemo(() => studyDetailsContent({ gameMode,
     startFen: rootFen, rootComment, rootResult, mainLinePinned, metadata: gameMetadata,
     review: currentGameSnapshot.review }), [gameMode, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
-  const savedStudyContent = useMemo(() => loadedSavedStudy ? {
-    moves: studyMoveContent(loadedSavedStudy), details: studyDetailsContent(loadedSavedStudy),
-  } : null, [loadedSavedStudy]);
+  const savedStudyContent = useMemo(() => loadedSavedStudy ? studyContentParts(loadedSavedStudy) : null, [loadedSavedStudy]);
   const commentStillPending = normalizeMoveComment(moveCommentDraft) !== normalizeMoveComment(
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
   const studyModified = Boolean(loadedSavedStudy && (currentStudyMoveContent !== savedStudyContent?.moves
@@ -5088,13 +5079,13 @@ function App() {
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     setLoadedSavedStudy(savedGames.some(saved => saved.id === game.id) ? game : null);
     restoreRecordedResult(rootNodeId, game.rootResult);
-    restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
+    restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, recordedResultFromSavedResult(game.result));
     setGameMetadata(game.metadata);
     if (!selectedMoves && (initialPly === undefined || initialPly >= (navigation?.moves.length ?? game.moves.length))) {
       // The loader has already derived checkmate/stalemate from the selected
       // board. Saved metadata may be stale or contradictory; only use it for
       // results the position cannot prove, such as resignation or an agreed draw.
-      setGameResult(loadedResult => loadedResult ?? savedResultToGameResult(navigation ? navigation.result : game.result));
+      setGameResult(loadedResult => loadedResult ?? recordedResultFromSavedResult(navigation ? navigation.result : game.result) ?? null);
     }
     if (game.review) {
       setNodeReviewDataBulk(

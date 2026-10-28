@@ -38,6 +38,7 @@ const scripts = [
   'test-save-state-browser.cjs',
   'test-save-shortcut-browser.cjs',
   'test-empty-study-save-browser.cjs',
+  'test-legacy-result-save-state-browser.cjs',
   'test-save-error-retention-browser.cjs',
   'test-direct-import-race-browser.cjs',
   'test-direct-import-worker-browser.cjs',

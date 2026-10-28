@@ -105,6 +105,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-metadata-content-reuse-browser.cjs',
         'test-save-shortcut-browser.cjs',
         'test-empty-study-save-browser.cjs',
+        'test-legacy-result-save-state-browser.cjs',
         'test-ai-pause-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',
