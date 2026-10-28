@@ -3,15 +3,17 @@ import { toSearchText } from './searchTerms';
 export interface SearchTextPart { text: string; matched: boolean }
 let graphemeSegmenter: Intl.Segmenter | undefined;
 
-/** Highlight literal search terms without changing or splitting the displayed text. */
-export function highlightSearchText(text: string, terms: string[]): SearchTextPart[] {
+/** Highlight literal terms without splitting the displayed text; optionally limit repetitions per term. */
+export function highlightSearchText(text: string, terms: string[], maxMatchesPerTerm = Infinity): SearchTextPart[] {
     const plain = [{ text, matched: false }];
     if (!text || !terms.length) return plain;
     const searchable = toSearchText([text]);
     const hits = new Uint8Array(searchable.length);
     for (const term of new Set(terms.map(term => toSearchText([term])).filter(Boolean))) {
-        for (let at = searchable.indexOf(term); at !== -1; at = searchable.indexOf(term, at + 1)) {
+        let count = 0;
+        for (let at = searchable.indexOf(term); at !== -1 && count < maxMatchesPerTerm; at = searchable.indexOf(term, at + 1)) {
             hits.fill(1, at, at + term.length);
+            count++;
         }
     }
     if (!hits.includes(1) || typeof Intl.Segmenter !== 'function') return plain;

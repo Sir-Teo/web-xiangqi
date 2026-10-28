@@ -629,7 +629,9 @@
   line-clamp: 2;
   overflow: hidden;
 }
-.lib-details-content[data-expanded="true"] .lib-detail-line {
+/* A filtered card must show the text that explains its search match. */
+.lib-details-content[data-expanded="true"] .lib-detail-line,
+.lib-detail-line[data-search-match="true"] {
   display: block;
   -webkit-line-clamp: unset;
   line-clamp: unset;

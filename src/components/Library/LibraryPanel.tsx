@@ -1,6 +1,7 @@
 import { isComposingKey } from '../../utils/keyboard';
 import { LibraryPgnImport } from './LibraryPgnImport';
 import { LibraryGameMetadata } from './LibraryGameMetadata';
+import { SearchText } from '../SearchText';
 import { LibraryStudyMatches } from './LibraryStudyMatches';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
@@ -831,7 +832,7 @@ export function LibraryPanel({
                     onClick={() => startEdit(game)}
                     title={`Rename ${savedGameLabel}`}
                   >
-                    {savedGameLabel}
+                    <SearchText text={savedGameLabel} terms={searchTerms} maxMatchesPerTerm={8} />
                   </button>
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
@@ -945,7 +946,7 @@ export function LibraryPanel({
                 </button>
               </div>}
               {game.metadata && <LibraryGameMetadata metadata={game.metadata} gameId={game.id}
-                label={savedGameLabel} tabIndex={savedTabIndex} />}
+                label={savedGameLabel} tabIndex={savedTabIndex} terms={searchTerms} />}
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
                 <span className={`lib-result lib-result--${primaryResult}`} title="Primary line result">

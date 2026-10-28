@@ -25,6 +25,17 @@ describe('literal search highlights', () => {
         expect(highlightSearchText(text, ['[a+b]?', '<script>']).filter(part => part.matched).map(part => part.text))
             .toEqual(['<script>', '[a+b]?']);
     });
+    it('can bound repeated highlights while preserving later search terms and all original text', () => {
+        const text = 'Canal '.repeat(100) + 'Café and Cafe\u0301';
+        const parts = highlightSearchText(text, ['a', 'café'], 8);
+        expect(parts.map(part => part.text).join('')).toBe(text);
+        const marked = parts.filter(part => part.matched).map(part => part.text);
+        expect(marked).toHaveLength(10);
+        expect(marked.slice(-2)).toEqual(['Café', 'Cafe\u0301']);
+    });
+    it('keeps text plain when no highlights are requested', () => {
+        expect(highlightSearchText('Canal', ['a'], 0)).toEqual([{ text: 'Canal', matched: false }]);
+    });
     it.each([['Plan', []], ['Plan', ['unmatched']], ['', ['plan']]])('leaves unmatched text readable', (text, terms) => {
         expect(highlightSearchText(text as string, terms as string[])).toEqual([{ text, matched: false }]);
     });
