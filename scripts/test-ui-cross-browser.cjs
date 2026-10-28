@@ -22,6 +22,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-board-coordinates-browser.cjs',
         'test-board-press-browser.cjs',
         'test-move-tree-keyboard-browser.cjs',
+        'test-graph-keyboard-browser.cjs',
         'test-analysis-context-browser.cjs',
         'test-visible-control-names-browser.cjs',
         'test-analysis-control-names-browser.cjs',
@@ -43,6 +44,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-pgn-collection-export-browser.cjs',
       ] : [
         'test-worker-lifecycle-browser.cjs',
+        'test-graph-keyboard-browser.cjs',
         'test-move-tree-keyboard-browser.cjs',
         'test-isolation-analysis-resume-browser.cjs',
         'test-worker-progress-browser.cjs',

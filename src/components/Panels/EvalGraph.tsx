@@ -431,10 +431,12 @@ export const EvalGraph = React.memo(function EvalGraph({
         let targetIndex: number | null = null;
         switch (event.key) {
             case 'ArrowLeft':
+            case 'ArrowDown':
             case 'PageUp':
                 targetIndex = Math.max(-1, currentMoveIndex - 1);
                 break;
             case 'ArrowRight':
+            case 'ArrowUp':
             case 'PageDown':
                 targetIndex = Math.min(history.length - 1, currentMoveIndex + 1);
                 break;
@@ -597,7 +599,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                 <div className="graph-scroll-inner">
                     <div className={`graph-svg-stage ${isSweepingLoad ? 'graph-svg-stage-sweeping' : ''}`}>
                         <p id="evaluation-graph-instructions" className="sr-only">
-                            Use left and right arrows to move across the line. Press Home or End to jump to the edge of the line.
+                            Use Right or Up to advance one move, Left or Down to go back. Press Home or End to jump to the edge of the line.
                         </p>
                         <svg
                             className="winrate-graph"
@@ -622,7 +624,7 @@ export const EvalGraph = React.memo(function EvalGraph({
                             aria-valuemax={Math.max(0, points.length - 1)}
                             aria-valuenow={currentPointIndex}
                             aria-valuetext={currentValueText}
-                            aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End Enter Space"
+                            aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown PageUp PageDown Home End Enter Space"
                             data-rendered-points={visiblePointIndexes.length}
                             data-total-points={points.length}
                             tabIndex={0}

@@ -13,6 +13,7 @@ const scripts = [
   'test-board-coordinates-browser.cjs',
   'test-board-press-browser.cjs',
   'test-move-tree-keyboard-browser.cjs',
+  'test-graph-keyboard-browser.cjs',
   'test-cloud-visibility-browser.cjs',
   'test-density-browser.cjs',
   'test-editor-keyboard-browser.cjs',
