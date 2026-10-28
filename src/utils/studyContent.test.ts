@@ -39,6 +39,27 @@ it('compares the metadata that saving retains, independent of edit order and bla
     .not.toBe(studyDetailsContent({ ...study, metadata: { redPlayer: 'Bob', event: 'Open Cup' } }));
 });
 
+it('ignores runtime review node IDs while preserving the meaning and source of key moments', () => {
+  const reviewed: SavedGame = { ...study, review: {
+    summary: { totalMoves: 2, accuracy: 90, bestCount: 0, goodCount: 1, inaccuracyCount: 0, mistakeCount: 1,
+      blunderCount: 0, reviewedAt: 1, lineSignature: 'h2e2 h9g7', keyMoments: [{
+        nodeId: 'n99', moveIndex: 0, jumpTarget: 0, ply: 1, side: 'red', quality: 'mistake',
+        swing: 100, winPercentLoss: 10, evalBefore: 0, evalAfter: -100, playedMove: 'h2e2', note: 'Develop another piece',
+      }] }, annotations: [{ moveIndex: 0, evalScore: -100, quality: 'mistake' }],
+  } };
+  const before = JSON.stringify(reviewed);
+  const withMoment = (patch: Partial<NonNullable<SavedGame['review']>['summary']['keyMoments'][number]>): SavedGame => ({
+    ...reviewed, review: { ...reviewed.review!, summary: { ...reviewed.review!.summary,
+      keyMoments: [{ ...reviewed.review!.summary.keyMoments[0], ...patch }],
+    } },
+  });
+  expect(studyDetailsContent(withMoment({ nodeId: 'n1' }))).toBe(studyDetailsContent(reviewed));
+  for (const patch of [{ note: 'New explanation' }, { moveIndex: 1 }, { jumpTarget: 1 }, { evalAfter: -200 }]) {
+    expect(studyDetailsContent(withMoment(patch))).not.toBe(studyDetailsContent(reviewed));
+  }
+  expect(JSON.stringify(reviewed)).toBe(before);
+});
+
 it('still detects annotation, order and result edits independently of automatic evaluations', () => {
   const base = { moves: [], moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }, { uci: 'b9c7' }] }] };
   const identity = studyMoveContent(base);
