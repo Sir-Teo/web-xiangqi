@@ -60,6 +60,26 @@ it('ignores runtime review node IDs while preserving the meaning and source of k
   expect(JSON.stringify(reviewed)).toBe(before);
 });
 
+it('compares summary-only reviews without treating empty annotation rows as edits', () => {
+  const reviewed: SavedGame = { ...study, review: {
+    summary: { totalMoves: 2, accuracy: 90, bestCount: 0, goodCount: 0, inaccuracyCount: 0, mistakeCount: 0,
+      blunderCount: 0, reviewedAt: 1, lineSignature: 'h2e2 h9g7', keyMoments: [] }, annotations: [],
+  } };
+  const withAnnotations = (annotations: NonNullable<SavedGame['review']>['annotations']): SavedGame => ({
+    ...reviewed, review: { ...reviewed.review!, annotations },
+  });
+  const empty = withAnnotations([{ moveIndex: 0 }, { moveIndex: 1, evalScore: undefined, quality: undefined }]);
+  const before = JSON.stringify(empty);
+  expect(studyDetailsContent(empty)).toBe(studyDetailsContent(reviewed));
+  expect(studyDetailsContent(withAnnotations([{ moveIndex: 0 }, { moveIndex: 1, evalScore: 0 }])))
+    .toBe(studyDetailsContent(withAnnotations([{ moveIndex: 1, evalScore: 0 }])));
+  for (const annotation of [{ evalScore: 0 }, { swing: 0 }, { winPercentLoss: 0 },
+    { quality: 'good' as const }, { reviewNote: 'New note' }, { bestMove: 'h9g7', bestLine: ['h9g7'] }]) {
+    expect(studyDetailsContent(withAnnotations([{ moveIndex: 1, ...annotation }]))).not.toBe(studyDetailsContent(reviewed));
+  }
+  expect(JSON.stringify(empty)).toBe(before);
+});
+
 it('still detects annotation, order and result edits independently of automatic evaluations', () => {
   const base = { moves: [], moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }, { uci: 'b9c7' }] }] };
   const identity = studyMoveContent(base);

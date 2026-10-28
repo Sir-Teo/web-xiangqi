@@ -22,9 +22,15 @@ export function studyContentParts(study: Study): { moves: string; details: strin
 export function studyDetailsContent(study: Omit<Study, 'moves' | 'moveTree'>): string {
   // Key moments use fresh runtime node IDs after loading; their move indices
   // carry the saved meaning. Reassigning an ID is navigation, not an edit.
-  const review = study.review && { ...study.review, summary: { ...study.review.summary,
-    keyMoments: study.review.summary.keyMoments.map(moment => ({ ...moment, nodeId: undefined })),
-  } };
+  const review = study.review && { ...study.review,
+    // Loading a summary-only review materializes an empty row for each move.
+    // Those placeholders carry no annotation to compare.
+    annotations: study.review.annotations.filter(annotation => Object.entries(annotation)
+      .some(([field, value]) => field !== 'moveIndex' && value !== undefined)),
+    summary: { ...study.review.summary,
+      keyMoments: study.review.summary.keyMoments.map(moment => ({ ...moment, nodeId: undefined })),
+    },
+  };
   return JSON.stringify([study.gameMode, study.startFen || START_POSITION_FEN, normalizeMoveComment(study.rootComment),
     study.rootResult, study.mainLinePinned === true, normalizeGameMetadata(study.metadata), review]);
 }
