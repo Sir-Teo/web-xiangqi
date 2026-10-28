@@ -35,37 +35,70 @@ export function restoreRemovedSubtree(
     if (!removed?.parentId || !current[removed.parentId]) return null;
     const tree = { ...current };
     const restoredIds = new Map<string, string>();
+    const claimed = new Set<string>();
+    const ownedChildren = new Set<string>();
+    const siblingPositions = new Map<string, Map<string, number>>();
+    const replayedChildren = new Map<string, Map<string, string[]>>();
     const stack = [{ oldId: removedId, parentId: removed.parentId }];
     while (stack.length) {
         const { oldId, parentId } = stack.pop()!;
         const old = before[oldId];
         const parent = tree[parentId];
         if (!old?.record || !parent || restoredIds.has(oldId)) return null;
-        const existingId = parent.childrenIds.find(id => tree[id]?.record?.uci === old.record!.uci);
+        // Only merge a newly replayed move, once. An older identical sibling
+        // or another restored occurrence has its own annotations to retain.
+        let replays = replayedChildren.get(parentId);
+        if (!replays) {
+            replays = new Map<string, string[]>();
+            for (const childId of current[parentId]?.childrenIds ?? []) {
+                const uci = !before[childId] ? current[childId]?.record?.uci : undefined;
+                if (!uci) continue;
+                const ids = replays.get(uci);
+                if (ids) ids.push(childId); else replays.set(uci, [childId]);
+            }
+            for (const ids of replays.values()) ids.reverse();
+            replayedChildren.set(parentId, replays);
+        }
+        const candidates = replays.get(old.record.uci);
+        let existingId = candidates?.pop();
+        while (existingId && claimed.has(existingId)) existingId = candidates?.pop();
         const id = existingId ?? oldId;
         if (!existingId && tree[id]) return null; // Never overwrite an unrelated ID.
         restoredIds.set(oldId, id);
+        claimed.add(id);
         if (existingId) {
             const existing = tree[id];
             tree[id] = { ...existing, record: mergeRestoredRecord(old.record, existing.record!) };
         } else {
             tree[id] = { ...old, id, parentId, childrenIds: [] };
+            ownedChildren.add(id);
             // Insert after the nearest surviving older sibling. New branches
             // keep their relative order and remain after the original ones.
             const siblings = before[old.parentId!]?.childrenIds ?? [];
+            let positions = siblingPositions.get(old.parentId!);
+            if (!positions && siblings.length > 1) {
+                positions = new Map(siblings.map((sibling, index) => [sibling, index]));
+                siblingPositions.set(old.parentId!, positions);
+            }
             let insertAt = 0;
-            for (const siblingId of siblings) {
-                if (siblingId === oldId) break;
-                const uci = before[siblingId]?.record?.uci;
-                const index = parent.childrenIds.findIndex(child => tree[child]?.record?.uci === uci);
-                if (index >= 0) insertAt = index + 1;
+            for (let i = (positions?.get(oldId) ?? 0) - 1; i >= 0; i--) {
+                const siblingId = siblings[i];
+                const mapped = restoredIds.get(siblingId) ?? siblingId;
+                const index = parent.childrenIds.at(-1) === mapped ? parent.childrenIds.length - 1 : parent.childrenIds.indexOf(mapped);
+                if (index >= 0) { insertAt = index + 1; break; }
             }
             // A main line explicitly chosen after the deletion is newer user
             // intent. Restoring an old first sibling must not demote it.
             if (preserveFirstChildren && parent.childrenIds.length && insertAt === 0) insertAt = 1;
-            const childrenIds = [...parent.childrenIds];
+            // Clone each parent's list once; later inserts belong to this
+            // transaction, including thousands of repeated annotated moves.
+            const owned = ownedChildren.has(parentId);
+            const childrenIds = owned ? parent.childrenIds : [...parent.childrenIds];
             childrenIds.splice(insertAt, 0, id);
-            tree[parentId] = { ...parent, childrenIds };
+            if (!owned) {
+                tree[parentId] = { ...parent, childrenIds };
+                ownedChildren.add(parentId);
+            }
         }
         for (let i = old.childrenIds.length - 1; i >= 0; i -= 1) {
             const childId = old.childrenIds[i];

@@ -1,6 +1,7 @@
 import { normalizeRecordedResult, type RecordedResult } from './recordedResult';
 import { MAX_STUDY_LINE_MOVES, MAX_STUDY_TREE_NODES } from './studyLimits';
 import { truncateText } from './truncateText';
+import { normalizeSavedTreePath } from './savedTreePath';
 
 import { evaluationKindOverride, type EvaluationScoreKind } from './engineEvalReading';
 import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
@@ -110,6 +111,8 @@ export interface SavedGame {
     gameMode: GameMode;
     moves: string[];            // UCI line used by the saved review, or path to the cursor
     cursorPly?: number;         // selected position within moves; defaults to its end
+    /** Child indices distinguish repeated sibling moves along the saved moves. */
+    moveTreePath?: number[];
     startFen?: string;          // root position for custom-FEN games
     result?: SavedResult;
     label?: string;             // user-editable
@@ -436,6 +439,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         return null;
     }
 
+    const moveTreePath = normalizeSavedTreePath(raw.moveTreePath, moveTree, moves);
     const result = typeof raw.result === 'string' && SAVED_RESULTS.includes(raw.result as SavedResult)
         ? raw.result as SavedResult
         : 'ongoing';
@@ -447,6 +451,7 @@ export function normalizeSavedGame(raw: unknown): SavedGame | null {
         gameMode,
         moves,
         ...(Number.isInteger(raw.cursorPly) && Number(raw.cursorPly) >= 0 && Number(raw.cursorPly) <= moves.length ? { cursorPly: Number(raw.cursorPly) } : {}),
+        ...(moveTreePath ? { moveTreePath } : {}),
         startFen,
         rootComment,
         ...(normalizeRecordedResult(raw.rootResult) ? { rootResult: normalizeRecordedResult(raw.rootResult) } : {}),

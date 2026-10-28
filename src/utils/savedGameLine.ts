@@ -1,15 +1,10 @@
 import type { SavedGame, SavedMoveTreeNode } from './gameLibrary';
+import { findSavedTreePath, savedNodeAtPath } from './savedTreePath';
 
 /** The declaration at the saved cursor, before any unplayed continuation or pinned line. */
 export function savedGamePositionResult(game: SavedGame): SavedGame['result'] {
     if (!game.moves.length) return toSavedResult(game.rootResult) ?? game.result;
-    let children = game.moveTree;
-    let endpoint: SavedMoveTreeNode | undefined;
-    for (const uci of game.moves) {
-        endpoint = children?.find(node => node.uci === uci);
-        if (!endpoint) return game.result;
-        children = endpoint.children;
-    }
+    const endpoint = savedNodeAtPath(game.moveTree, findSavedTreePath(game.moveTree, game.moves, game.moveTreePath));
     return toSavedResult(endpoint?.recordedResult) ?? game.result;
 }
 
@@ -21,12 +16,13 @@ export function savedGameLine(game: SavedGame): { moves: string[]; result: Saved
     }
     const moves: string[] = [];
     const seen = new Set<SavedMoveTreeNode>();
+    const savedPath = findSavedTreePath(game.moveTree, game.moves, game.moveTreePath);
+    if (!game.mainLinePinned && savedPath === null) return { moves: game.moves, result: game.result };
     let children: SavedMoveTreeNode[] | undefined = game.moveTree;
     let endpoint: SavedMoveTreeNode | undefined;
     while (children?.length) {
-        const preferred: string | undefined = game.mainLinePinned ? undefined : game.moves[moves.length];
-        const node: SavedMoveTreeNode | undefined = preferred
-            ? children.find(child => child.uci === preferred) : children[0];
+        const index = game.mainLinePinned ? 0 : savedPath?.[moves.length] ?? 0;
+        const node: SavedMoveTreeNode | undefined = children[index];
         // Do not reinterpret a damaged saved path as a different game.
         if (!node || seen.has(node)) return { moves: game.moves, result: game.result };
         seen.add(node);
@@ -35,7 +31,7 @@ export function savedGameLine(game: SavedGame): { moves: string[]; result: Saved
         children = node.children;
     }
     if (!game.mainLinePinned && moves.length < game.moves.length) return { moves: game.moves, result: game.result };
-    const atSavedEndpoint = moves.length === game.moves.length && moves.every((move, i) => move === game.moves[i]);
+    const atSavedEndpoint = endpoint === savedNodeAtPath(game.moveTree, savedPath);
     return { moves, result: toSavedResult(endpoint?.recordedResult) ?? (atSavedEndpoint ? game.result : undefined) };
 }
 

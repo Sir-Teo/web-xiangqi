@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluationSearchText, savedTreeSearchText, savedStudySearchEntries, savedStudyMatchMoves } from './savedStudySearch';
+import { evaluationSearchText, savedTreeSearchText, savedStudySearchEntries, savedStudyMatchMoves, savedStudyMatchPath } from './savedStudySearch';
 import { matchesSearchTerms, toSearchTerms } from './searchTerms';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import type { StudyAnalysis } from './studyAnalysis';
@@ -65,6 +65,7 @@ describe('searching saved study annotations', () => {
         const entries = savedStudySearchEntries(tree);
         const matches = entries.filter(entry => matchesSearchTerms(entry.text, toSearchTerms('Shared preparation')));
         expect(matches.map(savedStudyMatchMoves)).toEqual([['h2e2', 'h9g7'], ['b2e2', 'h9g7']]);
+        expect(matches.map(savedStudyMatchPath)).toEqual([[0, 0], [1, 0]]);
         expect(matches.map(entry => entry.ply)).toEqual([2, 2]);
         expect(matchesSearchTerms(matches[1].text, toSearchTerms('龙门 $2'))).toBe(true);
         expect(JSON.stringify(tree)).toBe(before);

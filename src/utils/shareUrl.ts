@@ -15,6 +15,7 @@ import { encodeSavedMoveTreeParam } from './shareTree';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_POSITION_FEN } from './xiangqi';
 import type { GameMode } from '../App';
+import { findSavedTreePath, normalizeSavedTreePath } from './savedTreePath';
 
 export const MAX_SHARE_QUERY_LENGTH = 6000;
 export const MAX_SHARE_URL_LENGTH = 24000;
@@ -41,6 +42,7 @@ export function buildShareUrl(
   rootComment?: string,
   mainLinePinned = false,
   rootResult?: RecordedResult,
+  moveTreePath?: number[],
 ): ShareUrlBuildResult {
   const url = new URL(currentHref);
   url.search = '';
@@ -63,6 +65,8 @@ export function buildShareUrl(
     }
   }
   if (mainLinePinned && treeIncluded) url.searchParams.set('main', '1');
+  const path = treeIncluded ? normalizeSavedTreePath(moveTreePath, moveTree, moves) : undefined;
+  if (path) url.searchParams.set('path', path.join('.'));
   if (mode !== 'PvP') {
     url.searchParams.set('mode', mode);
   }
@@ -86,12 +90,5 @@ export function buildShareUrl(
  * mismatched-tree case the loader falls back from.
  */
 export function moveTreeContainsLine(moveTree: SavedMoveTreeNode[] | undefined, moves: string[]) {
-  if (moves.length === 0) return true;
-  let siblings = moveTree ?? [];
-  for (const move of moves) {
-    const child = siblings.find((node) => node.uci === move);
-    if (!child) return false;
-    siblings = child.children ?? [];
-  }
-  return true;
+  return findSavedTreePath(moveTree, moves) !== null;
 }

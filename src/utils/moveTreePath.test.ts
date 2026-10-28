@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MOVE_TREE_ROOT_ID, getMovesToNode, type MoveTreePathNode } from './moveTreePath';
+import { MOVE_TREE_ROOT_ID, distinctMoveTreePath, getMovesToNode, type MoveTreePathNode } from './moveTreePath';
 
 function line(...moves: string[]): Record<string, MoveTreePathNode> {
     const nodes: Record<string, MoveTreePathNode> = {};
@@ -11,6 +11,25 @@ function line(...moves: string[]): Record<string, MoveTreePathNode> {
     });
     return nodes;
 }
+
+it('stores a complete child address when a repeated move selects a later sibling', () => {
+    const nodes = { root: { childrenIds: ['first', 'second'] },
+        first: { childrenIds: [], record: { uci: 'h2e2' } },
+        second: { childrenIds: ['reply'], record: { uci: 'h2e2' } },
+        reply: { childrenIds: [], record: { uci: 'h9g7' } } };
+    expect(distinctMoveTreePath(nodes, 'root', ['first'])).toBeUndefined();
+    expect(distinctMoveTreePath(nodes, 'root', ['second', 'reply'])).toEqual([1, 0]);
+    expect(distinctMoveTreePath(nodes, 'root', ['missing'])).toBeUndefined();
+    expect(distinctMoveTreePath(nodes, 'root', ['reply'])).toBeUndefined();
+});
+
+it('does not add addresses to ordinary studies even when their branch is not first', () => {
+    const nodes = { root: { childrenIds: ['first', 'other'] },
+        first: { childrenIds: [], record: { uci: 'h2e2' } },
+        other: { childrenIds: [], record: { uci: 'b2e2' } } };
+    expect(distinctMoveTreePath(nodes, 'root', ['other'])).toBeUndefined();
+    expect(distinctMoveTreePath(nodes, 'root', [])).toBeUndefined();
+});
 
 describe('moves from the root to a node', () => {
     it('returns them in play order, not the order they are walked', () => {

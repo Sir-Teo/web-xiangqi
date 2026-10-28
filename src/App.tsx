@@ -95,6 +95,8 @@ import {
   type ReviewPhase,
 } from './utils/engineTags';
 import { buildShareUrl, moveTreeContainsLine, readShareParams } from './utils/shareUrl';
+import { distinctMoveTreePath } from './utils/moveTreePath';
+import { decodeSavedTreePathParam, isSavedTreePath } from './utils/savedTreePath';
 import {
   formatRedPovEngineScore,
   normalizeEvalForFen,
@@ -1665,7 +1667,9 @@ function App() {
   }, [clearCompletedReview, reviewStatus, reviewSummary, reviewedLineNodeIds, treeNodes]);
 
   /** Whether the board is on the line the review describes. */
-  const reviewMatchesActiveLine = Boolean(reviewSummary) && reviewSummary?.lineSignature === currentLineSignature;
+  const reviewMatchesActiveLine = Boolean(reviewSummary) && reviewSummary?.lineSignature === currentLineSignature
+    && activeLineNodeIds.length === reviewedLineNodeIds.length
+    && activeLineNodeIds.every((id, index) => id === reviewedLineNodeIds[index]);
   /**
    * A finished review that a save will not carry.
    *
@@ -3303,7 +3307,8 @@ function App() {
       : undefined;
     let share: ReturnType<typeof buildShareUrl>;
     try {
-      share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult);
+      share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult,
+        distinctMoveTreePath(moveStructure, rootNodeId, activeLineNodeIds.slice(0, currentMoveIndex + 1)));
     } catch {
       setShareLinkNotice({ tone: 'warning', text: 'Link not copied', detail: 'This study is too large for a share link. Export PGN to keep all of it.' });
       return;
@@ -3334,7 +3339,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes, moveStructure, activeLineNodeIds, currentMoveIndex]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -4335,6 +4340,11 @@ function App() {
     const treeValidation = sharedMoveTree?.length ? validateMoveTree(sharedMoveTree, rawFen) : null;
     const sharedTreeContainsLine = sharedMoveTree?.length ? moveTreeContainsLine(sharedMoveTree, moves) : false;
     const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true && sharedTreeContainsLine : false;
+    const sharedTreePath = decodeSavedTreePathParam(params.get('path'), sharedMoveTree ?? undefined, moves);
+    if (params.has('path') && (!canLoadSharedTree || !sharedTreePath)) {
+      failShareLink({ kind: 'study-location' });
+      return;
+    }
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
       failShareLink({ kind: 'variations-only' });
       logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
@@ -4358,7 +4368,8 @@ function App() {
     setGameMode(mode);
     setLoadedSavedStudy(null);
     if (sharedMoveTree?.length && canLoadSharedTree) {
-      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1');
+      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1', undefined,
+        { saved: sharedTreePath });
     } else if (moves.length > 0) {
       loadMoves(moves, rawFen, undefined, sharedRootComment);
     } else if (rawFen || sharedRootComment || sharedRootResult) {
@@ -4422,6 +4433,9 @@ function App() {
     || savedLineLength === 0 || savedLineLength < activeLineNodeIds.length);
   const snapshotMoveTree = useMemo(() => needsSnapshotTree
     ? serializeSavedMoveTree(treeNodes, rootNodeId) : undefined, [needsSnapshotTree, treeNodes, rootNodeId]);
+  const snapshotMoveTreePath = useMemo(() => needsSnapshotTree
+    ? distinctMoveTreePath(moveStructure, rootNodeId, activeLineNodeIds.slice(0, savedLineLength)) : undefined,
+  [needsSnapshotTree, moveStructure, rootNodeId, activeLineNodeIds, savedLineLength]);
   const currentGameSnapshot = useMemo(() => {
     // The whole line when it is the reviewed one, so the annotations line up
     // with it; otherwise the line as far as the cursor, and no review -- a
@@ -4442,6 +4456,7 @@ function App() {
       mainLinePinned,
       moves,
       cursorPly: currentMoveIndex + 1,
+      ...(snapshotMoveTreePath ? { moveTreePath: snapshotMoveTreePath } : {}),
       opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: ((gameResult ?? selectedRecordedResult) === 'red-wins' ? 'red' : (gameResult ?? selectedRecordedResult) === 'black-wins' ? 'black' : (gameResult ?? selectedRecordedResult) === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
@@ -4456,7 +4471,7 @@ function App() {
           }
         : undefined,
     };
-  }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
+  }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, snapshotMoveTreePath, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
   const fullStudyTree = useMemo(() => serializeSavedMoveTree(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const currentStudyMoveContent = useMemo(() => studyMoveContent({ moves: [], moveTree: fullStudyTree }), [fullStudyTree]);
@@ -5059,9 +5074,10 @@ function App() {
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
       stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
-  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
+  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[], selectedPath?: number[]) => {
     initialPly ??= selectedMoves?.length === 0 ? 0 : selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
     if (selectedMoves && !moveTreeContainsLine(game.moveTree, selectedMoves)) return false;
+    if (selectedMoves && selectedPath && !isSavedTreePath(game.moveTree, selectedMoves, selectedPath)) return false;
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
@@ -5090,7 +5106,8 @@ function App() {
     setLeftPanelTab('graph');
     const navigation = selectedMoves ? { moves: selectedMoves, result: undefined } : openPrimaryLine ? savedGameLine(game) : undefined;
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves)
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves,
+        { saved: game.moveTreePath, navigation: selectedPath ?? (openPrimaryLine && !game.mainLinePinned ? game.moveTreePath : undefined) })
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     setLoadedSavedStudy(savedGames.some(saved => saved.id === game.id) ? game : null);
     restoreRecordedResult(rootNodeId, game.rootResult);
@@ -6906,7 +6923,7 @@ function App() {
                     searchFocusRequest={librarySearchRequest}
                     onSearchFocusHandled={handleLibrarySearchFocused}
                     savedGames={savedGames}
-                    onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
+                    onLoadSavedGame={(game, moves, path) => handleLoadGame(game, moves?.length, false, moves, path)}
                     onDeleteSavedGame={handleDeleteSavedGame}
                     onRenameSavedGame={renameGameInLibrary}
                     loadedStudy={loadedSavedStudy ? {

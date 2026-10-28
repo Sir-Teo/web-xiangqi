@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SavedGame } from '../../utils/gameLibrary';
 import { matchesSearchTerms } from '../../utils/searchTerms';
-import { savedStudyMatchMoves, savedStudySearchEntries, type SavedStudySearchEntry } from '../../utils/savedStudySearch';
+import { savedStudyMatchMoves, savedStudyMatchPath, savedStudySearchEntries, type SavedStudySearchEntry } from '../../utils/savedStudySearch';
 import { studyAnalysisScore } from '../../utils/studyAnalysis';
 import { SearchText } from '../SearchText';
 
@@ -16,7 +16,7 @@ function MatchPath({ entry, tabIndex }: { entry: SavedStudySearchEntry; tabIndex
 }
 
 function Matches({ game, terms, tabIndex, onOpen }: {
-  game: SavedGame; terms: string[]; tabIndex: number; onOpen: (moves: string[]) => void;
+  game: SavedGame; terms: string[]; tabIndex: number; onOpen: (moves: string[], path?: number[]) => void;
 }) {
   // Assign identity before filtering so an expanded sequence follows its move.
   // The starting position has no move, but its note is searchable too.
@@ -48,7 +48,7 @@ function Matches({ game, terms, tabIndex, onOpen }: {
       const comment = entry ? entry.node.comment : game.rootComment;
       return <div className="lib-study-match" key={ordinal}>
         <button type="button" className="chip-btn" tabIndex={tabIndex} data-library-action="open-match"
-          onClick={() => onOpen(entry ? savedStudyMatchMoves(entry) : [])}>
+          onClick={() => onOpen(entry ? savedStudyMatchMoves(entry) : [], entry ? savedStudyMatchPath(entry) : [])}>
           {entry ? `Open ${entry.node.uci} · ply ${entry.ply}` : 'Open starting position'}
         </button>
         {comment && <p className="lib-study-match-note"><SearchText text={comment} terms={terms} /></p>}
@@ -68,7 +68,7 @@ function Matches({ game, terms, tabIndex, onOpen }: {
 }
 
 export function LibraryStudyMatches({ game, terms, formatKey, tabIndex, onOpen }: {
-  game: SavedGame; terms: string[]; formatKey: string; tabIndex: number; onOpen: (moves: string[]) => void;
+  game: SavedGame; terms: string[]; formatKey: string; tabIndex: number; onOpen: (moves: string[], path?: number[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();

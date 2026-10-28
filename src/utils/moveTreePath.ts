@@ -44,3 +44,24 @@ export function getMovesToNode(
 
     return moves.reverse();
 }
+
+/** Store an address only when UCI moves alone would choose another sibling. */
+export function distinctMoveTreePath(
+    nodes: Record<string, { childrenIds: string[]; record?: { uci?: string } }>,
+    rootId: string,
+    nodeIds: readonly string[],
+): number[] | undefined {
+    const path: number[] = [];
+    let parent = nodes[rootId];
+    let ambiguous = false;
+    for (const id of nodeIds) {
+        const node = nodes[id];
+        const index = parent?.childrenIds.indexOf(id) ?? -1;
+        const uci = node?.record?.uci;
+        if (index < 0 || !uci) return undefined;
+        if (parent.childrenIds.findIndex(child => nodes[child]?.record?.uci === uci) !== index) ambiguous = true;
+        path.push(index);
+        parent = node;
+    }
+    return ambiguous ? path : undefined;
+}

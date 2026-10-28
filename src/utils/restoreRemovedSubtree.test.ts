@@ -13,6 +13,60 @@ function fixture(): Record<string, MoveTreeNode> {
 }
 
 describe('restore a deleted branch into the current study', () => {
+    it('keeps every annotation at the study node limit without mutating the current tree', () => {
+        const ids = Array.from({ length: 8191 }, (_, i) => `reply-${i}`);
+        const before: Record<string, MoveTreeNode> = {
+            root: node('root', null, ['branch']), branch: node('branch', 'root', ids, 'h2e2'),
+        };
+        for (const id of ids) before[id] = node(id, 'branch', [], 'h9g7');
+        const { tree: current } = removeSubtree(before, 'root', 'branch');
+        const restored = restoreRemovedSubtree(current, before, 'branch')!;
+        expect(restored.tree.branch.childrenIds).toEqual(ids);
+        expect(restored.tree[ids[0]].record?.comment).toBe('Note reply-0');
+        expect(restored.tree[ids.at(-1)!].record?.comment).toBe('Note reply-8190');
+        expect(restored.restoredIds.size).toBe(8192);
+        expect(current.root.childrenIds).toEqual([]);
+        expect(before.branch.childrenIds).toBe(ids);
+    });
+
+    it('keeps a surviving identical-move sibling separate when restoring a deleted note', () => {
+        const before = fixture();
+        before.d = { ...before.d, record: { ...before.d.record!, uci: 'b', comment: 'Surviving distinct note' } };
+        const { tree: current } = removeSubtree(before, 'root', 'b');
+        const restored = restoreRemovedSubtree(current, before, 'b')!;
+        expect(restored.tree.a.childrenIds).toEqual(['b', 'd']);
+        expect(restored.tree.b.record?.comment).toBe('Note b');
+        expect(restored.tree.d).toBe(current.d);
+        expect(restored.tree.b.childrenIds).toEqual(['c']);
+    });
+
+    it('restores repeated children as separate annotated occurrences', () => {
+        const before = fixture();
+        before.extra = node('extra', 'b', [], 'c');
+        before.b = { ...before.b, childrenIds: ['c', 'extra'] };
+        const { tree: current } = removeSubtree(before, 'root', 'b');
+        const restored = restoreRemovedSubtree(current, before, 'b')!;
+        expect(restored.tree.b.childrenIds).toEqual(['c', 'extra']);
+        expect(restored.tree.c.record?.comment).toBe('Note c');
+        expect(restored.tree.extra.record?.comment).toBe('Note extra');
+    });
+
+    it('merges a replay only once when the removed branch has repeated children', () => {
+        const before = fixture();
+        before.extra = node('extra', 'b', [], 'c');
+        before.b = { ...before.b, childrenIds: ['c', 'extra'] };
+        const { tree: current } = removeSubtree(before, 'root', 'b');
+        current.replayed = node('replayed', 'a', ['fresh'], 'b');
+        current.fresh = node('fresh', 'replayed', [], 'c');
+        current.a = { ...current.a, childrenIds: ['d', 'replayed'] };
+        const restored = restoreRemovedSubtree(current, before, 'b')!;
+        expect(restored.tree.replayed.childrenIds).toEqual(['fresh', 'extra']);
+        expect(restored.tree.fresh.record?.comment).toBe('Note fresh');
+        expect(restored.tree.extra.record?.comment).toBe('Note extra');
+        expect(restored.restoredIds.get('c')).toBe('fresh');
+        expect(restored.restoredIds.get('extra')).toBe('extra');
+    });
+
     it('keeps the newer review when the deleted move has since been played again', () => {
         // The merge rule: a re-played move's own review wins over the one the
         // deleted copy carried. Found by mutation -- joining the two halves of

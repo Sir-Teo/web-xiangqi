@@ -3,8 +3,9 @@ import { START_POSITION_FEN } from './xiangqi';
 import { normalizeMoveComment } from './moveComment';
 import { normalizeGameMetadata } from './gameMetadata';
 import { recordedResultFromSavedResult, type RecordedResult } from './recordedResult';
+import { findSavedTreePath, savedNodeAtPath } from './savedTreePath';
 
-type Study = Pick<SavedGame, 'gameMode' | 'moves' | 'moveTree' | 'metadata' | 'startFen' | 'rootComment' | 'rootResult' | 'mainLinePinned' | 'review' | 'result'>;
+type Study = Pick<SavedGame, 'gameMode' | 'moves' | 'moveTree' | 'moveTreePath' | 'metadata' | 'startFen' | 'rootComment' | 'rootResult' | 'mainLinePinned' | 'review' | 'result'>;
 
 /** Content identity for the save indicator. Navigation and automatic engine readings aren't edits. */
 export function studyContent(study: Study): string {
@@ -36,11 +37,11 @@ export function studyDetailsContent(study: Omit<Study, 'moves' | 'moveTree'>): s
 }
 
 /** Both compact lines and full trees have the same identity for the same moves. */
-export function studyMoveContent(study: Pick<Study, 'moves' | 'moveTree' | 'result'>): string {
+export function studyMoveContent(study: Pick<Study, 'moves' | 'moveTree' | 'moveTreePath' | 'result'>): string {
   const rows: unknown[] = [];
   const legacyResult = recordedResultFromSavedResult(study.result);
   if (study.moveTree?.length) {
-    const endpoint = legacyResult ? savedEndpoint(study.moveTree, study.moves) : undefined;
+    const endpoint = legacyResult ? savedNodeAtPath(study.moveTree, findSavedTreePath(study.moveTree, study.moves, study.moveTreePath)) : undefined;
     const stack = study.moveTree.slice().reverse().map(node => ({ node, depth: 0 }));
     while (stack.length) {
       const { node, depth } = stack.pop()!;
@@ -51,17 +52,6 @@ export function studyMoveContent(study: Pick<Study, 'moves' | 'moveTree' | 'resu
     study.moves.forEach((uci, depth) => rows.push(contentRow({ uci }, depth, depth === study.moves.length - 1 ? legacyResult : undefined)));
   }
   return JSON.stringify(rows);
-}
-
-function savedEndpoint(nodes: SavedMoveTreeNode[], moves: string[]): SavedMoveTreeNode | undefined {
-  let siblings: SavedMoveTreeNode[] | undefined = nodes;
-  let endpoint: SavedMoveTreeNode | undefined;
-  for (const uci of moves) {
-    endpoint = siblings?.find(node => node.uci === uci);
-    if (!endpoint) return undefined;
-    siblings = endpoint.children;
-  }
-  return endpoint;
 }
 
 function contentRow(node: SavedMoveTreeNode, depth: number, legacyResult?: RecordedResult) {
