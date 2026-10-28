@@ -168,7 +168,7 @@ import {
 import { describeShareLinkFailure, shareLinkHeadline, type ShareLinkFailure } from './utils/shareLinkNotice';
 import { DeferredCommandPalette as CommandPaletteModal } from './components/DeferredDialogs';
 import type { Command } from './utils/commandPalette';
-import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
+import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, SAVE_STUDY_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel, saveStudyShortcutLabel } from './utils/commandPalette';
 import {
   extractUciMoveLine,
   hasTooManyUciMoves,
@@ -1727,8 +1727,8 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isComposingKey(event)) return;
-      // Command/Control+K, the near-universal palette binding and the only
-      // chord this app claims. Handled before anything else so it works from a
+      // Command/Control+K, the near-universal palette binding.
+      // Handled before the single-key shortcuts so it works from a
       // text field too, which is where a reader often is when they reach for it.
       if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
@@ -2706,7 +2706,6 @@ function App() {
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !studyControlsDisabled && !viewingStudyMainLine;
   const hasGameMetadata = Boolean(normalizeGameMetadata(gameMetadata));
-  const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata);
   const canShareCurrentPosition = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
   const canExportCurrentLine = canShareCurrentPosition || hasGameMetadata;
   // A finished game has nothing to play on from, and the starting position is
@@ -3586,6 +3585,8 @@ function App() {
 
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
+  const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN
+    || hasMoveTreeMoves || Boolean(rootComment || rootResult || normalizeMoveComment(moveCommentDraft)) || hasGameMetadata);
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const studyNotesViewRef = useRef<{ identity: object; state: StudyNotesViewState } | null>(null);
   const rememberStudyNotesView = useCallback((identity: object, state: StudyNotesViewState) => {
@@ -4697,6 +4698,7 @@ function App() {
       label: 'Save game',
       hint: canSaveCurrentPosition ? undefined : 'Play a move or set up a position first',
       keywords: ['store', 'keep'],
+      shortcut: loadedSavedStudy ? undefined : saveStudyShortcutLabel(),
       disabled: !canSaveCurrentPosition,
       run: handleSaveGame,
     },
@@ -4704,6 +4706,7 @@ function App() {
       id: 'update-saved-study', label: 'Update saved study',
       hint: loadedSavedStudy ? (savingWouldDropTheReview ? 'Replace the opened study; its different-line review will not be included' : 'Replace the opened study with this board and its variations') : 'Load or save a study first',
       keywords: ['replace', 'overwrite', 'library'], disabled: !loadedSavedStudy || !canSaveCurrentPosition,
+      shortcut: loadedSavedStudy ? saveStudyShortcutLabel() : undefined,
       run: handleUpdateSavedStudy,
     },
     {
@@ -5466,6 +5469,18 @@ function App() {
     setAutoSaveRecovery(null);
   }, [autoSaveRecovery, handleLoadGame, savedGames]);
 
+  useEffect(() => {
+    const onSaveShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isComposingKey(event) || aDialogIsOpen
+        || event.key.toLowerCase() !== 's' || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      if (event.repeat || !canSaveCurrentPosition) return;
+      void (loadedSavedStudy ? handleUpdateSavedStudy() : handleSaveGame());
+    };
+    window.addEventListener('keydown', onSaveShortcut);
+    return () => window.removeEventListener('keydown', onSaveShortcut);
+  }, [aDialogIsOpen, canSaveCurrentPosition, handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy]);
+
   /**
    * Single-key shortcuts for the things a player reaches for mid-analysis.
    *
@@ -5686,7 +5701,8 @@ function App() {
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
     aria-labelledby={isMobile ? 'study-save-action' : undefined}
     aria-describedby={isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined}
-    title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
+    aria-keyshortcuts={SAVE_STUDY_ARIA_KEYSHORTCUTS}
+    title={`${loadedSavedStudy ? 'Update saved study' : 'Save study'} (${saveStudyShortcutLabel()})`}
     onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
     <span id="study-save-state" role="status" className={isMobile ? 'sr-only' : undefined}>{studySaveLabel}</span>
     {isMobile && <span id="study-save-action">{mobileStudySaveLabel}</span>}
