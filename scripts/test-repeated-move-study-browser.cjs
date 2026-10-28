@@ -35,8 +35,10 @@ async function openMatch(page, id, query, expected) {
   await command(page, 'Library');
   await page.getByRole('searchbox', { name: 'Search library' }).fill(query);
   const matches = page.getByTestId(`study-matches-${id}`);
-  const expand = matches.getByRole('button', { name: 'Find matching positions', exact: true });
-  if (await expand.count()) await expand.click();
+  const expand = matches.locator('[data-library-action="find-matches"]');
+  // Search text is prepared in queued tasks. Wait for the card instead of
+  // treating a not-yet-rendered toggle as an already expanded result list.
+  if (await expand.getAttribute('aria-expanded') !== 'true') await expand.click();
   await matches.locator('[data-library-action="open-match"]').click();
   await note(page, expected);
 }
