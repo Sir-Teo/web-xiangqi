@@ -2715,9 +2715,12 @@ async function assertDesktopBoardLayout(page, viewport) {
     !layout.graphValueText.includes("Start position, Not evaluated") ||
     layout.graphOrientation !== "horizontal" ||
     !layout.graphKeyshortcuts.includes("Home") ||
+    !layout.graphKeyshortcuts.includes("ArrowUp") ||
+    !layout.graphKeyshortcuts.includes("ArrowDown") ||
     layout.graphVisualsHidden !== "true" ||
     layout.graphVisualsFocusable !== "false" ||
-    !layout.graphDescriptionText.includes("Use left and right arrows") ||
+    !layout.graphDescriptionText.includes("Use Right or Up to advance one move") ||
+    !layout.graphDescriptionText.includes("Left or Down to go back") ||
     layout.graphLegacyDescription
   ) {
     throw new Error(`Evaluation graph instructions are not exposed accessibly: ${JSON.stringify(layout)}`);
