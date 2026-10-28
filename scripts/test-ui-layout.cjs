@@ -1012,7 +1012,9 @@ async function assertBoardMatchesThePlyItIsOn(page) {
     const shown = await page.evaluate(() => {
       const el = document.querySelector(".bottombar-fen");
       const fen = el?.getAttribute("title") || el?.textContent?.replace(/^FEN:\s*/, "") || "";
-      const counter = (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null;
+      // Notes have their own character counter. Read the move control's
+      // accessible value rather than an unrelated fraction elsewhere on the page.
+      const counter = (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") || null;
       return { placement: fen.split(" ")[0], side: fen.split(" ")[1], counter };
     });
     const want = boardAfterPlies(MOVES, plies);
@@ -1062,7 +1064,7 @@ async function assertAdvertisedMoveShortcuts(page) {
   await page.evaluate(() => document.body.click());
 
   const ply = () => page.evaluate(
-    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1)
+    () => Number(document.querySelector(".wc-scrubber")?.value ?? -1)
   );
 
   // Waits for the move to land rather than assuming a fixed delay is enough.
@@ -1073,7 +1075,7 @@ async function assertAdvertisedMoveShortcuts(page) {
     await page.keyboard.press(key);
     const landed = await page
       .waitForFunction(
-        (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === want,
+        (want) => Number(document.querySelector(".wc-scrubber")?.value ?? -1) === want,
         expected,
         { timeout: 5000 },
       )
@@ -1091,7 +1093,7 @@ async function assertAdvertisedMoveShortcuts(page) {
   await press("ArrowDown", MOVES.length, "jump to the latest move");
 
   // With the board focused the arrows belong to the board's own cursor.
-  await page.keyboard.press("Tab");
+  await page.getByRole("button", { name: "Skip to board", exact: true }).focus();
   await page.keyboard.press("Enter");
   const focusedOnBoard = await page.evaluate(
     () => Boolean(document.activeElement && document.activeElement.closest(".xiangqi-board"))
@@ -1465,7 +1467,7 @@ async function assertPlayFromHereKeepsThePosition(page) {
   const read = () => page.evaluate(() => ({
     workspace: document.querySelector(".top-mode-pills .gc-pill-active")?.textContent?.trim() ?? null,
     fen: document.querySelector(".bottombar-fen")?.getAttribute("title") ?? null,
-    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] ?? null,
+    plies: (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") ?? null,
     mode: (document.body.innerText.match(/Local board|You play (?:Red|Black)|AI exhibition/) || [])[0] ?? null,
     orientation: document.querySelector(".xiangqi-board-container")?.getAttribute("data-orientation") ?? null,
   }));
@@ -1813,7 +1815,7 @@ async function assertPiecesCanBeDraggedWithoutBreakingClicks(page) {
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   };
   const ply = () => page.evaluate(() =>
-    Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1));
+    Number(document.querySelector(".wc-scrubber")?.value ?? -1));
   const dragSquare = async (fromFile, fromRank, toFile, toRank) => {
     const from = await centre(fromFile, fromRank);
     const to = await centre(toFile, toRank);
@@ -2126,7 +2128,7 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
     await page.click(square(toFile, toRank));
     const landed = await page
       .waitForFunction(
-        (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === want,
+        (want) => Number(document.querySelector(".wc-scrubber")?.value ?? -1) === want,
         expectedPly,
         { timeout: 5000 },
       )
@@ -2140,7 +2142,7 @@ async function assertPlayedMovesAreNumberedFromOne(page) {
 
   const plies = await page.evaluate(() =>
     [...document.querySelectorAll(".tree-breadcrumb-chip")]
-      .map((chip) => chip.getAttribute("aria-label") || "")
+      .map((chip) => chip.getAttribute("title") || "")
       .filter((label) => /^Ply /.test(label))
       .map((label) => label.split(":")[0])
   );
@@ -2219,7 +2221,7 @@ async function assertALoadedCaptureRecordsWhatItDid(page) {
     if (await button.count()) { await button.first().click().catch(() => {}); break; }
   }
   await page.waitForFunction(
-    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === 1,
+    () => Number(document.querySelector(".wc-scrubber")?.value ?? -1) === 1,
     null,
     { timeout: 10000 },
   );
@@ -2270,7 +2272,7 @@ async function assertAPlayedCaptureRecordsWhatItDid(page) {
   await page.waitForSelector(`${square(4, 5)}[aria-label*="legal capture"]`, { timeout: 5000 });
   await page.click(square(4, 5));
   await page.waitForFunction(
-    () => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[1] ?? -1) === 1,
+    () => Number(document.querySelector(".wc-scrubber")?.value ?? -1) === 1,
     null,
     { timeout: 5000 },
   );
@@ -2544,7 +2546,7 @@ async function assertCheckmateByPlayingTheMove(page) {
 
   const state = await page.evaluate(() => ({
     subtitle: document.querySelector(".game-over-subtitle")?.textContent?.trim() || "",
-    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null,
+    plies: (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") || null,
     announced: document.querySelector('.sr-only[role="status"]')?.textContent?.trim() || "",
   }));
 
@@ -6741,30 +6743,28 @@ async function assertMobileNewGameStartButtonVisible(page) {
   await page.locator(".new-game-mode-btn").filter({ hasText: "You play Black" }).click();
   await page.getByRole('button', { name: /Beginner:.*depth 2/ }).click();
 
-  const layout = await page.evaluate(() => {
+  const readLayout = () => page.evaluate(() => {
     const menu = document.querySelector(".new-game-menu");
-    const footer = document.querySelector(".new-game-menu-footer");
     const start = document.querySelector(".new-game-start-btn");
     const menuRect = menu?.getBoundingClientRect();
     const startRect = start?.getBoundingClientRect();
-    const footerStyle = footer ? getComputedStyle(footer) : null;
     return {
       innerHeight: window.innerHeight,
       menu: menuRect ? { top: menuRect.top, bottom: menuRect.bottom, height: menuRect.height } : null,
       start: startRect ? { top: startRect.top, bottom: startRect.bottom, height: startRect.height } : null,
-      footerPosition: footerStyle?.position || "",
-      menuScrollTop: menu?.scrollTop ?? -1,
+      contentScrollTop: document.querySelector(".new-game-menu-content")?.scrollTop ?? -1,
       modeButtonLabels: Array.from(document.querySelectorAll(".new-game-mode-btn"))
-        .map((button) => button.getAttribute("aria-label") || ""),
+        .map((button) => ({ label: button.querySelector('span')?.textContent?.trim(), description: button.querySelector('small')?.textContent?.trim() })),
       selectionLabel: document.querySelector(".new-game-selection")?.getAttribute("aria-label") || "",
       overflowX: document.body.scrollWidth - document.body.clientWidth,
     };
   });
 
-  if (!layout.menu || !layout.start || layout.footerPosition !== "sticky") {
-    throw new Error(`Mobile New Game footer was not sticky: ${JSON.stringify(layout)}`);
+  const layout = await readLayout();
+  if (!layout.menu || !layout.start) {
+    throw new Error(`Mobile New Game start action was missing: ${JSON.stringify(layout)}`);
   }
-  if (!layout.modeButtonLabels.every((label) => /^[^.]+\. .+/.test(label))) {
+  if (!layout.modeButtonLabels.every(({ label, description }) => label && description)) {
     throw new Error(`New Game mode buttons need readable accessible labels: ${JSON.stringify(layout)}`);
   }
   if (!/^Selected .+\. .+/.test(layout.selectionLabel)) {
@@ -6775,6 +6775,13 @@ async function assertMobileNewGameStartButtonVisible(page) {
   }
   if (layout.overflowX > 2) {
     throw new Error(`Mobile New Game dialog introduced horizontal overflow: ${layout.overflowX}`);
+  }
+  // The footer sits outside the scrolling form. Verify that Start remains
+  // reachable after scrolling, without depending on a CSS positioning mode.
+  await page.locator('.new-game-menu-content').evaluate(content => { content.scrollTop = content.scrollHeight; });
+  const afterScroll = await readLayout();
+  if (afterScroll.contentScrollTop <= 0 || afterScroll.start.top !== layout.start.top || afterScroll.start.bottom > afterScroll.innerHeight - 6) {
+    throw new Error(`Scrolling New Game hid its start action: ${JSON.stringify(afterScroll)}`);
   }
 
   await page.getByRole("button", { name: "Start Fresh Board", exact: true }).click();
@@ -6881,7 +6888,7 @@ async function assertANotationRecordCanStartFromAGivenPosition(page) {
   await page.getByTestId("move-tree-row-label-0").waitFor({ timeout: 5000 });
 
   const state = await page.evaluate(() => ({
-    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null,
+    plies: (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") || null,
     error: (document.querySelector("#new-game-line-error")?.textContent || "").trim(),
     // The square the handicap took the horse from. If the record went in
     // against the opening position instead, the horse is still standing.
@@ -7003,7 +7010,7 @@ async function assertNotationImportSaysWhatItCouldNotRead(page) {
     throw new Error(`The notice was announced as "${announced.text}"`);
   }
   const plies = await page.evaluate(
-    () => (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || null
+    () => (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") || null
   );
   if (plies !== "2 / 2") {
     throw new Error(`Expected the two moves before the unreadable one, got ${plies}`);
@@ -8335,7 +8342,7 @@ async function assertReviewBestMoveBranchAction(page) {
     stage: [...document.querySelectorAll(".top-mode-pills button")]
       .find((button) => button.textContent?.trim() === "Analysis")?.getAttribute("aria-pressed") || "",
     mode: document.querySelector(".game-mode-badge")?.textContent?.trim() || "",
-    plies: (document.body.innerText.match(/(\d+) \/ (\d+)/g) || []).slice(-1)[0] || "",
+    plies: (document.querySelector(".wc-scrubber")?.getAttribute("aria-valuetext")?.replace("No moves", "0 of 0").match(/\d+/g) || []).join(" / ") || "",
     reviewVisible: Boolean(document.querySelector(".review-panel")),
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
@@ -8565,12 +8572,12 @@ async function assertLastMoveArrowUsesPracticalReviewQuality(page) {
 
   const state = await page.evaluate(() => ({
     arrowStroke: document.querySelector('.board-arrow-last[data-from="1:0"][data-to="2:2"] path')?.getAttribute("stroke") || "",
-    reviewMoment: document.querySelector('[data-testid="review-moment-2"]')?.getAttribute("aria-label") || "",
+    reviewMoment: document.querySelector('[data-testid="review-moment-2"]')?.textContent || "",
     overflowX: document.body.scrollWidth - document.body.clientWidth,
   }));
   if (
     state.arrowStroke !== "#facc15" ||
-    !state.reviewMoment.includes("Inaccuracy review moment") ||
+    !state.reviewMoment.includes("Inaccuracy") ||
     state.overflowX > 2
   ) {
     throw new Error(`Last-move arrow did not follow practical review quality: ${JSON.stringify(state)}`);
@@ -9093,7 +9100,7 @@ async function assertMoveLineImportErrorAccessibility(page) {
   const role = await error.getAttribute("role");
   const invalid = await input.getAttribute("aria-invalid");
   const describedBy = await input.getAttribute("aria-describedby");
-  if (role !== "alert" || invalid !== "true" || describedBy !== "new-game-line-error") {
+  if (role !== "alert" || invalid !== "true" || !String(describedBy).split(/\s+/).includes("new-game-line-error")) {
     throw new Error(`Invalid import was not announced accessibly: role=${role} invalid=${invalid} describedBy=${describedBy}`);
   }
 
@@ -9314,7 +9321,7 @@ async function assertReplayedMoveKeepsChosenContinuation(page) {
     !state.active.includes("b9c7") ||
     state.activeCurrent !== "step" ||
     !state.activeLabel.includes("Current move") ||
-    !state.activeLabel.includes("UCI B9→C7") ||
+    !state.activeLabel.includes("Black horse from B9 moves to C7") ||
     !state.rows.includes("h0g2") ||
     !state.variations.includes("c3c4") ||
     state.overflowX > 2
@@ -11823,7 +11830,7 @@ async function assertOversizedMoveLineFileRejected(page) {
     if (
       state.valueLength !== 0 ||
       state.invalid !== "true" ||
-      state.describedBy !== "new-game-line-error" ||
+      !String(state.describedBy).split(/\s+/).includes("new-game-line-error") ||
       state.fileNameVisible ||
       !state.importDisabled ||
       !state.error.includes("Library → Import PGN collection, then Open on board.") ||
@@ -11863,7 +11870,7 @@ async function assertOversizedMoveLinePasteRejected(page) {
   if (
     state.valueLength !== 0 ||
     state.invalid !== "true" ||
-    state.describedBy !== "new-game-line-error" ||
+    !String(state.describedBy).split(/\s+/).includes("new-game-line-error") ||
     !state.importDisabled ||
     !state.error.includes("1024 moves or fewer") ||
     state.overflowX > 2
@@ -14169,7 +14176,7 @@ async function assertMobileSaveLibraryActions(page) {
   // the palette and leave the reader staring at exactly the same board.
   const commandSearch = page.getByRole("combobox", { name: "Search commands" });
   await commandSearch.fill("engine panel");
-  await page.getByRole("button", { name: /^Engine panel/ }).click();
+  await page.getByRole("option", { name: /^Engine panel/ }).click();
   await page.getByTestId("mobile-analysis-tab-engine").waitFor({ state: "visible", timeout: 5000 });
   const engineRoute = await page.evaluate(() => ({
     analysisSelected: document.querySelector('[data-testid="mobile-view-analysis"]')?.getAttribute("aria-current"),
@@ -14264,7 +14271,7 @@ async function assertPerpetualCheckIsNamedAndBinding(page) {
   }
   const loaded = await page
     .waitForFunction(
-      (want) => Number((document.body.innerText.match(/(\d+) \/ (\d+)/) || [])[2] ?? -1) === want,
+      (want) => Number(document.querySelector(".wc-scrubber")?.max ?? -1) === want,
       moves.length,
       { timeout: 10000 },
     )
