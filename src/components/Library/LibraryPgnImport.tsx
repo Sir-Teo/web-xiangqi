@@ -1,14 +1,26 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../../utils/libraryMutation';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { COLLECTION_SIZE_ERROR, MAX_COLLECTION_TEXT_LENGTH, type CollectionGame } from '../../utils/pgnCollection';
 import { isSavedGameMode, previewGameCollection, saveGameCollection, type LibraryState } from '../../utils/gameLibrary';
 import { resultLabel } from '../../utils/savedGameLabels';
-import { formatRatedPlayer } from '../../utils/gameMetadata';
+import { formatRatedPlayer, type GameMetadata } from '../../utils/gameMetadata';
 import { matchesSearchTerms, MAX_SEARCH_QUERY_LENGTH, toSearchTerms, toSearchText } from '../../utils/searchTerms';
 import { unpackCollectionGames, type PackedGame } from '../../utils/moveTreeTransfer';
 import { isComposingKey } from '../../utils/keyboard';
+import { SearchText } from '../SearchText';
 
 const PREVIEW_PAGE_SIZE = 20;
+
+const CollectionSearchDetails = memo(function CollectionSearchDetails({ metadata, terms }: { metadata?: GameMetadata; terms: string[] }) {
+  if (!metadata || !terms.length) return null;
+  // These searchable fields are not in the compact preview. Reveal the ones
+  // that explain the current match, without adding controls to every card.
+  return <>{([
+    ['Site', metadata.site], ['Time control', metadata.timeControl], ['Annotated by', metadata.annotator],
+  ] as const).map(([label, value]) => value && terms.some(term => matchesSearchTerms(value, [term]))
+    ? <span className="lib-pgn-search-detail" key={label}>{label}: <SearchText text={value} terms={terms} /></span>
+    : null)}</>;
+});
 
 export function LibraryPgnImport({ state, onChange, onOpenGame }: {
   state: LibraryState; onChange: () => void; onOpenGame: (game: CollectionGame) => boolean;
@@ -178,9 +190,10 @@ export function LibraryPgnImport({ state, onChange, onOpenGame }: {
             <input type="checkbox" disabled={saving} checked={selected.has(index)} onChange={() => setSelected(previous => {
               const next = new Set(previous); if (next.has(index)) next.delete(index); else next.add(index); return next;
             })} />
-            <span><strong>{index + 1}. {formatRatedPlayer(game.metadata?.redPlayer, game.metadata?.redRating, 'Red')} · {formatRatedPlayer(game.metadata?.blackPlayer, game.metadata?.blackRating, 'Black')}</strong>
-              <span>{[game.metadata?.event, game.metadata?.date, game.metadata?.round ? `Round ${game.metadata.round}` : undefined,
-                `${game.moves.length} ${game.moves.length === 1 ? 'ply' : 'plies'}`, resultLabel(game.result || 'ongoing')].filter(Boolean).join(' · ')}</span></span>
+            <span><strong>{index + 1}. <SearchText text={`${formatRatedPlayer(game.metadata?.redPlayer, game.metadata?.redRating, 'Red')} · ${formatRatedPlayer(game.metadata?.blackPlayer, game.metadata?.blackRating, 'Black')}`} terms={terms} /></strong>
+              <span><SearchText text={[game.metadata?.event, game.metadata?.date, game.metadata?.round ? `Round ${game.metadata.round}` : undefined,
+                `${game.moves.length} ${game.moves.length === 1 ? 'ply' : 'plies'}`, resultLabel(game.result || 'ongoing')].filter(Boolean).join(' · ')} terms={terms} /></span>
+              <CollectionSearchDetails metadata={game.metadata} terms={terms} /></span>
             </label>
             <button type="button" aria-label={`Open game ${index + 1} on board`}
               onClick={() => { if (!onOpenGame(game)) setError('This game could not be opened because its move data is invalid.'); }}>

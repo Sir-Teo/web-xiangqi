@@ -638,7 +638,8 @@
 }
 .lib-tournament-details .lib-details-toggle { min-height: 44px; max-width: 100%; margin-bottom: .35rem; font: inherit; white-space: normal; }
 
-.lib-pgn-games { max-height: 260px; overflow-y: auto; margin: 10px 0; }
+/* Keep a useful result viewport when the reader enlarges the text. */
+.lib-pgn-games { max-height: max(260px, 16rem); overflow-y: auto; margin: 10px 0; }
 .lib-pgn-game { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--border-subtle); }
 .lib-pgn-game > label { display: flex; flex: 1 1 12rem; min-width: 0; gap: 8px; cursor: pointer; }
 .lib-pgn-game label > span { min-width: 0; overflow-wrap: anywhere; }
