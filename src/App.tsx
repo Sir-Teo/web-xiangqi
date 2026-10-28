@@ -5503,7 +5503,9 @@ function App() {
    * below once the panel is up, rather than fired and then cancelled.
    */
   const pendingShortcutRef = useRef<'threat' | 'deep' | null>(null);
-  useEffect(() => {
+  // A displayed engine line must answer the very next key. Passive effects
+  // could leave the shortcut reading the previous line after the DOM updated.
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isComposingKey(event)) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;

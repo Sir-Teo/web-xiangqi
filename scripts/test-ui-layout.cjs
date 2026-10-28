@@ -4313,22 +4313,8 @@ async function assertClickingIntoAnEngineLinePlaysItUpToThere(browser) {
       // something that has to happen, not what counts as happening.
       null, { timeout: 10000 },
     );
-    // Let the render that showed the line, and the effects that follow it,
-    // finish before pressing. The shortcut handler is re-registered by an
-    // effect whose dependencies include `canPlayBestMove` and
-    // `topAnalysisPv`, and an effect runs after paint -- so between the frame
-    // that paints "C8=5" and the flush that re-registers the handler, the
-    // listener still attached is the one that was built when there was no
-    // line, and it returns without playing.
-    //
-    // Reproduced under CPU throttling (CDP Emulation.setCPUThrottlingRate at
-    // rate 6, which reproduces CI's timing here almost exactly): pressing
-    // Space repeatedly, the first press was swallowed and the second worked,
-    // six times out of six, with focus on BODY and the line already reading
-    // C8=5. That is a real dropped keypress and is worth fixing in the app;
-    // this wait stops the gate reporting it as a broken shortcut every third
-    // CI run in the meantime.
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    // Shortcut bindings update before paint; the newly shown line must answer
+    // Space without waiting for another frame or passive-effect flush.
     await page.keyboard.press("Space");
     await page.waitForFunction(
       () => document.querySelector(".wc-meta strong")?.textContent?.trim() === "1 / 2",
