@@ -7841,8 +7841,9 @@ summary:active {
   overflow-wrap: anywhere;
 }
 
-/* A save failure needs readable instructions on phones as well as desktop. */
-.save-error-notice {
+/* Save guidance needs readable instructions on phones as well as desktop. */
+.save-error-notice,
+.study-empty-notice {
   width: min(560px, 100%);
   flex-shrink: 0;
   pointer-events: auto;
@@ -7860,7 +7861,10 @@ summary:active {
   font-size: .8125rem;
   line-height: 1.5;
 }
-.save-error-notice > span { flex-basis: 100%; }
+.save-error-notice > span,
+.study-empty-notice > span { flex-basis: 100%; }
+.study-empty-notice { padding: 4px; gap: 4px; line-height: 1.25; }
+.study-empty-notice .chip-btn { min-height: 44px; max-width: 100%; padding: 6px 10px; font: inherit; line-height: 1.25; white-space: normal; }
 
 /* Touch targets in the analysis panels.
    ------------------------------------
@@ -8318,9 +8322,9 @@ summary:active {
 }
 
 .panel .move-tree-empty-actions button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0.5rem 0.75rem;
-  color: var(--accent);
+  color: var(--accent-hover);
   border-color: var(--accent-subtle);
   background: var(--accent-muted);
 }

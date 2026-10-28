@@ -3586,7 +3586,7 @@ function App() {
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
   const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN
-    || hasMoveTreeMoves || Boolean(rootComment || rootResult || normalizeMoveComment(moveCommentDraft)) || hasGameMetadata);
+    || hasMoveTreeMoves || Boolean(rootResult || (currentNodeId === rootNodeId ? normalizeMoveComment(moveCommentDraft) : rootComment)) || hasGameMetadata);
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const studyNotesViewRef = useRef<{ identity: object; state: StudyNotesViewState } | null>(null);
   const rememberStudyNotesView = useCallback((identity: object, state: StudyNotesViewState) => {
@@ -4472,6 +4472,7 @@ function App() {
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
   const studyModified = Boolean(loadedSavedStudy && (currentStudyMoveContent !== savedStudyContent?.moves
     || currentStudyDetailsContent !== savedStudyContent?.details || commentStillPending));
+  const emptySavedStudy = Boolean(loadedSavedStudy && studyModified && !canSaveCurrentPosition && !libraryWritePending);
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
   const mobileStudySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Save study' : studyModified ? 'Save changes' : 'Saved study';
 
@@ -5700,9 +5701,11 @@ function App() {
   const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
     aria-labelledby={isMobile ? 'study-save-action' : undefined}
-    aria-describedby={isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined}
+    aria-describedby={[isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined,
+      emptySavedStudy ? 'empty-study-save-help' : undefined].filter(Boolean).join(' ') || undefined}
     aria-keyshortcuts={SAVE_STUDY_ARIA_KEYSHORTCUTS}
-    title={`${loadedSavedStudy ? 'Update saved study' : 'Save study'} (${saveStudyShortcutLabel()})`}
+    title={emptySavedStudy ? 'Add a move, note, or game details before saving'
+      : `${loadedSavedStudy ? 'Update saved study' : 'Save study'} (${saveStudyShortcutLabel()})`}
     onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
     <span id="study-save-state" role="status" className={isMobile ? 'sr-only' : undefined}>{studySaveLabel}</span>
     {isMobile && <span id="study-save-action">{mobileStudySaveLabel}</span>}
@@ -8348,6 +8351,10 @@ function App() {
               <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
             </div>
           ) : null}
+          {emptySavedStudy && <div className="study-empty-notice" role="status" data-testid="empty-study-save-notice">
+            <span id="empty-study-save-help">Add content to update the saved copy.</span>
+            <button type="button" className="chip-btn" onClick={openLibraryPanel}>Open library</button>
+          </div>}
         </div>
       </div>
 
