@@ -68,7 +68,7 @@ import {
 } from './utils/panelWidth';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { formatExplorerRecord } from './utils/positionExplorer';
-import { savedGameLine } from './utils/savedGameLine';
+import { savedGameLine, savedGamePositionResult } from './utils/savedGameLine';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import { createSavedGameId, MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
@@ -5085,7 +5085,7 @@ function App() {
       // The loader has already derived checkmate/stalemate from the selected
       // board. Saved metadata may be stale or contradictory; only use it for
       // results the position cannot prove, such as resignation or an agreed draw.
-      setGameResult(loadedResult => loadedResult ?? recordedResultFromSavedResult(navigation ? navigation.result : game.result) ?? null);
+      setGameResult(loadedResult => loadedResult ?? recordedResultFromSavedResult(navigation ? navigation.result : savedGamePositionResult(game)) ?? null);
     }
     if (game.review) {
       setNodeReviewDataBulk(

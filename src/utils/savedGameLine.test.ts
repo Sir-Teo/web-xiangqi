@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedGame } from './gameLibrary';
-import { savedGameLine } from './savedGameLine';
+import { savedGameLine, savedGamePositionResult } from './savedGameLine';
 import { buildLibraryPositionIndex, libraryPositionSignature, lookupLibraryPosition } from './positionExplorer';
 import { parseFenBoard, START_FEN } from './xiangqi';
 
@@ -11,6 +11,35 @@ const study: SavedGame = {
         { uci: 'b2e2', recordedResult: 'black-wins' },
     ],
 };
+
+describe('the outcome at the saved position', () => {
+    it.each([['red-wins', 'red'], ['black-wins', 'black'], ['draw', 'draw']] as const)(
+        'prefers an explicit %s to a conflicting legacy result', (recordedResult, result) => {
+            expect(savedGamePositionResult({ ...study, result: 'ongoing', moveTree: [{ uci: 'b2e2', recordedResult }] })).toBe(result);
+            expect(savedGamePositionResult({ ...study, moves: [], result: 'ongoing', rootResult: recordedResult })).toBe(result);
+        },
+    );
+    it('uses the exact saved variation independently of pins and repeated replies', () => {
+        const game: SavedGame = { ...study, moves: ['b2e2', 'h9g7'], result: 'red', moveTree: [
+            { uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'red-wins' }] },
+            { uci: 'b2e2', children: [{ uci: 'h9g7', recordedResult: 'black-wins' }] },
+        ] };
+        expect(savedGamePositionResult(game)).toBe('black');
+    });
+    it('stops at the saved position, including a root with continuations', () => {
+        const game: SavedGame = { ...study, moves: ['h2e2'], moveTree: [
+            { uci: 'h2e2', recordedResult: 'draw', children: [{ uci: 'h9g7', recordedResult: 'red-wins' }] },
+        ] };
+        expect(savedGamePositionResult(game)).toBe('draw');
+        expect(savedGamePositionResult({ ...game, moves: [], rootResult: 'black-wins' })).toBe('black');
+    });
+    it('retains legacy outcomes when the saved position has no declaration', () => {
+        expect(savedGamePositionResult({ ...study, moveTree: undefined })).toBe('black');
+        expect(savedGamePositionResult({ ...study, moveTree: [{ uci: 'b2e2' }] })).toBe('black');
+        expect(savedGamePositionResult({ ...study, moves: [], rootResult: undefined })).toBe('black');
+        expect(savedGamePositionResult({ ...study, moveTree: undefined, result: undefined })).toBeUndefined();
+    });
+});
 
 describe('the primary line of a saved game', () => {
     it('uses the pinned line and its result instead of the saved variation', () => {

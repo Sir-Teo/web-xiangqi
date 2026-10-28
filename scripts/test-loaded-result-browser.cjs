@@ -9,6 +9,14 @@ const fixtures = [
   { id: 'stalemate-root', startFen: '3k5/4R4/9/9/9/9/9/9/9/4K4 b - - 0 1', moves: [], result: 'draw', expected: 'Red Wins', tag: '1-0', saved: 'red' },
   { id: 'agreed-draw', moves: ['h2e2'], result: 'draw', expected: 'Draw', tag: '1/2-1/2', saved: 'draw' },
   { id: 'resignation-tree', moves: ['h2e2'], moveTree: [{ uci: 'h2e2' }, { uci: 'b2e2' }], result: 'black', expected: 'Black Wins', tag: '0-1', saved: 'black' },
+  { id: 'declared-node', moves: ['h2e2'], moveTree: [{ uci: 'h2e2', recordedResult: 'black-wins' }], result: 'red', expected: 'Black Wins', tag: '0-1', saved: 'black' },
+  { id: 'declared-root', moves: [], rootResult: 'draw', result: 'red', expected: 'Draw', tag: '1/2-1/2', saved: 'draw' },
+  { id: 'declared-prefix', moves: ['h2e2'], mainLinePinned: true,
+    moveTree: [{ uci: 'h2e2', recordedResult: 'draw', children: [{ uci: 'h9g7', recordedResult: 'black-wins' }] }],
+    result: 'red', expected: 'Draw', tag: '0-1', saved: 'draw' },
+  { id: 'declared-variation', moves: ['b2e2', 'h9g7'], mainLinePinned: true,
+    moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7', recordedResult: 'red-wins' }] }, { uci: 'b2e2', children: [{ uci: 'h9g7', recordedResult: 'black-wins' }] }],
+    result: 'draw', expected: 'Black Wins', tag: '1-0', saved: 'black' },
 ];
 async function command(page, label) {
   await page.keyboard.press('ControlOrMeta+k');
@@ -42,11 +50,16 @@ async function copyPgn(page) { await command(page, 'Copy PGN'); return page.eval
           await command(page, 'Library');
           await page.getByTestId(`load-saved-${fixture.id}`).click();
           const modal = page.getByRole('dialog', { name: fixture.expected, exact: true });
-          await modal.waitFor({ timeout: 3000 });
+          try { await modal.waitFor({ timeout: 3000 }); }
+          catch (error) {
+            console.error(`${fixture.id}: expected ${fixture.expected}; shown:`, await page.locator('.game-over-title').allTextContents());
+            throw error;
+          }
           if (fixture.id === 'stalemate-root') assert.match(await modal.innerText(), /no legal moves/i);
           if (fixture.id === 'mate-tree') await page.screenshot({ path: `/tmp/xiangqi-loaded-result-${browserType.name()}-${width}.png` });
           await modal.getByRole('button', { name: 'Review', exact: true }).click();
-          assert.ok((await copyPgn(page)).includes(`[Result "${fixture.tag}"]`), fixture.id);
+          const pgn = await copyPgn(page);
+          assert.ok(pgn.includes(`[Result "${fixture.tag}"]`), `${fixture.id}: ${pgn}`);
           {
             const before = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
             await command(page, 'Save game');
@@ -67,7 +80,7 @@ async function copyPgn(page) { await command(page, 'Copy PGN'); return page.eval
         await page.getByRole('dialog', { name: 'Red Wins', exact: true }).waitFor({ timeout: 3000 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: terminal line/tree/root outcomes override stale results; agreed draws/resignations, navigation, export, saving and recovery passed`);
+        console.log(`${browserType.name()} ${width}px: board-proven and declared outcomes override stale results at roots, cursors and pinned variations; navigation, export, saving and recovery passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

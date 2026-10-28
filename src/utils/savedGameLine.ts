@@ -1,5 +1,18 @@
 import type { SavedGame, SavedMoveTreeNode } from './gameLibrary';
 
+/** The declaration at the saved cursor, before any unplayed continuation or pinned line. */
+export function savedGamePositionResult(game: SavedGame): SavedGame['result'] {
+    if (!game.moves.length) return toSavedResult(game.rootResult) ?? game.result;
+    let children = game.moveTree;
+    let endpoint: SavedMoveTreeNode | undefined;
+    for (const uci of game.moves) {
+        endpoint = children?.find(node => node.uci === uci);
+        if (!endpoint) return game.result;
+        children = endpoint.children;
+    }
+    return toSavedResult(endpoint?.recordedResult) ?? game.result;
+}
+
 /** The PGN primary line: a pinned first-child path, or the saved path continued. */
 export function savedGameLine(game: SavedGame): { moves: string[]; result: SavedGame['result'] } {
     if (!game.moveTree?.length) {
