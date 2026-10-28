@@ -11,6 +11,7 @@ import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind 
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
+import { PositionResultEditor } from './components/PositionResultEditor';
 import { StudyNotes, type StudyNotesViewState } from './components/StudyNotes';
 import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
@@ -866,6 +867,7 @@ function App() {
     keepUciLineAtNode,
     setCurrentNodeEval,
     restoreRecordedResult,
+    setNodeRecordedResult,
     setNodeComment,
     setNodeGlyphs,
     setNodeComments,
@@ -2692,6 +2694,8 @@ function App() {
   const rootComment = treeNodes[rootNodeId]?.comment;
   const rootResult = treeNodes[rootNodeId]?.recordedResult;
   const selectedRecordedResult = treeNodes[currentNodeId]?.record?.recordedResult ?? (currentNodeId === rootNodeId ? rootResult : undefined);
+  const automaticPositionResult = useMemo(() => hasAnyLegalMove(board, sideToMove) ? undefined
+    : sideToMove === 'w' ? 'black-wins' : 'red-wins', [board, sideToMove]);
   const lineRecordedResult = activeLineNodeIds.length ? treeNodes[activeLineNodeIds.at(-1)!]?.record?.recordedResult : rootResult;
   const mainLinePinned = treeNodes[rootNodeId]?.mainLinePinned;
   const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(moveStructure, rootNodeId) : [], [mainLinePinned, moveStructure, rootNodeId]);
@@ -7754,7 +7758,16 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
-                  <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
+                  <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata}>
+                    <PositionResultEditor value={selectedRecordedResult} automaticResult={automaticPositionResult}
+                      target={moveCommentTarget ?? 'Selected position'} disabled={studyControlsDisabled}
+                      onChange={result => {
+                        setNodeRecordedResult(currentNodeId, result);
+                        // A legacy resignation/draw is metadata. Replacing it
+                        // must also release the old game-wide result fallback.
+                        setGameResult(automaticPositionResult ?? null);
+                      }} />
+                  </GameMetadataEditor>
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
                     initialViewState={studyNotesViewRef.current?.identity === gameIdentity ? studyNotesViewRef.current.state : undefined}

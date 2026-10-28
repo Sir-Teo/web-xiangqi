@@ -948,6 +948,19 @@ export function useXiangqi() {
         });
     }, []);
 
+    /** An explicit edit can replace or remove a declaration at any position. */
+    const setNodeRecordedResult = useCallback((nodeId: string, value: unknown) => {
+        const recordedResult = normalizeRecordedResult(value);
+        if (value !== undefined && !recordedResult) return;
+        setTreeNodes(tree => {
+            const node = tree[nodeId];
+            if (!node || (node.record ?? node).recordedResult === recordedResult) return tree;
+            return { ...tree, [nodeId]: node.record
+                ? { ...node, record: { ...node.record, recordedResult } }
+                : { ...node, recordedResult } };
+        });
+    }, []);
+
     const setNodeGlyphs = useCallback((nodeId: string, value: number[] | undefined) => {
         const nags = normalizeMoveGlyphs(value);
         setTreeNodes(tree => {
@@ -1181,6 +1194,7 @@ export function useXiangqi() {
         setNodeEvals,
         setNodeBestMove,
         restoreRecordedResult,
+        setNodeRecordedResult,
         setNodeComment,
         setNodeGlyphs,
         setNodeComments,

@@ -103,6 +103,7 @@ const scripts = [
   'test-active-continuation-browser.cjs',
   'test-study-main-line-browser.cjs',
   'test-loaded-result-browser.cjs',
+  'test-position-result-editor-browser.cjs',
   'test-recorded-result-browser.cjs',
   'test-library-primary-line-browser.cjs',
   'test-mobile-hint-feedback-browser.cjs',

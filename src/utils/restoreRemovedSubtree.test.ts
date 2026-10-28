@@ -92,7 +92,7 @@ describe('restore a deleted branch into the current study', () => {
     });
     it('restores missing annotations on a replayed move and respects explicitly replaced or cleared annotations', () => {
         const before = fixture();
-        before.b.record = { ...before.b.record!, evalScore: 20000, evalScoreKind: 'cp', evalDepth: 40, quality: 'good', persistEvaluation: true, nags: [1, 42] };
+        before.b.record = { ...before.b.record!, recordedResult: 'draw', evalScore: 20000, evalScoreKind: 'cp', evalDepth: 40, quality: 'good', persistEvaluation: true, nags: [1, 42] };
         const { tree: current } = removeSubtree(before, 'root', 'b');
         current.replayed = node('replayed', 'a', [], 'b');
         delete current.replayed.record!.comment;
@@ -103,13 +103,18 @@ describe('restore a deleted branch into the current study', () => {
         expect(record.evalDepth).toBe(40);
         expect(record.quality).toBe('good');
         expect(record.nags).toEqual([1, 42]);
+        expect(record.recordedResult).toBe('draw');
+        current.replayed.record!.recordedResult = 'black-wins';
+        expect(restoreRemovedSubtree(current, before, 'b')!.tree.replayed.record!.recordedResult).toBe('black-wins');
         current.replayed.record!.nags = [2];
         expect(restoreRemovedSubtree(current, before, 'b')!.tree.replayed.record!.nags).toEqual([2]);
         current.replayed.record!.comment = undefined;
         current.replayed.record!.nags = undefined;
+        current.replayed.record!.recordedResult = undefined;
         record = restoreRemovedSubtree(current, before, 'b')!.tree.replayed.record!;
         expect(record.comment).toBeUndefined();
         expect(record.nags).toBeUndefined();
+        expect(record.recordedResult).toBeUndefined();
     });
     it('rejects missing parents, unrelated ID collisions and broken or cyclic snapshots atomically', () => {
         const before = fixture();

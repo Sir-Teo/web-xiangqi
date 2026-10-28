@@ -61,6 +61,10 @@ const command = async (page, label) => {
         const mainLine = page.getByTestId('study-main-line');
         await mainLine.locator('summary').click();
         assert.equal(await page.getByTestId('pin-study-main-line').isDisabled(), true);
+        const metadata = page.getByTestId('game-metadata');
+        await metadata.locator('summary').click();
+        const result = metadata.getByRole('combobox', { name: /Result at this position/ });
+        assert.equal(await result.isDisabled(), true, 'An active opponent turn must lock result edits');
         const fen = await page.locator('.bottombar-fen').getAttribute('title');
         if (mobile) await page.getByTestId('mobile-view-board').click();
         const stops = await page.evaluate(() => window.__stopCount);
@@ -75,6 +79,7 @@ const command = async (page, label) => {
         assert.equal(await note.isEnabled(), true, 'Pausing must enable the promised note navigation');
         assert.equal(await page.getByText('Pause play to visit a note.', { exact: true }).count(), 0);
         assert.equal(await annotation.isEnabled(), true, 'Paused games must allow study annotations');
+        assert.equal(await result.isEnabled(), true, 'Paused games must allow recorded results');
         assert.equal(await page.getByText('Pause play to edit study annotations.', { exact: true }).count(), 0);
         await annotation.selectOption('1');
         await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
@@ -111,7 +116,8 @@ const command = async (page, label) => {
           assert.equal(await note.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
           await page.screenshot({ path: `/tmp/xiangqi-ai-pause-notes-${browserType.name()}-${width}-${size}.png` });
-          for (const [panel, target, label] of [[mainLine, page.getByTestId('unpin-study-main-line'), 'main-line'], [glyphs, annotation, 'annotations']]) {
+          for (const [panel, target, label] of [[mainLine, page.getByTestId('unpin-study-main-line'), 'main-line'], [glyphs, annotation, 'annotations'], [metadata, result, 'results']]) {
+            if (panel === metadata && await metadata.getAttribute('open') === null) await metadata.locator('summary').click();
             await target.evaluate(node => node.scrollIntoView({ block: 'center' }));
             await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
             assert.equal(await target.evaluate(node => { const r = node.getBoundingClientRect(); return r.height >= 44 && node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true, `${label} controls must remain reachable`);
@@ -133,6 +139,7 @@ const command = async (page, label) => {
         await page.waitForFunction(before => window.__goCount > before, searches);
         await command(page, 'Find study notes');
         assert.equal(await annotation.isDisabled(), true, 'Resuming must lock annotations during the opponent turn');
+        assert.equal(await result.isDisabled(), true, 'Resuming must lock recorded results during the opponent turn');
         assert.equal(await page.getByTestId('unpin-study-main-line').isDisabled(), true);
         await page.keyboard.press('ControlOrMeta+k');
         await page.getByRole('combobox', { name: 'Search commands' }).fill('Let PGN follow the selected line');
