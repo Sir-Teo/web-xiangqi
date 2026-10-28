@@ -74,18 +74,17 @@ async function command(page, label) {
         }
         await search.fill('NEEDLE 中炮 🐎');
         assert.equal(await results.count(), 1);
+        assert.deepEqual(await results.locator('mark').allTextContents(), ['Needle', '中炮', '🐎']);
         await oneStop();
         for (const fontSize of [16, 32]) {
           await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, fontSize);
           await results.first().scrollIntoViewIfNeeded();
           const preview = await results.first().locator('.study-note-preview').evaluate(element => {
-            const text = element.firstChild;
-            const range = document.createRange();
-            range.setStart(text, text.textContent.indexOf('Needle'));
-            range.setEnd(text, text.textContent.length);
-            const match = range.getBoundingClientRect();
             const box = element.getBoundingClientRect();
-            return { visible: match.bottom <= box.bottom + 1 && match.top >= box.top - 1,
+            return { visible: [...element.querySelectorAll('mark')].every(mark => {
+                const match = mark.getBoundingClientRect();
+                return match.bottom <= box.bottom + 1 && match.top >= box.top - 1;
+              }),
               fits: document.documentElement.scrollWidth <= innerWidth + 1 };
           });
           assert.deepEqual(preview, { visible: true, fits: true }, 'Search matches at the end of long notes must remain visible at 200% text size');
@@ -93,6 +92,7 @@ async function command(page, label) {
         await page.evaluate(() => { document.documentElement.style.fontSize = '16px'; });
         await search.press('Escape');
         assert.equal(await search.inputValue(), '');
+        assert.equal(await results.locator('mark').count(), 0, 'Clearing the query removes old highlights');
         await search.press('ArrowUp');
         await focused(19);
         await page.getByRole('button', { name: 'Show 7 more notes', exact: true }).click();
@@ -102,6 +102,18 @@ async function command(page, label) {
         await search.fill('Plan 26');
         assert.equal(await results.count(), 1);
         await oneStop();
+        if (width === 1440 && browserType.name() === 'chromium') {
+          await page.emulateMedia({ forcedColors: 'active' });
+          const colors = await results.locator('mark').first().evaluate(mark => {
+            const style = getComputedStyle(mark);
+            return { foreground: style.color, background: style.backgroundColor };
+          });
+          assert.notEqual(colors.foreground, colors.background, 'Highlighted words remain readable in forced colors');
+          assert.notEqual(colors.background, 'rgba(0, 0, 0, 0)');
+          await page.emulateMedia({ forcedColors: 'none' });
+        }
+        await finder.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `/tmp/xiangqi-note-highlights-${browserType.name()}-${width}.png` });
         await search.press('Tab');
         assert.equal(await finder.getByRole('button', { name: 'Clear note search' }).evaluate(element => element === document.activeElement), true);
         await page.keyboard.press('Tab');

@@ -34,7 +34,7 @@ const command = async (page, label) => {
                 annotations: [{ moveIndex: 0, evalScore: 42, quality: 'good' }, { moveIndex: 1, evalScore: 50, quality: 'mistake', reviewNote: 'Review belongs to the saved path' }] } },
             { id: 'loop', savedAt: 2, gameMode: 'PvP', label: 'Training study', moves: [], moveTree: loop },
             { id: 'root-only', savedAt: 3, gameMode: 'PvP', label: 'Root lesson', moves: [],
-              rootComment: 'A note-only lesson Cafe\u0301 龙门',
+              rootComment: 'A note-only lesson. '.repeat(20) + 'Cafe\u0301 龙门',
               startFen: 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR b - - 0 42' },
             { id: 'legacy', savedAt: 4, gameMode: 'PvP', label: 'Legacy study', moves: ['h2e2', 'h9g7'],
               cursorPly: 2, result: 'red', rootComment: 'Legacy starting guide' },
@@ -112,7 +112,7 @@ const command = async (page, label) => {
         assert.equal(await page.getByTestId('move-comment-input').inputValue(), 'Training loop 15');
         for (const [gameId, query, note, moveCount] of [
           ['prepared', '中炮 overview', 'Starting guide: 中炮 overview', 2],
-          ['root-only', 'CAFÉ 龙门', 'A note-only lesson Café 龙门', 0],
+          ['root-only', 'CAFÉ 龙门', 'A note-only lesson. '.repeat(20) + 'Café 龙门', 0],
           ['legacy', 'Legacy starting guide', 'Legacy starting guide', 2],
         ]) {
           await command(page, 'Library');
@@ -125,6 +125,15 @@ const command = async (page, label) => {
             await page.evaluate(size => { document.documentElement.style.fontSize = size + 'px'; }, size);
             await rootMatches.getByRole('button', { name: 'Open starting position', exact: true }).scrollIntoViewIfNeeded();
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+            const highlighted = await rootMatches.locator('.lib-study-match-note').evaluate(element => {
+              const box = element.getBoundingClientRect();
+              const marks = [...element.querySelectorAll('mark')];
+              return marks.length > 0 && marks.every(mark => {
+                const match = mark.getBoundingClientRect();
+                return match.top >= box.top - 1 && match.bottom <= box.bottom + 1;
+              });
+            });
+            assert.equal(highlighted, true, 'Matching note text must be highlighted and unclipped, including long starting notes');
           }
           await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
           await rootMatches.getByRole('button', { name: 'Open starting position', exact: true }).click();

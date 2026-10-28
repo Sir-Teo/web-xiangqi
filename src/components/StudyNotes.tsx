@@ -7,6 +7,7 @@ import type { XiangqiNotationStyle } from '../utils/xiangqiNotation';
 import { isComposingKey } from '../utils/keyboard';
 import { rovingIndexForKey, rovingTabStopIndex } from '../utils/rovingFocus';
 import { IconX } from './icons';
+import { SearchText } from './SearchText';
 import './StudyNotes.css';
 
 const PAGE_SIZE = 20;
@@ -136,7 +137,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
                         <strong>{label(note.nodeId)}</strong>
                         {note.nodeId !== rootId && <small>{note.variationId ? `Variation via ${label(note.variationId)}` : 'Main line'}</small>}
                         {note.nodeId === currentNodeId && <small className="study-note-current">Current position</small>}
-                        <span className="study-note-preview" title={note.comment}>{note.comment}</span>
+                        <span className="study-note-preview" title={note.comment}><SearchText text={note.comment} terms={terms} /></span>
                     </button>
                 </li>)}
             </ul>

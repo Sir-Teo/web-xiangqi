@@ -3,6 +3,7 @@ import type { SavedGame } from '../../utils/gameLibrary';
 import { matchesSearchTerms } from '../../utils/searchTerms';
 import { savedStudyMatchMoves, savedStudySearchEntries, type SavedStudySearchEntry } from '../../utils/savedStudySearch';
 import { studyAnalysisScore } from '../../utils/studyAnalysis';
+import { SearchText } from '../SearchText';
 
 const PAGE_SIZE = 10;
 
@@ -43,16 +44,19 @@ function Matches({ game, terms, tabIndex, onOpen }: {
   return <div ref={resultsRef}>
     <p>{matches.length ? `${matches.length} matching ${matches.length === 1 ? 'position' : 'positions'}. Open a position to read its notes and saved analysis.`
       : 'No single position matches every search word. This game matches through its details or several positions; try fewer words.'}</p>
-    {matches.slice(0, limit).map(({ entry, ordinal }) => <div className="lib-study-match" key={ordinal}>
-      <button type="button" className="chip-btn" tabIndex={tabIndex} data-library-action="open-match"
-        onClick={() => onOpen(entry ? savedStudyMatchMoves(entry) : [])}>
-        {entry ? `Open ${entry.node.uci} · ply ${entry.ply}` : 'Open starting position'}
-      </button>
-      {(entry ? entry.node.comment : game.rootComment) && <p className="lib-study-match-note">{entry ? entry.node.comment : game.rootComment}</p>}
-      {entry?.node.analysis && <p>Saved analysis · {studyAnalysisScore(entry.node.analysis)} Red POV · D{entry.node.analysis.depth}
-        {entry.node.analysis.bounded ? ` · ${entry.node.analysis.bound ?? ''} bound, not exact` : ''} · {entry.node.analysis.engine.name}</p>}
-      {entry && <MatchPath entry={entry} tabIndex={tabIndex} />}
-    </div>)}
+    {matches.slice(0, limit).map(({ entry, ordinal }) => {
+      const comment = entry ? entry.node.comment : game.rootComment;
+      return <div className="lib-study-match" key={ordinal}>
+        <button type="button" className="chip-btn" tabIndex={tabIndex} data-library-action="open-match"
+          onClick={() => onOpen(entry ? savedStudyMatchMoves(entry) : [])}>
+          {entry ? `Open ${entry.node.uci} · ply ${entry.ply}` : 'Open starting position'}
+        </button>
+        {comment && <p className="lib-study-match-note"><SearchText text={comment} terms={terms} /></p>}
+        {entry?.node.analysis && <p>Saved analysis · {studyAnalysisScore(entry.node.analysis)} Red POV · D{entry.node.analysis.depth}
+          {entry.node.analysis.bounded ? ` · ${entry.node.analysis.bound ?? ''} bound, not exact` : ''} · {entry.node.analysis.engine.name}</p>}
+        {entry && <MatchPath entry={entry} tabIndex={tabIndex} />}
+      </div>;
+    })}
     {matches.length > limit && <button type="button" className="chip-btn" tabIndex={tabIndex}
       data-library-action="more-matches" onClick={() => {
         nextPageFocusRef.current = { query, index: limit };
