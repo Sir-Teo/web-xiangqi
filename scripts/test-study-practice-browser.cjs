@@ -49,6 +49,8 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         const dialog = page.getByTestId('study-practice-dialog');
         const close = dialog.getByRole('button', { name: 'Close study practice' });
         const progress = page.getByTestId('study-practice-progress'); await progress.waitFor();
+        const linePosition = dialog.getByTestId('study-practice-line-position');
+        assert.match(await linePosition.innerText(), /Line 1 of 3 · 0 of 3 moves played/);
         assert.ok(chunks.length > 0);
         assert.equal(await close.evaluate(node => node === document.activeElement), true);
         const notes = dialog.getByTestId('study-practice-line-notes');
@@ -86,6 +88,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         await dialog.getByRole('button', { name: 'Show a saved move' }).click();
         assert.match(await dialog.getByTestId('study-practice-hint').innerText(), /C2=5/);
         await move('h2e2', true);
+        assert.match(await linePosition.innerText(), /Line 1 of 3 · 1 of 3 moves played/);
         assert.equal(await notes.count(), 0);
         assert.equal(await dialog.getByRole('button', { name: 'Play saved reply' }).evaluate(node => node === document.activeElement), true, 'A recalled move must focus the saved reply');
         assert.match(await dialog.getByTestId('study-practice-status').innerText(), /Play the saved reply/);
@@ -99,9 +102,11 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
         assert.match(await progress.innerText(), /1 of 3/);
         assert.match(await dialog.getByTestId('study-practice-recall').innerText(), /1 of 2/);
         await dialog.getByRole('button', { name: 'Next line' }).click();
+        assert.match(await linePosition.innerText(), /Line 2 of 3 · 0 of 3 moves played/);
         assert.equal(await notes.count(), 0, 'Starting another line must hide the previous notes');
         // A different saved Red branch is accepted, not labeled a mistake.
         await move('b2e2'); await dialog.getByRole('button', { name: 'Play saved reply' }).click();
+        assert.match(await linePosition.innerText(), /Line 3 of 3 · 2 of 2 moves played/);
         assert.match(await progress.innerText(), /2 of 3/);
         await checkNotes(['Other cannon', 'Other line reply']);
         await dialog.getByRole('button', { name: 'Next line' }).click();

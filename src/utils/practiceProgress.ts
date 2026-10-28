@@ -30,13 +30,22 @@ export function readPracticeProgress(game: SavedGame, study: PracticeStudy, side
     const entry = readPracticeEntries(storage ?? localStorage).find(entry => entry.id === game.id && matchesPracticeRevision(game, entry.revision));
     if (!entry) return null;
     let chosen = side ?? entry.side;
-    if (!practiceLineIndices(study, chosen).length) {
+    let eligible = practiceLineIndices(study, chosen);
+    if (!eligible.length) {
       if (side) return null;
       // Older clients could remember a color with no moves. Keep the valid
       // color's own saved session instead of copying or resetting its scores.
       chosen = study.side;
+      eligible = practiceLineIndices(study, chosen);
     }
-    const session = restorePracticeSession(study, entry.sessions[chosen]);
+    let session = restorePracticeSession(study, entry.sessions[chosen]);
+    if (session && !eligible.includes(session.line)) {
+      // Older progress can select an opponent-only line in a mixed study.
+      // Resume a playable exercise while retaining this side's own history.
+      const completed = new Set(session.completed);
+      const next = eligible.find(line => !completed.has(line)) ?? eligible[0];
+      session = startPracticeLine(study, next, session);
+    }
     return session ? { side: chosen, session } : null;
   } catch { return null; }
 }

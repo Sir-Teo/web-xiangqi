@@ -163,7 +163,7 @@ async function downloadedJson(page, action) {
           await practiceDialog.locator(`.hitbox[data-file="${file}"][data-rank="${rank}"]`).click();
         }
         await practiceDialog.getByRole('button', { name: 'Play saved reply', exact: true }).click();
-        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 lines practiced/);
+        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 line practiced/);
         await practiceNotes.locator('summary').click();
         await practiceNotes.locator('li').first().waitFor();
         const expectedPracticeNotes = ['Original cannon', 'Needle root plan', 'Original main reply', 'Other repeated reply', 'Updated needle nested plan'];
@@ -173,7 +173,7 @@ async function downloadedJson(page, action) {
         await practiceDialog.getByRole('button', { name: 'Close study practice', exact: true }).click();
         await practice.click();
         await practiceDialog.getByTestId('study-practice-status').waitFor();
-        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 lines practiced/);
+        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 line practiced/);
         await practiceNotes.locator('summary').click();
         await practiceNotes.locator('li').first().waitFor();
         assert.deepEqual(await practiceNotes.locator('li p').allTextContents(), expectedPracticeNotes);

@@ -19,6 +19,7 @@
 .study-practice-board .xiangqi-board-container { --board-max-width: 440px; }
 .study-practice-feedback { grid-area: feedback; min-width: 0; }
 .study-practice-feedback > p[role="status"] { padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-panel); }
+.study-practice-line-position { display: block; margin-bottom: .4rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .study-practice-hint { display: block; margin-top: .5rem; }
 .study-practice-save-notice { display: grid; gap: .5rem; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-panel); }
 .study-practice-save-notice p { margin: 0; }
