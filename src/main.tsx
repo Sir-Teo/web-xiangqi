@@ -7,7 +7,11 @@ import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { QaForcedRenderError } from './components/QaForcedRenderError'
 import { cleanupLegacyRuntimeStorage } from './utils/serviceWorkerCleanup'
 
-void cleanupLegacyRuntimeStorage()
+declare global {
+  interface Window { __xiangqiIsolationRegistration?: Promise<unknown> }
+}
+
+void cleanupLegacyRuntimeStorage({ appWorkerRegistration: window.__xiangqiIsolationRegistration })
 
 const forceErrorBoundary = import.meta.env.DEV &&
   new URLSearchParams(window.location.search).has('qa-error-boundary')

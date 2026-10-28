@@ -31,6 +31,7 @@ type CleanupEnvironment = {
     cacheStorage?: CacheStorageLike;
     appBasePath?: string;
     locationHref?: string;
+    appWorkerRegistration?: Promise<unknown>;
 };
 
 const LEGACY_CACHE_PREFIX = 'pikafish-demo-';
@@ -112,34 +113,44 @@ export async function cleanupLegacyRuntimeStorage(
         cacheKeysDeleted: 0,
     };
 
-    try {
-        const registrations = await serviceWorker?.getRegistrations?.();
-        if (registrations) {
-            result.registrationsChecked = registrations.length;
-            await Promise.all(registrations.map(async (registration) => {
-                if (!isLegacyWebXiangqiServiceWorker(registration, appBasePath, locationHref)) return;
-                if (!registration.unregister) return;
-                const unregistered = await registration.unregister();
-                if (unregistered) result.registrationsUnregistered += 1;
-            }));
-        }
-    } catch (_) {
-        // Cleanup is best-effort; app startup must never depend on SW APIs.
-    }
-
-    try {
-        const cacheKeys = await cacheStorage?.keys?.();
-        if (cacheKeys) {
-            result.cacheKeysChecked = cacheKeys.length;
-            await Promise.all(cacheKeys.map(async (cacheKey) => {
-                if (!isLegacyRuntimeCacheKey(cacheKey)) return;
-                const deleted = await cacheStorage?.delete?.(cacheKey);
-                if (deleted) result.cacheKeysDeleted += 1;
-            }));
-        }
-    } catch (_) {
-        // Ignore cache API failures for the same reason.
-    }
+    await Promise.all([
+        (async () => {
+            // The new worker updates the old worker's registration. Removing
+            // it while register() is fetching the script can cancel the update.
+            // Read the registrations only after that attempt has settled.
+            try { await environment.appWorkerRegistration; } catch { /* still remove a legacy worker after a failed replacement */ }
+            try {
+                const registrations = await serviceWorker?.getRegistrations?.();
+                if (registrations) {
+                    result.registrationsChecked = registrations.length;
+                    await Promise.all(registrations.map(async (registration) => {
+                        if (!isLegacyWebXiangqiServiceWorker(registration, appBasePath, locationHref)) return;
+                        if (!registration.unregister) return;
+                        const unregistered = await registration.unregister();
+                        if (unregistered) result.registrationsUnregistered += 1;
+                    }));
+                }
+            } catch (_) {
+                // Cleanup is best-effort; app startup must never depend on SW APIs.
+            }
+        })(),
+        (async () => {
+            // Stale cached artifacts can be removed while installation waits.
+            try {
+                const cacheKeys = await cacheStorage?.keys?.();
+                if (cacheKeys) {
+                    result.cacheKeysChecked = cacheKeys.length;
+                    await Promise.all(cacheKeys.map(async (cacheKey) => {
+                        if (!isLegacyRuntimeCacheKey(cacheKey)) return;
+                        const deleted = await cacheStorage?.delete?.(cacheKey);
+                        if (deleted) result.cacheKeysDeleted += 1;
+                    }));
+                }
+            } catch (_) {
+                // Ignore cache API failures for the same reason.
+            }
+        })(),
+    ]);
 
     return result;
 }

@@ -98,6 +98,49 @@ describe('cleaning up legacy runtime storage', () => {
         expect(result.registrationsUnregistered).toBe(1);
     });
 
+    it('waits for the replacement registration while clearing stale caches immediately', async () => {
+        let finish!: () => void;
+        const pending = new Promise<void>(resolve => { finish = resolve; });
+        let inspected = false;
+        let removed = false;
+        let deleted = false;
+        const worker = {
+            scope: HREF, active: { scriptURL: `${HREF}sw.js` },
+            unregister: async () => { removed = true; return true; },
+        };
+        const cleanup = cleanupLegacyRuntimeStorage({
+            appWorkerRegistration: pending,
+            serviceWorker: { getRegistrations: async () => { inspected = true; return [worker]; } },
+            cacheStorage: { keys: async () => ['pikafish-demo-old'], delete: async () => { deleted = true; return true; } },
+            appBasePath: BASE, locationHref: HREF,
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(inspected).toBe(false);
+        expect(deleted).toBe(true);
+        worker.active = { scriptURL: `${HREF}${APP_SERVICE_WORKER_FILENAME}` };
+        finish();
+        const result = await cleanup;
+        expect(inspected).toBe(true);
+        expect(removed).toBe(false);
+        expect(result.cacheKeysDeleted).toBe(1);
+        expect(result.registrationsChecked).toBe(1);
+    });
+
+    it('still removes the old registration if its replacement fails', async () => {
+        let removed = false;
+        const result = await cleanupLegacyRuntimeStorage({
+            appWorkerRegistration: Promise.reject(Error('offline')),
+            serviceWorker: { getRegistrations: async () => [{
+                scope: HREF, active: { scriptURL: `${HREF}sw.js` },
+                unregister: async () => { removed = true; return true; },
+            }] },
+            cacheStorage: {}, appBasePath: BASE, locationHref: HREF,
+        });
+        expect(removed).toBe(true);
+        expect(result.registrationsUnregistered).toBe(1);
+    });
+
     it('deletes only the demo caches', async () => {
         const deleted: string[] = [];
         const result = await cleanupLegacyRuntimeStorage({

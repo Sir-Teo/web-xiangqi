@@ -1,4 +1,5 @@
 import { isComposingKey } from './utils/keyboard';
+import { useAnalysisActivation } from './hooks/useAnalysisActivation';
 import { downloadRecoveryGame } from './utils/recoveryDownload';
 import { studyContentParts, studyDetailsContent, studyMoveContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
@@ -537,11 +538,11 @@ function App() {
   const [guideDismissed, setGuideDismissed] = useState(() => readStorage(BEGINNER_GUIDE_STORAGE_KEY) === 'true');
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
-  const [engineRequested, setEngineRequested] = useState(false);
+  const [engineRequested, setEngineRequested] = useAnalysisActivation();
   const startEngineAnalysis = useCallback(() => {
     setEngineRequested(true);
     setWorkspaceMode('analysis');
-  }, []);
+  }, [setEngineRequested]);
   const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
   const [leftWidth, setLeftWidth] = useState(() => initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH));
   const [rightWidth, setRightWidth] = useState(() => initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH));

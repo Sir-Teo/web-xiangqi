@@ -14,6 +14,7 @@ const { browserType } = require('./qa-browser.cjs');
     for (const browser of browsers) {
       for (const script of (process.argv.includes('--smoke') ? [
         'test-engine-on-demand-browser.cjs',
+        'test-isolation-analysis-resume-browser.cjs',
         'test-engine-startup-cancel-browser.cjs',
         'test-beginner-browser.cjs',
         'test-editor-keyboard-browser.cjs',
@@ -41,6 +42,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-pgn-collection-export-browser.cjs',
       ] : [
         'test-worker-lifecycle-browser.cjs',
+        'test-isolation-analysis-resume-browser.cjs',
         'test-worker-progress-browser.cjs',
         'test-engine-progress-deadline-browser.cjs',
         'test-nnue-memory-browser.cjs',

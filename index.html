@@ -86,10 +86,15 @@
           if (sessionStorage.getItem(RELOADED)) return;
           sessionStorage.setItem(RELOADED, '1');
         } catch (e) { return; }
+        // React can already be interactive while this worker is installing.
+        // Carry an explicit Start analysis request through this reload only.
+        window.dispatchEvent(new Event('web-xiangqi:before-isolation-reload'));
         window.location.reload();
       }
 
-      navigator.serviceWorker.register('./' + WORKER)
+      // Let legacy cleanup wait for this replacement before unregistering the
+      // old worker's shared registration. React can mount in the meantime.
+      window.__xiangqiIsolationRegistration = navigator.serviceWorker.register('./' + WORKER)
         .then(function () {
           // Reload only once *our* worker is the controller, never merely once
           // some worker is. Waiting on navigator.serviceWorker.ready instead
