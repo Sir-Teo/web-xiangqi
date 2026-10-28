@@ -1095,10 +1095,13 @@ async function assertAdvertisedMoveShortcuts(page) {
   // With the board focused the arrows belong to the board's own cursor.
   await page.getByRole("button", { name: "Skip to board", exact: true }).focus();
   await page.keyboard.press("Enter");
-  const focusedOnBoard = await page.evaluate(
-    () => Boolean(document.activeElement && document.activeElement.closest(".xiangqi-board"))
+  // The skip action reveals the mobile board before focusing it on the next
+  // animation frame. Check the completed handoff rather than the key event.
+  await page.waitForFunction(
+    () => Boolean(document.activeElement && document.activeElement.closest(".xiangqi-board")),
+    {},
+    { timeout: 5000 },
   );
-  if (!focusedOnBoard) throw new Error("The skip link did not put focus on the board");
   const before = await ply();
   await page.keyboard.press("ArrowLeft");
   await page.waitForTimeout(300);
