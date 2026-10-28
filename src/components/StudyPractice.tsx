@@ -179,7 +179,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         <details className="study-practice-note"><summary>How practice works</summary>
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
           <p>Complete a line to read any notes saved with it.</p>
-          <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Editing a saved study starts fresh practice.</p>
+          <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Changing the saved moves, study notes or the starting position starts fresh practice.</p>
           <p>Use Undo reset to recover the position and scores from before a progress reset.</p>
         </details>
       </section>

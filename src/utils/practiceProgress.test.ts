@@ -16,6 +16,38 @@ it('restores the board from moves, maintains separate sides, and invalidates edi
   expect(readPracticeProgress(game, study, undefined, store)?.side).toBe('b');
   expect(readPracticeProgress({ ...game, rootComment: 'Changed' }, study, 'w', store)).toBeNull();
 });
+it('keeps practice progress when saving details or browsing an unchanged repertoire', () => {
+  const store = storage();
+  const session = attemptPracticeMove(study, startPracticeLine(study, 0), 'w', 'h2e2').session;
+  writePracticeProgress(game, 'w', session, store);
+  const details: SavedGame = { ...game, modifiedAt: 2, cursorPly: 0, gameMode: 'AIvAI', rootResult: 'draw',
+    startFen: `${START_FEN.replace('/9/', '/111111111/')} w - - 47 32`,
+    metadata: { event: 'Club match' }, opening: 'Central Cannon', finalEval: 42, result: 'draw' };
+  expect(readPracticeProgress(details, preparePracticeStudy(details).study!, 'w', store)?.session.moves).toEqual(['h2e2']);
+  const browsed: SavedGame = { ...details, moves: [],
+    moveTree: [{ uci: 'h2e2', children: [{ uci: 'h9g7' }] }] };
+  expect(readPracticeProgress(browsed, preparePracticeStudy(browsed).study!, 'w', store)?.session.moves).toEqual(['h2e2']);
+});
+it('starts fresh when the saved training moves, notes, starting board or line order change', () => {
+  const repertoire: SavedGame = { ...game, moveTree: [
+    { uci: 'h2e2', children: [{ uci: 'h9g7' }] }, { uci: 'b2e2', children: [{ uci: 'h9g7' }] },
+  ] };
+  const prepared = preparePracticeStudy(repertoire).study!;
+  const store = storage();
+  writePracticeProgress(repertoire, 'w', attemptPracticeMove(prepared, startPracticeLine(prepared, 0), 'w', 'h2e2').session, store);
+  const ranks = START_FEN.split('/'); ranks[5] = 'P8'; ranks[6] = '2P1P1P1P';
+  for (const changed of [
+    { ...repertoire, rootComment: 'New plan' },
+    { ...repertoire, moveTree: [{ ...repertoire.moveTree![0], comment: 'New move note' }, repertoire.moveTree![1]] },
+    { ...repertoire, moveTree: repertoire.moveTree!.slice().reverse() },
+    { ...repertoire, moveTree: [{ uci: 'h2e2', children: [{ uci: 'b9c7' }] }] },
+    { ...repertoire, startFen: `${ranks.join('/')} w - - 0 1` },
+  ]) {
+    const changedStudy = preparePracticeStudy(changed).study;
+    expect(changedStudy).not.toBeNull();
+    expect(readPracticeProgress(changed, changedStudy!, 'w', store)).toBeNull();
+  }
+});
 it('rejects invalid paths and counters, and reports refused storage', () => {
   const session = startPracticeLine(study, 0);
   for (const patch of [{ moves: ['b2e2'] }, { line: 1 }, { recalled: 2 }, { completed: [-1] }, { answered: Infinity }]) {
