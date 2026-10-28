@@ -70,6 +70,7 @@ const scripts = [
   'test-variation-focus-browser.cjs',
   'test-ai-pause-notes-browser.cjs',
   'test-write-note-entry-browser.cjs',
+  'test-board-action-menu-keyboard-browser.cjs',
   'test-metadata-browser.cjs',
   'test-metadata-content-reuse-browser.cjs',
   'test-metadata-only-browser.cjs',

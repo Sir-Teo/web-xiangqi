@@ -28,6 +28,7 @@ import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
+import { BoardActionMenu } from './components/BoardActionMenu';
 import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
 import { DeferredEvalGraph as EvalGraph, DeferredCandidatePanel as CandidatePanel } from './components/DeferredAnalysisPanels';
@@ -588,6 +589,7 @@ function App() {
    */
   const [editorSeed, setEditorSeed] = useState<{ board: BoardState; sideToMove: Side } | null>(null);
   const mobileMoreActionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileActionMenuInitialFocus = useRef<'first' | 'last'>('first');
 
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
@@ -5539,7 +5541,7 @@ function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isComposingKey(event)) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (aDialogIsOpen) return;
+      if (aDialogIsOpen || showMobileBoardActionMenu) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
@@ -5613,7 +5615,7 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    startEngineAnalysis, openAnalysisPanel, aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive,
+    startEngineAnalysis, openAnalysisPanel, aDialogIsOpen, showMobileBoardActionMenu, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive,
     handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopDeepDive,
     stopThreat, threatActive, topAnalysisPv,
   ]);
@@ -5729,7 +5731,7 @@ function App() {
 
   const recoveryDraftControl = !autoSaveRecovery && recoveryDrafts.length > 0 ? (
     <button type="button" className={isMobile ? 'mobile-action-menu-btn' : 'top-action-btn'}
-      role={isMobile ? 'menuitem' : undefined} data-testid="recovery-drafts-btn"
+      role={isMobile ? 'menuitem' : undefined} tabIndex={isMobile ? -1 : undefined} data-testid="recovery-drafts-btn"
       aria-label={`Recovery drafts (${recoveryDrafts.length})`} title="Restore an unfinished study or replacement checkpoint"
       onClick={() => { setShowMobileBoardActionMenu(false); setAutoSaveRecovery(recoveryDrafts[0]); }}>
       <IconRefresh /><span className={isMobile ? undefined : 'btn-label-desktop'}>Recovery drafts ({recoveryDrafts.length})</span>
@@ -7068,7 +7070,18 @@ function App() {
                   ref={mobileMoreActionsButtonRef}
                   className={`mobile-action-btn ${showMobileBoardActionMenu ? 'mobile-action-btn-active' : ''}`}
                   type="button"
-                  onClick={() => setShowMobileBoardActionMenu((open) => !open)}
+                  onClick={() => {
+                    mobileActionMenuInitialFocus.current = 'first';
+                    setShowMobileBoardActionMenu(open => !open);
+                  }}
+                  onKeyDown={event => {
+                    if (event.defaultPrevented || isComposingKey(event.nativeEvent)
+                      || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                    event.preventDefault();
+                    mobileActionMenuInitialFocus.current = event.key === 'ArrowUp' ? 'last' : 'first';
+                    setShowMobileBoardActionMenu(true);
+                  }}
                   title="More board actions"
                   aria-label="More board actions"
                   aria-haspopup="menu"
@@ -7113,13 +7126,10 @@ function App() {
                 onClick={() => setShowMobileBoardActionMenu(false)}
                 aria-hidden="true"
               />
-              <div
-                id="mobile-board-action-menu"
-                className="mobile-board-action-menu"
-                role="menu"
-                aria-label="More board actions"
-              >
-                <button className="mobile-action-menu-btn" type="button" role="menuitem"
+              <BoardActionMenu initialFocus={mobileActionMenuInitialFocus.current}
+                openerRef={mobileMoreActionsButtonRef}
+                onClose={() => setShowMobileBoardActionMenu(false)}>
+                <button className="mobile-action-menu-btn" type="button" role="menuitem" tabIndex={-1}
                   onClick={openMoveCommentEditor} disabled={!moveCommentTarget}
                   title={isAiTurn && !paused ? 'Pause AI and write a note at this position' : `Write a note on ${moveCommentTarget ?? 'the selected position'}`}
                   data-testid="mobile-write-note-btn">
@@ -7133,7 +7143,7 @@ function App() {
                     className="mobile-action-menu-btn"
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); playFromHere(); }}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={`Keep this position and play on as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     data-testid="mobile-play-from-here-btn"
@@ -7148,7 +7158,7 @@ function App() {
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); handleTakeBack(); }}
                     disabled={!canTakeBack}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={canTakeBack ? 'Take back your last move' : 'Nothing to take back'}
                     data-testid="mobile-take-back-btn"
                   >
@@ -7165,7 +7175,7 @@ function App() {
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); runHint(); }}
                     disabled={!canHint}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={canHint ? 'Ask the engine what it would play for you' : isAiTurn ? 'Wait for your turn' : 'No hint right now'}
                     data-testid="mobile-hint-btn"
                   >
@@ -7183,7 +7193,7 @@ function App() {
                     type="button"
                     onClick={handleCopyPgn}
                     disabled={!canExportCurrentLine}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'copy-pgn' ? 'Could not copy PGN to clipboard' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
                     aria-label={exportFailureKey === 'copy-pgn' ? 'PGN copy failed' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
                     data-testid="mobile-copy-pgn-btn"
@@ -7197,7 +7207,7 @@ function App() {
                   type="button"
                   onClick={handleSaveGame}
                   disabled={!canSaveCurrentPosition}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
                   aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Saved game in this browser' : 'Save game in this browser'}
                   data-testid="mobile-save-game-btn"
@@ -7212,7 +7222,7 @@ function App() {
                     type="button"
                     onClick={handleDownloadPgn}
                     disabled={!canExportCurrentLine}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
                     aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
                     data-testid="mobile-download-pgn-btn"
@@ -7227,7 +7237,7 @@ function App() {
                     type="button"
                     onClick={handleCopyShareLink}
                     disabled={!canShareCurrentPosition}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
                     aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Copied link to this position' : 'Copy link to this position'}
                     data-testid="mobile-copy-share-link-btn"
@@ -7240,7 +7250,7 @@ function App() {
                   className={`mobile-action-menu-btn ${copiedFenToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-menu-btn-warn' : ''}`}
                   type="button"
                   onClick={handleCopyFen}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
                   aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'Copied FEN for this position' : 'Copy FEN for this position'}
                   data-testid="mobile-copy-fen-btn"
@@ -7252,7 +7262,7 @@ function App() {
                   className={`mobile-action-menu-btn ${showArrows ? 'mobile-action-menu-btn-active' : ''}`}
                   type="button"
                   onClick={() => setShowArrows(v => !v)}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Toggle arrows and markers"
                   // No aria-label: the visible text already names the action and
                   // carries the state. "Toggle board arrows and markers" replaced
@@ -7266,15 +7276,14 @@ function App() {
                   className="mobile-action-menu-btn"
                   type="button"
                   onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Flip board"
                   aria-label="Flip board"
                 >
                   <IconFlip />
                   <span>Flip board</span>
                 </button>
-                {/* No shortcut in the label here: this menu only exists on
-                    touch, where there is no modifier key to press. */}
+                {/* Keep this compact label short; the palette lists shortcuts. */}
                 <button
                   className="mobile-action-menu-btn"
                   type="button"
@@ -7282,7 +7291,7 @@ function App() {
                     setShowMobileBoardActionMenu(false);
                     setShowCommandPalette(true);
                   }}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Commands"
                   aria-label="Open commands"
                   data-testid="mobile-command-palette-btn"
@@ -7297,7 +7306,7 @@ function App() {
                     mobileMoreActionsButtonRef.current?.focus({ preventScroll: true });
                     toggleSettings();
                   }}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   aria-label="Open settings"
                   aria-haspopup="dialog"
                   aria-expanded={showSettings}
@@ -7307,7 +7316,7 @@ function App() {
                   <IconSettings />
                   <span>Settings</span>
                 </button>
-              </div>
+              </BoardActionMenu>
             </>
           ) : null}
           {isMobile && beginnerGuide}
@@ -8665,7 +8674,7 @@ function App() {
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
               onScrub={jumpToMove}
-              shortcutsEnabled={!aDialogIsOpen}
+              shortcutsEnabled={!aDialogIsOpen && !showMobileBoardActionMenu}
             />
           </div>
 
