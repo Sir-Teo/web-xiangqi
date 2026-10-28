@@ -206,10 +206,7 @@
 
 .lib-study-match-note {
   white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .lib-card {
@@ -632,7 +629,9 @@
   line-clamp: 2;
   overflow: hidden;
 }
-.lib-details-content[data-expanded="true"] .lib-detail-line {
+/* A filtered card must show the text that explains its search match. */
+.lib-details-content[data-expanded="true"] .lib-detail-line,
+.lib-detail-line[data-search-match="true"] {
   display: block;
   -webkit-line-clamp: unset;
   line-clamp: unset;
@@ -641,7 +640,8 @@
 }
 .lib-tournament-details .lib-details-toggle { min-height: 44px; max-width: 100%; margin-bottom: .35rem; font: inherit; white-space: normal; }
 
-.lib-pgn-games { max-height: 260px; overflow-y: auto; margin: 10px 0; }
+/* Keep a useful result viewport when the reader enlarges the text. */
+.lib-pgn-games { max-height: max(260px, 16rem); overflow-y: auto; margin: 10px 0; }
 .lib-pgn-game { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--border-subtle); }
 .lib-pgn-game > label { display: flex; flex: 1 1 12rem; min-width: 0; gap: 8px; cursor: pointer; }
 .lib-pgn-game label > span { min-width: 0; overflow-wrap: anywhere; }

@@ -1,4 +1,5 @@
 import { GAME_METADATA_FIELDS, MAX_METADATA_FIELD_LENGTH, type GameMetadata } from '../utils/gameMetadata';
+import type { ReactNode } from 'react';
 import './GameMetadataEditor.css';
 
 const labels: Record<keyof GameMetadata, string> = {
@@ -12,9 +13,10 @@ const placeholders: Partial<Record<keyof GameMetadata, string>> = {
   timeControl: 'PGN seconds, e.g. 600+5', annotator: 'Person or team credited',
 };
 
-export function GameMetadataEditor({ metadata, onChange }: {
+export function GameMetadataEditor({ metadata, onChange, children }: {
   metadata?: GameMetadata;
   onChange: (metadata: GameMetadata) => void;
+  children?: ReactNode;
 }) {
   const players = [metadata?.redPlayer, metadata?.blackPlayer].filter(Boolean).join(' · ');
   return <details className="game-metadata" data-testid="game-metadata">
@@ -29,5 +31,6 @@ export function GameMetadataEditor({ metadata, onChange }: {
           autoComplete="off" />
       </label>)}
     </div>
+    {children}
   </details>;
 }

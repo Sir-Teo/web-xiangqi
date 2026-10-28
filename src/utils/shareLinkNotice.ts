@@ -37,7 +37,9 @@ export type ShareLinkFailure =
     /** The main line loaded; the variations did not. */
     | { kind: 'variations' }
     /** The link carried variations and nothing else, and they could not be used. */
-    | { kind: 'variations-only' };
+    | { kind: 'variations-only' }
+    /** The requested occurrence of a repeated move is not in this study. */
+    | { kind: 'study-location' };
 
 export const SHARE_LINK_FAILED_HEADLINE = 'Shared link not loaded';
 export const SHARE_VARIATIONS_FAILED_HEADLINE = 'Shared variations not loaded';
@@ -74,5 +76,7 @@ export function describeShareLinkFailure(failure: ShareLinkFailure): string {
             return 'The main line loaded. The variations in the link did not match it, so they were left out.';
         case 'variations-only':
             return 'The link carried variations and no main line, and they could not be read. A link cut short in transit looks like this — ask for it again.';
+        case 'study-location':
+            return 'The selected variation could not be identified. Nothing was loaded. Ask the sender to copy the link again.';
     }
 }

@@ -36,14 +36,17 @@ async function navigationDebounce(browser, width) {
     await page.waitForFunction(() => window.__commands?.some(command => command.startsWith('go ')));
     await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     const searches = () => page.evaluate(() => window.__commands.filter(command => command.startsWith('go ')).length);
+    // Starting analysis returns focus to the board, where arrows move between
+    // squares. Use the timeline controls to request history navigation.
+    const previous = () => page.getByRole('button', { name: 'Go to previous move', exact: true }).filter({ visible: true }).first().click();
     const before = await searches();
-    await page.keyboard.press('ArrowLeft');
+    await previous();
     // Finish the old position while the new position is still debounced.
     await page.evaluate(() => window.__emit('bestmove a0a1'));
     assert.equal(await searches(), before, 'bestmove bypassed the navigation debounce');
     await page.clock.runFor(100);
     assert.equal(await searches(), before, 'Navigation started a search before its deadline');
-    await page.keyboard.press('ArrowLeft');
+    await previous();
     await page.clock.runFor(100);
     assert.equal(await searches(), before, 'Superseded position was searched');
     await page.clock.runFor(250);
@@ -52,7 +55,7 @@ async function navigationDebounce(browser, width) {
 
     // Once the timer expires during an active search, stop once and wait for
     // bestmove. Completion must then dispatch immediately without another delay.
-    await page.keyboard.press('ArrowLeft');
+    await previous();
     await page.clock.runFor(350);
     assert.equal(await searches(), before + 1);
     assert.equal(await page.evaluate(() => window.__commands.filter(command => command === 'stop').length), 1);

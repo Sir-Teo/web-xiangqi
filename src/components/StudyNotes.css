@@ -13,7 +13,9 @@
 .study-notes .study-note-result { box-sizing: border-box; display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; min-height: 44px; text-align: start; padding: 8px; border: 1px solid var(--border-subtle); border-radius: 5px; background: transparent; color: inherit; font: inherit; overflow-wrap: anywhere; cursor: pointer; }
 .study-note-result strong, .study-note-result small, .study-note-result span { min-width: 0; max-width: 100%; }
 .study-note-result span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.study-note-result[data-search-match] .study-note-preview { display: block; white-space: pre-wrap; }
 .study-note-result small { font-size: .75rem; }
+.study-notes .study-note-current { color: var(--accent); font-weight: 600; }
 .study-note-result:hover, .study-note-result[aria-current] { border-color: var(--accent); background: var(--bg-card-hover); }
 .study-note-result:disabled { cursor: default; opacity: .6; }
 .study-notes summary:focus-visible, .study-notes li:focus-visible, .study-note-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

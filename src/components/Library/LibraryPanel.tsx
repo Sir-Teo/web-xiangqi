@@ -1,6 +1,7 @@
 import { isComposingKey } from '../../utils/keyboard';
 import { LibraryPgnImport } from './LibraryPgnImport';
 import { LibraryGameMetadata } from './LibraryGameMetadata';
+import { SearchText } from '../SearchText';
 import { LibraryStudyMatches } from './LibraryStudyMatches';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { rovingIndexForKey, rovingTabStopIndex } from '../../utils/rovingFocus';
@@ -61,7 +62,7 @@ interface LibraryPanelProps {
   savedGames: SavedGame[];
   libraryState: LibraryState;
   onLibraryChange: () => void;
-  onLoadSavedGame: (game: SavedGame, moves?: string[]) => boolean;
+  onLoadSavedGame: (game: SavedGame, moves?: string[], path?: number[]) => boolean;
   onDeleteSavedGame: (id: string) => boolean | Promise<boolean>;
   onRenameSavedGame: (id: string, label: string) => boolean | Promise<boolean>;
   onPracticeSavedGame: (game: SavedGame) => void;
@@ -348,7 +349,8 @@ export function LibraryPanel({
     let line = savedPrimaryLines.get(game);
     if (!line) {
       const primary = savedGameLine(game);
-      const prefixMatches = game.moves.every((move, i) => move === primary.moves[i]);
+      const prefixMatches = game.moves.every((move, i) => move === primary.moves[i])
+        && (!game.mainLinePinned || !game.moveTreePath?.some(index => index !== 0));
       const savedPath = !prefixMatches ? 'variation' : game.moves.length === primary.moves.length ? 'complete' : 'prefix';
       line = { ...primary, savedPath };
       savedPrimaryLines.set(game, line);
@@ -583,8 +585,8 @@ export function LibraryPanel({
     }, 1800);
   };
 
-  const loadSavedGame = (game: SavedGame, moves?: string[]) => {
-    const ok = onLoadSavedGame(game, moves);
+  const loadSavedGame = (game: SavedGame, moves?: string[], path?: number[]) => {
+    const ok = onLoadSavedGame(game, moves, path);
     if (!ok) {
       setFailedActionId(`load-${game.id}`);
       setActionError('Could not load this game. Its saved move data is invalid.');
@@ -831,7 +833,7 @@ export function LibraryPanel({
                     onClick={() => startEdit(game)}
                     title={`Rename ${savedGameLabel}`}
                   >
-                    {savedGameLabel}
+                    <SearchText text={savedGameLabel} terms={searchTerms} maxMatchesPerTerm={8} />
                   </button>
                 )}
                 <div className="lib-card-actions lib-card-actions--inline">
@@ -945,7 +947,7 @@ export function LibraryPanel({
                 </button>
               </div>}
               {game.metadata && <LibraryGameMetadata metadata={game.metadata} gameId={game.id}
-                label={savedGameLabel} tabIndex={savedTabIndex} />}
+                label={savedGameLabel} tabIndex={savedTabIndex} terms={searchTerms} />}
               <div className="lib-card-meta">
                 <span>{game.gameMode}</span>
                 <span className={`lib-result lib-result--${primaryResult}`} title="Primary line result">
@@ -976,9 +978,9 @@ export function LibraryPanel({
                 {game.modifiedAt ? <span className="lib-date" title={`Created ${formatDate(game.savedAt)}`}>Updated {formatDate(game.modifiedAt)}</span>
                   : game.label ? <span className="lib-date">{formatDate(game.savedAt)}</span> : null}
               </div>
-              {searchTerms.length > 0 && Boolean(game.moveTree?.length) && <LibraryStudyMatches
+              {searchTerms.length > 0 && Boolean(game.moveTree?.length || game.rootComment) && <LibraryStudyMatches
                 game={game} terms={searchTerms} formatKey={dateFormatKey} tabIndex={savedTabIndex}
-                onOpen={moves => loadSavedGame(game, moves)} />}
+                onOpen={(moves, path) => loadSavedGame(game, moves, path)} />}
               {game.review ? (
                 <div
                   className="lib-review-meta"

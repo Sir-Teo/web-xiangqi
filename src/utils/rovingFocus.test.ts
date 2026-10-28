@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rovingIndexForKey, rovingTabStopIndex } from './rovingFocus';
+import { rovingIndexForKey, rovingTabStopIndex, verticalRovingIndexForKey } from './rovingFocus';
 
 describe('which item carries the tab stop', () => {
     it('prefers wherever focus was last left', () => {
@@ -40,6 +40,42 @@ describe('which item carries the tab stop', () => {
         // Correct rather than defensive: there is nothing on it to reach.
         expect(rovingTabStopIndex(0, null, null)).toBeNull();
         expect(rovingTabStopIndex(0, 0, 0)).toBeNull();
+    });
+});
+
+describe('vertical navigation through rendered rows', () => {
+    const box = (left: number, top: number, bottom = top + 24) => ({ left, top, bottom });
+
+    it('keeps the nearest column in two-column move rows', () => {
+        const rects = [box(0, 0), box(100, 0), box(0, 30), box(100, 30)];
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 0)).toBe(2);
+        expect(verticalRovingIndexForKey('ArrowUp', rects, 3)).toBe(1);
+    });
+
+    it('visits each wrapped variation row before the following main-line row', () => {
+        const rects = [box(0, 0), box(100, 0), box(20, 40), box(100, 40), box(20, 70), box(100, 70), box(0, 110)];
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 2)).toBe(4);
+        expect(verticalRovingIndexForKey('ArrowUp', rects, 4)).toBe(2);
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 4)).toBe(6);
+    });
+
+    it('groups different-height controls that share a visible row', () => {
+        const rects = [box(0, 0, 60), box(100, 18, 42), box(0, 80), box(100, 80)];
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 1)).toBe(3);
+        expect(verticalRovingIndexForKey('ArrowUp', rects, 3)).toBe(1);
+    });
+
+    it('stops at the edges of stacked rows and skips empty boxes', () => {
+        const rects = [box(0, 0, 0), box(20, -30), box(20, 0), box(20, 30)];
+        expect(verticalRovingIndexForKey('ArrowUp', rects, 1)).toBe(1);
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 1)).toBe(2);
+        expect(verticalRovingIndexForKey('ArrowDown', rects, 3)).toBe(3);
+    });
+
+    it('leaves unrelated keys and unavailable focus positions to the caller', () => {
+        expect(verticalRovingIndexForKey('Enter', [box(0, 0)], 0)).toBeNull();
+        expect(verticalRovingIndexForKey('ArrowDown', [], 0)).toBeNull();
+        expect(verticalRovingIndexForKey('ArrowUp', [box(0, 0)], -1)).toBeNull();
     });
 });
 

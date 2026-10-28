@@ -1,21 +1,10 @@
 import type { SavedGame } from './gameLibrary';
-import { librarySource } from './librarySource';
+import { PRACTICE_PROGRESS_KEY, MAX_PRACTICE_PROGRESS_LENGTH, readPracticeEntries, practiceRevision, matchesPracticeRevision,
+  type PracticeProgressEntry, type PracticeProgressStorage } from './practiceProgressStore';
 import { playPracticeReply, practiceLineIndices, startPracticeLine, type PracticeSession, type PracticeStudy } from './studyPractice';
 import type { Side } from './xiangqi';
 
-export const PRACTICE_PROGRESS_KEY = 'xiangqi:practice-progress:v1';
-const MAX_LENGTH = 512_000;
-type Entry = { id: string; revision: string; side: Side; updatedAt: number; sessions: Partial<Record<Side, unknown>> };
-type ProgressStorage = Pick<Storage, 'getItem' | 'setItem'>;
-
-function entries(storage: ProgressStorage): Entry[] {
-  const raw = storage.getItem(PRACTICE_PROGRESS_KEY);
-  if (!raw || raw.length > MAX_LENGTH) return [];
-  const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed) || parsed.length > 50) return [];
-  return parsed.filter((entry): entry is Entry => Boolean(entry && typeof entry.id === 'string' && typeof entry.revision === 'string'
-    && (entry.side === 'w' || entry.side === 'b') && Number.isFinite(entry.updatedAt) && entry.sessions && typeof entry.sessions === 'object'));
-}
+export { PRACTICE_PROGRESS_KEY } from './practiceProgressStore';
 
 /** Rebuild from a validated prefix; never trust stored board state. */
 export function restorePracticeSession(study: PracticeStudy, raw: unknown): PracticeSession | null {
@@ -36,36 +25,45 @@ export function restorePracticeSession(study: PracticeStudy, raw: unknown): Prac
   return { ...session, completed: [...new Set([...value.completed, ...session.completed])], answered: value.answered, recalled: value.recalled, assisted: value.assisted };
 }
 
-export function readPracticeProgress(game: SavedGame, study: PracticeStudy, side?: Side, storage?: ProgressStorage) {
+export function readPracticeProgress(game: SavedGame, study: PracticeStudy, side?: Side, storage?: PracticeProgressStorage) {
   try {
-    const entry = entries(storage ?? localStorage).find(entry => entry.id === game.id && entry.revision === librarySource(game).revision);
+    const entry = readPracticeEntries(storage ?? localStorage).find(entry => entry.id === game.id && matchesPracticeRevision(game, entry.revision));
     if (!entry) return null;
     let chosen = side ?? entry.side;
-    if (!practiceLineIndices(study, chosen).length) {
+    let eligible = practiceLineIndices(study, chosen);
+    if (!eligible.length) {
       if (side) return null;
       // Older clients could remember a color with no moves. Keep the valid
       // color's own saved session instead of copying or resetting its scores.
       chosen = study.side;
+      eligible = practiceLineIndices(study, chosen);
     }
-    const session = restorePracticeSession(study, entry.sessions[chosen]);
+    let session = restorePracticeSession(study, entry.sessions[chosen]);
+    if (session && !eligible.includes(session.line)) {
+      // Older progress can select an opponent-only line in a mixed study.
+      // Resume a playable exercise while retaining this side's own history.
+      const completed = new Set(session.completed);
+      const next = eligible.find(line => !completed.has(line)) ?? eligible[0];
+      session = startPracticeLine(study, next, session);
+    }
     return session ? { side: chosen, session } : null;
   } catch { return null; }
 }
 
-export function writePracticeProgress(game: SavedGame, side: Side, session: PracticeSession, storage?: ProgressStorage): boolean {
+export function writePracticeProgress(game: SavedGame, side: Side, session: PracticeSession, storage?: PracticeProgressStorage): boolean {
   try {
     const target = storage ?? localStorage;
-    let previous: Entry[];
-    try { previous = entries(target); } catch { previous = []; }
-    const revision = librarySource(game).revision;
-    const existing = previous.find(entry => entry.id === game.id && entry.revision === revision);
+    let previous: PracticeProgressEntry[];
+    try { previous = readPracticeEntries(target); } catch { previous = []; }
+    const revision = practiceRevision(game);
+    const existing = previous.find(entry => entry.id === game.id && matchesPracticeRevision(game, entry.revision));
     const { line, moves, completed, recalled, answered, assisted } = session;
-    const next: Entry = { id: game.id, revision, side, updatedAt: Date.now(), sessions: { ...existing?.sessions,
+    const next: PracticeProgressEntry = { id: game.id, revision, side, updatedAt: Date.now(), sessions: { ...existing?.sessions,
       [side]: { line, moves, completed, recalled, answered, assisted } } };
     const rest = previous.filter(entry => entry.id !== game.id).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 49);
     let serialized = JSON.stringify([next, ...rest]);
-    while (serialized.length > MAX_LENGTH && rest.length) { rest.pop(); serialized = JSON.stringify([next, ...rest]); }
-    if (serialized.length > MAX_LENGTH) return false;
+    while (serialized.length > MAX_PRACTICE_PROGRESS_LENGTH && rest.length) { rest.pop(); serialized = JSON.stringify([next, ...rest]); }
+    if (serialized.length > MAX_PRACTICE_PROGRESS_LENGTH) return false;
     target.setItem(PRACTICE_PROGRESS_KEY, serialized);
     return true;
   } catch { return false; }

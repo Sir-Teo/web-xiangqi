@@ -7,6 +7,7 @@ import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
 import type { GameMode } from '../App';
 import type { SavedMoveTreeNode } from './gameLibrary';
+import { findSavedTreePath, isSavedTreePath } from './savedTreePath';
 import { START_FEN, parseFenBoard, validateMoveStr, hasAnyLegalMove, type Side } from './xiangqi';
 import { annotationTokensForMove, type MoveAnnotationInput } from './pgnAnnotations';
 
@@ -432,6 +433,7 @@ export function exportPgnFromMoveTree(
     options: {
         /** Saved cursor path; omitted means the default primary line, whereas [] means the root. */
         mainLineMoves?: string[];
+        mainLineTreePath?: number[];
         metadata?: GameMetadata;
         gameMode?: GameMode;
         opening?: string;
@@ -447,9 +449,12 @@ export function exportPgnFromMoveTree(
     const { rootNodeId, treeNodes } = savedMoveTreeToNodes(moveTree);
     const preferredNodeIds: string[] = [];
     const mainLineMoves = options.mainLineMoves ?? [];
+    if (options.mainLineTreePath && !isSavedTreePath(moveTree, mainLineMoves, options.mainLineTreePath)) return null;
+    const path = findSavedTreePath(moveTree, mainLineMoves, options.mainLineTreePath);
+    if (path === null) return null;
     let cursor = rootNodeId;
-    for (const move of mainLineMoves) {
-        const childId = treeNodes[cursor]?.childrenIds.find((id) => treeNodes[id]?.record?.uci === move);
+    for (const index of path) {
+        const childId = treeNodes[cursor]?.childrenIds[index];
         if (!childId) return null;
         preferredNodeIds.push(childId);
         cursor = childId;

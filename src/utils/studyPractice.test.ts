@@ -37,10 +37,41 @@ describe('saved study practice', () => {
     const annotated = preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2', comment: ' '.repeat(10), children: [{ uci: 'h9g7', comment: 'x'.repeat(600) }] }] })).study!;
     expect(annotated.notes).toEqual([[{ ply: 2, move: 'h9g7', comment: 'x'.repeat(500) }]]);
   });
-  it('keeps notes aligned with the retained line when duplicate paths collapse', () => {
+  it('keeps distinct notes when identical move paths share one practice exercise', () => {
     const study = preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2', comment: 'Earlier' }, { uci: 'h2e2', comment: 'Later' }] })).study!;
     expect(study.lines).toEqual([['h2e2']]);
-    expect(study.notes).toEqual([[{ ply: 1, move: 'h2e2', comment: 'Later' }]]);
+    expect(study.notes).toEqual([[{ ply: 1, move: 'h2e2', comment: 'Earlier' }, { ply: 1, move: 'h2e2', comment: 'Later' }]]);
+  });
+  it('combines matching-line notes by ply without copying shared notes or unrelated explanations', () => {
+    const source = game({ rootComment: 'Opening plan', moveTree: [
+      { uci: 'h2e2', comment: 'Common plan', children: [
+        { uci: 'h9g7', comment: 'First reply' }, { uci: 'h9g7', comment: 'Second reply' },
+        { uci: 'b9c7', comment: 'Other continuation' },
+      ] },
+      { uci: 'h2e2', comment: '  Common   plan ', children: [{ uci: 'h9g7', comment: 'First reply' }] },
+      { uci: 'h2e2', comment: 'Another plan', children: [{ uci: 'h9g7' }] },
+      { uci: 'h2e2', comment: 'Unrelated plan', children: [{ uci: 'b9c7' }] },
+    ] });
+    const before = JSON.stringify(source);
+    const study = preparePracticeStudy(source).study!;
+    expect(study.lines).toEqual([['h2e2', 'h9g7'], ['h2e2', 'b9c7']]);
+    expect(study.notes[0]).toEqual([
+      { ply: 0, comment: 'Opening plan' },
+      { ply: 1, move: 'h2e2', comment: 'Common plan' }, { ply: 1, move: 'h2e2', comment: 'Another plan' },
+      { ply: 2, move: 'h9g7', comment: 'First reply' }, { ply: 2, move: 'h9g7', comment: 'Second reply' },
+    ]);
+    expect(study.notes[1].map(note => note.comment)).toEqual(['Opening plan', 'Common plan', 'Unrelated plan', 'Other continuation']);
+    expect(study.notes[0].some(note => note.comment.includes('Unrelated'))).toBe(false);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+  it('retains every distinct note at the study limit while deduplicating one shared move line', () => {
+    const study = preparePracticeStudy(game({ moveTree: [{ uci: 'h2e2', comment: 'Shared plan',
+      children: Array.from({ length: MAX_SAVED_TREE_NODES - 1 }, (_, index) => ({ uci: 'h9g7', comment: `Reply note ${index}` })) }] })).study!;
+    expect(study.lines).toEqual([['h2e2', 'h9g7']]);
+    expect(study.notes[0]).toHaveLength(MAX_SAVED_TREE_NODES);
+    expect(study.notes[0][0].comment).toBe('Shared plan');
+    expect(study.notes[0].at(-1)?.comment).toBe(`Reply note ${MAX_SAVED_TREE_NODES - 2}`);
+    expect(study.lineLengths).toEqual([2]);
   });
   it('includes all variations without changing the saved cursor, annotations or tree', () => {
     const original = JSON.stringify(branched);

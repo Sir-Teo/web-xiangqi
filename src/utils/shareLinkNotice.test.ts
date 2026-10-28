@@ -17,6 +17,7 @@ const ALL: ShareLinkFailure[] = [
     { kind: 'illegal-move', moveNumber: 7, reason: 'rook path blocked' },
     { kind: 'variations' },
     { kind: 'variations-only' },
+    { kind: 'study-location' },
 ];
 
 describe('describeShareLinkFailure', () => {

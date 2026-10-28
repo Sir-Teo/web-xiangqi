@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractPgnResult } from './pgnResult';
-import { readRecordedResultPgn, normalizeRecordedResult } from './recordedResult';
+import { readRecordedResultPgn, normalizeRecordedResult, recordedResultFromSavedResult } from './recordedResult';
 import { planMoveLineImport } from './moveLineImportPlan';
 import { parsePgnCollection } from './pgnCollection';
 import { exportPgnFromMoveTree, exportPgnFromUci } from './gameExport';
@@ -12,6 +12,14 @@ import { START_POSITION_FEN } from './xiangqi';
 const validators = { validateMoveSequence: () => ({ ok: true }), validateMoveTree: () => ({ ok: true }) };
 
 describe('durable recorded results', () => {
+    it('translates legacy library outcomes without accepting unrelated result spellings', () => {
+        expect(recordedResultFromSavedResult('red')).toBe('red-wins');
+        expect(recordedResultFromSavedResult('black')).toBe('black-wins');
+        expect(recordedResultFromSavedResult('draw')).toBe('draw');
+        for (const value of ['ongoing', 'unknown', 'red-wins', '1-0', null, undefined, 1, {}]) {
+            expect(recordedResultFromSavedResult(value)).toBeUndefined();
+        }
+    });
     it('reads first-game declarations while ignoring comments, variations and later records', () => {
         expect(extractPgnResult('[Result "1/2-1/2"]\n1.h2e2 (1.b2e2 1-0) {0-1} h9g7 1/2-1/2\n[Result "0-1"] 1.b2e2 0-1')).toMatchObject({ result: 'draw' });
         expect(extractPgnResult('1.h2e2 ; 1-0\nh9g7 *')).toMatchObject({ result: undefined });

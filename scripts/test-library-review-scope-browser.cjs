@@ -66,7 +66,10 @@ async function command(page, label) {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         if (width === 320) await page.screenshot({ path: `/tmp/xiangqi-review-scope-${browserType.name()}-320-large-text.png` });
         const original = await page.evaluate(() => localStorage.getItem('xiangqi:library:v1'));
-        await page.getByTestId('load-saved-side').click(); await page.keyboard.press('t');
+        await page.getByTestId('load-saved-side').click();
+        await page.getByRole('dialog', { name: 'Black Wins', exact: true }).getByRole('button', { name: 'Review', exact: true }).click();
+        await command(page, 'Move tree');
+        await page.locator('.mtree-row .move-uci').first().waitFor();
         assert.deepEqual(await page.locator('.mtree-row .move-uci').allTextContents(), ['b2e2', 'h9i7']);
         assert.equal(await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')), original);
         assert.deepEqual(errors, []);

@@ -1,4 +1,5 @@
 import { withLibraryMutation, LIBRARY_LOCK_ERROR } from '../utils/libraryMutation';
+import { migratePracticeProgressRevision } from '../utils/practiceProgressStore';
 import { useCallback, useEffect, useState } from 'react';
 import { GAME_LIBRARY_STORAGE_KEY, loadLibraryState, saveGameWithResult, updateSavedGameWithResult, deleteGame, renameGame, restoreGame } from '../utils/gameLibrary';
 import type { SavedGame } from '../utils/gameLibrary';
@@ -62,7 +63,10 @@ export function useGameLibrary() {
     }, []);
 
     const update = useCallback(async (source: SavedGame, replacement: Omit<SavedGame, 'id' | 'savedAt'>): Promise<SavedGame | null> => {
-        const result = await withLibraryMutation(() => updateSavedGameWithResult(source, replacement), { game: null, error: LIBRARY_LOCK_ERROR });
+        const result = await withLibraryMutation(() => {
+            migratePracticeProgressRevision(source);
+            return updateSavedGameWithResult(source, replacement);
+        }, { game: null, error: LIBRARY_LOCK_ERROR });
         setSaveError(result.error);
         setLibraryState(loadLibraryState());
         return result.game;

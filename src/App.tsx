@@ -1,16 +1,18 @@
 import { isComposingKey } from './utils/keyboard';
+import { useAnalysisActivation } from './hooks/useAnalysisActivation';
 import { downloadRecoveryGame } from './utils/recoveryDownload';
-import { studyContent } from './utils/studyContent';
+import { studyContentParts, studyDetailsContent, studyMoveContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
 import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
-import { normalizeRecordedResult, RESULT_TAG } from './utils/recordedResult';
+import { normalizeRecordedResult, recordedResultFromSavedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
 import { StudyAnalysisCard } from './components/StudyAnalysisCard';
 import { GameMetadataEditor } from './components/GameMetadataEditor';
+import { PositionResultEditor } from './components/PositionResultEditor';
 import { StudyNotes, type StudyNotesViewState } from './components/StudyNotes';
 import { ImportedGlyphs } from './components/ImportedGlyphs';
 import { collectStudyNotes } from './utils/studyNotes';
@@ -26,6 +28,7 @@ import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { Board } from './components/Board/Board';
+import { BoardActionMenu } from './components/BoardActionMenu';
 import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
 import { DeferredEvalGraph as EvalGraph, DeferredCandidatePanel as CandidatePanel } from './components/DeferredAnalysisPanels';
@@ -41,14 +44,14 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
+  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark, IconNote
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
 import { useUndoTimeout } from './hooks/useUndoTimeout';
 import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type CandidateSearch } from './utils/candidateSearch';
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
-import { useXiangqi, type GameResult, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
+import { useXiangqi, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove, type BoardState, type Side } from './utils/xiangqi';
 import { describeFenProblem, readFenBoard } from './utils/positionSetup';
 import { WdlBar } from './components/Panels/WdlBar';
@@ -68,7 +71,7 @@ import {
 } from './utils/panelWidth';
 import { getOpeningCandidates, matchOpening } from './utils/openings';
 import { formatExplorerRecord } from './utils/positionExplorer';
-import { savedGameLine } from './utils/savedGameLine';
+import { savedGameLine, savedGamePositionResult } from './utils/savedGameLine';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
 import { createSavedGameId, MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
@@ -93,6 +96,8 @@ import {
   type ReviewPhase,
 } from './utils/engineTags';
 import { buildShareUrl, moveTreeContainsLine, readShareParams } from './utils/shareUrl';
+import { distinctMoveTreePath } from './utils/moveTreePath';
+import { decodeSavedTreePathParam, isSavedTreePath } from './utils/savedTreePath';
 import {
   formatRedPovEngineScore,
   normalizeEvalForFen,
@@ -168,7 +173,7 @@ import {
 import { describeShareLinkFailure, shareLinkHeadline, type ShareLinkFailure } from './utils/shareLinkNotice';
 import { DeferredCommandPalette as CommandPaletteModal } from './components/DeferredDialogs';
 import type { Command } from './utils/commandPalette';
-import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel } from './utils/commandPalette';
+import { COMMAND_PALETTE_ARIA_KEYSHORTCUTS, SAVE_STUDY_ARIA_KEYSHORTCUTS, commandPaletteShortcutLabel, saveStudyShortcutLabel } from './utils/commandPalette';
 import {
   extractUciMoveLine,
   hasTooManyUciMoves,
@@ -519,13 +524,6 @@ function formatSquare(square: BoardSquare | null) {
 /** Long enough that a fast sequence of moves writes once, not per move. */
 const AUTO_SAVE_DEBOUNCE_MS = 600;
 
-function savedResultToGameResult(result: SavedGame['result']): GameResult {
-  if (result === 'red') return 'red-wins';
-  if (result === 'black') return 'black-wins';
-  if (result === 'draw') return 'draw';
-  return null;
-}
-
 function App() {
   const storedPreferences = useMemo(() => readStoredPreferences(), []);
   // A narrow window is not a weaker machine. This read innerWidth, so opening
@@ -543,11 +541,11 @@ function App() {
   const [guideDismissed, setGuideDismissed] = useState(() => readStorage(BEGINNER_GUIDE_STORAGE_KEY) === 'true');
   const [gameMode, setGameMode] = useState<GameMode>('PvP');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('analysis');
-  const [engineRequested, setEngineRequested] = useState(false);
+  const [engineRequested, setEngineRequested] = useAnalysisActivation();
   const startEngineAnalysis = useCallback(() => {
     setEngineRequested(true);
     setWorkspaceMode('analysis');
-  }, []);
+  }, [setEngineRequested]);
   const [assistMode, setAssistMode] = useState<AssistMode>(storedPreferences.assistMode ?? 'coach');
   const [leftWidth, setLeftWidth] = useState(() => initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH));
   const [rightWidth, setRightWidth] = useState(() => initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH));
@@ -591,6 +589,7 @@ function App() {
    */
   const [editorSeed, setEditorSeed] = useState<{ board: BoardState; sideToMove: Side } | null>(null);
   const mobileMoreActionsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileActionMenuInitialFocus = useRef<'first' | 'last'>('first');
 
   const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
@@ -873,6 +872,7 @@ function App() {
     keepUciLineAtNode,
     setCurrentNodeEval,
     restoreRecordedResult,
+    setNodeRecordedResult,
     setNodeComment,
     setNodeGlyphs,
     setNodeComments,
@@ -1669,7 +1669,9 @@ function App() {
   }, [clearCompletedReview, reviewStatus, reviewSummary, reviewedLineNodeIds, treeNodes]);
 
   /** Whether the board is on the line the review describes. */
-  const reviewMatchesActiveLine = Boolean(reviewSummary) && reviewSummary?.lineSignature === currentLineSignature;
+  const reviewMatchesActiveLine = Boolean(reviewSummary) && reviewSummary?.lineSignature === currentLineSignature
+    && activeLineNodeIds.length === reviewedLineNodeIds.length
+    && activeLineNodeIds.every((id, index) => id === reviewedLineNodeIds[index]);
   /**
    * A finished review that a save will not carry.
    *
@@ -1727,8 +1729,8 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isComposingKey(event)) return;
-      // Command/Control+K, the near-universal palette binding and the only
-      // chord this app claims. Handled before anything else so it works from a
+      // Command/Control+K, the near-universal palette binding.
+      // Handled before the single-key shortcuts so it works from a
       // text field too, which is where a reader often is when they reach for it.
       if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
         event.preventDefault();
@@ -2699,6 +2701,8 @@ function App() {
   const rootComment = treeNodes[rootNodeId]?.comment;
   const rootResult = treeNodes[rootNodeId]?.recordedResult;
   const selectedRecordedResult = treeNodes[currentNodeId]?.record?.recordedResult ?? (currentNodeId === rootNodeId ? rootResult : undefined);
+  const automaticPositionResult = useMemo(() => hasAnyLegalMove(board, sideToMove) ? undefined
+    : sideToMove === 'w' ? 'black-wins' : 'red-wins', [board, sideToMove]);
   const lineRecordedResult = activeLineNodeIds.length ? treeNodes[activeLineNodeIds.at(-1)!]?.record?.recordedResult : rootResult;
   const mainLinePinned = treeNodes[rootNodeId]?.mainLinePinned;
   const studyMainLineNodeIds = useMemo(() => mainLinePinned ? getStudyMainLine(moveStructure, rootNodeId) : [], [mainLinePinned, moveStructure, rootNodeId]);
@@ -2706,7 +2710,6 @@ function App() {
     && activeLineNodeIds.every((id, index) => id === studyMainLineNodeIds[index]);
   const canPinStudyMainLine = hasMoveTreeMoves && !studyControlsDisabled && !viewingStudyMainLine;
   const hasGameMetadata = Boolean(normalizeGameMetadata(gameMetadata));
-  const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN || hasMoveTreeMoves || Boolean(rootComment || rootResult) || hasGameMetadata);
   const canShareCurrentPosition = (currentMoveIndex >= 0 && moveHistory.length > 0) || hasMoveTreeMoves || Boolean(rootComment || rootResult) || rootFen !== START_POSITION_FEN;
   const canExportCurrentLine = canShareCurrentPosition || hasGameMetadata;
   // A finished game has nothing to play on from, and the starting position is
@@ -3306,7 +3309,8 @@ function App() {
       : undefined;
     let share: ReturnType<typeof buildShareUrl>;
     try {
-      share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult);
+      share = buildShareUrl(window.location.href, rootFen, currentLineMoves, gameMode, moveTree, rootComment, mainLinePinned, rootResult,
+        distinctMoveTreePath(moveStructure, rootNodeId, activeLineNodeIds.slice(0, currentMoveIndex + 1)));
     } catch {
       setShareLinkNotice({ tone: 'warning', text: 'Link not copied', detail: 'This study is too large for a share link. Export PGN to keep all of it.' });
       return;
@@ -3337,7 +3341,7 @@ function App() {
       copiedShareToastTimerRef.current = null;
       setCopiedShareToast(false);
     }, 2000);
-  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes]);
+  }, [canShareCurrentPosition, clearExportFailure, currentLineMoves, gameMode, hasAnnotatedStudyMoves, hasMoveTreeMoves, hasStudyBranches, rootFen, rootComment, rootResult, mainLinePinned, rootNodeId, shareNoticePositionKey, showExportFailure, treeNodes, moveStructure, activeLineNodeIds, currentMoveIndex]);
 
   const handlePickMoveLineFile = useCallback(() => {
     moveLineFileInputRef.current?.click();
@@ -3351,7 +3355,7 @@ function App() {
   const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
     showImportNotice(null);
     const recordedResult = record.mainLineComplete && record.result !== 'unknown'
-      ? savedResultToGameResult(record.result) : null;
+      ? recordedResultFromSavedResult(record.result) ?? null : null;
     const metadata = normalizeGameMetadata(record);
     const reportRecovery = () => {
       if (!record.mainLineComplete) {
@@ -3546,6 +3550,16 @@ function App() {
   }, [gameIdentity, setNodeComment]);
 
   const handleMoveCommentChange = useCallback((value: string) => {
+    // Keep an opponent reply from changing the selected note mid-sentence.
+    if (isAiTurn && !paused) {
+      const editor = document.getElementById('move-comment-input');
+      pause();
+      // Pause can change the bottom bar's height. Reveal the field after that
+      // layout settles, provided the reader is still editing this note.
+      requestAnimationFrame(() => {
+        if (editor && editor === document.activeElement) editor.scrollIntoView({ block: 'center', inline: 'nearest' });
+      });
+    }
     setMoveCommentDraft(value);
     if (moveCommentEditRef.current) moveCommentEditRef.current.draft = value;
     if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
@@ -3554,7 +3568,7 @@ function App() {
       const pending = moveCommentEditRef.current;
       if (pending?.gameIdentity === gameIdentity) setNodeComment(pending.nodeId, pending.draft);
     }, 600);
-  }, [gameIdentity, setNodeComment]);
+  }, [gameIdentity, isAiTurn, pause, paused, setNodeComment]);
 
   // Stepping to another move writes the note being edited before loading the
   // next one, so a note is never lost by navigating away from it. The tree is
@@ -3586,6 +3600,8 @@ function App() {
 
   const moveCommentTarget = currentNodeId === rootNodeId ? 'starting position'
     : currentNodeId ? nodeLabel(currentNodeId, rootNodeId, treeNodes, notationStyle, rootFen) : null;
+  const canSaveCurrentPosition = !libraryWritePending && (moveHistory.length > 0 || rootFen !== START_POSITION_FEN
+    || hasMoveTreeMoves || Boolean(rootResult || (currentNodeId === rootNodeId ? normalizeMoveComment(moveCommentDraft) : rootComment)) || hasGameMetadata);
   const studyNotes = useMemo(() => collectStudyNotes(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
   const studyNotesViewRef = useRef<{ identity: object; state: StudyNotesViewState } | null>(null);
   const rememberStudyNotesView = useCallback((identity: object, state: StudyNotesViewState) => {
@@ -4336,6 +4352,11 @@ function App() {
     const treeValidation = sharedMoveTree?.length ? validateMoveTree(sharedMoveTree, rawFen) : null;
     const sharedTreeContainsLine = sharedMoveTree?.length ? moveTreeContainsLine(sharedMoveTree, moves) : false;
     const canLoadSharedTree = sharedMoveTree?.length ? treeValidation?.ok === true && sharedTreeContainsLine : false;
+    const sharedTreePath = decodeSavedTreePathParam(params.get('path'), sharedMoveTree ?? undefined, moves);
+    if (params.has('path') && (!canLoadSharedTree || !sharedTreePath)) {
+      failShareLink({ kind: 'study-location' });
+      return;
+    }
     if (sharedMoveTree?.length && treeValidation && !treeValidation.ok && moves.length === 0 && !rawFen) {
       failShareLink({ kind: 'variations-only' });
       logDiagnosticWarning('Ignored invalid shared Xiangqi variation tree:', treeValidation);
@@ -4359,7 +4380,8 @@ function App() {
     setGameMode(mode);
     setLoadedSavedStudy(null);
     if (sharedMoveTree?.length && canLoadSharedTree) {
-      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1');
+      loadMoveTree(sharedMoveTree, moves, rawFen, undefined, sharedRootComment, params.get('main') === '1', undefined,
+        { saved: sharedTreePath });
     } else if (moves.length > 0) {
       loadMoves(moves, rawFen, undefined, sharedRootComment);
     } else if (rawFen || sharedRootComment || sharedRootResult) {
@@ -4423,6 +4445,9 @@ function App() {
     || savedLineLength === 0 || savedLineLength < activeLineNodeIds.length);
   const snapshotMoveTree = useMemo(() => needsSnapshotTree
     ? serializeSavedMoveTree(treeNodes, rootNodeId) : undefined, [needsSnapshotTree, treeNodes, rootNodeId]);
+  const snapshotMoveTreePath = useMemo(() => needsSnapshotTree
+    ? distinctMoveTreePath(moveStructure, rootNodeId, activeLineNodeIds.slice(0, savedLineLength)) : undefined,
+  [needsSnapshotTree, moveStructure, rootNodeId, activeLineNodeIds, savedLineLength]);
   const currentGameSnapshot = useMemo(() => {
     // The whole line when it is the reviewed one, so the annotations line up
     // with it; otherwise the line as far as the cursor, and no review -- a
@@ -4443,6 +4468,7 @@ function App() {
       mainLinePinned,
       moves,
       cursorPly: currentMoveIndex + 1,
+      ...(snapshotMoveTreePath ? { moveTreePath: snapshotMoveTreePath } : {}),
       opening: exportOpeningName,
       startFen: rootFen !== START_POSITION_FEN ? rootFen : undefined,
       result: ((gameResult ?? selectedRecordedResult) === 'red-wins' ? 'red' : (gameResult ?? selectedRecordedResult) === 'black-wins' ? 'black' : (gameResult ?? selectedRecordedResult) === 'draw' ? 'draw' : 'ongoing') as SavedGame['result'],
@@ -4457,16 +4483,19 @@ function App() {
           }
         : undefined,
     };
-  }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
+  }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, snapshotMoveTreePath, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
   const fullStudyTree = useMemo(() => serializeSavedMoveTree(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
-  const currentStudyContent = useMemo(() => studyContent({ gameMode, moves: [], moveTree: fullStudyTree,
+  const currentStudyMoveContent = useMemo(() => studyMoveContent({ moves: [], moveTree: fullStudyTree }), [fullStudyTree]);
+  const currentStudyDetailsContent = useMemo(() => studyDetailsContent({ gameMode,
     startFen: rootFen, rootComment, rootResult, mainLinePinned, metadata: gameMetadata,
-    review: currentGameSnapshot.review }), [gameMode, fullStudyTree, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
-  const savedStudyContent = useMemo(() => loadedSavedStudy ? studyContent(loadedSavedStudy) : null, [loadedSavedStudy]);
+    review: currentGameSnapshot.review }), [gameMode, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
+  const savedStudyContent = useMemo(() => loadedSavedStudy ? studyContentParts(loadedSavedStudy) : null, [loadedSavedStudy]);
   const commentStillPending = normalizeMoveComment(moveCommentDraft) !== normalizeMoveComment(
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
-  const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
+  const studyModified = Boolean(loadedSavedStudy && (currentStudyMoveContent !== savedStudyContent?.moves
+    || currentStudyDetailsContent !== savedStudyContent?.details || commentStillPending));
+  const emptySavedStudy = Boolean(loadedSavedStudy && studyModified && !canSaveCurrentPosition && !libraryWritePending);
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
   const mobileStudySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Save study' : studyModified ? 'Save changes' : 'Saved study';
 
@@ -4679,6 +4708,25 @@ function App() {
     handleDeleteNode(cutNodeId);
   }, [activeLineNodeIds, canTakeBack, clearQueuedSearch, currentMoveIndex, handleDeleteNode, stopSearch, takeBackPlies]);
 
+  const studyEditorFocusRequestRef = useRef(0);
+  useLayoutEffect(() => { studyEditorFocusRequestRef.current++; }, [gameIdentity]);
+  const openMoveCommentEditor = useCallback(() => {
+    if (!moveCommentTarget) return;
+    const request = ++studyEditorFocusRequestRef.current;
+    const source = dialogLauncherRef.current ?? document.activeElement;
+    // Revoke permission before opening the panel; stop can return a bestmove.
+    if (isAiTurn && !paused) pause();
+    openAnalysisPanel('tree');
+    window.setTimeout(() => {
+      if (request !== studyEditorFocusRequestRef.current
+        || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const input = document.getElementById('move-comment-input');
+      const active = document.activeElement;
+      if (active !== document.body && active !== source && active !== input) return;
+      input?.focus();
+      if (input && input === document.activeElement) input.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, 0);
+  }, [isAiTurn, moveCommentTarget, openAnalysisPanel, pause, paused]);
   const paletteCommands = useMemo<Command[]>(() => [
     { id: 'start-engine-analysis', label: 'Start engine analysis', keywords: ['download', 'pikafish', 'activate'],
       hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
@@ -4693,6 +4741,7 @@ function App() {
       label: 'Save game',
       hint: canSaveCurrentPosition ? undefined : 'Play a move or set up a position first',
       keywords: ['store', 'keep'],
+      shortcut: loadedSavedStudy ? undefined : saveStudyShortcutLabel(),
       disabled: !canSaveCurrentPosition,
       run: handleSaveGame,
     },
@@ -4700,6 +4749,7 @@ function App() {
       id: 'update-saved-study', label: 'Update saved study',
       hint: loadedSavedStudy ? (savingWouldDropTheReview ? 'Replace the opened study; its different-line review will not be included' : 'Replace the opened study with this board and its variations') : 'Load or save a study first',
       keywords: ['replace', 'overwrite', 'library'], disabled: !loadedSavedStudy || !canSaveCurrentPosition,
+      shortcut: loadedSavedStudy ? saveStudyShortcutLabel() : undefined,
       run: handleUpdateSavedStudy,
     },
     {
@@ -4765,15 +4815,7 @@ function App() {
         : 'Step to a move first',
       keywords: ['comment', 'annotate', 'study', 'remark', '注释'],
       disabled: !moveCommentTarget,
-      run: () => {
-        openAnalysisPanel('tree');
-        // After the panel is up, or the field is not in the document yet.
-        window.setTimeout(() => {
-          // A second command/dialog can open before this callback runs.
-          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-          document.getElementById('move-comment-input')?.focus();
-        }, 0);
-      },
+      run: openMoveCommentEditor,
     },
     {
       id: 'find-study-notes',
@@ -4782,10 +4824,12 @@ function App() {
       keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
       disabled: !studyNotes.length,
       run: () => {
+        const request = ++studyEditorFocusRequestRef.current;
         const source = dialogLauncherRef.current;
         openAnalysisPanel('tree');
         window.setTimeout(() => {
-          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          if (request !== studyEditorFocusRequestRef.current
+            || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
           const input = document.getElementById('study-notes-search') as HTMLInputElement | null;
           const active = document.activeElement;
           if (active !== document.body && active !== source && active !== input) return;
@@ -5044,10 +5088,11 @@ function App() {
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
-      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
-  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[]) => {
-    initialPly ??= selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
-    if (selectedMoves && (!game.moveTree?.length || !moveTreeContainsLine(game.moveTree, selectedMoves))) return false;
+      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length, openMoveCommentEditor])
+  const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[], selectedPath?: number[]) => {
+    initialPly ??= selectedMoves?.length === 0 ? 0 : selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
+    if (selectedMoves && !moveTreeContainsLine(game.moveTree, selectedMoves)) return false;
+    if (selectedMoves && selectedPath && !isSavedTreePath(game.moveTree, selectedMoves, selectedPath)) return false;
     const lineValidation = validateMoveSequence(game.moves, game.startFen);
     if (!lineValidation.ok) {
       logDiagnosticWarning('Ignored invalid saved Xiangqi game:', lineValidation);
@@ -5076,17 +5121,18 @@ function App() {
     setLeftPanelTab('graph');
     const navigation = selectedMoves ? { moves: selectedMoves, result: undefined } : openPrimaryLine ? savedGameLine(game) : undefined;
     const loadedNodeIds = game.moveTree?.length
-      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves)
+      ? loadMoveTree(game.moveTree, game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned, navigation?.moves,
+        { saved: game.moveTreePath, navigation: selectedPath ?? (openPrimaryLine && !game.mainLinePinned ? game.moveTreePath : undefined) })
       : loadMoves(game.moves, game.startFen, initialPly, game.rootComment, game.mainLinePinned);
     setLoadedSavedStudy(savedGames.some(saved => saved.id === game.id) ? game : null);
     restoreRecordedResult(rootNodeId, game.rootResult);
-    restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, savedResultToGameResult(game.result));
+    restoreRecordedResult(loadedNodeIds[game.moves.length - 1] ?? rootNodeId, recordedResultFromSavedResult(game.result));
     setGameMetadata(game.metadata);
     if (!selectedMoves && (initialPly === undefined || initialPly >= (navigation?.moves.length ?? game.moves.length))) {
       // The loader has already derived checkmate/stalemate from the selected
       // board. Saved metadata may be stale or contradictory; only use it for
       // results the position cannot prove, such as resignation or an agreed draw.
-      setGameResult(loadedResult => loadedResult ?? savedResultToGameResult(navigation ? navigation.result : game.result));
+      setGameResult(loadedResult => loadedResult ?? recordedResultFromSavedResult(navigation ? navigation.result : savedGamePositionResult(game)) ?? null);
     }
     if (game.review) {
       setNodeReviewDataBulk(
@@ -5462,6 +5508,18 @@ function App() {
     setAutoSaveRecovery(null);
   }, [autoSaveRecovery, handleLoadGame, savedGames]);
 
+  useEffect(() => {
+    const onSaveShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isComposingKey(event) || aDialogIsOpen
+        || event.key.toLowerCase() !== 's' || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      if (event.repeat || !canSaveCurrentPosition) return;
+      void (loadedSavedStudy ? handleUpdateSavedStudy() : handleSaveGame());
+    };
+    window.addEventListener('keydown', onSaveShortcut);
+    return () => window.removeEventListener('keydown', onSaveShortcut);
+  }, [aDialogIsOpen, canSaveCurrentPosition, handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy]);
+
   /**
    * Single-key shortcuts for the things a player reaches for mid-analysis.
    *
@@ -5477,11 +5535,13 @@ function App() {
    * below once the panel is up, rather than fired and then cancelled.
    */
   const pendingShortcutRef = useRef<'threat' | 'deep' | null>(null);
-  useEffect(() => {
+  // A displayed engine line must answer the very next key. Passive effects
+  // could leave the shortcut reading the previous line after the DOM updated.
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isComposingKey(event)) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (aDialogIsOpen) return;
+      if (aDialogIsOpen || showMobileBoardActionMenu) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest('[role="dialog"]')) {
@@ -5555,7 +5615,7 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
-    startEngineAnalysis, openAnalysisPanel, aDialogIsOpen, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive,
+    startEngineAnalysis, openAnalysisPanel, aDialogIsOpen, showMobileBoardActionMenu, analysisTab, canDeepDive, canHint, canPlayBestMove, canShowThreat, deepDiveActive,
     handlePlayPvLine, runDeepDive, runHint, runThreatSearch, stopDeepDive,
     stopThreat, threatActive, topAnalysisPv,
   ]);
@@ -5671,7 +5731,7 @@ function App() {
 
   const recoveryDraftControl = !autoSaveRecovery && recoveryDrafts.length > 0 ? (
     <button type="button" className={isMobile ? 'mobile-action-menu-btn' : 'top-action-btn'}
-      role={isMobile ? 'menuitem' : undefined} data-testid="recovery-drafts-btn"
+      role={isMobile ? 'menuitem' : undefined} tabIndex={isMobile ? -1 : undefined} data-testid="recovery-drafts-btn"
       aria-label={`Recovery drafts (${recoveryDrafts.length})`} title="Restore an unfinished study or replacement checkpoint"
       onClick={() => { setShowMobileBoardActionMenu(false); setAutoSaveRecovery(recoveryDrafts[0]); }}>
       <IconRefresh /><span className={isMobile ? undefined : 'btn-label-desktop'}>Recovery drafts ({recoveryDrafts.length})</span>
@@ -5681,8 +5741,11 @@ function App() {
   const studySaveControl = <button type="button" className={isMobile ? 'mobile-tab-bar-btn study-save-control' : 'gc-pill study-save-control'}
     data-testid="study-save-status" disabled={!canSaveCurrentPosition}
     aria-labelledby={isMobile ? 'study-save-action' : undefined}
-    aria-describedby={isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined}
-    title={loadedSavedStudy ? 'Update saved study' : 'Save study'}
+    aria-describedby={[isMobile && studySaveLabel !== mobileStudySaveLabel ? 'study-save-state' : undefined,
+      emptySavedStudy ? 'empty-study-save-help' : undefined].filter(Boolean).join(' ') || undefined}
+    aria-keyshortcuts={SAVE_STUDY_ARIA_KEYSHORTCUTS}
+    title={emptySavedStudy ? 'Add a move, note, or game details before saving'
+      : `${loadedSavedStudy ? 'Update saved study' : 'Save study'} (${saveStudyShortcutLabel()})`}
     onClick={loadedSavedStudy ? handleUpdateSavedStudy : handleSaveGame}>
     <span id="study-save-state" role="status" className={isMobile ? 'sr-only' : undefined}>{studySaveLabel}</span>
     {isMobile && <span id="study-save-action">{mobileStudySaveLabel}</span>}
@@ -6875,7 +6938,7 @@ function App() {
                     searchFocusRequest={librarySearchRequest}
                     onSearchFocusHandled={handleLibrarySearchFocused}
                     savedGames={savedGames}
-                    onLoadSavedGame={(game, moves) => handleLoadGame(game, moves?.length, false, moves)}
+                    onLoadSavedGame={(game, moves, path) => handleLoadGame(game, moves?.length, false, moves, path)}
                     onDeleteSavedGame={handleDeleteSavedGame}
                     onRenameSavedGame={renameGameInLibrary}
                     loadedStudy={loadedSavedStudy ? {
@@ -7007,7 +7070,18 @@ function App() {
                   ref={mobileMoreActionsButtonRef}
                   className={`mobile-action-btn ${showMobileBoardActionMenu ? 'mobile-action-btn-active' : ''}`}
                   type="button"
-                  onClick={() => setShowMobileBoardActionMenu((open) => !open)}
+                  onClick={() => {
+                    mobileActionMenuInitialFocus.current = 'first';
+                    setShowMobileBoardActionMenu(open => !open);
+                  }}
+                  onKeyDown={event => {
+                    if (event.defaultPrevented || isComposingKey(event.nativeEvent)
+                      || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+                    event.preventDefault();
+                    mobileActionMenuInitialFocus.current = event.key === 'ArrowUp' ? 'last' : 'first';
+                    setShowMobileBoardActionMenu(true);
+                  }}
                   title="More board actions"
                   aria-label="More board actions"
                   aria-haspopup="menu"
@@ -7052,12 +7126,15 @@ function App() {
                 onClick={() => setShowMobileBoardActionMenu(false)}
                 aria-hidden="true"
               />
-              <div
-                id="mobile-board-action-menu"
-                className="mobile-board-action-menu"
-                role="menu"
-                aria-label="More board actions"
-              >
+              <BoardActionMenu initialFocus={mobileActionMenuInitialFocus.current}
+                openerRef={mobileMoreActionsButtonRef}
+                onClose={() => setShowMobileBoardActionMenu(false)}>
+                <button className="mobile-action-menu-btn" type="button" role="menuitem" tabIndex={-1}
+                  onClick={openMoveCommentEditor} disabled={!moveCommentTarget}
+                  title={isAiTurn && !paused ? 'Pause AI and write a note at this position' : `Write a note on ${moveCommentTarget ?? 'the selected position'}`}
+                  data-testid="mobile-write-note-btn">
+                  <IconNote /><span>Write note</span>
+                </button>
                 {/* The desktop bar this mirrors is hidden at these widths, so
                     without an entry here the only way to it on a phone is the
                     command palette. */}
@@ -7066,7 +7143,7 @@ function App() {
                     className="mobile-action-menu-btn"
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); playFromHere(); }}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={`Keep this position and play on as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     aria-label={`Play from here against the engine as ${sideToMove === 'w' ? 'Red' : 'Black'}`}
                     data-testid="mobile-play-from-here-btn"
@@ -7081,7 +7158,7 @@ function App() {
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); handleTakeBack(); }}
                     disabled={!canTakeBack}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={canTakeBack ? 'Take back your last move' : 'Nothing to take back'}
                     data-testid="mobile-take-back-btn"
                   >
@@ -7098,7 +7175,7 @@ function App() {
                     type="button"
                     onClick={() => { setShowMobileBoardActionMenu(false); runHint(); }}
                     disabled={!canHint}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={canHint ? 'Ask the engine what it would play for you' : isAiTurn ? 'Wait for your turn' : 'No hint right now'}
                     data-testid="mobile-hint-btn"
                   >
@@ -7116,7 +7193,7 @@ function App() {
                     type="button"
                     onClick={handleCopyPgn}
                     disabled={!canExportCurrentLine}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'copy-pgn' ? 'Could not copy PGN to clipboard' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
                     aria-label={exportFailureKey === 'copy-pgn' ? 'PGN copy failed' : copiedToast ? 'PGN copied' : 'Copy PGN to clipboard'}
                     data-testid="mobile-copy-pgn-btn"
@@ -7130,7 +7207,7 @@ function App() {
                   type="button"
                   onClick={handleSaveGame}
                   disabled={!canSaveCurrentPosition}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title={saveFailedToast ? 'Save failed' : savedToast ? 'Saved' : savingWouldDropTheReview ? 'Save current game. The review covers a different line, so it is not saved with it.' : 'Save current game'}
                   aria-label={saveFailedToast ? 'Current game save failed' : savedToast ? 'Saved game in this browser' : 'Save game in this browser'}
                   data-testid="mobile-save-game-btn"
@@ -7145,7 +7222,7 @@ function App() {
                     type="button"
                     onClick={handleDownloadPgn}
                     disabled={!canExportCurrentLine}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN downloaded' : 'Download PGN'}
                     aria-label={exportFailureKey === 'download-pgn' ? 'PGN export failed' : downloadedPgnToast ? 'PGN exported' : 'Export PGN'}
                     data-testid="mobile-download-pgn-btn"
@@ -7160,7 +7237,7 @@ function App() {
                     type="button"
                     onClick={handleCopyShareLink}
                     disabled={!canShareCurrentPosition}
-                    role="menuitem"
+                    role="menuitem" tabIndex={-1}
                     title={exportFailureKey === 'copy-share' ? 'Copy link failed' : copiedShareToast ? 'Link copied' : 'Copy share link'}
                     aria-label={exportFailureKey === 'copy-share' ? 'Share link copy failed' : copiedShareToast ? 'Copied link to this position' : 'Copy link to this position'}
                     data-testid="mobile-copy-share-link-btn"
@@ -7173,7 +7250,7 @@ function App() {
                   className={`mobile-action-menu-btn ${copiedFenToast ? 'mobile-action-menu-btn-active' : ''} ${exportFailureKey === 'copy-fen' ? 'mobile-action-menu-btn-warn' : ''}`}
                   type="button"
                   onClick={handleCopyFen}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title={exportFailureKey === 'copy-fen' ? 'Copy FEN failed' : copiedFenToast ? 'FEN copied' : 'Copy FEN'}
                   aria-label={exportFailureKey === 'copy-fen' ? 'FEN copy failed' : copiedFenToast ? 'Copied FEN for this position' : 'Copy FEN for this position'}
                   data-testid="mobile-copy-fen-btn"
@@ -7185,7 +7262,7 @@ function App() {
                   className={`mobile-action-menu-btn ${showArrows ? 'mobile-action-menu-btn-active' : ''}`}
                   type="button"
                   onClick={() => setShowArrows(v => !v)}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Toggle arrows and markers"
                   // No aria-label: the visible text already names the action and
                   // carries the state. "Toggle board arrows and markers" replaced
@@ -7199,15 +7276,14 @@ function App() {
                   className="mobile-action-menu-btn"
                   type="button"
                   onClick={() => setOrientation(o => o === 'red' ? 'black' : 'red')}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Flip board"
                   aria-label="Flip board"
                 >
                   <IconFlip />
                   <span>Flip board</span>
                 </button>
-                {/* No shortcut in the label here: this menu only exists on
-                    touch, where there is no modifier key to press. */}
+                {/* Keep this compact label short; the palette lists shortcuts. */}
                 <button
                   className="mobile-action-menu-btn"
                   type="button"
@@ -7215,7 +7291,7 @@ function App() {
                     setShowMobileBoardActionMenu(false);
                     setShowCommandPalette(true);
                   }}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   title="Commands"
                   aria-label="Open commands"
                   data-testid="mobile-command-palette-btn"
@@ -7230,7 +7306,7 @@ function App() {
                     mobileMoreActionsButtonRef.current?.focus({ preventScroll: true });
                     toggleSettings();
                   }}
-                  role="menuitem"
+                  role="menuitem" tabIndex={-1}
                   aria-label="Open settings"
                   aria-haspopup="dialog"
                   aria-expanded={showSettings}
@@ -7240,7 +7316,7 @@ function App() {
                   <IconSettings />
                   <span>Settings</span>
                 </button>
-              </div>
+              </BoardActionMenu>
             </>
           ) : null}
           {isMobile && beginnerGuide}
@@ -7730,7 +7806,16 @@ function App() {
                       so a study built on this board carried the line and none of
                       the reasoning for it. The note is the reader's, kept in a
                       separate field for exactly that reason. */}
-                  <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata} />
+                  <GameMetadataEditor metadata={gameMetadata} onChange={setGameMetadata}>
+                    <PositionResultEditor value={selectedRecordedResult} automaticResult={automaticPositionResult}
+                      target={moveCommentTarget ?? 'Selected position'} disabled={studyControlsDisabled}
+                      onChange={result => {
+                        setNodeRecordedResult(currentNodeId, result);
+                        // A legacy resignation/draw is metadata. Replacing it
+                        // must also release the old game-wide result fallback.
+                        setGameResult(automaticPositionResult ?? null);
+                      }} />
+                  </GameMetadataEditor>
                   <StudyNotes notes={studyNotes} treeNodes={treeNodes} rootId={rootNodeId} rootFen={rootFen}
                     notationStyle={notationStyle} currentNodeId={currentNodeId} gameIdentity={gameIdentity}
                     initialViewState={studyNotesViewRef.current?.identity === gameIdentity ? studyNotesViewRef.current.state : undefined}
@@ -8328,6 +8413,10 @@ function App() {
               <button type="button" className="undo-toast-btn" onClick={() => persistAutoSave(snapshotForStorage(currentGameSnapshot))}>Retry autosave</button>
             </div>
           ) : null}
+          {emptySavedStudy && <div className="study-empty-notice" role="status" data-testid="empty-study-save-notice">
+            <span id="empty-study-save-help">Add content to update the saved copy.</span>
+            <button type="button" className="chip-btn" onClick={openLibraryPanel}>Open library</button>
+          </div>}
         </div>
       </div>
 
@@ -8585,7 +8674,7 @@ function App() {
               currentMoveIndex={currentMoveIndex}
               totalMoves={moveHistory.length}
               onScrub={jumpToMove}
-              shortcutsEnabled={!aDialogIsOpen}
+              shortcutsEnabled={!aDialogIsOpen && !showMobileBoardActionMenu}
             />
           </div>
 

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
-const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Result "1-0"] [WhiteElo "2500"] [BlackElo "2450"] [TimeControl "40/7200:3600"] [Annotator "Coach 王"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
+const source = '[White "Alice"] [Black "Bob"] [Event "Open Cup"] [Site "Paris"] [Result "1-0"] [WhiteElo "2500"] [BlackElo "2450"] [TimeControl "40/7200:3600"] [Annotator "Coach 王"]\n1.h2e2 {Main note} (1.b2e2 {Branch note}) h9g7 1-0\n[White "Carol"] [Black "Dan"]\n1.b2e2 *';
 async function checkEnlargedDetails(page, details, name) {
  const original = await details.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
  await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
@@ -63,6 +63,9 @@ async function resetText(page) {
    await search.fill('王 PLAYER 45');
    assert.equal(await rows.count(),1);
    assert.match(await rows.first().innerText(),/45\. Player 45/);
+   assert.match(await rows.first().locator('.lib-pgn-search-detail').innerText(), /Annotated by: Coach 王/,
+    'Searching an annotator must show why the game matched');
+   assert.deepEqual(await rows.first().locator('mark').allTextContents(), ['Player', '45', '王']);
    assert.equal(await rows.getByRole('checkbox').isChecked(),true);
    assert.match(await panel.innerText(),/44 selected games are outside this search/);
    await panel.getByRole('button',{name:'Deselect matches',exact:true}).click();
@@ -75,6 +78,7 @@ async function resetText(page) {
    assert.equal(await panel.getByRole('button',{name:'Select all matches',exact:true}).isDisabled(),true);
    await search.press('Escape');
    assert.equal(await search.inputValue(),'','Escape clears the preview search');
+   assert.equal(await rows.locator('.lib-pgn-search-detail, mark').count(),0,'Clearing search restores compact previews');
    assert.equal(await search.evaluate(node=>node===document.activeElement),true,'Clearing preview search retains focus');
    assert.equal(await panel.getByRole('button',{name:'Import 1 game',exact:true}).isEnabled(),true,'Clearing search preserves selected games');
    assert.equal(await rows.count(),20,'Changing the search resets pagination');
@@ -93,6 +97,21 @@ async function resetText(page) {
    assert.equal(await search.inputValue(),'','A replacement file clears the old search');
    assert.match(await panel.locator('.lib-pgn-game strong').first().innerText(), /Alice \(2500\).*Bob \(2450\)/);
    assert.match(await panel.innerText(), /ratings.*recorded time control.*annotator credits/);
+   await search.fill('PARIS 40/7200:3600 COACH');
+   assert.equal(await rows.count(),1);
+   assert.deepEqual(await rows.locator('.lib-pgn-search-detail').allTextContents(),
+    ['Site: Paris', 'Time control: 40/7200:3600', 'Annotated by: Coach 王']);
+   assert.deepEqual(await rows.locator('mark').allTextContents(), ['Paris', '40/7200:3600', 'Coach']);
+   for (const size of [16,32]) {
+    await page.evaluate(size=>{document.documentElement.style.fontSize=size+'px';},size);
+    await rows.first().scrollIntoViewIfNeeded();
+    assert.equal(await rows.first().evaluate(node=>node.scrollWidth>node.clientWidth),false,'Matching metadata must wrap at enlarged text sizes');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+   }
+   await page.screenshot({path:`/tmp/xiangqi-collection-matched-details-${browserType.name()}-${width}.png`});
+   await resetText(page);
+   await search.press('Escape');
+   assert.equal(await rows.locator('.lib-pgn-search-detail, mark').count(),0);
    assert.equal(await raw(),before,'Preview does not save');
    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen);
    await checkEnlargedDetails(page, panel.locator('.lib-pgn-game span span').first(), 'preview');
@@ -114,7 +133,7 @@ async function resetText(page) {
    const alice=games.find(game=>game.metadata.redPlayer==='Alice');
    assert.equal(alice.result,'red');
    assert.equal(alice.moveTree[1].comment,'Branch note');
-   assert.deepEqual(alice.metadata, {redPlayer:'Alice',blackPlayer:'Bob',event:'Open Cup',redRating:'2500',blackRating:'2450',timeControl:'40/7200:3600',annotator:'Coach 王'});
+   assert.deepEqual(alice.metadata, {redPlayer:'Alice',blackPlayer:'Bob',event:'Open Cup',site:'Paris',redRating:'2500',blackRating:'2450',timeControl:'40/7200:3600',annotator:'Coach 王'});
    assert.equal(await page.locator('.bottombar-fen').getAttribute('title'),beforeFen,'Saving leaves board untouched');
    await resetText(page);
    await checkEnlargedDetails(page, page.getByTestId(`metadata-saved-${alice.id}`), 'metadata');
@@ -122,7 +141,7 @@ async function resetText(page) {
    await page.getByTestId(`download-pgn-saved-${alice.id}`).click();
    const pgn=fs.readFileSync(await (await download).path(),'utf8');
    assert.ok(pgn.includes('Branch note') && pgn.includes('(') && pgn.includes('[White "Alice"]'));
-   for(const tag of ['[WhiteElo "2500"]','[BlackElo "2450"]','[TimeControl "40/7200:3600"]','[Annotator "Coach 王"]']) assert.ok(pgn.includes(tag), `Collection export lost ${tag}`);
+   for(const tag of ['[WhiteElo "2500"]','[BlackElo "2450"]','[Site "Paris"]','[TimeControl "40/7200:3600"]','[Annotator "Coach 王"]']) assert.ok(pgn.includes(tag), `Collection export lost ${tag}`);
    await resetText(page);
    await upload(source);
    await panel.getByRole('button',{name:'Import 0 games',exact:true}).waitFor();

@@ -47,6 +47,7 @@ export interface SavedStudySearchEntry {
     parent?: SavedStudySearchEntry;
     ply: number;
     text: string;
+    siblingIndex: number;
 }
 
 /** On-demand move lookup: shared parent links keep deep studies linear in size. */
@@ -57,7 +58,8 @@ export function savedStudySearchEntries(nodes: SavedGame['moveTree']): SavedStud
         const frame = pending[pending.length - 1];
         const node = frame.nodes[frame.index++];
         if (!node) { pending.pop(); continue; }
-        const entry = { node, parent: frame.parent, ply: (frame.parent?.ply ?? 0) + 1, text: savedNodeSearchText(node).toLowerCase() };
+        const entry = { node, parent: frame.parent, ply: (frame.parent?.ply ?? 0) + 1,
+            siblingIndex: frame.index - 1, text: savedNodeSearchText(node).toLowerCase() };
         entries.push(entry);
         if (node.children?.length) pending.push({ nodes: node.children, index: 0, parent: entry });
     }
@@ -69,6 +71,12 @@ export function savedStudyMatchMoves(entry: SavedStudySearchEntry): string[] {
     const moves: string[] = [];
     for (let cursor: SavedStudySearchEntry | undefined = entry; cursor; cursor = cursor.parent) moves.push(cursor.node.uci);
     return moves.reverse();
+}
+
+export function savedStudyMatchPath(entry: SavedStudySearchEntry): number[] {
+    const path: number[] = [];
+    for (let cursor: SavedStudySearchEntry | undefined = entry; cursor; cursor = cursor.parent) path.push(cursor.siblingIndex);
+    return path.reverse();
 }
 
 /** Called once per saved-game object by the library's lazy search cache. */

@@ -27,6 +27,7 @@ import {
 } from '../utils/xiangqi';
 import type { ReviewMoveQuality } from '../utils/review';
 import { getMovesToNode } from '../utils/moveTreePath';
+import { findSavedTreePath } from '../utils/savedTreePath';
 import { halfmoveClockAtNode } from '../utils/moveHalfmoveClock';
 import { removeSubtree } from '../utils/moveTreeEdit';
 import { getStudyMainLine, pinStudyMainLine, unpinStudyMainLine } from '../utils/studyMainLine';
@@ -419,7 +420,7 @@ export function useXiangqi() {
         return activeLine;
     }, []); // no deps — uses only local vars and stable refs
 
-    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false, navigationMoves?: string[]) => {
+    const loadMoveTree = useCallback((moveTree: SerializableMoveTreeNode[], mainLineMoves: string[], startFen?: string, initialPly?: number, rootComment?: string, mainLinePinned = false, navigationMoves?: string[], paths?: { saved?: number[]; navigation?: number[] }) => {
         const root = startFen ? parseRootPositionFromFen(startFen) ?? createStartRootPosition() : createStartRootPosition();
         const tree: Record<string, MoveTreeNode> = createRootTree(rootComment);
         if (mainLinePinned) tree[ROOT_NODE_ID] = { ...tree[ROOT_NODE_ID], mainLinePinned: true, mainLineRevision: 1 };
@@ -487,26 +488,24 @@ export function useXiangqi() {
 
         appendChildren(moveTree, ROOT_NODE_ID, root.board, root.sideToMove, 0, sourceRootCommand);
 
-        let activeLine: string[] = [];
-        let cursor = ROOT_NODE_ID;
-        for (const move of mainLineMoves) {
-            const childId = tree[cursor]?.childrenIds.find((id) => tree[id]?.record?.uci === move);
-            if (!childId) break;
-            activeLine.push(childId);
-            cursor = childId;
-        }
+        const resolveLine = (moves: string[], preferred?: number[]) => {
+            const path = findSavedTreePath(moveTree, moves, preferred);
+            const line: string[] = [];
+            let cursor = ROOT_NODE_ID;
+            for (let i = 0; i < moves.length; i++) {
+                const childId = path ? tree[cursor]?.childrenIds[path[i]]
+                    : tree[cursor]?.childrenIds.find(id => tree[id]?.record?.uci === moves[i]);
+                if (!childId || tree[childId]?.record?.uci !== moves[i]) break;
+                line.push(childId); cursor = childId;
+            }
+            return { line, cursor };
+        };
+        let { line: activeLine, cursor } = resolveLine(mainLineMoves, paths?.saved);
         // Review annotations and legacy results belong to the saved path even
         // when an explorer match opens another primary-line occurrence.
         const savedLine = activeLine;
         if (navigationMoves) {
-            activeLine = [];
-            cursor = ROOT_NODE_ID;
-            for (const move of navigationMoves) {
-                const childId = tree[cursor]?.childrenIds.find(id => tree[id]?.record?.uci === move);
-                if (!childId) break;
-                activeLine.push(childId);
-                cursor = childId;
-            }
+            ({ line: activeLine, cursor } = resolveLine(navigationMoves, paths?.navigation));
         }
 
         // The saved line stops where the reader was standing, and the rest of
@@ -948,6 +947,19 @@ export function useXiangqi() {
         });
     }, []);
 
+    /** An explicit edit can replace or remove a declaration at any position. */
+    const setNodeRecordedResult = useCallback((nodeId: string, value: unknown) => {
+        const recordedResult = normalizeRecordedResult(value);
+        if (value !== undefined && !recordedResult) return;
+        setTreeNodes(tree => {
+            const node = tree[nodeId];
+            if (!node || (node.record ?? node).recordedResult === recordedResult) return tree;
+            return { ...tree, [nodeId]: node.record
+                ? { ...node, record: { ...node.record, recordedResult } }
+                : { ...node, recordedResult } };
+        });
+    }, []);
+
     const setNodeGlyphs = useCallback((nodeId: string, value: number[] | undefined) => {
         const nags = normalizeMoveGlyphs(value);
         setTreeNodes(tree => {
@@ -1181,6 +1193,7 @@ export function useXiangqi() {
         setNodeEvals,
         setNodeBestMove,
         restoreRecordedResult,
+        setNodeRecordedResult,
         setNodeComment,
         setNodeGlyphs,
         setNodeComments,

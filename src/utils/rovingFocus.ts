@@ -63,3 +63,29 @@ export function rovingIndexForKey(key: string, count: number, from: number): num
             return null;
     }
 }
+
+/** Move one rendered row, including side lines that wrap onto several rows. */
+export function verticalRovingIndexForKey(
+    key: string,
+    rects: Array<{ left: number; top: number; bottom: number }>,
+    from: number,
+): number | null {
+    if (key !== 'ArrowUp' && key !== 'ArrowDown') return null;
+    const rows: Array<{ top: number; bottom: number; indices: number[] }> = [];
+    rects.forEach((rect, index) => {
+        if (rect.bottom <= rect.top) return;
+        const previous = rows.at(-1);
+        // Different-height controls on one flex/grid row still overlap.
+        if (previous && Math.min(previous.bottom, rect.bottom) - Math.max(previous.top, rect.top) > 1) {
+            previous.top = Math.min(previous.top, rect.top);
+            previous.bottom = Math.max(previous.bottom, rect.bottom);
+            previous.indices.push(index);
+        } else rows.push({ top: rect.top, bottom: rect.bottom, indices: [index] });
+    });
+    const row = rows.findIndex(item => item.indices.includes(from));
+    if (row < 0) return null;
+    const next = rows[row + (key === 'ArrowDown' ? 1 : -1)];
+    if (!next) return from;
+    const x = rects[from].left;
+    return next.indices.reduce((best, index) => Math.abs(rects[index].left - x) < Math.abs(rects[best].left - x) ? index : best);
+}

@@ -4,6 +4,10 @@ export const RESULT_TAG: Record<RecordedResult, string> = { 'red-wins': '1-0', '
 export function normalizeRecordedResult(value: unknown): RecordedResult | undefined {
     return value === 'red-wins' || value === 'black-wins' || value === 'draw' ? value : undefined;
 }
+/** The library's legacy endpoint result uses shorter side names. */
+export function recordedResultFromSavedResult(value: unknown): RecordedResult | undefined {
+    return value === 'red' ? 'red-wins' : value === 'black' ? 'black-wins' : value === 'draw' ? 'draw' : undefined;
+}
 export function parseResultTag(value: unknown): RecordedResult | undefined {
     return value === '1-0' ? 'red-wins' : value === '0-1' ? 'black-wins' : value === '1/2-1/2' ? 'draw' : undefined;
 }

@@ -127,9 +127,14 @@ export function commandPaletteShortcutLabel(): string {
     return isApplePlatform() ? '⌘K' : 'Ctrl+K';
 }
 
+export function saveStudyShortcutLabel(): string {
+    return isApplePlatform() ? '⌘S' : 'Ctrl+S';
+}
+
 /**
  * The same chord in the token form `aria-keyshortcuts` specifies: a
  * space-separated list of alternatives, each modifier joined with `+`. Both
  * are listed because the handler really does accept both.
  */
 export const COMMAND_PALETTE_ARIA_KEYSHORTCUTS = 'Meta+K Control+K';
+export const SAVE_STUDY_ARIA_KEYSHORTCUTS = 'Meta+S Control+S';

@@ -7,6 +7,7 @@ import { isInCheck, legalMovesFrom, pieceSide, squareToUci, uciToSquare, type Si
 import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine, type PracticeSession } from '../utils/studyPractice';
 import { Board } from './Board/Board';
 import { IconCheck } from './icons';
+import { PracticeLinePicker } from './PracticeLinePicker';
 
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
@@ -98,6 +99,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
     }
   }
   const next = nextPracticeLine(study, session, side);
+  const lineLength = study.lineLengths[session.line];
   const nextMove = study.lines[session.line]?.[session.moves.length];
   const completedNotes = complete ? study.notes[session.line] : [];
   const noteTokens = notesOpen && complete ? formatLineTokensInStyle(study.board, study.lines[session.line], notationStyle, study.lineLengths[session.line]).tokens : [];
@@ -136,7 +138,11 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
           highlights={hint && nextMove ? [uciToSquare(nextMove.slice(0, 2))!, uciToSquare(nextMove.slice(2))!] : []} />
       </div>
       <section className="study-practice-feedback" aria-label="Practice feedback">
-        <p id={feedbackId} role="status" aria-atomic="true" ref={feedbackRef} data-testid="study-practice-status">{message ? `${message} ${turnMessage}` : asking
+        <p id={feedbackId} role="status" aria-atomic="true" ref={feedbackRef} data-testid="study-practice-status">
+          <span className="study-practice-line-position" data-testid="study-practice-line-position">
+            Line {eligible.indexOf(session.line) + 1} of {eligible.length} · {session.moves.length} of {lineLength} {lineLength === 1 ? 'move' : 'moves'} played
+          </span>{' '}
+          {message ? `${message} ${turnMessage}` : asking
           ? `${turnMessage} Choose a piece, then its destination. You can also use the board’s arrow keys and Enter.` : turnMessage}
           {hint && nextMove && <span className="study-practice-hint" data-testid="study-practice-hint"> One saved move: {formatMoveInStyle(session.board, nextMove, notationStyle)}</span>}
         </p>
@@ -156,8 +162,11 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
           </button>}
           <button type="button" onClick={() => reset(session.line, true)}>Restart line</button>
         </div>
-        <p data-testid="study-practice-progress">{session.completed.filter(line => eligible.includes(line)).length} of {eligible.length} lines practiced</p>
-        {session.answered > 0 && <p data-testid="study-practice-recall">{session.recalled} of {session.answered} moves recalled without help</p>}
+        {eligible.length > 1 && <PracticeLinePicker key={`${side}:${session.line}`}
+          current={eligible.indexOf(session.line) + 1} total={eligible.length}
+          onStart={ordinal => reset(eligible[ordinal - 1], true)} />}
+        <p data-testid="study-practice-progress">{session.completed.filter(line => eligible.includes(line)).length} of {eligible.length} {eligible.length === 1 ? 'line' : 'lines'} practiced</p>
+        {session.answered > 0 && <p data-testid="study-practice-recall">{session.recalled} of {session.answered} {session.answered === 1 ? 'move' : 'moves'} recalled without help</p>}
         {(!progressSaved || saveRetryResult === 'saved') && <div className="study-practice-save-notice" data-testid="practice-progress-save">
           <p role="status">{progressSaved ? 'Practice progress saved in this browser.' : saveRetryResult === 'failed'
             ? 'Practice continues, but browser storage still could not save your progress.'
@@ -171,7 +180,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         {completedNotes.length > 0 && <details className="study-practice-note study-practice-line-notes" data-testid="study-practice-line-notes"
           onToggle={event => setNotesOpen(event.currentTarget.open)}>
           <summary>Study notes for this line ({completedNotes.length})</summary>
-          {notesOpen && <ul>{completedNotes.map(note => <li key={note.ply}>
+          {notesOpen && <ul>{completedNotes.map((note, index) => <li key={index}>
             <strong>{note.move ? `Ply ${note.ply} · ${noteTokens[note.ply - 1] ?? note.move}` : 'Start position'}</strong>
             <p>{note.comment}</p>
           </li>)}</ul>}
@@ -179,7 +188,8 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         <details className="study-practice-note"><summary>How practice works</summary>
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
           <p>Complete a line to read any notes saved with it.</p>
-          <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Editing a saved study starts fresh practice.</p>
+          <p>Use Choose a line to start any line for this side while keeping your scores and completed lines.</p>
+          <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Changing the saved moves, study notes or the starting position starts fresh practice.</p>
           <p>Use Undo reset to recover the position and scores from before a progress reset.</p>
         </details>
       </section>

@@ -23,7 +23,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
         const search = page.getByRole('searchbox', { name: 'Search library' });
         await search.fill('Training loop');
         const results = page.getByTestId('study-matches-loop');
-        await results.getByRole('button', { name: 'Find matching moves', exact: true }).click();
+        await results.getByRole('button', { name: 'Find matching positions', exact: true }).click();
         await results.locator('.lib-study-match').first().locator('summary').click();
         await search.fill('Training loop chosen');
         assert.equal(await results.locator('details[open]').count(), 0,
@@ -36,7 +36,7 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5199/web-xiangqi/';
           'A retained move keeps its own expansion when its position in the list changes');
         const moveResults = results.locator('[data-library-action="open-match"]');
         for (const [count, firstNew] of [[20, 10], [26, 20]]) {
-          await results.getByRole('button', { name: /Show \d+ more matching moves/, exact: false }).press('Enter');
+          await results.getByRole('button', { name: /Show \d+ more matching positions/, exact: false }).press('Enter');
           assert.equal(await results.locator('.lib-study-match').count(), count);
           assert.equal(await moveResults.nth(firstNew).evaluate(node => node === document.activeElement), true,
             'Showing more matches must focus the first new move, including when the More button disappears');

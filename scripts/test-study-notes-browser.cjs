@@ -21,6 +21,19 @@ async function openFinder(page) {
   await command(page, 'Find study notes');
   await page.waitForFunction(() => document.activeElement?.id === 'study-notes-search');
 }
+async function holdNextNoteFocus(page) {
+  await page.evaluate(() => {
+    const native = window.setTimeout;
+    window.setTimeout = function(callback, delay, ...args) {
+      if (delay === 0 && document.querySelector('[data-command-input]')?.value === 'Write a note on this move') {
+        window.__heldNoteFocus = () => callback(...args);
+        window.setTimeout = native;
+        return native(() => {}, 0);
+      }
+      return native(callback, delay, ...args);
+    };
+  });
+}
 async function assertFits(page) {
   const result = await page.getByTestId('study-notes').evaluate(details => ({
     documentFits: document.documentElement.scrollWidth <= innerWidth + 1,
@@ -220,17 +233,7 @@ async function assertFits(page) {
         }
         // Hold only Write note's scheduled focus, then open a second palette.
         // Its stale callback must not move Enter into the textarea behind it.
-        await page.evaluate(() => {
-          const native = window.setTimeout;
-          window.setTimeout = function(callback, delay, ...args) {
-            if (delay === 0 && document.querySelector('[data-command-input]')?.value === 'Write a note on this move') {
-              window.__heldNoteFocus = () => callback(...args);
-              window.setTimeout = native;
-              return native(() => {}, 0);
-            }
-            return native(callback, delay, ...args);
-          };
-        });
+        await holdNextNoteFocus(page);
         await command(page, 'Write a note on this move');
         await page.keyboard.press('ControlOrMeta+k');
         await page.getByRole('combobox', { name: 'Search commands' }).fill('Find study notes');
@@ -243,12 +246,21 @@ async function assertFits(page) {
         // and its delete, which then cleared the search instead of the note,
         // and the panel this waits to disappear stayed (about one run in six).
         await page.waitForFunction(() => document.activeElement?.id === 'study-notes-search');
+        // An earlier note command must also stand down after a newer finder
+        // command has completed and its dialog has already closed.
+        await holdNextNoteFocus(page);
+        await command(page, 'Write a note on this move');
+        await openFinder(page);
+        await page.evaluate(() => window.__heldNoteFocus());
+        assert.equal(await search.evaluate(input => input === document.activeElement), true,
+          'A delayed Write note must not override a newer completed Find study notes command');
         await page.getByTestId('move-comment-input').fill('');
         await page.getByTestId('move-comment-input').blur();
         await page.getByTestId('study-notes').waitFor({ state: 'detached' });
         await page.keyboard.press('ControlOrMeta+k');
         await page.getByRole('combobox', { name: 'Search commands' }).fill('Find study notes');
-        assert.equal(await page.getByRole('option').first().getAttribute('aria-disabled'), 'true');
+        const palette = page.getByRole('dialog', { name: 'Commands', exact: true });
+        assert.equal(await palette.getByRole('option', { name: /Find study notes/ }).getAttribute('aria-disabled'), 'true');
         await page.keyboard.press('Escape');
         assert.deepEqual(errors, []);
         console.log(`${browserType.name()} ${width}px: all-branch search, draft retention, keyboard jumps, saved notes, notation and 200% reflow passed${width === 1440 ? '; 1,024-move study rendered only 20 initial results' : ''}`);

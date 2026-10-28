@@ -12,6 +12,7 @@ import {
 } from '../../utils/review';
 import { getMoveListQuality } from '../../utils/moveListQuality';
 import { isMoveListNodeVisible, MAX_VISIBLE_VARIATION_PLIES } from '../../utils/moveListVisibility';
+import { verticalRovingIndexForKey } from '../../utils/rovingFocus';
 import { describeMoveWithCheck, formatMoveRecordLabel, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveGlyphs, glyphSymbol } from '../../utils/moveGlyphs';
@@ -140,6 +141,9 @@ export const MoveListTree = memo(function MoveListTree({
         const chips = Array.from(container.querySelectorAll<HTMLButtonElement>('.mtree-chip'));
         const index = chips.indexOf(event.currentTarget);
         if (index === -1) return;
+        // At an edge, keep the timeline's global arrow shortcuts from moving
+        // the board while the reader is only browsing move-list controls.
+        event.preventDefault();
 
         let target: HTMLButtonElement | undefined;
         if (key === 'ArrowLeft') target = chips[Math.max(0, index - 1)];
@@ -147,32 +151,10 @@ export const MoveListTree = memo(function MoveListTree({
         else if (key === 'Home') target = chips[0];
         else if (key === 'End') target = chips[chips.length - 1];
         else {
-            const pair = container.querySelector('.mtree-pair:has(> .mtree-chip-wrap + .mtree-chip-wrap)');
-            const stacked = !pair || getComputedStyle(pair).gridTemplateColumns.split(' ').length === 1;
-            const rowOf = (chip: HTMLButtonElement) => {
-                const row = chip.closest('.mtree-row, .mtree-variation');
-                return stacked && row?.classList.contains('mtree-row') ? chip : row;
-            };
-            const rows: HTMLButtonElement[][] = [];
-            for (const chip of chips) {
-                const row = rowOf(chip);
-                const last = rows[rows.length - 1];
-                if (last && rowOf(last[0]) === row) last.push(chip);
-                else rows.push([chip]);
-            }
-            const rowIndex = rows.findIndex((row) => row.includes(event.currentTarget));
-            const nextRow = rows[rowIndex + (key === 'ArrowDown' ? 1 : -1)];
-            if (!nextRow) return;
-            const x = event.currentTarget.getBoundingClientRect().left;
-            target = nextRow.reduce((best, chip) => (
-                Math.abs(chip.getBoundingClientRect().left - x) < Math.abs(best.getBoundingClientRect().left - x) ? chip : best
-            ), nextRow[0]);
+            const next = verticalRovingIndexForKey(key, chips.map(chip => chip.getBoundingClientRect()), index);
+            target = next === null ? undefined : chips[next];
         }
-        if (!target || target === event.currentTarget) {
-            event.preventDefault();
-            return;
-        }
-        event.preventDefault();
+        if (!target || target === event.currentTarget) return;
         target.focus({ preventScroll: true });
         target.scrollIntoView({ block: 'nearest' });
     }, []);

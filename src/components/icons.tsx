@@ -139,6 +139,12 @@ export const IconCopy = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+export const IconNote = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...decorativeIconProps(props)}>
+        <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z" />
+    </svg>
+);
+
 export const IconLink = (props: React.SVGProps<SVGSVGElement>) => (
     <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...decorativeIconProps(props)}>
         <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />

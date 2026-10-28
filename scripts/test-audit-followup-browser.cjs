@@ -863,20 +863,14 @@ async function landscapeNavRidesHeader(browser, width, height) {
       const nav = r('.mobile-board-nav');
       const board = r('.xiangqi-board');
       const menu = r('.mobile-board-action-menu');
-      let coveredMenuItems = 0;
-      for (const el of document.querySelectorAll('.mobile-action-menu-btn')) {
-        const b = el.getBoundingClientRect();
-        const top = document.elementFromPoint(Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2));
-        if (!top || !top.closest('.mobile-board-action-menu')) coveredMenuItems += 1;
-      }
       return {
+        headerTop: header.top,
         navInHeaderColumn: Math.abs(nav.left - header.left) < 4 && nav.top >= header.bottom - 1,
         boardBeside: board.right <= Math.min(header.left, nav.left) + 1,
         boardHeight: board.height,
         menuFollowsButtons: Math.abs(menu.right - header.right) < 2,
         menuBelowHeader: menu.top >= header.bottom - 1,
         menuOnScreen: menu.left >= 0 && menu.right <= innerWidth && menu.bottom <= innerHeight,
-        coveredMenuItems,
         hscroll: document.documentElement.scrollWidth > innerWidth,
       };
     });
@@ -886,7 +880,17 @@ async function landscapeNavRidesHeader(browser, width, height) {
       `The action menu did not follow the header's right edge at ${width}x${height}`);
     assert.equal(box.menuBelowHeader, true, `The action menu covers the header at ${width}x${height}`);
     assert.equal(box.menuOnScreen, true, `The action menu runs off screen at ${width}x${height}`);
-    assert.equal(box.coveredMenuItems, 0, `An action menu item is covered at ${width}x${height}`);
+    // Comfortable targets and enlarged labels can make this menu scroll.
+    // Reveal each action before checking whether it can actually be reached.
+    for (const item of await page.locator('.mobile-action-menu-btn').all()) {
+      await item.scrollIntoViewIfNeeded();
+      assert.equal(await item.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        return node.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+      }), true, `An action menu item is covered at ${width}x${height}: ${await item.textContent()}`);
+    }
+    const headerTop = await page.locator('.mobile-board-header').evaluate(node => node.getBoundingClientRect().top);
+    assert.ok(Math.abs(headerTop - box.headerTop) < 1, `Scrolling actions displaced the header at ${width}x${height}`);
     assert.equal(box.hscroll, false, `The landscape stage scrolls sideways at ${width}x${height}`);
     // The nav's own bar was 38px plus a 12px gap. Anything less than most of it
     // back means the row it left is being spent somewhere else again.

@@ -1,0 +1,5 @@
+.search-text-match { background: rgba(250, 204, 21, .22); color: inherit; border-radius: 2px; font-weight: 600; }
+
+@media (forced-colors: active) {
+    .search-text-match { background: Highlight; color: HighlightText; }
+}
