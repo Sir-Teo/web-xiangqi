@@ -148,6 +148,35 @@ async function downloadedJson(page, action) {
         if (await matchingGames.getAttribute('open') === null) await matchingGames.locator('summary').click();
         await matchingGames.getByTestId('library-match-repeated').click();
         await note(page, 'Original main reply');
+        const beforePractice = await raw();
+        await command(page, 'Library');
+        await page.getByRole('searchbox', { name: 'Search library' }).fill('');
+        const practice = page.getByTestId('practice-saved-repeated');
+        await practice.click();
+        const practiceDialog = page.getByTestId('study-practice-dialog');
+        await practiceDialog.getByTestId('study-practice-status').waitFor();
+        const practiceNotes = practiceDialog.getByTestId('study-practice-line-notes');
+        assert.equal(await practiceNotes.count(), 0, 'Practice must keep future notes hidden until completion');
+        for (const [file, rank] of [[7, 2], [4, 2]]) {
+          await practiceDialog.locator(`.hitbox[data-file="${file}"][data-rank="${rank}"]`).click();
+        }
+        await practiceDialog.getByRole('button', { name: 'Play saved reply', exact: true }).click();
+        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 lines practiced/);
+        await practiceNotes.locator('summary').click();
+        await practiceNotes.locator('li').first().waitFor();
+        const expectedPracticeNotes = ['Original cannon', 'Needle root plan', 'Original main reply', 'Other repeated reply', 'Updated needle nested plan'];
+        assert.deepEqual(await practiceNotes.locator('li p').allTextContents(), expectedPracticeNotes);
+        await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:practice-progress:v1') || '[]')
+          .find(entry => entry.id === 'repeated')?.sessions?.w?.completed?.length === 1);
+        await practiceDialog.getByRole('button', { name: 'Close study practice', exact: true }).click();
+        await practice.click();
+        await practiceDialog.getByTestId('study-practice-status').waitFor();
+        assert.match(await practiceDialog.getByTestId('study-practice-progress').textContent(), /1 of 1 lines practiced/);
+        await practiceNotes.locator('summary').click();
+        await practiceNotes.locator('li').first().waitFor();
+        assert.deepEqual(await practiceNotes.locator('li p').allTextContents(), expectedPracticeNotes);
+        await practiceDialog.getByRole('button', { name: 'Close study practice', exact: true }).click();
+        assert.equal(await raw(), beforePractice, 'Practice notes and resume must leave every saved occurrence unchanged');
         const beforeLegacy = await raw();
         await command(page, 'Library');
         await page.getByTestId('load-saved-legacy-repeat').click();
@@ -186,7 +215,7 @@ async function downloadedJson(page, action) {
         assert.equal(await resultSelect.inputValue(), 'red-wins');
         assert.equal(await raw(), beforeMainLine, 'Viewing a pinned result must not overwrite the saved occurrence');
         assert.deepEqual(errors, []);
-        console.log(`${browserType.name()} ${width}px: exact repeated-move notes, independent edits/review/results, save/recovery, shared location and pinned line, invalid address rejection, backup and legacy continuation passed`);
+        console.log(`${browserType.name()} ${width}px: exact repeated-move notes, independent edits/review/results, combined practice notes/resume, save/recovery, shared location and pinned line, invalid address rejection, backup and legacy continuation passed`);
       } finally { await page.close(); }
     }
   } finally { await browser.close(); }

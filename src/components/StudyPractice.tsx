@@ -171,7 +171,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         {completedNotes.length > 0 && <details className="study-practice-note study-practice-line-notes" data-testid="study-practice-line-notes"
           onToggle={event => setNotesOpen(event.currentTarget.open)}>
           <summary>Study notes for this line ({completedNotes.length})</summary>
-          {notesOpen && <ul>{completedNotes.map(note => <li key={note.ply}>
+          {notesOpen && <ul>{completedNotes.map((note, index) => <li key={index}>
             <strong>{note.move ? `Ply ${note.ply} · ${noteTokens[note.ply - 1] ?? note.move}` : 'Start position'}</strong>
             <p>{note.comment}</p>
           </li>)}</ul>}

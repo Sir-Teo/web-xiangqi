@@ -7,6 +7,26 @@ import { START_POSITION_FEN, cloneBoardState, otherSide, parseFenBoard, validate
 export interface PracticeStudyNote { ply: number; move?: string; comment: string }
 interface PracticeTrie { children: Map<string, PracticeTrie>; parent?: PracticeTrie; line?: number; firstLine: number }
 interface PracticePath { move: string; parent?: PracticePath; note?: PracticeStudyNote; length: number }
+
+/** Equivalent move lines share an exercise, while each occurrence can explain it. */
+function notesForPaths(paths: PracticePath[], rootNotes: PracticeStudyNote[]): PracticeStudyNote[] {
+  const visited = new Set<PracticePath>();
+  const seen = new Map<number, Set<string>>();
+  const notes: PracticeStudyNote[] = [];
+  for (const path of paths) {
+    for (let node: PracticePath | undefined = path; node && !visited.has(node); node = node.parent) {
+      visited.add(node);
+      if (!node.note) continue;
+      const { ply, comment } = node.note;
+      let comments = seen.get(ply);
+      if (!comments) { comments = new Set(); seen.set(ply, comments); }
+      if (!comments.has(comment)) { comments.add(comment); notes.push(node.note); }
+    }
+  }
+  // Walk shared prefixes once, then present notes in move order. Stable sorting
+  // keeps different explanations at the same ply in their saved tree order.
+  return [...rootNotes, ...notes.sort((a, b) => a.ply - b.ply)];
+}
 export interface PracticeStudy {
   board: BoardState; side: Side;
   /** Only the currently requested line is materialized; prefixes stay shared. */
@@ -52,7 +72,7 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
     if (!roots.length) return fail('Save a game or variation with moves to practice it.');
     const root: PracticeTrie = { children: new Map(), firstLine: Infinity };
     const trieNodes = [root];
-    const ends = new Map<PracticeTrie, PracticePath>();
+    const ends = new Map<PracticeTrie, PracticePath[]>();
     const rootComment = normalizeMoveComment(game.rootComment);
     const rootNotes: PracticeStudyNote[] = rootComment ? [{ ply: 0, comment: rootComment }] : [];
     const ancestors = new Set<SavedMoveTreeNode>();
@@ -85,7 +105,10 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       if (node.children?.length) {
         ancestors.add(node);
         stack.push({ nodes: node.children, index: 0, board: next, side: otherSide(frame.side), owner: node, path, trie });
-      } else ends.set(trie, path);
+      } else {
+        const paths = ends.get(trie);
+        if (paths) paths.push(path); else ends.set(trie, [path]);
+      }
     }
     const leaves = [...ends.values()];
     [...ends.keys()].forEach((trie, index) => { trie.line = index; trie.firstLine = index; });
@@ -100,10 +123,10 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
     const materialize = (index: number) => {
       if (cachedIndex === index) return;
       const path: PracticePath[] = [];
-      for (let node: PracticePath | undefined = leaves[index]; node; node = node.parent) path.push(node);
+      for (let node: PracticePath | undefined = leaves[index][0]; node; node = node.parent) path.push(node);
       path.reverse();
       cachedMoves = path.map(node => node.move);
-      cachedNotes = [...rootNotes, ...path.flatMap(node => node.note ? [node.note] : [])];
+      cachedNotes = notesForPaths(leaves[index], rootNotes);
       cachedIndex = index;
     };
     const lines: string[][] = new Array(leaves.length);
@@ -112,7 +135,7 @@ export function preparePracticeStudy(game: SavedGame): { study: PracticeStudy | 
       Object.defineProperty(lines, index, { enumerable: true, configurable: true, get: () => { materialize(index); return cachedMoves; } });
       Object.defineProperty(notes, index, { enumerable: true, configurable: true, get: () => { materialize(index); return cachedNotes; } });
     });
-    return { study: { board, side, lines, notes, lineLengths: leaves.map(node => node.length), root }, error: null };
+    return { study: { board, side, lines, notes, lineLengths: leaves.map(paths => paths[0].length), root }, error: null };
   } catch { return fail('This saved study could not be read. Load and correct it before practicing.'); }
 }
 
