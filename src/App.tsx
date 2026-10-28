@@ -4676,6 +4676,8 @@ function App() {
     handleDeleteNode(cutNodeId);
   }, [activeLineNodeIds, canTakeBack, clearQueuedSearch, currentMoveIndex, handleDeleteNode, stopSearch, takeBackPlies]);
 
+  const studyEditorFocusRequestRef = useRef(0);
+  useLayoutEffect(() => { studyEditorFocusRequestRef.current++; }, [gameIdentity]);
   const paletteCommands = useMemo<Command[]>(() => [
     { id: 'start-engine-analysis', label: 'Start engine analysis', keywords: ['download', 'pikafish', 'activate'],
       hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
@@ -4765,12 +4767,18 @@ function App() {
       keywords: ['comment', 'annotate', 'study', 'remark', '注释'],
       disabled: !moveCommentTarget,
       run: () => {
+        const request = ++studyEditorFocusRequestRef.current;
+        const source = dialogLauncherRef.current;
         openAnalysisPanel('tree');
         // After the panel is up, or the field is not in the document yet.
         window.setTimeout(() => {
           // A second command/dialog can open before this callback runs.
-          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-          document.getElementById('move-comment-input')?.focus();
+          if (request !== studyEditorFocusRequestRef.current
+            || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          const input = document.getElementById('move-comment-input');
+          const active = document.activeElement;
+          if (active !== document.body && active !== source && active !== input) return;
+          input?.focus();
         }, 0);
       },
     },
@@ -4781,10 +4789,12 @@ function App() {
       keywords: ['search', 'comment', 'annotation', 'variation', '注释'],
       disabled: !studyNotes.length,
       run: () => {
+        const request = ++studyEditorFocusRequestRef.current;
         const source = dialogLauncherRef.current;
         openAnalysisPanel('tree');
         window.setTimeout(() => {
-          if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+          if (request !== studyEditorFocusRequestRef.current
+            || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
           const input = document.getElementById('study-notes-search') as HTMLInputElement | null;
           const active = document.activeElement;
           if (active !== document.body && active !== source && active !== input) return;
