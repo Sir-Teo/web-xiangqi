@@ -1,6 +1,6 @@
 import { isComposingKey } from './utils/keyboard';
 import { downloadRecoveryGame } from './utils/recoveryDownload';
-import { studyContent } from './utils/studyContent';
+import { studyDetailsContent, studyMoveContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
 import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
@@ -4460,13 +4460,17 @@ function App() {
   }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
   const fullStudyTree = useMemo(() => serializeSavedMoveTree(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
-  const currentStudyContent = useMemo(() => studyContent({ gameMode, moves: [], moveTree: fullStudyTree,
+  const currentStudyMoveContent = useMemo(() => studyMoveContent({ moves: [], moveTree: fullStudyTree }), [fullStudyTree]);
+  const currentStudyDetailsContent = useMemo(() => studyDetailsContent({ gameMode,
     startFen: rootFen, rootComment, rootResult, mainLinePinned, metadata: gameMetadata,
-    review: currentGameSnapshot.review }), [gameMode, fullStudyTree, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
-  const savedStudyContent = useMemo(() => loadedSavedStudy ? studyContent(loadedSavedStudy) : null, [loadedSavedStudy]);
+    review: currentGameSnapshot.review }), [gameMode, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
+  const savedStudyContent = useMemo(() => loadedSavedStudy ? {
+    moves: studyMoveContent(loadedSavedStudy), details: studyDetailsContent(loadedSavedStudy),
+  } : null, [loadedSavedStudy]);
   const commentStillPending = normalizeMoveComment(moveCommentDraft) !== normalizeMoveComment(
     currentNodeId === rootNodeId ? treeNodes[rootNodeId]?.comment : treeNodes[currentNodeId]?.record?.comment);
-  const studyModified = Boolean(loadedSavedStudy && (currentStudyContent !== savedStudyContent || commentStillPending));
+  const studyModified = Boolean(loadedSavedStudy && (currentStudyMoveContent !== savedStudyContent?.moves
+    || currentStudyDetailsContent !== savedStudyContent?.details || commentStillPending));
   const studySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Unsaved study' : studyModified ? 'Modified study' : 'Saved study';
   const mobileStudySaveLabel = libraryWritePending ? 'Saving…' : !loadedSavedStudy ? 'Save study' : studyModified ? 'Save changes' : 'Saved study';
 

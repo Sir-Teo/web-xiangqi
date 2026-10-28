@@ -58,6 +58,7 @@ const scripts = [
   'test-variation-focus-browser.cjs',
   'test-ai-pause-notes-browser.cjs',
   'test-metadata-browser.cjs',
+  'test-metadata-content-reuse-browser.cjs',
   'test-metadata-only-browser.cjs',
   'test-metadata-layout-browser.cjs',
   'test-snapshot-reuse-browser.cjs',

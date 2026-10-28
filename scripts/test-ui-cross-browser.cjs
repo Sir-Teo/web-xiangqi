@@ -102,6 +102,7 @@ const { browserType } = require('./qa-browser.cjs');
         'test-position-card-text-browser.cjs',
         'test-study-notes-browser.cjs',
         'test-study-notes-navigation-browser.cjs',
+        'test-metadata-content-reuse-browser.cjs',
         'test-ai-pause-notes-browser.cjs',
         'test-cloud-response-browser.cjs',
         'test-pgn-collection-browser.cjs',
