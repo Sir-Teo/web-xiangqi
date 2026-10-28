@@ -115,7 +115,7 @@ async function play(page, from, to) {
         // symbols that the author has deliberately removed since deletion.
         await page.locator('.mtree-chip[data-node-id="n6"]').click();
         let glyphs = page.getByTestId('imported-glyphs');
-        await glyphs.locator(':scope > summary').click();
+        if (await glyphs.getAttribute('open') === null) await glyphs.locator(':scope > summary').click();
         await glyphs.getByRole('combobox', { name: 'Add study annotation' }).selectOption('1');
         await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
         await command(page, 'Delete this move and what follows');
@@ -125,7 +125,7 @@ async function play(page, from, to) {
         await page.getByTestId('move-comment-input').fill('');
         await page.getByTestId('move-comment-input').blur();
         glyphs = page.getByTestId('imported-glyphs');
-        await glyphs.locator(':scope > summary').click();
+        if (await glyphs.getAttribute('open') === null) await glyphs.locator(':scope > summary').click();
         await glyphs.getByRole('combobox', { name: 'Add study annotation' }).selectOption('2');
         await glyphs.getByRole('button', { name: 'Apply symbol', exact: true }).click();
         await glyphs.getByRole('button', { name: /Remove .*\(\$2\)/ }).click();
