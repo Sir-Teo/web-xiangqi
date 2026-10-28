@@ -93,6 +93,7 @@ const scripts = [
   'test-search-queue-browser.cjs',
   'test-analysis-move-render-browser.cjs',
   'test-study-notes-browser.cjs',
+  'test-study-notes-navigation-browser.cjs',
   'test-active-continuation-browser.cjs',
   'test-study-main-line-browser.cjs',
   'test-loaded-result-browser.cjs',
