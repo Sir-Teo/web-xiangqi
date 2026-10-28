@@ -7,6 +7,7 @@ import { isInCheck, legalMovesFrom, pieceSide, squareToUci, uciToSquare, type Si
 import { attemptPracticeMove, nextPracticeLine, playPracticeReply, practiceComplete, practiceLineIndices, preparePracticeStudy, startPracticeLine, type PracticeSession } from '../utils/studyPractice';
 import { Board } from './Board/Board';
 import { IconCheck } from './icons';
+import { PracticeLinePicker } from './PracticeLinePicker';
 
 export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { game: SavedGame; pieceStyle: PieceStyle; notationStyle?: XiangqiNotationStyle }) {
   const prepared = useMemo(() => preparePracticeStudy(game), [game]);
@@ -161,6 +162,9 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
           </button>}
           <button type="button" onClick={() => reset(session.line, true)}>Restart line</button>
         </div>
+        {eligible.length > 1 && <PracticeLinePicker key={`${side}:${session.line}`}
+          current={eligible.indexOf(session.line) + 1} total={eligible.length}
+          onStart={ordinal => reset(eligible[ordinal - 1], true)} />}
         <p data-testid="study-practice-progress">{session.completed.filter(line => eligible.includes(line)).length} of {eligible.length} {eligible.length === 1 ? 'line' : 'lines'} practiced</p>
         {session.answered > 0 && <p data-testid="study-practice-recall">{session.recalled} of {session.answered} {session.answered === 1 ? 'move' : 'moves'} recalled without help</p>}
         {(!progressSaved || saveRetryResult === 'saved') && <div className="study-practice-save-notice" data-testid="practice-progress-save">
@@ -184,6 +188,7 @@ export function StudyPractice({ game, pieceStyle, notationStyle = 'wxf' }: { gam
         <details className="study-practice-note"><summary>How practice works</summary>
           <p>Recall moves from your saved study. Any stored continuation is accepted; other legal moves may also be good.</p>
           <p>Complete a line to read any notes saved with it.</p>
+          <p>Use Choose a line to start any line for this side while keeping your scores and completed lines.</p>
           <p>Progress is saved in this browser for your 50 most recent studies, separately for each side. Changing the saved moves, study notes or the starting position starts fresh practice.</p>
           <p>Use Undo reset to recover the position and scores from before a progress reset.</p>
         </details>

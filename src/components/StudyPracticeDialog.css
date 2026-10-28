@@ -10,7 +10,7 @@
 .study-practice-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "board controls" "board feedback"; gap: .75rem 1rem; align-items: start; }
 .study-practice-controls { grid-area: controls; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr)); align-items: end; gap: .5rem; }
 .study-practice-controls label { display: grid; gap: .3rem; font-size: .85rem; }
-.study-practice-dialog select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font-size: max(16px, 1rem); padding: .4rem; background: var(--bg-input); color: inherit; border: 1px solid var(--border-default); border-radius: 6px; }
+.study-practice-dialog select, .study-practice-line-picker input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; font-size: max(16px, 1rem); padding: .4rem; background: var(--bg-input); color: inherit; border: 1px solid var(--border-default); border-radius: 6px; }
 .study-practice-dialog button:not(.hitbox) { min-width: 44px; min-height: 44px; max-width: 100%; font: inherit; font-size: .85rem; padding: .5rem .75rem; color: inherit; background: var(--bg-input); border: 1px solid var(--border-default); border-radius: 8px; cursor: pointer; }
 .study-practice-dialog header > button:not(.hitbox) { flex-shrink: 0; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; }
 .study-practice-dialog button[aria-pressed="true"] { border-color: var(--accent); }
@@ -28,6 +28,10 @@
 .app-shell .study-practice-dialog .study-practice-actions button:focus { outline: 2px solid var(--info); outline-offset: 2px; scroll-margin-block: 5px; }
 .study-practice-note { color: var(--text-secondary); }
 .study-practice-note summary { min-height: 44px; align-content: center; cursor: pointer; font-size: .85rem; }
+.study-practice-line-picker { margin: .5rem 0; }
+.study-practice-line-picker form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); gap: .5rem; align-items: end; color: var(--text-primary); }
+.study-practice-line-picker label { display: grid; min-width: 0; gap: .3rem; font-size: .85rem; }
+.study-practice-line-picker p { grid-column: 1 / -1; margin: 0; color: var(--text-secondary); }
 .study-practice-line-notes { margin: .75rem 0; padding: .65rem; border: 1px solid var(--border-subtle); border-radius: 8px; }
 .study-practice-line-notes ul { list-style: none; padding: 0; margin: .5rem 0 0; }
 .study-practice-line-notes li + li { border-top: 1px solid var(--border-subtle); padding-top: .5rem; }

@@ -136,9 +136,9 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
           assert.equal(await dialog.evaluate(node => node.scrollWidth > node.clientWidth + 1), false);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
           assert.equal(await notes.evaluate(node => node.scrollWidth > node.clientWidth + 1), false, 'Long notes overflow the panel');
-          const buttons = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
+          const buttons = await dialog.locator('button:not(.hitbox)').filter({ visible: true }).evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
           assert.ok(buttons.every(height => height >= 43.99));
-          const clipped = await dialog.locator('button:not(.hitbox)').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => ({ text: node.textContent, width: node.clientWidth, scrollWidth: node.scrollWidth, height: node.clientHeight, scrollHeight: node.scrollHeight })));
+          const clipped = await dialog.locator('button:not(.hitbox)').filter({ visible: true }).evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => ({ text: node.textContent, width: node.clientWidth, scrollWidth: node.scrollWidth, height: node.clientHeight, scrollHeight: node.scrollHeight })));
           assert.deepEqual(clipped, [], 'Practice controls must contain their enlarged labels');
           const selection = await dialog.getByRole('combobox', { name: 'Practice as' }).evaluate(select => {
             const style = getComputedStyle(select);
@@ -151,7 +151,7 @@ const isPracticeChunk = url => /\/StudyPractice(?:-[^/]+\.js|\.tsx)$/.test(new U
             return { text, needed, available: select.clientWidth };
           });
           assert.ok(selection.available >= selection.needed, 'Selected practice side is truncated: ' + JSON.stringify(selection));
-          for (const control of await dialog.locator('button:not(.hitbox), select').all()) {
+          for (const control of await dialog.locator('button:not(.hitbox), select').filter({ visible: true }).all()) {
             await control.scrollIntoViewIfNeeded();
             assert.equal(await control.evaluate(node => {
               const rect = node.getBoundingClientRect();
