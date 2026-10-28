@@ -4750,7 +4750,11 @@ summary:active {
   z-index: 35;
   width: min(286px, calc(100% - var(--mobile-stage-pad-left, 14px)));
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  /* Stay within the grid area below the header as enlarged labels grow. */
+  max-height: max(62px, calc(100% - 12px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: 6px;
   padding: 8px;
   border: 1px solid var(--border-subtle);
@@ -4762,15 +4766,14 @@ summary:active {
   -webkit-backdrop-filter: blur(20px);
 }
 
-/* The menu holds 3 to 5 items depending on state, so an odd count always left
-   a hole in the two-column grid. Let the trailing item span the row. */
+/* When two columns leave an odd action, let the last item fill the row. */
 .mobile-board-action-menu > :nth-child(odd):last-child {
   grid-column: 1 / -1;
 }
 
 .mobile-action-menu-btn {
   min-width: 0;
-  min-height: 36px;
+  min-height: 44px;
   border-radius: 9px;
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
@@ -4779,7 +4782,7 @@ summary:active {
   align-items: center;
   justify-content: flex-start;
   gap: 7px;
-  padding: 0 9px;
+  padding: 6px 9px;
   font-size: 0.72rem;
   font-weight: 650;
   cursor: pointer;
@@ -4793,9 +4796,8 @@ summary:active {
 
 .mobile-action-menu-btn span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .mobile-action-menu-btn-active {
@@ -8346,11 +8348,6 @@ summary:active {
     font-size: 0.7rem;
   }
 
-  .mobile-board-action-menu {
-    max-height: calc(100dvh - 112px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
 }
 
 

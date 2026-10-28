@@ -69,6 +69,7 @@ const scripts = [
   'test-position-card-text-browser.cjs',
   'test-variation-focus-browser.cjs',
   'test-ai-pause-notes-browser.cjs',
+  'test-write-note-entry-browser.cjs',
   'test-metadata-browser.cjs',
   'test-metadata-content-reuse-browser.cjs',
   'test-metadata-only-browser.cjs',

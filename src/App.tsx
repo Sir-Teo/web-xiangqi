@@ -43,7 +43,7 @@ import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
   IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark
+  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark, IconNote
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
@@ -3548,6 +3548,16 @@ function App() {
   }, [gameIdentity, setNodeComment]);
 
   const handleMoveCommentChange = useCallback((value: string) => {
+    // Keep an opponent reply from changing the selected note mid-sentence.
+    if (isAiTurn && !paused) {
+      const editor = document.getElementById('move-comment-input');
+      pause();
+      // Pause can change the bottom bar's height. Reveal the field after that
+      // layout settles, provided the reader is still editing this note.
+      requestAnimationFrame(() => {
+        if (editor && editor === document.activeElement) editor.scrollIntoView({ block: 'center', inline: 'nearest' });
+      });
+    }
     setMoveCommentDraft(value);
     if (moveCommentEditRef.current) moveCommentEditRef.current.draft = value;
     if (moveCommentTimerRef.current !== null) window.clearTimeout(moveCommentTimerRef.current);
@@ -3556,7 +3566,7 @@ function App() {
       const pending = moveCommentEditRef.current;
       if (pending?.gameIdentity === gameIdentity) setNodeComment(pending.nodeId, pending.draft);
     }, 600);
-  }, [gameIdentity, setNodeComment]);
+  }, [gameIdentity, isAiTurn, pause, paused, setNodeComment]);
 
   // Stepping to another move writes the note being edited before loading the
   // next one, so a note is never lost by navigating away from it. The tree is
@@ -4698,6 +4708,23 @@ function App() {
 
   const studyEditorFocusRequestRef = useRef(0);
   useLayoutEffect(() => { studyEditorFocusRequestRef.current++; }, [gameIdentity]);
+  const openMoveCommentEditor = useCallback(() => {
+    if (!moveCommentTarget) return;
+    const request = ++studyEditorFocusRequestRef.current;
+    const source = dialogLauncherRef.current ?? document.activeElement;
+    // Revoke permission before opening the panel; stop can return a bestmove.
+    if (isAiTurn && !paused) pause();
+    openAnalysisPanel('tree');
+    window.setTimeout(() => {
+      if (request !== studyEditorFocusRequestRef.current
+        || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const input = document.getElementById('move-comment-input');
+      const active = document.activeElement;
+      if (active !== document.body && active !== source && active !== input) return;
+      input?.focus();
+      if (input && input === document.activeElement) input.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, 0);
+  }, [isAiTurn, moveCommentTarget, openAnalysisPanel, pause, paused]);
   const paletteCommands = useMemo<Command[]>(() => [
     { id: 'start-engine-analysis', label: 'Start engine analysis', keywords: ['download', 'pikafish', 'activate'],
       hint: 'Downloads about 53 MB on first use', disabled: engineEnabled, run: startEngineAnalysis },
@@ -4786,21 +4813,7 @@ function App() {
         : 'Step to a move first',
       keywords: ['comment', 'annotate', 'study', 'remark', '注释'],
       disabled: !moveCommentTarget,
-      run: () => {
-        const request = ++studyEditorFocusRequestRef.current;
-        const source = dialogLauncherRef.current;
-        openAnalysisPanel('tree');
-        // After the panel is up, or the field is not in the document yet.
-        window.setTimeout(() => {
-          // A second command/dialog can open before this callback runs.
-          if (request !== studyEditorFocusRequestRef.current
-            || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-          const input = document.getElementById('move-comment-input');
-          const active = document.activeElement;
-          if (active !== document.body && active !== source && active !== input) return;
-          input?.focus();
-        }, 0);
-      },
+      run: openMoveCommentEditor,
     },
     {
       id: 'find-study-notes',
@@ -5073,7 +5086,7 @@ function App() {
       deepDiveBudget.moveTimeMs, engineEnabled, engineRequired, goToFirstMove, goToLatestMove, handleClearEngineHash,
       handleCopyFen, handleCopyPgn, handleCopyShareLink, handleDownloadPgn, handleRestartEngine,
       handleSaveGame, handleUpdateSavedStudy, loadedSavedStudy, savingWouldDropTheReview, isReady, openGraphPanel, openLibraryPanel, openNewGameMenu, resetGame, runDeepDive, startGameReview,
-      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length])
+      stopDeepDive, studyNotes.length, clearBoardMarkers, userArrows.length, userHighlights.length, openMoveCommentEditor])
   const handleLoadGame = useCallback((game: SavedGame, initialPly?: number, openPrimaryLine = false, selectedMoves?: string[], selectedPath?: number[]) => {
     initialPly ??= selectedMoves?.length === 0 ? 0 : selectedMoves || openPrimaryLine ? undefined : game.cursorPly;
     if (selectedMoves && !moveTreeContainsLine(game.moveTree, selectedMoves)) return false;
@@ -7106,6 +7119,12 @@ function App() {
                 role="menu"
                 aria-label="More board actions"
               >
+                <button className="mobile-action-menu-btn" type="button" role="menuitem"
+                  onClick={openMoveCommentEditor} disabled={!moveCommentTarget}
+                  title={isAiTurn && !paused ? 'Pause AI and write a note at this position' : `Write a note on ${moveCommentTarget ?? 'the selected position'}`}
+                  data-testid="mobile-write-note-btn">
+                  <IconNote /><span>Write note</span>
+                </button>
                 {/* The desktop bar this mirrors is hidden at these widths, so
                     without an entry here the only way to it on a phone is the
                     command palette. */}
