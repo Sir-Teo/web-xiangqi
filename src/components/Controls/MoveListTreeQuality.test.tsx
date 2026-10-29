@@ -34,18 +34,20 @@ function nodes(evals: Array<number | undefined>) {
     return tree;
 }
 
-const render = (evals: Array<number | undefined>) =>
-    renderToStaticMarkup(
+const render = (evals: Array<number | undefined>) => {
+    const tree = nodes(evals);
+    return renderToStaticMarkup(
         <MoveListTree
-            treeNodes={nodes(evals) as never}
+            treeNodes={tree as never}
+            moveStructure={tree as never}
             rootNodeId={ROOT}
             rootFen={START_FEN}
             currentNodeId={`n${evals.length}`}
-            currentMoveIndex={evals.length - 1}
             activeLineNodeIds={evals.map((_, index) => `n${index + 1}`)}
             onNavigateNode={() => {}}
         />
     );
+};
 
 /** The class the tree gives a node it has no opinion about. */
 const PENDING = 'quality-pending';

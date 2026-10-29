@@ -27,10 +27,6 @@ export function isRedPiece(ch: string): boolean {
     return !!ch && ch === ch.toUpperCase();
 }
 
-export function isBlackPiece(ch: string): boolean {
-    return !!ch && ch === ch.toLowerCase();
-}
-
 export function parseFenBoard(fen: string): BoardState {
     const [placement] = fen.trim().split(/\s+/);
     const rows = placement.split("/");

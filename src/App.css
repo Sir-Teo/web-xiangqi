@@ -359,43 +359,6 @@ body.resizing * {
   flex-shrink: 0;
 }
 
-/* Settings dropdown */
-
-.top .settings-body {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: auto;
-  right: 0;
-  /* Align to right edge for easier access from the settings button */
-  z-index: 1000;
-  width: 320px;
-  /* Slightly narrower for mobile friendliness */
-  max-height: 72vh;
-  overflow-y: auto;
-  padding: var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 1px var(--border-subtle);
-  animation: dropdown-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 /* ═══════════════════════════════════════════════════
    Board stage
    ═══════════════════════════════════════════════════ */
@@ -756,15 +719,8 @@ body.resizing * {
 }
 
 /* ═══════════════════════════════════════════════════
-   Settings & controls (dropdown content)
+   Settings & controls
    ═══════════════════════════════════════════════════ */
-.settings-body {
-  padding: 0 0.65rem 0.65rem;
-}
-
-.settings-header {
-  display: none;
-}
 
 /* Range sliders */
 .control {
@@ -1465,90 +1421,6 @@ body.resizing * {
 
   .top .panel-content {
     padding: 0.35rem 0.5rem;
-  }
-
-  /* Mobile settings backdrop */
-    /* Make sure the text on the summary tag stays above if we don't hide it, 
-     but the modal body needs to be above the backdrop. */
-  .top .settings-body {
-    position: fixed;
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    transform: translateY(100%) !important;
-    width: 100%;
-    max-width: 100%;
-    /* Prevent blowout here */
-    max-height: 85vh;
-    z-index: 1000;
-    box-shadow:
-      0 -12px 48px rgba(0, 0, 0, 0.6),
-      0 -1px 0 0 var(--border-subtle);
-    padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    overflow-y: auto;
-    border: none;
-    border-top: 1px solid var(--border-strong);
-  }
-
-  /* Drawer pill handle */
-  .top .settings-body::before {
-    content: "";
-    position: fixed;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 40px;
-    height: 4px;
-    background: var(--border-strong);
-    border-radius: 4px;
-    z-index: 1001;
-    pointer-events: none;
-  }
-
-  .settings-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .settings-header h2 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: var(--text-heading);
-    font-weight: 600;
-  }
-
-  /* The pill padding here was written for a text "Close" label, but the button
-     renders an icon inside a fixed 2rem box — 0.85rem of side padding left the
-     X 2.8px wide and effectively invisible on every mobile dialog. */
-  .settings-close-btn {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-default);
-    color: var(--text-primary);
-    padding: 0;
-    cursor: pointer;
-    transition-property: background-color, border-color, color, box-shadow, transform, opacity;
-    transition-duration: 140ms;
-    transition-timing-function: ease;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .settings-close-btn:hover {
-      background: var(--bg-card-hover);
-      border-color: var(--border-strong);
-    }
-  }
-
-  @keyframes slide-up {
-    to {
-      transform: translateY(0) !important;
-    }
   }
 
   .desktop-only {
@@ -2647,6 +2519,17 @@ summary:active {
 .tree-breadcrumb-sep {
   margin-left: 0.35rem;
   opacity: 0.55;
+}
+
+.tree-breadcrumb-gap {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  min-height: 24px;
+  cursor: pointer;
+  font: inherit;
 }
 
 /* Xiangqi graph extras */
@@ -5211,7 +5094,7 @@ summary:active {
 }
 
 /* ═══════════════════════════════════════════════════
-   Settings Modal (replaces <details> approach)
+   Settings modal
    ═══════════════════════════════════════════════════ */
 .settings-backdrop {
   position: fixed;
@@ -8387,7 +8270,7 @@ summary:active {
 [data-ui-density="comfortable"] :is(.panel.left, .panel.right, .settings-body) :is(button, select, input:not([type="range"]):not([type="checkbox"])) {
   min-height: 44px;
 }
-[data-ui-density="comfortable"] :is(.settings-hint, .settings-help, .lib-date, .lib-meta, .lib-label, .pv-line-moves, .move-tree-row) {
+[data-ui-density="comfortable"] :is(.settings-hint, .settings-help, .lib-date, .pv-line-moves) {
   font-size: max(0.875rem, 14px);
   line-height: 1.6;
 }

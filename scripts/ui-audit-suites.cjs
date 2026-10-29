@@ -1,8 +1,6 @@
 "use strict";
 
-// Shared manifest: every entry runs exactly once across the CI shards.
-// Ordering spreads slow checks across the eight runners using timings from
-// Actions run 34731372594; keep sharding coverage intact when rebalancing.
+// Shared local audit manifest; optional shards partition this list exactly once.
 const scripts = [
   'test-action-repeat-browser.cjs',
   'test-analysis-context-browser.cjs',
@@ -19,6 +17,13 @@ const scripts = [
   'test-editor-keyboard-browser.cjs',
   'test-editor-pending-fen-browser.cjs',
   'test-engine-on-demand-browser.cjs',
+  'test-navigation-analysis-cache-browser.cjs',
+  'test-engine-assets-browser.cjs',
+  'test-warm-engine-browser.cjs',
+  'test-virtual-moves-browser.cjs',
+  'test-background-storage-browser.cjs',
+  'test-deep-storage-worker-browser.cjs',
+  'test-study-snapshot-cache-browser.cjs',
   'test-first-frame-shortcut-browser.cjs',
   'test-isolation-analysis-resume-browser.cjs',
   'test-play-startup-progress-browser.cjs',
@@ -39,6 +44,7 @@ const scripts = [
   'test-practice-available-sides-browser.cjs',
   'test-recovery-cursor-browser.cjs',
   'test-recovery-drafts-browser.cjs',
+  'test-recovery-startup-browser.cjs',
   'test-recovery-library-source-browser.cjs',
   'test-replacement-checkpoint-browser.cjs',
   'test-save-state-browser.cjs',

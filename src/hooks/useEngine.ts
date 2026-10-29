@@ -1,4 +1,7 @@
+import { createWarmEngineSlot, warmEngineDuration } from '../utils/warmEngine';
 import { samePvReading } from '../utils/samePvReading';
+import { createSelectorStore, type StoreUpdate } from '../utils/selectorStore';
+import { createNavigationAnalysisCache, navigationAnalysisKey } from '../utils/navigationAnalysisCache';
 import { createEngineTelemetryStore, type EngineTelemetryStore } from '../utils/engineTelemetryStore';
 import type { EvaluationScoreKind } from '../utils/engineEvalReading';
 import { parseScoreBound, type ScoreBound } from '../utils/engineScore';
@@ -208,7 +211,8 @@ export function useEngine(options: EngineInitOptions = {}) {
     const [variant, setVariant] = useState<string>('unknown');
     const telemetryRef = useRef<EngineTelemetryStore | null>(null);
     if (!telemetryRef.current) telemetryRef.current = createEngineTelemetryStore();
-    const [pvLines, setPvLines] = useState<PvLine[]>([]);
+    const [recommendations] = useState(() => createSelectorStore<PvLine[]>([]));
+    const setPvLines = useCallback((update: StoreUpdate<PvLine[]>) => recommendations.set(update), [recommendations]);
     const wdlRef = useRef<WdlStats | null>(null);
     const [isSearchQueued, setIsSearchQueued] = useState(false);
     /**
@@ -217,6 +221,22 @@ export function useEngine(options: EngineInitOptions = {}) {
      */
     const [assetProgress, setAssetProgress] = useState<EngineAssetProgress | null>(null);
     const enabled = options.enabled ?? true;
+    const enabledRef = useRef(enabled);
+    enabledRef.current = enabled;
+    const [warmEngine] = useState(createWarmEngineSlot);
+    const instanceKeys = useRef(new WeakMap<object, string>());
+    const instanceListeners = useRef(new WeakMap<object, (line: string) => void>());
+    const healthyInstances = useRef(new WeakSet<object>());
+    useEffect(() => {
+        const onHidden = () => { if (document.visibilityState === 'hidden') warmEngine.dispose(); };
+        document.addEventListener('visibilitychange', onHidden);
+        window.addEventListener('pagehide', warmEngine.dispose);
+        return () => {
+            document.removeEventListener('visibilitychange', onHidden);
+            window.removeEventListener('pagehide', warmEngine.dispose);
+            warmEngine.dispose();
+        };
+    }, [warmEngine]);
 
     const engineRef = useRef<any>(null);
     const onBestMoveRef = useRef(options.onBestMove);
@@ -274,6 +294,8 @@ export function useEngine(options: EngineInitOptions = {}) {
     const pendingOptionCommandsRef = useRef<Map<string, string>>(new Map());
     const activeSearchSignatureRef = useRef('');
     const activeSearchTagRef = useRef<string | null>(null);
+    const navigationCacheRef = useRef(createNavigationAnalysisCache());
+    const activeNavigationCacheKeyRef = useRef<string | null>(null);
     const handleUciOutRef = useRef<(rawMsg: string) => void>(() => {});
 
     useEffect(() => {
@@ -311,6 +333,10 @@ export function useEngine(options: EngineInitOptions = {}) {
 
     const terminateEngineInstance = useCallback((engineInstance: any) => {
         if (!engineInstance || typeof engineInstance.terminate !== 'function') return;
+        const listener = instanceListeners.current.get(engineInstance);
+        if (listener) engineInstance.removeMessageListener?.(listener);
+        instanceListeners.current.delete(engineInstance);
+        healthyInstances.current.delete(engineInstance);
         try {
             const termination = engineInstance.terminate();
             if (termination && typeof termination.catch === 'function') {
@@ -378,7 +404,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             pvLinesRef.current = sorted;
             setPvLines(previous => samePvReading(previous, sorted) ? previous : sorted);
         }
-    }, [commitOutputLines]);
+    }, [commitOutputLines, setPvLines]);
 
     const scheduleInfoFlush = useCallback(() => {
         if (infoFlushTimerRef.current !== null) return;
@@ -414,7 +440,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvDirtyRef.current = false;
         setPvLines([]);
         clearSearchStats();
-    }, [clearSearchStats]);
+    }, [clearSearchStats, setPvLines]);
 
     const trimPvLines = useCallback((maxLines = 1) => {
         const limit = Math.max(0, Math.trunc(maxLines));
@@ -425,7 +451,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         pvDirtyRef.current = false;
         setPvLines(trimmed);
         clearSearchStats();
-    }, [clearSearchStats]);
+    }, [clearSearchStats, setPvLines]);
 
     const clearWdl = useCallback(() => {
         pendingWdlRef.current = null;
@@ -442,6 +468,10 @@ export function useEngine(options: EngineInitOptions = {}) {
     }, [appendOutputLine]);
 
     const setOption = useCallback((name: string, value?: string | number | boolean) => {
+        // A queued option can change the meaning of the currently running
+        // search too. Never cache a result spanning two configurations.
+        navigationCacheRef.current.clear();
+        activeNavigationCacheKeyRef.current = null;
         let suffix = '';
         if (typeof value !== 'undefined') {
             const normalizedValue = typeof value === 'boolean' ? (value ? 'true' : 'false') : value;
@@ -520,6 +550,30 @@ export function useEngine(options: EngineInitOptions = {}) {
         pendingSearchRef.current = null;
         setIsSearchQueued(false);
         flushPendingOptions();
+        const cacheKey = navigationAnalysisKey(nextRequest.positionCmd, nextRequest.goCmd, nextRequest.tag);
+        const cached = navigationCacheRef.current.get(cacheKey);
+        if (cached) {
+            // Restore recommendations, not old speed/time counters. Use the
+            // same completion path as UCI so the caller settles its stage.
+            activeNavigationCacheKeyRef.current = null;
+            activeSearchSignatureRef.current = nextRequest.signature;
+            activeSearchTagRef.current = null;
+            pendingInfoLineRef.current = null;
+            pendingSearchStatsRef.current = null;
+            pendingWdlRef.current = null;
+            pendingEvalRef.current = cached.reading;
+            latestEvalRef.current = cached.reading.score!;
+            pvLinesRef.current = cached.lines;
+            pvSlotRef.current = Object.fromEntries(cached.lines.map(line => [line.multipv ?? 1, line]));
+            pvDirtyRef.current = false;
+            wdlRef.current = cached.wdl;
+            setPvLines(cached.lines);
+            clearSearchStats();
+            onBestMoveRef.current?.(cached.bestMove, cached.reading.score!, nextRequest.tag ?? null,
+                cached.lines.slice(), true, true, cached.reading.kind);
+            return;
+        }
+        activeNavigationCacheKeyRef.current = cacheKey;
         activeSearchSignatureRef.current = nextRequest.signature;
         activeSearchTagRef.current = nextRequest.tag ?? null;
         stopRequestedRef.current = false;
@@ -535,7 +589,7 @@ export function useEngine(options: EngineInitOptions = {}) {
         clearSearchStats();
         startSearch(nextRequest.positionCmd);
         startSearch(nextRequest.goCmd);
-    }, [clearSearchStats, flushPendingOptions, startSearch, stopSearch]);
+    }, [clearSearchStats, flushPendingOptions, setPvLines, startSearch, stopSearch]);
 
     const queueSearch = useCallback((positionCmd: string, goCmd: string, debounceMs = 0, tag?: string) => {
         const signature = `${positionCmd}\n${goCmd}\n${tag ?? ''}`;
@@ -557,7 +611,9 @@ export function useEngine(options: EngineInitOptions = {}) {
             queuedSearchTimerRef.current = null;
         }
 
-        if (debounceMs <= 0) {
+        // Cached positions need neither engine time nor a navigation debounce.
+        // dispatchQueuedSearch still waits for any running search's bestmove.
+        if (debounceMs <= 0 || navigationCacheRef.current.get(navigationAnalysisKey(positionCmd, goCmd, tag))) {
             dispatchQueuedSearch();
             return;
         }
@@ -569,6 +625,8 @@ export function useEngine(options: EngineInitOptions = {}) {
     }, [dispatchQueuedSearch]);
 
     const initializeEngine = useCallback((initToken: number) => {
+        navigationCacheRef.current.clear();
+        activeNavigationCacheKeyRef.current = null;
         if (typeof (window as any).Pikafish !== 'function' || typeof (window as any).Pikafish.createWorkerEngine !== 'function') {
             setIsReady(false);
             setIsSearching(false);
@@ -600,6 +658,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             : null;
         const threads = options.threads ?? fallbackBootConfig!.threads;
         const hashMB = options.hashMB ?? fallbackBootConfig!.hashMB;
+        const runtimeKey = JSON.stringify([options.variant || 'auto', options.allowSIMD ?? detectSIMDSupport(), threads, hashMB, options.restartToken]);
         didConfigureSessionRef.current = false;
         publishedAssetProgressRef.current = null;
         setAssetProgress(null);
@@ -651,11 +710,13 @@ export function useEngine(options: EngineInitOptions = {}) {
             const controller = new AbortController();
             engineBootAbortRef.current = controller;
             const engineBasePath = getEngineAssetUrl();
-            createEnginePromise = Promise.resolve(pikafishFactory.createWorkerEngine({
+            const retained = warmEngine.take(runtimeKey);
+            createEnginePromise = retained ? Promise.resolve(retained) : Promise.resolve(pikafishFactory.createWorkerEngine({
                 signal: controller.signal,
                 basePath: engineBasePath,
                 workerScript: getEngineAssetUrl('pikafish.js'),
                 nnuePath: getEngineAssetUrl('pikafish.nnue'),
+                assetManifest: true,
                 variant: options.variant || 'auto',
                 allowSIMD: options.allowSIMD ?? detectSIMDSupport(),
                 threads,
@@ -689,13 +750,16 @@ export function useEngine(options: EngineInitOptions = {}) {
                 clearEngineBootTimer();
 
                 engineRef.current = engineInstance;
+                instanceKeys.current.set(engineInstance, runtimeKey);
                 setVariant(String(engineInstance?.variant || options.variant || 'auto'));
 
                 // Listen to stdout from the worker
-                engineInstance.addMessageListener((msg: string) => {
+                const listener = (msg: string) => {
                     if (initToken !== initTokenRef.current) return;
                     handleUciOutRef.current(msg);
-                });
+                };
+                instanceListeners.current.set(engineInstance, listener);
+                engineInstance.addMessageListener(listener);
 
                 // Send initialization commands
                 engineReadyTimerRef.current = window.setTimeout(() => {
@@ -728,10 +792,12 @@ export function useEngine(options: EngineInitOptions = {}) {
                 onWorkerErrorRef.current?.(`[boot-error] ${err?.message || String(err)}`);
                 logEngineDiagnosticError("Failed to boot Pikafish engine", err);
             });
-    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, terminateEngineInstance]);
+    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, options.variant, options.threads, options.hashMB, options.allowSIMD, options.restartToken, terminateEngineInstance, warmEngine]);
 
     useEffect(() => {
         const resetInactiveEngineState = () => {
+            navigationCacheRef.current.clear();
+            activeNavigationCacheKeyRef.current = null;
             clearQueuedSearch();
             clearBufferedInfoState();
             latestEvalRef.current = 0;
@@ -847,6 +913,9 @@ export function useEngine(options: EngineInitOptions = {}) {
             }
         }
 
+        const listeners = instanceListeners.current;
+        const healthy = healthyInstances.current;
+        const keys = instanceKeys.current;
         return () => {
             initTokenRef.current += 1;
             clearScriptLoadWatch();
@@ -854,14 +923,28 @@ export function useEngine(options: EngineInitOptions = {}) {
             clearEngineReadyTimer();
             clearQueuedSearch();
             clearBufferedInfoState();
+            const instance = engineRef.current;
+            const searching = isSearchingRef.current;
+            const memoryGB = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory) || 0;
+            const mobileLike = window.matchMedia('(pointer: coarse)').matches;
+            const duration = warmEngineDuration(memoryGB, mobileLike, options.hashMB ?? defaultEngineBootConfig().hashMB);
+            const listener = instance && listeners.get(instance);
+            if (listener) instance.removeMessageListener?.(listener);
+            if (instance) listeners.delete(instance);
+            if (!enabledRef.current && document.visibilityState === 'visible' && instance && healthy.has(instance)
+                && typeof instance.removeMessageListener === 'function' && duration > 0) {
+                warmEngine.park(instance, keys.get(instance)!, searching, duration);
+            } else {
+                warmEngine.dispose();
+                terminateEngineInstance(instance);
+            }
             isSearchingRef.current = false;
             stopRequestedRef.current = false;
             activeSearchSignatureRef.current = '';
-            terminateEngineInstance(engineRef.current);
             engineRef.current = null;
             activeSearchTagRef.current = null;
         };
-    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken]);
+    }, [clearBufferedInfoState, clearEngineBootTimer, clearEngineReadyTimer, clearQueuedSearch, enabled, initializeEngine, terminateEngineInstance, options.restartToken, options.hashMB, setPvLines, warmEngine]);
 
     const handleUciOut = (rawMsg: string) => {
         const msg = rawMsg.trim();
@@ -879,6 +962,7 @@ export function useEngine(options: EngineInitOptions = {}) {
             }
             sendCommand('isready');
         } else if (msg === 'readyok') {
+            if (engineRef.current) healthyInstances.current.add(engineRef.current);
             setReadySessionId(initTokenRef.current);
             clearEngineReadyTimer();
             appendOutputLine(msg);
@@ -909,10 +993,18 @@ export function useEngine(options: EngineInitOptions = {}) {
             appendOutputLine(msg);
             setIsSearching(false);
             isSearchingRef.current = false;
+            const searchWasStopped = stopRequestedRef.current;
             stopRequestedRef.current = false;
             const completedSearchTag = activeSearchTagRef.current;
             activeSearchTagRef.current = null;
             const uciMove = parseBestMoveUci(msg);
+            const cacheKey = activeNavigationCacheKeyRef.current;
+            activeNavigationCacheKeyRef.current = null;
+            if (cacheKey && !searchWasStopped && uciMove && pendingEvalRef.current.exact
+                && pendingEvalRef.current.score !== null && pvLinesRef.current.some(line => !line.bounded && line.moves[0] === uciMove)) {
+                navigationCacheRef.current.set(cacheKey, { bestMove: uciMove, reading: pendingEvalRef.current,
+                    lines: pvLinesRef.current.slice(), wdl: wdlRef.current });
+            }
             onBestMoveRef.current?.(uciMove, latestEvalRef.current, completedSearchTag, pvLinesRef.current.slice(), pendingEvalRef.current.score !== null, pendingEvalRef.current.exact, pendingEvalRef.current.kind);
             if (pendingSearchRef.current) {
                 dispatchQueuedSearch();
@@ -1077,7 +1169,6 @@ export function useEngine(options: EngineInitOptions = {}) {
         isSearching,
         isSearchQueued,
         variant,
-        startSearch,
         stopSearch,
         getActiveSearchTag,
         queueSearch,
@@ -1086,11 +1177,9 @@ export function useEngine(options: EngineInitOptions = {}) {
         trimPvLines,
         clearWdl,
         setOption,
-        sendCommand,
         telemetry: telemetryRef.current,
-        pvLines,
+        recommendations,
         getLatestPvLines,
-        wdl: wdlRef.current,
         assetProgress,
     };
 }

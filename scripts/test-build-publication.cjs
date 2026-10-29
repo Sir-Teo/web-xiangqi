@@ -16,6 +16,7 @@ function fixture() {
     fs.mkdirSync(path.join(root, dir), { recursive: true });
   }
   fs.copyFileSync(path.join(__dirname, 'build-pikafish.sh'), path.join(root, 'scripts/build-pikafish.sh'));
+  fs.copyFileSync(path.join(__dirname, 'write-engine-manifest.cjs'), path.join(root, 'scripts/write-engine-manifest.cjs'));
   for (const [name, content] of Object.entries({
     'templates/pikafish.js': wrapper, 'templates/emscripten/wasm-makefile.mk': '',
     'templates/emscripten/pre.js': '', '.deps/pikafish/src/main.cpp': 'extern "C" void command',
@@ -95,6 +96,13 @@ for (const buildSimd of ['yes', 'no']) test(`${buildSimd === 'yes' ? 'four-flavo
       const calls = fs.readFileSync(path.join(f.root, 'make-calls.log'), 'utf8').trim().split('\n').map(JSON.parse);
       assert.deepEqual(calls, modes.flatMap(([single, simd]) => [{ single, simd, clean: true }, { single, simd, clean: false }]), 'Clean and build must agree on each requested mode');
       const files = f.readPublished();
+      assert.equal(files['public/engine-assets.json'], files['dist/engine-assets.json']);
+      const manifest = JSON.parse(files['public/engine-assets.json']);
+      assert.equal(manifest.version, 1);
+      for (const [name, asset] of Object.entries(manifest.assets)) {
+        assert.equal(asset.size, Buffer.byteLength(files['public/' + name]));
+        assert.equal(asset.sha256, require('node:crypto').createHash('sha256').update(files['public/' + name]).digest('hex'));
+      }
       for (const [single, simd] of modes) {
         const base = 'pikafish-core' + (single === 'yes' ? '-single' : '') + (simd === 'yes' ? '-simd' : '');
         for (const dir of ['public', 'dist']) for (const ext of ['js', 'wasm']) assert.equal(files[`${dir}/${base}.${ext}`], 'new ' + base);
@@ -326,10 +334,16 @@ test('the engine contract accepts a scalar build and rejects stale artifacts or 
     for (const dir of ['public', 'dist']) for (const core of ['pikafish-core.js', 'pikafish-core-single.js']) {
       fs.copyFileSync(path.join(__dirname, '../public', core), path.join(f.root, dir, core));
     }
+    for (const dir of ['public', 'dist']) require('./write-engine-manifest.cjs').writeEngineManifest(path.join(f.root, dir));
     const check = () => spawnSync(process.execPath, ['scripts/test-engine-contract.cjs'], { cwd: f.root, encoding: 'utf8', timeout: 15000 });
     const valid = check();
     assert.equal(valid.status, 0, valid.stderr);
     assert.match(valid.stdout, /2 cores/);
+    const manifestPath = path.join(f.root, 'public/engine-assets.json');
+    const manifest = fs.readFileSync(manifestPath, 'utf8');
+    fs.writeFileSync(manifestPath, manifest.replace(/"size":\d+/, '"size":0'));
+    assert.match(check().stderr, /does not describe the shipped binaries/);
+    fs.writeFileSync(manifestPath, manifest);
     const stale = path.join(f.root, 'public/pikafish-core-simd.wasm');
     fs.writeFileSync(stale, 'old SIMD');
     assert.match(check().stderr, /is stale: the wrapper declares a scalar-only build/);

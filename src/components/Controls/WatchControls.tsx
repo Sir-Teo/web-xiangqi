@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import type { GameMode } from '../../App';
+import type { GameMode } from '../../utils/gameModes';
 import { isComposingKey } from '../../utils/keyboard';
 import {
     IconSkipBack, IconChevronLeft, IconChevronRight, IconSkipForward,

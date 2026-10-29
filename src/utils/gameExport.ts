@@ -5,7 +5,7 @@ import { normalizeMoveEvaluation } from './moveEvaluation';
 import { normalizeMoveGlyphs } from './moveGlyphs';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
 import type { GameResult } from '../hooks/useXiangqi';
-import type { GameMode } from '../App';
+import type { GameMode } from './gameModes';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { findSavedTreePath, isSavedTreePath } from './savedTreePath';
 import { START_FEN, parseFenBoard, validateMoveStr, hasAnyLegalMove, type Side } from './xiangqi';

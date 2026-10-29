@@ -19,7 +19,12 @@ async function noteIs(page, text) {
 }
 async function openFinder(page) {
   await command(page, 'Find study notes');
-  await page.waitForFunction(() => document.activeElement?.id === 'study-notes-search');
+  // Closing the palette restores focus before the command's deferred select.
+  // Wait for both so typing starts only once the command has completed.
+  await page.waitForFunction(() => {
+    const input = document.getElementById('study-notes-search');
+    return document.activeElement === input && input.selectionStart === 0 && input.selectionEnd === input.value.length;
+  });
 }
 async function holdNextNoteFocus(page) {
   await page.evaluate(() => {
@@ -84,11 +89,20 @@ async function assertFits(page) {
         assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Returning from analysis must preserve the notes query');
         assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), true, 'Returning from analysis must preserve the expanded notes finder');
         assert.equal(await results.count(), 1);
+        // A native toggle can still be queued when a tab unmounts the finder.
+        // Suppress delivery to exercise that handoff deterministically.
+        await page.evaluate(() => {
+          window.__holdStudyToggle = event => {
+            if (event.target?.id === 'study-notes') event.stopImmediatePropagation();
+          };
+          window.addEventListener('toggle', window.__holdStudyToggle, true);
+        });
         await page.getByTestId('study-notes').locator('summary').click();
         await command(page, 'Review panel');
         await command(page, 'Move tree');
         await page.getByTestId('study-notes').waitFor({ state: 'attached' });
         assert.equal(await page.getByTestId('study-notes').evaluate(node => node.open), false, 'A collapsed finder must stay collapsed on return');
+        await page.evaluate(() => window.removeEventListener('toggle', window.__holdStudyToggle, true));
         await openFinder(page);
         assert.equal(await search.inputValue(), '🐎 CANNON 中炮', 'Reopening the finder must preserve its query');
         const clear = page.getByRole('button', { name: 'Clear note search', exact: true });

@@ -10,26 +10,35 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
       try {
         await page.addInitScript(() => {
           window.__moveWork = [];
+          window.__mountedMoveKeys = [];
           const renderers = new Map();
           const previousFibers = new Map();
           window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
             supportsFiber: true, renderers,
             inject(renderer) { renderers.set(1, renderer); return 1; }, onCommitFiberUnmount() {},
             onCommitFiberRoot(_id, root) {
+              const mounted = [];
               const stack = [root.current];
               while (stack.length) {
                 const fiber = stack.pop();
                 const name = fiber.elementType?.displayName || fiber.type?.displayName || fiber.type?.name;
+                if (name === 'MoveListTree') for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+                  const value = hook.memoizedState?.[0];
+                  if (Array.isArray(value) && value[0]?.key?.startsWith('row-')) window.__rowModel = value;
+                  if (value?.rowByNode instanceof Map && Array.isArray(value.ids)) window.__navigationModel = value;
+                }
                 if (['MoveChip', 'BreadcrumbChip'].includes(name)) {
                   const nodeId = fiber.memoizedProps.nodeId;
                   if (name === 'MoveChip' && nodeId === 'n1024') window.__observedScore = fiber.memoizedProps.record?.evalScore;
                   const key = name + ':' + nodeId;
+                  mounted.push(key);
                   // A bailed-out parent can reuse its child fiber, including old flags.
                   if (previousFibers.get(key) !== fiber && (fiber.flags & 1)) window.__moveWork.push({ name, nodeId });
                   previousFibers.set(key, fiber);
                 }
                 if (fiber.child) stack.push(fiber.child); if (fiber.sibling) stack.push(fiber.sibling);
               }
+              window.__mountedMoveKeys = mounted;
             },
           };
           Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied = text; } } });
@@ -58,25 +67,30 @@ const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:8196/web-xiangqi/';
         await page.getByTestId('move-tree-active').waitFor();
         const labels = await page.locator('.tree-breadcrumb-chip').allTextContents();
         const score = 25;
-        await page.evaluate(score => { window.__moveWork = []; window.__completeScore(score); }, score);
+        await page.evaluate(score => { window.__beforeMoveKeys = window.__mountedMoveKeys; window.__beforeRowModel = window.__rowModel; window.__beforeNavigationModel = window.__navigationModel; window.__moveWork = []; window.__completeScore(score); }, score);
         await page.waitForFunction(score => window.__observedScore === score, score);
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        assert.equal(await page.evaluate(() => window.__beforeRowModel?.length), 512, 'The model probe must observe all move rows');
+        assert.equal(await page.evaluate(() => window.__rowModel === window.__beforeRowModel && window.__navigationModel === window.__beforeNavigationModel), true, 'A score update rebuilt the structural row/navigation model');
         const work = await page.evaluate(() => window.__moveWork);
+        const previouslyMounted = new Set(await page.evaluate(() => window.__beforeMoveKeys));
         console.log(`${browserType.name()} ${width}px: completed score ${score} rendered ${work.length} move/breadcrumb entries`);
         if (!process.env.XIANGQI_QA_MEASURE_ONLY) {
           assert.ok(work.some(item => item.name === 'MoveChip' && item.nodeId === 'n1024'));
-          assert.ok(work.every(item => item.nodeId === 'n1024'), `Unchanged entries rendered: ${JSON.stringify(work.slice(0, 8))}`);
-          assert.ok(work.length <= 3, `A completed score rendered ${work.length} entries`);
+          assert.ok(work.every(item => item.nodeId === 'n1024' || !previouslyMounted.has(item.name + ':' + item.nodeId)), `Unchanged entries rendered: ${JSON.stringify(work.slice(0, 8))}`);
+          assert.ok(work.length <= 12, `A completed score rendered ${work.length} entries`);
         }
         assert.deepEqual(await page.locator('.tree-breadcrumb-chip').allTextContents(), labels);
-        await page.evaluate(() => { window.__moveWork = []; });
+        await page.evaluate(() => { window.__beforeMoveKeys = window.__mountedMoveKeys; window.__moveWork = []; });
         await page.getByTestId('move-comment-input').fill('Score checked');
         await page.getByTestId('move-comment-input').blur();
         await page.waitForFunction(() => document.querySelector('[data-testid="move-tree-active"]')?.getAttribute('aria-label').includes('Score checked'));
         if (!process.env.XIANGQI_QA_MEASURE_ONLY) {
           const noteWork = await page.evaluate(() => window.__moveWork);
-          assert.ok(noteWork.length > 0 && noteWork.every(item => item.nodeId === 'n1024'), 'A note edit redrew unrelated move entries');
+          const beforeNote = new Set(await page.evaluate(() => window.__beforeMoveKeys));
+          assert.ok(noteWork.length > 0 && noteWork.length <= 12 && noteWork.every(item => item.nodeId === 'n1024' || !beforeNote.has(item.name + ':' + item.nodeId)), 'A note edit redrew unrelated move entries');
         }
+        assert.equal(await page.evaluate(() => window.__rowModel === window.__beforeRowModel && window.__navigationModel === window.__beforeNavigationModel), true, 'A note edit rebuilt the structural row/navigation model');
         // Delegated navigation must use the latest tree, including after a
         // score update, and accept clicks on the notation span inside a chip.
         await page.locator('.mtree-chip[data-node-id="n1023"] .move-uci').click();

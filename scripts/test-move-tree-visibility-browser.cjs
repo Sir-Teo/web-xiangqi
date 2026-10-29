@@ -79,10 +79,17 @@ const command = async (page, label) => {
         const checkBreadcrumbs = async (length, firstNode) => {
           const strip = page.locator('.tree-breadcrumb');
           const chips = strip.locator('.tree-breadcrumb-chip');
-          assert.equal(await chips.count(), length);
-          assert.equal(await chips.first().getAttribute('data-breadcrumb-node-id'), 'root');
-          assert.equal(await chips.nth(1).getAttribute('data-breadcrumb-node-id'), firstNode);
-          assert.deepEqual(await chips.evaluateAll(nodes => nodes.map(n => Number(n.dataset.breadcrumbIndex))), Array.from({ length }, (_, i) => i));
+          const entries = await chips.evaluateAll(nodes => nodes.map(node => ({ index: Number(node.dataset.breadcrumbIndex), id: node.dataset.breadcrumbNodeId })));
+          assert.ok(entries.length >= 2 && entries.length <= 50, 'Reopened breadcrumbs must keep a bounded window');
+          assert.deepEqual(entries[0], { index: 0, id: 'root' });
+          assert.equal(entries.at(-1).index, length - 1);
+          const start = Number(firstNode.slice(1));
+          entries.slice(1).forEach((entry, index) => {
+            assert.ok(entry.index > entries[index].index && entry.index < length);
+            assert.equal(entry.id, 'n' + (start + entry.index - 1), 'The window belongs to another branch');
+          });
+          const omitted = await strip.locator('.tree-breadcrumb-gap').evaluateAll(nodes => nodes.reduce((total, node) => total + Number(node.getAttribute('aria-label').match(/Show (\d+)/)[1]), 0));
+          assert.equal(entries.length + omitted, length, 'Breadcrumb gaps lost part of the selected history');
           assert.equal(await chips.last().getAttribute('aria-current'), 'true');
           assert.equal(await strip.locator('[tabindex="0"]').count(), 1);
           await page.waitForFunction(() => {
@@ -94,7 +101,8 @@ const command = async (page, label) => {
         await command(page, 'Move tree');
         await checkBreadcrumbs(503, 'n1');
         await page.locator('.mtree-chip').first().waitFor();
-        assert.equal(await page.locator('.mtree-chip').count(), 1712, 'Reopening must restore all main moves and bounded branch previews');
+        assert.ok(await page.locator('[data-virtual-key]').count() < 64, 'Reopening mounted the entire row model');
+        assert.ok(await page.locator('.mtree-chip').count() < 1712, 'Reopening rendered every branch preview');
         const active = page.locator('.mtree-chip[aria-current="step"]');
         await active.waitFor();
         assert.match(await active.getAttribute('aria-label'), /Current move/);
@@ -106,7 +114,17 @@ const command = async (page, label) => {
           console.error(await active.evaluate(node => ({ chip: node.getBoundingClientRect().toJSON(), scroll: node.closest('.mtree-scroll').getBoundingClientRect().toJSON(), scrollTop: node.closest('.mtree-scroll').scrollTop, scrollHeight: node.closest('.mtree-scroll').scrollHeight, outer: node.closest('.panel-content').getBoundingClientRect().toJSON() })));
           await page.screenshot({ path: '/tmp/xiangqi-tree-centering-failure.png' }); throw error;
         });
-        await page.locator('.mtree-chip').filter({ has: page.locator('.move-uci', { hasText: 'h2h6' }) }).click();
+        await command(page, 'Go to start');
+        await page.waitForFunction(() => document.querySelector('.mtree-scroll')?.scrollTop < 2);
+        const branch = page.locator('.mtree-chip').filter({ has: page.locator('.move-uci', { hasText: 'h2h6' }) });
+        const scroll = page.locator('.mtree-scroll');
+        await scroll.dispatchEvent('wheel', { deltaY: 1 });
+        for (let step = 0; step < 400 && !(await branch.count()); step++) {
+          await scroll.evaluate(node => { node.scrollTop += Math.max(100, node.clientHeight * .8); });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        }
+        assert.equal(await branch.count(), 1, 'The last root variation never became reachable');
+        await branch.click();
         await command(page, 'Go to latest move');
         await page.waitForFunction(() => document.querySelector('[data-testid="move-comment-input"]')?.value === 'Line 16 end');
         await hideTree(); await command(page, 'Move tree');

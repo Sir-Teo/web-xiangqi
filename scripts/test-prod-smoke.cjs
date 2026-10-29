@@ -42,8 +42,8 @@
  *
  * Not part of `verify`, deliberately: that command is browser-free so it works
  * offline, and the README lists this one under "Not in `verify`" for exactly
- * that reason. No workflow runs it either: the Pages deploy builds and
- * publishes without tests, so run it before pushing a change to the build.
+ * that reason. `verify:local` runs it after correctness and performance checks,
+ * before pushing. GitHub Actions only builds and deploys Pages.
  *
  * So a green local `verify` has *not* opened the bundle. That is the gap this
  * file exists to describe, and saying otherwise here would have been the same
@@ -197,11 +197,9 @@ function startPlainServer(port) {
  * the whole 53MB again. That is around forty seconds on a ten-megabit phone
  * connection, each time the board is opened.
  *
- * Two things have to hold, and they pull in opposite directions. The second
- * visit must not re-transfer the body, or the cache is doing nothing. And it
- * must still *ask* -- a conditional request, answered 304 -- because a copy
- * served on its own authority is exactly the stale engine artifact this repo's
- * `serviceWorkerCleanup` exists to clean up after.
+ * Every visit refreshes the small manifest. Unchanged verified assets require
+ * no body request; a changed manifest identifies a new compatible asset set.
+ * Legacy unversioned weights still use conditional service-worker requests.
  */
 async function checkWeightsAreCachedAcrossVisits(browser, server) {
   // One context for both visits: Cache Storage lives with the context, which is
@@ -225,7 +223,9 @@ async function checkWeightsAreCachedAcrossVisits(browser, server) {
         { timeout: READY_TIMEOUT_MS }
       );
       await page.waitForTimeout(800);
-      return server.transferred.slice(before).filter((entry) => entry.name === "pikafish.nnue");
+      const transferred = server.transferred.slice(before);
+      if (!transferred.some(entry => entry.name === 'engine-assets.json')) throw new Error('Engine startup did not refresh its asset manifest');
+      return transferred.filter((entry) => entry.name === "pikafish.nnue");
     };
 
     const first = await visit();
@@ -235,16 +235,12 @@ async function checkWeightsAreCachedAcrossVisits(browser, server) {
     if (!first.length || bytes(first) === 0) {
       throw new Error(`weights: the first visit never fetched them (${JSON.stringify(first)})`);
     }
-    if (!second.length) {
-      throw new Error(
-        "weights: the second visit did not ask for them at all. A cached engine net has to be " +
-        "revalidated on every load, or a redeployed one is never picked up."
-      );
-    }
+    // The fresh engine manifest authorizes hash-verified reuse. Legacy hosts
+    // without a manifest still revalidate their unversioned weights via 304.
     if (bytes(second) !== 0 || second.some((entry) => entry.status !== 304)) {
       throw new Error(
         `weights: the second visit transferred ${bytes(second)} bytes (${JSON.stringify(second)}). ` +
-        "Over 53MB is being re-sent on every visit -- see the weights cache in public/coi-sw.js."
+        "Over 53MB is being re-sent on every visit -- see the hash-verified asset cache in templates/pikafish.js."
       );
     }
   } finally {

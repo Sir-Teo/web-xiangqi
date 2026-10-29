@@ -14,7 +14,7 @@ import { normalizeMoveComment } from './moveComment';
 import { encodeSavedMoveTreeParam } from './shareTree';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { START_POSITION_FEN } from './xiangqi';
-import type { GameMode } from '../App';
+import type { GameMode } from './gameModes';
 import { findSavedTreePath, normalizeSavedTreePath } from './savedTreePath';
 
 export const MAX_SHARE_QUERY_LENGTH = 6000;

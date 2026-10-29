@@ -1,6 +1,8 @@
+import { useVirtualRows } from '../../hooks/useVirtualRows';
+import { buildMoveListNavigation, buildMoveListRows, type MoveListRow } from '../../utils/moveListRows';
 import { isComposingKey } from '../../utils/keyboard';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MoveTreeNode } from '../../hooks/useXiangqi';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { MoveTreeNode, MoveTreeStructure } from '../../hooks/useXiangqi';
 import {
     REVIEW_THRESHOLDS,
     REVIEW_WIN_PERCENT_LOSS_THRESHOLDS,
@@ -11,12 +13,10 @@ import {
     type ReviewMoveQuality,
 } from '../../utils/review';
 import { getMoveListQuality } from '../../utils/moveListQuality';
-import { isMoveListNodeVisible, MAX_VISIBLE_VARIATION_PLIES } from '../../utils/moveListVisibility';
 import { verticalRovingIndexForKey } from '../../utils/rovingFocus';
 import { describeMoveWithCheck, formatMoveRecordLabel, formatUciMove } from '../../utils/moveNotation';
 import { summarizeMoveComment } from '../../utils/moveComment';
 import { describeMoveGlyphs, glyphSymbol } from '../../utils/moveGlyphs';
-import { describeMoveNumber } from '../../utils/moveNumbering';
 import {
     boardBeforeRecord,
     formatMoveInStyle,
@@ -27,10 +27,10 @@ import { IconSpark, IconCornerDownRight, IconX } from '../icons';
 
 type Props = {
     treeNodes: Record<string, MoveTreeNode>;
+    moveStructure: MoveTreeStructure;
     rootNodeId: string;
     rootFen: string;
     currentNodeId: string;
-    currentMoveIndex: number;
     activeLineNodeIds: string[];
     notationStyle?: XiangqiNotationStyle;
     onNavigateNode: (nodeId: string) => void;
@@ -40,21 +40,12 @@ type Props = {
     onOpenLibrary?: () => void;
 };
 
-type MoveSide = 'w' | 'b';
-
-type MoveListEntry = {
-    nodeId: string;
-    lineIndex: number;
-    moveNumber: number;
-    side: MoveSide;
-};
-
 export const MoveListTree = memo(function MoveListTree({
     treeNodes,
+    moveStructure,
     rootNodeId,
     rootFen,
     currentNodeId,
-    currentMoveIndex: _currentMoveIndex,
     activeLineNodeIds,
     notationStyle = 'uci',
     onNavigateNode,
@@ -123,92 +114,135 @@ export const MoveListTree = memo(function MoveListTree({
      * so tabbing away and back returns to where the reader was.
      */
     const [rovingNodeId, setRovingNodeId] = useState<string | null>(null);
-    const rovingNodeIsVisible = useMemo(() => rovingNodeId !== null
-        && isMoveListNodeVisible(treeNodes, rootNodeId, activeLineNodeIds, rovingNodeId),
-    [treeNodes, rootNodeId, activeLineNodeIds, rovingNodeId]);
-    const stopNodeId = rovingNodeIsVisible
-        ? rovingNodeId
-        : treeNodes[currentNodeId]?.record
-            ? currentNodeId
-            : activeLineNodeIds[0] ?? null;
-
+    const rows = useMemo(() => buildMoveListRows(moveStructure, rootNodeId, activeLineNodeIds, rootFen),
+        [moveStructure, rootNodeId, activeLineNodeIds, rootFen]);
+    const keys = useMemo(() => rows.map(row => row.key), [rows]);
+    const navigation = useMemo(() => buildMoveListNavigation(rows, moveStructure), [rows, moveStructure]);
+    const stopNodeId = rovingNodeId && navigation.rowByNode.has(rovingNodeId)
+        ? rovingNodeId : navigation.rowByNode.has(currentNodeId) ? currentNodeId : navigation.ids[0] ?? null;
+    // The root has no chip, but returning to it must reveal the first rows
+    // and root variations rather than leave a virtual list at its old cursor.
+    const activeRow = currentNodeId === rootNodeId ? 0 : navigation.rowByNode.get(currentNodeId) ?? -1;
+    const stopRow = navigation.rowByNode.get(stopNodeId ?? '') ?? -1;
+    const retainedRows = useMemo(() => [activeRow, stopRow], [activeRow, stopRow]);
+    const virtual = useVirtualRows(keys, scrollRef, activeRow, retainedRows);
+    const visibleSignature = virtual.indices.join(',');
+    const virtualOffsets = virtual.offsets;
+    const cancelAutomaticScroll = virtual.stopAutomaticScroll;
+    const pendingFocus = useRef<{ id: string; row: number; x?: number; direction?: number } | null>(null);
+    const automaticScroll = useRef(true);
+    const lastPosition = useRef(currentNodeId);
+    const live = useRef({ navigation, rows, virtual });
+    live.current = { navigation, rows, virtual };
+    const requestFocus = useCallback((id: string, x?: number, direction?: number) => {
+        const row = live.current.navigation.rowByNode.get(id);
+        if (row === undefined) return;
+        pendingFocus.current = { id, row, x, direction };
+        automaticScroll.current = false;
+        setRovingNodeId(id);
+        live.current.virtual.scrollToIndex(row);
+    }, []);
     const handleChipKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
-        const { key } = event;
-        if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Home' && key !== 'End') return;
-        const container = scrollRef.current;
-        if (!container) return;
-        const chips = Array.from(container.querySelectorAll<HTMLButtonElement>('.mtree-chip'));
-        const index = chips.indexOf(event.currentTarget);
-        if (index === -1) return;
-        // At an edge, keep the timeline's global arrow shortcuts from moving
-        // the board while the reader is only browsing move-list controls.
+        const key = event.key;
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(key)) return;
         event.preventDefault();
-
-        let target: HTMLButtonElement | undefined;
-        if (key === 'ArrowLeft') target = chips[Math.max(0, index - 1)];
-        else if (key === 'ArrowRight') target = chips[Math.min(chips.length - 1, index + 1)];
-        else if (key === 'Home') target = chips[0];
-        else if (key === 'End') target = chips[chips.length - 1];
-        else {
-            const next = verticalRovingIndexForKey(key, chips.map(chip => chip.getBoundingClientRect()), index);
-            target = next === null ? undefined : chips[next];
+        const { navigation, rows } = live.current;
+        const id = event.currentTarget.dataset.nodeId!;
+        const index = navigation.ids.indexOf(id);
+        if (index < 0) return;
+        if (key === 'Home') { requestFocus(navigation.ids[0]); return; }
+        if (key === 'End') { requestFocus(navigation.ids[navigation.ids.length - 1]); return; }
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
+            requestFocus(navigation.ids[Math.max(0, Math.min(navigation.ids.length - 1, index + (key === 'ArrowLeft' ? -1 : 1)))]); return;
         }
-        if (!target || target === event.currentTarget) return;
-        target.focus({ preventScroll: true });
-        target.scrollIntoView({ block: 'nearest' });
-    }, []);
-
-    const centreActiveMove = useCallback(() => {
+        const chips = Array.from(scrollRef.current?.querySelectorAll<HTMLButtonElement>('.mtree-chip') ?? []);
+        const mountedIndex = chips.indexOf(event.currentTarget);
+        const targetIndex = verticalRovingIndexForKey(key, chips.map(chip => chip.getBoundingClientRect()), mountedIndex);
+        const geometric = targetIndex === null ? undefined : chips[targetIndex];
+        const row = navigation.rowByNode.get(id)!;
+        const targetRow = geometric ? navigation.rowByNode.get(geometric.dataset.nodeId!)! : row;
+        if (geometric && Math.abs(targetRow - row) <= 1 && geometric !== event.currentTarget) {
+            requestFocus(geometric.dataset.nodeId!); return;
+        }
+        const direction = key === 'ArrowUp' ? -1 : 1;
+        const nextRow = Math.max(0, Math.min(rows.length - 1, row + direction));
+        if (nextRow === row) return;
+        const next = rows[nextRow].nodeIds.find(id => navigation.rowByNode.has(id));
+        const box = event.currentTarget.getBoundingClientRect();
+        if (next) requestFocus(next, box.left + box.width / 2, direction);
+    }, [requestFocus]);
+    useLayoutEffect(() => {
+        const pending = pendingFocus.current;
+        if (pending) {
+            const container = scrollRef.current;
+            const row = container?.querySelector<HTMLElement>(`[data-virtual-index="${pending.row}"]`);
+            const candidates = Array.from(row?.querySelectorAll<HTMLButtonElement>('.mtree-chip') ?? []);
+            let target = container?.querySelector<HTMLButtonElement>(`[data-node-id="${pending.id}"]`);
+            if (pending.x !== undefined && candidates.length) {
+                const edge = pending.direction === -1 ? Math.max(...candidates.map(chip => chip.getBoundingClientRect().top))
+                    : Math.min(...candidates.map(chip => chip.getBoundingClientRect().top));
+                target = candidates.filter(chip => Math.abs(chip.getBoundingClientRect().top - edge) < 1)
+                    .sort((a, b) => Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - pending.x!)
+                        - Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - pending.x!))[0];
+            }
+            if (target) {
+                pendingFocus.current = null;
+                cancelAutomaticScroll();
+                target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        }
+        if (lastPosition.current !== currentNodeId) { automaticScroll.current = true; lastPosition.current = currentNodeId; }
         const container = scrollRef.current;
-        const el = container?.querySelector(`[data-node-id="${currentNodeId}"]`) as HTMLElement | null;
-        if (!container || !el) return;
-
-        const containerRect = container.getBoundingClientRect();
-        const activeRect = el.getBoundingClientRect();
-        const rawTargetTop = container.scrollTop
-            + activeRect.top
-            - containerRect.top
-            - (containerRect.height - activeRect.height) / 2;
-        const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
-        const targetTop = Math.max(0, Math.min(maxTop, rawTargetTop));
-        const distance = Math.abs(targetTop - container.scrollTop);
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const activeFullyVisible = activeRect.top >= containerRect.top && activeRect.bottom <= containerRect.bottom;
-        const behavior: ScrollBehavior = prefersReducedMotion || !activeFullyVisible || distance > container.clientHeight * 1.5
-            ? 'auto'
-            : 'smooth';
-
-        if (prefersReducedMotion) {
-            el.scrollIntoView({ block: 'nearest', behavior });
+        const active = container?.querySelector<HTMLElement>('.mtree-chip-active');
+        if (automaticScroll.current && container && active) {
+            const box = active.getBoundingClientRect(), viewport = container.getBoundingClientRect();
+            if (box.top < viewport.top) container.scrollTop -= viewport.top - box.top;
+            else if (box.bottom > viewport.bottom) container.scrollTop += box.bottom - viewport.bottom;
         }
-        if (distance > 1) {
-            container.scrollTo({ top: targetTop, behavior });
+    }, [currentNodeId, rovingNodeId, visibleSignature, virtualOffsets, cancelAutomaticScroll]);
+    const stopAutomaticScroll = () => { automaticScroll.current = false; virtual.stopAutomaticScroll(); };
+    const legend = useMemo(() => {
+        const flags = { quality: false, estimated: false, saved: false };
+        for (const id of navigation.ids) {
+            const node = treeNodes[id], record = node?.record;
+            if (!record || !getMoveListQuality(record, node.parentId ? treeNodes[node.parentId]?.record?.evalScore : undefined)) continue;
+            flags.quality = true;
+            if (!record.quality) flags.estimated = true;
+            if (record.quality && record.persistEvaluation) flags.saved = true;
         }
-    }, [currentNodeId]);
+        return flags;
+    }, [navigation, treeNodes]);
+    const hasMoveQualityLegend = legend.quality, hasEstimatedQuality = legend.estimated, hasSavedQualityMarks = legend.saved;
+    const renderMoveChip = (nodeId: string, compact = false) => {
+        const node = treeNodes[nodeId];
+        const record = node?.record;
+        if (!node || !record) return null;
+        const quality = getMoveListQuality(record, node.parentId ? treeNodes[node.parentId]?.record?.evalScore : undefined);
+        return <MoveChip key={nodeId} nodeId={nodeId} record={record} quality={quality}
+            compact={compact} isCurrent={currentNodeId === nodeId} isTabStop={nodeId === stopNodeId}
+            notationStyle={notationStyle}
+            onRovingFocus={setRovingNodeId} onKeyDown={handleChipKeyDown} />;
+    };
 
-    useEffect(() => { centreActiveMove(); }, [centreActiveMove]);
-
-    // Mounting while the panel expands can initially measure its collapsed
-    // width. Reflow then moves the active row away from that scroll position.
-    // Recenter after visible size changes, including panel resizing and text
-    // enlargement, once the list has dimensions it can actually use.
-    useEffect(() => {
-        const container = scrollRef.current;
-        if (!container || typeof ResizeObserver === 'undefined') return;
-        let previousWidth = 0;
-        let previousHeight = 0;
-        const observer = new ResizeObserver(() => {
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            if (width > 0 && height > 0 && (width !== previousWidth || height !== previousHeight)) centreActiveMove();
-            previousWidth = width;
-            previousHeight = height;
-        });
-        observer.observe(container);
-        return () => observer.disconnect();
-    }, [centreActiveMove]);
-
+    const renderRow = (row: MoveListRow, index: number) => {
+        if (!row.variationRootId) return <div className="mtree-row">
+            <span className="mtree-num" data-testid={`move-tree-row-label-${index}`}>{row.label}</span>
+            <div className="mtree-pair">{row.nodeIds.map(id => renderMoveChip(id))}</div>
+        </div>;
+        const firstRecord = treeNodes[row.variationRootId]?.record;
+        const variationName = firstRecord ? formatMoveLabel(firstRecord, notationStyle) : 'variation';
+        return <div className="mtree-variation">
+            <IconCornerDownRight className="mtree-var-marker" />
+            {row.nodeIds.map(id => renderMoveChip(id, true))}
+            {Boolean(row.remaining) && <span className="mtree-variation-rest" title={`${row.remaining} more ${row.remaining === 1 ? 'ply' : 'plies'} in this line — open it to read them`}>+{row.remaining}</span>}
+            {onDeleteNode && <button type="button" className="mtree-var-delete" onClick={event => {
+                pendingDeleteFocus.current = document.activeElement === event.currentTarget ? { parentId: row.parentId!, element: event.currentTarget } : null;
+                onDeleteNode(row.variationRootId!);
+            }} title={`Delete the variation starting ${variationName}`} aria-label={`Delete the variation starting ${variationName}`}
+                data-testid={`delete-variation-${row.variationRootId}`}><IconX aria-hidden="true" focusable="false" /></button>}
+        </div>;
+    };
     if (activeLineNodeIds.length === 0) {
         return (
             <div className="empty-state move-tree-empty">
@@ -222,127 +256,25 @@ export const MoveListTree = memo(function MoveListTree({
         );
     }
 
-    const rows: JSX.Element[] = [];
-    let hasMoveQualityLegend = false;
-    let hasEstimatedQuality = false;
-    let hasSavedQualityMarks = false;
-    const entryAt = (lineIndex: number): MoveListEntry | null => {
-        const nodeId = activeLineNodeIds[lineIndex];
-        if (!nodeId) return null;
-        return makeMoveListEntry(nodeId, lineIndex, rootFen);
-    };
-
-    const renderMoveChip = (nodeId: string, compact = false) => {
-        const node = treeNodes[nodeId];
-        const record = node?.record;
-        if (!node || !record) return null;
-        const quality = getMoveListQuality(record, node.parentId ? treeNodes[node.parentId]?.record?.evalScore : undefined);
-        if (quality) {
-            hasMoveQualityLegend = true;
-            if (!record.quality) hasEstimatedQuality = true;
-            if (record.quality && record.persistEvaluation) hasSavedQualityMarks = true;
-        }
-        return <MoveChip key={nodeId} nodeId={nodeId} record={record} quality={quality}
-            compact={compact} isCurrent={currentNodeId === nodeId} isTabStop={nodeId === stopNodeId}
-            notationStyle={notationStyle}
-            onRovingFocus={setRovingNodeId} onKeyDown={handleChipKeyDown} />;
-    };
-
-    const pushVariations = (parentId: string, lineIndex: number) => {
-        const parent = treeNodes[parentId];
-        if (!parent || parent.childrenIds.length <= 1) return;
-        const mainChild = activeLineNodeIds[lineIndex + 1] ?? null;
-        const variationRoots = parent.childrenIds.filter((childId) => childId !== mainChild);
-        variationRoots.forEach((variationRootId) => {
-            const { line: variationLine, remaining: variationRemaining } = buildVariationLine(variationRootId, treeNodes);
-            const firstRecord = treeNodes[variationRootId]?.record;
-            const variationName = firstRecord ? formatMoveLabel(firstRecord, notationStyle) : 'variation';
-            rows.push(
-                <div key={`var-${parentId}-${variationRootId}`} className="mtree-variation">
-                    <IconCornerDownRight className="mtree-var-marker" />
-                    {variationLine.map((nodeId) => renderMoveChip(nodeId, true))}
-                    {variationRemaining > 0 ? (
-                        <span
-                            className="mtree-variation-rest"
-                            title={`${variationRemaining} more ${variationRemaining === 1 ? 'ply' : 'plies'} in this line — open it to read them`}
-                        >
-                            +{variationRemaining}
-                        </span>
-                    ) : null}
-                    {onDeleteNode ? (
-                        // At the end of the row rather than the start, so it
-                        // cannot be mistaken for the first move of the line,
-                        // and named after that move so a reader with several
-                        // variations open knows which one is going.
-                        <button
-                            type="button"
-                            className="mtree-var-delete"
-                            onClick={(event) => {
-                                pendingDeleteFocus.current = document.activeElement === event.currentTarget
-                                    ? { parentId, element: event.currentTarget } : null;
-                                onDeleteNode(variationRootId);
-                            }}
-                            title={`Delete the variation starting ${variationName}`}
-                            aria-label={`Delete the variation starting ${variationName}`}
-                            data-testid={`delete-variation-${variationRootId}`}
-                        >
-                            <IconX aria-hidden="true" focusable="false" />
-                        </button>
-                    ) : null}
-                </div>
-            );
-        });
-    };
-
-    let lineIndex = 0;
-    while (lineIndex < activeLineNodeIds.length) {
-        const entry = entryAt(lineIndex);
-        if (!entry) break;
-
-        let redEntry: MoveListEntry | null = null;
-        let blackEntry: MoveListEntry | null = null;
-        let consumed = 1;
-        let rowLabel = `${entry.moveNumber}.`;
-
-        if (entry.side === 'w') {
-            redEntry = entry;
-            const nextEntry = entryAt(lineIndex + 1);
-            if (nextEntry?.side === 'b' && nextEntry.moveNumber === entry.moveNumber) {
-                blackEntry = nextEntry;
-                consumed = 2;
-            }
-        } else {
-            blackEntry = entry;
-            rowLabel = `${entry.moveNumber}...`;
-        }
-
-        const rowKey = redEntry?.nodeId ?? blackEntry?.nodeId ?? `row-${lineIndex}`;
-        const rowIndex = rows.length;
-        rows.push(
-            <div key={`row-${rowKey}`} className="mtree-row">
-                <span className="mtree-num" data-testid={`move-tree-row-label-${rowIndex}`}>{rowLabel}</span>
-                <div className="mtree-pair">
-                    {redEntry ? renderMoveChip(redEntry.nodeId) : null}
-                    {blackEntry ? renderMoveChip(blackEntry.nodeId) : null}
-                </div>
-            </div>
-        );
-
-        if (lineIndex === 0) pushVariations(rootNodeId, -1);
-        if (redEntry) pushVariations(redEntry.nodeId, redEntry.lineIndex);
-        if (blackEntry) pushVariations(blackEntry.nodeId, blackEntry.lineIndex);
-        lineIndex += consumed;
-    }
-
     return (
         <div
             className="mtree-scroll"
             onClick={handleNavigateClick}
             ref={scrollRef}
+            onScroll={virtual.onScroll}
+            onWheel={stopAutomaticScroll} onPointerDown={stopAutomaticScroll} onTouchStart={stopAutomaticScroll}
             role="group"
             aria-label="Move list, one tab stop; the arrow keys move between moves"
         >
-            {rows}
+            {virtual.indices.map((index, position) => {
+                const previous = virtual.indices[position - 1];
+                const gap = virtual.offsets[index] - (previous === undefined ? 0 : virtual.offsets[previous + 1]);
+                return <Fragment key={rows[index].key}>
+                    {virtual.enabled && gap > 0 && <div aria-hidden="true" style={{ height: gap }} />}
+                    <div data-virtual-key={rows[index].key} data-virtual-index={index} style={{ display: 'flow-root' }}>{renderRow(rows[index], index)}</div>
+                </Fragment>;
+            })}
+            {virtual.enabled && <div aria-hidden="true" style={{ height: virtual.offsets[rows.length] - (virtual.offsets[(virtual.indices.at(-1) ?? -1) + 1] ?? 0) }} />}
             {hasMoveQualityLegend ? <div className="mtree-quality-legend">
                     <span className="legend-title">Move loss</span>
                     <div className="legend-items">
@@ -519,51 +451,4 @@ function formatMoveAriaLabel(
         record.comment ? `Note, ${record.comment}` : '',
     ].filter(Boolean);
     return parts.join(', ');
-}
-
-/**
- * A variation row, and how much of it did not fit.
- *
- * The row stops at `MAX_VISIBLE_VARIATION_PLIES` so one long side line cannot
- * push the rest of the list off the screen. It used to stop silently, which
- * made a 100-ply line look like a 40-move line that simply ended -- the moves
- * were still there, and still reachable by clicking into the row, but nothing
- * on screen gave a reader any reason to look. The walk now continues past the
- * cap to count what it is not showing, so the row can say so the way the
- * engine's own line strip already does with its `+12`.
- *
- * The `seen` set stays the guard against a cycle; the cap is no longer doing
- * that job on the side.
- */
-function buildVariationLine(
-    startId: string,
-    treeNodes: Record<string, MoveTreeNode>
-): { line: string[]; remaining: number } {
-    const line: string[] = [];
-    let remaining = 0;
-    let cursor: string | undefined = startId;
-    const seen = new Set<string>();
-    while (cursor && !seen.has(cursor)) {
-        seen.add(cursor);
-        if (line.length < MAX_VISIBLE_VARIATION_PLIES) line.push(cursor);
-        else remaining += 1;
-        const children: string[] = treeNodes[cursor]?.childrenIds ?? [];
-        const nextNodeId: string | undefined = children[children.length - 1];
-        cursor = nextNodeId;
-    }
-    return { line, remaining };
-}
-
-function makeMoveListEntry(
-    nodeId: string,
-    lineIndex: number,
-    rootFen: string
-): MoveListEntry {
-    // `lineIndex` is 0-based and `describeMoveNumber` takes a 1-based ply, which
-    // is what a MoveRecord stores. The arithmetic used to live here as well as
-    // in `useXiangqi` and the breadcrumb; the breadcrumb is what proved that
-    // three statements of one rule is two too many -- it had drifted into
-    // numbering plies instead.
-    const { moveNumber, side } = describeMoveNumber(rootFen, lineIndex + 1);
-    return { nodeId, lineIndex, side, moveNumber };
 }

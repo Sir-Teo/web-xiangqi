@@ -16,7 +16,6 @@ import { normalizeGameMetadata } from './gameMetadata';
 
 export { AUTO_SAVED_GAME_KEY };
 export const AUTO_SAVE_MAX_BYTES = 2 * 1024 * 1024;
-export const AUTO_SAVE_MAX_LABEL = '2 MB';
 /** Fixed, because there is only ever one auto-save. */
 export const AUTO_SAVE_ID = 'auto-save';
 
@@ -27,7 +26,7 @@ export type AutoSaveWriteResult = 'saved' | 'too-large' | 'empty' | 'failed';
 type AutoSaveStorage = KeyValueStorage;
 const savedSnapshots = new WeakMap<AutoSaveStorage, { content: string; raw: string }>();
 
-function exceedsRecoveryMoveLimit(game: AutoSaveInput): boolean {
+export function exceedsRecoveryMoveLimit(game: AutoSaveInput): boolean {
     if (game.moves.length > MAX_SAVED_MOVES) return true;
     const pending = [{ siblings: game.moveTree ?? [], depth: 1 }];
     let nodes = 0;
@@ -61,18 +60,24 @@ export function readAutoSavedGame(
     storage: AutoSaveStorage | null = getLocalStorage()
 ): AutoSavedGame | null {
     if (!storage) return null;
+    const raw = readVersionedStorage(AUTO_SAVED_GAME_KEY, storage);
+    return raw ? parseAutoSaveEnvelope(raw).snapshot : null;
+}
+
+/** Parse the snapshot and its tab owner together so mirrors need no second JSON read. */
+export function parseAutoSaveEnvelope(raw: string): { snapshot: AutoSavedGame | null; draftId?: string } {
     try {
-        const raw = readVersionedStorage(AUTO_SAVED_GAME_KEY, storage);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw) as Partial<AutoSavedGame> | null;
-        if (!parsed || parsed.version !== 1) return null;
-        if (typeof parsed.savedAt !== 'number' || !Number.isFinite(parsed.savedAt)) return null;
+        const parsed = JSON.parse(raw) as (Partial<AutoSavedGame> & { draftId?: unknown }) | null;
+        if (!parsed || parsed.version !== 1) return { snapshot: null };
+        if (typeof parsed.savedAt !== 'number' || !Number.isFinite(parsed.savedAt)) return { snapshot: null };
 
         const game = normalizeSavedGame(parsed.game);
-        if (!game) return null;
-        return { version: 1, savedAt: parsed.savedAt, game, ...(normalizeLibrarySource(parsed.sourceLibrary) ? { sourceLibrary: normalizeLibrarySource(parsed.sourceLibrary) } : {}) };
+        if (!game) return { snapshot: null };
+        const sourceLibrary = normalizeLibrarySource(parsed.sourceLibrary);
+        return { snapshot: { version: 1, savedAt: parsed.savedAt, game, ...(sourceLibrary ? { sourceLibrary } : {}) },
+            ...(typeof parsed.draftId === 'string' && parsed.draftId ? { draftId: parsed.draftId } : {}) };
     } catch {
-        return null;
+        return { snapshot: null };
     }
 }
 
@@ -82,21 +87,29 @@ export function writeAutoSavedGame(
     savedAt = Date.now()
 ): AutoSaveWriteResult {
     if (!storage) return 'failed';
-    if (!isWorthAutoSaving(game)) {
-        clearAutoSavedGame(storage);
-        return 'empty';
-    }
-
+    if (!isWorthAutoSaving(game)) { clearAutoSavedGame(storage); return 'empty'; }
     try {
         // Ignore envelope timestamps, but verify the actual slot: deletion or
         // external replacement must be repaired even without a new edit.
         const content = JSON.stringify(game);
         const previous = savedSnapshots.get(storage);
         if (previous?.content === content && storage.getItem(AUTO_SAVED_GAME_KEY) === previous.raw) return 'saved';
+        return commitPreparedAutoSave(prepareAutoSavedGame(game, savedAt, content), storage);
+    } catch { return 'failed'; }
+}
+
+export type PreparedAutoSave = { result: 'ready'; content: string; serialized: string }
+    | { result: 'failed' | 'too-large' | 'empty' };
+
+/** Pure preparation also runs in the background worker. Writes stay on the owning tab. */
+export function prepareAutoSavedGame(game: AutoSaveInput, savedAt = Date.now(), content?: string): PreparedAutoSave {
+    if (!isWorthAutoSaving(game)) return { result: 'empty' };
+    try {
+        content ??= JSON.stringify(game);
         // The byte ceiling alone permits thousands of moves that the reader
         // rejects. Report the capacity problem while the study is still open.
         if (exceedsRecoveryMoveLimit(game)) {
-            return 'too-large';
+            return { result: 'too-large' };
         }
         const { sourceLibrary, ...gameData } = game;
         const snapshot: AutoSavedGame = {
@@ -108,14 +121,25 @@ export function writeAutoSavedGame(
         const serialized = JSON.stringify(snapshot);
         if (getSerializedByteLength(serialized) > AUTO_SAVE_MAX_BYTES) {
             // Keep the last recoverable snapshot until a newer write succeeds.
-            return 'too-large';
+            return { result: 'too-large' };
         }
         if (!normalizeSavedGame(snapshot.game)) {
-            return 'failed';
+            return { result: 'failed' };
         }
-        if (!writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage)) return 'failed';
+        return { result: 'ready', content, serialized };
+    } catch { return { result: 'failed' }; }
+}
+
+export function commitPreparedAutoSave(prepared: PreparedAutoSave, storage: AutoSaveStorage | null = getLocalStorage()): AutoSaveWriteResult {
+    if (!storage) return 'failed';
+    if (prepared.result === 'empty') { clearAutoSavedGame(storage); return 'empty'; }
+    if (prepared.result !== 'ready') return prepared.result;
+    try {
+        const previous = savedSnapshots.get(storage);
+        if (previous?.content === prepared.content && storage.getItem(AUTO_SAVED_GAME_KEY) === previous.raw) return 'saved';
+        if (!writeStorage(AUTO_SAVED_GAME_KEY, prepared.serialized, storage)) return 'failed';
         const raw = storage.getItem(AUTO_SAVED_GAME_KEY);
-        if (raw !== null) savedSnapshots.set(storage, { content, raw });
+        if (raw !== null) savedSnapshots.set(storage, { content: prepared.content, raw });
         return 'saved';
     } catch {
         return 'failed';

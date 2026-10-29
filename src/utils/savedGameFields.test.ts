@@ -133,8 +133,8 @@ describe('the saved-game record and its normaliser', () => {
 describe('the saved move-tree node and its normaliser', () => {
     it('normalises every field the node declares itself', () => {
         const declared = topLevelKeys(blockAfter('export interface SavedMoveTreeNode'));
-        const functionAt = source.indexOf('function normalizeSavedMoveTreeNode');
-        const written = topLevelKeys(blockAfter('return {', functionAt));
+        const functionAt = source.indexOf('export function normalizeSavedMoveTree');
+        const written = topLevelKeys(blockAfter('const node: SavedMoveTreeNode =', functionAt));
         expect(declared).toContain('uci');
         expect(declared).toContain('comment');
         expect(declared.filter((field) => !written.includes(field))).toEqual([]);

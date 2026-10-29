@@ -1,7 +1,7 @@
 name: Deploy GitHub Pages
 
 # Build and publish on every push to main. No test gate: checks are run
-# locally (`npm run verify`, the browser suites in README.md) before pushing.
+# locally (`npm run verify:local`, the browser suites in README.md) before pushing.
 on:
   push:
     branches: [main]

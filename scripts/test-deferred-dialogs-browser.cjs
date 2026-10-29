@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5200/web-xiangqi/';
 const cases = [
+  { module: 'NewGameDialog', title: 'Import a game', ready: 'new-game-dialog', dialog: 'new-game-dialog', extensions: ['js'] },
+  { module: 'SettingsDialog', title: 'Settings', ready: 'settings-dialog', dialog: 'settings-dialog', extensions: ['js'] },
   { module: 'BoardEditor', title: 'Set up a position', ready: 'editor-brush-erase', dialog: 'board-editor' },
   { module: 'RuleLessons', title: 'Learn the rules', ready: 'lesson-select', dialog: 'rule-lessons' },
 ];
@@ -80,7 +82,7 @@ async function setup(page) {
         console.log(`${browserType.name()} ${item.module} ${width}px: no startup request, delayed close/Tab/Escape, 200% text, late resolution and loaded focus restoration passed`);
       } finally { release(); await page.close(); }
     }
-    for (const item of cases) for (const extension of ['js', 'css']) {
+    for (const item of cases) for (const extension of item.extensions || ['js', 'css']) {
       const page = await browser.newPage({ viewport: { width: 320, height: 480 } });
       try {
         await setup(page);

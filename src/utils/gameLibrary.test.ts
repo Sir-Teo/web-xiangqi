@@ -216,6 +216,24 @@ describe('normalizing a variation tree', () => {
         expect(normalizeSavedMoveTree([null])).toBeNull();
     });
 
+    it('copies shared branches without mutating sparse source arrays and rejects cycles', () => {
+        const leaf = { uci: 'h9g7', comment: ' Retained note ', nags: [1], children: new Array(2) };
+        const source: unknown[] = new Array(3);
+        source[0] = { uci: 'h2e2', children: [leaf] };
+        source[2] = { uci: 'b2e2', children: [leaf] };
+        const result = normalizeSavedMoveTree(source);
+        expect(result).toEqual([
+            { uci: 'h2e2', children: [{ uci: 'h9g7', comment: 'Retained note', nags: [1] }] },
+            { uci: 'b2e2', children: [{ uci: 'h9g7', comment: 'Retained note', nags: [1] }] },
+        ]);
+        expect(result?.[0].children?.[0]).not.toBe(result?.[1].children?.[0]);
+        expect(leaf.comment).toBe(' Retained note ');
+        expect(leaf.children).toHaveLength(2);
+        const cycle: { uci: string; children?: unknown[] } = { uci: 'h2e2' };
+        cycle.children = [cycle];
+        expect(normalizeSavedMoveTree([cycle])).toBeNull();
+    });
+
     it('refuses a tree with more nodes than the cap', () => {
         // One long chain, counted across the whole walk rather than per branch.
         let node: Record<string, unknown> = { uci: 'h2e2' };

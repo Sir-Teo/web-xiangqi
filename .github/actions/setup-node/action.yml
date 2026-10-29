@@ -1,5 +1,5 @@
 name: Install Node dependencies
-description: Shared Node and npm setup for CI jobs
+description: Shared Node and npm setup for the Pages deployment
 runs:
   using: composite
   steps:

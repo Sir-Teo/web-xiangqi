@@ -10,8 +10,6 @@ import {
 } from '../utils/cloudRule';
 import { BoundedLruCache } from '../utils/boundedCache';
 
-export type { CloudRuleState } from '../utils/cloudRule';
-
 const CLOUD_RULE_DEBOUNCE_MS = 350;
 const CLOUD_RULE_TIMEOUT_MS = 8000;
 

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { scripts, selectShard } = require('./ui-audit-suites.cjs');
 
-// Shards run on separate CI runners. Keep scripts serial within each runner
+// Optional shards can run separately. Keep scripts serial within each process
 // so browser timing assertions do not compete for CPU or fixed test ports.
 (async () => {
   const args = process.argv.slice(2);
@@ -13,7 +13,7 @@ const { scripts, selectShard } = require('./ui-audit-suites.cjs');
   const shard = args.find(arg => arg.startsWith('--shard='))?.slice(8) || '1/1';
   const selected = selectShard(scripts, shard);
   if (args.includes('--list')) { console.log(selected.join('\n')); return; }
-  // Match production performance and test the exact artifact CI will publish.
+  // Match production performance and test the exact artifact Pages will publish.
   const { preview } = await import('vite');
   const server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
   const results = [];

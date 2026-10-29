@@ -45,7 +45,18 @@ const command = async (page, label) => {
         await page.waitForFunction(() => JSON.parse(localStorage.getItem('xiangqi:auto-saved-game:v1') || 'null')?.game.moveTree?.length === 16);
         assert.equal(await page.getByTestId('auto-save-error').count(), 0);
         await command(page, 'Go to start');
-        await page.locator('.mtree-chip').filter({ hasText: roots[15] }).click();
+        await page.waitForFunction(() => document.querySelector('.mtree-scroll')?.scrollTop < 2);
+        // A distant branch is deliberately absent from the virtual DOM. Walk
+        // the scroll window as a reader does, including variable-height rows.
+        const branch = page.locator('.mtree-chip').filter({ hasText: roots[15] });
+        const scroll = page.locator('.mtree-scroll');
+        await scroll.dispatchEvent('wheel', { deltaY: 1 });
+        for (let step = 0; step < 400 && !(await branch.count()); step++) {
+          await scroll.evaluate(node => { node.scrollTop += Math.max(100, node.clientHeight * .8); });
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        }
+        assert.equal(await branch.count(), 1, 'Scrolling never mounted the last root variation');
+        await branch.click();
         if (width < 900) await page.getByTestId('mobile-view-board').click();
         await page.getByRole('button', { name: 'Go to latest move', exact: true }).filter({ visible: true }).first().click();
         await page.keyboard.press('t');

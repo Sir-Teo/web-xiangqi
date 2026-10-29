@@ -36,10 +36,10 @@ function render(overrides: Overrides) {
     return renderToStaticMarkup(
         <MoveListTree
             treeNodes={tree as never}
+            moveStructure={tree as never}
             rootNodeId={ROOT}
             rootFen={START_FEN}
             currentNodeId="n1"
-            currentMoveIndex={0}
             activeLineNodeIds={['n1']}
             onNavigateNode={() => {}}
         />

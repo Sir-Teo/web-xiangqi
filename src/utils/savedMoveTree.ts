@@ -6,6 +6,45 @@ import type { MoveTreeNode } from '../hooks/useXiangqi';
 import type { SavedMoveTreeNode } from './gameLibrary';
 import { normalizeMoveComment } from './moveComment';
 
+/** The stored projection excludes automatic scores and runtime board state. */
+function sameStoredNode(left: MoveTreeNode | undefined, right: MoveTreeNode): boolean {
+    if (left === right) return true;
+    if (!left || (left.childrenIds !== right.childrenIds
+        && (left.childrenIds.length !== right.childrenIds.length || left.childrenIds.some((id, index) => id !== right.childrenIds[index])))) return false;
+    const a = left.record, b = right.record;
+    if (!a || !b) return a === b;
+    if (a.uci !== b.uci || a.comment !== b.comment || a.nags !== b.nags
+        || a.recordedResult !== b.recordedResult || a.analysis !== b.analysis
+        || Boolean(a.persistEvaluation) !== Boolean(b.persistEvaluation)) return false;
+    return !a.persistEvaluation || (a.evalScore === b.evalScore && a.evalDepth === b.evalDepth
+        && a.evalScoreKind === b.evalScoreKind && a.quality === b.quality);
+}
+
+/**
+ * Inputs and returned snapshots are immutable. One snapshot per owner is
+ * released with its study view. Checking
+ * changed nodes avoids re-normalizing and allocating an entire annotated tree
+ * when the engine only updates automatic scores or recommendations. Structural
+ * and persisted edits still use the full serializer and its cycle guard.
+ */
+export function createSavedMoveTreeSerializer() {
+    let previous: { tree: Record<string, MoveTreeNode>; root: string; size: number; saved: SavedMoveTreeNode[] } | undefined;
+    const serialize = (tree: Record<string, MoveTreeNode>, root: string): SavedMoveTreeNode[] => {
+        const cached = previous;
+        if (cached?.tree === tree && cached.root === root) return cached.saved;
+        const keys = Object.keys(tree);
+        if (cached && cached.root === root && keys.length === cached.size
+            && keys.every(id => sameStoredNode(cached.tree[id], tree[id]))) {
+            cached.tree = tree;
+            return cached.saved;
+        }
+        const saved = serializeSavedMoveTree(tree, root);
+        previous = { tree, root, size: keys.length, saved };
+        return saved;
+    };
+    return Object.assign(serialize, { clear: () => { previous = undefined; } });
+}
+
 /**
  * The move tree as it is written to storage and to a share link.
  *

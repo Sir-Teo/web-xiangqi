@@ -120,7 +120,9 @@ self.addEventListener('fetch', (event) => {
     // `only-if-cached` outside same-origin mode throws if passed to fetch().
     if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
 
-    if (WEIGHTS_PATTERN.test(new URL(request.url).pathname)) {
+    // The wrapper owns hash-verified, versioned assets in its bounded cache.
+    // Legacy callers retain conditional revalidation here.
+    if (WEIGHTS_PATTERN.test(new URL(request.url).pathname) && !new URL(request.url).searchParams.has('pikafish-sha256')) {
         event.respondWith(serveWeights(request));
         return;
     }

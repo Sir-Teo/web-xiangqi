@@ -8,7 +8,7 @@ import { normalizeStudyAnalysis, type StudyAnalysis } from './studyAnalysis';
 import { normalizeMoveEvaluation, type MoveEvaluation } from './moveEvaluation';
 import { normalizeMoveGlyphs, type MoveGlyphs } from './moveGlyphs';
 import { normalizeGameMetadata, type GameMetadata } from './gameMetadata';
-import type { GameMode } from '../App';
+import type { GameMode } from './gameModes';
 import { describeFenProblem } from './positionSetup';
 import type {
     ReviewCriticalQuality,
@@ -182,46 +182,53 @@ function normalizeSavedMoves(value: unknown): string[] | null {
     return moves;
 }
 
-function normalizeSavedMoveTreeNode(raw: unknown, state: { count: number }, depth = 1): SavedMoveTreeNode | null {
-    if (!isRecord(raw) || depth > MAX_SAVED_MOVES) return null;
-    const uci = normalizeSavedMove(raw.uci);
-    if (!uci) return null;
-    state.count += 1;
-    if (state.count > MAX_SAVED_TREE_NODES) return null;
-
-    const rawChildren = raw.children;
-    if (rawChildren !== undefined && !Array.isArray(rawChildren)) return null;
-    const children = Array.isArray(rawChildren)
-        ? rawChildren.map((child) => normalizeSavedMoveTreeNode(child, state, depth + 1))
-        : [];
-    if (children.some((child) => child === null)) return null;
-    const normalizedChildren = children.filter((child): child is SavedMoveTreeNode => Boolean(child));
-    // A note is bounded and folded on the way back out of storage, not only on
-    // the way in: this reader also sees records written by an older build and
-    // by anything that hand-edits localStorage. A note that cannot be read is
-    // dropped rather than failing the node, since losing a sentence is better
-    // than losing the variation it sits on.
-    const comment = normalizeMoveComment(raw.comment);
-    const nags = normalizeMoveGlyphs(raw.nags);
-    const analysis = normalizeStudyAnalysis(raw.analysis, undefined, uci);
-    return {
-        uci,
-        ...(comment ? { comment } : {}),
-        ...(nags ? { nags } : {}),
-        ...(analysis ? { analysis } : {}),
-        ...(normalizeRecordedResult(raw.recordedResult) ? { recordedResult: normalizeRecordedResult(raw.recordedResult) } : {}),
-        ...normalizeMoveEvaluation(raw),
-        ...(normalizedChildren.length > 0 ? { children: normalizedChildren } : {}),
-    };
-}
-
+/** Explicit frames preserve full-depth studies in workers with smaller stacks. */
 export function normalizeSavedMoveTree(value: unknown): SavedMoveTreeNode[] | undefined | null {
     if (value === undefined) return undefined;
     if (!Array.isArray(value)) return null;
-    const state = { count: 0 };
-    const tree = value.map((node) => normalizeSavedMoveTreeNode(node, state));
-    if (tree.some((node) => node === null)) return null;
-    return tree.filter((node): node is SavedMoveTreeNode => Boolean(node));
+    try {
+        const output: SavedMoveTreeNode[] = [];
+        const stack: Array<{ input: unknown[]; index: number; output: SavedMoveTreeNode[]; depth: number; owner?: SavedMoveTreeNode }> = [
+            { input: value, index: 0, output, depth: 1 },
+        ];
+        let count = 0;
+        while (stack.length) {
+            const frame = stack[stack.length - 1];
+            if (frame.index === frame.input.length) {
+                if (frame.owner && !frame.output.length) delete frame.owner.children;
+                stack.pop();
+                continue;
+            }
+            const index = frame.index++;
+            // Match Array.map/filter for sparse caller-owned arrays too.
+            if (!(index in frame.input)) continue;
+            const raw = frame.input[index];
+            if (!isRecord(raw) || frame.depth > MAX_SAVED_MOVES || ++count > MAX_SAVED_TREE_NODES) return null;
+            const uci = normalizeSavedMove(raw.uci);
+            const rawChildren = raw.children;
+            if (!uci || (rawChildren !== undefined && !Array.isArray(rawChildren))) return null;
+            const children: SavedMoveTreeNode[] | undefined = Array.isArray(rawChildren) && rawChildren.length ? [] : undefined;
+            // Invalid annotations are dropped without losing their variation.
+            const comment = normalizeMoveComment(raw.comment);
+            const nags = normalizeMoveGlyphs(raw.nags);
+            const analysis = normalizeStudyAnalysis(raw.analysis, undefined, uci);
+            const recordedResult = normalizeRecordedResult(raw.recordedResult);
+            const node: SavedMoveTreeNode = {
+                uci,
+                ...(comment ? { comment } : {}),
+                ...(nags ? { nags } : {}),
+                ...(analysis ? { analysis } : {}),
+                ...(recordedResult ? { recordedResult } : {}),
+                ...normalizeMoveEvaluation(raw),
+                ...(children ? { children } : {}),
+            };
+            frame.output.push(node);
+            if (Array.isArray(rawChildren) && children) {
+                stack.push({ input: rawChildren, index: 0, output: children, depth: frame.depth + 1, owner: node });
+            }
+        }
+        return output;
+    } catch { return null; }
 }
 
 /**
@@ -499,36 +506,66 @@ function serializeGame(game: SavedGame): string {
     return text;
 }
 
-export function loadLibraryState(): LibraryState {
-    let raw: string | null = null;
+function readLibraryRaw(): string | null {
+    let raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
+    if (raw === null) {
+        raw = localStorage.getItem(LEGACY_STORAGE_KEYS[GAME_LIBRARY_STORAGE_KEY]);
+        if (raw !== null) readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
+    }
+    return raw;
+}
+
+/** Shared validation for the synchronous mutation path and background startup. */
+export function parseLibraryState(raw: string | null, previousGames: SavedGame[] = []): LibraryState {
     try {
-        // Read directly first: the general preference reader deliberately treats
-        // inaccessible storage as absent, which is unsafe for library writes.
-        raw = localStorage.getItem(GAME_LIBRARY_STORAGE_KEY);
-        if (raw === null) {
-            raw = localStorage.getItem(LEGACY_STORAGE_KEYS[GAME_LIBRARY_STORAGE_KEY]);
-            if (raw !== null) readVersionedStorage(GAME_LIBRARY_STORAGE_KEY);
-        }
-        const cached = libraryCache.get(localStorage);
-        if (cached?.raw === raw) return cached;
-        if (raw === null) {
-            const state = { games: [], mutationBlocked: false, raw };
-            libraryCache.set(localStorage, state);
-            return state;
-        }
-        if (raw.length > MAX_LIBRARY_JSON_LENGTH) {
-            return { games: [], mutationBlocked: true, raw };
-        }
+        if (raw === null) return { games: [], mutationBlocked: false, raw };
+        if (raw.length > MAX_LIBRARY_JSON_LENGTH) return { games: [], mutationBlocked: true, raw };
         const parsed: unknown = JSON.parse(raw);
         if (!Array.isArray(parsed)) return { games: [], mutationBlocked: true, raw };
-        const previous = new Map(cached?.games.map(game => [game.id, game]));
+        const previous = new Map(previousGames.map(game => [game.id, game]));
         const games = parsed.flatMap((record: unknown) => {
             const existing = isRecord(record) && typeof record.id === 'string' ? previous.get(record.id) : undefined;
             const game = existing && serializeGame(existing) === JSON.stringify(record) ? existing : normalizeSavedGame(record);
             return game ? [game] : [];
         }).sort((a, b) => a.savedAt - b.savedAt).slice(-MAX_SAVED_GAMES);
         const duplicateIds = new Set(games.map(game => game.id)).size !== games.length;
-        const state = { games, mutationBlocked: games.length !== parsed.length || duplicateIds, raw };
+        return { games, mutationBlocked: games.length !== parsed.length || duplicateIds, raw };
+    } catch { return { games: [], mutationBlocked: true, raw }; }
+}
+
+export function initialLibraryState(): { state: LibraryState; pendingRaw?: string } {
+    try {
+        const raw = readLibraryRaw();
+        const cached = libraryCache.get(localStorage);
+        if (cached?.raw === raw) return { state: cached };
+        if (raw && raw.length > 64 * 1024 && raw.length <= MAX_LIBRARY_JSON_LENGTH) {
+            return { state: { games: [], mutationBlocked: true, raw: null }, pendingRaw: raw };
+        }
+    } catch { /* The synchronous reader reports inaccessible storage safely. */ }
+    return { state: loadLibraryState() };
+}
+
+/** Never publish a worker result over newer bytes from a mutation or another tab. */
+export function adoptLibraryState(raw: string, result: Pick<LibraryState, 'games' | 'mutationBlocked'>): LibraryState {
+    try {
+        if (readLibraryRaw() !== raw) return loadLibraryState();
+        const cached = libraryCache.get(localStorage);
+        if (cached?.raw === raw) return cached;
+        const state = { ...result, raw };
+        libraryCache.set(localStorage, state);
+        return state;
+    } catch { return loadLibraryState(); }
+}
+
+export function loadLibraryState(): LibraryState {
+    let raw: string | null = null;
+    try {
+        // Read directly first: the general preference reader deliberately treats
+        // inaccessible storage as absent, which is unsafe for library writes.
+        raw = readLibraryRaw();
+        const cached = libraryCache.get(localStorage);
+        if (cached?.raw === raw) return cached;
+        const state = parseLibraryState(raw, cached?.games);
         libraryCache.set(localStorage, state);
         return state;
     } catch {

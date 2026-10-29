@@ -28,3 +28,9 @@ console.log(JSON.stringify({
   deferred: [...chunks.values()].filter(chunk => !startup.has(chunk.fileName)).map(sizes),
   largestStartupModules: modules.sort((a, b) => b.renderedLength - a.renderedLength).slice(0, 20),
 }, null, 2));
+
+if (process.argv.includes('--check')) {
+  const bytes = initial.reduce((sum, chunk) => sum + chunk.bytes, 0);
+  const gzipBytes = initial.reduce((sum, chunk) => sum + chunk.gzipBytes, 0);
+  if (bytes > 560_000 || gzipBytes > 175_000) throw new Error(`Startup JavaScript budget exceeded: ${bytes} bytes / ${gzipBytes} gzip bytes`);
+}

@@ -75,7 +75,7 @@
    * capacity hint and the buffer grows if the body outruns it; a caller
    * showing a percentage has to clamp.
    */
-  async function readBytes(input, onProgress) {
+  async function readBytes(input, onProgress, signal) {
     if (input instanceof Uint8Array) return input;
     if (isNode()) {
       const fs = require("fs");
@@ -83,8 +83,12 @@
       reportProgress(onProgress, bytes.length, bytes.length, true);
       return bytes;
     }
-    const res = await fetch(input);
+    const res = await fetch(input, { signal });
     if (!res.ok) throw new Error("Failed to fetch NNUE: " + input);
+    return readResponseBytes(res, onProgress);
+  }
+
+  async function readResponseBytes(res, onProgress) {
     const declared = Number(res.headers.get("content-length"));
     const total = Number.isFinite(declared) && declared > 0 ? declared : 0;
     const canStream = typeof onProgress === "function" && res.body && typeof res.body.getReader === "function";
@@ -116,6 +120,59 @@
     }
     reportProgress(onProgress, loaded, total || loaded, true);
     return loaded === bytes.length ? bytes : bytes.subarray(0, loaded);
+  }
+
+  // A fresh, small manifest identifies the compatible core/network pair. Only
+  // verified bodies are reused without a network round trip. Keep two builds
+  // per application path; quota/private-mode failures simply disable caching.
+  async function loadPublishedAssets(basePath, variant, onProgress, signal, loadWeights, timing) {
+    if (typeof crypto === "undefined" || !crypto.subtle) return null;
+    const response = await fetch(joinPath(basePath, "engine-assets.json"), { cache: "no-cache", signal });
+    if (response.status === 404 || (response.ok && !/json/i.test(response.headers.get("content-type") || ""))) return null;
+    if (!response.ok) throw new Error("Failed to fetch engine asset manifest");
+    const manifest = await response.json();
+    const jsFile = coreMeta(variant).jsFile;
+    const wasmFile = jsFile.replace(/\.js$/, ".wasm");
+    if (manifest.version !== 1 || !/^[a-f0-9]{64}$/.test(manifest.buildId || "")) throw new Error("Invalid engine asset manifest");
+    for (const name of [jsFile, wasmFile, ...(loadWeights ? ["pikafish.nnue"] : [])]) {
+      const entry = manifest.assets && manifest.assets[name];
+      if (!entry || !/^[a-f0-9]{64}$/.test(entry.sha256) || !Number.isSafeInteger(entry.size) || entry.size <= 0) throw new Error("Missing engine asset: " + name);
+    }
+    timing("manifest-ready");
+    const scope = new URL(basePath, self.location.href).pathname;
+    const cachePrefix = "pikafish-assets-v1-" + encodeURIComponent(scope) + "-";
+    let cache = null;
+    try {
+      cache = await caches.open(cachePrefix + manifest.buildId);
+      const names = (await caches.keys()).filter(name => name.startsWith(cachePrefix));
+      const previous = names.filter(name => name !== cachePrefix + manifest.buildId);
+      await Promise.all(previous.slice(0, Math.max(0, previous.length - 1)).map(name => caches.delete(name)));
+    } catch (_) {}
+    async function get(name, progress) {
+      const entry = manifest.assets[name];
+      const url = new URL(joinPath(basePath, name), self.location.href);
+      url.searchParams.set("pikafish-sha256", entry.sha256);
+      let cached = null;
+      try { if (cache) cached = await cache.match(url.href); } catch (_) {}
+      const result = cached || await fetch(url.href, { cache: "no-cache", signal });
+      if (!result.ok) throw new Error("Failed to fetch engine asset: " + name);
+      const bytes = await readResponseBytes(result, progress);
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), byte => byte.toString(16).padStart(2, "0")).join("");
+      if (bytes.length !== entry.size || hash !== entry.sha256) {
+        try { if (cache) await cache.delete(url.href); } catch (_) {}
+        throw new Error("Engine asset integrity mismatch: " + name + ". Reload to fetch the current build.");
+      }
+      if (!cached && cache) {
+        try { await cache.put(url.href, new Response(bytes, { headers: { "Content-Length": String(bytes.length) } })); } catch (_) {}
+      }
+      return bytes;
+    }
+    // Attach all rejection handlers immediately, including for a failed sibling.
+    const weights = loadWeights ? get("pikafish.nnue", onProgress).then(bytes => { timing("weights-ready"); return { bytes }; }, error => ({ error })) : null;
+    const all = await Promise.all([get(jsFile), get(wasmFile)]);
+    timing("core-download-ready");
+    const coreUrl = URL.createObjectURL(new Blob([all[0]], { type: "application/javascript" }));
+    return { coreUrl, wasmBinary: all[1], nnuePromise: weights };
   }
 
   function toUint8Array(input) {
@@ -334,6 +391,17 @@
     const variant = resolveVariant(opts);
     const basePath = opts.basePath || defaultBasePath();
     const coreFactory = getCoreFactory({ ...opts, basePath, variant });
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const timing = phase => {
+      if (typeof opts.onStartupTiming === "function") {
+        try { opts.onStartupTiming({ phase, elapsedMs: (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt }); } catch (_) {}
+      }
+    };
+    const downloadAbort = typeof AbortController === "function" ? new AbortController() : null;
+    timing("core-start");
+    let prefetched = opts.nnuePromise || (opts.nnueBytes ? Promise.resolve({ bytes: opts.nnueBytes }) :
+      !isNode() && opts.autoLoadNNUE !== false ? readBytes(opts.nnuePath || joinPath(basePath, "pikafish.nnue"), opts.onAssetProgress, downloadAbort && downloadAbort.signal)
+        .then(bytes => { timing("weights-ready"); return { bytes }; }, error => ({ error })) : null);
     const listeners = new Set();
     const messageEventListeners = new Set();
     const maxLineHistory = clampInt((opts && opts.lineHistoryMax) || 2000, 10, 20000);
@@ -380,23 +448,28 @@
     }
 
     const meta = coreMeta(variant);
-    mod = await coreFactory({
+    try { mod = await coreFactory({
       listener: onLine,
       // In browser workers, Emscripten pthread workers need to load the core
       // runtime script, not this wrapper script.
-      mainScriptUrlOrBlob: !isNode() ? joinPath(basePath, meta.jsFile) : undefined,
+      mainScriptUrlOrBlob: !isNode() ? opts.coreUrl || joinPath(basePath, meta.jsFile) : undefined,
+      ...(opts.wasmBinary ? { wasmBinary: opts.wasmBinary } : {}),
       locateFile: function(file) {
         if (file.endsWith(".wasm") || file.endsWith(".worker.js")) {
           return joinPath(basePath, file);
         }
         return file;
       }
-    });
+    }); } catch (error) {
+      if (downloadAbort) downloadAbort.abort();
+      throw error;
+    }
+    timing("core-ready");
 
-    async function loadNNUE(nnueSource) {
+    async function loadNNUE(nnueSource, initialBytes) {
       const target = "/pikafish.nnue";
       const source = nnueSource || opts.nnuePath || joinPath(basePath, "pikafish.nnue");
-      const bytes = await readBytes(
+      const bytes = initialBytes || await readBytes(
         source,
         opts.onAssetProgress
       );
@@ -442,7 +515,11 @@
     }
 
     if (opts.autoLoadNNUE !== false) {
-      await loadNNUE(opts.nnuePath);
+      const downloaded = prefetched ? await prefetched : null;
+      prefetched = null;
+      if (downloaded && downloaded.error) throw downloaded.error;
+      await loadNNUE(opts.nnuePath, downloaded && downloaded.bytes);
+      timing("network-installed");
     }
 
     function waitForLine(matcher, waitOpts) {
@@ -720,6 +797,12 @@
             }
             return;
           }
+          if (data.type === "startupTiming") {
+            if (typeof opts.onStartupTiming === "function") {
+              try { opts.onStartupTiming({ phase: data.phase, elapsedMs: data.elapsedMs }); } catch (_) {}
+            }
+            return;
+          }
           if (data.type === "inited") {
             activeVariant = data.variant || activeVariant;
             settled = true;
@@ -776,6 +859,8 @@
         autoHashMB: opts.autoHashMB,
         hashMB: opts.hashMB,
         reportAssetProgress: typeof opts.onAssetProgress === "function" || opts.extendInitTimeoutOnProgress === true,
+        reportStartupTiming: typeof opts.onStartupTiming === "function",
+        useAssetManifest: opts.assetManifest === true || (opts.assetManifest !== false && !opts.coreScript && !opts.coreScripts && !opts.nnuePath && !opts.workerScript),
         coreScript,
         coreScripts
       });
@@ -934,8 +1019,15 @@
       let autoHashMBOverride = true;
       let hashMBOverride = undefined;
       let reportAssetProgressOverride = false;
+      let publishedAssets = null;
+      let startupBegan = 0;
+      let reportStartupTimings = false;
       let lastPostedAssetProgress = null;
       let forwardAttached = false;
+
+    function postStartupTiming(phase) {
+      if (reportStartupTimings) self.postMessage({ type: "startupTiming", phase, elapsedMs: performance.now() - startupBegan });
+    }
 
     function postAssetProgress(progress) {
       if (!reportAssetProgressOverride) return;
@@ -970,6 +1062,8 @@
             threads: threadsOverride,
             autoHashMB: autoHashMBOverride,
             hashMB: hashMBOverride,
+            ...(publishedAssets || {}),
+            onStartupTiming: entry => postStartupTiming(entry.phase),
             onAssetProgress: reportAssetProgressOverride ? postAssetProgress : undefined
           });
         }
@@ -1075,10 +1169,19 @@
       try {
         const data = event.data;
         if (data && typeof data === "object" && data.type === "init") {
+          startupBegan = performance.now();
+          reportStartupTimings = data.reportStartupTiming === true;
+          reportAssetProgressOverride = data.reportAssetProgress === true;
+          if (data.useAssetManifest) {
+            publishedAssets = await loadPublishedAssets(data.basePath || defaultBasePath(), data.bootstrapVariant || data.variant,
+              reportAssetProgressOverride ? postAssetProgress : undefined, undefined, data.autoLoadNNUE !== false, postStartupTiming);
+          }
           const coreScripts = Array.isArray(data.coreScripts) && data.coreScripts.length
             ? data.coreScripts
             : (data.coreScript ? [data.coreScript] : []);
-          if (coreScripts.length) {
+          if (publishedAssets) {
+            importCoreScripts([publishedAssets.coreUrl], data.bootstrapVariant || data.variant);
+          } else if (coreScripts.length) {
             importCoreScripts(coreScripts, data.bootstrapVariant || data.variant);
           }
           basePathOverride = data.basePath || basePathOverride;
@@ -1094,6 +1197,7 @@
           reportAssetProgressOverride = data.reportAssetProgress === true;
           const engine = await ensureEngine();
           attachForwarder(engine);
+          postStartupTiming("engine-created");
           self.postMessage({ type: "inited", variant: engine.variant });
           return;
         }

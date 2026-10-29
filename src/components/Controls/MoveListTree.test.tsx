@@ -63,10 +63,10 @@ function render(overrides: Partial<Parameters<typeof MoveListTree>[0]> = {}) {
     return renderToStaticMarkup(
         <MoveListTree
             treeNodes={treeNodes}
+            moveStructure={overrides.treeNodes ?? treeNodes}
             rootNodeId="root"
             rootFen={ROOT_FEN}
             currentNodeId="n2"
-            currentMoveIndex={1}
             activeLineNodeIds={activeLineNodeIds}
             onNavigateNode={noop}
             {...overrides}

@@ -191,6 +191,8 @@ cp "$NNUE_SOURCE" "$STAGED_DIST_DIR/pikafish.nnue"
 if [ "$NNUE_SOURCE" != "$PUBLIC_DIR/pikafish.nnue" ]; then
   cp "$NNUE_SOURCE" "$STAGED_PUBLIC_DIR/pikafish.nnue"
 fi
+node "$ROOT/scripts/write-engine-manifest.cjs" "$STAGED_DIST_DIR"
+cp "$STAGED_DIST_DIR/engine-assets.json" "$STAGED_PUBLIC_DIR/engine-assets.json"
 
 # Mark dist/ as CJS so Node.js doesn't treat pikafish.js as ES module
 # (root package.json has "type":"module" but pikafish.js uses module.exports)

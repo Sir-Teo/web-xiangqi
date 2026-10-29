@@ -19,12 +19,14 @@ async function noteIs(page, note) {
       try {
         await page.addInitScript(() => {
           window.__moveWork = [];
+          window.__mountedMoveKeys = [];
           const renderers = new Map();
           const previousFibers = new Map();
           window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
             supportsFiber: true, renderers,
             inject(renderer) { renderers.set(1, renderer); return 1; }, onCommitFiberUnmount() {},
             onCommitFiberRoot(_id, root) {
+              const mounted = [];
               const stack = [root.current];
               while (stack.length) {
                 const fiber = stack.pop();
@@ -32,12 +34,14 @@ async function noteIs(page, note) {
                 if (['MoveChip', 'BreadcrumbChip'].includes(name)) {
                   const nodeId = fiber.memoizedProps.nodeId;
                   const key = name + ':' + nodeId;
+                  mounted.push(key);
                   // A bailed-out parent can reuse its child fiber, including old flags.
                   if (previousFibers.get(key) !== fiber && (fiber.flags & 1)) window.__moveWork.push({ name, nodeId });
                   previousFibers.set(key, fiber);
                 }
                 if (fiber.child) stack.push(fiber.child); if (fiber.sibling) stack.push(fiber.sibling);
               }
+              window.__mountedMoveKeys = mounted;
             },
           };
           Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copied = text; } } });
@@ -63,13 +67,14 @@ async function noteIs(page, note) {
         await page.keyboard.press('t');
         await page.waitForFunction(plies => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n' + plies, plies);
         assert.ok(await page.evaluate(() => window.__moveWork.some(item => item.name === 'MoveChip') && window.__moveWork.some(item => item.name === 'BreadcrumbChip')), 'Both render probes must observe the initial study');
-        await page.evaluate(() => { document.activeElement?.blur(); window.__moveWork = []; });
+        await page.evaluate(() => { document.activeElement?.blur(); window.__beforeMoveKeys = window.__mountedMoveKeys; window.__moveWork = []; });
         await page.keyboard.press('ArrowLeft');
         await page.waitForFunction(plies => document.querySelector('[data-testid="move-tree-active"]')?.dataset.nodeId === 'n' + (plies - 1), plies);
         const work = await page.evaluate(() => window.__moveWork);
+        const previouslyMounted = new Set(await page.evaluate(() => window.__beforeMoveKeys));
         assert.ok(work.some(item => item.name === 'MoveChip'), 'Navigation must redraw the active move');
-        assert.ok(work.every(item => ['n1023', 'n1024'].includes(item.nodeId)), `Unchanged entries rendered: ${JSON.stringify(work.slice(0, 12))}`);
-        assert.ok(work.length <= 4, `A single navigation rendered ${work.length} entries`);
+        assert.ok(work.every(item => ['n1023', 'n1024'].includes(item.nodeId) || !previouslyMounted.has(item.name + ':' + item.nodeId)), `Unchanged entries rendered: ${JSON.stringify(work.slice(0, 12))}`);
+        assert.ok(work.length <= 12, `A single navigation rendered ${work.length} entries`);
         await page.keyboard.press('t');
         assert.equal(await page.locator('.mtree-chip[tabindex="0"]').count(), 1);
         await page.locator('.mtree-chip[tabindex="0"]').focus();

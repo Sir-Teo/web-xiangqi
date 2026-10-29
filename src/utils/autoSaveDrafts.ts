@@ -1,4 +1,5 @@
-import { AUTO_SAVED_GAME_KEY, readAutoSavedGame, writeAutoSavedGame, type AutoSaveInput, type AutoSavedGame } from './autoSave';
+import { AUTO_SAVED_GAME_KEY, commitPreparedAutoSave, parseAutoSaveEnvelope, writeAutoSavedGame, type AutoSaveInput, type AutoSavedGame, type PreparedAutoSave } from './autoSave';
+import { readVersionedStorage } from './storageKeys';
 import { getLocalStorage, readStorage, removeStorage, writeStorage, type KeyValueStorage } from './storage';
 
 export const AUTO_SAVE_DRAFT_PREFIX = 'xiangqi:recovery-draft:v1:';
@@ -13,6 +14,7 @@ function draftStorage(id: string, storage: KeyValueStorage): KeyValueStorage {
     const cached = slots.get(id);
     if (cached) return cached;
     const key = AUTO_SAVE_DRAFT_PREFIX + id;
+    let knownOwnedMirror: string | null = null;
     const adapter: KeyValueStorage = {
         getItem: name => name === AUTO_SAVED_GAME_KEY ? storage.getItem(key) : null,
         setItem: (_name, value) => {
@@ -23,13 +25,13 @@ function draftStorage(id: string, storage: KeyValueStorage): KeyValueStorage {
             // Compatibility mirror for older app versions. Recovery always uses
             // the independent slots, so another tab replacing this is harmless.
             const previous = readStorage(AUTO_SAVED_GAME_KEY, storage);
-            if (previous) {
+            if (previous && previous !== knownOwnedMirror) {
                 let owned = false;
                 try { owned = Boolean(JSON.parse(previous)?.draftId); } catch { /* Keep malformed data too. */ }
                 if (!owned && !readStorage(AUTO_SAVE_DRAFT_PREFIX + 'legacy', storage)
                     && !writeStorage(AUTO_SAVE_DRAFT_PREFIX + 'legacy', previous, storage)) return;
             }
-            writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage);
+            if (writeStorage(AUTO_SAVED_GAME_KEY, serialized, storage)) knownOwnedMirror = serialized;
         },
         removeItem: () => clearAutoSaveDraft(id, storage),
     };
@@ -56,7 +58,17 @@ export function clearAutoSaveDraft(id: string, storage = getLocalStorage()): voi
 }
 
 export function readAutoSaveDrafts(storage = getLocalStorage()): RecoveryDraft[] {
-    if (!storage) return [];
+    return readRecoveryState(storage).drafts;
+}
+
+export type RecoveryProblem = { draftId: string; raw: string; reason: string };
+export type RecoveryState = { drafts: RecoveryDraft[]; problems: RecoveryProblem[] };
+
+/** One startup scan; an owned slot and its identical legacy mirror are parsed once. */
+export function readRecoveryState(storage = getLocalStorage()): RecoveryState {
+    if (!storage) return { drafts: [], problems: [] };
+    const legacyRaw = readVersionedStorage(AUTO_SAVED_GAME_KEY, storage);
+    const slots: { draftId: string; raw: string }[] = [];
     const drafts: RecoveryDraft[] = [];
     const enumerable = storage as Partial<Storage>;
     try {
@@ -64,45 +76,42 @@ export function readAutoSaveDrafts(storage = getLocalStorage()): RecoveryDraft[]
             const key = enumerable.key?.(i);
             if (!key?.startsWith(AUTO_SAVE_DRAFT_PREFIX)) continue;
             const draftId = key.slice(AUTO_SAVE_DRAFT_PREFIX.length);
-            const snapshot = readAutoSavedGame(draftStorage(draftId, storage));
-            if (snapshot) drafts.push({ ...snapshot, draftId });
+            const raw = readStorage(key, storage);
+            if (raw) slots.push({ draftId, raw });
         }
     } catch { /* The legacy reader below still works with restricted storage. */ }
-    const legacy = readAutoSavedGame(storage);
-    if (legacy) {
-        let id = 'legacy';
-        try { id = JSON.parse(readStorage(AUTO_SAVED_GAME_KEY, storage)!).draftId ?? id; } catch { /* Legacy envelope. */ }
-        if (!drafts.some(draft => draft.draftId === id)) drafts.push({ ...legacy, draftId: id });
+    // Local to this scan: a later read must see another tab's changed bytes,
+    // and old recovery records should be released when their UI is dismissed.
+    const parsed = new Map<string, ReturnType<typeof parseAutoSaveEnvelope>>();
+    const parse = (raw: string) => {
+        let envelope = parsed.get(raw);
+        if (!envelope) { envelope = parseAutoSaveEnvelope(raw); parsed.set(raw, envelope); }
+        return envelope;
+    };
+    for (const { draftId, raw } of slots) {
+        const { snapshot } = parse(raw);
+        if (snapshot) drafts.push({ ...snapshot, draftId });
     }
-    return drafts.sort((a, b) => b.savedAt - a.savedAt);
+    if (legacyRaw) {
+        const { snapshot, draftId = 'legacy' } = parse(legacyRaw);
+        if (snapshot && !drafts.some(draft => draft.draftId === draftId)) drafts.push({ ...snapshot, draftId });
+    }
+    const problems = new Map<string, RecoveryProblem>();
+    for (const { draftId, raw } of [...(legacyRaw ? [{ draftId: 'legacy', raw: legacyRaw }] : []), ...slots]) {
+        if (!parse(raw).snapshot) problems.set(draftId, { draftId, raw, reason: 'This recovery copy has an unsupported format or damaged data.' });
+    }
+    return { drafts: drafts.sort((a, b) => b.savedAt - a.savedAt), problems: [...problems.values()] };
 }
 
 export function writeAutoSaveDraft(game: AutoSaveInput, storage = getLocalStorage(), savedAt = Date.now(), id: string = currentDraftId) {
     return writeAutoSavedGame(game, storage ? draftStorage(id, storage) : null, savedAt);
 }
 
+export function commitPreparedAutoSaveDraft(prepared: PreparedAutoSave, storage = getLocalStorage(), id: string = currentDraftId) {
+    return commitPreparedAutoSave(prepared, storage ? draftStorage(id, storage) : null);
+}
+
 export function readAutoSaveDraftRaw(id: string, storage = getLocalStorage()): string | null {
     return readStorage(AUTO_SAVE_DRAFT_PREFIX + id, storage)
         ?? (id === 'legacy' ? readStorage(AUTO_SAVED_GAME_KEY, storage) : null);
-}
-export type RecoveryProblem = { draftId: string; raw: string; reason: string };
-export function readAutoSaveProblems(storage = getLocalStorage()): RecoveryProblem[] {
-    if (!storage) return [];
-    const keys = new Set([AUTO_SAVED_GAME_KEY]);
-    const enumerable = storage as Partial<Storage>;
-    try {
-        for (let i = 0; i < (enumerable.length ?? 0); i++) {
-            const key = enumerable.key?.(i);
-            if (key?.startsWith(AUTO_SAVE_DRAFT_PREFIX)) keys.add(key);
-        }
-    } catch { /* Inspect the known legacy slot even when enumeration fails. */ }
-    const problems = new Map<string, RecoveryProblem>();
-    for (const key of keys) {
-        const raw = readStorage(key, storage);
-        if (!raw) continue;
-        const draftId = key === AUTO_SAVED_GAME_KEY ? 'legacy' : key.slice(AUTO_SAVE_DRAFT_PREFIX.length);
-        const game = readAutoSavedGame(key === AUTO_SAVED_GAME_KEY ? storage : draftStorage(draftId, storage));
-        if (!game) problems.set(draftId, { draftId, raw, reason: 'This recovery copy has an unsupported format or damaged data.' });
-    }
-    return [...problems.values()];
 }

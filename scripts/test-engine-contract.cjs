@@ -39,6 +39,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { createHash } = require('node:crypto');
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -138,6 +139,22 @@ function checkCore(dir, core, expectedPool) {
   }
 }
 
+function checkAssetManifest(dir) {
+  try {
+    const directory = path.join(ROOT, dir);
+    const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'engine-assets.json'), 'utf8'));
+    const assets = {};
+    for (const name of fs.readdirSync(directory).filter(name => /^pikafish-core(?:-single)?(?:-simd)?\.(?:js|wasm)$/.test(name) || name === 'pikafish.nnue').sort()) {
+      const bytes = fs.readFileSync(path.join(directory, name));
+      assets[name] = { sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length };
+    }
+    const buildId = createHash('sha256').update(JSON.stringify(assets)).digest('hex');
+    if (manifest.version !== 1 || manifest.buildId !== buildId || JSON.stringify(manifest.assets) !== JSON.stringify(assets)) {
+      fail(`${dir}/engine-assets.json does not describe the shipped binaries; regenerate it with scripts/write-engine-manifest.cjs`);
+    }
+  } catch (error) { fail(`${dir}/engine-assets.json is missing or unreadable: ${error.message}`); }
+}
+
 function main() {
   const expectedPool = poolSizeFromSource();
   const maxThreads = maxThreadsFromSource();
@@ -151,6 +168,7 @@ function main() {
 
   const buildModes = new Map();
   for (const dir of SHIPPED_DIRS) {
+    checkAssetManifest(dir);
     const file = path.join(ROOT, dir, 'pikafish.js');
     if (fs.existsSync(file)) {
       const markers = [...fs.readFileSync(file, 'utf8').matchAll(/^ {2}const BUILD_HAS_SIMD = (true|false);$/gm)];

@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "verify": "npm run typecheck && npm run lint && npm test && npm run test:openings && npm run test:library && npm run test:build:publication && npm run test:engine:contract && npm run test:smoke && npm run test:parity && npm run build:react && npm run test:server:headers",
+    "verify:local": "npm run verify && npm run test:performance && npm run test:prod:smoke",
     "preview": "vite preview",
     "test": "npm run test:unit && npm run test:parser-limits",
     "test:unit": "vitest run --project unit && vitest run --project unit-heavy",
@@ -45,7 +46,11 @@
     "bench:nps:threaded-simd": "node scripts/bench-nps.cjs --variant threaded-simd",
     "test:ui:audit": "node scripts/test-ui-audit.cjs",
     "test:ui:cross-browser": "node scripts/test-ui-cross-browser.cjs",
-    "test:server:headers": "node scripts/test-server-headers.cjs"
+    "test:server:headers": "node scripts/test-server-headers.cjs",
+    "test:performance": "node scripts/measure-startup-bundle.mjs --check && node scripts/test-performance.mjs",
+    "bench:resources": "node scripts/bench-engine-resources.cjs",
+    "bench:active-engine": "node scripts/test-performance.mjs bench-active-engine-browser.cjs",
+    "bench:study-snapshots": "node scripts/bench-study-snapshots.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

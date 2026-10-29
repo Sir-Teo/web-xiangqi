@@ -2,9 +2,17 @@ const assert = require('node:assert/strict');
 const { browserType } = require('./qa-browser.cjs');
 const base = process.env.XIANGQI_QA_URL || 'http://127.0.0.1:5174/web-xiangqi/';
 async function command(page, label) {
+  const previousLibrary = label === 'Save game'
+    ? await page.evaluate(() => localStorage.getItem('xiangqi:library:v1')) : null;
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByRole('combobox', { name: 'Search commands' }).fill(label);
   await page.keyboard.press('Enter');
+  await page.getByRole('combobox', { name: 'Search commands' }).waitFor({ state: 'hidden' });
+  if (label === 'Save game') {
+    // Saving acquires an asynchronous cross-tab lock. Closing the palette
+    // only dispatches the action; the previous library may still be present.
+    await page.waitForFunction(previous => localStorage.getItem('xiangqi:library:v1') !== previous, previousLibrary);
+  }
 }
 (async () => {
   const browser = await browserType.launch();

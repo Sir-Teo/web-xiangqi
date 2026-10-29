@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { MoveRecord, MoveTreeNode } from '../hooks/useXiangqi';
-import { isMoveListNodeVisible } from './moveListVisibility';
+import { buildMoveListNavigation, buildMoveListRows } from './moveListRows';
+import { START_FEN } from './xiangqi';
+
+function isMoveListNodeVisible(tree: Record<string, MoveTreeNode>, root: string, line: string[], id: string) {
+    return buildMoveListNavigation(buildMoveListRows(tree, root, line, START_FEN), tree).rowByNode.has(id);
+}
 
 function fixture() {
     const record: MoveRecord = { uci: 'a0a1', piece: 'R', captured: '', board: [], sideToMove: 'b', inCheck: false, ply: 1 };
@@ -26,7 +31,7 @@ describe('move-list focus visibility', () => {
     });
     it('only shows the preferred continuation within a side line', () => {
         const nodes = fixture();
-        nodes.hidden = { ...nodes.v3, id: 'hidden' };
+        nodes.hidden = { ...nodes.v3, id: 'hidden', childrenIds: [] };
         nodes.v2.childrenIds = ['hidden', 'v3'];
         expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'hidden')).toBe(false);
         expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'v3')).toBe(true);
@@ -44,15 +49,20 @@ describe('move-list focus visibility', () => {
         nodes.main.childrenIds.push('other');
         expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'v80')).toBe(true);
     });
-    it('rejects missing links, recordless moves, empty lists and cycles', () => {
+    it('ignores missing/recordless moves and does not invent an empty line', () => {
         const nodes = fixture();
         expect(isMoveListNodeVisible(nodes, 'start', [], 'v1')).toBe(false);
         delete nodes.v1.record;
         expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'v1')).toBe(false);
-        nodes.v2.parentId = 'missing';
+        delete nodes.v2;
         expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'v3')).toBe(false);
-        nodes.v2.parentId = 'v3';
+    });
+    it('terminates cyclic side lines while keeping their actually rendered chips focusable', () => {
+        const nodes = fixture();
         nodes.v3.childrenIds = ['v2'];
-        expect(isMoveListNodeVisible(nodes, 'start', ['main'], 'v3')).toBe(false);
+        const rows = buildMoveListRows(nodes, 'start', ['main'], START_FEN);
+        const navigation = buildMoveListNavigation(rows, nodes);
+        expect(navigation.ids).toEqual(['main', 'v1', 'v2', 'v3']);
+        expect(new Set(navigation.ids).size).toBe(navigation.ids.length);
     });
 });

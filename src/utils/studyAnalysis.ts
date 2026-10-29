@@ -104,13 +104,3 @@ export function readStudyAnalysisPgn(comment: string): StudyAnalysis | undefined
   if (!match) return undefined;
   try { return normalizeStudyAnalysis(JSON.parse(decodeURIComponent(match[1]))); } catch { return undefined; }
 }
-
-export function hasStudyAnalysis(tree: Array<{ analysis?: StudyAnalysis; children?: unknown[] }>): boolean {
-  const stack = [...tree];
-  while (stack.length) {
-    const node = stack.pop()!;
-    if (node.analysis) return true;
-    if (node.children) stack.push(...node.children as typeof tree);
-  }
-  return false;
-}

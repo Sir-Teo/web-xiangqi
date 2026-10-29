@@ -30,6 +30,9 @@ type Props = {
 export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, rootFen, notationStyle,
     currentNodeId, gameIdentity, disabled, onNavigate, initialViewState, onViewStateChange }: Props) {
     const [view, setView] = useState(initialViewState ?? EMPTY_VIEW);
+    const hasNotes = notes.length > 0;
+    const viewRef = useRef(view);
+    viewRef.current = view;
     const { query, limit, expanded } = view;
     const identityRef = useRef(gameIdentity);
     const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -42,8 +45,17 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
         identityRef.current = gameIdentity;
         setView(EMPTY_VIEW);
     }, [gameIdentity]);
+    useLayoutEffect(() => {
+        const details = detailsRef.current;
+        return () => {
+            // Native toggle events are deferred and can be lost when a tab
+            // unmounts the finder. Retain its actual final disclosure state.
+            if (details) onViewStateChange?.(gameIdentity, { ...viewRef.current, expanded: details.open });
+        };
+    }, [gameIdentity, onViewStateChange, hasNotes]);
     const updateView = (patch: Partial<StudyNotesViewState>) => {
         const next = { ...view, expanded: detailsRef.current?.open ?? expanded, ...patch };
+        viewRef.current = next;
         setView(next);
         onViewStateChange?.(gameIdentity, next);
     };
@@ -85,7 +97,7 @@ export const StudyNotes = memo(function StudyNotes({ notes, treeNodes, rootId, r
     const label = (id: string) => id === rootId ? 'Starting position'
         : formatBreadcrumbLabel(treeNodes[id]?.record, rootFen, notationStyle);
 
-    if (!notes.length) return null;
+    if (!hasNotes) return null;
     return <details id="study-notes" className="study-notes" data-testid="study-notes" ref={detailsRef}
         open={expanded} onToggle={event => updateView({ expanded: event.currentTarget.open })}>
         <summary>Study notes <span>({notes.length})</span></summary>

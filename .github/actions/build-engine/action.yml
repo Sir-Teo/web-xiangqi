@@ -31,6 +31,8 @@ runs:
         mkdir -p dist
         cp .cache/engine/* dist/
         cp .cache/engine/* public/
+        node scripts/write-engine-manifest.cjs dist
+        cp dist/engine-assets.json public/engine-assets.json
         cp demo/*.html dist/
         printf '%s\n' '{"type":"commonjs"}' > dist/package.json
     - name: Save compiled engine cache

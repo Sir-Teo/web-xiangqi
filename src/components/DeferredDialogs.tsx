@@ -1,4 +1,6 @@
 import type { CommandPaletteModal } from './CommandPaletteModal';
+import type { SettingsDialogProps } from './SettingsDialog';
+import type { NewGameDialogProps } from './NewGameDialog';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import type { BoardEditorProps } from './Board/BoardEditor';
 import { keepTabWithin } from '../utils/focusTrap';
@@ -9,6 +11,8 @@ import './DeferredDialogs.css';
 const Commands = lazy(() => import('./CommandPaletteModal').then(module => ({ default: module.CommandPaletteModal })));
 const Editor = lazy(() => import('./Board/BoardEditor').then(module => ({ default: module.BoardEditor })));
 const Lessons = lazy(() => import('./RuleLessons').then(module => ({ default: module.RuleLessons })));
+const Settings = lazy(() => import('./SettingsDialog').then(module => ({ default: module.SettingsDialog })));
+const NewGame = lazy(() => import('./NewGameDialog').then(module => ({ default: module.NewGameDialog })));
 
 function DialogNotice({ title, onClose, failed = false }: { title: string; onClose: () => void; failed?: boolean }) {
   const dialog = useRef<HTMLDivElement>(null);
@@ -59,6 +63,14 @@ export function DeferredBoardEditor(props: BoardEditorProps) {
 
 export function DeferredRuleLessons(props: ComponentProps<typeof Lessons>) {
   return <DeferredDialog title="Learn the rules" onClose={props.onClose}><Lessons {...props} /></DeferredDialog>;
+}
+
+export function DeferredSettingsDialog(props: SettingsDialogProps) {
+  return <DeferredDialog title="Settings" onClose={props.closeSettings}><Settings {...props} /></DeferredDialog>;
+}
+
+export function DeferredNewGameDialog(props: NewGameDialogProps) {
+  return <DeferredDialog title="New game" onClose={props.closeNewGameMenu}><NewGame {...props} /></DeferredDialog>;
 }
 
 export function DeferredCommandPalette(props: ComponentProps<typeof CommandPaletteModal>) {

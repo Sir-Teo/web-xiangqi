@@ -1,12 +1,18 @@
+import { prepareAutoSaveInWorker, shouldPrepareAutoSaveInWorker } from './utils/autoSaveWorker';
+import { DeferredEnginePanel as EnginePanel } from './components/DeferredAnalysisPanels';
+import type { EngineNotice, EngineHashFeedback, ExportFailureKey } from './utils/appUiTypes';
+import { createNewGameForm } from './utils/newGameForm';
+import { GAME_MODES, type GameMode } from './utils/gameModes';
+import { useStoreSelector } from './hooks/useStoreSelector';
+import { sameBoardPvReading } from './utils/samePvReading';
 import { isComposingKey } from './utils/keyboard';
 import { useAnalysisActivation } from './hooks/useAnalysisActivation';
 import { downloadRecoveryGame } from './utils/recoveryDownload';
 import { studyContentParts, studyDetailsContent, studyMoveContent } from './utils/studyContent';
 import { AnalysisBoardContext } from './components/AnalysisBoardContext';
-import { EngineOutput, EngineSearchTelemetry } from './components/EngineTelemetry';
 import { librarySource, resolveLibrarySource } from './utils/librarySource';
 import { isWorthAutoSaving } from './utils/autoSave';
-import { currentDraftId, readAutoSaveDraftRaw, readAutoSaveProblems, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
+import { commitPreparedAutoSaveDraft, currentDraftId, readAutoSaveDraftRaw, readRecoveryState, clearAutoSaveDraft, readAutoSaveDrafts, writeAutoSaveDraft, type RecoveryDraft } from './utils/autoSaveDrafts';
 import { normalizeRecordedResult, recordedResultFromSavedResult, RESULT_TAG } from './utils/recordedResult';
 import { evaluationKindOverride, formatEvaluationText, type EvaluationScoreKind } from './utils/engineEvalReading';
 import { captureStudyAnalysis, sameStudyAnalysis } from './utils/studyAnalysis';
@@ -22,7 +28,7 @@ import { LibraryMatches } from './components/Library/LibraryMatches';
 import type { LibrarySearchFocusRequest, LibraryViewState } from './components/Library/LibraryPanel';
 import { readStorage, writeStorage } from './utils/storage';
 import { BeginnerGuide } from './components/BeginnerGuide';
-import { DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
+import { DeferredNewGameDialog as NewGameDialog, DeferredSettingsDialog as SettingsDialog, DeferredRuleLessons as RuleLessons, DeferredBoardEditor as BoardEditor } from './components/DeferredDialogs';
 import { hasMoveTreeLine } from './utils/appendMoveTreeLine';
 import { BEGINNER_GUIDE_STORAGE_KEY } from './utils/storageKeys';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -31,20 +37,20 @@ import { Board } from './components/Board/Board';
 import { BoardActionMenu } from './components/BoardActionMenu';
 import { EvalBar } from './components/Board/EvalBar';
 import type { BoardOrientation } from './components/Board/Board';
-import { DeferredEvalGraph as EvalGraph, DeferredCandidatePanel as CandidatePanel } from './components/DeferredAnalysisPanels';
+import { DeferredEvalGraph as EvalGraph } from './components/DeferredAnalysisPanels';
 import { DeferredReviewPanel } from './components/Panels/DeferredReviewPanel';
 import { WatchControls } from './components/Controls/WatchControls';
 import type { AiSpeed } from './components/Controls/WatchControls';
 import { StudyMainLineControls } from './components/Controls/StudyMainLineControls';
 import { getStudyMainLine } from './utils/studyMainLine';
-import { BreadcrumbChip } from './components/Controls/BreadcrumbChip';
+import { TreeBreadcrumb } from './components/Controls/TreeBreadcrumb';
 import { MoveListTree } from './components/Controls/MoveListTree';
 import { MoveLineStrip } from './components/Controls/MoveLineStrip';
 import {
   IconSettings, IconRefresh, IconFlip, IconBarChart, IconTree,
   IconBot, IconX, IconPause, IconPlay, IconSave, IconLibrary, IconArrow,
-  IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconUpload, IconSkipBack, IconChevronLeft, IconChevronRight,
-  IconSkipForward, IconMore, IconSearch, IconTarget, IconSpark, IconNote
+  IconPawn, IconCheck, IconCopy, IconLink, IconDownload, IconSkipBack, IconChevronLeft, IconChevronRight,
+  IconSkipForward, IconMore, IconSearch, IconSpark, IconNote
 } from './components/icons';
 import { useEngine } from './hooks/useEngine';
 import { useEngineErrorRecovery } from './hooks/useEngineErrorRecovery';
@@ -53,13 +59,12 @@ import { candidateGoCommand, makeCandidateTag, parseCandidateTag, type Candidate
 import { formatEngineDownload, formatEngineDownloadShort } from './utils/engineAssetProgress';
 import { useXiangqi, type MoveRecord, type MoveTreeSnapshot } from './hooks/useXiangqi';
 import { START_FEN, START_POSITION_FEN, hasAnyLegalMove, parseFenBoard, pieceSide, squareToUci, uciToSquare, validateMoveStr, validatePieceMove, type BoardState, type Side } from './utils/xiangqi';
-import { describeFenProblem, readFenBoard } from './utils/positionSetup';
+import { describeFenProblem } from './utils/positionSetup';
 import { WdlBar } from './components/Panels/WdlBar';
 import { playMoveSound, playCaptureSound, playCheckSound, prepareSoundEffects, suspendSoundEffects, unlockSoundEffects } from './utils/sounds';
 import { formatMoveRuleHint } from './utils/moveRuleHints';
 import { PIECE_NAMES, formatCapturedTrayLabel, formatMaterialValue, isPieceCode, summarizeMaterial, type PieceCode } from './utils/material';
-import { serializeSavedMoveTree } from './utils/savedMoveTree';
-import { rovingIndexForKey, rovingTabStopIndex } from './utils/rovingFocus';
+import { createSavedMoveTreeSerializer, serializeSavedMoveTree } from './utils/savedMoveTree';
 import { pgnDownloadFilename } from './utils/pgnFilename';
 import {
   DEFAULT_PANEL_WIDTH,
@@ -74,7 +79,7 @@ import { formatExplorerRecord } from './utils/positionExplorer';
 import { savedGameLine, savedGamePositionResult } from './utils/savedGameLine';
 import { useLibraryExplorer } from './hooks/useLibraryExplorer';
 import { useGameLibrary } from './hooks/useGameLibrary';
-import { createSavedGameId, MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
+import { loadLibraryState, createSavedGameId, MAX_SAVED_TREE_NODES, type SavedGame } from './utils/gameLibrary';
 import { narrativeTags } from './utils/narrativeTags';
 import {
   type AutoSavedGame,
@@ -117,8 +122,7 @@ import { formatBreadcrumbLabel } from './utils/moveBreadcrumb';
 import { passMoveFen } from './utils/threatPosition';
 import { isDrillSuccess, judgeCompletedDrillAttempt, judgeDrillAttempt, orderDrillMoments, type DrillVerdict } from './utils/mistakeDrill';
 import type { XqfRecord } from './utils/xqf';
-import { PIECE_STYLES, PIECE_STYLE_DESCRIPTIONS, PIECE_STYLE_LABELS, type PieceStyle } from './utils/pieceStyle';
-import { describePvStanding } from './utils/pvStanding';
+import { PIECE_STYLE_DESCRIPTIONS, type PieceStyle } from './utils/pieceStyle';
 import { formatRecordText } from './utils/recordText';
 import { useCloudBook } from './hooks/useCloudBook';
 import { useCloudRule } from './hooks/useCloudRule';
@@ -151,7 +155,6 @@ import {
 } from './utils/preferences';
 import { createBoardArrowSelector, type BoardArrow, type BoardSquare } from './utils/boardArrows';
 import { readDirectImport } from './utils/directImport';
-import { getDialogFocusableElements, keepTabWithin } from './utils/focusTrap';
 import {
   createRepetitionAnalyzer,
   formatRepetitionHeadline,
@@ -165,7 +168,6 @@ import {
   readCaptureFreePlies,
 } from './utils/captureFreeRule';
 import {
-  describeAnalysisActivity,
   formatAnalysisActivity,
   isAnalysisActivityStalled,
   resolveAnalysisActivity,
@@ -179,8 +181,7 @@ import {
   hasTooManyUciMoves,
   isMoveImportTextTooLarge,
   MAX_MOVE_IMPORT_TEXT_LENGTH,
-  MAX_MOVE_IMPORT_UCI_MOVES,
-} from './utils/moveImport';
+  } from './utils/moveImport';
 import {
   detectDeviceProfile,
   detectDeviceScreen,
@@ -218,11 +219,9 @@ import {
   nextCriticalSwing,
 } from './utils/review';
 import {
-  AI_STRENGTH_LABELS,
   WORKER_SAFE_MAX_DEPTH,
   buildAiGoCommand,
   chooseAiMoveFromPv,
-  describeAiStrength,
   getAiSearchConfig,
   type AiStrength,
 } from './utils/aiOpponent';
@@ -246,66 +245,19 @@ const LazyLibraryPanel = React.lazy(() =>
 const MOBILE_LAYOUT_QUERY = '(max-width: 900px), (max-width: 960px) and (max-height: 500px) and (pointer: coarse)';
 const NO_OPENING_CANDIDATES: readonly { move: string }[] = [];
 
-export type GameMode = 'PvP' | 'PvAI-Black' | 'PvAI-Red' | 'AIvAI';
 type WorkspaceMode = 'play' | 'analysis';
-type EngineNotice = { tone: 'warning' | 'danger'; text: string } | null;
-type EngineHashFeedback = 'queued' | 'cleared' | null;
 type ShareLinkNotice = { tone: 'warning'; text: string; detail: string; positionKey?: string } | null;
-type ExportFailureKey = 'copy-pgn' | 'download-pgn' | 'copy-share' | 'copy-fen' | 'copy-record' | `copy-pv-${number}`;
 
 function clearToastTimer(timer: { current: number | null }) {
   if (timer.current !== null) window.clearTimeout(timer.current);
   timer.current = null;
 }
 
-const GAME_MODES: Array<{ mode: GameMode; label: string; shortLabel: string; description: string }> = [
-  { mode: 'PvP', label: 'Local board', shortLabel: 'Local', description: 'Two players, one board, no engine moves.' },
-  { mode: 'PvAI-Black', label: 'You play Red', shortLabel: 'Red vs AI', description: 'Red moves first while the engine replies as Black.' },
-  { mode: 'PvAI-Red', label: 'You play Black', shortLabel: 'Black vs AI', description: 'The engine starts as Red, then you defend as Black.' },
-  { mode: 'AIvAI', label: 'AI exhibition', shortLabel: 'AI vs AI', description: 'Both sides are engine-driven for watching and review.' },
-];
-
 const AI_SPEED_MS: Record<Exclude<AiSpeed, 'step'>, number> = {
   slow: 1500,
   normal: 800,
   fast: 150,
 };
-const PV_LINE_OPTIONS: PvLineCount[] = [1, 3, 5];
-const PV_LINE_CONTROL_COPY: Record<PvLineCount, { ariaLabel: string; title: string }> = {
-  1: {
-    ariaLabel: 'Set principal variation lines to 1, fastest best-move search',
-    title: 'Show 1 engine line for the fastest best-move search.',
-  },
-  3: {
-    ariaLabel: 'Set principal variation lines to 3, compare main candidates',
-    title: 'Show 3 engine lines to compare main candidate moves.',
-  },
-  5: {
-    ariaLabel: 'Set principal variation lines to 5, broad option scan',
-    title: 'Show 5 engine lines for a broader option scan. This uses more engine time.',
-  },
-};
-const ANALYSIS_ENGINE_MODE_COPY: Record<AnalysisEngineMode, { ariaLabel: string; title: string }> = {
-  stable: {
-    ariaLabel: 'Stable analysis engine profile, safer boot and conservative resources',
-    title: 'Stable profile: safer boot and conservative engine resources.',
-  },
-  optimized: {
-    ariaLabel: 'Optimized analysis engine profile, faster search when supported',
-    title: 'Optimized profile: faster search when this device supports it.',
-  },
-};
-const ASSIST_MODE_COPY: Record<AssistMode, { ariaLabel: string; title: string }> = {
-  coach: {
-    ariaLabel: 'Coach interface, show rule hints and guided move context',
-    title: 'Coach interface: show rule hints and guided move context.',
-  },
-  pro: {
-    ariaLabel: 'Pro interface, compact analysis with fewer teaching prompts',
-    title: 'Pro interface: compact analysis with fewer teaching prompts.',
-  },
-};
-const THIRD_PARTY_NOTICES_HREF = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.md`;
 /** index.html's own title, which the tab returns to between prompts. */
 const DOCUMENT_TITLE = 'Web Xiangqi | Pikafish Analysis Board';
 const FILE_LABELS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const;
@@ -525,6 +477,12 @@ function formatSquare(square: BoardSquare | null) {
 const AUTO_SAVE_DEBOUNCE_MS = 600;
 
 function App() {
+  const [newGameForm] = useState(createNewGameForm);
+  const { pendingGameMode: setPendingGameMode, fenInput: setFenInput, fenError: setFenError,
+    directImportBusy: setDirectImportBusy, moveLineFileDragActive: setMoveLineFileDragActive,
+    moveLineInput: setMoveLineInput, moveLineFileName: setMoveLineFileName,
+    moveLineFileUndo: setMoveLineFileUndo, moveLineError: setMoveLineError } = newGameForm.setters;
+  const newGameInitialFocus = useRef<'default' | 'import'>('default');
   const storedPreferences = useMemo(() => readStoredPreferences(), []);
   // A narrow window is not a weaker machine. This read innerWidth, so opening
   // the app small on a large display picked the lower depth and saved it, and
@@ -535,7 +493,7 @@ function App() {
   // the slider was the binding constraint on every position, and nothing said
   // so. Lowering it is still a real choice; raising it past the tier's ceiling
   // is not, which is what the label under it now reports.
-  const defaultSearchDepth = detectDeviceScreen().width <= 900 ? 14 : 22;
+  const [defaultSearchDepth] = useState(() => detectDeviceScreen().width <= 900 ? 14 : 22);
   const initialSoundEnabled = storedPreferences.soundEnabled ?? true;
   const initialAiSpeed = storedPreferences.aiSpeed ?? 'normal';
   const [guideDismissed, setGuideDismissed] = useState(() => readStorage(BEGINNER_GUIDE_STORAGE_KEY) === 'true');
@@ -553,6 +511,7 @@ function App() {
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [analysisTab, setAnalysisTab] = useState<'tree' | 'review' | 'engine'>('tree');
   const [mobileView, setMobileView] = useState<'board' | 'analysis'>('board');
+  const showMobileBoard = useCallback(() => setMobileView('board'), []);
   const [mobileAnalysisTab, setMobileAnalysisTab] = useState<'moves' | 'review' | 'engine' | 'graph' | 'library'>('moves');
   const [showArrows, setShowArrows] = useState(storedPreferences.showArrows ?? true);
   const [userHighlights, setUserHighlights] = useState<BoardSquare[]>([]);
@@ -591,10 +550,7 @@ function App() {
   const mobileMoreActionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileActionMenuInitialFocus = useRef<'first' | 'last'>('first');
 
-  const settingsDialogRef = useRef<HTMLDivElement | null>(null);
   const newGameDialogRef = useRef<HTMLDivElement | null>(null);
-  const treeBreadcrumbRef = useRef<HTMLDivElement | null>(null);
-  const [pendingGameMode, setPendingGameMode] = useState<GameMode>('PvP');
   const [aiStrength, setAiStrength] = useState<AiStrength>(storedPreferences.aiStrength ?? 2);
   const [leftPanelTab, setLeftPanelTab] = useState<'graph' | 'library'>('graph');
   // Keep search choices and revealed pages while the library unmounts. A ref
@@ -1245,7 +1201,7 @@ function App() {
     clearWdl,
     setOption,
     telemetry,
-    pvLines,
+    recommendations,
     getLatestPvLines,
     assetProgress,
   } = useEngine({
@@ -1467,71 +1423,6 @@ function App() {
     ? mobileView === 'analysis' && mobileAnalysisTab === 'moves'
     : rightPanelOpen;
   const breadcrumbVisible = moveTreeVisible && analysisTab === 'tree';
-  // The hook already maintains this ordered path. Reuse it instead of walking
-  // parents and prepending every node; hidden panels need no breadcrumb list.
-  const breadcrumbNodeIds = useMemo(() => breadcrumbVisible
-    ? [rootNodeId, ...activeLineNodeIds.slice(0, currentMoveIndex + 1)]
-    : [], [activeLineNodeIds, breadcrumbVisible, currentMoveIndex, rootNodeId]);
-
-  useEffect(() => {
-    const container = treeBreadcrumbRef.current;
-    const active = container?.querySelector('.tree-breadcrumb-chip-active') as HTMLElement | null;
-    if (!container || !active) return;
-
-    const centerActive = (resized = false) => {
-      const containerRect = container.getBoundingClientRect();
-      const activeRect = active.getBoundingClientRect();
-      const activeCenter = container.scrollLeft
-        + activeRect.left
-        - containerRect.left
-        + activeRect.width / 2;
-      const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-      const targetLeft = Math.max(0, Math.min(maxLeft, activeCenter - container.clientWidth / 2));
-      const distance = Math.abs(targetLeft - container.scrollLeft);
-      const activeFullyVisible = activeRect.left >= containerRect.left && activeRect.right <= containerRect.right;
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const behavior: ScrollBehavior = resized || prefersReducedMotion || !activeFullyVisible || distance > container.clientWidth
-        ? 'auto'
-        : 'smooth';
-      if (distance > 1) container.scrollTo({ left: targetLeft, behavior });
-    };
-    centerActive();
-    // Reopening initially sees a collapsed panel width. Recenter as it grows,
-    // and when enlarged text changes the active chip's dimensions.
-    const observer = new ResizeObserver(() => centerActive(true));
-    observer.observe(container);
-    observer.observe(active);
-    return () => observer.disconnect();
-  }, [breadcrumbNodeIds.length, currentNodeId, breadcrumbVisible]);
-
-  /**
-   * The breadcrumb is one composite widget, so it gets one tab stop.
-   *
-   * `rovingFocus.ts` holds the arithmetic and says why. The stop follows focus,
-   * so tabbing out and back returns you to the chip you were on rather than to
-   * the end of the line.
-   */
-  const [rovingBreadcrumbIndex, setRovingBreadcrumbIndex] = useState<number | null>(null);
-  const breadcrumbCurrentIndex = breadcrumbNodeIds.indexOf(currentNodeId);
-  const breadcrumbTabStopIndex = rovingTabStopIndex(
-    breadcrumbNodeIds.length,
-    rovingBreadcrumbIndex,
-    breadcrumbCurrentIndex >= 0 ? breadcrumbCurrentIndex : null
-  );
-
-  const handleBreadcrumbKeyDown = useCallback((
-    event: React.KeyboardEvent<HTMLButtonElement>,
-    index: number
-  ) => {
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isComposingKey(event.nativeEvent)) return;
-    const strip = treeBreadcrumbRef.current;
-    const next = rovingIndexForKey(event.key, strip?.childElementCount ?? 0, index);
-    if (next === null) return;
-    event.preventDefault();
-    setRovingBreadcrumbIndex(next);
-    const target = strip?.querySelector<HTMLButtonElement>(`[data-breadcrumb-index="${next}"]`);
-    target?.focus();
-  }, []);
 
   const graphBranchCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -1798,49 +1689,8 @@ function App() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (resizeTimer !== undefined) clearTimeout(resizeTimer);
     };
-  }, [clearAnalysisDeepenTimer, clearQueuedSearch, hasCurrentDeepResult, stopSearch]);
+  }, [clearAnalysisDeepenTimer, clearQueuedSearch, hasCurrentDeepResult, setFenError, setMoveLineError, stopSearch]);
 
-  useEffect(() => {
-    const activeDialog = showSettings
-      ? settingsDialogRef.current
-      : showNewGameMenu
-        ? newGameDialogRef.current
-        : null;
-    if (!activeDialog) return;
-
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    let initialFocusPlaced = false;
-    const focusInitial = () => {
-      if (initialFocusPlaced) return;
-      if (activeDialog.contains(document.activeElement)) { initialFocusPlaced = true; return; }
-      const firstFocusable = getDialogFocusableElements(activeDialog)[0];
-      (firstFocusable ?? activeDialog).focus({ preventScroll: true });
-      // Retry only a focus attempt that failed, for example while the page's
-      // inert state settles. A later disabled action can legitimately blur to
-      // body; an initial-focus retry must not take over that interaction.
-      initialFocusPlaced = activeDialog.contains(document.activeElement);
-    };
-
-    focusInitial();
-    const frame = window.requestAnimationFrame(focusInitial);
-    const retryTimer = window.setTimeout(focusInitial, 80);
-    const onDialogKeyDown = (event: KeyboardEvent) => keepTabWithin(activeDialog, event);
-
-    document.addEventListener('keydown', onDialogKeyDown);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(retryTimer);
-      document.removeEventListener('keydown', onDialogKeyDown);
-      // Never `body`: inerting the page behind a dialog blurs the launcher, so
-      // this can have captured `body`, and focusing it would undo the give-back
-      // the inert effect already did.
-      if (previouslyFocused && previouslyFocused !== document.body && document.contains(previouslyFocused)) {
-        previouslyFocused.focus({ preventScroll: true });
-      }
-    };
-  }, [showNewGameMenu, showSettings]);
 
   // Sound effect: fire when a move is played (currentMoveIndex advanced by 1)
   const prevMoveIndexRef = useRef(currentMoveIndex);
@@ -2514,10 +2364,8 @@ function App() {
   }, [rightWidth]);
 
   const currentModeMeta = GAME_MODES.find((candidate) => candidate.mode === gameMode) ?? GAME_MODES[0];
-  const pendingModeMeta = GAME_MODES.find((candidate) => candidate.mode === pendingGameMode) ?? GAME_MODES[0];
   const currentModeLabel = currentModeMeta.label;
-  const pendingModeLabel = pendingModeMeta.label;
-  const pendingModeIsAi = pendingGameMode !== 'PvP';
+  const pvLines = useStoreSelector(recommendations, value => value, sameBoardPvReading);
   const currentAnalysisPvLines = useMemo(() => {
     if (!engineEnabled) return [];
     return pvLines.filter((pv) => parseAnalysisTag(pv.searchTag)?.requestKey === analysisRequestKey);
@@ -2560,16 +2408,8 @@ function App() {
     return sameStudyAnalysis(first ? treeNodes[first]?.record?.analysis : undefined, analysisForLine(moves));
   }, [analysisForLine, currentNodeId, treeNodes]);
   const canKeepBestLine = isReady && canPlayBestMove && reviewStatus !== 'running' && !isAnalysisLineKept(topAnalysisPv?.moves ?? []);
-  const coachBestMoveText = topAnalysisPv?.moves[0]
-    ? formatLineInStyle(board, [topAnalysisPv.moves[0]], notationStyle, 1)
-    : isSearchQueued || isSearching
-      ? 'Waiting for engine'
-      : 'No engine move yet';
-  const coachLineText = topAnalysisPv?.moves.length
-    ? formatLineInStyle(board, topAnalysisPv.moves, notationStyle, 5)
-    : isSearchQueued || isSearching
-      ? 'Waiting for engine line'
-      : 'No engine line yet';
+
+
   const liveEvalScore = currentAnalysisPvLines[0]?.score ?? null;
   const displayEvalScore = useMemo(
     () => typeof liveEvalScore === 'number' ? normalizeEvalForSide(liveEvalScore, sideToMove) : null,
@@ -2985,10 +2825,11 @@ function App() {
   );
 
   // Game library
-  const { games: savedGames, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, restore: restoreGameToLibrary, rename: renameGameInLibrary } = useGameLibrary();
+  const { games: savedGames, loading: libraryLoading, save: saveGameToLibrary, update: updateGameInLibrary, saveError: librarySaveError, libraryState, refresh: refreshGameLibrary, remove: deleteGameFromLibrary, restore: restoreGameToLibrary, rename: renameGameInLibrary } = useGameLibrary();
 
-  const { report: libraryPositionReport, status: libraryExplorerStatus, skipped: libraryExplorerSkipped, retry: retryLibraryExplorer } =
-    useLibraryExplorer(savedGames, board, sideToMove, graphVisible && leftPanelTab === 'graph');
+  const { report: libraryPositionReport, status: loadedLibraryExplorerStatus, skipped: libraryExplorerSkipped, retry: retryLibraryExplorer } =
+    useLibraryExplorer(savedGames, board, sideToMove, !libraryLoading && graphVisible && leftPanelTab === 'graph');
+  const libraryExplorerStatus = libraryLoading ? 'loading' : loadedLibraryExplorerStatus;
 
   const [copiedToast, setCopiedToast] = useState(false);
   const [copiedFenToast, setCopiedFenToast] = useState(false);
@@ -3049,35 +2890,21 @@ function App() {
   const fenErrorTimerRef = useRef<number | null>(null);
   const moveLineFileInputRef = useRef<HTMLInputElement | null>(null);
   const shareLinkLoadedRef = useRef(false);
-  const [fenInput, setFenInput] = useState('');
-  const [fenError, setFenError] = useState<string | null>(null);
   const directImportGenerationRef = useRef(0);
   const directImportControllerRef = useRef<AbortController | null>(null);
-  const [directImportBusy, setDirectImportBusy] = useState(false);
-  const [moveLineFileDragActive, setMoveLineFileDragActive] = useState(false);
   const directImportFocusRef = useRef<HTMLElement | null>(null);
   const directImportCancelRef = useRef<HTMLButtonElement | null>(null);
-  useLayoutEffect(() => {
-    // A disabled Import button, or a removed Cancel button, can blur to body.
-    // Keep keyboard retry nearby without moving focus from another control.
-    const target = directImportFocusRef.current;
-    if (!directImportBusy && target?.isConnected && document.activeElement === document.body) target.focus();
-  }, [directImportBusy]);
   const cancelDirectImport = useCallback(() => {
     directImportGenerationRef.current++;
     directImportControllerRef.current?.abort();
     directImportControllerRef.current = null;
     setDirectImportBusy(false);
-  }, []);
+  }, [setDirectImportBusy]);
   useLayoutEffect(() => {
     cancelDirectImport();
     setMoveLineFileDragActive(false);
-  }, [cancelDirectImport, gameIdentity, pendingGameMode, showNewGameMenu, fenInput]);
+  }, [cancelDirectImport, gameIdentity, setMoveLineFileDragActive, showNewGameMenu]);
   useEffect(() => () => { directImportGenerationRef.current++; directImportControllerRef.current?.abort(); }, []);
-  const [moveLineInput, setMoveLineInput] = useState('');
-  const [moveLineFileName, setMoveLineFileName] = useState('');
-  const [moveLineFileUndo, setMoveLineFileUndo] = useState<{ text: string; name: string } | null>(null);
-  const [moveLineError, setMoveLineError] = useState<string | null>(null);
   const showMobilePgnAction =
     canExportCurrentLine ||
     downloadedPgnToast ||
@@ -3150,7 +2977,7 @@ function App() {
       fenErrorTimerRef.current = null;
     }
     setFenError(null);
-  }, []);
+  }, [setFenError]);
 
   const closeSettings = useCallback(() => {
     setShowSettings(false);
@@ -3163,7 +2990,7 @@ function App() {
     clearFenError();
     setMoveLineError(null);
     setShowSettings((open) => !open);
-  }, [clearFenError]);
+  }, [clearFenError, setMoveLineError, setMoveLineFileUndo]);
 
   const closeNewGameMenu = useCallback(() => {
     cancelDirectImport();
@@ -3172,9 +2999,10 @@ function App() {
     setShowMobileBoardActionMenu(false);
     clearFenError();
     setMoveLineError(null);
-  }, [clearFenError, cancelDirectImport]);
+  }, [cancelDirectImport, setMoveLineFileUndo, clearFenError, setMoveLineError]);
 
   const openNewGameMenu = useCallback(() => {
+    newGameInitialFocus.current = 'default';
     cancelDirectImport();
     setShowMobileBoardActionMenu(false);
     setShowSettings(false);
@@ -3186,7 +3014,7 @@ function App() {
     clearFenError();
     setMoveLineError(null);
     setShowNewGameMenu(true);
-  }, [clearFenError, gameMode, cancelDirectImport]);
+  }, [cancelDirectImport, setPendingGameMode, gameMode, setFenInput, setMoveLineInput, setMoveLineFileName, setMoveLineFileUndo, clearFenError, setMoveLineError]);
 
   const beginnerGuide = showBeginnerGuide ? (
     <BeginnerGuide
@@ -3196,7 +3024,7 @@ function App() {
       onPlay={() => { setAiStrength(1); setAiSpeed('normal'); playFromHere(); }}
       onImport={() => {
         openNewGameMenu();
-        window.setTimeout(() => document.getElementById('new-game-line-input')?.focus(), 0);
+        newGameInitialFocus.current = 'import';
       }}
       onLibrary={openLibraryPanel}
       onLearn={() => setShowRuleLessons(true)}
@@ -3213,9 +3041,9 @@ function App() {
   }, [closeNewGameMenu, openNewGameMenu, showNewGameMenu]);
 
   const startNewGameFromMenu = useCallback(() => {
-    applyMode(pendingGameMode);
+    applyMode(newGameForm.getSnapshot().pendingGameMode);
     closeNewGameMenu();
-  }, [applyMode, closeNewGameMenu, pendingGameMode]);
+  }, [applyMode, closeNewGameMenu, newGameForm]);
 
   const buildCurrentPgn = useCallback(() => {
     if (hasMoveTreeMoves && (mainLinePinned || hasStudyBranches || currentMoveIndex < 0)) {
@@ -3352,7 +3180,7 @@ function App() {
    * in. Unlike a paste it has nowhere to be shown before it is loaded, so
    * it goes straight onto the board, variations and notes with it.
    */
-  const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = pendingGameMode) => {
+  const handleImportXqf = useCallback((record: XqfRecord, nextGameMode: GameMode = newGameForm.getSnapshot().pendingGameMode) => {
     showImportNotice(null);
     const recordedResult = record.mainLineComplete && record.result !== 'unknown'
       ? recordedResultFromSavedResult(record.result) ?? null : null;
@@ -3404,11 +3232,12 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, setGameMetadata, clearFenError, closeNewGameMenu, handleCancelReview, loadMoveTree, gameMode, pendingGameMode, resetReview, showImportNotice, stopAnalysis]);
+  }, [newGameForm, showImportNotice, stopAnalysis, handleCancelReview, resetReview, gameMode, loadMoveTree, restoreRecordedResult, rootNodeId, setGameMetadata, setFenInput, clearFenError, setMoveLineInput, setMoveLineFileName, setMoveLineError, closeNewGameMenu]);
 
   const readMoveLineFile = useCallback(async (file: File) => {
     cancelDirectImport();
     const generation = directImportGenerationRef.current;
+    const { moveLineInput, moveLineFileName } = newGameForm.getSnapshot();
     const previous = { text: moveLineInput, name: moveLineFileName };
 
     if (file.size > MAX_MOVE_IMPORT_TEXT_LENGTH) {
@@ -3446,9 +3275,10 @@ function App() {
       setDirectImportBusy(false);
       setMoveLineError(error instanceof Error ? error.message : 'Could not read file');
     }
-  }, [handleImportXqf, cancelDirectImport, moveLineInput, moveLineFileName]);
+  }, [cancelDirectImport, newGameForm, setMoveLineError, setDirectImportBusy, setMoveLineInput, setMoveLineFileName, setMoveLineFileUndo, handleImportXqf]);
 
   const handleUndoMoveLineFile = useCallback(() => {
+    const { moveLineFileUndo } = newGameForm.getSnapshot();
     if (!moveLineFileUndo) return;
     const source = document.activeElement;
     directImportFocusRef.current = document.getElementById('new-game-line-input');
@@ -3465,7 +3295,7 @@ function App() {
       const input = document.getElementById('new-game-line-input');
       if (document.activeElement === document.body || document.activeElement === input || document.activeElement === source) input?.focus();
     });
-  }, [cancelDirectImport, moveLineFileUndo]);
+  }, [cancelDirectImport, newGameForm, setMoveLineError, setMoveLineFileName, setMoveLineFileUndo, setMoveLineInput]);
 
   const handleMoveLineFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -3485,7 +3315,7 @@ function App() {
       return;
     }
     void readMoveLineFile(file);
-  }, [cancelDirectImport, readMoveLineFile]);
+  }, [cancelDirectImport, readMoveLineFile, setMoveLineError, setMoveLineFileDragActive]);
 
   const handleCopyFen = useCallback(async () => {
     const request = ++exportRequestRef.current;
@@ -4147,10 +3977,7 @@ function App() {
    * open on the current game instead, which looks like the button ignoring
    * the paste.
    */
-  const refusedPosition = useMemo(
-    () => (fenError ? readFenBoard(fenInput) : null),
-    [fenError, fenInput],
-  );
+
 
   const handleLoadFen = useCallback((fen: string, nextGameMode: GameMode = gameMode, note?: string) => {
     if (!describeFenProblem(fen.trim()) && !checkpointBeforeReplaceRef.current()) return false;
@@ -4185,12 +4012,12 @@ function App() {
     clearFenError();
     closeNewGameMenu();
     return true;
-  }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, stopAnalysis]);
+  }, [clearFenError, closeNewGameMenu, gameMode, handleCancelReview, loadFen, resetReview, setFenError, setFenInput, stopAnalysis]);
 
   const handleLoadFenRef = useRef<typeof handleLoadFen | null>(null);
   handleLoadFenRef.current = handleLoadFen;
 
-  const handleImportMoveLine = useCallback(async (text: string, nextGameMode: GameMode = pendingGameMode) => {
+  const handleImportMoveLine = useCallback(async (text: string, nextGameMode: GameMode = newGameForm.getSnapshot().pendingGameMode) => {
     cancelDirectImport();
     showImportNotice(null);
     setMoveLineError(null);
@@ -4199,7 +4026,7 @@ function App() {
     directImportControllerRef.current = controller;
     setDirectImportBusy(true);
     let response;
-    try { response = await readDirectImport({ kind: 'plan', text, fen: fenInput }, controller.signal); }
+    try { response = await readDirectImport({ kind: 'plan', text, fen: newGameForm.getSnapshot().fenInput }, controller.signal); }
     catch (error) {
       if (generation !== directImportGenerationRef.current) return;
       setDirectImportBusy(false);
@@ -4272,7 +4099,7 @@ function App() {
     setMoveLineError(null);
     setGraphLoadSweepToken((token) => token + 1);
     closeNewGameMenu();
-  }, [restoreRecordedResult, rootNodeId, clearFenError, closeNewGameMenu, fenInput, handleCancelReview, handleLoadFen, loadMoveTree, loadMoves, gameMode, pendingGameMode, resetReview, setGameMetadata, setNodeComments, showImportNotice, stopAnalysis, cancelDirectImport]);
+  }, [newGameForm, cancelDirectImport, showImportNotice, setMoveLineError, setDirectImportBusy, stopAnalysis, handleCancelReview, resetReview, gameMode, loadMoveTree, loadMoves, restoreRecordedResult, rootNodeId, setGameMetadata, setFenInput, clearFenError, setMoveLineInput, setMoveLineFileName, closeNewGameMenu, handleLoadFen, setNodeComments]);
 
   useEffect(() => {
     if (shareLinkLoadedRef.current || typeof window === 'undefined') return;
@@ -4443,8 +4270,15 @@ function App() {
   const savedLineLength = reviewMatchesActiveLine ? activeLineNodeIds.length : currentMoveIndex + 1;
   const needsSnapshotTree = hasMoveTreeMoves && Boolean(mainLinePinned || hasStudyBranches || hasAnnotatedStudyMoves
     || savedLineLength === 0 || savedLineLength < activeLineNodeIds.length);
-  const snapshotMoveTree = useMemo(() => needsSnapshotTree
-    ? serializeSavedMoveTree(treeNodes, rootNodeId) : undefined, [needsSnapshotTree, treeNodes, rootNodeId]);
+  // Recovery and the saved-study indicator share one immutable serialization.
+  // A new compact line needs neither a tree nor a saved-content comparison.
+  const [serializeStudyTree] = useState(createSavedMoveTreeSerializer);
+  const fullStudyTree = useMemo(() => {
+    if (needsSnapshotTree || loadedSavedStudy) return serializeStudyTree(treeNodes, rootNodeId);
+    serializeStudyTree.clear();
+    return undefined;
+  }, [needsSnapshotTree, loadedSavedStudy, treeNodes, rootNodeId, serializeStudyTree]);
+  const snapshotMoveTree = needsSnapshotTree ? fullStudyTree : undefined;
   const snapshotMoveTreePath = useMemo(() => needsSnapshotTree
     ? distinctMoveTreePath(moveStructure, rootNodeId, activeLineNodeIds.slice(0, savedLineLength)) : undefined,
   [needsSnapshotTree, moveStructure, rootNodeId, activeLineNodeIds, savedLineLength]);
@@ -4485,8 +4319,8 @@ function App() {
     };
   }, [loadedSavedStudy, selectedRecordedResult, activeLineNodeIds, currentMoveIndex, exportOpeningName, gameMetadata, gameMode, gameResult, snapshotMoveTree, snapshotMoveTreePath, reviewMatchesActiveLine, reviewSummary, rootFen, rootComment, rootResult, mainLinePinned, savedReviewSnapshot, treeNodes]);
 
-  const fullStudyTree = useMemo(() => serializeSavedMoveTree(treeNodes, rootNodeId), [treeNodes, rootNodeId]);
-  const currentStudyMoveContent = useMemo(() => studyMoveContent({ moves: [], moveTree: fullStudyTree }), [fullStudyTree]);
+  const currentStudyMoveContent = useMemo(() => loadedSavedStudy
+    ? studyMoveContent({ moves: [], moveTree: fullStudyTree }) : null, [loadedSavedStudy, fullStudyTree]);
   const currentStudyDetailsContent = useMemo(() => studyDetailsContent({ gameMode,
     startFen: rootFen, rootComment, rootResult, mainLinePinned, metadata: gameMetadata,
     review: currentGameSnapshot.review }), [gameMode, rootFen, rootComment, rootResult, mainLinePinned, gameMetadata, currentGameSnapshot.review]);
@@ -4790,9 +4624,7 @@ function App() {
       run: () => {
         openNewGameMenu();
         // After the panel is up, or the field is not in the document yet.
-        window.setTimeout(() => {
-          document.getElementById('new-game-line-input')?.focus();
-        }, 0);
+        newGameInitialFocus.current = 'import';
       },
     },
     {
@@ -5240,10 +5072,10 @@ function App() {
     return { moveCount: extractUciMoveLine(rawMoves).length };
   }, []);
 
-  const [recoveryProblems, setRecoveryProblems] = useState(() => readAutoSaveProblems());
+  const [recoveryState, setRecoveryState] = useState(readRecoveryState);
+  const { problems: recoveryProblems, drafts: recoveryDrafts } = recoveryState;
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveryDownloadFailed, setRecoveryDownloadFailed] = useState(false);
-  const [recoveryDrafts, setRecoveryDrafts] = useState<RecoveryDraft[]>([]);
   const [autoSaveRecovery, setAutoSaveRecovery] = useState<RecoveryDraft | null>(null);
   /**
    * One list, because there were two. Every keyboard shortcut that moves
@@ -5346,17 +5178,18 @@ function App() {
   useEffect(() => {
     if (autoSaveCheckedRef.current) return;
     autoSaveCheckedRef.current = true;
-    const drafts = readAutoSaveDrafts();
-    setRecoveryDrafts(drafts);
     // Credentialless previews keep temporary drafts only for the parent page's
     // lifetime. Reopening one should show its shared position, not a recovery dialog.
     const isolatedPreview = (window as Window & { credentialless?: boolean }).credentialless === true;
-    if (drafts.length && !isolatedPreview) setAutoSaveRecovery(drafts[0]);
+    if (recoveryDrafts.length && !isolatedPreview) setAutoSaveRecovery(recoveryDrafts[0]);
     setAutoSaveChecked(true);
-  }, []);
+  }, [recoveryDrafts]);
 
   const [autoSaveIssue, setAutoSaveIssue] = useState<'failed' | 'too-large' | null>(null);
+  const autoSaveJobRef = useRef<AbortController | null>(null);
   const persistAutoSave = useCallback((snapshot: AutoSaveInput) => {
+    autoSaveJobRef.current?.abort();
+    autoSaveJobRef.current = null;
     const result = writeAutoSaveDraft(snapshot);
     setAutoSaveIssue(result === 'failed' || result === 'too-large' ? result : null);
   }, []);
@@ -5367,10 +5200,24 @@ function App() {
   // them. The live evaluation is deliberately not in it -- see the ref above.
   useEffect(() => {
     if (!autoSaveChecked || autoSaveRecovery) return;
+    const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      persistAutoSave(snapshotForStorage(currentGameSnapshot));
+      const snapshot = snapshotForStorage(currentGameSnapshot);
+      if (!shouldPrepareAutoSaveInWorker(snapshot)) { persistAutoSave(snapshot); return; }
+      autoSaveJobRef.current?.abort();
+      autoSaveJobRef.current = controller;
+      void prepareAutoSaveInWorker(snapshot, controller.signal).then(prepared => {
+        if (controller.signal.aborted || autoSaveJobRef.current !== controller) return;
+        autoSaveJobRef.current = null;
+        const result = commitPreparedAutoSaveDraft(prepared);
+        setAutoSaveIssue(result === 'failed' || result === 'too-large' ? result : null);
+      }).catch(() => { /* Cancellation leaves the last durable snapshot intact. */ });
     }, AUTO_SAVE_DEBOUNCE_MS);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+      if (autoSaveJobRef.current === controller) autoSaveJobRef.current = null;
+    };
   }, [autoSaveChecked, autoSaveRecovery, currentGameSnapshot, persistAutoSave, snapshotForStorage]);
 
   const currentGameSnapshotRef = useRef(currentGameSnapshot);
@@ -5396,6 +5243,8 @@ function App() {
   const lastCheckpointRef = useRef<{ signature: string; id: string } | null>(null);
   useLayoutEffect(() => {
     checkpointBeforeReplaceRef.current = () => {
+      autoSaveJobRef.current?.abort();
+      autoSaveJobRef.current = null;
       const snapshot = recoverySnapshot();
       if (!isWorthAutoSaving(snapshot)) return true;
       const signature = JSON.stringify(snapshot);
@@ -5409,7 +5258,8 @@ function App() {
         return false;
       }
       lastCheckpointRef.current = { signature, id };
-      setRecoveryDrafts(readAutoSaveDrafts().filter(draft => draft.draftId !== currentDraftId));
+      const drafts = readAutoSaveDrafts().filter(draft => draft.draftId !== currentDraftId);
+      setRecoveryState(state => ({ ...state, drafts }));
       return true;
     };
   }, [recoverySnapshot]);
@@ -5454,7 +5304,7 @@ function App() {
   const dismissAutoSaveRecovery = useCallback(() => {
     const discarded = autoSaveRecovery;
     if (discarded) clearAutoSaveDraft(discarded.draftId);
-    setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== discarded?.draftId));
+    setRecoveryState(state => ({ ...state, drafts: state.drafts.filter(draft => draft.draftId !== discarded?.draftId) }));
     setAutoSaveRecovery(null);
     if (!discarded || !isWorthAutoSaving(discarded.game)) return;
     setDiscardedAutoSave({ snapshot: discarded });
@@ -5483,10 +5333,10 @@ function App() {
     // refusal is reported the way every other auto-save failure is: the game
     // is on the board by then, so that notice and its Download PGN are the
     // right place for it rather than a second message here.
-    setLoadedSavedStudy(resolveLibrarySource(discardedAutoSave.snapshot.sourceLibrary, savedGames));
+    setLoadedSavedStudy(resolveLibrarySource(discardedAutoSave.snapshot.sourceLibrary, libraryLoading ? loadLibraryState().games : savedGames));
     persistAutoSave({ ...discardedAutoSave.snapshot.game, sourceLibrary: discardedAutoSave.snapshot.sourceLibrary });
     dismissDiscardedAutoSave();
-  }, [discardedAutoSave, discardedAutoSaveTimeout, dismissDiscardedAutoSave, handleLoadGame, persistAutoSave, savedGames]);
+  }, [discardedAutoSave, discardedAutoSaveTimeout, dismissDiscardedAutoSave, handleLoadGame, libraryLoading, persistAutoSave, savedGames]);
 
   const restoreAutoSavedGame = useCallback(() => {
     if (!autoSaveRecovery) return;
@@ -5496,17 +5346,17 @@ function App() {
       return;
     }
     setRecoveryError(null);
-    const source = resolveLibrarySource(autoSaveRecovery.sourceLibrary, savedGames);
+    const source = resolveLibrarySource(autoSaveRecovery.sourceLibrary, libraryLoading ? loadLibraryState().games : savedGames);
     setLoadedSavedStudy(source);
     if (autoSaveRecovery.sourceLibrary && !source) {
       setShareLinkNotice({ tone: 'warning', text: 'Recovered as a separate study', detail: 'The saved library entry changed or was removed. Use Save to keep this draft as another copy.' });
     }
     if (restored && writeAutoSaveDraft({ ...autoSaveRecovery.game, sourceLibrary: source ? librarySource(source) : undefined }) === 'saved') {
       clearAutoSaveDraft(autoSaveRecovery.draftId);
-      setRecoveryDrafts(drafts => drafts.filter(draft => draft.draftId !== autoSaveRecovery.draftId));
+      setRecoveryState(state => ({ ...state, drafts: state.drafts.filter(draft => draft.draftId !== autoSaveRecovery.draftId) }));
     }
     setAutoSaveRecovery(null);
-  }, [autoSaveRecovery, handleLoadGame, savedGames]);
+  }, [autoSaveRecovery, handleLoadGame, libraryLoading, savedGames]);
 
   useEffect(() => {
     const onSaveShortcut = (event: KeyboardEvent) => {
@@ -5977,652 +5827,72 @@ function App() {
         </button>
       </section>
 
-      {/* ── Settings modal ── */}
-      {showSettings && (
-        <>
-          <div
-            className="settings-backdrop"
-            onClick={closeSettings}
-            aria-hidden="true"
-          />
-          <div
-            className="settings-body"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Settings"
-            id="settings-dialog"
-            ref={settingsDialogRef}
-            tabIndex={-1}
-          >
-            <div className="settings-header">
-              <h2>Settings</h2>
-              <button
-                className="settings-close-btn"
-                type="button"
-                onClick={closeSettings}
-                aria-label="Close settings"
-              >
-                <IconX />
-              </button>
-            </div>
-
-            <div className="settings-group">
-              <label htmlFor="settings-workspace-mode">Workspace</label>
-              <select
-                id="settings-workspace-mode"
-                className="premium-select app-select"
-                value={workspaceMode}
-                onChange={(e) => e.target.value === 'analysis' ? startEngineAnalysis() : setWorkspaceMode('play')}
-              >
-                <option value="analysis">Analysis</option>
-                <option value="play">Play</option>
-              </select>
-            </div>
-
-            <div className="settings-group">
-              <span id="settings-interface-label" className="settings-label">Interface</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-interface-label">
-                <button
-                  type="button"
-                  className={`pill-btn ${assistMode === 'coach' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setAssistMode('coach')}
-                  aria-pressed={assistMode === 'coach'}
-                  aria-label={ASSIST_MODE_COPY.coach.ariaLabel}
-                  title={ASSIST_MODE_COPY.coach.title}
-                >
-                  Coach
-                </button>
-                <button
-                  type="button"
-                  className={`pill-btn ${assistMode === 'pro' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setAssistMode('pro')}
-                  aria-pressed={assistMode === 'pro'}
-                  aria-label={ASSIST_MODE_COPY.pro.ariaLabel}
-                  title={ASSIST_MODE_COPY.pro.title}
-                >
-                  Pro
-                </button>
-              </div>
-              {/* The same visible hint Move Notation has. These two groups are
-                  the ones whose labels do not explain themselves -- "Coach" and
-                  "Optimized" mean nothing until told -- and the telling lived
-                  only in `title`, which does not exist on a touch screen. The
-                  words are the ones already written for the tooltip. */}
-              <p className="settings-hint">{ASSIST_MODE_COPY[assistMode].title}</p>
-              <button type="button" className={`chip-btn settings-guide-toggle ${!guideDismissed ? 'chip-btn-primary' : ''}`}
-                aria-pressed={!guideDismissed}
-                aria-describedby="settings-guide-hint"
-                onClick={() => {
-                  const dismissed = !guideDismissed;
-                  setGuideDismissed(dismissed);
-                  writeStorage(BEGINNER_GUIDE_STORAGE_KEY, String(dismissed));
-                }}>
-                {!guideDismissed && <IconCheck aria-hidden="true" focusable="false" />}
-                First-move guide
-              </button>
-              <p className="settings-hint" id="settings-guide-hint">Appears on empty local boards in Coach mode.</p>
-            </div>
-
-            <div className="settings-group">
-              <span id="settings-notation-label" className="settings-label">Move Notation</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-notation-label">
-                {NOTATION_STYLES.map((style) => (
-                  <button
-                    key={style}
-                    type="button"
-                    className={`pill-btn ${notationStyle === style ? 'pill-btn-active' : ''}`}
-                    onClick={() => setNotationStyle(style)}
-                    aria-pressed={notationStyle === style}
-                    aria-label={`Write moves in ${NOTATION_STYLE_LABELS[style]} notation. ${NOTATION_STYLE_DESCRIPTIONS[style]}`}
-                    title={NOTATION_STYLE_DESCRIPTIONS[style]}
-                    data-testid={`notation-style-${style}`}
-                  >
-                    {NOTATION_STYLE_LABELS[style]}
-                  </button>
-                ))}
-              </div>
-              <p className="settings-hint">{NOTATION_STYLE_DESCRIPTIONS[notationStyle]}</p>
-            </div>
-
-            <div className="settings-group">
-              <span id="settings-piece-style-label" className="settings-label">Pieces</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-piece-style-label">
-                {PIECE_STYLES.map((style) => (
-                  <button
-                    key={style}
-                    type="button"
-                    className={`pill-btn ${pieceStyle === style ? 'pill-btn-active' : ''}`}
-                    onClick={() => setPieceStyle(style)}
-                    aria-pressed={pieceStyle === style}
-                    aria-label={`${PIECE_STYLE_LABELS[style]}: Draw the pieces as ${style === 'letters' ? 'WXF letters' : 'traditional characters'}. ${PIECE_STYLE_DESCRIPTIONS[style]}`}
-                    title={PIECE_STYLE_DESCRIPTIONS[style]}
-                    data-testid={`piece-style-${style}`}
-                  >
-                    {PIECE_STYLE_LABELS[style]}
-                  </button>
-                ))}
-              </div>
-              <p className="settings-hint">{PIECE_STYLE_DESCRIPTIONS[pieceStyle]}</p>
-            </div>
-
-            <div className="settings-group">
-              <label htmlFor="settings-game-mode">Game Mode</label>
-              <select
-                id="settings-game-mode"
-                className="premium-select app-select"
-                value={gameMode}
-                onChange={(e) => {
-                  applyMode(e.target.value as GameMode);
-                  setShowSettings(false);
-                }}
-              >
-                {GAME_MODES.map(({ mode, label }) => (
-                  <option key={mode} value={mode}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="settings-group">
-              <span id="settings-orientation-label" className="settings-label">Board Orientation</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-orientation-label">
-                <button
-                  type="button"
-                  className={`pill-btn ${orientation === 'red' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setOrientation('red')}
-                  aria-pressed={orientation === 'red'}
-                >
-                  Red at bottom
-                </button>
-                <button
-                  type="button"
-                  className={`pill-btn ${orientation === 'black' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setOrientation('black')}
-                  aria-pressed={orientation === 'black'}
-                >
-                  Black at bottom
-                </button>
-              </div>
-            </div>
-
-            <div className="settings-group">
-              <label htmlFor="settings-ui-density">Interface density</label>
-              <select id="settings-ui-density" className="premium-select app-select" value={uiDensity}
-                onChange={event => setUiDensity(event.target.value as 'comfortable' | 'compact')}>
-                <option value="compact">Compact</option>
-                <option value="comfortable">Comfortable</option>
-              </select>
-              <p className="settings-hint">Comfortable enlarges panel text and controls while keeping the board size.</p>
-            </div>
-
-            <div className="settings-group">
-              <span id="settings-layout-label" className="settings-label">Layout</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-layout-label">
-                <button
-                  type="button"
-                  className={`pill-btn ${leftPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setLeftWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH))}
-                  aria-pressed={leftPanelOpen}
-                >
-                  Graph Panel
-                </button>
-                <button
-                  type="button"
-                  className={`pill-btn ${rightPanelOpen ? 'pill-btn-active' : ''}`}
-                  onClick={() => setRightWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH))}
-                  aria-pressed={rightPanelOpen}
-                >
-                  Tree Panel
-                </button>
-              </div>
-            </div>
-
-            <details className="engine-advanced settings-engine-advanced" data-testid="advanced-engine-settings">
-              <summary>Advanced engine settings</summary>
-              <p className="settings-hint">Tune search depth, CPU and memory. Device defaults work without adjustment.</p>
-            <div className="settings-group">
-              <span id="settings-analysis-engine-label" className="settings-label">Analysis Engine</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-analysis-engine-label">
-                <button
-                  type="button"
-                  className={`pill-btn ${analysisEngineMode === 'stable' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setAnalysisEngineMode('stable')}
-                  aria-pressed={analysisEngineMode === 'stable'}
-                  aria-label={ANALYSIS_ENGINE_MODE_COPY.stable.ariaLabel}
-                  title={ANALYSIS_ENGINE_MODE_COPY.stable.title}
-                >
-                  Stable
-                </button>
-                <button
-                  type="button"
-                  className={`pill-btn ${analysisEngineMode === 'optimized' ? 'pill-btn-active' : ''}`}
-                  onClick={() => setAnalysisEngineMode('optimized')}
-                  aria-pressed={analysisEngineMode === 'optimized'}
-                  aria-label={ANALYSIS_ENGINE_MODE_COPY.optimized.ariaLabel}
-                  title={ANALYSIS_ENGINE_MODE_COPY.optimized.title}
-                >
-                  Optimized
-                </button>
-              </div>
-              <p className="settings-hint">{ANALYSIS_ENGINE_MODE_COPY[analysisEngineMode].title}</p>
-            </div>
-
-            <div className="settings-group">
-              {/* Every other group here is a one- or two-word label. Spelling the
-                  scope out inline pushed this one onto a second line and orphaned
-                  its value; it lives in the tooltip instead. */}
-              <label
-                htmlFor="settings-search-depth"
-                className="settings-label-value"
-                title="Caps live analysis; the AI opponent has its own ceiling per strength"
-              >
-                <span>Search Depth</span>
-                <strong>
-                  {searchDepth}
-                  {liveAnalysisPolicy.primary.depth < searchDepth
-                    ? ` · this device ${liveAnalysisPolicy.primary.depth}`
-                    : ''}
-                </strong>
-              </label>
-              <input
-                id="settings-search-depth"
-                type="range"
-                min="1"
-                max="24"
-                value={searchDepth}
-                onChange={(e) => setSearchDepth(Number(e.target.value))}
-                className="premium-slider"
-              />
-            </div>
-
-            {/* The transposition table is the one engine resource a strong
-                player expects to set, and it matters more now that a search
-                runs for a second or two: a table that fills mid-search starts
-                discarding work the search is about to want again. `hash %` in
-                the engine dashboard is what says the current size is too small.
-                Changing it reboots the engine, which takes about a third of a
-                second, so the label says so rather than leaving a stall
-                unexplained. */}
-            {/* Downward only, and the ladder says so by stopping at what this
-                machine was going to take anyway. The reason to want it is an
-                unplugged laptop or a machine busy with something that matters
-                more than the search; upward has nothing to offer, because the
-                ceiling is the shipped core's thread pool rather than a policy. */}
-            {engineThreadChoices.length > 1 ? (
-              <div className="settings-group">
-                <span
-                  id="settings-engine-threads-label"
-                  className="settings-label"
-                  title="How much of the processor the search gets. Changing it restarts the engine."
-                >
-                  Engine Threads
-                </span>
-                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-threads-label" aria-describedby="settings-engine-threads-help">
-                  {engineThreadChoices.map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      className={`pill-btn ${engineBootConfig.threads === count ? 'pill-btn-active' : ''}`}
-                      onClick={() => setEngineThreads(count)}
-                      aria-pressed={engineBootConfig.threads === count}
-                      aria-label={`Engine threads ${count}`}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-                <p id="settings-engine-threads-help" className="settings-help">
-                  Fewer threads leave more CPU available for other apps. More threads can speed up analysis.
-                </p>
-              </div>
-            ) : null}
-
-            <div className="settings-group">
-              <span
-                id="settings-engine-hash-label"
-                className="settings-label"
-                title="The engine's transposition table. Changing it restarts the engine."
-              >
-                Engine Hash
-              </span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-engine-hash-label" aria-describedby="settings-engine-hash-help">
-                {engineHashChoices.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    className={`pill-btn ${engineBootConfig.hashMB === size ? 'pill-btn-active' : ''}`}
-                    onClick={() => setEngineHashMB(size)}
-                    aria-pressed={engineBootConfig.hashMB === size}
-                    aria-label={`Engine hash ${size} megabytes`}
-                  >
-                    {size}MB
-                  </button>
-                ))}
-              </div>
-              <p id="settings-engine-hash-help" className="settings-help">
-                Hash remembers positions already searched. A larger hash can help longer analysis, but uses more memory.
-              </p>
-            </div>
-
-            <div className="settings-group">
-              <button
-                type="button"
-                className="pill-btn settings-resource-reset"
-                aria-describedby="settings-engine-defaults-help"
-                onClick={() => { setEngineThreads(undefined); setEngineHashMB(undefined); }}
-              >
-                Use device defaults
-              </button>
-              <p id="settings-engine-defaults-help" className="settings-help">
-                Restore automatic thread and hash choices for this device. Changing resources restarts the engine.
-              </p>
-            </div>
-
-            </details>
-
-            {isAiMode && (
-              <div className="settings-group">
-                <span id="settings-ai-speed-label" className="settings-label">AI Speed</span>
-                <div className="settings-inline-toggles" role="group" aria-labelledby="settings-ai-speed-label">
-                  {(['slow', 'normal', 'fast', 'step'] as AiSpeed[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={`pill-btn ${aiSpeed === s ? 'pill-btn-active' : ''}`}
-                      onClick={() => handleSpeedChange(s)}
-                      aria-pressed={aiSpeed === s}
-                    >
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="settings-group">
-              <span id="settings-sound-label" className="settings-label">Sound Effects</span>
-              <div className="settings-inline-toggles" role="group" aria-labelledby="settings-sound-label">
-                <button
-                  type="button"
-                  className={`pill-btn ${soundEnabled ? 'pill-btn-active' : ''}`}
-                  onClick={() => handleSoundToggle(true)}
-                  aria-pressed={soundEnabled}
-                >
-                  On
-                </button>
-                <button
-                  type="button"
-                  className={`pill-btn ${!soundEnabled ? 'pill-btn-active' : ''}`}
-                  onClick={() => handleSoundToggle(false)}
-                  aria-pressed={!soundEnabled}
-                >
-                  Off
-                </button>
-              </div>
-            </div>
-
-            <div className="settings-group">
-              <a
-                className="settings-link"
-                href={THIRD_PARTY_NOTICES_HREF}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <IconLink /> Engine Notices
-              </a>
-              <button
-                type="button"
-                className="gc-btn settings-reset-btn"
-                onClick={resetPreferences}
-                data-testid="reset-preferences-btn"
-              >
-                <IconRefresh /> Reset Preferences
-              </button>
-              <button
-                type="button"
-                className="gc-btn gc-btn-danger"
-                onClick={() => { resetGame(); setShowSettings(false); }}
-              >
-                <IconRefresh /> New Game
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {showSettings && <SettingsDialog
+        closeSettings={closeSettings}
+        workspaceMode={workspaceMode}
+        startEngineAnalysis={startEngineAnalysis}
+        setWorkspaceMode={setWorkspaceMode}
+        assistMode={assistMode}
+        setAssistMode={setAssistMode}
+        guideDismissed={guideDismissed}
+        setGuideDismissed={setGuideDismissed}
+        notationStyle={notationStyle}
+        setNotationStyle={setNotationStyle}
+        pieceStyle={pieceStyle}
+        setPieceStyle={setPieceStyle}
+        gameMode={gameMode}
+        applyMode={applyMode}
+        orientation={orientation}
+        setOrientation={setOrientation}
+        uiDensity={uiDensity}
+        setUiDensity={setUiDensity}
+        leftPanelOpen={leftPanelOpen}
+        rightPanelOpen={rightPanelOpen}
+        onToggleLeftPanel={() => setLeftWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_LEFT_PANEL_WIDTH))}
+        onToggleRightPanel={() => setRightWidth(w => w > 0 ? 0 : initialPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH))}
+        analysisEngineMode={analysisEngineMode}
+        setAnalysisEngineMode={setAnalysisEngineMode}
+        searchDepth={searchDepth}
+        setSearchDepth={setSearchDepth}
+        liveAnalysisDepth={liveAnalysisPolicy.primary.depth}
+        engineThreadChoices={engineThreadChoices}
+        engineHashChoices={engineHashChoices}
+        engineBootConfig={engineBootConfig}
+        setEngineThreads={setEngineThreads}
+        setEngineHashMB={setEngineHashMB}
+        aiSpeed={aiSpeed}
+        handleSpeedChange={handleSpeedChange}
+        soundEnabled={soundEnabled}
+        handleSoundToggle={handleSoundToggle}
+        resetPreferences={resetPreferences}
+        resetGame={resetGame}
+      />}
 
       {/* ── New game menu ── */}
-      {showNewGameMenu && (
-        <>
-          <div
-            className="settings-backdrop"
-            onClick={closeNewGameMenu}
-            aria-hidden="true"
-          />
-          <div
-            className="new-game-menu"
-            role="dialog"
-            aria-modal="true"
-            aria-label="New game"
-            id="new-game-menu-dialog"
-            ref={newGameDialogRef}
-            tabIndex={-1}
-          >
-            <div className="new-game-menu-header">
-              <div className="new-game-menu-copy">
-                <h2>New Game</h2>
-              </div>
-              <button
-                className="settings-close-btn"
-                type="button"
-                onClick={closeNewGameMenu}
-                aria-label="Close"
-              >
-                <IconX />
-              </button>
-            </div>
-            <div className="new-game-menu-content" tabIndex={-1} onFocusCapture={event => {
-              if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            }}>
-            <div className="new-game-menu-modes">
-              {GAME_MODES.map(({ mode, label, description }) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`new-game-mode-btn ${pendingGameMode === mode ? 'new-game-mode-btn-active' : ''}`}
-                  onClick={() => setPendingGameMode(mode)}
-                  aria-pressed={pendingGameMode === mode}
-                >
-                  <span>{label}</span>
-                  <small>{description}</small>
-                </button>
-              ))}
-            </div>
-            {pendingModeIsAi && (
-              <div className="new-game-strength-section">
-                <p className="new-game-strength-label">AI Difficulty</p>
-                <div className="new-game-strength-pills">
-                  {([1, 2, 3, 4, 5, 6] as AiStrength[]).map((lvl) => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      className={`new-game-strength-btn ${aiStrength === lvl ? 'new-game-strength-btn-active' : ''}`}
-                      onClick={() => setAiStrength(lvl)}
-                      title={describeAiStrength(lvl)}
-                      aria-label={describeAiStrength(lvl)}
-                      aria-pressed={aiStrength === lvl}
-                    >
-                      {AI_STRENGTH_LABELS[lvl]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="new-game-fen-section">
-              <p className="new-game-strength-label">Load Position (FEN)</p>
-              <form
-                className="new-game-fen-form"
-                onSubmit={(e) => { e.preventDefault(); handleLoadFen(fenInput, pendingGameMode); }}
-              >
-                <input
-                  className={`new-game-fen-input ${fenError ? 'new-game-fen-input-error' : ''}`}
-                  type="text"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={fenInput}
-                  onChange={(e) => {
-                    setFenInput(e.target.value);
-                    if (fenError) clearFenError();
-                  }}
-                  placeholder="rnbakabnr/9/… w - - 0 1"
-                  aria-label="FEN string"
-                  aria-invalid={fenError ? true : undefined}
-                  aria-describedby={fenError ? 'new-game-fen-error' : undefined}
-                />
-                <button
-                  type="submit"
-                  className="new-game-strength-btn new-game-strength-btn-active"
-                  disabled={!fenInput.trim()}
-                >
-                  {fenError ? 'Invalid FEN' : 'Load'}
-                </button>
-              </form>
-              {fenError ? (
-                <span id="new-game-fen-error" className="new-game-fen-error" role="alert">
-                  {fenError}
-                </span>
-              ) : null}
-              {/* For the position nobody has a FEN for: the endgame in a
-                  book, a composed problem, the one a friend described -- and,
-                  when a pasted FEN drew a board and broke a rule, for that
-                  board. Being told the generals face each other and then having
-                  to rebuild the whole position to move one of them is the long
-                  way round; the editor holds an illegal board on purpose, says
-                  the same sentence about it, and keeps Done disabled until it
-                  is answered. Only when the layout itself parsed: there is
-                  nothing to hand over otherwise, and the button goes back to
-                  meaning what it always meant. */}
-              <button
-                type="button"
-                className="new-game-file-btn"
-                style={{ marginTop: '0.5rem' }}
-                onClick={() => {
-                  setEditorGameMode(pendingGameMode);
-                  setEditorSeed(refusedPosition);
-                  closeNewGameMenu();
-                  setShowBoardEditor(true);
-                }}
-                data-testid="open-board-editor-btn"
-              >
-                {refusedPosition ? 'Fix this position by hand' : 'Set up the board by hand'}
-              </button>
-            </div>
-            <div className="new-game-fen-section">
-              <p className="new-game-strength-label">Import Move Line</p>
-              <form
-                className="new-game-line-form"
-                onKeyDown={event => {
-                  if (!moveLineFileUndo || isComposingKey(event.nativeEvent) || !(event.ctrlKey || event.metaKey)
-                    || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'z') return;
-                  event.preventDefault(); event.stopPropagation(); handleUndoMoveLineFile();
-                }}
-                onFocusCapture={event => {
-                  if (!(event.target instanceof HTMLElement)) return;
-                  if (!event.target.isSameNode(directImportCancelRef.current)) directImportFocusRef.current = event.target;
-                  else if (!directImportFocusRef.current?.isConnected) directImportFocusRef.current = document.getElementById('new-game-line-input');
-                }}
-                onSubmit={(e) => { e.preventDefault(); handleImportMoveLine(moveLineInput, pendingGameMode); }}
-              >
-                <textarea
-                  id="new-game-line-input"
-                  className={`new-game-line-input ${moveLineError ? 'new-game-fen-input-error' : ''}`}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={moveLineInput}
-                  data-file-drag={moveLineFileDragActive || undefined}
-                  onDragLeave={() => setMoveLineFileDragActive(false)}
-                  onDragEnd={() => setMoveLineFileDragActive(false)}
-                  onDragOver={event => {
-                    if (!event.dataTransfer.types.includes('Files')) return;
-                    event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
-                    setMoveLineFileDragActive(true);
-                  }}
-                  onDrop={handleMoveLineFileDrop}
-                  onChange={(e) => {
-                    cancelDirectImport();
-                    const nextValue = e.target.value;
-                    if (isMoveImportTextTooLarge(nextValue)) {
-                      setMoveLineError(`Move line is too large. Import ${MAX_MOVE_IMPORT_UCI_MOVES} moves or fewer.`);
-                      return;
-                    }
-                    setMoveLineFileName('');
-                    setMoveLineFileUndo(null);
-                    setMoveLineInput(nextValue);
-                    setMoveLineError(null);
-                  }}
-                  placeholder="1. 炮二平五 马8进7   ·   1. C2=5 H8+7   ·   1. b2e2 h9g7"
-                  aria-label="Move line in coordinates, WXF or Chinese notation"
-                  aria-invalid={moveLineError ? true : undefined}
-                  aria-describedby={moveLineError ? 'new-game-line-error new-game-line-drop-hint' : 'new-game-line-drop-hint'}
-                  rows={viewportSize.height <= 500 ? 2 : 3}
-                  data-testid="uci-line-input"
-                />
-                <p id="new-game-line-drop-hint" className="settings-hint">Drop a PGN, XQF or text file here.</p>
-                <div className="new-game-file-row">
-                  <button
-                    type="button"
-                    className="new-game-file-btn"
-                    onClick={handlePickMoveLineFile}
-                    data-testid="load-uci-file-btn"
-                  >
-                    <IconUpload /> Open PGN or XQF
-                  </button>
-                  <input
-                    ref={moveLineFileInputRef}
-                    className="new-game-file-input"
-                    type="file"
-                    accept=".pgn,.txt,.xqf,text/plain,application/x-chess-pgn,application/octet-stream"
-                    onChange={handleMoveLineFileChange}
-                    aria-label="Open PGN file"
-                    data-testid="uci-line-file-input"
-                  />
-                  {moveLineFileName ? <span className="new-game-file-name" title={moveLineFileName}>{moveLineFileName}</span> : null}
-                  {moveLineFileUndo && <button type="button" className="new-game-file-btn" onClick={handleUndoMoveLineFile}
-                    title="Undo file load (Ctrl/Cmd+Z)" aria-keyshortcuts="Control+Z Meta+Z">Undo file load</button>}
-                </div>
-                {directImportBusy && <p role="status">Checking the game… <button type="button" ref={directImportCancelRef} onClick={cancelDirectImport}>Cancel reading</button></p>}
-                <div className="new-game-line-actions">
-                  {moveLineError ? <span id="new-game-line-error" className="new-game-line-error" role="alert">{moveLineError}</span> : <span />}
-                  <button
-                    type="submit"
-                    className="new-game-strength-btn new-game-strength-btn-active"
-                    disabled={directImportBusy || !moveLineInput.trim()}
-                    data-testid="import-uci-line-btn"
-                  >
-                    {directImportBusy ? 'Reading…' : 'Import'}
-                  </button>
-                </div>
-              </form>
-            </div>
-            </div>
-            <div className="new-game-menu-footer">
-              <div className="new-game-selection" aria-label={`Selected ${pendingModeLabel}. ${pendingModeMeta.description}`}>
-                <span className="new-game-selection-label">Selected</span>
-                <strong>{pendingModeLabel}</strong>
-              </div>
-              <button
-                type="button"
-                className="new-game-start-btn"
-                onClick={startNewGameFromMenu}
-              >
-                Start Fresh Board
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {showNewGameMenu && <NewGameDialog
+        closeNewGameMenu={closeNewGameMenu}
+        newGameDialogRef={newGameDialogRef}
+        aiStrength={aiStrength}
+        setAiStrength={setAiStrength}
+        handleLoadFen={handleLoadFen}
+        clearFenError={clearFenError}
+        setEditorGameMode={setEditorGameMode}
+        setEditorSeed={setEditorSeed}
+        setShowBoardEditor={setShowBoardEditor}
+        handleUndoMoveLineFile={handleUndoMoveLineFile}
+        directImportCancelRef={directImportCancelRef}
+        directImportFocusRef={directImportFocusRef}
+        handleImportMoveLine={handleImportMoveLine}
+        handleMoveLineFileDrop={handleMoveLineFileDrop}
+        cancelDirectImport={cancelDirectImport}
+        viewportSize={viewportSize}
+        handlePickMoveLineFile={handlePickMoveLineFile}
+        moveLineFileInputRef={moveLineFileInputRef}
+        handleMoveLineFileChange={handleMoveLineFileChange}
+        startNewGameFromMenu={startNewGameFromMenu}
+        form={newGameForm}
+        initialFocus={newGameInitialFocus.current}
+      />}
 
       <div className="main-container" data-mobile-tab={isMobile ? mobileAnalysisTab : undefined}>
         <div className="main-workspace">
@@ -6932,7 +6202,7 @@ function App() {
                 <LazyPanelBoundary>
                 {qaForcePanelError ? <QaForcedRenderError /> : (
                 <React.Suspense fallback={<div className="library-loading" data-testid="library-loading">Loading library…</div>}>
-                  <LazyLibraryPanel
+                  {libraryLoading ? <p role="status">Loading saved games…</p> : <LazyLibraryPanel
                     initialViewState={libraryViewState.current}
                     onViewStateChange={rememberLibraryViewState}
                     searchFocusRequest={librarySearchRequest}
@@ -6953,7 +6223,7 @@ function App() {
                     libraryState={libraryState}
                     onLibraryChange={refreshGameLibrary}
                     onLoadHistorical={handleLoadHistoricalGame}
-                  />
+                  />}
                 </React.Suspense>
                 )}
                 </LazyPanelBoundary>
@@ -7758,40 +7028,20 @@ function App() {
                       bottom command bar, half of those breadcrumb chips. A real
                       100-ply game put a hundred of them between the toolbar and
                       "Save". */}
-                  {breadcrumbVisible && <div
-                    className="tree-breadcrumb"
-                    ref={treeBreadcrumbRef}
-                    role="toolbar"
-                    aria-label="Current line, one chip per move"
-                    aria-orientation="horizontal"
-                    aria-keyshortcuts="ArrowLeft ArrowRight Home End"
-                    onClick={event => {
-                      const chip = event.target instanceof Element
-                        ? event.target.closest<HTMLButtonElement>('.tree-breadcrumb-chip') : null;
-                      const nodeId = chip?.dataset.breadcrumbNodeId;
-                      if (chip && nodeId && event.currentTarget.contains(chip)) jumpToNode(nodeId);
-                    }}
-                  >
-                    {breadcrumbNodeIds.map((nodeId, index) => {
-                      return <BreadcrumbChip key={nodeId} nodeId={nodeId} index={index}
-                        record={treeNodes[nodeId]?.record} rootFen={rootFen} notationStyle={notationStyle}
-                        isRoot={nodeId === rootNodeId} isCurrent={nodeId === currentNodeId}
-                        isTabStop={index === breadcrumbTabStopIndex} hasNext={index < breadcrumbNodeIds.length - 1}
-                        onFocusIndex={setRovingBreadcrumbIndex}
-                        onKeyDown={handleBreadcrumbKeyDown} />;
-                    })}
-                  </div>}
+                  {breadcrumbVisible && <TreeBreadcrumb treeNodes={treeNodes} rootNodeId={rootNodeId}
+                    rootFen={rootFen} currentNodeId={currentNodeId} currentMoveIndex={currentMoveIndex}
+                    activeLineNodeIds={activeLineNodeIds} notationStyle={notationStyle} onNavigate={jumpToNode} />}
                   {!isMobile && beginnerGuide ? beginnerGuide : moveTreeVisible && <MoveListTree
                     treeNodes={treeNodes}
+                    moveStructure={moveStructure}
                     rootNodeId={rootNodeId}
                     rootFen={rootFen}
                     currentNodeId={currentNodeId}
-                    currentMoveIndex={currentMoveIndex}
                     activeLineNodeIds={activeLineNodeIds}
                     notationStyle={notationStyle}
                     onNavigateNode={jumpToNode}
                     onDeleteNode={handleDeleteNode}
-                    onShowBoard={isMobile ? () => setMobileView('board') : undefined}
+                    onShowBoard={isMobile ? showMobileBoard : undefined}
                     onOpenLibrary={openLibraryPanel}
                   />}
                   {lineRecordedResult && <p className="recorded-line-result" data-testid="recorded-line-result">
@@ -7915,400 +7165,76 @@ function App() {
                   formatLineText={formatReviewLineText}
                 />
               ) : (
-                <>
-                  <div className="engine-pv-controls" role="group" aria-label="Engine principal variation lines">
-                    <span>PV Lines</span>
-                    <div className="engine-pv-buttons">
-                      {PV_LINE_OPTIONS.map((count) => (
-                        <button
-                          key={count}
-                          type="button"
-                          className={`engine-pv-btn ${enginePvLineCount === count ? 'engine-pv-btn-active' : ''}`}
-                          onClick={() => setEnginePvLineCount(count)}
-                          aria-pressed={enginePvLineCount === count}
-                          aria-label={PV_LINE_CONTROL_COPY[count].ariaLabel}
-                          title={PV_LINE_CONTROL_COPY[count].title}
-                          data-testid={`engine-pv-lines-${count}`}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="engine-pv-controls engine-runtime-controls" role="group" aria-label="Engine runtime controls">
-                    <span>Runtime</span>
-                    <div className="engine-runtime-buttons">
-                      {/* The one thing live analysis cannot do: stop on this
-                          position and go as deep as the machine can. Bounded,
-                          so it settles on its own; stoppable, so a long wait is
-                          never forced on anyone. */}
-                      <button
-                        type="button"
-                        className={`engine-cache-btn ${deepDiveActive ? 'engine-pv-btn-active' : ''}`}
-                        onClick={deepDiveActive ? stopDeepDive : runDeepDive}
-                        disabled={!deepDiveActive && !canDeepDive}
-                        title={deepDiveActive
-                          ? 'Stop the deep search and keep what it has found (D)'
-                          : deepSearchMode === 'infinite'
-                            ? 'Search this position until stopped, including while this tab is in the background (D)'
-                            : `Search this position to depth ${deepDiveBudget.depth} for up to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s, and keep going if this tab goes to the background (D)`}
-                        aria-keyshortcuts="D"
-                        aria-label={deepDiveActive
-                          ? 'Stop the deep search'
-                          : `Go deep: search this position, ${deepSearchLimitText}`}
-                        data-testid="deep-dive-btn"
-                      >
-                        {deepDiveActive
-                          ? <><IconPause aria-hidden="true" focusable="false" /> Stop</>
-                          : <><IconSearch aria-hidden="true" focusable="false" /> Go Deep</>}
-                      </button>
-                      {/* The other way a deep search can end: never, until the
-                          reader says so. Pressed, Go Deep sends `go infinite`
-                          and the depth climbs until Stop or a new position.
-                          A toggle beside the button rather than a setting,
-                          because it is decided per position, not per session. */}
-                      <button
-                        type="button"
-                        className={`engine-cache-btn engine-infinite-btn ${deepSearchMode === 'infinite' ? 'engine-pv-btn-active' : ''}`}
-                        onClick={() => setDeepSearchMode((mode) => (mode === 'infinite' ? 'bounded' : 'infinite'))}
-                        aria-pressed={deepSearchMode === 'infinite'}
-                        title={deepSearchMode === 'infinite'
-                          ? `Deep search runs until stopped. Press to limit it to ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s.`
-                          : `Deep search stops after ${Math.round(deepDiveBudget.moveTimeMs / 1000)}s. Press to let it run until stopped.`}
-                        aria-label="Let a deep search run until stopped"
-                        data-testid="deep-infinite-toggle"
-                      >
-                        ∞
-                      </button>
-                      {/* Give the opponent the move and read the reply. The
-                          button says why it is unavailable rather than sitting
-                          disabled with no account of itself -- being in check is
-                          the common reason and it is not obvious that it is one. */}
-                      <button
-                        type="button"
-                        className={`engine-cache-btn ${threatActive ? 'engine-pv-btn-active' : ''}`}
-                        onClick={threatActive ? stopThreat : runThreatSearch}
-                        disabled={!threatActive && !canShowThreat}
-                        title={threatActive
-                          ? 'Back to analysing the position as it stands (X)'
-                          : !threatFen
-                            ? `${sideToMoveLabel} is in check, so there is no position to pass from`
-                            : `Let ${sideToMove === 'w' ? 'Black' : 'Red'} move first and show what they are threatening (X)`}
-                        aria-keyshortcuts="X"
-                        aria-label={threatActive
-                          ? 'Threat on: stop showing the threat and analyse the position as it stands'
-                          : 'Show the threat: let the opponent move first'}
-                        data-testid="show-threat-btn"
-                      >
-                        <IconTarget aria-hidden="true" focusable="false" /> {threatActive ? 'Threat on' : 'Threat'}
-                      </button>
-                      <button
-                        type="button"
-                        ref={candidateButtonRef}
-                        className={`engine-cache-btn ${candidatePickerOpen ? 'engine-pv-btn-active' : ''}`}
-                        onClick={candidatePickerOpen ? closeCandidatePicker : openCandidatePicker}
-                        disabled={!candidatePickerOpen && !canCompareCandidates}
-                        aria-expanded={candidatePickerOpen}
-                        aria-controls={candidatePickerOpen ? 'candidate-comparison' : undefined}
-                        title="Choose legal moves and compare only their continuations"
-                        data-testid="open-candidate-comparison"
-                      >
-                        <IconBarChart aria-hidden="true" /> Compare
-                      </button>
-                      <details className="engine-advanced" data-testid="advanced-engine-maintenance">
-                        <summary>Engine maintenance</summary>
-                        <p>Restart a stalled engine or clear remembered search positions.</p>
-                        <div className="engine-advanced-actions">
-                      <button
-                        type="button"
-                        className="engine-cache-btn"
-                        onClick={handleRestartEngine}
-                        disabled={!engineRequired}
-                        title="Restart the engine worker"
-                        aria-label="Restart engine"
-                        data-testid="restart-engine-btn"
-                      >
-                        <IconRefresh aria-hidden="true" focusable="false" /> Restart
-                      </button>
-                      <button
-                        type="button"
-                        className={`engine-cache-btn ${engineHashFeedback ? 'engine-pv-btn-active' : ''}`}
-                        onClick={handleClearEngineHash}
-                        disabled={!isReady}
-                        title={engineHashFeedback === 'queued' ? 'Engine hash clear is queued after the current search' : isSearching || isSearchQueued ? 'Queue a transposition-table clear after the current search' : 'Clear the engine hash table'}
-                        aria-label={engineHashFeedback === 'queued' ? 'Engine hash clear queued' : engineHashFeedback === 'cleared' ? 'Engine hash cleared' : 'Clear hash: empty the engine search table'}
-                        data-testid="clear-engine-hash-btn"
-                      >
-                        {engineHashFeedback === 'queued' ? <><IconRefresh aria-hidden="true" focusable="false" /> Queued</> : engineHashFeedback === 'cleared' ? <><IconCheck aria-hidden="true" focusable="false" /> Cleared</> : 'Clear Hash'}
-                      </button>
-                        </div>
-                      </details>
-                    </div>
-                  </div>
-                  {engineRecoveryNotice ? (
-                    <div
-                      className={`engine-recovery-notice engine-recovery-notice-${engineRecoveryNotice.tone}`}
-                      role="status"
-                      data-testid="engine-recovery-notice"
-                    >
-                      <strong>{engineRecoveryNotice.text}</strong>
-                      <span>{engineRecoveryHint}</span>
-                    </div>
-                  ) : null}
-                  {candidatePickerOpen ? (
-                    <CandidatePanel
-                      key={currentPositionCommand}
-                      board={board} side={sideToMove} notation={notationStyle}
-                      active={candidateActive} completed={candidateSearch?.completed ?? false}
-                      searching={candidateActive && (isSearching || isSearchQueued)}
-                      canCompare={canCompareCandidates}
-                      canPlay={isReady && !gameResult && !isAiTurn && reviewStatus !== 'running'}
-                      budgetLabel={candidateActive ? candidateSearch!.budgetLabel : candidateBudgetLabel}
-                      lines={candidatePvLines}
-                      onCompare={compareCandidateMoves} onEdit={leaveCandidateSearch} onClose={closeCandidatePicker}
-                      onStop={stopDeepDive}
-                      onPlay={handlePlayPvLine} onKeep={handleKeepPvLine}
-                      isKept={isAnalysisLineKept} hasLine={moves => hasMoveTreeLine(treeNodes, currentNodeId, moves)}
-                    />
-                  ) : null}
-                  {/* The threat replaces the candidate list rather than sitting
-                      beside it, because the two are evaluations of different
-                      positions and a reader comparing them side by side would be
-                      comparing nothing. The card says whose move it is showing. */}
-                  {candidateActive ? null : threatActive ? (
-                    <div className="pv-lines-container">
-                      <div className="pv-line premium-card threat-card" data-testid="threat-card">
-                        <div className="pv-line-heading">
-                          <span className="pv-line-rank">
-                            If {sideToMove === 'w' ? 'Black' : 'Red'} moved now
-                          </span>
-                          {/* Red POV like every other evaluation here, and said
-                              so, because this one is a score for a position the
-                              reader is not looking at -- an unlabelled number
-                              beside "If Black moved now" reads as Black's. The
-                              side passed to the formatter is the *opponent*,
-                              since that is who is to move in the searched
-                              position. */}
-                          {threatPv ? (
-                            <span
-                              className="pv-line-standing"
-                              title={`Red POV score ${formatRedPovEngineScore(threatPv, sideToMove === 'w' ? 'b' : 'w')}`}
-                            >
-                              {formatRedPovEngineScore(threatPv, sideToMove === 'w' ? 'b' : 'w')} Red POV
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="pv-line-moves" data-testid="threat-line">
-                          {threatPv
-                            ? formatLineInStyle(
-                                parseFenBoard((threatFen ?? currentFen).split(' ')[0]),
-                                threatPv.moves,
-                                notationStyle,
-                                6,
-                              )
-                            : 'Searching…'}
-                        </div>
-                        <div className="pv-empty">
-                          A passed move: this position is not one the game can reach.
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                  <div className="pv-lines-container">
-                    {currentAnalysisPvLines.length === 0 ? (
-                      <div className="pv-empty">No PV available yet.</div>
-                    ) : currentAnalysisPvLines.map((pv, i) => {
-                      const bestReading = currentAnalysisPvLines[0] ?? pv;
-                      const lineStanding = describePvStanding(bestReading, pv, i);
-                      const normalizedScore = normalizeEvalForSide(pv.score, sideToMove);
-                      // One decimal, like every other evaluation in the app.
-                      // At zero this badge could not tell a half-pawn from
-                      // level -- everything between -0.99 and +0.99 rendered as
-                      // "+0" or "-0", which is most of an opening and most of a
-                      // middlegame, and "-0" reads as a typo rather than as a
-                      // number. The screen-reader label had already been built
-                      // at one decimal all along, so the informative form
-                      // existed and was simply not the one on screen.
-                      const pvScoreText = formatRedPovEngineScore(pv, sideToMove, 1);
-                      const pvScoreLabel = `Red POV score ${pvScoreText}`;
-                      const pvScoreClass = normalizedScore > 0 ? 'positive' : normalizedScore < 0 ? 'negative' : '';
-                      const firstMove = pv.moves[0];
-                      const lineExists = hasMoveTreeLine(treeNodes, currentNodeId, pv.moves);
-                      const lineKept = isAnalysisLineKept(pv.moves);
-                      const depthLabel = pv.depth ? `depth ${pv.depth}` : 'depth pending';
-                      const pvLineText = pv.moves.length ? formatLineInStyle(board, pv.moves, notationStyle, 7) : 'No moves yet';
-                      const pvTokens = formatLineTokensInStyle(board, pv.moves, notationStyle, 7);
-                      const pvLineLabel = pv.moves.length ? `moves ${pvLineText}` : 'no moves yet';
-                      const firstMoveText = firstMove ? formatLineInStyle(board, [firstMove], notationStyle, 1) : '';
-                      // The clipboard gets the raw moves whatever the reader is
-                      // looking at, so the tooltip shows those rather than
-                      // promising "raw UCI" beside a line written in WXF.
-                      const pvRawLine = pv.moves.join(' ');
-                      const lineActionContext = `engine line ${i + 1}, ${depthLabel}, ${pvLineLabel}`;
-                      // Red's chances, like every other number on this card:
-                      // the engine's wdl is for the side to move.
-                      const lineWdl = pv.wdl ? normalizeWdlForSide(pv.wdl, sideToMove) : null;
-                      const lineWdlText = lineWdl
-                        ? `Red ${Math.round(lineWdl.win / 10)}% · draw ${Math.round(lineWdl.draw / 10)}% · Black ${Math.round(lineWdl.loss / 10)}%`
-                        : null;
-                      const playPvLabel = firstMove
-                        ? `Play ${firstMoveText} from engine line ${i + 1}`
-                        : `Play engine line ${i + 1} first move unavailable`;
-                      const copyPvLabel = exportFailureKey === `copy-pv-${i}`
-                        ? `Engine line ${i + 1} copy failed: ${pvLineText}`
-                        : copiedPvIndex === i
-                          ? `Engine line ${i + 1} copied: ${pvLineText}`
-                          : `Copy engine line ${i + 1}: ${pvLineText}`;
-                      return (
-                        <div
-                          key={i}
-                          className={`pv-line premium-card ${spotlightPvIndex === i ? 'pv-line-spotlight' : ''}`}
-                          role="group"
-                          tabIndex={0}
-                          aria-label={`Engine line ${i + 1}, ${lineStanding}, ${pvScoreLabel}, ${depthLabel}${lineWdlText ? `, ${lineWdlText}` : ''}, ${pvLineLabel}`}
-                          onMouseEnter={() => setSpotlightPvIndex(i)}
-                          onMouseLeave={() => setSpotlightPvIndex(null)}
-                          onFocus={() => setSpotlightPvIndex(i)}
-                          onBlur={(event) => {
-                            const nextFocus = event.relatedTarget;
-                            if (nextFocus instanceof Node && event.currentTarget.contains(nextFocus)) return;
-                            setSpotlightPvIndex(null);
-                          }}
-                          data-testid={`engine-pv-line-${i}`}
-                          data-spotlight={spotlightPvIndex === i ? 'true' : undefined}
-                        >
-                          <div
-                            className={['pv-score', pvScoreClass].filter(Boolean).join(' ')}
-                            aria-label={pvScoreLabel}
-                            title={pvScoreLabel}
-                            data-testid={`engine-pv-score-${i}`}
-                          >
-                            <strong>{pvScoreText}</strong>
-                            <span>Red POV</span>
-                          </div>
-                          <div className="pv-moves">
-                            <div className="pv-line-heading">
-                              <span className="pv-line-rank">Line {i + 1}</span>
-                              <span
-                                className={`pv-line-standing ${lineStanding === 'Best' ? 'pv-line-standing-best' : ''}`}
-                                title={lineStanding === 'Not exact'
-                                  ? i === 0
-                                    ? 'This score is a bound; an exact evaluation is not available yet.'
-                                    : 'At least one score is a bound, so an exact comparison is not available yet.'
-                                  : i === 0 ? 'The engine’s first principal variation.'
-                                  : 'Compared with Line 1 from the side to move’s perspective. Live scores can update at different times.'}
-                              >
-                                {lineStanding}
-                              </span>
-                            </div>
-                            <span className="turnNum">
-                              Depth {pv.depth}
-                              {lineWdlText ? <span className="pv-line-wdl" title={lineWdlText} data-testid={`engine-pv-wdl-${i}`}> · {lineWdlText}</span> : null}
-                            </span>
-                            <span className="move">
-                              {/* One control per move: click the third to play the
-                                  line up to it, which is what a strong player does
-                                  with an engine line and could not do here. */}
-                              <MoveLineStrip
-                                tokens={pvTokens.tokens}
-                                remaining={pvTokens.remaining}
-                                disabled={Boolean(gameResult)}
-                                onPlay={(count) => handlePlayPvLine(pv.moves, count)}
-                                title={(_, token) => `Play this line up to ${token}`}
-                                ariaLabel={(moveIndex, token) => `Play engine line ${i + 1} up to move ${moveIndex + 1}, ${token}`}
-                                testId={(moveIndex) => `engine-pv-${i}-move-${moveIndex}`}
-                                emptyText="No moves yet"
-                              />
-                            </span>
-                          </div>
-                          <div className="pv-line-actions" role="group" aria-label={`Actions for ${lineActionContext}`}>
-                            <button
-                              type="button"
-                              className="pv-action-btn"
-                              onClick={() => handlePlayPvMove(firstMove)}
-                              disabled={!firstMove || Boolean(gameResult)}
-                              title={firstMove ? `Play ${firstMoveText} from this engine line` : 'No move to play from this engine line'}
-                              aria-label={playPvLabel}
-                              data-testid={`play-engine-pv-${i}`}
-                            >
-                              <IconPlay />
-                              <span>Play</span>
-                            </button>
-                            <button
-                              type="button"
-                              className={`pv-action-btn ${copiedPvIndex === i ? 'pv-action-btn-active' : ''} ${exportFailureKey === `copy-pv-${i}` ? 'pv-action-btn-warning' : ''}`}
-                              onClick={() => handleCopyPvLine(i, pv.moves)}
-                              disabled={pv.moves.length === 0}
-                              title={exportFailureKey === `copy-pv-${i}` ? `Copy failed for ${pvLineText}` : `Copy this engine line as raw UCI moves: ${pvRawLine}`}
-                              aria-label={copyPvLabel}
-                              data-testid={`copy-engine-pv-${i}`}
-                            >
-                              {exportFailureKey === `copy-pv-${i}` ? <IconX /> : copiedPvIndex === i ? <IconCheck /> : <IconCopy />}
-                              <span>{exportFailureKey === `copy-pv-${i}` ? 'Failed' : copiedPvIndex === i ? 'Copied' : 'Copy'}</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="pv-action-btn"
-                              onClick={() => handleKeepPvLine(pv.moves)}
-                              disabled={!isReady || lineKept || !pv.moves.length || Boolean(gameResult) || isAiTurn || reviewStatus === 'running'}
-                              title={lineKept ? 'This line and analysis are saved' : 'Keep the complete line and save this analysis snapshot without moving the board'}
-                              aria-label={lineKept ? `Kept line ${i + 1} in the move tree` : lineExists ? `Update analysis for engine line ${i + 1}` : `Keep line ${i + 1} in the move tree`}
-                              data-testid={`keep-engine-pv-${i}`}
-                            >
-                              {lineKept ? <IconCheck /> : <IconSave />}
-                              <span>{lineKept ? 'Kept' : lineExists ? 'Update analysis' : 'Keep line'}</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  )}
-                  {/* Diagnostics last: at 1280x720 the four cards stood between the
-                      controls and the lines and left room for one line of three. The
-                      lines are what the panel is for; the core, tier and node rate are
-                      what you look at when something is wrong. */}
-                  <div className="engine-dashboard" role="group" aria-label="Engine diagnostics">
-                    <div className="engine-stat" title={engineCoreDetail} aria-label={engineCoreDetail}>
-                      <span>Core</span>
-                      <strong>{engineVariant}</strong>
-                      <em>{engineBootConfig.threads}T · {engineBootConfig.hashMB}MB</em>
-                    </div>
-                    <div className="engine-stat">
-                      <span>Profile</span>
-                      <strong>{analysisEngineMode}</strong>
-                      <em>{engineBootConfig.tier}{engineBootConfig.saferBoot ? ' · safe boot' : ''}</em>
-                    </div>
-                    <EngineSearchTelemetry store={telemetry} ready={isReady} queued={isSearchQueued} searching={isSearching} stalled={analysisIsStalled}
-                      detail={engineRecoveryNotice ? `${engineRecoveryNotice.text}. ${engineRecoveryHint}` : analysisIsStalled ? describeAnalysisActivity(analysisActivity) : undefined}
-                      label={engineRecoveryNotice?.text ?? (analysisIsStalled ? formatAnalysisActivity(analysisActivity) : undefined)}
-                      secondary={engineRecoveryNotice ? engineRecoveryHint : candidateActive ? candidateSearch!.budgetLabel : analysisIsStalled ? 'tab in background' : undefined}
-                    />
-                    <div className="engine-stat">
-                      <span>Detail</span>
-                      <strong>{`MultiPV ${candidateActive ? candidateSearch!.moves.length : analysisMultiPv}`}</strong>
-                      <em>{candidateActive ? 'Selected moves · WDL off' : analysisWdlEnabled ? 'WDL on' : 'WDL off'}</em>
-                    </div>
-                  </div>
-                  {assistMode === 'pro' ? (
-                    <EngineOutput store={telemetry} />
-                  ) : candidateActive ? null : (
-                    <div className="engine-coach-summary">
-                      <div className="engine-coach-item">
-                        <span>Best</span>
-                        <strong>{coachBestMoveText}</strong>
-                      </div>
-                      <div className="engine-coach-item">
-                        <span>Depth</span>
-                        <strong>{!isReady ? '—' : topAnalysisPv?.depth ? `D${topAnalysisPv.depth}` : isSearchQueued ? 'Queued' : isSearching ? 'Pending' : `D${liveAnalysisPolicy.primary.depth}`}</strong>
-                      </div>
-                      <div className="engine-coach-item engine-coach-line">
-                        <span>Line</span>
-                        <strong>{coachLineText}</strong>
-                      </div>
-                    </div>
-                  )}
-                </>
+                <EnginePanel
+                  enginePvLineCount={enginePvLineCount}
+                  setEnginePvLineCount={setEnginePvLineCount}
+                  deepDiveActive={deepDiveActive}
+                  stopDeepDive={stopDeepDive}
+                  runDeepDive={runDeepDive}
+                  canDeepDive={canDeepDive}
+                  deepSearchMode={deepSearchMode}
+                  deepDiveBudget={deepDiveBudget}
+                  deepSearchLimitText={deepSearchLimitText}
+                  setDeepSearchMode={setDeepSearchMode}
+                  threatActive={threatActive}
+                  stopThreat={stopThreat}
+                  runThreatSearch={runThreatSearch}
+                  canShowThreat={canShowThreat}
+                  threatFen={threatFen}
+                  sideToMoveLabel={sideToMoveLabel}
+                  sideToMove={sideToMove}
+                  candidateButtonRef={candidateButtonRef}
+                  candidatePickerOpen={candidatePickerOpen}
+                  closeCandidatePicker={closeCandidatePicker}
+                  openCandidatePicker={openCandidatePicker}
+                  canCompareCandidates={canCompareCandidates}
+                  handleRestartEngine={handleRestartEngine}
+                  engineRequired={engineRequired}
+                  engineHashFeedback={engineHashFeedback}
+                  handleClearEngineHash={handleClearEngineHash}
+                  isReady={isReady}
+                  isSearching={isSearching}
+                  isSearchQueued={isSearchQueued}
+                  engineRecoveryNotice={engineRecoveryNotice}
+                  engineRecoveryHint={engineRecoveryHint}
+                  currentPositionCommand={currentPositionCommand}
+                  board={board}
+                  notationStyle={notationStyle}
+                  candidateActive={candidateActive}
+                  candidateSearch={candidateSearch}
+                  gameResult={gameResult}
+                  isAiTurn={isAiTurn}
+                  reviewStatus={reviewStatus}
+                  candidateBudgetLabel={candidateBudgetLabel}
+                  compareCandidateMoves={compareCandidateMoves}
+                  leaveCandidateSearch={leaveCandidateSearch}
+                  handlePlayPvLine={handlePlayPvLine}
+                  handleKeepPvLine={handleKeepPvLine}
+                  isAnalysisLineKept={isAnalysisLineKept}
+                  treeNodes={treeNodes}
+                  currentNodeId={currentNodeId}
+                  currentFen={currentFen}
+                  exportFailureKey={exportFailureKey}
+                  copiedPvIndex={copiedPvIndex}
+                  spotlightPvIndex={spotlightPvIndex}
+                  setSpotlightPvIndex={setSpotlightPvIndex}
+                  handlePlayPvMove={handlePlayPvMove}
+                  handleCopyPvLine={handleCopyPvLine}
+                  engineCoreDetail={engineCoreDetail}
+                  engineVariant={engineVariant}
+                  engineBootConfig={engineBootConfig}
+                  analysisEngineMode={analysisEngineMode}
+                  telemetry={telemetry}
+                  analysisIsStalled={analysisIsStalled}
+                  analysisActivity={analysisActivity}
+                  analysisMultiPv={analysisMultiPv}
+                  analysisWdlEnabled={analysisWdlEnabled}
+                  assistMode={assistMode}
+                  liveAnalysisPolicy={liveAnalysisPolicy}
+                  recommendations={recommendations}
+                  analysisRequestKey={analysisRequestKey}
+                  engineEnabled={engineEnabled}
+                />
               )}
             </div>
           </div>
@@ -8398,7 +7324,7 @@ function App() {
                 const ok = downloadTextFile('xiangqi-recovery-data.json', JSON.stringify(recoveryProblems, null, 2), 'application/json');
                 setRecoveryDownloadFailed(!ok);
               }}>{recoveryDownloadFailed ? 'Download failed — retry' : 'Download recovery data'}</button>
-              <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryProblems([])} aria-label="Dismiss recovery data notice"><IconX /></button>
+              <button type="button" className="undo-toast-dismiss" onClick={() => setRecoveryState(state => ({ ...state, problems: [] }))} aria-label="Dismiss recovery data notice"><IconX /></button>
             </div>
           )}
 
@@ -8713,7 +7639,7 @@ function App() {
           {studySaveControl}
           <button
             className={`mobile-tab-bar-btn ${mobileView === 'board' ? 'active' : ''}`}
-            onClick={() => setMobileView('board')}
+            onClick={showMobileBoard}
             aria-current={mobileView === 'board' ? 'page' : undefined}
             data-testid="mobile-view-board"
           >
@@ -8787,4 +7713,6 @@ function App() {
   );
 }
 
+// Keep the controller identifiable in production React profiles and render checks.
+App.displayName = 'App';
 export default App;
