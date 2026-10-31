@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentProps } from 'react';
+import { lazy, memo, Suspense, useDeferredValue, type ComponentProps } from 'react';
 import type { EvalGraph } from './Panels/EvalGraph';
 import type { CandidatePanel } from './CandidatePanel';
 import type { EnginePanelProps } from './EnginePanel';
@@ -8,9 +8,10 @@ const Graph = lazy(() => import('./Panels/EvalGraph').then(module => ({ default:
 const Candidates = lazy(() => import('./CandidatePanel').then(module => ({ default: module.CandidatePanel })));
 const Engine = lazy(() => import('./EnginePanel').then(module => ({ default: module.EnginePanel })));
 
-export function DeferredEvalGraph(props: ComponentProps<typeof EvalGraph>) {
-  return <LazyPanelBoundary><Suspense fallback={<p role="status">Loading graph…</p>}><Graph {...props} /></Suspense></LazyPanelBoundary>;
-}
+export const DeferredEvalGraph = memo(function DeferredEvalGraph(props: ComponentProps<typeof EvalGraph>) {
+  const deferred = useDeferredValue(props);
+  return <LazyPanelBoundary><Suspense fallback={<p role="status">Loading graph…</p>}><Graph {...deferred} onNavigate={props.onNavigate} /></Suspense></LazyPanelBoundary>;
+});
 export function DeferredEnginePanel(props: EnginePanelProps) {
   return <LazyPanelBoundary><Suspense fallback={<p role="status">Loading engine panel…</p>}><Engine {...props} /></Suspense></LazyPanelBoundary>;
 }

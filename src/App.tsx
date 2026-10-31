@@ -597,8 +597,10 @@ function App() {
   useEffect(() => {
     if (!soundEnabled || typeof window === 'undefined') return;
     const unlock = () => unlockSoundEffects();
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    window.addEventListener('keydown', unlock, { once: true });
+    // The first gesture can precede idle audio preparation. Keep listening so
+    // the next gesture can unlock the prepared device without delaying play.
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock);
     // Build the audio device while the main thread is free, so the gesture
     // above is left with resume() rather than ~125ms of device startup on the
     // reader's first tap. See prepareSoundEffects.

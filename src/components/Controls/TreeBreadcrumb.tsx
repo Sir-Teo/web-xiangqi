@@ -30,7 +30,7 @@ export const TreeBreadcrumb = memo(function TreeBreadcrumb({ treeNodes, rootNode
     const active = container?.querySelector('.tree-breadcrumb-chip-active') as HTMLElement | null;
     if (!container || !active) return;
 
-    const centerActive = (resized = false) => {
+    const centerActive = () => {
       const containerRect = container.getBoundingClientRect();
       const activeRect = active.getBoundingClientRect();
       const activeCenter = container.scrollLeft
@@ -40,17 +40,12 @@ export const TreeBreadcrumb = memo(function TreeBreadcrumb({ treeNodes, rootNode
       const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
       const targetLeft = Math.max(0, Math.min(maxLeft, activeCenter - container.clientWidth / 2));
       const distance = Math.abs(targetLeft - container.scrollLeft);
-      const activeFullyVisible = activeRect.left >= containerRect.left && activeRect.right <= containerRect.right;
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const behavior: ScrollBehavior = resized || prefersReducedMotion || !activeFullyVisible || distance > container.clientWidth
-        ? 'auto'
-        : 'smooth';
-      if (distance > 1) container.scrollTo({ left: targetLeft, behavior });
+      if (distance > 1) container.scrollTo({ left: targetLeft, behavior: 'auto' });
     };
-    centerActive();
     // Reopening initially sees a collapsed panel width. Recenter as it grows,
-    // and when enlarged text changes the active chip's dimensions.
-    const observer = new ResizeObserver(() => centerActive(true));
+    // and when enlarged text changes the active chip's dimensions. Its initial
+    // notification also centers after layout, without forcing it during a move.
+    const observer = new ResizeObserver(centerActive);
     observer.observe(container);
     observer.observe(active);
     return () => observer.disconnect();

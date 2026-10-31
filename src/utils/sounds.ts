@@ -41,9 +41,9 @@ export function prepareSoundEffects(): () => void {
 }
 
 export function unlockSoundEffects() {
-    // Still creates the context if the idle prime above has not run yet, so
-    // this is never worse than doing the work here -- only usually free.
-    const ac = createCtx();
+    // A first gesture may beat idle preparation. Never start the audio device
+    // on that gesture's critical path; a later gesture can resume it instead.
+    const ac = ctx;
     if (!ac) return;
     if (ac.state === 'suspended') {
         ac.resume().catch(() => {});

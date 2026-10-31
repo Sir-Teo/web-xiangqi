@@ -224,18 +224,7 @@ export const Board = React.memo(function Board({
         started: boolean;
     } | null>(null);
     const [drag, setDrag] = useState<{ file: number; rank: number; dx: number; dy: number } | null>(null);
-    /**
-     * Identity per piece, so the stylesheet's `left`/`top` transition has a
-     * DOM node to carry. Keyed by square, a move unmounts one element and
-     * mounts another, and a new element has nothing to transition from — the
-     * 300ms slide in `Board.css` had never once fired. See `pieceIdentity.ts`.
-     *
-     * Called during render rather than in an effect because the key has to be
-     * right in the same commit that moves the piece; `nextPieceIdentityState`
-     * returns its input unchanged for a board it has already seen, so a
-     * repeated render (React's development double-invoke among them) produces
-     * the same ids.
-     */
+    // Keep the same DOM node across a single move so its position can animate.
     const pieceIdentityRef = useRef<PieceIdentityState | null>(null);
     pieceIdentityRef.current = nextPieceIdentityState(pieceIdentityRef.current, board);
     const pieceIds = pieceIdentityRef.current.ids;
@@ -684,23 +673,8 @@ export const Board = React.memo(function Board({
                         }
                     })}
 
-                    {/* Pieces, in a flat list ordered by identity rather than
-                        by square -- both halves are load-bearing, and each was
-                        measured failing on its own.
-
-                        Flat, because React scopes keys to the array they sit
-                        in: with one sub-array per rank, a piece changing rank
-                        crosses between two sibling arrays and is remounted
-                        however stable its key is. With that alone, a same-rank
-                        move animated and every other move did not.
-
-                        Ordered by identity, because a list ordered by square
-                        makes a move an array *reorder*, and React then moves
-                        the DOM node as well as restyling it. That was directional
-                        -- stepping back animated, stepping forward jumped the
-                        whole way on the first frame. An identity order never
-                        reorders: a move changes only `left`/`top`, which is
-                        exactly what the transition is written against. */}
+                    {/* Stable identity order preserves each piece across moves. */}
+                    <div className="piece-motion-grid">
                     {renderedPieces.map(({ id, file, rank, piece }) => {
                         const isSelected = selected?.file === file && selected?.rank === rank;
                         const isRed = piece === piece.toUpperCase();
@@ -715,22 +689,19 @@ export const Board = React.memo(function Board({
                             <div
                                 key={id}
                                 className={`piece ${colorClass} ${pieceStyle === 'letters' ? 'piece-letter' : ''} ${isSelected ? 'selected' : ''} ${isMoving ? 'moving' : ''} ${isDragging ? 'dragging' : ''}`}
+                                data-file={file}
+                                data-rank={rank}
                                 style={{
-                                    left: leftFor(file, orientation),
-                                    top: topFor(rank, orientation),
-                                    // Offset from where the piece sits rather
-                                    // than an absolute position, so it keeps
-                                    // the point it was grabbed by instead of
-                                    // snapping its centre to the cursor.
-                                    ...(isDragging
-                                        ? ({ '--drag-x': `${drag.dx}px`, '--drag-y': `${drag.dy}px` } as React.CSSProperties)
-                                        : null),
+                                    left: 0,
+                                    top: 0,
+                                    translate: `calc(${orientation === 'black' ? 8 - file : file} * 100cqw / 8 + ${isDragging ? drag.dx : 0}px) calc(${orientation === 'black' ? rank : 9 - rank} * 100cqh / 9 + ${isDragging ? drag.dy : 0}px)`,
                                 }}
                             >
                                 {pieceLabel(piece, pieceStyle)}
                             </div>
                         );
                     })}
+                    </div>
                 </div>
             </div>
         </div>

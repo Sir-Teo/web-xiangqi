@@ -9,8 +9,8 @@ export function useVirtualRows(keys: readonly string[], container: RefObject<HTM
     const [measured, setMeasured] = useState<ReadonlyMap<string, number>>(() => new Map());
     const [viewport, setViewport] = useState({ top: Math.max(0, activeIndex * 36 - 250), height: 500 });
     const offsets = useMemo(() => rowOffsets(keys, measured), [keys, measured]);
-    const state = useRef({ keys, offsets, enabled });
-    state.current = { keys, offsets, enabled };
+    const state = useRef({ keys, offsets, enabled, viewport });
+    state.current = { keys, offsets, enabled, viewport };
     const automaticTarget = useRef<number | null>(activeIndex >= 0 ? activeIndex : null);
     const frame = useRef<number | null>(null);
     const readViewport = useCallback(() => {
@@ -33,14 +33,17 @@ export function useVirtualRows(keys: readonly string[], container: RefObject<HTM
         if (!node || index < 0 || index >= current.keys.length) return;
         automaticTarget.current = index;
         if (current.enabled) {
-            const height = node.clientHeight, top = node.scrollTop;
+            // Resize/scroll observers keep this current. A layout read here
+            // would flush the new move's DOM while React is still committing.
+            const { height, top } = current.viewport;
             // Nearby moves already in view need no recentering or scroll
             // write. Distant jumps still mount and reveal their target.
             if (current.offsets[index] >= top && current.offsets[index + 1] <= top + height) return;
-            node.scrollTop = Math.max(0, current.offsets[index] - height * .4);
-            readViewport();
+            const nextTop = Math.max(0, current.offsets[index] - height * .4);
+            node.scrollTop = nextTop;
+            setViewport(previous => previous.top === nextTop ? previous : { ...previous, top: nextTop });
         }
-    }, [container, readViewport]);
+    }, [container]);
     const keySignature = useMemo(() => keys.join('\n'), [keys]);
     useEffect(() => {
         const currentKeys = new Set(state.current.keys);

@@ -16,7 +16,6 @@
    is where a 9x10 grid has the most to gain and where a strong player is most
    likely to be reading one. */
 .xiangqi-board-container {
-    container-type: inline-size;
     width: 100%;
     max-width: var(--board-max-width, 860px);
     aspect-ratio: 9 / 10;
@@ -259,6 +258,21 @@
     width: calc(100% - 2 * var(--board-pad));
     height: calc(100% - 2 * var(--board-pad));
     pointer-events: none;
+    font-size: clamp(20.8px, 7.5cqi, 32px);
+}
+
+.pieces-layer:has(.piece-letter) {
+    font-size: clamp(18.4px, 6.6cqi, 28.8px);
+}
+
+/* Container units position each piece without animating layout properties.
+   Inherit typography from outside so it keeps using the full board's width. */
+.piece-motion-grid {
+    position: absolute;
+    inset: 0;
+    container-type: size;
+    pointer-events: none;
+    z-index: 10;
 }
 
 /* ─── User Analysis Markers ──────────────────────────────────────────────── */
@@ -315,8 +329,7 @@
        the content -- every piece drew as a tall oval with its character
        spilling over the ring. The river line below follows for the same
        reason; the coordinates stay in rem, being text to read. */
-    font-size: 27.2px; /* fallback */
-    font-size: clamp(20.8px, 7.5cqi, 32px);
+    font-size: inherit;
 
     /* Layered ivory / bone gradient */
     background:
@@ -334,13 +347,8 @@
         0 5px 12px rgba(0, 0, 0, 0.58),
         0 2px 4px rgba(0, 0, 0, 0.38);
 
-    /* No `box-shadow` here: transitioning it re-rasterized the piece on every
-       frame of a select or deselect. The lift is carried by the transform, and
-       the shadow simply arrives with it. */
-    transition:
-        left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-        top 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-        transform 0.12s ease;
+    /* Selection responds immediately; movement only changes compositor position. */
+    transition: translate 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
     z-index: 10;
 }
 
@@ -350,7 +358,6 @@
 .piece.piece-letter {
     font-family: var(--font-heading);
     font-weight: 900;
-    font-size: clamp(18.4px, 6.6cqi, 28.8px);
     letter-spacing: 0.02em;
 }
 
@@ -385,14 +392,10 @@
     z-index: 15;
 }
 
-/* The piece under the cursor while it is being dragged.
-   After `.piece.selected` on purpose: a dragged piece is also a selected one,
-   the two rules have equal specificity, and this transform has to win. The
-   slide is switched off because the piece is already following a pointer --
-   transitioning `left`/`top` here would make it lag behind the cursor. */
+/* Position translation follows the pointer; keep the piece centered under it. */
 .piece.dragging {
     transition: none;
-    transform: translate(calc(-50% + var(--drag-x, 0px)), calc(-50% + var(--drag-y, 0px))) scale(1.12) translateZ(0);
+    transform: translate(-50%, -50%) scale(1.12) translateZ(0);
     z-index: 20;
 }
 
@@ -513,7 +516,7 @@
             -4px 12px 24px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .piece {
+    .pieces-layer {
         font-size: clamp(17.6px, 7cqi, 25.6px);
     }
     .river-text {
@@ -544,7 +547,7 @@
             -2px 8px 16px rgba(0, 0, 0, 0.7),
             var(--shadow-lg);
     }
-    .piece {
+    .pieces-layer {
         font-size: clamp(13.6px, 6.5cqi, 19.2px);
     }
     .river-text {

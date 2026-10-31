@@ -1,20 +1,7 @@
 import type { BoardState } from './xiangqi';
 
 /**
- * Stable identities for the pieces on the board, so a move can be animated.
- *
- * `Board.css` gives `.piece` a 300ms `left`/`top` transition, and it had never
- * once fired. The piece elements were keyed by the square they stand on, so a
- * move unmounts the element on the source square and mounts a different one on
- * the destination; a freshly mounted element has no previous `left` to
- * transition from, so it simply appears at the end of the move. Measured in a
- * browser rather than inferred: stepping one move back on a loaded game ran
- * **zero** `transitionrun` events and replaced exactly one of the 31 piece
- * nodes.
- *
- * Keying by identity instead means the moving piece keeps its DOM node, the
- * commit changes its `left`/`top`, and the transition the stylesheet already
- * describes is what carries it across.
+ * Stable identities keep a piece's DOM node and transform animation across moves.
  *
  * ## Only a single move is carried across
  *

@@ -42,6 +42,19 @@ const primed = async () => {
 };
 
 describe('releasing the audio device', () => {
+    it('does not start the audio device when a gesture beats idle preparation', async () => {
+        const sounds = await load();
+        sounds.prepareSoundEffects();
+        sounds.unlockSoundEffects();
+        expect(FakeAudioContext.built).toBe(0);
+
+        idleCallbacks.forEach(fn => fn());
+        sounds.suspendSoundEffects();
+        sounds.unlockSoundEffects();
+        expect(FakeAudioContext.built).toBe(1);
+        expect(FakeAudioContext.last?.resumes).toBe(1);
+    });
+
     it('suspends a context that is running', async () => {
         const sounds = await primed();
         // The control: priming really did build one and leave it running, so a

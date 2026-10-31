@@ -193,14 +193,23 @@ export const MoveListTree = memo(function MoveListTree({
             }
         }
         if (lastPosition.current !== currentNodeId) { automaticScroll.current = true; lastPosition.current = currentNodeId; }
+    }, [currentNodeId, rovingNodeId, visibleSignature, virtualOffsets, cancelAutomaticScroll]);
+    useEffect(() => {
         const container = scrollRef.current;
         const active = container?.querySelector<HTMLElement>('.mtree-chip-active');
-        if (automaticScroll.current && container && active) {
-            const box = active.getBoundingClientRect(), viewport = container.getBoundingClientRect();
+        if (!container || !active) return;
+        // Use geometry supplied after layout. Reading rectangles in the commit
+        // forced the entire workspace to lay out before the board could paint.
+        const observer = new IntersectionObserver(([entry]) => {
+            const viewport = entry.rootBounds;
+            if (!automaticScroll.current || !viewport || !viewport.height) return;
+            const box = entry.boundingClientRect;
             if (box.top < viewport.top) container.scrollTop -= viewport.top - box.top;
             else if (box.bottom > viewport.bottom) container.scrollTop += box.bottom - viewport.bottom;
-        }
-    }, [currentNodeId, rovingNodeId, visibleSignature, virtualOffsets, cancelAutomaticScroll]);
+        }, { root: container, threshold: 1 });
+        observer.observe(active);
+        return () => observer.disconnect();
+    }, [currentNodeId, visibleSignature, virtualOffsets]);
     const stopAutomaticScroll = () => { automaticScroll.current = false; virtual.stopAutomaticScroll(); };
     const legend = useMemo(() => {
         const flags = { quality: false, estimated: false, saved: false };

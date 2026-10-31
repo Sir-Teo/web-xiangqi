@@ -10,6 +10,7 @@ const scripts = [
   'test-library-export-integrity-browser.cjs',
   'test-board-coordinates-browser.cjs',
   'test-board-press-browser.cjs',
+  'test-board-interaction-browser.cjs',
   'test-move-tree-keyboard-browser.cjs',
   'test-graph-keyboard-browser.cjs',
   'test-cloud-visibility-browser.cjs',

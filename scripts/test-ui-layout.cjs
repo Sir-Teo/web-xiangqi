@@ -1238,10 +1238,7 @@ async function assertThePieceStyleSettingDrawsLetters(page) {
 
   const glyphs = () => page.evaluate(() => {
     const at = (file, rank) => {
-      const target = [...document.querySelectorAll(".piece")].find((piece) => {
-        const style = piece.getAttribute("style") || "";
-        return style.includes(`left: ${(file / 8) * 100}%`) && style.includes(`top: ${((9 - rank) / 9) * 100}%`);
-      });
+      const target = document.querySelector(`.xiangqi-board .piece[data-file="${file}"][data-rank="${rank}"]`);
       return target?.textContent?.trim() ?? "";
     };
     return { redGeneral: at(4, 0), blackHorse: at(1, 9), redElephant: at(2, 0), letterClass: document.querySelectorAll(".piece.piece-letter").length };
@@ -1518,33 +1515,9 @@ async function assertPlayFromHereKeepsThePosition(page) {
 }
 
 /**
- * The board's move animation, checked by where the piece is actually painted.
- *
- * `Board.css` gives `.piece` a 300ms `left`/`top` transition and it had never
- * once run, because the pieces were keyed by square: a move unmounted one
- * element and mounted another, and a fresh element has nothing to slide from.
- * Two further things had to be right before the stylesheet's own animation
- * would fire, and each of them failed on its own in a way that looked like
- * success from the other side:
- *
- *   - the pieces must render as one flat list. React scopes keys to the array
- *     they sit in, so with a sub-array per rank a piece changing rank crosses
- *     between siblings and is remounted whatever its key. Measured with that
- *     alone: a same-rank move animated and every rank-changing move did not.
- *   - the list must be ordered by identity, not by square. Ordered by square, a
- *     move is an array reorder and React moves the DOM node as well as
- *     restyling it; that was directional -- stepping back animated and stepping
- *     forward jumped the whole distance on the first frame.
- *
- * So this asserts the property rather than the mechanism, and it asserts it in
- * both directions, because one direction passing is exactly what the second bug
- * looked like. `transitionrun` is deliberately not the signal: it did not fire
- * for the forward step even while the node persisted, and where a piece is
- * painted is the thing a reader can see.
- *
- * The jump case is asserted too, and it is not decoration. Carrying identity
- * across an arbitrary position change would slide pieces along paths no move
- * ever took.
+ * Single moves preserve piece nodes and animate their painted positions in
+ * both directions. Jumps replace them without sliding along paths no move took.
+ * Sampling coordinates also catches transitions that never become visible.
  */
 async function assertBoardAnimatesAMoveInBothDirections(page) {
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -1627,8 +1600,8 @@ async function assertBoardAnimatesAMoveInBothDirections(page) {
       throw new Error(
         `The board does not animate when ${step.label}: the piece was painted ` +
         `${step.moved}px from where it started on the very first frame, having ` +
-        `never been caught part of the way. Board.css asks for a 300ms slide, so ` +
-        `the piece element is being replaced or reordered rather than restyled -- ` +
+        `never been caught part of the way. Board.css asks for a 100ms slide, so ` +
+        `check whether the piece is being replaced, reordered or delayed -- ` +
         `see the pieces list in Board.tsx and utils/pieceIdentity.ts.`
       );
     }

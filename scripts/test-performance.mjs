@@ -5,7 +5,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0 } });
 const suites = process.argv.slice(2);
 if (!suites.length) suites.push(
-  'test-performance-budget-browser.cjs', 'test-engine-assets-browser.cjs',
+  'test-performance-budget-browser.cjs', 'test-board-interaction-browser.cjs', 'test-engine-assets-browser.cjs',
   'test-engine-telemetry-isolation-browser.cjs', 'test-warm-engine-browser.cjs',
   'test-virtual-moves-browser.cjs', 'test-move-render-browser.cjs',
   'test-analysis-move-render-browser.cjs', 'test-background-storage-browser.cjs',
